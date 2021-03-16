@@ -29,9 +29,9 @@ class Spirou(base_classes.Instrument):
         # set parameters for instrument
         self.params = params
         # override params
-        self.override()
+        self.param_override()
 
-    def override(self):
+    def param_override(self):
         # set function name
         func_name = __NAME__ + '.Spirou.override()'
         # set parameters to update
