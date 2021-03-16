@@ -1,3 +1,5 @@
+# Example YAML file for use in LBL
+
 # Set instrument name
 INSTRUMENT: SPIROU
 
