@@ -1,0 +1,20 @@
+# Set instrument name
+INSTRUMENT: SPIROU
+
+# Set data directory
+DATA_DIR: /data/spirou/data/lbl
+
+# Set object name
+OBJECT: GL699
+
+# Set whether to plot
+PLOT: True
+
+# Set whether to debug plot
+DEBUG_PLOT: True
+
+# Set blaze file (None for default)
+BLAZE_FILE: None
+
+# Set template file (None for default)
+TEMPLATE_FILE: None
