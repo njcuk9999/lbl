@@ -7,9 +7,12 @@ Created on 2021-03-15
 
 @author: cook
 """
+from astropy.io import fits
+from astropy.table import Table
 import argparse
+import numpy as np
 import os
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 import yaml
 
 from lbl.core import base
@@ -19,15 +22,155 @@ from lbl.core import io
 from lbl.instruments import spirou
 from lbl.instruments import harps
 
+
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.select.py'
+__NAME__ = 'instruments.default.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
 # load classes
 ParamDict = base_classes.ParamDict
+
+# =============================================================================
+# Define classes
+# =============================================================================
+class Instrument:
+    params = ParamDict()
+
+    def __init__(self, name):
+        self.name = name
+
+    def __str__(self) -> str:
+        return 'Instrument[{0}]'.format(self.name)
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    def _not_implemented(self, method):
+        emsg = 'Must implement {0} in specific instrument class'
+        raise NotImplemented(emsg.format(method))
+
+    def mask_file(self, directory):
+        """
+        Make the absolute path for the mask file
+
+        :param directory: str, the directory the file is located at
+
+        :return: absolute path to mask file
+        """
+        _ = directory
+        raise self._not_implemented('mask_file')
+
+    def load_mask(self, filename: str) -> Table:
+        """
+        Load a mask
+
+        :param filename: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (fits.Header)
+        """
+        return io.load_table(filename, kind='mask table')
+
+    def template_file(self, directory: str):
+        """
+        Make the absolute path for the template file
+
+        :param directory: str, the directory the file is located at
+
+        :return: absolute path to template file
+        """
+        _ = directory
+        raise self._not_implemented('template_file')
+
+    def load_template(self, filename: str) -> Table:
+        """
+        Load a template
+
+        :param filename: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (fits.Header)
+        """
+        return io.load_table(filename, kind='template fits file')
+
+    def blaze_file(self, directory: str):
+        """
+        Make the absolute path for the template file
+
+        :param directory: str, the directory the file is located at
+
+        :return: absolute path to template file
+        """
+        _ = directory
+        raise self._not_implemented('blaze_file')
+
+    # complex blaze return
+    BlazeReturn = Union[Tuple[np.ndarray, fits.Header], None]
+
+    def load_blaze(self, filename: str) -> BlazeReturn:
+        """
+        Load a blaze file
+
+        :param filename: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (fits.Header)
+        """
+        if filename is not None:
+            return io.load_fits(filename, kind='blaze fits file')
+        else:
+            return None
+
+    def science_files(self, directory: str):
+        """
+        List the absolute paths of all science files
+
+        :param directory: str, the directory the file is located at
+
+        :return: absolute path to template file
+        """
+        _ = directory
+        raise self._not_implemented('science_files')
+
+    def load_science(self, filename: str) -> Tuple[np.ndarray, fits.Header]:
+        """
+        Load a science exposure
+
+        :param filename: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (fits.Header)
+        """
+        return io.load_fits(filename, kind='science fits file')
+
+    def ref_table_file(self, directory: str):
+        """
+        Make the absolute path for the ref_table file
+
+        :param directory: str, the directory the file is located at
+
+        :return: absolute path to ref_table file
+        """
+        _ = directory
+        raise self._not_implemented('ref_table_file')
+
+    def get_wave_solution(self, filename: str):
+        """
+        Get a wave solution from a file (for SPIROU this is from the header)
+        :param filename: str, the absolute path to the file
+        :return:
+        """
+        _ = filename
+        raise self._not_implemented('get_wave_solution')
+
+    def get_lblrv_file(self, science_filename: str, directory: str):
+        """
+        Construct the LBL RV file name and check whether it exists
+
+        :param filename: str, the absolute path to the file
+        :return:
+        """
+        _ = science_filename, directory
+        raise self._not_implemented('get_wave_solution')
 
 
 # =============================================================================
@@ -54,8 +197,11 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     inputs = ParamDict()
     # update params value with kwargs
     for kwarg in kwargs:
-        if kwarg in params:
-            inputs.set(kwarg, kwargs[kwarg], source=func_name + ' [KWARGS]')
+        # force kwarg to upper case
+        kwargname = kwarg.upper()
+        # only if in params
+        if kwargname in params:
+            inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
     # add args from sys.argv
     for argname in argnames:
         if argname in params:

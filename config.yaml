@@ -6,8 +6,14 @@ INSTRUMENT: SPIROU
 # Set data directory
 DATA_DIR: /data/spirou/data/lbl
 
-# Set object name
-OBJECT: GL699
+# Set science object name
+OBJECT_SCIENCE: GL699
+
+# Set template object name
+OBJECT_TEMPLATE: GL699
+
+# Set the science input file string
+INPUT_FILE: '*e2dsff*AB.fits'
 
 # Set whether to plot
 PLOT: True

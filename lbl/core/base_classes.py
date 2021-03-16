@@ -7,12 +7,15 @@ Created on 2021-03-15
 
 @author: cook
 """
+from astropy.io import fits
 from collections import UserDict
 from copy import deepcopy
+import numpy as np
 from typing import Any, List, Tuple, Type, Union
 
 from lbl.core import base
 from lbl.core import logger
+from lbl.core import io
 
 # =============================================================================
 # Define variables
@@ -221,19 +224,6 @@ class LBLError(Exception):
         message = 'Error: {0}'.format(self.message)
 
         return message
-
-
-class Instrument:
-    params = ParamDict()
-
-    def __init__(self, name):
-        self.name = name
-
-    def __str__(self) -> str:
-        return 'Instrument[{0}]'.format(self.name)
-
-    def __repr__(self) -> str:
-        return self.__str__()
 
 
 # =============================================================================
