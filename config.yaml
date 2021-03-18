@@ -22,7 +22,7 @@ PLOT: True
 DEBUG_PLOT: True
 
 # Set blaze file (None for default)
-BLAZE_FILE: None
+BLAZE_FILE: 2498F798T802f_pp_blaze_AB.fits
 
 # Set template file (None for default)
 TEMPLATE_FILE: None

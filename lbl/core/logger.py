@@ -10,7 +10,7 @@ Created on 2021-03-15
 @author: cook
 """
 import logging
-from typing import Any, List, Tuple, Type, Union
+from typing import Union
 
 from lbl.core import base
 
@@ -23,6 +23,7 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # no theme values
 NO_THEME = [False, 'False', 'OFF', 'off', 'Off', 'None']
+
 
 # =============================================================================
 # Define functions
@@ -111,7 +112,7 @@ class Log:
 # Custom formatter
 class ConsoleFormat(logging.Formatter):
 
-    def __init__(self, fmt: str ="%(levelno)s: %(msg)s", theme=None):
+    def __init__(self, fmt: str = "%(levelno)s: %(msg)s", theme=None):
         # get colours
         self.cprint = Colors(theme=theme)
         # define default format
@@ -153,6 +154,7 @@ class ConsoleFormat(logging.Formatter):
         self._style._fmt = format_orig
         return result
 
+
 # Color class
 class Colors:
     BLACK1 = '\033[90;1m'
@@ -183,6 +185,13 @@ class Colors:
         self.endc = self.ENDC
         self.bold = self.BOLD
         self.underline = self.UNDERLINE
+        self.header = self.MAGENTA1
+        self.okblue = self.BLUE1
+        self.okgreen = self.GREEN1
+        self.ok = self.MAGENTA2
+        self.warning = self.YELLOW1
+        self.fail = self.RED1
+        self.debug = self.BLACK1
         self.update_theme()
 
     def update_theme(self, theme=None):

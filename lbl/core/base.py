@@ -7,6 +7,8 @@ Created on 2021-03-15
 
 @author: cook
 """
+from astropy.time import Time, TimeDelta
+
 # =============================================================================
 # Define variables
 # =============================================================================
@@ -15,14 +17,14 @@ __version__ = '0.0.001'
 __date__ = '2021-03-15'
 __authors__ = 'Neil Cook, Etienne Artigau'
 
+# log variables
 LOG_FILE = 'lbl.log'
 LOG_FORMAT = '%(asctime)s %(message)s'
 
-# =============================================================================
-# Define functions
-# =============================================================================
-
-
+# astropy time is slow the first time - get it done now and do not re-import
+__now__ = Time.now()
+AstropyTime = Time
+AstropyTimeDelta = TimeDelta
 
 # =============================================================================
 # Start of code

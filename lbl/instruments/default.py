@@ -9,19 +9,12 @@ Created on 2021-03-15
 """
 from astropy.io import fits
 from astropy.table import Table
-import argparse
 import numpy as np
-import os
-from typing import Any, Dict, List, Tuple, Union
-import yaml
+from typing import Any, Dict, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.core import parameters
 from lbl.core import io
-from lbl.instruments import spirou
-from lbl.instruments import harps
-
 
 # =============================================================================
 # Define variables
@@ -32,6 +25,7 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # load classes
 ParamDict = base_classes.ParamDict
+
 
 # =============================================================================
 # Define classes
@@ -48,7 +42,8 @@ class Instrument:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def _not_implemented(self, method):
+    @staticmethod
+    def _not_implemented(method):
         emsg = 'Must implement {0} in specific instrument class'
         raise NotImplemented(emsg.format(method))
 
@@ -71,6 +66,7 @@ class Instrument:
 
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
+        _ = self, filename
         return io.load_table(filename, kind='mask table')
 
     def template_file(self, directory: str):
@@ -81,7 +77,7 @@ class Instrument:
 
         :return: absolute path to template file
         """
-        _ = directory
+        _ = self, directory
         raise self._not_implemented('template_file')
 
     def load_template(self, filename: str) -> Table:
@@ -92,6 +88,7 @@ class Instrument:
 
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
+        _ = self, filename
         return io.load_table(filename, kind='template fits file')
 
     def blaze_file(self, directory: str):
@@ -102,7 +99,7 @@ class Instrument:
 
         :return: absolute path to template file
         """
-        _ = directory
+        _ = self, directory
         raise self._not_implemented('blaze_file')
 
     # complex blaze return
@@ -116,6 +113,7 @@ class Instrument:
 
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
+        _ = self
         if filename is not None:
             return io.load_fits(filename, kind='blaze fits file')
         else:
@@ -132,14 +130,32 @@ class Instrument:
         _ = directory
         raise self._not_implemented('science_files')
 
+    def load_blaze_from_science(self, sci_hdr: fits.Header,
+                                calib_directory: str):
+        """
+        Load the blaze file using a science file header
+
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+
+        :return: None
+        """
+        _ = sci_hdr
+        raise self._not_implemented('science_files')
+
     def load_science(self, filename: str) -> Tuple[np.ndarray, fits.Header]:
         """
         Load a science exposure
+
+        Note data should be a 2D array (even if data is 1D)
+        Treat 1D data as a single order?
 
         :param filename: str, absolute path to filename
 
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
+        _ = self
         return io.load_fits(filename, kind='science fits file')
 
     def ref_table_file(self, directory: str):
@@ -153,134 +169,73 @@ class Instrument:
         _ = directory
         raise self._not_implemented('ref_table_file')
 
-    def get_wave_solution(self, filename: str):
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[fits.Header, None] = None):
         """
-        Get a wave solution from a file (for SPIROU this is from the header)
-        :param filename: str, the absolute path to the file
-        :return:
+        Get a wave solution from a file
+
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
-        _ = filename
+        _ = science_filename, data, header
         raise self._not_implemented('get_wave_solution')
 
     def get_lblrv_file(self, science_filename: str, directory: str):
         """
         Construct the LBL RV file name and check whether it exists
 
-        :param filename: str, the absolute path to the file
+        :param science_filename: str, the absolute path to the file
+        :param directory: str, the directory to find lblrv file in
+
         :return:
         """
         _ = science_filename, directory
         raise self._not_implemented('get_wave_solution')
 
+    def load_bad_hdr_keys(self):
+        """
+        Load the bad values and bad key for spirou
 
-# =============================================================================
-# Define functions
-# =============================================================================
-def parse_args(argnames: List[str], kwargs: Dict[str, Any],
-               description: Union[str, None] = None) -> ParamDict:
-    """
-    Parse the arguments 'args' using params (and their Const instances)
-    if value in kwargs override default value in params
+        :return: tuple, 1. the list of bad values, 2. the bad key in
+                 a file header to check against bad values
+        """
+        raise self._not_implemented('load_bad_hdr_keys')
 
-    :param argnames: list of strings, the arguments to add to command line
-    :param kwargs: dictionary, the function call arguments to add
-    :param description: str, the program description (for the help)
-    :return:
-    """
-    # set function name
-    func_name = __NAME__ + '.parse_args'
-    # get parser
-    parser = argparse.ArgumentParser(description=description)
-    # get params
-    params = parameters.params.copy()
-    # storage of inputs
-    inputs = ParamDict()
-    # update params value with kwargs
-    for kwarg in kwargs:
-        # force kwarg to upper case
-        kwargname = kwarg.upper()
-        # only if in params
-        if kwargname in params:
-            inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
-    # add args from sys.argv
-    for argname in argnames:
-        if argname in params:
-            # get constant
-            const = params.instances[argname]
-            # skip constants without argument / dtype
-            if const.argument is None or const.dtype is None:
-                continue
-            # parse argument
-            parser.add_argument(const.argument, dest=const.key,
-                                type=const.dtype, default=params[argname],
-                                action='store', help=const.description)
-    # load parsed args into inputs
-    args = vars(parser.parse_args())
-    for argname in args:
-        inputs.set(argname, args[argname], source=func_name + '[CMD]')
-    # deal with yaml file
-    if 'CONFIG_FILE' in inputs:
-        if inputs['CONFIG_FILE'] is not None:
-            # get config file
-            config_file = inputs['CONFIG_FILE']
-            # check if exists
-            if not io.check_file_exists(config_file):
-                emsg = 'config file = "{0}" does not exist'
-                eargs = [os.path.realpath(config_file)]
-                raise base_classes.LblException(emsg.format(*eargs))
-            # load yaml file
-            with open(config_file, 'r') as yfile:
-                yaml_inputs = yaml.load(yfile, yaml.FullLoader)
-            # add these inputs to inputs
-            for argname in yaml_inputs:
-                # skip Nones
-                if yaml_inputs[argname] not in [None, 'None']:
-                    inputs.set(argname, yaml_inputs[argname],
-                               source=func_name + '[YAML]')
-    # parse arguments
-    return inputs
+    def get_berv(self, sci_hdr: fits.Header):
+        """
+        Get the Barycenteric correction for the RV
 
+        :param sci_hdr: fits.Header, the science header
 
-def load_instrument(args: ParamDict) -> base_classes.Instrument:
-    """
-    Load an instrument
+        :return:
+        """
+        _ = sci_hdr
+        raise self._not_implemented('get_berv')
 
-    :param args: ParamDict, the parameter dictionary of inputs
+    def write_ref_table(self, ref_table: Dict[str, Any],
+                        ref_filename: str, header: fits.Header,
+                        outputs: Dict[str, Any]):
+        """
+        Write the reference table to file "filename"
 
-    :return: Instrument instance
-    """
-    # deal with instrument not in args
-    if 'INSTRUMENT' not in args:
-        emsg = ('Instrument name must be be defined (yaml, input or '
-                'command line)')
-        raise base_classes.LblException(emsg)
-    # set instrument
-    instrument = args['INSTRUMENT']
-    # get base params
-    params = parameters.params.copy()
-    # deal with instrument not being a string
-    if not isinstance(instrument, str):
-        emsg = 'Instrument name must be a string (value={0})'
-        eargs = [instrument]
-        raise base_classes.LblException(emsg.format(*eargs))
-    # select SPIROU
-    if instrument.upper() == 'SPIROU':
-        inst = spirou.Spirou(params)
-    # select HARPS
-    elif instrument.upper() == 'HARPS':
-        inst = harps.Harps(params)
-    # else instrument is invalid
-    else:
-        emsg = 'Instrument name "{0}" invalid'
-        eargs = [instrument]
-        raise base_classes.LblException(emsg.format(*eargs))
-    # override inst params with args (from input/cmd/yaml)
-    for argname in args:
-        if argname in inst.params:
-            inst.params.set(argname, args[argname],
-                            source=args.instances[argname].source)
-    # return instrument instances
-    return inst
+        :param ref_table: dict, the reference table dictionary
+        :param ref_filename: str, the reference table absolute path
+        :param header: fits.Header, the header to write to primary extension
+        :param outputs: dict, a dictionary of outputs from compute_rv function
+
+        :return: None - write file
+        """
+        _ = ref_table, ref_filename, header, outputs
+        raise self._not_implemented('get_berv')
+
 
 # =============================================================================
 # Start of code

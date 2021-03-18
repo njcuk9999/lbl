@@ -9,37 +9,44 @@ Created on 2021-03-15
 """
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.core import parameters
+from lbl.instruments import default
 
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'base_classes.py'
+__NAME__ = 'instruments.harps.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
+# get classes
+Instrument = default.Instrument
+LblException = base_classes.LblException
+log = base_classes.log
 
 
 # =============================================================================
 # Define functions
 # =============================================================================
-class Harps(base_classes.Instrument):
-    def __init__(self, params):
+class Harps(Instrument):
+    def __init__(self, params: base_classes.ParamDict):
+        # call to super function
+        super().__init__('HARPS')
         # set parameters for instrument
         self.params = params
-        # call to super function
-        super().__init__(self.params['INSTRUMENT'])
+        # override params
+        self.param_override()
 
+    # -------------------------------------------------------------------------
+    # SPIROU SPECIFIC PARAMETERS
+    # -------------------------------------------------------------------------
+    def param_override(self):
+        """
+        Parameter override for HARPS parameters
+        (update default params)
 
-# get copy of params
-params = parameters.params.copy()
-
-# update properties based on spirou
-params['INSTRUMENT'] = 'HARPS'
-
-# push into Instrument class
-harps_inst = Harps(params)
-
+        :return: None - updates self.params
+        """
+        pass
 
 # =============================================================================
 # Start of code

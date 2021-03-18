@@ -7,15 +7,13 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.io import fits
 from collections import UserDict
 from copy import deepcopy
-import numpy as np
-from typing import Any, List, Tuple, Type, Union
+from typing import Any, Type, Union
 
 from lbl.core import base
 from lbl.core import logger
-from lbl.core import io
+
 
 # =============================================================================
 # Define variables
@@ -98,12 +96,15 @@ class ParamDict(UserDict):
         super().__init__(*args, **kwargs)
         # storage for constants
         self.instances = dict()
+        # must be set (by instrument)
+        self.not_none = []
 
     def set(self, key: str, value: Any,
             source: Union[str, None] = None,
             desc: Union[str, None] = None,
             arg: Union[str, None] = None,
-            dtype: Union[Type, None] = None):
+            dtype: Union[Type, None] = None,
+            not_none: bool = False):
         """
         Set a parameter
 
@@ -114,11 +115,17 @@ class ParamDict(UserDict):
         :param arg: str or None, the command argument
         :param dtype: Type or None, the type of object (for argparse) only
                       required if arg is set
+        :param not_none: bool, if True and value is None error will be raised
+                         when getting parameter (so devs don't forget to
+                         have this parameter defined by instrument)
 
         :return: None - updates dict
         """
         # capitalize
         key = self._capitalize(key)
+        # deal with storing not None
+        if not_none:
+            self.not_none.append(key)
         # set item
         self.__setitem__(key, value)
         # set instance
@@ -128,13 +135,22 @@ class ParamDict(UserDict):
         # capitalize
         key = self._capitalize(key)
         # then do the normal dictionary setting
-        super(ParamDict, self).__setitem__(key, value)
+        self.data[key] = value
 
     def __getitem__(self, key) -> Any:
         # capitalize
         key = self._capitalize(key)
         # return from supers dictionary storage
-        return super(ParamDict, self).__getitem__(key)
+        value = self.data[key]
+        # deal with not none and value is None
+        if value is None:
+            if key in self.not_none:
+                emsg = ('Key {0} is None - it must be set by the instrument,'
+                        'function inputs, command line or yaml file.')
+                eargs = [key]
+                raise LblException(emsg.format(*eargs))
+        # return value
+        return value
 
     def __contains__(self, key: str) -> bool:
         """
@@ -153,7 +169,7 @@ class ParamDict(UserDict):
         # capitalize
         key = self._capitalize(key)
         # return True if key in keys else return False
-        return super(ParamDict, self).__contains__(key)
+        return key in self.data.keys()
 
     def __delitem__(self, key: str):
         """
@@ -168,7 +184,7 @@ class ParamDict(UserDict):
         # capitalize
         key = self._capitalize(key)
         # delete key from keys
-        super(ParamDict, self).__delitem__(key)
+        del self.data[key]
 
     def copy(self) -> 'ParamDict':
         """
@@ -177,7 +193,7 @@ class ParamDict(UserDict):
         :return: new instance of ParamDict
         """
         new = ParamDict()
-        keys, values = self.keys(), self.values()
+        keys, values = self.data.keys(), self.data.values()
         for key, value in zip(keys, values):
             # copy value
             new[key] = deepcopy(value)
@@ -220,7 +236,6 @@ class LBLError(Exception):
         self.message = message
 
     def __str__(self) -> str:
-
         message = 'Error: {0}'.format(self.message)
 
         return message

@@ -9,10 +9,14 @@ Created on 2021-03-16
 
 @author: cook
 """
+from astropy import constants
 import copy
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
+from scipy.special import erf
 from typing import Tuple, Union
+
+from lbl.core import base
 
 # try to import bottleneck module
 # noinspection PyBroadException
@@ -31,14 +35,6 @@ try:
 except Exception as _:
     jit = None
     HAS_NUMBA = False
-
-from astropy.io import fits
-from astropy import constants
-from astropy.table import Table
-import numpy as np
-from typing import Dict, List, Tuple, Union
-
-from lbl.core import base
 
 # =============================================================================
 # Define variables
@@ -306,6 +302,73 @@ def median(a: Union[list, np.ndarray],
 
 
 # =============================================================================
+# Numba JIT functionality
+# =============================================================================
+# must catch if we do not have the jit decorator and define our own
+if not HAS_NUMBA:
+    def jit(**options):
+        # don't use options but they are required to match jit definition
+        _ = options
+
+        # define decorator
+        def decorator(func):
+            # define wrapper
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+
+            # return wrapper
+            return wrapper
+
+        # return decorator
+        return decorator
+
+
+# Set "nopython" mode for best performance, equivalent to @nji
+@jit(nopython=True)
+def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
+                   odd_ratio: float = 1e-4, nmax: int = 10):
+    """
+    Provide values and corresponding errors and compute a weighted mean
+
+    :param value: np.array (1D), value array
+    :param error: np.array (1D), uncertainties for value array
+    :param odd_ratio: float, the probability that the point is bad
+    :param nmax: int, number of iterations to pass through
+    :return:
+    """
+    # deal with NaNs in value or error
+    keep = np.isfinite(value) & np.isfinite(error)
+    # deal with no finite values
+    if np.sum(keep) == 0:
+        return np.nan, np.nan
+    # remove NaNs from arrays
+    value, error = value[keep], error[keep]
+    # take a first guess at the mean (the median)
+    guess = np.median(value)
+    # work out some values to speed up loop
+    error2 = error ** 2
+    # just if nmax == 0
+    odd_good = np.ones(len(error2))
+    # loop around until we do all required iterations
+    for _ in range(nmax):
+        # model points as gaussian
+        gfit = np.exp(-0.5 * ((value - guess) ** 2 / error2))
+        # find the probability that a point is bad
+        odd_bad = odd_ratio / (gfit + odd_ratio)
+        # find the probability that a point is good
+        odd_good = 1 - odd_bad
+        # calculate the weights based on the probability of being good
+        weights = odd_good / error2
+        # update the guess based on the weights
+        # TODO: Question: can there be NaNs here?
+        guess = np.sum(value * weights) / np.sum(weights)
+    # work out the bulk error
+    bulk_error = np.sqrt(1.0 / np.nansum(odd_good / error2))
+    # return the guess and bulk error
+    return guess, bulk_error
+
+
+# =============================================================================
 # Define general math functions
 # =============================================================================
 class NanSpline:
@@ -491,7 +554,7 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101) -> np.ndarray:
         xmed = xmed2
         ymed = ymed2
     # splining the vector
-    spline = InterpolatedUnivariateSpline(xmed, ymed, k=1, ext=3)
+    spline = iuv_spline(xmed, ymed, k=1, ext=3)
     lowpass = spline(np.arange(len(input_vect)))
     # return the low pass filtered input vector
     return lowpass
@@ -501,7 +564,7 @@ def doppler_shift(wavegrid: np.ndarray, velocity: float) -> np.ndarray:
     """
     Apply a doppler shift
 
-    :param wave: wave grid to shift
+    :param wavegrid: wave grid to shift
     :param velocity: float, velocity expressed in m/s
 
     :return: np.ndarray, the updated wave grid
@@ -512,6 +575,59 @@ def doppler_shift(wavegrid: np.ndarray, velocity: float) -> np.ndarray:
     part2 = 1 + velocity / speed_of_light_ms
     # return updated wave grid
     return wavegrid * np.sqrt(part1 / part2)
+
+
+def gauss_fit_s(x: Union[float, np.ndarray], x0: float, sigma: float,
+                a: float, zp: float, slope: float) -> Union[float, np.ndarray]:
+    """
+    Gaussian fit with a slope
+
+    :param x: numpy array (1D), the x values for the gauss fit
+    :param x0: float, the mean position
+    :param sigma: float, the FWHM
+    :param a: float, the amplitude
+    :param zp: float, the dc level
+    :param slope: float, the float (x-x0) * slope
+
+    :return: np.ndarray - the gaussian value with slope correction
+    """
+    # calculate gaussian
+    gauss = a * np.exp(-0.5 * (x - x0) ** 2 / (sigma ** 2)) + zp
+    correction = (x - x0) * slope
+    return gauss + correction
+
+
+def normal_fraction(sigma: Union[float, np.ndarray] = 1.0
+                    ) -> Union[float, np.ndarray]:
+    """
+    Return the expected fraction of population inside a range
+    (Assuming data is normally distributed)
+
+    :param sigma: the number of sigma away from the median to be
+    :return:
+    """
+    # return error function
+    return erf(sigma / np.sqrt(2.0))
+
+
+def estimate_sigma(tmp: np.ndarray, sigma=1.0) -> float:
+    """
+    Return a robust estimate of N sigma away from the mean
+
+    :param tmp: np.array (1D) - the data to estimate N sigma of
+    :param sigma: float, the number of sigma to calculate for
+
+    :return: the 1 sigma value
+    """
+    # get formal definition of N sigma
+    sig1 = normal_fraction(sigma)
+    # get the 1 sigma as a percentile
+    p1 = (1 - (1 - sig1) / 2) * 100
+    # work out the lower and upper percentiles for 1 sigma
+    upper = np.nanpercentile(tmp, p1)
+    lower = np.nanpercentile(tmp, 100 - p1)
+    # return the mean of these two bounds
+    return (upper - lower) / 2.0
 
 
 # =============================================================================

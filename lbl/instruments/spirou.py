@@ -8,29 +8,33 @@ Created on 2021-03-15
 @author: cook
 """
 from astropy.table import Table
+from astropy.io import fits
 import glob
 import numpy as np
 import os
 import requests
-from typing import List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import default
-from lbl.science import general
 
 
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'base_classes.py'
+__NAME__ = 'instruments.spirou.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
+# get time from base
+Time = base.AstropyTime
 # get classes
 Instrument = default.Instrument
 LblException = base_classes.LblException
+log = base_classes.log
+
 
 # =============================================================================
 # Define Spirou class
@@ -48,6 +52,12 @@ class Spirou(Instrument):
     # SPIROU SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
+        """
+        Parameter override for SPIRou parameters
+        (update default params)
+
+        :return: None - updates self.params
+        """
         # set function name
         func_name = __NAME__ + '.Spirou.override()'
         # set parameters to update
@@ -56,19 +66,29 @@ class Spirou(Instrument):
         self.params.set('INPUT_FILE', '*e2dsff*AB.fits', source=func_name)
         # define the mask
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
-        # define the HP width
+        # define the High pass width in km/s
         self.params.set('HP_WIDTH', 223, source=func_name)
         # define the SNR cut off threshold
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
+        # define the plot order for the compute rv model plot
+        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [35], source=func_name)
+        # ---------------------------------------------------------------------
+        # Header keywords
+        # ---------------------------------------------------------------------
         # define wave coeff key in header
         self.params.set('KW_WAVECOEFFS', 'WAVE{0:04d}', source=func_name)
         # define wave num orders key in header
         self.params.set('KW_WAVEORDN', 'WAVEORDN', source=func_name)
         # define wave degree key in header
         self.params.set('KW_WAVEDEGN', 'WAVEDEGN', source=func_name)
+        # define the key that gives the mid exposure time in MJD
+        self.params.set('KW_MID_EXP_TIME', 'MJDMID', source=func_name)
         # define snr keyword
         self.params.set('KW_SNR', 'EXTSN035', source=func_name)
-
+        # define berv keyword
+        self.params.set('KW_BERV', 'BERV', source=func_name)
+        # define the Blaze calibration file
+        self.params.set('KW_BLAZE_FILE', 'CDBBLAZE', source=func_name)
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
@@ -175,6 +195,27 @@ class Spirou(Instrument):
             # return numpy array of files
             return files
 
+    def load_blaze_from_science(self, sci_hdr: fits.Header,
+                                calib_directory: str) -> np.ndarray:
+        """
+        Load the blaze file using a science file header
+
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+        :return: None
+        """
+        # get blaze file from science header
+        blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
+        # construct absolute path
+        abspath = os.path.join(calib_directory, blaze_file)
+        # check that this file exists
+        io.check_file_exists(abspath)
+        # read blaze file (data and header)
+        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        # return blaze
+        return blaze
+
     def ref_table_file(self, directory: str) -> Tuple[Union[str, None], bool]:
         """
         Make the absolute path for the ref_table file (if it exists)
@@ -200,37 +241,46 @@ class Spirou(Instrument):
             # return absolute path
             return abspath, True
 
-    def get_wave_solution(self, filename: str) -> np.ndarray:
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[fits.Header, None] = None
+                          ) -> np.ndarray:
         """
         Get a wave solution from a file (for SPIROU this is from the header)
-        :param filename: str, the absolute path to the file - for spirou this
-                         is a file with the wave solution in the header
-        :return:
-        """
-        # load the science spectrum
-        sci_data, sci_hdr = self.load_science(filename)
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
 
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
         # get header keys
         kw_wavecoeffs = self.params['KW_WAVECOEFFS']
         kw_waveordn = self.params['KW_WAVEORDN']
         kw_wavedegn = self.params['KW_WAVEDEGN']
-
         # ---------------------------------------------------------------------
         # get header
-        data, header = io.load_fits(filename, 'wave fits file')
+        if header is None or data is None:
+            sci_data, sci_hdr = io.load_fits(science_filename,
+                                             'wave fits file')
+        else:
+            sci_data, sci_hdr = data, header
         # ---------------------------------------------------------------------
         # get the data shape
-        nby, nbx = data.shape
+        nby, nbx = sci_data.shape
         # get xpix
         xpix = np.arange(nbx)
         # ---------------------------------------------------------------------
         # get wave order from header
-        waveordn = io.get_hkey(header, kw_waveordn, filename)
-        wavedegn = io.get_hkey(header, kw_wavedegn, filename)
+        waveordn = io.get_hkey(sci_hdr, kw_waveordn, science_filename)
+        wavedegn = io.get_hkey(sci_hdr, kw_wavedegn, science_filename)
         # get the wave 2d list
-        wavecoeffs = io.get_hkey_2d(header, key=kw_wavecoeffs,
+        wavecoeffs = io.get_hkey_2d(sci_hdr, key=kw_wavecoeffs,
                                     dim1=waveordn, dim2=wavedegn + 1,
-                                    filename=filename)
+                                    filename=science_filename)
         # ---------------------------------------------------------------------
         # convert to wave map
         wavemap = np.zeros([waveordn, nbx])
@@ -283,13 +333,13 @@ class Spirou(Instrument):
                  a file header to check against bad values
         """
         # set up googlesheet parameters
-        URL_BASE = ('https://docs.google.com/spreadsheets/d/'
+        url_base = ('https://docs.google.com/spreadsheets/d/'
                     '{}/gviz/tq?tqx=out:csv&sheet={}')
-        SHEET_ID = '1gvMp1nHmEcKCUpxsTxkx-5m115mLuQIGHhxJCyVoZCM'
-        WORKSHEET = 0
-        BAD_ODO_URL = URL_BASE.format(SHEET_ID, WORKSHEET)
+        sheet_id = '1gvMp1nHmEcKCUpxsTxkx-5m115mLuQIGHhxJCyVoZCM'
+        worksheet = 0
+        bad_odo_url = url_base.format(sheet_id, worksheet)
         # fetch data
-        data = requests.get(BAD_ODO_URL)
+        data = requests.get(bad_odo_url)
         tbl = Table.read(data.text, format='ascii')
         # get bad keys
         bad_values = tbl['ODOMETER'].astype(str)
@@ -298,7 +348,77 @@ class Spirou(Instrument):
         # return the
         return bad_values, bad_key
 
+    def get_berv(self, sci_hdr: fits.Header) -> float:
+        """
+        Get the Barycenteric correction for the RV
 
+        :param sci_hdr: fits.Header, the science header
+
+        :return:
+        """
+        # get BERV header key
+        hdr_key = self.params['KW_BERV']
+
+        # BERV depends on whether object is FP or not
+        # Question: should we deal with BERV = np.nan?
+        if 'FP' not in self.params['OBJECT_SCIENCE']:
+            berv = io.get_hkey(sci_hdr, hdr_key) * 1000
+        else:
+            berv = 0.0
+        # return the berv measurement (in m/s)
+        return berv
+
+    def write_ref_table(self, ref_table: Dict[str, Any],
+                        ref_filename: str, header: fits.Header,
+                        outputs: Dict[str, Any]):
+        """
+        Write the reference table to file "filename"
+
+        :param ref_table: dict, the reference table dictionary
+        :param ref_filename: str, the reference table absolute path
+        :param header: fits.Header, the header to write to primary extension
+        :param outputs: dict, a dictionary of outputs from compute_rv function
+
+        :return: None - write file
+        """
+        # ---------------------------------------------------------------------
+        # add keys to header
+        # ---------------------------------------------------------------------
+        # add number of iterations
+        header['ITE_RV'] = (outputs['NUM_ITERATIONS'],
+                            'Num iterat to reach sigma accuracy')
+        # add systemic velocity in m/s
+        header['SYSTVELO'] = (outputs['SYSTEMIC_VELOCITY'],
+                              'Systemic velocity in m/s')
+        # add rms to photon noise ratio
+        header['RMSRATIO'] = (outputs['RMSRATIO'], 'RMS vs photon noise')
+        # add e-width of LBL CCF
+        header['CCF_EW'] = (outputs['CCF_EW'], 'e-width of LBL CCF in m/s')
+        # add the high-pass LBL width [km/s]
+        header['HP_WIDTH'] = (outputs['HP_WIDTH'],
+                              'high-pass LBL width in km/s')
+        # add LBL version
+        header['LBL_VERS'] = (__version__, 'LBL code version')
+        # add LBL date
+        header['LBLVDATE'] = (__date__, 'LBL version date')
+        # add process date
+        header['LBLPDATE'] = (Time.now().fits, 'LBL processed date')
+        # ---------------------------------------------------------------------
+        # Convert ref table dictionary to table
+        # ---------------------------------------------------------------------
+        table = Table()
+        for col in ref_table:
+            table[col] = np.array(ref_table[col])
+        # ---------------------------------------------------------------------
+        # save to fits file
+        # ---------------------------------------------------------------------
+        # log saving of file
+        msg = 'Writing reference table to: {0}'
+        margs = [ref_filename]
+        log.logger.info(msg.format(*margs))
+        # write to disk
+        io.write_fits(ref_filename, data=[None, table],
+                      header=[header, None], dtype=[None, 'table'])
 
 
 # =============================================================================

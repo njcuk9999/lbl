@@ -9,13 +9,12 @@ Created on 2021-03-15
 
 @author: cook
 """
-import os
-from typing import Union
+import numpy as np
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
-from lbl.instruments import default
+from lbl.instruments import select
 from lbl.science import general
 
 # =============================================================================
@@ -26,7 +25,8 @@ __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
 # get classes
-Instrument = base_classes.Instrument
+InstrumentsList = select.InstrumentsList
+InstrumentsType = select.InstrumentsType
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
@@ -40,13 +40,21 @@ DESCRIPTION = 'Use this code to compute the LBL'
 # Define functions
 # =============================================================================
 def main(**kwargs):
+    """
+    Wrapper around __main__ recipe code (deals with errors and loads instrument
+    profile)
+
+    :param kwargs: kwargs to parse to instrument - anything in params can be
+                   parsed (overwrites instrumental and default parameters)
+    :return:
+    """
     # deal with parsing arguments
-    args = default.parse_args(ARGS, kwargs, DESCRIPTION)
+    args = select.parse_args(ARGS, kwargs, DESCRIPTION)
     # load instrument
-    inst = default.load_instrument(args)
+    inst = select.load_instrument(args)
     # run __main__
     try:
-        return __main__(inst, inst.params)
+        return __main__(inst)
     except LblException as e:
         raise LblException(e.message)
     except Exception as e:
@@ -55,38 +63,51 @@ def main(**kwargs):
         raise LblException(emsg.format(*eargs))
 
 
-def __main__(inst: Union[Instrument, None] = None,
-             params: Union[ParamDict, None] = None, **kwargs):
+def __main__(inst: InstrumentsType, **kwargs):
+    """
+    The main recipe function - all code dealing with recipe functionality
+    should go here
+
+    :param inst: Instrument instance
+    :param kwargs: kwargs to parse to instrument (only use if inst is None)
+                   anything in params can be parsed (overwrites instrumental
+                   and default parameters)
+
+    :return: all variables in local namespace
+    """
     # -------------------------------------------------------------------------
     # deal with debug
-    if inst is None or params is None:
+    if inst is None or inst.params is None:
         # deal with parsing arguments
-        args = default.parse_args(ARGS, kwargs, DESCRIPTION)
+        args = select.parse_args(ARGS, kwargs, DESCRIPTION)
         # load instrument
-        inst = default.load_instrument(args)
-        assert isinstance(inst, Instrument), 'inst must be Instrument class'
-        params = inst.params
-
+        inst = select.load_instrument(args)
+        # assert inst type
+        amsg = 'inst must be a valid Instrument class'
+        assert isinstance(inst, InstrumentsList), amsg
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
     # get data directory
-    data_dir = params['DATA_DIR']
+    data_dir = inst.params['DATA_DIR']
     # make mask directory
-    mask_dir = io.make_dir(data_dir, 'masks', 'Mask')
+    mask_dir = io.make_dir(data_dir, inst.params['MASK_SUBDIR'], 'Mask')
     # make template directory
-    template_dir = io.make_dir(data_dir, 'templates', 'Templates')
+    template_dir = io.make_dir(data_dir, inst.params['TEMPLATE_SUBDIR'],
+                               'Templates')
     # make calib directory (for blaze and wave solutions)
-    calib_dir = io.make_dir(data_dir, 'calib', 'Calib')
+    calib_dir = io.make_dir(data_dir, inst.params['CALIB_SUBDIR'], 'Calib')
     # make science directory (for S2D files)
-    science_dir = io.make_dir(data_dir, 'science', 'Science')
+    science_dir = io.make_dir(data_dir, inst.params['SCIENCE_SUBDIR'],
+                              'Science')
     # make lblrv directory
-    lblrv_dir = io.make_dir(data_dir, 'lblrv', 'LBL RV')
+    lblrv_dir = io.make_dir(data_dir, inst.params['LBLRV_SUBDIR'], 'LBL RV')
     # make lbl reftable directory
-    lbl_reftable_dir = io.make_dir(data_dir, 'lblreftable', 'LBL reftable')
+    lbl_reftable_dir = io.make_dir(data_dir, inst.params['LBLREFTAB_SUBDIR'],
+                                   'LBL reftable')
     # make lbl rdb directory
-    lbl_rdb_dir = io.make_dir(data_dir, 'lblrdb', 'LBL rdb')
-
+    lbl_rdb_dir = io.make_dir(data_dir, inst.params['LBLREFTAB_SUBDIR'],
+                              'LBL rdb')
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
@@ -100,9 +121,15 @@ def __main__(inst: Union[Instrument, None] = None,
     science_files = inst.science_files(science_dir)
     # reftable filename (None if not set)
     reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir)
-
     # -------------------------------------------------------------------------
-    # Step 3: Load or make ref_dict
+    # Step 3: Load blaze file if set
+    # -------------------------------------------------------------------------
+    if blaze_file is not None:
+        blaze, _ = inst.load_blaze(blaze_file)
+    else:
+        blaze = None
+    # -------------------------------------------------------------------------
+    # Step 4: Load or make ref_dict
     # -------------------------------------------------------------------------
     ref_table = general.make_ref_dict(inst, reftable_file, reftable_exists,
                                       science_files, mask_file)
@@ -110,40 +137,64 @@ def __main__(inst: Union[Instrument, None] = None,
     _, mask_hdr = io.load_fits(mask_file, kind='mask fits file')
     # get info on template systvel for splining correctly
     systemic_vel = -1000 * io.get_hkey(mask_hdr, 'SYSTVEL')
-
     # -------------------------------------------------------------------------
-    # Step 4: spline the template
+    # Step 5: spline the template
     # -------------------------------------------------------------------------
     splines = general.spline_template(inst, template_file, systemic_vel)
-
     # -------------------------------------------------------------------------
-    # Step 5: Loop around science files
+    # Step 6: Loop around science files
     # -------------------------------------------------------------------------
     # load bad odometer codes
     bad_hdr_keys, bad_hdr_key = inst.load_bad_hdr_keys()
-
+    # store all systemic velocities and mid exposure times in mjd
+    systemic_all = np.full_like(science_files, np.nan)
+    mjdate_all = np.zeros_like(science_files)
+    # store the initial ccf_ewidth value
+    ccf_ewidth = None
+    # flag to take a completely new rv measurement
+    reset_rv = True
+    # time stats
+    mean_time, std_time, time_left = np.nan, np.nan, ''
+    all_durations = []
     # loop through each science file
     for it, science_file in enumerate(science_files):
         # ---------------------------------------------------------------------
-        # log process
-        msg = 'Processing file {0} / {1}'
-        margs = [it + 1, len(science_file)]
-        log.logger.info(msg.format(*margs))
+        # 6.1 log process
         # ---------------------------------------------------------------------
-        # get lbl rv file and check whether it exists
+        # number left
+        nleft = len(science_files) - it + 1
+        # standard loop message
+        msg = 'Processing file {0} / {1}   ({2} left)'
+        margs = [it + 1, len(science_file), nleft]
+        log.logger.info(msg.format(*margs))
+        # add time stats
+        if it > 2:
+            msg = '\tDuration per file {0:.2f}+-{1:.2f} s'
+            msg += '\n\tTime left to completion: {3}'
+            margs = [mean_time, std_time, time_left]
+            log.logger.info(msg.format(*margs))
+        # ---------------------------------------------------------------------
+        # 6.2 get lbl rv file and check whether it exists
+        # ---------------------------------------------------------------------
         lblrv_file, lblrv_exists = inst.get_lblrv_file(science_file, lblrv_dir)
         # if file exists and we are skipping done files
-        if lblrv_exists and params['SKIP_DONE']:
+        if lblrv_exists and inst.params['SKIP_DONE']:
             # log message about skipping
             log.logger.info('\t\tFile exists and skipping activated. '
                             'Skipping file.')
             # skip
             continue
         # ---------------------------------------------------------------------
-        # load file
+        # 6.3 load file
+        # ---------------------------------------------------------------------
         sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
         # ---------------------------------------------------------------------
-        # check for bad files (via a header key)
+        # 6.4 load blaze if not set above
+        # ---------------------------------------------------------------------
+        if blaze is None:
+            blaze = inst.load_blaze_from_science(sci_hdr, calib_dir)
+        # ---------------------------------------------------------------------
+        # 6.5 check for bad files (via a header key)
         # ---------------------------------------------------------------------
         # check we have a bad hdr key
         if bad_hdr_key is not None and bad_hdr_key in sci_hdr:
@@ -156,11 +207,11 @@ def __main__(inst: Union[Instrument, None] = None,
                 # skip
                 continue
         # ---------------------------------------------------------------------
-        # quality control on snr
+        # 6.6 quality control on snr
         # ---------------------------------------------------------------------
         # get snr key
-        snr_key = params['KW_SNR']
-        snr_limit = params['SNR_THRESHOLD']
+        snr_key = inst.params['KW_SNR']
+        snr_limit = inst.params['SNR_THRESHOLD']
         # check we have snr key in science header
         if snr_key in sci_hdr:
             # get snr value
@@ -174,13 +225,37 @@ def __main__(inst: Union[Instrument, None] = None,
                 # skip
                 continue
         # ---------------------------------------------------------------------
-        # compute rv
+        # 6.7 compute rv
         # ---------------------------------------------------------------------
-        # general.compute_rv
-
+        cout = general.compute_rv(inst, it, sci_data, sci_hdr, splines=splines,
+                                  ref_table=ref_table, blaze=blaze,
+                                  systemic_all=systemic_all,
+                                  mjdate_all=mjdate_all, ccf_ewidth=ccf_ewidth,
+                                  reset_rv=reset_rv)
+        # get back ref_table and outputs
+        ref_table, outputs = cout
         # ---------------------------------------------------------------------
-        # save to file
+        # update iterables (for next iteration)
+        systemic_all = outputs['SYSTEMIC_ALL']
+        mjdate_all = outputs['MJDATE_ALL']
+        reset_rv = outputs['RESET_RV']
+        ccf_ewidth = outputs['CCF_EW']
+        all_durations.append(outputs['TOTAL_DURATION'])
         # ---------------------------------------------------------------------
+        # 6.8 save to file
+        # ---------------------------------------------------------------------
+        inst.write_ref_table(ref_table, reftable_file, sci_hdr, outputs)
+        # ---------------------------------------------------------------------
+        # 6.9 Time taken stats (For next iteration)
+        # ---------------------------------------------------------------------
+        if it > 2:
+            # smart timing
+            sout = general.smart_timing(all_durations, nleft)
+            mean_time, std_time, time_left = sout
+    # -------------------------------------------------------------------------
+    # return local namespace
+    # -------------------------------------------------------------------------
+    return locals()
 
 
 # =============================================================================
