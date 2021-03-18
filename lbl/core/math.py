@@ -532,19 +532,19 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101) -> np.ndarray:
         if len(pixval) < 3:
             continue
         # if no finite value, skip
-        if np.max(np.isfinite(input_vect[pixval])) == 0:
+        if np.sum(np.isfinite(input_vect[pixval])) < 3:
             continue
         # mean position along vector and NaN median value of
         # points at those positions
-        xmed.append(np.nanmean(pixval))
-        ymed.append(np.nanmedian(input_vect[pixval]))
+        xmed.append(nanmean(pixval))
+        ymed.append(nanmedian(input_vect[pixval]))
     # convert to arrays
     xmed = np.array(xmed, dtype=float)
     ymed = np.array(ymed, dtype=float)
     # we need at least 3 valid points to return a
     # low-passed vector.
     if len(xmed) < 3:
-        return np.zeros_like(input_vect) + np.nan
+        return np.full_like(input_vect, np.nan)
     # low pass with a mean
     if len(xmed) != len(np.unique(xmed)):
         xmed2 = np.unique(xmed)
@@ -554,7 +554,7 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101) -> np.ndarray:
         xmed = xmed2
         ymed = ymed2
     # splining the vector
-    spline = iuv_spline(xmed, ymed, k=1, ext=3)
+    spline = iuv_spline(xmed, ymed, k=2, ext=3)
     lowpass = spline(np.arange(len(input_vect)))
     # return the low pass filtered input vector
     return lowpass

@@ -204,6 +204,9 @@ def spline_template(inst: Instrument, template_file: str,
     :param systemic_vel: float, the systemic velocity
     :return:
     """
+    # log that we are producing all template splines
+    msg = 'Defining all the template splines required later'
+    log.logger.info(msg)
     # get the pixel hp_width [needs to be in m/s]
     hp_width = inst.params['HP_WIDTH'] * 1000
     # load the template

@@ -159,6 +159,43 @@ class Spirou(Instrument):
         # return absolute path
         return abspath
 
+    def load_blaze(self, filename: str) -> Union[np.ndarray, None]:
+        """
+        Load a blaze file
+
+        :param filename: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (fits.Header)
+        """
+        _ = self
+        if filename is not None:
+            blaze, _ = io.load_fits(filename, kind='blaze fits file')
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
+            # return blaze
+            return blaze
+        else:
+            return None
+
+    def get_mask_systemic_vel(self, mask_file: str) -> float:
+        """
+        Get the systemic velocity in m/s of the mask
+
+        :param mask_file: the absolute path to the mask file
+
+        :return: float, systemic velocity in m/s
+        """
+        # load the mask header
+        _, mask_hdr = io.load_fits(mask_file, kind='mask fits file')
+        # get info on template systvel for splining correctly
+        systemic_vel = -1000 * io.get_hkey(mask_hdr, 'SYSTVEL')
+        # return systemic velocity in m/s
+        return systemic_vel
+
     def science_files(self, directory: str) -> np.ndarray:
         """
         List the absolute paths of all science files
@@ -213,6 +250,12 @@ class Spirou(Instrument):
         io.check_file_exists(abspath)
         # read blaze file (data and header)
         blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        # normalize blaze per order
+        for order_num in range(blaze.shape[0]):
+            # normalize by the 90% percentile
+            norm = np.nanpercentile(blaze[order_num], 90)
+            # apply to blaze
+            blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze
 
@@ -325,7 +368,7 @@ class Spirou(Instrument):
             # return absolute path
             return abspath, True
 
-    def load_bad_hdr_keys(self) -> Tuple[List[str], str]:
+    def load_bad_hdr_keys(self) -> Tuple[np.ndarray, str]:
         """
         Load the bad values and bad key for spirou
 
@@ -338,13 +381,20 @@ class Spirou(Instrument):
         sheet_id = '1gvMp1nHmEcKCUpxsTxkx-5m115mLuQIGHhxJCyVoZCM'
         worksheet = 0
         bad_odo_url = url_base.format(sheet_id, worksheet)
+        # log progress
+        msg = 'Loading bad odometer codes from spreadsheet'
+        log.logger.info(msg)
         # fetch data
         data = requests.get(bad_odo_url)
         tbl = Table.read(data.text, format='ascii')
         # get bad keys
-        bad_values = tbl['ODOMETER'].astype(str)
+        bad_values = np.array(tbl['ODOMETER']).astype(str)
         # define bad file header key
         bad_key = 'EXPNUM'
+        # log number of bad values loaded
+        msg = '\t{0} bad values loaded'
+        margs = [len(bad_values)]
+        log.logger.info(msg.format(*margs))
         # return the
         return bad_values, bad_key
 

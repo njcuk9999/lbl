@@ -105,7 +105,7 @@ class Instrument:
     # complex blaze return
     BlazeReturn = Union[Tuple[np.ndarray, fits.Header], None]
 
-    def load_blaze(self, filename: str) -> BlazeReturn:
+    def load_blaze(self, filename: str):
         """
         Load a blaze file
 
@@ -113,11 +113,18 @@ class Instrument:
 
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
-        _ = self
-        if filename is not None:
-            return io.load_fits(filename, kind='blaze fits file')
-        else:
-            return None
+        _ = self, filename
+        raise self._not_implemented('load_blaze')
+
+    def get_mask_systemic_vel(self, mask_file: str) -> float:
+        """
+        Get the systemic velocity in m/s of the mask
+
+        :param mask_file: the absolute path to the mask file
+
+        :return: float, systemic velocity in m/s
+        """
+        raise self._not_implemented('get_mask_systemic_vel')
 
     def science_files(self, directory: str):
         """

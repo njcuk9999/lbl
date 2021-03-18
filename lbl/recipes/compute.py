@@ -125,7 +125,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 3: Load blaze file if set
     # -------------------------------------------------------------------------
     if blaze_file is not None:
-        blaze, _ = inst.load_blaze(blaze_file)
+        blaze = inst.load_blaze(blaze_file)
     else:
         blaze = None
     # -------------------------------------------------------------------------
@@ -133,10 +133,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     ref_table = general.make_ref_dict(inst, reftable_file, reftable_exists,
                                       science_files, mask_file)
-    # load the mask header
-    _, mask_hdr = io.load_fits(mask_file, kind='mask fits file')
-    # get info on template systvel for splining correctly
-    systemic_vel = -1000 * io.get_hkey(mask_hdr, 'SYSTVEL')
+    # get the systemic velocity for mask
+    systemic_vel = inst.get_mask_systemic_vel(mask_file)
     # -------------------------------------------------------------------------
     # Step 5: spline the template
     # -------------------------------------------------------------------------
