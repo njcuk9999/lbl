@@ -1,12 +1,16 @@
 # lbl
 Line by line code for radial velocity
 
+---
+
 # Contents
 
 1. [Installation](#1-installation)
 2. [Using LBL compute](#2-using-lbl-compute)
 3. [Using LBL compil](#3-using-lbl-compil)
 4. [The config file](#4-the-configuration-file)
+
+---
 
 # 1. Installation
 ### Step 1: Download the github repository
@@ -18,6 +22,7 @@ Note from now on we refer to this directory as `{LBL_ROOT}`
 
 [back to top](#contents)
 
+---
 
 ## Step 2: Choose your branch
 #### Main
@@ -43,6 +48,7 @@ experimental functionality currently in development.
 
 [back to top](#contents)
 
+---
 
 ## Step 3: Install python 3.8 and required modules
 Install python 3.8 (either with venv, manually or with conda).
@@ -66,6 +72,7 @@ pip install -r requirements.txt
 
 [back to top](#contents)
 
+---
 
 ## Step 4: Add to the PYTHONPATH environment
 
@@ -80,20 +87,23 @@ export PYTHONPATH={LBL_ROOT}/lbl/recipes/:$PYTHONPATH
 
 [back to top](#contents)
 
-
+---
 
 # 2. Using LBL Compute
 
 [back to top](#contents)
 
+---
 
 # 3. Using LBL Compil
 
 [back to top](#contents)
 
+---
 
 # 4. The configuration file
 
 
 [back to top](#contents)
 
+---
