@@ -20,7 +20,7 @@ from lbl.science import general
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'compute.py'
+__NAME__ = 'lbl_compute.py'
 __STRNAME__ = 'LBL Compute'
 __version__ = base.__version__
 __date__ = base.__date__
@@ -32,9 +32,10 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS = ['INSTRUMENT', 'CONFIG_FILE', 'DATA_DIR']
-# TODO: Fill out
-DESCRIPTION = 'Use this code to compute the LBL'
+ARGS = ['INSTRUMENT', 'CONFIG_FILE', 'DATA_DIR', 'PLOT', 'PLOT_COMPUTE_CCF',
+        'PLOT_COMPUTE_LINES']
+# TODO: Etienne - Fill out
+DESCRIPTION = 'Use this code to compute the LBL rv'
 
 
 # =============================================================================
@@ -164,20 +165,20 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.1 log process
         # ---------------------------------------------------------------------
         # number left
-        nleft = len(science_files) - it + 1
+        nleft = len(science_files) - (it + 1)
         # standard loop message
-        log.logger.info('*' * 79)
+        log.info('*' * 79)
         msg = 'Processing file {0} / {1}   ({2} left)'
         margs = [it + 1, len(science_files), nleft]
-        log.logger.info(msg.format(*margs))
-        log.logger.info('*' * 79)
+        log.info(msg.format(*margs))
+        log.info('*' * 79)
         # add time stats
         if count > 3:
             msgs = ['\tDuration per file {0:.2f}+-{1:.2f} s']
             msgs += ['\tTime left to completion: {2}']
             margs = [mean_time, std_time, time_left]
             for msg in msgs:
-                log.logger.info(msg.format(*margs))
+                log.general(msg.format(*margs))
         # ---------------------------------------------------------------------
         # 6.2 get lbl rv file and check whether it exists
         # ---------------------------------------------------------------------
@@ -185,7 +186,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # if file exists and we are skipping done files
         if lblrv_exists and inst.params['SKIP_DONE']:
             # log message about skipping
-            log.logger.info('\t\tFile exists and skipping activated. '
+            log.general('\t\tFile exists and skipping activated. '
                             'Skipping file.')
             # skip
             continue
@@ -208,7 +209,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             # if sci_bad_hdr_key in bad_hdr_keys
             if str(sci_bad_hdr_key) in bad_hdr_keys:
                 # log message about bad header key
-                log.logger.info('\t\tFile is known to be bad. Skipping file.')
+                log.general('\t\tFile is known to be bad. Skipping file.')
                 # skip
                 continue
         # ---------------------------------------------------------------------
@@ -226,7 +227,7 @@ def __main__(inst: InstrumentsType, **kwargs):
                 # log message
                 msg = '\t\tSNR < {0} (SNR = {1}). Skipping file.'
                 margs = [snr_limit, snr_value]
-                log.logger.info(msg.format(*margs))
+                log.general(msg.format(*margs))
                 # skip
                 continue
         # ---------------------------------------------------------------------

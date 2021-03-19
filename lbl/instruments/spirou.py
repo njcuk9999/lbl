@@ -383,7 +383,7 @@ class Spirou(Instrument):
         bad_odo_url = url_base.format(sheet_id, worksheet)
         # log progress
         msg = 'Loading bad odometer codes from spreadsheet'
-        log.logger.info(msg)
+        log.general(msg)
         # fetch data
         data = requests.get(bad_odo_url)
         tbl = Table.read(data.text, format='ascii')
@@ -394,7 +394,7 @@ class Spirou(Instrument):
         # log number of bad values loaded
         msg = '\t{0} bad values loaded'
         margs = [len(bad_values)]
-        log.logger.info(msg.format(*margs))
+        log.general(msg.format(*margs))
         # return the
         return bad_values, bad_key
 
@@ -465,7 +465,7 @@ class Spirou(Instrument):
         # log saving of file
         msg = 'Writing reference table to: {0}'
         margs = [ref_filename]
-        log.logger.info(msg.format(*margs))
+        log.general(msg.format(*margs))
         # write to disk
         io.write_fits(ref_filename, data=[None, table],
                       header=[header, None], dtype=[None, 'table'])

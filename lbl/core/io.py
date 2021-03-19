@@ -69,7 +69,7 @@ def make_dir(path: str, directory: str, kind: str) -> str:
     if abspath.exists():
         msg = '{0} directory exists (Path={1})'
         margs = [kind, str(abspath)]
-        log.logger.info(msg.format(*margs))
+        log.general(msg.format(*margs))
         # return absolute path directory
         return str(abspath)
     # else try to create directory
@@ -234,7 +234,7 @@ def write_fits(filename: str, data: FitsData = None,
         # print warning
         wmsg = 'Do not put data in primary extension (File: {0})'
         wargs = [filename]
-        log.logger.warning(wmsg.format(*wargs))
+        log.warning(wmsg.format(*wargs))
     # add primary header
     if header[0] is not None:
         hdu0.header = header[0]

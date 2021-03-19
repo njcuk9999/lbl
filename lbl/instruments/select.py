@@ -82,6 +82,12 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     # load parsed args into inputs
     args = vars(parser.parse_args())
     for argname in args:
+        if argname in inputs:
+            # check whether None is allowed
+            if args[argname] is None:
+                if argname not in inputs.not_none:
+                    continue
+        # we set the input
         inputs.set(argname, args[argname], source=func_name + '[CMD]')
     # deal with yaml file
     if 'CONFIG_FILE' in inputs:
@@ -159,7 +165,7 @@ def splash(name: str, instrument: str):
     margs = [name, __version__, instrument]
     # loop through messages
     for msg in msgs:
-        log.logger.info(msg.format(*margs))
+        log.info(msg.format(*margs))
 
 # =============================================================================
 # Start of code

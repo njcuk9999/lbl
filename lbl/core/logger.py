@@ -34,6 +34,9 @@ class Log:
         self.logger = logging.getLogger()
         # set the default value to one below between INFO and DEBUG level
         self.baselevel = logging.DEBUG
+        # add a new level (GENERAL)
+        self.GENERAL = 15
+        logging.addLevelName(self.GENERAL, 'GENERAL')
         # set logger to this as the lowest level
         self.logger.setLevel(self.baselevel)
         # deal with log overwrite
@@ -52,7 +55,7 @@ class Log:
         # set the format from console format
         consolehandler.setFormatter(self.confmt)
         # set the default level (INFO)
-        consolehandler.setLevel(logging.INFO)
+        consolehandler.setLevel(self.GENERAL)
         # add to the logger
         self.logger.addHandler(consolehandler)
         # if we have a filename defined add a file logger
@@ -108,6 +111,18 @@ class Log:
                     # update handler level
                     handler.setLevel(record)
 
+    def general(self, message: str, *args, **kwargs):
+        self.logger._log(self.GENERAL, message, args, **kwargs)
+
+    def info(self, message: str, *args, **kwargs):
+        self.logger.info(message, *args, **kwargs)
+
+    def warning(self, message: str, *args, **kwargs):
+        self.logger.warning(message, *args, **kwargs)
+
+    def error(self, message: str, *args, **kwargs):
+        self.logger.error(message, *args, **kwargs)
+
 
 # Custom formatter
 class ConsoleFormat(logging.Formatter):
@@ -122,8 +137,11 @@ class ConsoleFormat(logging.Formatter):
         self.empty_fmt = '%(message)s'
         # define debug format
         self.debug_fmt = self.cprint.debug + self.fmt + self.cprint.endc
+        # add a new level (GENERAL)
+        self.GENERAL = 15
+        self.general_fmt = self.cprint.okgreen + self.fmt + self.cprint.endc
         # define info format
-        self.info_fmt = self.cprint.okgreen + self.fmt + self.cprint.endc
+        self.info_fmt = self.cprint.okblue + self.fmt + self.cprint.endc
         # define warning format
         self.warning_fmt = self.cprint.warning + self.fmt + self.cprint.endc
         # define error format
@@ -140,6 +158,8 @@ class ConsoleFormat(logging.Formatter):
         # Replace the original format with one customized by logging level
         if record.levelno < logging.INFO:
             self._style._fmt = self.debug_fmt
+        if record.levelno == self.GENERAL:
+            self._style._fmt = self.general_fmt
         elif record.levelno == logging.INFO:
             self._style._fmt = self.info_fmt
         elif record.levelno == logging.WARNING:

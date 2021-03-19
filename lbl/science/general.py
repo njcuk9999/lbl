@@ -162,7 +162,7 @@ def make_ref_dict(inst: Instrument, reftable_file: str,
         for key in ref_dict.keys():
             ref_table[key] = np.array(ref_dict[key])
         # log writing
-        log.logger.info('Writing ref table {0}'.format(reftable_file))
+        log.general('Writing ref table {0}'.format(reftable_file))
         # write to file
         io.write_table(reftable_file, ref_table,
                        fmt=inst.params['REF_TABLE_FMT'])
@@ -206,7 +206,7 @@ def spline_template(inst: Instrument, template_file: str,
     """
     # log that we are producing all template splines
     msg = 'Defining all the template splines required later'
-    log.logger.info(msg)
+    log.general(msg)
     # get the pixel hp_width [needs to be in m/s]
     hp_width = inst.params['HP_WIDTH'] * 1000
     # load the template
@@ -321,7 +321,7 @@ def rough_ccf_rv(inst: Instrument, wavegrid: np.ndarray,
     # set up the ccf vector
     ccf_vector = np.zeros_like(dvgrid)
     # log the we are computing the CCF
-    log.logger.info('\tComputing CCF')
+    log.general('\tComputing CCF')
     # loop around dv elements
     for dv_element in range(len(dvgrid)):
         # calculate the spline on to the doppler shifted dv value
@@ -355,7 +355,7 @@ def rough_ccf_rv(inst: Instrument, wavegrid: np.ndarray,
     # log ccf velocity
     msg = '\t\tCCF velocity = {0:.2f} m/s'
     margs = [-systemic_velocity, ccf_ewidth]
-    log.logger.info(msg.format(*margs))
+    log.general(msg.format(*margs))
     # -------------------------------------------------------------------------
     # debug plot
     # -------------------------------------------------------------------------
@@ -586,7 +586,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
                 # log ccf ewidth
                 msg = '\t\tCCF e-width = {0:.2f} m/s'
                 margs = [ccf_ewidth]
-                log.logger.info(msg.format(*margs))
+                log.general(msg.format(*margs))
         else:
             sys_rv, ccf_ewidth = 0, 0
     # for FP files
@@ -598,7 +598,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         # log using
         msg = '\tUsing systemic rv={0:.4f} m/s from MJD={1}'
         margs = [sys_rv, mjdate_all[closest]]
-        log.logger.info(msg.format(*margs))
+        log.general(msg.format(*margs))
     # -------------------------------------------------------------------------
     # iteration loop
     # -------------------------------------------------------------------------
@@ -638,9 +638,9 @@ def compute_rv(inst: Instrument, sci_iteration: int,
     # loop around iterations
     for iteration in range(compute_rv_n_iters):
         # log iteration
-        log.logger.info('\t' + '-' * 50)
-        log.logger.info('\tIteration {0}'.format(iteration + 1))
-        log.logger.info('\t' + '-' * 50)
+        log.general('\t' + '-' * 50)
+        log.general('\tIteration {0}'.format(iteration + 1))
+        log.general('\t' + '-' * 50)
         # add to the number of iterations used to converge
         num_to_converge += 1
         # get start time
@@ -835,7 +835,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         # log the value
         msg = '\t\tstdev_meas/stdev_pred = {0:.2f}'
         margs = [stddev_nsig]
-        log.logger.info(msg.format(*margs))
+        log.general(msg.format(*margs))
         # ---------------------------------------------------------------------
         # get the best etimate of the velocity and update sline
         rv_mean, bulk_error = mp.odd_ratio_mean(dv, dvrms)
@@ -856,7 +856,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
                  bulk_error]
         # loop around messages and add to log
         for msg in msgs:
-            log.logger.info('\t\t' + msg.format(*margs))
+            log.general('\t\t' + msg.format(*margs))
         # ---------------------------------------------------------------------
         # do a convergence check
         if np.abs(rv_mean) < (converge_thres * bulk_error):
@@ -889,7 +889,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
     # update the mjd date array
     mjdate_all[sci_iteration] = mjdate
     # end iterations
-    log.logger.info('\t' + '-' * 50)
+    log.general('\t' + '-' * 50)
     # -------------------------------------------------------------------------
     # Update convergence
     # -------------------------------------------------------------------------
@@ -900,7 +900,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         wmsg = ('This RV is (probably) bad (iterations = {0}). '
                 'Next step we will measure it with a CCF')
         wargs = [num_to_converge]
-        log.logger.warning(wmsg.format(*wargs))
+        log.warning(wmsg.format(*wargs))
 
     else:
         # make sure we are not taking a completely new rv measurement
@@ -908,7 +908,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         # log that rv converged
         msg = 'Compute RV converged in {0} steps'
         margs = [num_to_converge]
-        log.logger.info(msg.format(*margs))
+        log.general(msg.format(*margs))
     # -------------------------------------------------------------------------
     # Log total time
     total_time = (Time.now() - zero_time).to(uu.s).value

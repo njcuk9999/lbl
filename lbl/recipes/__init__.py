@@ -9,18 +9,16 @@ Created on 2021-03-15
 
 @author: cook
 """
-from lbl.recipes import compute
-from lbl.recipes import compile
+from lbl.recipes import lbl_compute
+from lbl.recipes import lbl_compile
 
 # =============================================================================
 # Define variables
 # =============================================================================
-
-
-# =============================================================================
-# Define functions
-# =============================================================================
-
+# alias to lbl compute
+compute = lbl_compute
+# alias to lbl compile
+compil = lbl_compile
 
 # =============================================================================
 # Start of code

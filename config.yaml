@@ -15,11 +15,14 @@ OBJECT_TEMPLATE: GL699
 # Set the science input file string
 INPUT_FILE: '*e2dsff*AB.fits'
 
-# Set whether to plot
-PLOT: False
+# Set whether to plot any plots
+PLOT: True
 
-# Set whether to debug plot
-DEBUG_PLOT: False
+# Set whether to do the compute ccf plot
+PLOT_COMPUTE_CCF: False
+
+# Set whether to do the compute line plot
+PLOT_COMPUTE_LINES: False
 
 # Set blaze file (None for default)
 BLAZE_FILE: 2498F798T802f_pp_blaze_AB.fits

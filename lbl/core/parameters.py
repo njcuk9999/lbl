@@ -23,7 +23,6 @@ params = base_classes.ParamDict()
 # =============================================================================
 # Define general parameters
 # =============================================================================
-
 # add default params - can be None
 params.set(key='CONFIG_FILE', value=None, source=__NAME__,
            desc='Config file for user settings',
@@ -66,16 +65,6 @@ params.set(key='LBLRDB_SUBDIR', value='lblrdb', source=__NAME__,
 params.set(key='INSTRUMENT', value=None, source=__NAME__,
            desc='The instrument to use',
            arg='--instrument', dtype=str, not_none=True)
-
-# Define whether to do plots
-params.set(key='PLOT', value=False, source=__NAME__,
-           desc='Whether to do plots for the compute function',
-           arg='--plot', dtype=bool)
-
-# Define whether to do debug plots
-params.set(key='DEBUG_PLOT', value=False, source=__NAME__,
-           desc='Whether to do debug plots for the compute function',
-           arg='--debugplot', dtype=bool)
 
 # Define whether to skip done files
 params.set(key='SKIP_DONE', value=True, source=__NAME__,
@@ -171,6 +160,24 @@ params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=0.2, source=__NAME__,
 params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=8, source=__NAME__,
            desc='The maximum number of iterations deemed to lead to a good RV')
 
+
+# =============================================================================
+# Define plot parameters
+# =============================================================================
+# Define whether to do any plots
+params.set(key='PLOT', value=False, source=__NAME__,
+           desc='Whether to do plots for the compute function (True/False)',
+           arg='--plot', dtype=bool)
+
+# Define whether to do the compute ccf plot
+params.set(key='PLOT_COMPUTE_CCF', value=False, source=__NAME__,
+           desc='Whether to do the compute ccf plot (True/False)',
+           arg='--plotccf', dtype=bool)
+
+# Define whether to do the compute line plot
+params.set(key='PLOT_COMPUTE_LINES', value=False, source=__NAME__,
+           desc='Whether to do the compute line plot (True/False)',
+           arg='--plotline', dtype=bool)
 
 # =============================================================================
 # Define header keys

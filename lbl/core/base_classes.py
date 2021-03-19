@@ -39,7 +39,7 @@ class LblException(Exception):
         """
         self.message = message
         # log error
-        log.logger.error(self.message)
+        log.error(self.message)
 
     def __str__(self) -> str:
         """

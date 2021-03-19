@@ -71,10 +71,6 @@ def plot_blank(inst: Instrument, **kwargs):
     """
     # import matplotlib
     plt = import_matplotlib()
-    # this is a debug plot skip is this is True
-    # TODO: This line is only required if debug plot
-    if not inst.params['DEBUG_PLOT']:
-        return
     # this is a plot skip if this is True
     if not inst.params['PLOT']:
         return
@@ -105,11 +101,11 @@ def plot_ccf(inst: Instrument, dvgrid: np.ndarray,
     # import matplotlib
     plt = import_matplotlib()
     # -------------------------------------------------------------------------
-    # this is a debug plot skip is this is True
-    if not inst.params['DEBUG_PLOT']:
-        return
-        # this is a plot skip if this is True
+    # this is a plot skip if this is True
     if not inst.params['PLOT']:
+        return
+    # this is a debug plot skip is this is True
+    if not inst.params['PLOT_COMPUTE_CCF']:
         return
     # -------------------------------------------------------------------------
     # set up plot
@@ -144,11 +140,11 @@ def line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
     # import matplotlib
     plt = import_matplotlib()
     # -------------------------------------------------------------------------
-    # this is a debug plot skip is this is True
-    if not inst.params['DEBUG_PLOT']:
-        return
-        # this is a plot skip if this is True
+    # this is a plot skip if this is True
     if not inst.params['PLOT']:
+        return
+    # this is a debug plot skip is this is True
+    if not inst.params['PLOT_COMPUTE_LINES']:
         return
     # -------------------------------------------------------------------------
     # extract values from plot dict

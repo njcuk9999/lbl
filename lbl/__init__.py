@@ -11,15 +11,14 @@ Created on 2021-03-15
 """
 from lbl import recipes
 
-
 # =============================================================================
 # Define variables
 # =============================================================================
 # compute recipe
-compute = recipes.compute.main
+compute = recipes.lbl_compute.main
 
 # compile recipe
-compile = recipes.compile.main
+compil = recipes.lbl_compile.main
 
 
 # =============================================================================
