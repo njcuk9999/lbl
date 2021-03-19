@@ -597,7 +597,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         sys_rv = systemic_all[closest]
         # log using
         msg = '\tUsing systemic rv={0:.4f} m/s from MJD={1}'
-        margs = [sys_rv, closest]
+        margs = [sys_rv, mjdate_all[closest]]
         log.logger.info(msg.format(*margs))
     # -------------------------------------------------------------------------
     # iteration loop

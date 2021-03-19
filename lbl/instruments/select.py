@@ -31,6 +31,7 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # load classes
 ParamDict = base_classes.ParamDict
+log = base_classes.log
 # instruments list
 InstrumentsType = Union[default.Instrument, spirou.Spirou,
                         harps.Harps, None]
@@ -146,6 +147,19 @@ def load_instrument(args: ParamDict) -> InstrumentsType:
     # return instrument instances
     return inst
 
+
+def splash(name: str, instrument: str):
+    # print splash
+    msgs = ['']
+    msgs += ['*' * 79]
+    msgs += ['\t {0}']
+    msgs += ['\t VERSION:{1} INSTRUMENT: {2}']
+    msgs += ['*' * 79]
+    msgs += ['']
+    margs = [name, __version__, instrument]
+    # loop through messages
+    for msg in msgs:
+        log.logger.info(msg.format(*margs))
 
 # =============================================================================
 # Start of code

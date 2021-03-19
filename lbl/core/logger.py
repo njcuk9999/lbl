@@ -116,7 +116,7 @@ class ConsoleFormat(logging.Formatter):
         # get colours
         self.cprint = Colors(theme=theme)
         # define default format
-        self.fmt = '%(asctime)s | %(levelname)-5.5s | %(message)s'
+        self.fmt = '%(asctime)s | %(levelname)-1.1s | %(message)s'
         self.default = logging.Formatter(self.fmt)
         # define empty format
         self.empty_fmt = '%(message)s'

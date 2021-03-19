@@ -20,7 +20,8 @@ from lbl.science import general
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'base_classes.py'
+__NAME__ = 'compute.py'
+__STRNAME__ = 'LBL Compute'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -52,6 +53,8 @@ def main(**kwargs):
     args = select.parse_args(ARGS, kwargs, DESCRIPTION)
     # load instrument
     inst = select.load_instrument(args)
+    # print splash
+    select.splash(name=__STRNAME__, instrument=inst.name)
     # run __main__
     try:
         return __main__(inst)
