@@ -16,10 +16,10 @@ OBJECT_TEMPLATE: GL699
 INPUT_FILE: '*e2dsff*AB.fits'
 
 # Set whether to plot
-PLOT: True
+PLOT: False
 
 # Set whether to debug plot
-DEBUG_PLOT: True
+DEBUG_PLOT: False
 
 # Set blaze file (None for default)
 BLAZE_FILE: 2498F798T802f_pp_blaze_AB.fits

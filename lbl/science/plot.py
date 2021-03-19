@@ -11,7 +11,7 @@ Created on 2021-03-17
 """
 import matplotlib
 import numpy as np
-from typing import List, Union
+from typing import Any, Dict
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -104,60 +104,108 @@ def plot_ccf(inst: Instrument, dvgrid: np.ndarray,
     """
     # import matplotlib
     plt = import_matplotlib()
+    # -------------------------------------------------------------------------
     # this is a debug plot skip is this is True
     if not inst.params['DEBUG_PLOT']:
         return
         # this is a plot skip if this is True
     if not inst.params['PLOT']:
         return
-        # set up plot
+    # -------------------------------------------------------------------------
+    # set up plot
     fig, frame = plt.subplots(ncols=1, nrows=1)
+    # -------------------------------------------------------------------------
     # plot functions here
     frame.plot(-dvgrid / 1000, ccf_vector)
     frame.plot(-dvgrid / 1000, ccf_fit)
     # construct title
     targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE'],
-             gcoeffs[0] * 1000, gcoeffs[1]]
-    title = ('OBJ_SCI={0} OBJ_TEMP={1}\nCCF: cent={2:.4f} km/s '
+             gcoeffs[0] / 1000, gcoeffs[1] / 1000]
+    title = ('CCF Plot\nOBJ_SCI={0} OBJ_TEMP={1}\nCCF: cent={2:.4f} km/s '
              'ewid={3:.4f} km/s')
     # set labels and title
     frame.set(xlabel='RV [km/s]', ylabel='Normalized CCF',
               title=title.format(*targs))
+    # -------------------------------------------------------------------------
     # show and close plot
     plt.show()
     plt.close()
 
 
-def model_debug_plot(inst: Instrument, wavegrid: np.ndarray,
-                     model: np.ndarray,
-                     orders: Union[List[int], int]):
+def line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
     """
-    This is a blank plot
-    :param inst:  Instrument, instrument this plot is used for
-    :param wavegrid: the wave grid
-    :param model: the model spectrum
-    :param orders: int or List[int], the order(s) to plot
+    Compute RV line plot
+
+    :param inst: Instrument, instrument this plot is used for
+    :param plot_dict: a dictionary of
 
     :return: None - plots
     """
     # import matplotlib
     plt = import_matplotlib()
+    # -------------------------------------------------------------------------
     # this is a debug plot skip is this is True
-    # TODO: This line is only required if debug plot
     if not inst.params['DEBUG_PLOT']:
         return
-    # this is a plot skip if this is True
+        # this is a plot skip if this is True
     if not inst.params['PLOT']:
         return
-    # deal with orders being an integer
-    if isinstance(orders, int):
-        orders = [orders]
+    # -------------------------------------------------------------------------
+    # extract values from plot dict
+    wavegrid = plot_dict['WAVEGRID']
+    model = plot_dict['MODEL']
+    plot_orders = plot_dict['PLOT_ORDERS']
+    line_orders = plot_dict['LINE_ORDERS']
+    ww_ord_line = plot_dict['WW_ORD_LINE']
+    spec_ord_line = plot_dict['SPEC_ORD_LINE']
+    # deal with plot orders being an integer (we want a list)
+    if isinstance(plot_orders, int):
+        plot_orders = [plot_orders]
+    # -------------------------------------------------------------------------
     # set up plot
     fig, frame = plt.subplots(ncols=1, nrows=1)
-    # plot functions here
-    for order_num in orders:
-        frame.plot(wavegrid[order_num], model[order_num],
-                   color='grey', lw=3, alpha=0.3, label='template')
+    # -------------------------------------------------------------------------
+    # storage for used labels
+    used_labels = []
+    # loop around orders
+    for ord_num in plot_orders:
+        # add template label (only if not present)
+        label1 = 'template'
+        if label1 in used_labels:
+            label1 = None
+        else:
+            used_labels.append(label1)
+        # plot the template
+        frame.plot(wavegrid[ord_num], model[ord_num], color='grey', lw=3,
+                   alpha=0.3, label=label1)
+        # plot the lines
+        for line_it in range(len(line_orders)):
+            # get colour of line
+            colour = ['red', 'green', 'blue'][line_it % 3]
+            # only plot the orders we want
+            if line_orders[line_it] == ord_num:
+                # add template label (only if not present)
+                label2 = 'line'
+                if label2 in used_labels:
+                    label2 = None
+                else:
+                    used_labels.append(label2)
+                # plot the line
+                frame.plot(ww_ord_line[line_it], spec_ord_line[line_it],
+                           color=colour, label=label2)
+    # construct title
+    title = ('Line spectrum {0}\nOBJ_SCI={1} OBJ_TEMP={2}')
+    if len(plot_orders) == 1:
+        targs = ['order {0}'.format(plot_orders[0])]
+    else:
+        str_orders = np.array(plot_orders).astype(str)
+        targs = ['orders {0}'.format(','.join(str_orders))]
+    targs += [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE']]
+    # set labels and title
+    frame.set(xlabel='Wavelength [nm]', ylabel='Arbitrary flux',
+              title=title.format(*targs))
+    frame.legend(loc=0)
+    # -------------------------------------------------------------------------
     # show and close plot
     plt.show()
     plt.close()

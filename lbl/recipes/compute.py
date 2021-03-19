@@ -145,8 +145,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # load bad odometer codes
     bad_hdr_keys, bad_hdr_key = inst.load_bad_hdr_keys()
     # store all systemic velocities and mid exposure times in mjd
-    systemic_all = np.full_like(science_files, np.nan)
-    mjdate_all = np.zeros_like(science_files)
+    systemic_all = np.full(len(science_files), np.nan)
+    mjdate_all = np.zeros(len(science_files)).astype(float)
     # store the initial ccf_ewidth value
     ccf_ewidth = None
     # flag to take a completely new rv measurement
@@ -154,6 +154,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # time stats
     mean_time, std_time, time_left = np.nan, np.nan, ''
     all_durations = []
+    count = 0
     # loop through each science file
     for it, science_file in enumerate(science_files):
         # ---------------------------------------------------------------------
@@ -162,15 +163,18 @@ def __main__(inst: InstrumentsType, **kwargs):
         # number left
         nleft = len(science_files) - it + 1
         # standard loop message
+        log.logger.info('*' * 79)
         msg = 'Processing file {0} / {1}   ({2} left)'
-        margs = [it + 1, len(science_file), nleft]
+        margs = [it + 1, len(science_files), nleft]
         log.logger.info(msg.format(*margs))
+        log.logger.info('*' * 79)
         # add time stats
-        if it > 2:
-            msg = '\tDuration per file {0:.2f}+-{1:.2f} s'
-            msg += '\n\tTime left to completion: {3}'
+        if count > 3:
+            msgs = ['\tDuration per file {0:.2f}+-{1:.2f} s']
+            msgs += ['\tTime left to completion: {2}']
             margs = [mean_time, std_time, time_left]
-            log.logger.info(msg.format(*margs))
+            for msg in msgs:
+                log.logger.info(msg.format(*margs))
         # ---------------------------------------------------------------------
         # 6.2 get lbl rv file and check whether it exists
         # ---------------------------------------------------------------------
@@ -199,7 +203,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             # get bad header key
             sci_bad_hdr_key = io.get_hkey(sci_hdr, bad_hdr_key)
             # if sci_bad_hdr_key in bad_hdr_keys
-            if sci_bad_hdr_key in bad_hdr_keys:
+            if str(sci_bad_hdr_key) in bad_hdr_keys:
                 # log message about bad header key
                 log.logger.info('\t\tFile is known to be bad. Skipping file.')
                 # skip
@@ -242,14 +246,15 @@ def __main__(inst: InstrumentsType, **kwargs):
         # ---------------------------------------------------------------------
         # 6.8 save to file
         # ---------------------------------------------------------------------
-        inst.write_ref_table(ref_table, reftable_file, sci_hdr, outputs)
+        inst.write_lblrv_table(ref_table, lblrv_file, sci_hdr, outputs)
         # ---------------------------------------------------------------------
         # 6.9 Time taken stats (For next iteration)
         # ---------------------------------------------------------------------
-        if it > 2:
+        if count > 2:
             # smart timing
             sout = general.smart_timing(all_durations, nleft)
             mean_time, std_time, time_left = sout
+        count += 1
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------

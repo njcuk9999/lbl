@@ -418,9 +418,9 @@ class Spirou(Instrument):
         # return the berv measurement (in m/s)
         return berv
 
-    def write_ref_table(self, ref_table: Dict[str, Any],
-                        ref_filename: str, header: fits.Header,
-                        outputs: Dict[str, Any]):
+    def write_lblrv_table(self, ref_table: Dict[str, Any],
+                          ref_filename: str, header: fits.Header,
+                          outputs: Dict[str, Any]):
         """
         Write the reference table to file "filename"
 

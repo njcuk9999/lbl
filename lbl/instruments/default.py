@@ -227,9 +227,9 @@ class Instrument:
         _ = sci_hdr
         raise self._not_implemented('get_berv')
 
-    def write_ref_table(self, ref_table: Dict[str, Any],
-                        ref_filename: str, header: fits.Header,
-                        outputs: Dict[str, Any]):
+    def write_lblrv_table(self, ref_table: Dict[str, Any],
+                          ref_filename: str, header: fits.Header,
+                          outputs: Dict[str, Any]):
         """
         Write the reference table to file "filename"
 
@@ -241,7 +241,7 @@ class Instrument:
         :return: None - write file
         """
         _ = ref_table, ref_filename, header, outputs
-        raise self._not_implemented('get_berv')
+        raise self._not_implemented('write_lblrv_table')
 
 
 # =============================================================================

@@ -252,8 +252,8 @@ def spline_template(inst: Instrument, template_file: str,
     # -------------------------------------------------------------------------
     # we create a mask to know if the splined point  is valid
     tmask = np.isfinite(tflux).astype(float)
-    # Question: Should this be template['wavelength'][valid] or not?
-    sps['spline_mask'] = mp.iuv_spline(ntwave, tmask[valid], k=1, ext=1)
+    ntwave1 = mp.doppler_shift(twave, -systemic_vel)
+    sps['spline_mask'] = mp.iuv_spline(ntwave1, tmask, k=1, ext=1)
     # -------------------------------------------------------------------------
     # return splines
     return sps
@@ -321,7 +321,7 @@ def rough_ccf_rv(inst: Instrument, wavegrid: np.ndarray,
     # set up the ccf vector
     ccf_vector = np.zeros_like(dvgrid)
     # log the we are computing the CCF
-    log.logger.info('\t\tComputing CCF')
+    log.logger.info('\tComputing CCF')
     # loop around dv elements
     for dv_element in range(len(dvgrid)):
         # calculate the spline on to the doppler shifted dv value
@@ -352,6 +352,10 @@ def rough_ccf_rv(inst: Instrument, wavegrid: np.ndarray,
     ccf_ewidth = gcoeffs[1]
     # fit ccf
     ccf_fit = mp.gauss_fit_s(dvgrid, *gcoeffs)
+    # log ccf velocity
+    msg = '\t\tCCF velocity = {0:.2f} m/s'
+    margs = [-systemic_velocity, ccf_ewidth]
+    log.logger.info(msg.format(*margs))
     # -------------------------------------------------------------------------
     # debug plot
     # -------------------------------------------------------------------------
@@ -395,7 +399,7 @@ def get_scaling_ratio(spectrum1: np.ndarray,
         good = np.isfinite(spectrum1) & np.isfinite(spectrum2)
         good &= np.abs(residuals / sigma_res) < 3
         # calculate amp scale
-        part1 = mp.nansum(residuals[good])
+        part1 = mp.nansum(residuals[good] * spectrum2[good])
         part2 = mp.nansum(spectrum1_2[good])
         part3 = mp.nansum(spectrum2_2[good])
         scale = part1 / np.sqrt(part2 * part3)
@@ -476,7 +480,9 @@ def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
         # work out the RV error
         rms_value = 1 / np.sqrt(np.sum(1 / rms_pix ** 2))
         # feed the line
-        value = mp.nansum(diff_vector * vector) / mp.nansum(vector ** 2)
+        # nansum can break here - subtle: must be a sum
+        #   nansum --> 0 / 0  [breaks]   sum --> nan / nan [works]
+        value = np.sum(diff_vector * vector) / np.sum(vector ** 2)
     # return the value and rms of the value
     return value, rms_value
 
@@ -555,7 +561,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         # work out the velocity scale
         width = get_velo_scale(wavegrid[order_num], hp_width)
         # we high-pass on a scale of ~101 pixels in the e2ds
-        sci_data[order_num] -= mp.lowpassfilter(wavegrid[order_num],
+        sci_data[order_num] -= mp.lowpassfilter(sci_data[order_num],
                                                 width=width)
     # -------------------------------------------------------------------------
     # get BERV
@@ -569,10 +575,11 @@ def compute_rv(inst: Instrument, sci_iteration: int,
     if reset_rv:
         # if we are not using FP file
         if 'FP' not in object_science:
+            # weighting of one everywhere
+            ccf_weight = np.ones_like(ref_table['WEIGHT_LINE'])
             # calculate the rough CCF RV estimate
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
-                                          ref_table['WAVE_START'],
-                                          ref_table['WEIGHT_LINE'])
+                                          ref_table['WAVE_START'], ccf_weight)
             # if ccf width is not set then set it and log message
             if ccf_ewidth is None:
                 ccf_ewidth = float(ewidth)
@@ -588,6 +595,10 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         closest = np.argmin(mjdate - mjdate_all)
         # get the closest system rv to this observation
         sys_rv = systemic_all[closest]
+        # log using
+        msg = '\tUsing systemic rv={0:.4f} m/s from MJD={1}'
+        margs = [sys_rv, closest]
+        log.logger.info(msg.format(*margs))
     # -------------------------------------------------------------------------
     # iteration loop
     # -------------------------------------------------------------------------
@@ -626,6 +637,10 @@ def compute_rv(inst: Instrument, sci_iteration: int,
     stddev_nsig = np.nan
     # loop around iterations
     for iteration in range(compute_rv_n_iters):
+        # log iteration
+        log.logger.info('\t' + '-' * 50)
+        log.logger.info('\tIteration {0}'.format(iteration + 1))
+        log.logger.info('\t' + '-' * 50)
         # add to the number of iterations used to converge
         num_to_converge += 1
         # get start time
@@ -657,7 +672,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
                 model0[order_num] = spline0(wave_ord) * blaze_ord
                 # get the median for the model and original spectrum
                 med_model0 = mp.nanmedian(model0[order_num])
-                med_sci_data_0 = mp.nanmedian(sci_data0)
+                med_sci_data_0 = mp.nanmedian(sci_data0[order_num])
                 # normalize by the median
                 model0[order_num] = model0[order_num] / med_model0
                 # multiply by the median of the original spectrum
@@ -731,11 +746,11 @@ def compute_rv(inst: Instrument, sci_iteration: int,
             # boundary conditions
             if (x_end - x_start) < min_line_width:
                 mask_keep[line_it] = False
+                continue
             # Question: Why not add these to the keep mask?
             if x_start < 0:
                 continue
-            # Question: Why is this shape[0] ?
-            if x_end > ww_ord.shape[0] - 2:
+            if x_end > len(ww_ord) - 2:
                 continue
             # -----------------------------------------------------------------
             # get weights at the edge of the domain. Pixels inside have a
@@ -744,13 +759,13 @@ def compute_rv(inst: Instrument, sci_iteration: int,
             # deal with overlapping pixels (before start)
             if ww_ord[x_start] < wave_start:
                 refdiff = ww_ord[x_start + 1] - wave_start
-                wavediff = ww_ord[x_start + 1] = ww_ord[x_start]
+                wavediff = ww_ord[x_start + 1] - ww_ord[x_start]
                 weight_mask[0] = refdiff / wavediff
             # deal with overlapping pixels (after end)
             if ww_ord[x_end + 1] > wave_end:
                 refdiff = ww_ord[x_end] - wave_end
                 wavediff = ww_ord[x_end + 1] - ww_ord[x_end]
-                weight_mask[0] = 1 - (refdiff / wavediff)
+                weight_mask[-1] = 1 - (refdiff / wavediff)
             # get the x pixels
             xpix = np.arange(x_start, len(weight_mask) + x_start)
             # get mean xpix and mean blaze for line
@@ -762,9 +777,9 @@ def compute_rv(inst: Instrument, sci_iteration: int,
             # -----------------------------------------------------------------
             # add to the plots dictionary (for plotting later)
             if iteration == 1:
-                plot_dict['LINE_ORDERS'] = [order_num]
-                plot_dict['WW_ORD_LINE'] = [ww_ord[x_start:x_end + 1]]
-                plot_dict['SPEC_ORD_LINE'] = [sci_ord[x_start:x_end + 1]]
+                plot_dict['LINE_ORDERS'] += [order_num]
+                plot_dict['WW_ORD_LINE'] += [ww_ord[x_start:x_end + 1]]
+                plot_dict['SPEC_ORD_LINE'] += [sci_ord[x_start:x_end + 1]]
             # -----------------------------------------------------------------
             # derivative of the segment
             d_seg = dmodel_ord[x_start: x_end + 1] * weight_mask
@@ -776,9 +791,9 @@ def compute_rv(inst: Instrument, sci_iteration: int,
             model_seg = model_ord[x_start:x_end + 1]
             diff_seg = (sci_seg - model_seg) * weight_mask
             # work out the sum of the weights of the weight mask
-            sum_weight_mask = mp.nansum(weight_mask)
+            sum_weight_mask = np.sum(weight_mask)
             # work out the sum of the rms
-            sum_rms = mp.nansum(rms_ord[x_start: x_end + 1] * weight_mask)
+            sum_rms = np.sum(rms_ord[x_start: x_end + 1] * weight_mask)
             # work out the mean rms
             mean_rms = sum_rms / sum_weight_mask
             # -----------------------------------------------------------------
@@ -848,6 +863,10 @@ def compute_rv(inst: Instrument, sci_iteration: int,
             # break here
             break
     # -------------------------------------------------------------------------
+    # line plot
+    # -------------------------------------------------------------------------
+    plot.line_plot(inst, plot_dict)
+    # -------------------------------------------------------------------------
     # update reference table
     # -------------------------------------------------------------------------
     # express to have sign fine relative to convention
@@ -869,6 +888,8 @@ def compute_rv(inst: Instrument, sci_iteration: int,
     systemic_all[sci_iteration] = sys_rv - berv
     # update the mjd date array
     mjdate_all[sci_iteration] = mjdate
+    # end iterations
+    log.logger.info('\t' + '-' * 50)
     # -------------------------------------------------------------------------
     # Update convergence
     # -------------------------------------------------------------------------
@@ -876,7 +897,7 @@ def compute_rv(inst: Instrument, sci_iteration: int,
         # flag that we need to take a completely new rv measurement
         reset_rv = True
         # log that rv did not converge
-        wmsg = ('This RV is (probably) bed (iterations = {0}). '
+        wmsg = ('This RV is (probably) bad (iterations = {0}). '
                 'Next step we will measure it with a CCF')
         wargs = [num_to_converge]
         log.logger.warning(wmsg.format(*wargs))
@@ -929,7 +950,7 @@ def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
     # get time delta
     timedelta = TimeDelta(mean_time * left * uu.s)
     # get in hh:mm:ss format
-    time_left = timedelta.to_datatime.__str__()
+    time_left = str(timedelta.to_datetime())
     # return values
     return mean_time, std_time, time_left
 

@@ -210,7 +210,7 @@ def write_fits(filename: str, data: FitsData = None,
     if dtype is None:
         dtype = [None] * len(data)
     elif isinstance(dtype, str):
-        dtype = [str]
+        dtype = [dtype]
     # -------------------------------------------------------------------------
     # deal with wrong length of headers
     if len(header) != len(data):
@@ -244,7 +244,7 @@ def write_fits(filename: str, data: FitsData = None,
     # push other extensions
     if len(data) > 1:
         # loop around other extensions
-        for ext in range(len(data)):
+        for ext in range(1, len(data)):
             if dtype[ext] == 'image':
                 hdu_ext = fits.ImageHDU(data[ext], header=header[ext])
             elif dtype[ext] == 'table':

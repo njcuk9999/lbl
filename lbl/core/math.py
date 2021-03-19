@@ -570,9 +570,9 @@ def doppler_shift(wavegrid: np.ndarray, velocity: float) -> np.ndarray:
     :return: np.ndarray, the updated wave grid
     """
     # relativistic calculation (1 - v/c)
-    part1 = 1 - velocity / speed_of_light_ms
+    part1 = 1 - (velocity / speed_of_light_ms)
     # relativistic calculation (1 + v/c)
-    part2 = 1 + velocity / speed_of_light_ms
+    part2 = 1 + (velocity / speed_of_light_ms)
     # return updated wave grid
     return wavegrid * np.sqrt(part1 / part2)
 
@@ -619,6 +619,9 @@ def estimate_sigma(tmp: np.ndarray, sigma=1.0) -> float:
 
     :return: the 1 sigma value
     """
+    # make sure we don't have all nan values
+    if np.sum(np.isfinite(tmp)) == 0:
+        return np.nan
     # get formal definition of N sigma
     sig1 = normal_fraction(sigma)
     # get the 1 sigma as a percentile
