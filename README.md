@@ -1,8 +1,14 @@
 # lbl
 Line by line code for radial velocity
 
+# Contents
 
-# Installation
+[1. Installation](#1-installation)
+[2. Using LBL compute](#2-using-lbl-compute)
+[3. Using LBL compil](#3-using-lbl-compil)
+[4. The config file](#4-the-configuration-file)
+
+# 1. Installation
 ### Step 1: Download the github repository
 ```bash
 >> git clone git@github.com:njcuk9999/lbl.git
@@ -62,3 +68,10 @@ For bash:
 export PYTHONPATH={LBL_ROOT}:$PYTHONPATH
 export PYTHONPATH={LBL_ROOT}/lbl/recipes/:$PYTHONPATH
 ```
+
+
+# 2. Using LBL Compute
+
+# 3. Using LBL Compil
+
+# 4. The configuration file
