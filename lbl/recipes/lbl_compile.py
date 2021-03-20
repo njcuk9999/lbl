@@ -9,9 +9,14 @@ Created on 2021-03-15
 
 @author: cook
 """
+import numpy as np
+import os
+
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import io
 from lbl.instruments import select
+from lbl.science import general
 
 # =============================================================================
 # Define variables
@@ -28,7 +33,17 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS = ['INSTRUMENT', 'CONFIG_FILE', 'DATA_DIR', 'PLOT']
+ARGS = [# core
+        'INSTRUMENT', 'CONFIG_FILE',
+        # directory
+        'DATA_DIR', 'LBLRV_SUBDIR', 'LBLRDB_SUBDIR',
+        # science
+        'OBJECT_SCIENCE', 'OBJECT_TEMPLATE',
+        # plotting
+        'PLOT',
+        # other
+        'SKIP_DONE', 'RDB_SUFFIX'
+        ]
 # TODO: Etienne - Fill out
 DESCRIPTION = 'Use this code to compile the LBL rdb file'
 
@@ -85,7 +100,44 @@ def __main__(inst: InstrumentsType, **kwargs):
         amsg = 'inst must be a valid Instrument class'
         assert isinstance(inst, InstrumentsList), amsg
     # -------------------------------------------------------------------------
-    # Step 1:
+    # Step 1: Set up data directory
+    # -------------------------------------------------------------------------
+    # get data directory
+    data_dir = inst.params['DATA_DIR']
+    # make lblrv directory
+    lblrv_dir = io.make_dir(data_dir, inst.params['LBLRV_SUBDIR'], 'LBL RV')
+    # make lbl rdb directory
+    lbl_rdb_dir = io.make_dir(data_dir, inst.params['LBLREFTAB_SUBDIR'],
+                              'LBL rdb')
+    # -------------------------------------------------------------------------
+    # Step 2: set filenames
+    # -------------------------------------------------------------------------
+    # get all lblrv files for this object_science and object_template
+    lblrv_files = inst.get_lblrv_files(lblrv_dir)
+    # get rdb files for this object_science and object_template
+    rdbfile1, rdbfile2 = inst.get_lblrdb_files(lbl_rdb_dir)
+
+    # -------------------------------------------------------------------------
+    # Step 3: Produce RDB file
+    # -------------------------------------------------------------------------
+    if os.path.exists(rdbfile1) and inst.params['SKIP_DONE']:
+        # log file exists and we are skipping
+        msg = 'File {0} exists, we will read it. To regenerate use --skip'
+        margs = [rdbfile1]
+        log.general(msg.format(*margs))
+        # read the rdb file
+        rdb_table = inst.load_lblrdb_file(rdbfile1)
+
+    # else we generate the rdb file
+    else:
+        rdb_table = general.make_rdb_table(inst, rdbfile1, lblrv_files)
+
+    # -------------------------------------------------------------------------
+    # Step 4: Produce binned (per-epoch) RDB file
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+    # Step 5: Produce drift file(s)
     # -------------------------------------------------------------------------
 
     # -------------------------------------------------------------------------
@@ -99,7 +151,7 @@ def __main__(inst: InstrumentsType, **kwargs):
 # =============================================================================
 if __name__ == "__main__":
     # print hello world
-    print('Hello World')
+    ll = main()
 
 # =============================================================================
 # End of code

@@ -112,14 +112,38 @@ def load_fits(filename: str,
     return np.array(data), header.copy()
 
 
+def load_header(filename: str,
+                kind: Union[str, None] = None) -> fits.Header:
+    """
+    Standard way to load fits file header only
+
+    :param filename: str, the filename
+    :param kind: the kind (for error message)
+
+    :return: tuple, the data and the header
+    """
+    # deal with no kind
+    if kind is None:
+        kind = 'fits file'
+    # try to load fits file
+    try:
+        header = fits.getheader(filename)
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return header.copy()
+
+
 def get_hkey(header: fits.Header, key: str,
-             filename: Union[str, None] = None) -> Any:
+             filename: Union[str, None] = None,
+             required: bool = True) -> Any:
     """
     Get a key from the header and deal with errors
 
     :param header: fits.Header, a fits header
     :param key: str, the key to get from header
-    :param filename, str, the filename associated with the header
+    :param filename: str, the filename associated with the header
 
     :return: Any, the value of header[key]
     """

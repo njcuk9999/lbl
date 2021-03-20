@@ -131,8 +131,8 @@ class ConsoleFormat(logging.Formatter):
         # get colours
         self.cprint = Colors(theme=theme)
         # define default format
-        self.fmt = '%(asctime)s | %(levelname)-1.1s | %(message)s'
-        self.default = logging.Formatter(self.fmt)
+        self.fmt = '%(asctime)s.%(msecs)03d | %(levelname)-1.1s | %(message)s'
+        self.default = logging.Formatter(self.fmt, datefmt='%Y-%m-%d %H:%M:%S')
         # define empty format
         self.empty_fmt = '%(message)s'
         # define debug format
@@ -149,7 +149,7 @@ class ConsoleFormat(logging.Formatter):
         # define critical format
         self.critial_fmt = self.cprint.fail + self.fmt + self.cprint.endc
         # initialize parent
-        logging.Formatter.__init__(self, fmt)
+        logging.Formatter.__init__(self, fmt, datefmt='%Y-%m-%d %H:%M:%S')
 
     def format(self, record):
         # Save the original format configured by the user
@@ -170,6 +170,7 @@ class ConsoleFormat(logging.Formatter):
             self._style._fmt = self.empty_fmt
         # Call the original formatter class to do the grunt work
         result = logging.Formatter.format(self, record)
+        logging.Formatter.datefmt = '%Y-%m-%d %H:%M:%S'
         # Restore the original format configured by the user
         self._style._fmt = format_orig
         return result

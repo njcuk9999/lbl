@@ -78,7 +78,8 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             # parse argument
             parser.add_argument(const.argument, dest=const.key,
                                 type=const.dtype, default=params[argname],
-                                action='store', help=const.description)
+                                action='store', help=const.description,
+                                choices=const.options)
     # load parsed args into inputs
     args = vars(parser.parse_args())
     for argname in args:

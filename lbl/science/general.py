@@ -24,6 +24,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
+from lbl.instruments import select
 from lbl.science import plot
 
 # =============================================================================
@@ -41,14 +42,15 @@ Instrument = default.Instrument
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
+InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value
 
 
 # =============================================================================
-# Define functions
+# Define compute functions
 # =============================================================================
-def make_ref_dict(inst: Instrument, reftable_file: str,
+def make_ref_dict(inst: InstrumentsType, reftable_file: str,
                   reftable_exists: bool, science_files: List[str],
                   mask_file: str) -> Dict[str, np.ndarray]:
     """
@@ -194,7 +196,7 @@ def get_velo_scale(wave_vector: np.ndarray, hp_width: float) -> int:
     return width
 
 
-def spline_template(inst: Instrument, template_file: str,
+def spline_template(inst: InstrumentsType, template_file: str,
                     systemic_vel: float) -> Dict[str, mp.IUVSpline]:
     """
     Calculate all the template splines (for later use)
@@ -259,7 +261,7 @@ def spline_template(inst: Instrument, template_file: str,
     return sps
 
 
-def rough_ccf_rv(inst: Instrument, wavegrid: np.ndarray,
+def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
                  sci_data: np.ndarray, wave_mask: np.ndarray,
                  weight_line: np.ndarray) -> Tuple[float, float]:
     """
@@ -487,7 +489,7 @@ def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
     return value, rms_value
 
 
-def compute_rv(inst: Instrument, sci_iteration: int,
+def compute_rv(inst: InstrumentsType, sci_iteration: int,
                sci_data: np.ndarray, sci_hdr: fits.Header,
                splines: Dict[str, Any], ref_table: Dict[str, Any],
                blaze: np.ndarray, systemic_all: np.ndarray,
@@ -953,6 +955,78 @@ def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
     time_left = str(timedelta.to_datetime())
     # return values
     return mean_time, std_time, time_left
+
+
+# =============================================================================
+# Define compil functions
+# =============================================================================
+def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
+                  lblrvfiles: np.ndarray) -> Table:
+
+
+    # get the header keys to add to rdb_table
+    header_keys = inst.rdb_columns()
+    # storage for rdb table dictionary
+    rdb_dict = dict()
+    # add columns
+    rdb_dict['rjd'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['vrad'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['svrad'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['per_epoch_DDV'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['per_epoch_DDVRMS'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['per_epoch_DDDV'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['per_epoch_DDDVRMS'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['local_file_name'] = np.array(lblrvfiles)
+    # time for matplotlib
+    rdb_dict['plot_date'] = np.zeros_like(lblrvfiles, dtype=float)
+    # for DACE, derived from de DDV
+    rdb_dict['fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
+    # for DACE, derived from de DDV
+    rdb_dict['sig_fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
+    # add header keys
+    for hdr_key in header_keys:
+        # empty elements in a list for each key to fill
+        rdb_dict[hdr_key] = [[]] * len(lblrvfiles)
+
+    # -------------------------------------------------------------------------
+    # Loop around lbl rv files
+    # -------------------------------------------------------------------------
+    for row in range(len(lblrvfiles)):
+        # log process
+        msg = 'Processing LBL RV File {0} / {1}'
+        margs = [row + 1, len(lblrvfiles)]
+        log.general(msg.format(*margs))
+        # ---------------------------------------------------------------------
+        # get lbl rv file table and header
+        # ---------------------------------------------------------------------
+        # load table and header
+        rvtable, rvhdr = inst.load_lblrv_file(lblrvfiles[row])
+        # fix header (instrument specific)
+        rvhdr = inst.fix_lblrv_header(rvhdr)
+        # fill rjd value
+        rdb_dict['rjd'][row] = inst.get_rjd_value(rvhdr)
+        # fill in plot date
+        rdb_dict['plot_date'][row] = inst.get_plot_date(rvhdr)
+        # ---------------------------------------------------------------------
+        # fill in header keys
+        # ---------------------------------------------------------------------
+        for key in header_keys:
+            if key in rvhdr:
+                rdb_dict[key][row] = rvhdr[key]
+            # print a warning
+            else:
+                wmsg = 'Key {0} not present in file {1}'
+                wargs = [key, lblrvfiles[row]]
+                log.warning(wmsg.format(*wargs))
+        # ---------------------------------------------------------------------
+        #
+        # ---------------------------------------------------------------------
+
+
+
+
+    # TODO: return proper table
+    return Table()
 
 
 # =============================================================================

@@ -13,7 +13,7 @@ import glob
 import numpy as np
 import os
 import requests
-from typing import Any, Dict, List, Tuple, Union
+from typing import Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -89,6 +89,63 @@ class Spirou(Instrument):
         self.params.set('KW_BERV', 'BERV', source=func_name)
         # define the Blaze calibration file
         self.params.set('KW_BLAZE_FILE', 'CDBBLAZE', source=func_name)
+        # define the start time of the observation
+        self.params.set('KW_MJDATE', 'MJDATE', source=func_name)
+        # define the exposure time of the observation
+        self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
+        # define the airmass of the observation
+        self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
+        # define the filename of the observation
+        self.params.set('KW_FILENAME', 'FILENAME', source=func_name)
+        # define the human date of the observation
+        self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
+        # define the tau_h20 of the observation
+        self.params.set('KW_TAU_H2O', 'TAU_H2O', source=func_name)
+        # define the tau_other of the observation
+        self.params.set('KW_TAU_OTHERS', 'TAU_OTHE', source=func_name)
+        # define the DPRTYPE of the observation
+        self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
+        # define the observation time (mjd) of the wave solution
+        self.params.set('KW_WAVETIME', 'WAVETIME', source=func_name)
+        # define the filename of the wave solution
+        self.params.set('KW_WAVEFILE', 'WAVEFILE', source=func_name)
+        # define the telluric preclean velocity of water absorbers
+        self.params.set('KW_TLPDVH2O', 'TLPDVH2O', source=func_name)
+        # define the telluric preclean velocity of other absorbers
+        self.params.set('KW_TLPDVOTR', 'TLPDVOTR', source=func_name)
+        # define the wave solution calibration filename
+        self.params.set('KW_CDBWAVE', 'CDBWAVE', source=func_name)
+        # define the original object name
+        self.params.set('KW_OBJNAME', 'OBJNAME', source=func_name)
+        # define the rhomb 1 predefined position
+        self.params.set('KW_RHOMB1', 'SBRHB1_P', source=func_name)
+        # define the rhomb 2 predefined position
+        self.params.set('KW_RHOMB2', 'SBRHB2_P', source=func_name)
+        # define the calib-reference density
+        self.params.set('KW_CDEN_P', 'SBCDEN_P', source=func_name)
+         # define the SNR goal per pixel per frame
+        self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
+        # define the SNR in chosen order
+        self.params.set('KW_EXT_SNR', 'EXTSN035', source=func_name)
+        # define the barycentric julian date
+        self.params.set('KW_BJD', 'EXTSN035', source=func_name)
+        # define the shape code dx value
+        self.params.set('KW_SHAPE_DX', 'SHAPE_DX', source=func_name)
+        # define the shape code dy value
+        self.params.set('KW_SHAPE_DY', 'SHAPE_DY', source=func_name)
+        # define the shape code A value
+        self.params.set('KW_SHAPE_A', 'SHAPE_A', source=func_name)
+        # define the shape code B value
+        self.params.set('KW_SHAPE_B', 'SHAPE_B', source=func_name)
+        # define the shape code C value
+        self.params.set('KW_SHAPE_C', 'SHAPE_C', source=func_name)
+        # define the shape code D value
+        self.params.set('KW_SHAPE_D', 'SHAPE_D', source=func_name)
+
+
+
+
+
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
@@ -123,11 +180,10 @@ class Spirou(Instrument):
 
         :return: absolute path to template file
         """
-        # deal with no object
-        if self.params['OBJECT_TEMPLATE'] is None:
-            raise LblException('OBJECT_TEMPLATE name must be defined')
-        else:
-            objname = self.params['OBJECT_TEMPLATE']
+        # deal with no object template
+        self._set_object_template()
+        # set template name
+        objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
             basename = 'Template_s1d_{0}_sc1d_v_file_AB.fits'.format(objname)
@@ -190,7 +246,7 @@ class Spirou(Instrument):
         :return: float, systemic velocity in m/s
         """
         # load the mask header
-        _, mask_hdr = io.load_fits(mask_file, kind='mask fits file')
+        mask_hdr = io.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
         systemic_vel = -1000 * io.get_hkey(mask_hdr, 'SYSTVEL')
         # return systemic velocity in m/s
@@ -259,31 +315,6 @@ class Spirou(Instrument):
         # return blaze
         return blaze
 
-    def ref_table_file(self, directory: str) -> Tuple[Union[str, None], bool]:
-        """
-        Make the absolute path for the ref_table file (if it exists)
-
-        :param directory: str, the directory the file is located at
-
-        :return: absolute path to ref_table file (if it exists) or None
-        """
-        # deal with no object
-        if self.params['OBJECT_TEMPLATE'] is None:
-            raise LblException('OBJECT_TEMPLATE name must be defined')
-        else:
-            objname = self.params['OBJECT_TEMPLATE']
-        # set base name
-        basename = 'ref_table_{0}.csv'.format(objname)
-        # get absolute path
-        abspath = os.path.join(directory, basename)
-        # check that this file exists
-        if not io.check_file_exists(abspath, required=False):
-            # ref_table does not exist --> return None
-            return abspath, False
-        else:
-            # return absolute path
-            return abspath, True
-
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
                           header: Union[fits.Header, None] = None
@@ -332,41 +363,6 @@ class Spirou(Instrument):
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
-
-    def get_lblrv_file(self, science_filename: str, directory: str
-                       ) -> Tuple[Union[str, None], bool]:
-        """
-        Construct the LBL RV file name and check whether it exists
-
-        :param science_filename: str, the science filename
-        :param directory: str, the directory name for lbl rv files
-
-        :return: tuple, 1. the lbl rv filename, 2. whether file exists on disk
-        """
-        # deal with no object
-        if self.params['OBJECT_TEMPLATE'] is None:
-            raise LblException('OBJECT_TEMPLATE name must be defined')
-        else:
-            tobjname = self.params['OBJECT_TEMPLATE']
-        # deal with no object
-        if self.params['OBJECT_SCIENCE'] is None:
-            raise LblException('OBJECT_SCIENCE name must be defined')
-        else:
-            sobjname = self.params['OBJECT_SCIENCE']
-        # get science file basename
-        science_basename = os.path.basename(science_filename).split('.fits')[0]
-        # construct base name
-        bargs = [science_basename, sobjname, tobjname]
-        basename = '{0}_{1}_{2}_lbl.fits'.format(*bargs)
-        # construct absolute path
-        abspath = os.path.join(directory, basename)
-        # check that this file exists
-        if not io.check_file_exists(abspath, required=False):
-            # ref_table does not exist --> return None
-            return abspath, False
-        else:
-            # return absolute path
-            return abspath, True
 
     def load_bad_hdr_keys(self) -> Tuple[np.ndarray, str]:
         """
@@ -418,57 +414,101 @@ class Spirou(Instrument):
         # return the berv measurement (in m/s)
         return berv
 
-    def write_lblrv_table(self, ref_table: Dict[str, Any],
-                          ref_filename: str, header: fits.Header,
-                          outputs: Dict[str, Any]):
+    def rdb_columns(self):
         """
-        Write the reference table to file "filename"
+        Define the fits header columns names to add to the RDB file
+        These should be references to keys in params
 
-        :param ref_table: dict, the reference table dictionary
-        :param ref_filename: str, the reference table absolute path
-        :param header: fits.Header, the header to write to primary extension
-        :param outputs: dict, a dictionary of outputs from compute_rv function
-
-        :return: None - write file
+        :return:
         """
+        # there are defined in params
+        drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_AIRMASS', 'KW_FILENAME', 'KW_DATE',
+                    'KW_BERV', 'KW_TAU_H2O', 'KW_TAU_OTHERS',
+                    'KW_DPRTYPE', 'KW_NITERATIONS',
+                    'KW_SYSTEMIC_VELO', 'KW_WAVETIME', 'KW_WAVEFILE',
+                    'KW_TLPDVH2O', 'KW_TLPDVOTR', 'KW_CDBWAVE', 'KW_OBJNAME',
+                    'KW_RHOMB1', 'KW_RHOMB2', 'KW_CDEN_P', 'KW_SNRGOAL',
+                    'KW_EXT_SNR', 'KW_BJD', 'KW_SHAPE_DX', 'KW_SHAPE_DY',
+                    'KW_SHAPE_A', 'KW_SHAPE_B', 'KW_SHAPE_C', 'KW_SHAPE_D',
+                    'KW_CCF_EW']
+        # convert to actual keys (not references to keys)
+        keys = []
+        for drs_key in drs_keys:
+            if drs_key in self.params:
+                keys.append(self.params[drs_key])
+            else:
+                keys.append(drs_key)
+        # return a numpy array
+        return np.array(keys)
+
+    def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
+        """
+        Fix the LBL RV header
+
+        :param header: fits.Header, the LBL RV fits file header
+
+        :return: fits.Header, the updated LBL RV fits file header
+        """
+        # get keys from params
+        kw_snrgoal = self.params['KW_SNRGOAL']
+        kw_ccf_ew = self.params['KW_CCF_EW']
         # ---------------------------------------------------------------------
-        # add keys to header
+        # because FP files don't have an SNR goal
+        if kw_snrgoal not in header:
+            header[kw_snrgoal] = 0
         # ---------------------------------------------------------------------
-        # add number of iterations
-        header['ITE_RV'] = (outputs['NUM_ITERATIONS'],
-                            'Num iterat to reach sigma accuracy')
-        # add systemic velocity in m/s
-        header['SYSTVELO'] = (outputs['SYSTEMIC_VELOCITY'],
-                              'Systemic velocity in m/s')
-        # add rms to photon noise ratio
-        header['RMSRATIO'] = (outputs['RMSRATIO'], 'RMS vs photon noise')
-        # add e-width of LBL CCF
-        header['CCF_EW'] = (outputs['CCF_EW'], 'e-width of LBL CCF in m/s')
-        # add the high-pass LBL width [km/s]
-        header['HP_WIDTH'] = (outputs['HP_WIDTH'],
-                              'high-pass LBL width in km/s')
-        # add LBL version
-        header['LBL_VERS'] = (__version__, 'LBL code version')
-        # add LBL date
-        header['LBLVDATE'] = (__date__, 'LBL version date')
-        # add process date
-        header['LBLPDATE'] = (Time.now().fits, 'LBL processed date')
+        # deal with not having CCF_EW
+        # Question: Is this instrument specific?
+        # Question: Why wouldn't we have this?
+        if kw_ccf_ew not in header:
+            header[kw_ccf_ew] = 5.5 / 2.354 * 1000
         # ---------------------------------------------------------------------
-        # Convert ref table dictionary to table
-        # ---------------------------------------------------------------------
-        table = Table()
-        for col in ref_table:
-            table[col] = np.array(ref_table[col])
-        # ---------------------------------------------------------------------
-        # save to fits file
-        # ---------------------------------------------------------------------
-        # log saving of file
-        msg = 'Writing reference table to: {0}'
-        margs = [ref_filename]
-        log.general(msg.format(*margs))
-        # write to disk
-        io.write_fits(ref_filename, data=[None, table],
-                      header=[header, None], dtype=[None, 'table'])
+        # return header
+        return header
+
+    def get_rjd_value(self, header: fits.Header) -> float:
+
+        """
+        Get the rjd either from KW_MID_EXP_TIME or KW_BJD
+        time returned is in MJD (not JD)
+
+        :param header: fits.Header - the LBL rv header
+        :return:
+        """
+        # get keys from params
+        kw_mjdmid = self.params['KW_MID_EXP_TIME']
+        kw_bjd = self.params['KW_BJD']
+        # get mjdmid and bjd
+        mid_exp_time = io.get_hkey(header, kw_mjdmid)
+        bjd = io.get_hkey(header, kw_bjd)
+        # Question: why would BJD be a string?
+        if isinstance(bjd, str):
+            return float(mid_exp_time)
+        else:
+            # convert bjd to mjd
+            bjd_mjd = Time(bjd, format='jd').mjd.value
+            # return bjd in mjd
+            return float(bjd_mjd)
+
+    def get_plot_date(self, header: fits.Header):
+        """
+        Get the matplotlib plotting date
+
+        :param header: fits.Header - the LBL rv header
+
+        :return: float, the plot date
+        """
+        # Question: This makes no sense to me
+        # get mjdate key
+        kw_mjdate = self.params['KW_MJDATE']
+        # get mjdate
+        mjdate = io.get_hkey(header, kw_mjdate)
+        # convert to plot date and take off JD?
+        plot_date = Time(mjdate, format='mjd').plot_date
+        plot_date = plot_date - Time(40588, format='mjd').plot_date
+        # return float plot date
+        return float(plot_date)
 
 
 # =============================================================================

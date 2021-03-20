@@ -25,54 +25,61 @@ params = base_classes.ParamDict()
 # =============================================================================
 # add default params - can be None
 params.set(key='CONFIG_FILE', value=None, source=__NAME__,
-           desc='Config file for user settings',
+           desc='Config file for user settings (absolute path)',
            arg='--config', dtype=str)
 
 # add main data directory (structure assumed below)
 params.set(key='DATA_DIR', value=None, source=__NAME__,
-           desc='Main data directory',
+           desc='Main data directory (absolute path)',
            arg='--datadir', dtype=str, not_none=True)
 
-# add masks sub directory
+# add masks sub directory (relative to data directory)
 params.set(key='MASK_SUBDIR', value='masks', source=__NAME__,
-           desc='mask sub directory', arg='--maskdir', dtype=str)
+           desc='mask sub directory (relative to data directory)',
+           arg='--maskdir', dtype=str)
 
-# add template sub directory
+# add template sub directory (relative to data directory)
 params.set(key='TEMPLATE_SUBDIR', value='templates', source=__NAME__,
-           desc='template sub directory', arg='--templatedir', dtype=str)
+           desc='template sub directory (relative to data directory)',
+           arg='--templatedir', dtype=str)
 
-# add calib sub directory
+# add calib sub directory (relative to data directory)
 params.set(key='CALIB_SUBDIR', value='calib', source=__NAME__,
-           desc='calib sub directory', arg='--calibdir', dtype=str)
+           desc='calib sub directory (relative to data directory)',
+           arg='--calibdir', dtype=str)
 
-# add science sub directory
+# add science sub directory (relative to data directory)
 params.set(key='SCIENCE_SUBDIR', value='science', source=__NAME__,
-           desc='science sub directory', arg='--scidir', dtype=str)
+           desc='science sub directory (relative to data directory)',
+           arg='--scidir', dtype=str)
 
-# add lblrv sub directory
+# add lblrv sub directory (relative to data directory)
 params.set(key='LBLRV_SUBDIR', value='lblrv', source=__NAME__,
-           desc='LBL RV sub directory', arg='--lblrvdir', dtype=str)
+           desc='LBL RV sub directory (relative to data directory)',
+           arg='--lblrvdir', dtype=str)
 
-# add lblreftable sub directory
+# add lblreftable sub directory (relative to data directory)
 params.set(key='LBLREFTAB_SUBDIR', value='lblreftable', source=__NAME__,
-           desc='LBL ref table sub directory', arg='--lblreftabdir', dtype=str)
+           desc='LBL ref table sub directory (relative to data directory)',
+           arg='--lblreftabdir', dtype=str)
 
-# add lblrdb sub directory
+# add lblrdb sub directory (relative to data directory)
 params.set(key='LBLRDB_SUBDIR', value='lblrdb', source=__NAME__,
-           desc='LBL RDB sub directory', arg='--lblrdbdir', dtype=str)
+           desc='LBL RDB sub directory (relative to data directory)',
+           arg='--lblrdbdir', dtype=str)
 
 # add instrument
 params.set(key='INSTRUMENT', value=None, source=__NAME__,
-           desc='The instrument to use',
+           desc='The instrument to use', options=base.INSTRUMENTS,
            arg='--instrument', dtype=str, not_none=True)
 
 # Define whether to skip done files
 params.set(key='SKIP_DONE', value=True, source=__NAME__,
            desc='Whether to skip done files',
-           arg='--skip', dtype=bool)
+           arg='--skip', dtype=bool, options=[True, False])
 
 # =============================================================================
-# Define compute parameters
+# Define common parameters (between compute / compil)
 # =============================================================================
 # The object name for the compute function
 params.set(key='OBJECT_SCIENCE', value=None, source=__NAME__,
@@ -81,24 +88,29 @@ params.set(key='OBJECT_SCIENCE', value=None, source=__NAME__,
 
 # The object name to use for the template
 params.set(key='OBJECT_TEMPLATE', value=None, source=__NAME__,
-           desc='The object name to use for the template',
-           arg='--obj_template', dtype=str, not_none=True)
+           desc='The object name to use for the template '
+                '(If None set to OBJECT_SCIENCE)',
+           arg='--obj_template', dtype=str)
 
+# =============================================================================
+# Define compute parameters
+# =============================================================================
 # Define blaze file - can be None
 params.set(key='BLAZE_FILE', value=None, source=__NAME__,
-           desc='Blaze file to use',
+           desc='Blaze file to use (must be present in the CALIB directory)',
            arg='--blaze', dtype=str)
 
 # Template file to use (if not defined will try to find template for OBJECT)
 #   - can be None
 params.set(key='TEMPLATE_FILE', value=None, source=__NAME__,
            desc='Template file to use (if not defined will try to find'
-                ' template for OBJECT',
+                ' template for OBJECT_TEMPLATE) must be present in the'
+                'TEMPLATES directory',
            arg='--template', dtype=str)
 
 # define the input files
 params.set(key='INPUT_FILE', value=None, source=__NAME__,
-           desc='The input file express to use (i.e. *e2dsff*AB.fits)',
+           desc='The input file expression to use (i.e. *e2dsff*AB.fits)',
            arg='--input_file', dtype=str,
            not_none=True)
 
@@ -108,15 +120,16 @@ params.set(key='REF_TABLE_FMT', value='csv', source=__NAME__,
 
 # define the High pass width [km/s]
 params.set(key='HP_WIDTH', value=None, source=__NAME__,
-           desc='The HP width', not_none=True)
+           desc='The High pass width [km/s]', not_none=True)
 
 # define the SNR cut off threshold
 params.set(key='SNR_THRESHOLD', value=None, source=__NAME__,
            desc='The SNR cut off threshold', not_none=True)
 
-# define switch whether to use noise model
+# define switch whether to use noise model for RMS calculation
 params.set(key='USE_NOISE_MODEL', value=False, source=__NAME__,
-           desc='Switch whether to use noise model or not for the rms')
+           desc='Switch whether to use noise model or not for the RMS '
+                'calculation', options=[True, False])
 
 # define the rough CCF rv minimum limit in m/s
 params.set(key='ROUGH_CCF_MIN_RV', value=-3e5, source=__NAME__,
@@ -128,7 +141,7 @@ params.set(key='ROUGH_CCF_MAX_RV', value=3e5, source=__NAME__,
 
 # define the rough CCF rv step in m/s
 params.set(key='ROUGH_CCF_RV_STEP', value=500, source=__NAME__,
-           desc='The rought CCF rv step in m/s')
+           desc='The rough CCF rv step in m/s')
 
 # define the rough CCF ewidth guess for fit in m/s
 params.set(key='ROUGH_CCF_EWIDTH_GUESS', value=2000, source=__NAME__,
@@ -160,24 +173,37 @@ params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=0.2, source=__NAME__,
 params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=8, source=__NAME__,
            desc='The maximum number of iterations deemed to lead to a good RV')
 
+# =============================================================================
+# Define compil parameters
+# =============================================================================
+# define the suffix to give the rdb files
+params.set(key='RDB_SUFFIX', value='', source=__NAME__,
+           desc='The suffix to give the rdb files',
+           arg='--subbfix_rdb', dtype=str)
 
 # =============================================================================
 # Define plot parameters
 # =============================================================================
 # Define whether to do any plots
 params.set(key='PLOT', value=False, source=__NAME__,
-           desc='Whether to do plots for the compute function (True/False)',
-           arg='--plot', dtype=bool)
+           desc='Whether to do plots for the compute function',
+           arg='--plot', dtype=bool, options=[True, False])
 
 # Define whether to do the compute ccf plot
 params.set(key='PLOT_COMPUTE_CCF', value=False, source=__NAME__,
-           desc='Whether to do the compute ccf plot (True/False)',
-           arg='--plotccf', dtype=bool)
+           desc='Whether to do the compute ccf plot',
+           arg='--plotccf', dtype=bool, options=[True, False])
 
 # Define whether to do the compute line plot
 params.set(key='PLOT_COMPUTE_LINES', value=False, source=__NAME__,
-           desc='Whether to do the compute line plot (True/False)',
-           arg='--plotline', dtype=bool)
+           desc='Whether to do the compute line plot',
+           arg='--plotline', dtype=bool, options=[True, False])
+
+# Define whether to do the compil cumulative plot
+params.set(key='PLOT_COMPIL_CUMUL', value=False, source=__NAME__,
+           desc='Whether to do the compute ccf plot',
+           arg='--plotcumul', dtype=bool, options=[True, False])
+
 
 # =============================================================================
 # Define header keys
@@ -209,6 +235,157 @@ params.set(key='KW_BERV', value=None, source=__NAME__,
 # define the Blaze calibration file
 params.set(key='KW_BLAZE_FILE', value=None, source=__NAME__,
            desc='The Blaze calibration file', not_none=True)
+
+# define the number of iterations
+params.set(key='KW_NITERATIONS', value='ITE_RV', source=__NAME__,
+           desc='the number of iterations',
+           comment='Num iterations to reach sigma accuracy')
+
+# define the systemic velocity in m/s
+params.set(key='KW_SYSTEMIC_VELO', value='SYSTVELO', source=__NAME__,
+           desc='the systemic velocity in m/s',
+           comment='systemic velocity in m/s')
+
+# define the rms to photon noise ratio
+params.set(key='KW_RMS_RATIO', value='RMSRATIO', source=__NAME__,
+           desc='the rms to photon noise ratio',
+           comment='RMS vs photon noise')
+
+# define the e-width of LBL CCF
+params.set(key='KW_CCF_EW', value='CCF_EW', source=__NAME__,
+           desc='the e-width of LBL CCF',
+           comment='e-width of LBL CCF in m/s')
+
+# define the high-pass LBL width [km/s]
+params.set(key='KW_HP_WIDTH', value='HP_WIDTH', source=__NAME__,
+           desc='the high-pass LBL width [km/s]',
+           comment='high-pass LBL width in km/s')
+
+# define the LBL version
+params.set(key='KW_VERSION', value='LBL_VERS', source=__NAME__,
+           desc='the LBL version',
+           comment='LBL code version')
+
+# define the LBL date
+params.set(key='KW_VDATE', value='LBLVDATE', source=__NAME__,
+           desc='the LBL version',
+           comment='LBL version date')
+
+# define the process date
+params.set(key='KW_PDATE', value='LBLPDATE', source=__NAME__,
+           desc='the LBL processed date',
+           comment='LBL processed date')
+
+# define the lbl instrument was used
+params.set(key='KW_INSTRUMENT', value='LBLINSTR', source=__NAME__,
+           desc='the LBL processed date',
+           comment='LBL instrument used')
+
+# define the start time of the observation key
+params.set(key='KW_MJDATE', value=None, source=__NAME__, not_none=False,
+           desc='the start time of the observation')
+
+# define the exposure time of the observation
+params.set(key='KW_EXPTIME', value=None, source=__NAME__, not_none=False,
+           desc='the exposure time of the observation')
+
+# define the airmass of the observation
+params.set(key='KW_AIRMASS', value=None, source=__NAME__, not_none=False,
+           desc='the airmass of the observation')
+
+# define the filename of the observation
+params.set(key='KW_FILENAME', value=None, source=__NAME__, not_none=False,
+           desc='the filename of the observation')
+
+# define the human date of the observation
+params.set(key='KW_DATE', value=None, source=__NAME__, not_none=False,
+           desc='the human date of the observation')
+
+# define the tau_h20 of the observation
+params.set(key='KW_TAU_H2O', value=None, source=__NAME__, not_none=False,
+           desc='the tau_h20 of the observation')
+
+# define the tau_other of the observation
+params.set(key='KW_TAU_OTHERS', value=None, source=__NAME__, not_none=False,
+           desc='the tau_other of the observation')
+
+# define the DPRTYPE of the observation
+params.set(key='KW_DPRTYPE', value=None, source=__NAME__, not_none=False,
+           desc='the DPRTYPE of the observation')
+
+# define the observation time (mjd) of the wave solution
+params.set(key='KW_WAVETIME', value=None, source=__NAME__, not_none=False,
+           desc='the observation time (mjd) of the wave solution')
+
+# define the filename of the wave solution
+params.set(key='KW_WAVEFILE', value=None, source=__NAME__, not_none=False,
+           desc='the filename of the wave solution')
+
+# define the telluric preclean velocity of water absorbers
+params.set(key='KW_TLPDVH2O', value=None, source=__NAME__, not_none=False,
+           desc='the telluric preclean velocity of water absorbers')
+
+# define the telluric preclean velocity of other absorbers
+params.set(key='KW_TLPDVOTR', value=None, source=__NAME__, not_none=False,
+           desc='the telluric preclean velocity of other absorbers')
+
+# define the wave solution calibration filename
+params.set(key='KW_CDBWAVE', value=None, source=__NAME__, not_none=False,
+           desc='the wave solution used')
+
+# define the original object name
+params.set(key='KW_OBJNAME', value=None, source=__NAME__, not_none=False,
+           desc='the original object name')
+
+# define the rhomb 1 predefined position
+params.set(key='KW_RHOMB1', value=None, source=__NAME__, not_none=False,
+           desc='the rhomb 1 predefined position')
+
+# define the rhomb 2 predefined position
+params.set(key='KW_RHOMB2', value=None, source=__NAME__, not_none=False,
+           desc='the rhomb 2 predefined position')
+
+# define the calib-reference density
+params.set(key='KW_CDEN_P', value=None, source=__NAME__, not_none=False,
+           desc='the calib-reference density')
+
+# define the SNR goal per pixel per frame
+params.set(key='KW_SNRGOAL', value=None, source=__NAME__, not_none=False,
+           desc='the SNR goal per pixel per frame')
+
+# define the SNR in chosen order
+params.set(key='KW_EXT_SNR', value=None, source=__NAME__, not_none=False,
+           desc='the SNR in chosen order')
+
+# define the barycentric julian date
+params.set(key='KW_BJD', value=None, source=__NAME__, not_none=False,
+           desc='The barycentric julian date')
+
+# define the shape code dx value
+params.set(key='KW_SHAPE_DX', value=None, source=__NAME__, not_none=False,
+           desc='The shape code dx value')
+
+# define the shape code dy value
+params.set(key='KW_SHAPE_DY', value=None, source=__NAME__, not_none=False,
+           desc='The shape code dy value')
+
+# define the shape code A value
+params.set(key='KW_SHAPE_A', value=None, source=__NAME__, not_none=False,
+           desc='The shape code A value')
+
+# define the shape code B value
+params.set(key='KW_SHAPE_B', value=None, source=__NAME__, not_none=False,
+           desc='The shape code B value')
+
+# define the shape code C value
+params.set(key='KW_SHAPE_C', value=None, source=__NAME__, not_none=False,
+           desc='The shape code C value')
+
+# define the shape code D value
+params.set(key='KW_SHAPE_D', value=None, source=__NAME__, not_none=True,
+           desc='The shape code D value')
+
+
 
 # =============================================================================
 # Start of code

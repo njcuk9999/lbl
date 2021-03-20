@@ -54,7 +54,9 @@ class Const:
     def __init__(self, key: str, source: Union[str, None] = None,
                  desc: Union[str, None] = None,
                  arg: Union[str, None] = None,
-                 dtype: Union[Type, None] = None):
+                 dtype: Union[Type, None] = None,
+                 options: Union[list, None] = None,
+                 comment: Union[str, None] = None):
         """
         Constant class (for storing properties of constants)
 
@@ -64,6 +66,10 @@ class Const:
         :param arg: str or None, the command argument
         :param dtype: Type or None, the type of object (for argparse) only
                       required if arg is set
+        :param options: list or None, the options (choices) to allow for
+                argparse
+        :param comment: str or None, if set this is the comment to add to a
+                        fits header
         """
         self.key = deepcopy(key)
         # set source
@@ -74,6 +80,10 @@ class Const:
         self.argument = deepcopy(arg)
         # set the dtype
         self.dtype = dtype
+        # the allowed options for argparse (choices)
+        self.options = deepcopy(options)
+        # the comment for a fits header
+        self.comment = deepcopy(comment)
 
     def __str__(self) -> str:
         return 'Const[{0}]'.format(self.key)
@@ -88,7 +98,7 @@ class Const:
         :return: new Const instance
         """
         return Const(self.key, self.source, self.description,
-                     self.argument, self.dtype)
+                     self.argument, self.dtype, self.options)
 
 
 class ParamDict(UserDict):
@@ -104,7 +114,9 @@ class ParamDict(UserDict):
             desc: Union[str, None] = None,
             arg: Union[str, None] = None,
             dtype: Union[Type, None] = None,
-            not_none: bool = False):
+            not_none: bool = False,
+            options: Union[list, None] = None,
+            comment: Union[str, None] = None):
         """
         Set a parameter
 
@@ -118,6 +130,10 @@ class ParamDict(UserDict):
         :param not_none: bool, if True and value is None error will be raised
                          when getting parameter (so devs don't forget to
                          have this parameter defined by instrument)
+        :param options: list or None, the options (choices) to allow for
+                        argparse
+        :param comment: str or None, if set this is the comment to add to a
+                        fits header
 
         :return: None - updates dict
         """
@@ -129,7 +145,8 @@ class ParamDict(UserDict):
         # set item
         self.__setitem__(key, value)
         # set instance
-        self.instances[key] = Const(key, source, desc, arg, dtype)
+        self.instances[key] = Const(key, source, desc, arg, dtype, options,
+                                    comment)
 
     def __setitem__(self, key, value):
         # capitalize
