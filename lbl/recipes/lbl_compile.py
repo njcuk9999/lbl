@@ -9,7 +9,6 @@ Created on 2021-03-15
 
 @author: cook
 """
-import numpy as np
 import os
 
 from lbl.core import base
@@ -17,6 +16,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
 from lbl.science import general
+from lbl.science import plot
 
 # =============================================================================
 # Define variables
@@ -33,19 +33,20 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS = [# core
-        'INSTRUMENT', 'CONFIG_FILE',
-        # directory
-        'DATA_DIR', 'LBLRV_SUBDIR', 'LBLRDB_SUBDIR',
-        # science
-        'OBJECT_SCIENCE', 'OBJECT_TEMPLATE',
-        # plotting
-        'PLOT',
-        # other
-        'SKIP_DONE', 'RDB_SUFFIX'
-        ]
+ARGS_COMPIL = [
+               # core
+               'INSTRUMENT', 'CONFIG_FILE',
+               # directory
+               'DATA_DIR', 'LBLRV_SUBDIR', 'LBLRDB_SUBDIR',
+               # science
+               'OBJECT_SCIENCE', 'OBJECT_TEMPLATE',
+               # plotting
+               'PLOT', 'PLOT_COMPIL_CUMUL', 'PLOT_COMPIL_BINNED',
+               # other
+               'SKIP_DONE', 'RDB_SUFFIX'
+               ]
 # TODO: Etienne - Fill out
-DESCRIPTION = 'Use this code to compile the LBL rdb file'
+DESCRIPTION_COMPIL = 'Use this code to compile the LBL rdb file'
 
 
 # =============================================================================
@@ -61,7 +62,7 @@ def main(**kwargs):
     :return:
     """
     # deal with parsing arguments
-    args = select.parse_args(ARGS, kwargs, DESCRIPTION)
+    args = select.parse_args(ARGS_COMPIL, kwargs, DESCRIPTION_COMPIL)
     # load instrument
     inst = select.load_instrument(args)
     # print splash
@@ -72,7 +73,7 @@ def main(**kwargs):
     except LblException as e:
         raise LblException(e.message)
     except Exception as e:
-        emsg = 'Unexpected Error: {0}: {1}'
+        emsg = 'Unexpected lbl_compile error: {0}: {1}'
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
 
@@ -93,10 +94,10 @@ def __main__(inst: InstrumentsType, **kwargs):
     # deal with debug
     if inst is None or inst.params is None:
         # deal with parsing arguments
-        args = select.parse_args(ARGS, kwargs, DESCRIPTION)
+        args = select.parse_args(ARGS_COMPIL, kwargs, DESCRIPTION_COMPIL)
         # load instrument
         inst = select.load_instrument(args)
-        # assert inst type
+        # assert inst type (for python typing later)
         amsg = 'inst must be a valid Instrument class'
         assert isinstance(inst, InstrumentsList), amsg
     # -------------------------------------------------------------------------
@@ -117,7 +118,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get all lblrv files for this object_science and object_template
     lblrv_files = inst.get_lblrv_files(lblrv_dir)
     # get rdb files for this object_science and object_template
-    rdbfile1, rdbfile2 = inst.get_lblrdb_files(lbl_rdb_dir)
+    rdbfiles = inst.get_lblrdb_files(lbl_rdb_dir)
+    rdbfile1, rdbfile2, rdbfile3, rdbfile4, drift_file = rdbfiles
 
     # -------------------------------------------------------------------------
     # Step 3: Produce RDB file
@@ -132,16 +134,61 @@ def __main__(inst: InstrumentsType, **kwargs):
 
     # else we generate the rdb file
     else:
+        # generate table using make_rdb_table function
         rdb_table = general.make_rdb_table(inst, rdbfile1, lblrv_files,
                                            plot_dir)
+        # plot here based on table (not required when loading)
+        plot.compil_binned_band_plot(inst, rdb_table)
+        # log creation of rdb table
+        msg = 'Writing RDB 1 file: {0}'
+        log.info(msg.format(rdbfile1))
+        # write rdb table
+        io.write_table(rdbfile1, rdb_table, fmt='rdb')
 
     # -------------------------------------------------------------------------
     # Step 4: Produce binned (per-epoch) RDB file
     # -------------------------------------------------------------------------
+    # make the per-epoch RDB table
+    rdb_table2 = general.make_rdb_table2(inst, rdb_table)
+    # log creation of rdb table 2
+    msg = 'Writing RDB 2 file: {0}'
+    log.info(msg.format(rdbfile2))
+    # write rdb table to file
+    io.write_table(rdbfile2, rdb_table2, fmt='rdb')
 
     # -------------------------------------------------------------------------
     # Step 5: Produce drift file(s)
     # -------------------------------------------------------------------------
+    if inst.params['OBJECT_SCIENCE'] == 'FP':
+        # make the drift table
+        drift_table = general.make_drift_table(inst, rdb_table2)
+        # log creation of drift table
+        msg = 'Writing drift file: {0}'
+        log.info(msg.format(drift_table))
+        # write the drift table
+        io.write_table(drift_file, drift_table, fmt='rdb')
+    # else we have a file which can be corrected (if drift file exists)
+    elif os.path.exists(drift_file):
+        # load drift table
+        drift_table = io.load_table(drift_file, kind='Drift table')
+        # create rdb corrected for drift table
+        rdb_table3 = general.correct_rdb_drift(inst, rdb_table, drift_table)
+        # log creation of rdb corrected table
+        msg = 'Writing RDB corrected for drift file: {0}'
+        log.info(msg.format(rdbfile3))
+        # write the corrected rdb file
+        io.write_table(rdbfile3, rdb_table3, fmt='rdb')
+        # make the per-epoch RDB corrected for drift table
+        rdb_table4 = general.make_rdb_table2(inst, rdb_table3)
+        # log creation of rdb table 2
+        msg = 'Writing RDB 2 corrected for drift file: {0}'
+        log.info(msg.format(rdbfile4))
+        # write rdb table to file
+        io.write_table(rdbfile4, rdb_table4, fmt='rdb')
+    # log that we are not correcting for drift
+    else:
+        msg = 'No drift file found - not correcting drift'
+        log.info(msg)
 
     # -------------------------------------------------------------------------
     # return local namespace

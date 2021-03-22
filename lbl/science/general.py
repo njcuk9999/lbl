@@ -962,9 +962,20 @@ def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
 # =============================================================================
 # Define compil functions
 # =============================================================================
-def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
+def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                   lblrvfiles: np.ndarray, plot_dir: str) -> Table:
+    """
+    Make the primary rdb table (row per observation)
 
+    :param inst: Instrument instance
+    :param rdbfile: str, the rdb file absolute path (only used to save plot)
+    :param lblrvfiles: np.ndarray, array of strings, the absolute path to each
+                       LBL RV file
+    :param plot_dir: str, the absolute path to the directory to save plot
+                     to (if plot commands are set to True)
+
+    :return: astropy.table.Table, the RDB table (row per observation)
+    """
     # -------------------------------------------------------------------------
     # get parameters
     # -------------------------------------------------------------------------
@@ -972,6 +983,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
     wave_min = inst.params['COMPIL_WAVE_MIN']
     wave_max = inst.params['COMPIL_WAVE_MAX']
     max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
+    # get the ccf e-width column name
+    ccf_ew_col = inst.params['KW_CCF_EW']
     # get the header keys to add to rdb_table
     header_keys = inst.rdb_columns()
     # -------------------------------------------------------------------------
@@ -1101,7 +1114,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
         pdf_fit_all.append(pdf_fit)
 
     # construct plot name
-    plot_name = rdbfile1.replace('.rdb', '') + '_cumul.pdf'
+    plot_name = os.path.basename(rdbfile.replace('.rdb', '')) + '_cumul.pdf'
     plot_path = os.path.join(plot_dir, plot_name)
     # plot the comulative plot
     plot.compil_cumulative_plot(inst, vrange_all, pdf_all, pdf_fit_all,
@@ -1181,7 +1194,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
         guess6, bulk_error6 = mp.odd_ratio_mean(dddv[row], dddvrms[row])
         # ---------------------------------------------------------------------
         # get the ccf_ew
-        ccf_ew_row = rdb_dict['ccf_rw'][row]
+        ccf_ew_row = rdb_dict[ccf_ew_col][row]
         # work out the fwhm (1 sigma * sigma value)
         fwhm_row = mp.fwhm() * (ccf_ew_row + guess5 / ccf_ew_row)
         sig_fwhm_row = mp.fwhm() * (bulk_error5 / ccf_ew_row)
@@ -1197,15 +1210,367 @@ def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
         rdb_dict['sig_fwhm'] = sig_fwhm_row
 
     # ---------------------------------------------------------------------
-    # Per-band RV measurements
+    # Per-band per region RV measurements
     # ---------------------------------------------------------------------
+    # get the instrument specific binned parameters
+    binned_dict = inst.get_binned_parameters()
+    # get info from binned dictionary
+    bands = binned_dict['bands']
+    blue_end = binned_dict['blue_end']
+    red_end = binned_dict['red_end']
+    region_names = binned_dict['region_names']
+    region_low = binned_dict['region_low']
+    region_high = binned_dict['region_high']
+    # get the shape of the binned parameters
+    bshape = (len(lblrvfiles), len(bands), len(region_names))
+    # make a rv and error matrix based on these binned params
+    rvs_matrix = np.full(bshape, np.nan)
+    err_matrix = np.full(bshape, np.nan)
+    # loop around files
+    for row in range(len(lblrvfiles)):
+        # get the residuals and dvrms for this rv file
+        tmp_rv = rvs[row] - rv_per_line_model[row]
+        tmp_err = dvrms[row]
+        # loop around the bands
+        for iband in range(len(bands)):
+            # make a mask based on the band (can use rvtable0 as wave start
+            #   is the same for all rvtables)
+            band_mask = rvtable0['WAVE_START'] > blue_end[iband]
+            band_mask &= rvtable0['WAVE_START'] < red_end[iband]
+            # loop around the regions
+            for iregion in range(len(region_names)):
+                # mask based on region
+                region_mask = rvtable0['XPIX'] > region_low[iregion]
+                region_mask &= rvtable0['XPIX'] < region_high[iregion]
+                # -------------------------------------------------------------
+                # get combined mask for band and region
+                comb_mask = band_mask & region_mask
+                # -------------------------------------------------------------
+                # get the finite points
+                finite_mask = np.isfinite(tmp_err[comb_mask])
+                finite_mask &= np.isfinite(tmp_rv[comb_mask])
+                # deal with not having enough values (half of total being
+                #    non finite)
+                if np.sum(finite_mask) < np.sum(comb_mask) / 2:
+                    continue
+                # deal with not having enough points in general (min = 5)
+                if np.sum(comb_mask) < 5:
+                    continue
+                # -------------------------------------------------------------
+                # make a guess on the vrad and svrad via odd ratio mean
+                guess7, bulk_error7 = mp.odd_ratio_mean(tmp_rv[comb_mask],
+                                                        tmp_err[comb_mask])
+                # -------------------------------------------------------------
+                # push these values into the large binned matrices
+                rvs_matrix[row, iband, iregion] = guess7
+                err_matrix[row, iband, iregion] = bulk_error7
+    # ---------------------------------------------------------------------
+    # Push per-band per region RV measurements into rdb table
+    # ---------------------------------------------------------------------
+    # loop around the bands
+    for iband in range(len(bands)):
+        # loop around the regions
+        for iregion in range(len(region_names)):
+            # construct new column name
+            cargs = [bands[iband], region_names[iregion]]
+            vrad_colname = 'vrad_{0}_{1}'.format(*cargs)
+            svrad_colname = 'svrad_{0}_{1}'.format(*cargs)
+            # add new column
+            rdb_dict[vrad_colname] = rvs_matrix[:, iband, iregion]
+            rdb_dict[svrad_colname] = err_matrix[:, iband, iregion]
+    # ---------------------------------------------------------------------
+    # convert rdb_dict to table
+    # ---------------------------------------------------------------------
+    rdb_table = Table()
+    # loop around columns
+    for colname in rdb_dict:
+        # add to table
+        rdb_table[colname] = rdb_dict[colname]
+    # ---------------------------------------------------------------------
+    # return rdb table
+    return rdb_table
 
 
+def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
+    """
+    Combine the rdb table per observation into a table per epoch
 
-    # convert rdb_dict to table?
+    :param inst: Instrument instance
+    :param rdb_table: astropy.table.Table, the RDB table (row per observation)
 
-    # TODO: return proper table
-    return rdb_dict
+    :return: astropy.table.Table, the RDB table (row per epoch)
+    """
+    # get the date col from params
+    kw_date = inst.params['KW_DATE']
+    # get unique dates (per epoch)
+    udates = np.unique(rdb_table[kw_date])
+    # -------------------------------------------------------------------------
+    # create dictionary storage for epochs
+    rdb_dict2 = dict()
+    # copy columns from rdb_table (as empty lists)
+    for colname in rdb_table:
+        rdb_dict2[colname] = []
+    # -------------------------------------------------------------------------
+    # loop around unique dates
+    for idate in tqdm(range(len(udates))):
+        # get the date of this iteration
+        udate = udates[idate]
+        # find all observations for this date
+        udate_mask = rdb_table[kw_date] == udate
+        # get masked table
+        itable = rdb_table[udate_mask]
+        # loop around all keys in rdb_table and populate rdb_dict
+        for colname in rdb_table:
+            # -----------------------------------------------------------------
+            # if table is vrad combine vrad + svrad
+            if colname.startswith('vrad'):
+                # get rv and error rv for this udate
+                rvs = itable[colname]
+                errs = itable[colname]
+                # get error^2
+                errs2 = errs ** 2
+                # get 1/error^2
+                rv_value = mp.nansum(rvs / errs2) / mp.nansum(1 / errs2)
+                err_value = np.sqrt(1 / mp.nansum(1 / errs2))
+                # push into table
+                rdb_dict2[colname].append(rv_value)
+                rdb_dict2['s{0}'.format(colname)].append(err_value)
+            # -----------------------------------------------------------------
+            # if not vrad or svrad then try to mean the column or if not
+            #   just take the first value
+            elif 'vrad' not in colname:
+                # try to produce the mean of rdb table
+                try:
+                    rdb_dict2[colname].append(np.mean(itable[colname]))
+                except Exception as _:
+                    rdb_dict2[colname].append(itable[colname][0])
+        # ---------------------------------------------------------------------
+        # convert rdb_dict2 to table
+        # ---------------------------------------------------------------------
+        rdb_table2 = Table()
+        # loop around columns
+        for colname in rdb_dict2:
+            # add to table
+            rdb_table2[colname] = rdb_dict2[colname]
+        # ---------------------------------------------------------------------
+        # return rdb table
+        return rdb_table2
+
+
+def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
+    """
+    Make the drift table
+
+    :param inst: Instrument instance
+    :param rdb_table: astropy.table.Table, the RDB table (row per epoch)
+
+    :return: astropy.table.Table, the RDB table per epoch corrected for the
+             calibration file
+    """
+    # Question: why using the per epoch file here?
+    # Question: this wont work with other instruments
+    # get wave file key
+    kw_wavefile = inst.params['KW_WAVEFILE']
+    # get type key
+    type_key = inst.params['KW_REF_KEY']
+    # get FP reference string
+    ref_list = inst.params['FP_REF_LIST']
+    std_list = inst.params['FP_STD_LIST']
+    # -------------------------------------------------------------------------
+    # storage for output table
+    rdb_dict3 = dict()
+    # fill columns with empty lists similar to rdb_table2
+    for colname in rdb_table2:
+        rdb_dict3[colname] = []
+    # -------------------------------------------------------------------------
+    # get unique wave files
+    uwaves = np.unique(rdb_table2[kw_wavefile])
+    # loop around unique wave files
+    for uwavefile in uwaves:
+        # find all entries that match this wave file
+        wave_mask = rdb_table2 == uwavefile
+        # get table for these entries
+        itable = rdb_table2[wave_mask]
+        # get a list of filenames
+        types = itable[type_key]
+        # ---------------------------------------------------------------------
+        # assume we don't have a reference
+        ref_present = False
+        ref = Table()
+        # loop around filenames and look for reference file
+        # Question: ref is the last one in the list? should we stop after
+        #           first found - its quicker
+        for row in range(len(types)):
+            if types[row] in ref_list:
+                ref_present = True
+                ref = itable[row]
+                break
+        # ---------------------------------------------------------------------
+        # if we have a reference present correct the file
+        if ref_present:
+            # loop around the wave files of this type
+            for row in range(len(types)):
+                # -------------------------------------------------------------
+                # if observation is in the standard list of observations
+                if types[row] in std_list:
+                    # loop around column names
+                    for colname in itable:
+                        # -----------------------------------------------------
+                        # if column is vrad correct for reference
+                        if colname.startswith('vrad'):
+                            # get reference value
+                            refvrad = ref[colname]
+                            # get rv value
+                            vrad = itable[colname][row]
+                            # correct value
+                            vrad_comb = vrad - refvrad
+                            # add to dictionary
+                            rdb_dict3[colname].append(vrad_comb)
+                        # -----------------------------------------------------
+                        # if column is svrad correct for reference
+                        elif colname.startswith('svrad'):
+                            # get reference value
+                            refsvrad2 = ref[colname] ** 2
+                            # get rv value
+                            svrad2 = itable[colname][row] ** 2
+                            # correct value
+                            svrad_comb = np.sqrt(svrad2 + refsvrad2)
+                            # add to dictionary
+                            rdb_dict3[colname].append(svrad_comb)
+                        # -----------------------------------------------------
+                        # else we have a non vrad / svrad column - add as is
+                        else:
+                            rdb_dict3[colname].append(itable[colname][row])
+                # -------------------------------------------------------------
+                # else we have a reference file - just add it as is
+                else:
+                    # loop around column names
+                    for colname in itable:
+                        rdb_dict3[colname].append(itable[colname][row])
+        # ---------------------------------------------------------------------
+        # else we don't have a reference file present --> set to NaN
+        else:
+            # loop around the wave files of this type
+            for row in range(len(types)):
+                # loop around column names
+                for colname in itable:
+                    # ---------------------------------------------------------
+                    # if column is vrad correct for reference
+                    if colname.startswith('vrad'):
+                        # correct value
+                        rdb_dict3[colname].append(np.nan)
+                    # ---------------------------------------------------------
+                    # if column is svrad correct for reference
+                    elif colname.startswith('svrad'):
+                        # correct value
+                        rdb_dict3[colname].append(np.nan)
+                    # ---------------------------------------------------------
+                    # else we have a non vrad / svrad column - add as is
+                    else:
+                        rdb_dict3[colname].append(itable[colname][row])
+    # ---------------------------------------------------------------------
+    # convert rdb_dict3 to table
+    # ---------------------------------------------------------------------
+    rdb_table3 = Table()
+    # loop around columns
+    for colname in rdb_dict3:
+        # add to table
+        rdb_table3[colname] = rdb_dict3[colname]
+    # ---------------------------------------------------------------------
+    # return rdb table
+    return rdb_table3
+
+
+def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
+                      drift_table: Table) -> Table:
+    """
+    Correct RDB table for drifts (where entry exists in both drift table
+    and in rdb_table (based on KW_FILENAME keyword) when entry does not exist
+    vrad and svrad are set to NaN
+
+    :param inst: Instrument instance
+    :param rdb_table: astropy.table.Table - the RDB 1 table per observation
+    :param drift_table: astropy.table.Table - the drift table per observation
+
+    :return: astropy.table.Table - the rdb per observation corrected for drift
+             where a drift exists (else vrad and svrad are NaN)
+    """
+    # get filename keyword
+    kw_filename = inst.params['KW_FILENAME']
+    # -------------------------------------------------------------------------
+    # storage for output table
+    rdb_dict4 = dict()
+    # fill columns with empty lists similar to rdb_table2
+    for colname in rdb_table:
+        rdb_dict4[colname] = []
+    # -------------------------------------------------------------------------
+    # get the types
+    filenames = rdb_table[kw_filename]
+    # loop around the wave files of this type
+    for row in tqdm(range(len(filenames))):
+        # create a mask of all files that match in drift file
+        file_mask = filenames[row] == drift_table[kw_filename]
+        # ---------------------------------------------------------------------
+        # deal with no files present - cannot correct drift
+        if np.sum(file_mask) == 0:
+            # loop around all columns
+            for colname in rdb_dict4:
+                # -------------------------------------------------------------
+                # if column is vrad correct for reference
+                if colname.startswith('vrad'):
+                    # correct value
+                    rdb_dict4[colname].append(np.nan)
+                # -------------------------------------------------------------
+                # if column is svrad correct for reference
+                elif colname.startswith('svrad'):
+                    # correct value
+                    rdb_dict4[colname].append(np.nan)
+                # -------------------------------------------------------------
+                # else we have a non vrad / svrad column - add as is
+                else:
+                    rdb_dict4[colname].append(rdb_table[colname][row])
+        # ---------------------------------------------------------------------
+        # else we have file(s) - use the first
+        else:
+            # get position in the drift table
+            pos = np.where(file_mask)[0]
+            # loop around all columns
+            for colname in rdb_dict4:
+                # -------------------------------------------------------------
+                # if column is vrad correct for reference
+                if colname.startswith('vrad'):
+                    # get vrad drift
+                    vrad_drift = drift_table[colname][pos]
+                    # correct vrad
+                    vrad_corr = rdb_table[colname][row] - vrad_drift
+                    # correct value
+                    rdb_dict4[colname].append(vrad_corr)
+                # -------------------------------------------------------------
+                # if column is svrad correct for reference
+                elif colname.startswith('svrad'):
+                    # get svrad drift
+                    svrad_drift_2 = drift_table[colname][pos] ** 2
+                    # get value
+                    svrad_value_2 = rdb_table[colname][row] ** 2
+                    # correct svrad
+                    svrad_corr = np.sqrt(svrad_value_2 + svrad_drift_2)
+                    # correct value
+                    rdb_dict4[colname].append(svrad_corr)
+                # -------------------------------------------------------------
+                # else we have a non vrad / svrad column - add as is
+                else:
+                    rdb_dict4[colname].append(rdb_table[colname][row])
+    # ---------------------------------------------------------------------
+    # convert rdb_dict3 to table
+    # ---------------------------------------------------------------------
+    rdb_table4 = Table()
+    # loop around columns
+    for colname in rdb_dict4:
+        # add to table
+        rdb_table4[colname] = rdb_dict4[colname]
+    # ---------------------------------------------------------------------
+    # return rdb table
+    return rdb_table4
 
 
 # =============================================================================

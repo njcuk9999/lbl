@@ -13,7 +13,7 @@ import glob
 import numpy as np
 import os
 import requests
-from typing import Tuple, Union
+from typing import Dict, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -78,6 +78,21 @@ class Spirou(Instrument):
         self.params.set('COMPIL_WAVE_MAX', 2500, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
+        # define the first band (from get_binned_parameters) to plot (band1)
+        self.params.set('COMPILE_BINNED_BAND1', 'H', source=func_name)
+        # define the second band (from get_binned_parameters) to plot (band2)
+        #    this is used for colour   band2 - band3
+        self.params.set('COMPILE_BINNED_BAND2', 'J', source=func_name)
+        # define the third band (from get_binned_parameters) to plot (band3)
+        #    this is used for colour   band2 - band3
+        self.params.set('COMPILE_BINNED_BAND2', 'H', source=func_name)
+        # define the FP reference string that defines that an FP observation was
+        #    a reference (calibration) file - should be a list of strings
+        self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
+        # define the FP standard string that defines that an FP observation
+        #    was NOT a reference file - should be a list of strings
+        self.params.set('FP_STD_LIST', ['OBJ_FP', 'POLAR_FP'], source=func_name)
+
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -147,6 +162,9 @@ class Spirou(Instrument):
         self.params.set('KW_SHAPE_C', 'SHAPE_C', source=func_name)
         # define the shape code D value
         self.params.set('KW_SHAPE_D', 'SHAPE_D', source=func_name)
+        # define the reference header key (must also be in rdb table) to
+        #    distinguish FP calibration files from FP simultaneous files
+        self.params.set('KW_REF_KEY', 'DPRTYPE', source=func_name)
 
 
     # -------------------------------------------------------------------------
@@ -512,6 +530,49 @@ class Spirou(Instrument):
         # return float plot date
         return float(plot_date)
 
+    def get_binned_parameters(self) -> Dict[str, list]:
+        """
+        Defines a "binning dictionary" splitting up the array by:
+
+        Each binning dimension has [str names, start value, end value]
+
+        - bands  (in wavelength)
+            [bands / blue_end / red_end]
+
+        - cross order regions (in pixels)
+            [region_names / region_low / region_high]
+
+        :return: dict, the binned dictionary
+        """
+        # ---------------------------------------------------------------------
+        # Question: this is instrument specific?
+        # define the band names
+        bands = ['Y', 'gapYJ', 'J', 'gapJH', 'H', 'gapHK', 'K', 'redK']
+        # define the blue end of each band [nm]
+        blue_end = [900.0, 1113.400, 1153.586, 1354.422, 1462.897, 1808.544,
+                    1957.792, 2343.105]
+        # define the red end of each band [nm]
+        red_end = [1113.4, 1153.586, 1354.422, 1462.897, 1808.544, 1957.792,
+                   2343.105, 2500.000]
+        # ---------------------------------------------------------------------
+        # define the region names (suffices)
+        region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
+        # lower x pixel bin point [pixels]
+        region_low = [0, 0, 2044, 1532]
+        # upper x pixel bin point [pixels]
+        region_high = [4088, 2044, 4088, 2556]
+        # ---------------------------------------------------------------------
+        # return all this information (in a dictionary)
+        binned = dict()
+        binned['bands'] = bands
+        binned['blue_end'] = blue_end
+        binned['red_end'] = red_end
+        binned['region_names'] = region_names
+        binned['region_low'] = region_low
+        binned['region_high'] = region_high
+        # ---------------------------------------------------------------------
+        # return this binning dictionary
+        return binned
 
 
 # =============================================================================

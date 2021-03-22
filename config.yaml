@@ -15,6 +15,12 @@ OBJECT_TEMPLATE: GL699
 # Set the science input file string
 INPUT_FILE: '*e2dsff*AB.fits'
 
+# Set blaze file (None for default)
+BLAZE_FILE: 2498F798T802f_pp_blaze_AB.fits
+
+# Set template file (None for default)
+TEMPLATE_FILE: None
+
 # Set whether to plot any plots
 PLOT: True
 
@@ -24,8 +30,8 @@ PLOT_COMPUTE_CCF: False
 # Set whether to do the compute line plot
 PLOT_COMPUTE_LINES: False
 
-# Set blaze file (None for default)
-BLAZE_FILE: 2498F798T802f_pp_blaze_AB.fits
+# set whether to do the compil cumulative plot
+PLOT_COMPIL_CUMUL: False
 
-# Set template file (None for default)
-TEMPLATE_FILE: None
+# Define whether to do the compil binned plot
+PLOT_COMPIL_BINNED: False

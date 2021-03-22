@@ -32,21 +32,21 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS = [# core
-        'INSTRUMENT', 'CONFIG_FILE',
-        # directory
-        'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
-        'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
-        # science
-        'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
-        'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
-        # plotting
-        'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
-        # other
-        'SKIP_DONE'
-        ]
+ARGS_COMPUTE = [# core
+                'INSTRUMENT', 'CONFIG_FILE',
+                # directory
+                'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
+                'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
+                # science
+                'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
+                'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
+                # plotting
+                'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
+                # other
+                'SKIP_DONE'
+                ]
 # TODO: Etienne - Fill out
-DESCRIPTION = 'Use this code to compute the LBL rv'
+DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
 
 
 # =============================================================================
@@ -62,7 +62,7 @@ def main(**kwargs):
     :return:
     """
     # deal with parsing arguments
-    args = select.parse_args(ARGS, kwargs, DESCRIPTION)
+    args = select.parse_args(ARGS_COMPUTE, kwargs, DESCRIPTION_COMPUTE)
     # load instrument
     inst = select.load_instrument(args)
     # print splash
@@ -73,7 +73,7 @@ def main(**kwargs):
     except LblException as e:
         raise LblException(e.message)
     except Exception as e:
-        emsg = 'Unexpected Error: {0}: {1}'
+        emsg = 'Unexpected lbl_compute error: {0}: {1}'
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
 
@@ -94,7 +94,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # deal with debug
     if inst is None or inst.params is None:
         # deal with parsing arguments
-        args = select.parse_args(ARGS, kwargs, DESCRIPTION)
+        args = select.parse_args(ARGS_COMPUTE, kwargs, DESCRIPTION_COMPUTE)
         # load instrument
         inst = select.load_instrument(args)
         # assert inst type

@@ -183,22 +183,57 @@ params.set(key='RDB_SUFFIX', value='', source=__NAME__,
 
 # define the plot order for the compute rv model plot
 params.set('COMPUTE_MODEL_PLOT_ORDERS', value=None, source=__NAME__,
-           desc='define the plot order for the compute rv model plot'
+           desc='The plot order for the compute rv model plot'
                 'this can be an integer of a list of integers')
 
 # define the compil minimum wavelength allowed for lines [nm]
 params.set('COMPIL_WAVE_MIN', None, source=__NAME__,
-           desc='define the compil minimum wavelength allowed for lines [nm]',
+           desc='The compil minimum wavelength allowed for lines [nm]',
            not_none=True)
 
 # define the compil maximum wavelength allowed for lines [nm]
 params.set('COMPIL_WAVE_MAX', None, source=__NAME__,
-           desc='define the compil maximum wavelength allowed for lines [nm]',
+           desc='The compil maximum wavelength allowed for lines [nm]',
            not_none=True)
 
 # define the maximum pixel width allowed for lines [pixels]
 params.set('COMPIL_MAX_PIXEL_WIDTH', None, source=__NAME__,
-           desc='define the maximum pixel width allowed for lines [pixels]',
+           desc='The maximum pixel width allowed for lines [pixels]',
+           not_none=True)
+
+# define the first band (from get_binned_parameters) to plot (band1)
+params.set('COMPILE_BINNED_BAND1', None, source=__NAME__,
+           desc='The first band (from get_binned_parameters) to plot (band1)',
+           not_none=True)
+
+# define the second band (from get_binned_parameters) to plot (band2)
+#    this is used for colour   band2 - band3
+params.set('COMPILE_BINNED_BAND2', None, source=__NAME__,
+           desc='The second band (from get_binned_parameters) to plot (band2) '
+                'this is used for colour (band2 - band3)',
+           not_none=True)
+
+# define the third band (from get_binned_parameters) to plot (band3)
+#    this is used for colour   band2 - band3
+params.set('COMPILE_BINNED_BAND3', None, source=__NAME__,
+           desc='The third band (from get_binned_parameters) to plot (band3) '
+                'this is used for colour (band2 - band3)',
+           not_none=True)
+
+# define the FP reference string that defines that an FP observation was
+#    a reference (calibration) file - should be a list of strings
+params.set('FP_REF_STRING', None, source=__NAME__,
+           desc='define the FP reference string that defines that an FP '
+                'observation was a reference (calibration) file - should be a '
+                'list of strings',
+           not_none=True)
+
+# define the FP standard string that defines that an FP observation was NOT
+#    a reference file - should be a list of strings
+params.set('FP_STD_LIST', None, source=__NAME__,
+           desc='# define the FP standard string that defines that an FP '
+                'observation was NOT a reference file - should be a list of '
+                'strings',
            not_none=True)
 
 # =============================================================================
@@ -221,10 +256,13 @@ params.set(key='PLOT_COMPUTE_LINES', value=False, source=__NAME__,
 
 # Define whether to do the compil cumulative plot
 params.set(key='PLOT_COMPIL_CUMUL', value=False, source=__NAME__,
-           desc='Whether to do the compute ccf plot',
+           desc='Whether to do the compil cumulative plot',
            arg='--plotcumul', dtype=bool, options=[True, False])
 
-
+# Define whether to do the compil binned plot
+params.set(key='PLOT_COMPIL_BINNED', value=False, source=__NAME__,
+           desc='Whether to to the compil binned plot',
+           arg='--plotbinned', dtype=bool, options=[True, False])
 
 
 # =============================================================================
@@ -407,7 +445,12 @@ params.set(key='KW_SHAPE_C', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_SHAPE_D', value=None, source=__NAME__, not_none=True,
            desc='The shape code D value')
 
-
+# define the reference header key (must also be in rdb table) to
+#    distinguish FP calibration files from FP simultaneous files
+params.set(key='KW_REF_KEY', value=None, source=__NAME__, non_none=True,
+           desc='define the reference header key (must also be in rdb table) '
+                'to distinguish FP calibration files from FP simultaneous '
+                'files')
 
 # =============================================================================
 # Start of code

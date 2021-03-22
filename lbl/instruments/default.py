@@ -292,7 +292,8 @@ class Instrument:
         # retuurn table and header
         return table, header
 
-    def get_lblrdb_files(self, directory: str) -> Tuple[str, str]:
+    def get_lblrdb_files(self, directory: str
+                         ) -> Tuple[str, str, str, str, str]:
         """
         Construct the LBL RDB absolute path and filenames
 
@@ -306,11 +307,17 @@ class Instrument:
                    self.params['RDB_SUFFIX']]
         outname1 = 'lbl_{0}_{1}{2}.rdb'.format(*outargs)
         outname2 = 'lbl2_{0}_{1}{2}.rdb'.format(*outargs)
+        outname3 = 'lbl_{0}_{1}{2}_drift.rdb'.format(*outargs)
+        outname4 = 'lbl2_{0}_{1}{2}_drift.rdb'.format(*outargs)
+        outname5 = 'drift.rdb'
         # construct absolute paths
         outpath1 = os.path.join(directory, outname1)
         outpath2 = os.path.join(directory, outname2)
+        outpath3 = os.path.join(directory, outname3)
+        outpath4 = os.path.join(directory, outname4)
+        outpath5 = os.path.join(directory, outname5)
         # return outpath 1 + 2
-        return outpath1, outpath2
+        return outpath1, outpath2, outpath3, outpath4, outpath5
 
     def load_lblrdb_file(self, filename: str) -> Table:
         """
@@ -505,6 +512,18 @@ class Instrument:
         """
         _ = header
         raise self._not_implemented('get_plot_date')
+
+    def get_binned_parameters(self):
+        """
+        Defines a "binning dictionary" splitting up the array by:
+
+        - bands  (in wavelength)  [bands / blue_end / red_end]
+
+        - cross order (in pixels) [xbin_names / xbin_low / xbin_high]
+
+        :return: dict, the binned dictionary
+        """
+        raise self._not_implemented('get_binned_parameters')
 
 
 # =============================================================================

@@ -9,13 +9,16 @@ Created on 2021-03-17
 
 @author: cook
 """
+from astropy.table import Table
 import matplotlib
 import numpy as np
 from typing import Any, Dict, List
 
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.instruments import default
+from lbl.core import math as mp
+from lbl.instruments import select
+
 
 # =============================================================================
 # Define variables
@@ -25,7 +28,7 @@ __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
 # get classes
-Instrument = default.Instrument
+InstrumentsType = select.InstrumentsType
 LblException = base_classes.LblException
 # plt module
 PLT_MOD = None
@@ -61,7 +64,7 @@ def import_matplotlib():
 # Define plot functions
 # =============================================================================
 # blank plot (for copying)
-def plot_blank(inst: Instrument, **kwargs):
+def plot_blank(inst: InstrumentsType, **kwargs):
     """
     This is a blank plot
     :param inst:  Instrument, instrument this plot is used for
@@ -84,7 +87,7 @@ def plot_blank(inst: Instrument, **kwargs):
     plt.close()
 
 
-def compute_plot_ccf(inst: Instrument, dvgrid: np.ndarray,
+def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
              ccf_vector: np.ndarray, ccf_fit: np.ndarray,
              gcoeffs: np.ndarray):
     """
@@ -128,7 +131,7 @@ def compute_plot_ccf(inst: Instrument, dvgrid: np.ndarray,
     plt.close()
 
 
-def compute_line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
+def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
     """
     Compute RV line plot
 
@@ -207,17 +210,19 @@ def compute_line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
     plt.close()
 
 
-def compil_cumulative_plot(inst: Instrument, vrange: List[np.ndarray],
+def compil_cumulative_plot(inst: InstrumentsType, vrange: List[np.ndarray],
                            pdf: List[np.ndarray], pdf_fit: List[np.ndarray],
                            plot_path: str):
     """
-    This is a blank plot
+    This is the probability density fucntion plot for all files
 
     :param inst:  Instrument, instrument this plot is used for
-    :param vrange: np.ndarray, the velocities array [m/s]
-    :param pdf: np.ndarray, the probability density function array
-    :param pdf_fit: np.ndarray, the fit to the probability density function
-                    (as an array using vrange)
+    :param vrange: list of np.ndarray, the velocities array [m/s] for each
+                   file (for this object)
+    :param pdf: list of np.ndarray, the probability density function array
+                for each file (for this object)
+    :param pdf_fit: list of np.ndarray, the fit to the probability density
+                    function for each file (for this object)
     :param plot_path: str, the absolute path and filename to save the plot to
 
     :return: None - plots
@@ -252,6 +257,82 @@ def compil_cumulative_plot(inst: Instrument, vrange: List[np.ndarray],
     plt.suptitle(title.format(*targs))
     # show and close plot
     plt.savefig(plot_path)
+    plt.close()
+
+
+def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
+    """
+    This is the binned in bands plot (doesn't look at individual regions)
+
+    :param inst:  Instrument, instrument this plot is used for
+    :param kwargs: replace with explicit keyword arguments
+
+    :return: None - plots
+    """
+    # import matplotlib
+    plt = import_matplotlib()
+    # this is a plot skip if this is True
+    if not inst.params['PLOT']:
+        return
+    # plot specific switch
+    if not inst.params['PLOT_COMPIL_BINNED']:
+        return
+    # -------------------------------------------------------------------------
+    # get the band names from params
+    band1_name = inst.params['COMPILE_BINNED_BAND1']
+    band2_name = inst.params['COMPILE_BINNED_BAND2']
+    band3_name = inst.params['COMPILE_BINNED_BAND3']
+    # get arrays from rdb table
+    rjd = rdb_table['rjd']
+    vrad = rdb_table['vrad']
+    svrad = rdb_table['svrad']
+    vrad_band1 = rdb_table['vrad_{0}'.format(band1_name)]
+    svrad_band1 = rdb_table['svrad_{0}'.format(band1_name)]
+    vrad_band2 = rdb_table['vrad_{0}'.format(band2_name)]
+    svrad_band2 = rdb_table['svrad_{0}'.format(band2_name)]
+    vrad_band3 = rdb_table['vrad_{0}'.format(band3_name)]
+    svrad_band3 = rdb_table['svrad_{0}'.format(band3_name)]
+    # get colour (band2 - band3)
+    vrad_colour = vrad_band2 - vrad_band3
+    svrad_colour = np.sqrt(svrad_band2**2 + svrad_band3**2)
+    # normalize by median value
+    nvrad_band1 = vrad_band1 - mp.nanmedian(vrad_band1)
+    nvrad = vrad - mp.nanmedian(vrad)
+    nvrad_colour = vrad_colour - mp.nanmedian(vrad_colour)
+    # colour name
+    colour_name = '{0} - {1}'.format(band2_name, band3_name)
+    # -------------------------------------------------------------------------
+    # set up plot
+    fig, frames = plt.subplots(ncols=1, nrows=2, sharex='all')
+    # -------------------------------------------------------------------------
+    # plot functions here
+
+    # plot band 1
+    frames[0].errorbar(rjd, nvrad_band1, fmt='.r', yerr=svrad_band1, alpha=0.2,
+               label=band1_name)
+    # plot all vrad
+    frames[0].errorbar(rjd, nvrad, fmt='.k', yerr=svrad, alpha=0.8,
+                       label='all')
+    # plot colour
+    frames[1].errorbar(rjd, nvrad_colour, fmt='.g', yerr=svrad_colour,
+                       alpha=0.5, label=colour_name)
+    # -------------------------------------------------------------------------
+    # add legend
+    frames[0].legend(loc=0)
+    # construct axis titles
+    title0 = '{0} velocity'.format(band1_name)
+    title1 = '{0} velocity difference'
+    # set labels
+    frames[0].set(xlabel='rjd', ylabel='RV [m/s]', title=title0)
+    frames[1].set(xlabel='rjd', ylabel='RV [m/s]', title=title1)
+    # construct main title
+    title = 'OBJECT_SCIENCE = {0}    OBJECT_TEMPLATE_{1}'
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE']]
+    # set super title
+    plt.suptitle(title.format(*targs))
+    # -------------------------------------------------------------------------
+    # show and close plot
+    plt.show()
     plt.close()
 
 
