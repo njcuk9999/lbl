@@ -109,6 +109,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # make lbl rdb directory
     lbl_rdb_dir = io.make_dir(data_dir, inst.params['LBLREFTAB_SUBDIR'],
                               'LBL rdb')
+    # make the plot directory
+    plot_dir = io.make_dir(data_dir, 'plots', 'Plot')
     # -------------------------------------------------------------------------
     # Step 2: set filenames
     # -------------------------------------------------------------------------
@@ -130,7 +132,8 @@ def __main__(inst: InstrumentsType, **kwargs):
 
     # else we generate the rdb file
     else:
-        rdb_table = general.make_rdb_table(inst, rdbfile1, lblrv_files)
+        rdb_table = general.make_rdb_table(inst, rdbfile1, lblrv_files,
+                                           plot_dir)
 
     # -------------------------------------------------------------------------
     # Step 4: Produce binned (per-epoch) RDB file

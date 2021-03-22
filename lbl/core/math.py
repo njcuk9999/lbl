@@ -597,6 +597,17 @@ def gauss_fit_s(x: Union[float, np.ndarray], x0: float, sigma: float,
     return gauss + correction
 
 
+def fwhm(sigma: Union[float, np.ndarray] = 1.0) -> Union[float, np.ndarray]:
+    """
+    Get the Full-width-half-maximum value from the sigma value (~2.3548)
+
+    :param sigma: float, the sigma, default value is 1.0 (normalised gaussian)
+    :return: 2 * sqrt(2 * log(2)) * sigma = 2.3548200450309493 * sigma
+    """
+    # return fwdm
+    return 2 * np.sqrt(2 * np.log(2)) * sigma
+
+
 def normal_fraction(sigma: Union[float, np.ndarray] = 1.0
                     ) -> Union[float, np.ndarray]:
     """

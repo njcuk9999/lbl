@@ -181,6 +181,26 @@ params.set(key='RDB_SUFFIX', value='', source=__NAME__,
            desc='The suffix to give the rdb files',
            arg='--subbfix_rdb', dtype=str)
 
+# define the plot order for the compute rv model plot
+params.set('COMPUTE_MODEL_PLOT_ORDERS', value=None, source=__NAME__,
+           desc='define the plot order for the compute rv model plot'
+                'this can be an integer of a list of integers')
+
+# define the compil minimum wavelength allowed for lines [nm]
+params.set('COMPIL_WAVE_MIN', None, source=__NAME__,
+           desc='define the compil minimum wavelength allowed for lines [nm]',
+           not_none=True)
+
+# define the compil maximum wavelength allowed for lines [nm]
+params.set('COMPIL_WAVE_MAX', None, source=__NAME__,
+           desc='define the compil maximum wavelength allowed for lines [nm]',
+           not_none=True)
+
+# define the maximum pixel width allowed for lines [pixels]
+params.set('COMPIL_MAX_PIXEL_WIDTH', None, source=__NAME__,
+           desc='define the maximum pixel width allowed for lines [pixels]',
+           not_none=True)
+
 # =============================================================================
 # Define plot parameters
 # =============================================================================
@@ -203,6 +223,8 @@ params.set(key='PLOT_COMPUTE_LINES', value=False, source=__NAME__,
 params.set(key='PLOT_COMPIL_CUMUL', value=False, source=__NAME__,
            desc='Whether to do the compute ccf plot',
            arg='--plotcumul', dtype=bool, options=[True, False])
+
+
 
 
 # =============================================================================

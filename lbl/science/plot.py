@@ -11,7 +11,7 @@ Created on 2021-03-17
 """
 import matplotlib
 import numpy as np
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -84,7 +84,7 @@ def plot_blank(inst: Instrument, **kwargs):
     plt.close()
 
 
-def plot_ccf(inst: Instrument, dvgrid: np.ndarray,
+def compute_plot_ccf(inst: Instrument, dvgrid: np.ndarray,
              ccf_vector: np.ndarray, ccf_fit: np.ndarray,
              gcoeffs: np.ndarray):
     """
@@ -104,7 +104,7 @@ def plot_ccf(inst: Instrument, dvgrid: np.ndarray,
     # this is a plot skip if this is True
     if not inst.params['PLOT']:
         return
-    # this is a debug plot skip is this is True
+    # plot specific switch
     if not inst.params['PLOT_COMPUTE_CCF']:
         return
     # -------------------------------------------------------------------------
@@ -128,7 +128,7 @@ def plot_ccf(inst: Instrument, dvgrid: np.ndarray,
     plt.close()
 
 
-def line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
+def compute_line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
     """
     Compute RV line plot
 
@@ -143,7 +143,7 @@ def line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
     # this is a plot skip if this is True
     if not inst.params['PLOT']:
         return
-    # this is a debug plot skip is this is True
+    # plot specific switch
     if not inst.params['PLOT_COMPUTE_LINES']:
         return
     # -------------------------------------------------------------------------
@@ -204,6 +204,54 @@ def line_plot(inst: Instrument, plot_dict: Dict[str, Any]):
     # -------------------------------------------------------------------------
     # show and close plot
     plt.show()
+    plt.close()
+
+
+def compil_cumulative_plot(inst: Instrument, vrange: List[np.ndarray],
+                           pdf: List[np.ndarray], pdf_fit: List[np.ndarray],
+                           plot_path: str):
+    """
+    This is a blank plot
+
+    :param inst:  Instrument, instrument this plot is used for
+    :param vrange: np.ndarray, the velocities array [m/s]
+    :param pdf: np.ndarray, the probability density function array
+    :param pdf_fit: np.ndarray, the fit to the probability density function
+                    (as an array using vrange)
+    :param plot_path: str, the absolute path and filename to save the plot to
+
+    :return: None - plots
+    """
+    # import matplotlib
+    plt = import_matplotlib()
+    # this is a plot skip if this is True
+    if not inst.params['PLOT']:
+        return
+    # plot specific switch
+    if not inst.params['PLOT_COMPUTE_LINES']:
+        return
+    # -------------------------------------------------------------------------
+    # set up plot
+    fig, frames = plt.subplots(ncols=1, nrows=2)
+    # loop around list elements
+    for it in range(len(vrange)):
+        # plot functions here
+        frames[0].plot(vrange[it] / 1000.0, pdf[it],
+                       alpha=0.2, color='grey')
+        frames[1].plot(vrange[it] / 1000.0, pdf[it] - pdf_fit[it],
+                       alpha=0.2, color='grey')
+    # construct title
+    title = 'OBJECT_SCIENCE = {0}    OBJECT_TEMPLATE_{1}'
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE']]
+    # set labels and titles
+    frames[0].set(xlabel='Velocity [km/s]',
+                  ylabel='Distribution function of RVs')
+    frames[1].set(xlabel='Velocity [km/s]',
+                  ylabel='Distribution function of RVs - gaussfit')
+    # set title
+    plt.suptitle(title.format(*targs))
+    # show and close plot
+    plt.savefig(plot_path)
     plt.close()
 
 

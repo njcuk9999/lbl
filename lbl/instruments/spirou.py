@@ -72,6 +72,12 @@ class Spirou(Instrument):
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define the plot order for the compute rv model plot
         self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [35], source=func_name)
+        # define the compil minimum wavelength allowed for lines [nm]
+        self.params.set('COMPIL_WAVE_MIN', 900, source=func_name)
+        # define the compil maximum wavelength allowed for lines [nm]
+        self.params.set('COMPIL_WAVE_MAX', 2500, source=func_name)
+        # define the maximum pixel width allowed for lines [pixels]
+        self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -141,10 +147,6 @@ class Spirou(Instrument):
         self.params.set('KW_SHAPE_C', 'SHAPE_C', source=func_name)
         # define the shape code D value
         self.params.set('KW_SHAPE_D', 'SHAPE_D', source=func_name)
-
-
-
-
 
 
     # -------------------------------------------------------------------------
@@ -509,6 +511,7 @@ class Spirou(Instrument):
         plot_date = plot_date - Time(40588, format='mjd').plot_date
         # return float plot date
         return float(plot_date)
+
 
 
 # =============================================================================

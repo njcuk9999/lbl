@@ -14,8 +14,10 @@ from astropy import constants
 from astropy import units as uu
 from astropy.table import Table
 import numpy as np
+import os
 from scipy import stats
 from scipy.optimize import curve_fit
+from tqdm import tqdm
 from typing import Any, Dict, List, Tuple, Union
 import warnings
 
@@ -361,7 +363,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # -------------------------------------------------------------------------
     # debug plot
     # -------------------------------------------------------------------------
-    plot.plot_ccf(inst, dvgrid, ccf_vector, ccf_fit, gcoeffs)
+    plot.compute_plot_ccf(inst, dvgrid, ccf_vector, ccf_fit, gcoeffs)
     # -------------------------------------------------------------------------
     # return the systemic velocity and the ewidth
     return systemic_velocity, ccf_ewidth
@@ -867,7 +869,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # line plot
     # -------------------------------------------------------------------------
-    plot.line_plot(inst, plot_dict)
+    plot.compute_line_plot(inst, plot_dict)
     # -------------------------------------------------------------------------
     # update reference table
     # -------------------------------------------------------------------------
@@ -961,11 +963,20 @@ def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
 # Define compil functions
 # =============================================================================
 def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
-                  lblrvfiles: np.ndarray) -> Table:
+                  lblrvfiles: np.ndarray, plot_dir: str) -> Table:
 
-
+    # -------------------------------------------------------------------------
+    # get parameters
+    # -------------------------------------------------------------------------
+    # get limits
+    wave_min = inst.params['COMPIL_WAVE_MIN']
+    wave_max = inst.params['COMPIL_WAVE_MAX']
+    max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
     # get the header keys to add to rdb_table
     header_keys = inst.rdb_columns()
+    # -------------------------------------------------------------------------
+    # output rdb column set up
+    # -------------------------------------------------------------------------
     # storage for rdb table dictionary
     rdb_dict = dict()
     # add columns
@@ -988,6 +999,33 @@ def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
         # empty elements in a list for each key to fill
         rdb_dict[hdr_key] = [[]] * len(lblrvfiles)
 
+    # -------------------------------------------------------------------------
+    # open first file to set up good mask
+    # -------------------------------------------------------------------------
+    # load table and header
+    rvtable0, rvhdr0 = inst.load_lblrv_file(lblrvfiles[0])
+    # do not consider lines below wave_min limit
+    good = rvtable0['WAVE_START'] > wave_min
+    # do not consider lines above wave_max limit
+    good &= rvtable0['WAVE_START'] < wave_max
+    # do not consider lines wider than max_pix_wid limit
+    good &= rvtable0['NPIXLINE'] < max_pix_wid
+    # size of arrays
+    nby, nbx = len(lblrvfiles), np.sum(good)
+    # set up arrays
+    rvs, dvrms = np.zeros([nby, nbx]), np.zeros([nby, nbx])
+    ddv, ddvrms = np.zeros([nby, nbx]), np.zeros([nby, nbx])
+    dddv, dddvrms = np.zeros([nby, nbx]), np.zeros([nby, nbx])
+
+    # -------------------------------------------------------------------------
+    # work out for cumulative plot for first file
+    # -------------------------------------------------------------------------
+    # median velocity for first file rv table
+    med_velo = mp.nanmedian(rvtable0['RV'])
+    # work out the best lines (less than 5 sigma)
+    best_mask = rvtable0['DVRMS'] < np.nanpercentile(rvtable0['DVRMS'], 5.0)
+    # list for plot storage
+    vrange_all, pdf_all, pdf_fit_all = [], [], []
     # -------------------------------------------------------------------------
     # Loop around lbl rv files
     # -------------------------------------------------------------------------
@@ -1019,14 +1057,155 @@ def make_rdb_table(inst: InstrumentsType, rdbfile1: str,
                 wargs = [key, lblrvfiles[row]]
                 log.warning(wmsg.format(*wargs))
         # ---------------------------------------------------------------------
-        #
+        # Read all lines for this file and load into arrays
         # ---------------------------------------------------------------------
+        # fill in rows in arrays
+        rvs[row] = rvtable[good]['RV']
+        dvrms[row] = rvtable[good]['DVRMS']
+        ddv[row] = rvtable[good]['DDV']
+        ddvrms[row] = rvtable[good]['DDVRMS']
+        dddv = rvtable[good]['DDDV']
+        dddvrms = rvtable[good]['DDDVRMS']
+        # ---------------------------------------------------------------------
+        # cumulative plot
+        # ---------------------------------------------------------------------
+        # plot specific math
+        xlim = [med_velo - 5000, med_velo + 5000]
+        # get velocity range
+        vrange = np.arange(xlim[0], xlim[1], 50.0)
+        # storage for probability density function
+        pdf = np.zeros_like(vrange, dtype=float)
+        # mask the rv and dvrms by best_mask
+        best_rv = rvs[best_mask]
+        best_dvrms = dvrms[best_mask]
+        # track finite values
+        finite_mask = np.isfinite(best_rv) & np.isfinite(best_dvrms)
+        # loop around each line
+        for line_it in range(len(best_rv)):
+            # only deal with finite masks
+            if finite_mask[line_it]:
+                # get exponent
+                part = (vrange - best_rv[line_it]) / best_dvrms[line_it]
+                # calculate pdf weights
+                pdf_weight = np.exp(-0.5 * part ** 2)
+                pdf_weight = pdf_weight / best_dvrms[line_it]
+                # add to pdf for each vrange
+                pdf = pdf + pdf_weight
+        # fit the probability density function
+        guess = [med_velo, 500.0, np.max(pdf), 0.0, 0.0]
+        pdf_coeffs = curve_fit(mp.gauss_fit_s, vrange, pdf, p0=guess)
+        pdf_fit = mp.gauss_fit_s(vrange, *pdf_coeffs)
+        # append values to plot lists
+        vrange_all.append(vrange)
+        pdf_all.append(pdf)
+        pdf_fit_all.append(pdf_fit)
+
+    # construct plot name
+    plot_name = rdbfile1.replace('.rdb', '') + '_cumul.pdf'
+    plot_path = os.path.join(plot_dir, plot_name)
+    # plot the comulative plot
+    plot.compil_cumulative_plot(inst, vrange_all, pdf_all, pdf_fit_all,
+                                plot_path)
+    # ---------------------------------------------------------------------
+    # First guess at vrad
+    # ---------------------------------------------------------------------
+    # log progress
+    msg = 'Forcing a stdev of 1 for all lines'
+    log.general(msg)
+    msg = 'Constructing a per-epoch mean velocity'
+    log.general(msg)
+    # loop around lines and generate a first guess for vrad and svrad
+    for line_it in tqdm(range(rvs.shape[0])):
+        # calculate the number of sigma away from median
+        diff = rvs[line_it] - mp.nanmedian(rvs[line_it])
+        nsig = diff / dvrms[line_it]
+        # force a std dev of 1
+        dvrms[line_it] = dvrms[line_it] * mp.estimate_sigma(nsig)
+        # use the odd ratio mean to guess vrad and svrad
+        orout1 = mp.odd_ratio_mean(rvs[line_it], dvrms[line_it])
+        # add to output table
+        rdb_dict['vrad'][line_it] = orout1[0]
+        rdb_dict['svrad'][line_it] = orout1[1]
+
+    # ---------------------------------------------------------------------
+    # Model per epoch
+    # ---------------------------------------------------------------------
+    # de-biasing line - matrix that contains a replicated 2d version of the
+    #    per-epoch mean
+    rv_per_epoch_model = np.repeat(rdb_dict['vrad'], rvs.shape[1])
+    rv_per_epoch_model = rv_per_epoch_model.reshape(rvs.shape)
+
+    # ---------------------------------------------------------------------
+    # line-by-line mean position
+    # ---------------------------------------------------------------------
+    # storage for line mean / error
+    per_line_mean = np.zeros(rvs.shape[1])
+    per_line_error = np.zeros(rvs.shape[1])
+    # compute the per-line bias
+    for line_it in tqdm(range(len(per_line_mean))):
+        # get the difference and error for each line
+        diff1 = rvs[:, line_it] - rv_per_epoch_model[:, line_it]
+        err1 = dvrms[:, line_it]
+        # try to guess the odd ratio mean
+        try:
+            guess2, bulk_error2 = mp.odd_ratio_mean(diff1, err1)
+            per_line_mean[line_it] = guess2
+            per_line_error[line_it] = bulk_error2
+        # if odd ratio mean fails push NaNs into arrays
+        except Exception as _:
+            per_line_mean[line_it] = np.nan
+            per_line_error[line_it] = np.nan
+
+    # normalize the per-line mean to zero
+    guess3, bulk_error3 = mp.odd_ratio_mean(per_line_mean, per_line_error)
+    per_line_mean = per_line_mean - guess3
+
+    # ---------------------------------------------------------------------
+    # Model per line
+    # ---------------------------------------------------------------------
+    # construct a 2d model of line biases
+    rv_per_line_model = np.tile(per_line_mean, rvs.shape[0])
+    rv_per_line_model = rv_per_line_model.reshape(rvs.shape)
+
+    # ---------------------------------------------------------------------
+    # Update table with vrad/svrad, per epoch values and fwhm/sig_fwhm
+    # ---------------------------------------------------------------------
+    for row in range(len(lblrvfiles)):
+        # get the residuals of the rvs to the rv per line model
+        residuals = rvs[row] - rv_per_line_model[row]
+        # recompute the guess at the vrad / svrad
+        guess4, bulk_error4 = mp.odd_ratio_mean(residuals, dvrms[row])
+        # same for the ddv
+        guess5, bulk_error5 = mp.odd_ratio_mean(ddv[row], ddvrms[row])
+        # same for the dddv
+        guess6, bulk_error6 = mp.odd_ratio_mean(dddv[row], dddvrms[row])
+        # ---------------------------------------------------------------------
+        # get the ccf_ew
+        ccf_ew_row = rdb_dict['ccf_rw'][row]
+        # work out the fwhm (1 sigma * sigma value)
+        fwhm_row = mp.fwhm() * (ccf_ew_row + guess5 / ccf_ew_row)
+        sig_fwhm_row = mp.fwhm() * (bulk_error5 / ccf_ew_row)
+        # ---------------------------------------------------------------------
+        # update rdb table
+        rdb_dict['vrad'][row] = guess4
+        rdb_dict['svrad'][row] = bulk_error4
+        rdb_dict['per_epoch_DDV'] = guess5
+        rdb_dict['per_epoch_DDVRMS'] = bulk_error5
+        rdb_dict['per_epoch_DDDV'] = guess6
+        rdb_dict['per_epoch_DDDVRMS'] = bulk_error6
+        rdb_dict['fwhm'] = fwhm_row
+        rdb_dict['sig_fwhm'] = sig_fwhm_row
+
+    # ---------------------------------------------------------------------
+    # Per-band RV measurements
+    # ---------------------------------------------------------------------
 
 
 
+    # convert rdb_dict to table?
 
     # TODO: return proper table
-    return Table()
+    return rdb_dict
 
 
 # =============================================================================
