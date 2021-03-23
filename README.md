@@ -78,7 +78,7 @@ pip install -r requirements.txt
 
 ---
 
-## Step 4: Add to the PYTHONPATH environment
+## Step 4: Add to the PATH and PYTHONPATH environment
 
 I.e. in `~/.bashrc` or `~/.bash_profile` or `~/.profile` or a sh script you 
 can source
@@ -86,7 +86,7 @@ can source
 For bash:
 ```shell
 export PYTHONPATH={LBL_ROOT}:$PYTHONPATH
-export PYTHONPATH={LBL_ROOT}/lbl/recipes/:$PYTHONPATH
+export PATH={LBL_ROOT}:{LBL_ROOT}/lbl/recipes/:$PATH
 ```
 
 [back to top](#contents)
