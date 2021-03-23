@@ -12,7 +12,7 @@ from astropy.table import Table
 import glob
 import numpy as np
 import os
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -118,7 +118,6 @@ class Instrument:
             header[key] = (value, comment)
         # return header
         return header
-
 
     def load_science(self, filename: str) -> Tuple[np.ndarray, fits.Header]:
         """
@@ -285,6 +284,7 @@ class Instrument:
 
         :return: tuple, 1. the LBL RV table, 2. the LBL RV header
         """
+        _ = self
         # get fits bin table as astropy table
         table = io.load_table(filename, kind='lbl rv fits table')
         # get fits header
@@ -327,6 +327,8 @@ class Instrument:
 
         :return: Table, the LBL rdb astropy table
         """
+        _ = self
+        # load table
         table = io.load_table(filename, kind='LBL rdb fits table')
         # return table
         return table
@@ -349,7 +351,6 @@ class Instrument:
         tobjname = self.params['OBJECT_TEMPLATE']
         # return sub directory
         return '{0}_{1}'.format(sobjname, tobjname)
-
 
     def _set_object_template(self):
         """
@@ -544,6 +545,22 @@ class Instrument:
         :return: dict, the binned dictionary
         """
         raise self._not_implemented('get_binned_parameters')
+
+    def get_epoch_groups(self, rdb_table: Table):
+        """
+        For a given instrument this is how we define epochs
+        returns the epoch groupings, and the value of the epoch for each
+        row in rdb_table
+
+        :param rdb_table: astropy.table.Table - the rdb table (source of epoch
+                          information)
+
+        :return: tuple, 1. the epoch groupings, 2. the value of the epoch for
+                 each row of the rdb_table
+        """
+        _ = rdb_table
+        # return the epoch groupings and epoch values
+        raise self._not_implemented('get_epoch_groups')
 
 
 # =============================================================================

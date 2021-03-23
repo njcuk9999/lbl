@@ -360,8 +360,10 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
         # calculate the weights based on the probability of being good
         weights = odd_good / error2
         # update the guess based on the weights
-        # TODO: Question: can there be NaNs here?
-        guess = np.sum(value * weights) / np.sum(weights)
+        if np.sum(np.isfinite(weights)) == 0:
+            guess = np.nan
+        else:
+            guess = np.nansum(value * weights) / np.nansum(weights)
     # work out the bulk error
     bulk_error = np.sqrt(1.0 / np.nansum(odd_good / error2))
     # return the guess and bulk error

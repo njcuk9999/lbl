@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-# CODE NAME HERE
-
-# CODE DESCRIPTION HERE
+General science functions and algorithms
 
 Created on 2021-03-16
 
@@ -105,8 +103,6 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
     # -------------------------------------------------------------------------
     # deal with creating table
     else:
-        # Question: always the same wave length solution ?
-        # Question: Should this wave solution come from calib ?
         # load wave solution from first science file
         wavegrid = inst.get_wave_solution(science_files[0])
         # storage for vectors
@@ -448,7 +444,6 @@ def estimate_noise_model(spectrum: np.ndarray, model: np.ndarray,
             sigma[it] = mp.estimate_sigma(residuals[istart: iend])
             # set any zero values to NaN
             sigma[sigma == 0] = np.nan
-        # Question: this was inside the loop - probably should be outside?
         # mask all NaN values
         good = np.isfinite(sigma)
         # if we have enough points calculate the rms
@@ -545,7 +540,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # deal with noise model
     if use_noise_model:
-        # Question: where is this noise model function?
+        # TODO: get a noise model
         # rms = get_noise_model(science_files)
         rms = np.zeros_like(sci_data)
     else:
@@ -751,10 +746,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if (x_end - x_start) < min_line_width:
                 mask_keep[line_it] = False
                 continue
-            # Question: Why not add these to the keep mask?
             if x_start < 0:
+                mask_keep[line_it] = False
                 continue
             if x_end > len(ww_ord) - 2:
+                mask_keep[line_it] = False
                 continue
             # -----------------------------------------------------------------
             # get weights at the edge of the domain. Pixels inside have a
@@ -1308,10 +1304,8 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
 
     :return: astropy.table.Table, the RDB table (row per epoch)
     """
-    # get the date col from params
-    kw_date = inst.params['KW_DATE']
-    # get unique dates (per epoch)
-    udates = np.unique(rdb_table[kw_date])
+    # get the epoch groupings and epoch values
+    epoch_groups, epoch_values = inst.get_epoch_groups(rdb_table)
     # -------------------------------------------------------------------------
     # create dictionary storage for epochs
     rdb_dict2 = dict()
@@ -1322,13 +1316,13 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     # log progress
     log.info('Producing LBL RDB 2 table')
     # loop around unique dates
-    for idate in tqdm(range(len(udates))):
+    for idate in tqdm(range(len(epoch_groups))):
         # get the date of this iteration
-        udate = udates[idate]
+        epoch = epoch_groups[idate]
         # find all observations for this date
-        udate_mask = rdb_table[kw_date] == udate
-        # get masked table
-        itable = rdb_table[udate_mask]
+        epoch_mask = epoch_values == epoch
+        # get masked table for this epoch (only rows for this epoch)
+        itable = rdb_table[epoch_mask]
         # loop around all keys in rdb_table and populate rdb_dict
         for colname in rdb_table.colnames:
             # -----------------------------------------------------------------
@@ -1372,7 +1366,7 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     return rdb_table2
 
 
-def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
+def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
     """
     Make the drift table
 
@@ -1382,8 +1376,6 @@ def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
     :return: astropy.table.Table, the RDB table per epoch corrected for the
              calibration file
     """
-    # Question: why using the per epoch file here?
-    # Question: this wont work with other instruments
     # get wave file key
     kw_wavefile = inst.params['KW_WAVEFILE']
     # get type key
@@ -1395,19 +1387,19 @@ def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
     # storage for output table
     rdb_dict3 = dict()
     # fill columns with empty lists similar to rdb_table2
-    for colname in rdb_table2.colnames:
+    for colname in rdb_table.colnames:
         rdb_dict3[colname] = []
     # -------------------------------------------------------------------------
     # get unique wave files
-    uwaves = np.unique(rdb_table2[kw_wavefile])
+    uwaves = np.unique(rdb_table[kw_wavefile])
     # log progress
     log.info('Producing LBL drift table')
     # loop around unique wave files
     for uwavefile in tqdm(uwaves):
         # find all entries that match this wave file
-        wave_mask = rdb_table2 == uwavefile
+        wave_mask = rdb_table == uwavefile
         # get table for these entries
-        itable = rdb_table2[wave_mask]
+        itable = rdb_table[wave_mask]
         # get a list of filenames
         types = itable[type_key]
         # ---------------------------------------------------------------------
@@ -1415,8 +1407,6 @@ def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
         ref_present = False
         ref = Table()
         # loop around filenames and look for reference file
-        # Question: ref is the last one in the list? should we stop after
-        #           first found - its quicker
         for row in range(len(types)):
             if types[row] in ref_list:
                 ref_present = True

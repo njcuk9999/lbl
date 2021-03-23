@@ -210,7 +210,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             # skip
             continue
         # ---------------------------------------------------------------------
-        # 6.3 load file
+        # 6.3 load science file
         # ---------------------------------------------------------------------
         sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
         # ---------------------------------------------------------------------

@@ -18,6 +18,7 @@ from typing import Dict, Tuple, Union
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import math as mp
 from lbl.instruments import default
 
 
@@ -165,7 +166,6 @@ class Spirou(Instrument):
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         self.params.set('KW_REF_KEY', 'DPRTYPE', source=func_name)
-
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
@@ -424,9 +424,7 @@ class Spirou(Instrument):
         """
         # get BERV header key
         hdr_key = self.params['KW_BERV']
-
         # BERV depends on whether object is FP or not
-        # Question: should we deal with BERV = np.nan?
         if 'FP' not in self.params['OBJECT_SCIENCE']:
             berv = io.get_hkey(sci_hdr, hdr_key) * 1000
         else:
@@ -479,10 +477,9 @@ class Spirou(Instrument):
             header[kw_snrgoal] = 0
         # ---------------------------------------------------------------------
         # deal with not having CCF_EW
-        # Question: Is this instrument specific?
-        # Question: Why wouldn't we have this?
+        # TODO: this is template specific
         if kw_ccf_ew not in header:
-            header[kw_ccf_ew] = 5.5 / 2.354 * 1000
+            header[kw_ccf_ew] = 5.5 / mp.fwhm() * 1000
         # ---------------------------------------------------------------------
         # return header
         return header
@@ -502,7 +499,6 @@ class Spirou(Instrument):
         # get mjdmid and bjd
         mid_exp_time = io.get_hkey(header, kw_mjdmid)
         bjd = io.get_hkey(header, kw_bjd)
-        # Question: why would BJD be a string?
         if isinstance(bjd, str):
             return float(mid_exp_time)
         else:
@@ -519,14 +515,12 @@ class Spirou(Instrument):
 
         :return: float, the plot date
         """
-        # Question: This makes no sense to me
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
         # get mjdate
         mjdate = io.get_hkey(header, kw_mjdate)
         # convert to plot date and take off JD?
         plot_date = Time(mjdate, format='mjd').plot_date
-        plot_date = plot_date - Time(40588, format='mjd').plot_date
         # return float plot date
         return float(plot_date)
 
@@ -545,7 +539,6 @@ class Spirou(Instrument):
         :return: dict, the binned dictionary
         """
         # ---------------------------------------------------------------------
-        # Question: this is instrument specific?
         # define the band names
         bands = ['Y', 'gapYJ', 'J', 'gapJH', 'H', 'gapHK', 'K', 'redK']
         # define the blue end of each band [nm]
@@ -573,6 +566,28 @@ class Spirou(Instrument):
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned
+
+    def get_epoch_groups(self, rdb_table: Table
+                         ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        For a given instrument this is how we define epochs
+        returns the epoch groupings, and the value of the epoch for each
+        row in rdb_table
+
+        :param rdb_table: astropy.table.Table - the rdb table (source of epoch
+                          information)
+
+        :return: tuple, 1. the epoch groupings, 2. the value of the epoch for
+                 each row of the rdb_table
+        """
+        # get the date col from params
+        kw_date = self.params['KW_DATE']
+        # get unique dates (per epoch)
+        epoch_groups = np.unique(rdb_table[kw_date])
+        # get the epoch values for each row of rdb_table
+        epoch_values = np.array(rdb_table[kw_date])
+        # return the epoch groupings and epoch values
+        return epoch_groups, epoch_values
 
 
 # =============================================================================

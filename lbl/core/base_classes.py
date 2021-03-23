@@ -9,7 +9,7 @@ Created on 2021-03-15
 """
 from collections import UserDict
 from copy import deepcopy
-from typing import Any, Type, Union
+from typing import Any, Dict, Type, Union
 
 from lbl.core import base
 from lbl.core import logger
@@ -103,22 +103,25 @@ class Const:
 
 class ParamDict(UserDict):
     def __init__(self, *args, **kwargs):
+        """
+        Construct the parameter dictionary class
+
+        :param args: args passed to dict constructor
+        :param kwargs: kwargs passed to dict constructor
+        """
         super().__init__(*args, **kwargs)
         # storage for constants
         self.instances = dict()
         # must be set (by instrument)
         self.not_none = []
 
-    def set(self, key: str, value: Any,
-            source: Union[str, None] = None,
-            desc: Union[str, None] = None,
-            arg: Union[str, None] = None,
-            dtype: Union[Type, None] = None,
-            not_none: bool = False,
-            options: Union[list, None] = None,
+    def set(self, key: str, value: Any, source: Union[str, None] = None,
+            desc: Union[str, None] = None, arg: Union[str, None] = None,
+            dtype: Union[Type, None] = None, not_none: bool = False,
+            options: Union[list, None] = None, 
             comment: Union[str, None] = None):
         """
-        Set a parameter
+        Set a parameter in the dictionary y[key] = value
 
         :param key: str, the key to set in dictionary
         :param value: Any, the value to give to the dictionary item
@@ -148,13 +151,28 @@ class ParamDict(UserDict):
         self.instances[key] = Const(key, source, desc, arg, dtype, options,
                                     comment)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Any, value: Any):
+        """
+        Set an item from the dictionary using y[key] = value
+        
+        :param key: Any, the key for which to store its value
+        :param value: Any, the value to store for this key
+        
+        :return: None - updates the dictionary 
+        """
         # capitalize
         key = self._capitalize(key)
         # then do the normal dictionary setting
         self.data[key] = value
 
-    def __getitem__(self, key) -> Any:
+    def __getitem__(self, key: Any) -> Any:
+        """
+        Get an item from the dictionary using y[key]
+        
+        :param key: Any, the key for which to return its value
+        
+        :return: Any, the value of the given key 
+        """
         # capitalize
         key = self._capitalize(key)
         # return from supers dictionary storage
@@ -224,16 +242,33 @@ class ParamDict(UserDict):
 
     @staticmethod
     def _capitalize(key: str) -> str:
+        """
+        capitalize a key
+        :param key: str, the key to capitalize
+        :return: str, the capitalized key
+        """
         if isinstance(key, str):
             return key.upper()
+        else:
+            return key
 
-    def sources(self):
+    def sources(self) -> Dict[str, str]:
+        """
+        Get the sources for this parameter dictionary (from instances)
+        
+        :return: dict, the source dictionary
+        """
         source_dict = dict()
         for key in self.instances:
             source_dict[key] = self.instances[key].source
         return source_dict
 
     def __str__(self) -> str:
+        """
+        String representation of the parameter dictionary
+        
+        :return: str, the string representation of the parameter dictionary 
+        """
         # get keys, values, sources
         keys = list(self.keys())
         values = list(self.values())
@@ -249,17 +284,32 @@ class ParamDict(UserDict):
             string += '\n{0:30s}\t{1:40s}\t// {2}'.format(*sargs)
         return string
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        String representation of the parameter dictionary
+        
+        :return: str, the string representation of the parameter dictionary 
+        """
         return self.__str__()
 
 
 class LBLError(Exception):
     def __init__(self, message):
+        """
+        Construct the LBL Error class 
+        
+        :param message: str, the message to print on error 
+        """
         self.message = message
 
     def __str__(self) -> str:
-        message = 'Error: {0}'.format(self.message)
+        """
+        String representation of the LBL Error class
 
+        :return: str, the string representation of the LBL Error class
+        """
+        message = 'Error: {0}'.format(self.message)
+        # return message
         return message
 
 

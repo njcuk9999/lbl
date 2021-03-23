@@ -167,7 +167,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     if inst.params['OBJECT_SCIENCE'] == 'FP':
         # make the drift table
-        drift_table = general.make_drift_table(inst, rdb_table2)
+        drift_table = general.make_drift_table(inst, rdb_table)
         # log creation of drift table
         msg = 'Writing drift file: {0}'
         log.info(msg.format(drift_table))

@@ -4,7 +4,7 @@
 INSTRUMENT: SPIROU
 
 # Set data directory
-DATA_DIR: /data/spirou/data/lbl
+DATA_DIR: /data/spirou/data/lbl/
 
 # Set science object name
 OBJECT_SCIENCE: GL699
