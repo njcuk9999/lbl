@@ -34,7 +34,8 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_COMPUTE = [# core
+ARGS_COMPUTE = [
+                # core
                 'INSTRUMENT', 'CONFIG_FILE',
                 # directory
                 'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
@@ -206,7 +207,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         if lblrv_exists and inst.params['SKIP_DONE']:
             # log message about skipping
             log.general('\t\tFile exists and skipping activated. '
-                            'Skipping file.')
+                        'Skipping file.')
             # skip
             continue
         # ---------------------------------------------------------------------
