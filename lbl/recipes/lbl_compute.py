@@ -16,6 +16,8 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
 from lbl.science import general
+from lbl.resources import misc
+
 
 # =============================================================================
 # Define variables
@@ -105,6 +107,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # get data directory
     data_dir = inst.params['DATA_DIR']
+    # copy over readme
+    misc.copy_readme(data_dir)
     # make mask directory
     mask_dir = io.make_dir(data_dir, inst.params['MASK_SUBDIR'], 'Mask')
     # make template directory
@@ -115,8 +119,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     # make science directory (for S2D files)
     science_dir = io.make_dir(data_dir, inst.params['SCIENCE_SUBDIR'],
                               'Science')
+    # make sub directory based on object science and object template
+    obj_subdir = inst.science_template_subdir()
     # make lblrv directory
-    lblrv_dir = io.make_dir(data_dir, inst.params['LBLRV_SUBDIR'], 'LBL RV')
+    lblrv_dir = io.make_dir(data_dir, inst.params['LBLRV_SUBDIR'], 'LBL RV',
+                            subdir=obj_subdir)
     # make lbl reftable directory
     lbl_reftable_dir = io.make_dir(data_dir, inst.params['LBLREFTAB_SUBDIR'],
                                    'LBL reftable')

@@ -10,6 +10,7 @@ Created on 2021-03-17
 @author: cook
 """
 import argparse
+from copy import deepcopy
 import os
 from typing import Any, Dict, List, Union
 import yaml
@@ -58,15 +59,14 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     parser = argparse.ArgumentParser(description=description)
     # get params
     params = parameters.params.copy()
+    # get default values
+    default_values = dict()
+    for argname in params:
+        default_values[argname] = deepcopy(params[argname])
     # storage of inputs
     inputs = ParamDict()
-    # update params value with kwargs
-    for kwarg in kwargs:
-        # force kwarg to upper case
-        kwargname = kwarg.upper()
-        # only if in params
-        if kwargname in params:
-            inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
+    cmd_inputs = ParamDict()
+    # -------------------------------------------------------------------------
     # add args from sys.argv
     for argname in argnames:
         if argname in params:
@@ -75,11 +75,26 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             # skip constants without argument / dtype
             if const.argument is None or const.dtype is None:
                 continue
+            # deal with bool
+            if const.dtype is bool:
+                pkwargs = dict(dest=const.key, default=params[argname],
+                               action='store_true', help=const.description)
+            else:
+                pkwargs = dict(dest=const.key, type=const.dtype,
+                               default=params[argname],
+                               action='store', help=const.description,
+                               choices=const.options)
             # parse argument
-            parser.add_argument(const.argument, dest=const.key,
-                                type=const.dtype, default=params[argname],
-                                action='store', help=const.description,
-                                choices=const.options)
+            parser.add_argument(const.argument, **pkwargs)
+    # -------------------------------------------------------------------------
+    # update params value with kwargs
+    for kwarg in kwargs:
+        # force kwarg to upper case
+        kwargname = kwarg.upper()
+        # only if in params
+        if kwargname in params:
+            inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
+    # -------------------------------------------------------------------------
     # load parsed args into inputs
     args = vars(parser.parse_args())
     for argname in args:
@@ -88,8 +103,16 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             if args[argname] is None:
                 if argname not in inputs.not_none:
                     continue
+
         # we set the input
-        inputs.set(argname, args[argname], source=func_name + '[CMD]')
+        cmd_inputs.set(argname, args[argname], source=func_name + '[CMD]')
+    # -------------------------------------------------------------------------
+    # we need to copy config_file into inputs - in general we copy command line
+    #   arguments after - but we need the config one to load it
+    if 'CONFIG_FILE' in cmd_inputs:
+        if cmd_inputs['CONFIG_FILE'] is not None:
+            inputs.set('CONFIG_FILE', value=cmd_inputs['CONFIG_FILE'])
+    # -------------------------------------------------------------------------
     # deal with yaml file
     if 'CONFIG_FILE' in inputs:
         if inputs['CONFIG_FILE'] is not None:
@@ -109,6 +132,34 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
                 if yaml_inputs[argname] not in [None, 'None']:
                     inputs.set(argname, yaml_inputs[argname],
                                source=func_name + '[YAML]')
+    # -------------------------------------------------------------------------
+    # storage of command line arguments
+    inputs.set('COMMAND_LINE_ARGS', value=[], source=func_name)
+    # now copy over rest of command line arguments
+    for key in cmd_inputs:
+        # skip keys that are None
+        if cmd_inputs[key] is not None:
+            # do not update if default value
+            if key in default_values:
+                # check that default value isn't set
+                if cmd_inputs[key] == default_values[key]:
+                    # skip values which are default (we don't want to override
+                    #   values set from kwargs or yaml)
+                    continue
+            # get arg
+            cmdarg = params.instances[key].argument
+            # get value
+            value = cmd_inputs[key]
+            # get source
+            source = cmd_inputs.instances[key].source
+            # update input - if valid
+            inputs.set(key, value=value, source=source)
+            # log inputs added from command line
+            if value in [None, '', 'None']:
+                continue
+            msg = '\t{0}="{1}"'.format(cmdarg, value)
+            inputs['COMMAND_LINE_ARGS'].append(msg)
+    # -------------------------------------------------------------------------
     # parse arguments
     return inputs
 
@@ -149,24 +200,33 @@ def load_instrument(args: ParamDict) -> InstrumentsType:
     # override inst params with args (from input/cmd/yaml)
     for argname in args:
         if argname in inst.params:
+            # get source
             inst.params.set(argname, args[argname],
                             source=args.instances[argname].source)
     # return instrument instances
     return inst
 
 
-def splash(name: str, instrument: str):
+def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None):
     # print splash
     msgs = ['']
     msgs += ['*' * 79]
-    msgs += ['\t {0}']
-    msgs += ['\t VERSION:{1} INSTRUMENT: {2}']
+    msgs += ['\t{0}']
+    msgs += ['\t\tVERSION: {1}']
+    msgs += ['\t\tINSTRUMENT: {2}']
     msgs += ['*' * 79]
     msgs += ['']
     margs = [name, __version__, instrument]
     # loop through messages
     for msg in msgs:
         log.info(msg.format(*margs))
+    # add command line arguments (if not None)
+    if cmdargs is not None:
+        log.info('Command line arguments:')
+        # loop around arguments and add
+        for cmdmsg in cmdargs:
+            log.info(cmdmsg)
+
 
 # =============================================================================
 # Start of code

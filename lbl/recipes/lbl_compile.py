@@ -17,6 +17,7 @@ from lbl.core import io
 from lbl.instruments import select
 from lbl.science import general
 from lbl.science import plot
+from lbl.resources import misc
 
 # =============================================================================
 # Define variables
@@ -66,7 +67,8 @@ def main(**kwargs):
     # load instrument
     inst = select.load_instrument(args)
     # print splash
-    select.splash(name=__STRNAME__, instrument=inst.name)
+    select.splash(name=__STRNAME__, instrument=inst.name,
+                  cmdargs=inst.params['COMMAND_LINE_ARGS'])
     # run __main__
     try:
         return __main__(inst)
@@ -105,11 +107,15 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # get data directory
     data_dir = inst.params['DATA_DIR']
+    # copy over readme
+    misc.copy_readme(data_dir)
+    # make sub directory based on object science and object template
+    obj_subdir = inst.science_template_subdir()
     # make lblrv directory
-    lblrv_dir = io.make_dir(data_dir, inst.params['LBLRV_SUBDIR'], 'LBL RV')
+    lblrv_dir = io.make_dir(data_dir, inst.params['LBLRV_SUBDIR'], 'LBL RV',
+                            subdir=obj_subdir)
     # make lbl rdb directory
-    lbl_rdb_dir = io.make_dir(data_dir, inst.params['LBLREFTAB_SUBDIR'],
-                              'LBL rdb')
+    lbl_rdb_dir = io.make_dir(data_dir, inst.params['LBLRDB_SUBDIR'], 'LBL rdb')
     # make the plot directory
     plot_dir = io.make_dir(data_dir, 'plots', 'Plot')
     # -------------------------------------------------------------------------

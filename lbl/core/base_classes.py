@@ -240,7 +240,12 @@ class ParamDict(UserDict):
         sources = self.sources()
         string = 'ParamDict:'
         for it, key in enumerate(keys):
-            sargs = [key + ':', str(values[it])[:40], sources[key]]
+            # get source
+            if key not in sources:
+                source = 'Not set'
+            else:
+                source = sources[key]
+            sargs = [key + ':', str(values[it])[:40], source]
             string += '\n{0:30s}\t{1:40s}\t// {2}'.format(*sargs)
         return string
 

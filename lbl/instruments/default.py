@@ -331,6 +331,26 @@ class Instrument:
         # return table
         return table
 
+    def science_template_subdir(self) -> str:
+        """
+        Create the object science / object template sub directory
+
+        :return: str, the sub directory named by object science and object
+                 template
+        """
+        # deal with no object
+        if self.params['OBJECT_SCIENCE'] is None:
+            raise LblException('OBJECT_SCIENCE name must be defined')
+        else:
+            sobjname = self.params['OBJECT_SCIENCE']
+        # deal with no object template
+        self._set_object_template()
+        # set object template
+        tobjname = self.params['OBJECT_TEMPLATE']
+        # return sub directory
+        return '{0}_{1}'.format(sobjname, tobjname)
+
+
     def _set_object_template(self):
         """
         Check that if OBJECT_TEMPLATE is not set, if it is not set

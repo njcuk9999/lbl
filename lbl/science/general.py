@@ -598,7 +598,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # use the systemic velocity from closest date
         closest = np.argmin(mjdate - mjdate_all)
         # get the closest system rv to this observation
-        sys_rv = systemic_all[closest]
+        sys_rv = systemic_all[closest] + berv
         # log using
         msg = '\tUsing systemic rv={0:.4f} m/s from MJD={1}'
         margs = [sys_rv, mjdate_all[closest]]
@@ -817,7 +817,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             #    From bouchy 2001 equation, RV error for each pixel
             # -----------------------------------------------------------------
             bout = bouchy_equation_line(ddd_seg, diff_seg, mean_rms)
-            ddv[line_it], ddvrms[line_it] = bout
+            dddv[line_it], dddvrms[line_it] = bout
             # -----------------------------------------------------------------
             # ratio of expected VS actual RMS in difference of model vs line
             ref_table['RMSRATIO'][line_it] = mp.nanstd(diff_seg) / mean_rms
@@ -950,7 +950,7 @@ def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
     # work out the mean time
     mean_time = mp.nanmean(durations)
     # work out the std time
-    std_time = mp.nanmean(durations)
+    std_time = mp.nanstd(durations)
     # get time delta
     timedelta = TimeDelta(mean_time * left * uu.s)
     # get in hh:mm:ss format
@@ -987,6 +987,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     ccf_ew_col = inst.params['KW_CCF_EW']
     # get the header keys to add to rdb_table
     header_keys = inst.rdb_columns()
+    # get base names
+    lblrvbasenames = []
+    for lblrvfile in lblrvfiles:
+        lblrvbasenames.append(os.path.basename(lblrvfile))
     # -------------------------------------------------------------------------
     # output rdb column set up
     # -------------------------------------------------------------------------
@@ -1000,7 +1004,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['per_epoch_DDVRMS'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['per_epoch_DDDV'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['per_epoch_DDDVRMS'] = np.zeros_like(lblrvfiles, dtype=float)
-    rdb_dict['local_file_name'] = np.array(lblrvfiles)
+    rdb_dict['local_file_name'] = np.array(lblrvbasenames)
     # time for matplotlib
     rdb_dict['plot_date'] = np.zeros_like(lblrvfiles, dtype=float)
     # for DACE, derived from de DDV
@@ -1023,6 +1027,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     good &= rvtable0['WAVE_START'] < wave_max
     # do not consider lines wider than max_pix_wid limit
     good &= rvtable0['NPIXLINE'] < max_pix_wid
+    # remove good from rv table
+    rvtable0 = rvtable0[good]
     # size of arrays
     nby, nbx = len(lblrvfiles), np.sum(good)
     # set up arrays
@@ -1039,14 +1045,14 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     best_mask = rvtable0['DVRMS'] < np.nanpercentile(rvtable0['DVRMS'], 5.0)
     # list for plot storage
     vrange_all, pdf_all, pdf_fit_all = [], [], []
+
     # -------------------------------------------------------------------------
     # Loop around lbl rv files
     # -------------------------------------------------------------------------
-    for row in range(len(lblrvfiles)):
-        # log process
-        msg = 'Processing LBL RV File {0} / {1}'
-        margs = [row + 1, len(lblrvfiles)]
-        log.general(msg.format(*margs))
+    # log progress
+    log.info('Producing LBL RDB 1 table')
+    # loop around lbl rv files
+    for row in tqdm(range(len(lblrvfiles))):
         # ---------------------------------------------------------------------
         # get lbl rv file table and header
         # ---------------------------------------------------------------------
@@ -1077,8 +1083,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         dvrms[row] = rvtable[good]['DVRMS']
         ddv[row] = rvtable[good]['DDV']
         ddvrms[row] = rvtable[good]['DDVRMS']
-        dddv = rvtable[good]['DDDV']
-        dddvrms = rvtable[good]['DDDVRMS']
+        dddv[row] = rvtable[good]['DDDV']
+        dddvrms[row] = rvtable[good]['DDDVRMS']
         # ---------------------------------------------------------------------
         # cumulative plot
         # ---------------------------------------------------------------------
@@ -1089,8 +1095,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # storage for probability density function
         pdf = np.zeros_like(vrange, dtype=float)
         # mask the rv and dvrms by best_mask
-        best_rv = rvs[best_mask]
-        best_dvrms = dvrms[best_mask]
+        best_rv = rvs[row][best_mask]
+        best_dvrms = dvrms[row][best_mask]
         # track finite values
         finite_mask = np.isfinite(best_rv) & np.isfinite(best_dvrms)
         # loop around each line
@@ -1106,7 +1112,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 pdf = pdf + pdf_weight
         # fit the probability density function
         guess = [med_velo, 500.0, np.max(pdf), 0.0, 0.0]
-        pdf_coeffs = curve_fit(mp.gauss_fit_s, vrange, pdf, p0=guess)
+        pdf_coeffs, _ = curve_fit(mp.gauss_fit_s, vrange, pdf, p0=guess)
         pdf_fit = mp.gauss_fit_s(vrange, *pdf_coeffs)
         # append values to plot lists
         vrange_all.append(vrange)
@@ -1116,7 +1122,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # construct plot name
     plot_name = os.path.basename(rdbfile.replace('.rdb', '')) + '_cumul.pdf'
     plot_path = os.path.join(plot_dir, plot_name)
-    # plot the comulative plot
+    # plot the cumulative plot
     plot.compil_cumulative_plot(inst, vrange_all, pdf_all, pdf_fit_all,
                                 plot_path)
     # ---------------------------------------------------------------------
@@ -1154,6 +1160,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # storage for line mean / error
     per_line_mean = np.zeros(rvs.shape[1])
     per_line_error = np.zeros(rvs.shape[1])
+    # log progress
+    log.info('Producing line-by-line mean positions')
     # compute the per-line bias
     for line_it in tqdm(range(len(per_line_mean))):
         # get the difference and error for each line
@@ -1202,12 +1210,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # update rdb table
         rdb_dict['vrad'][row] = guess4
         rdb_dict['svrad'][row] = bulk_error4
-        rdb_dict['per_epoch_DDV'] = guess5
-        rdb_dict['per_epoch_DDVRMS'] = bulk_error5
-        rdb_dict['per_epoch_DDDV'] = guess6
-        rdb_dict['per_epoch_DDDVRMS'] = bulk_error6
-        rdb_dict['fwhm'] = fwhm_row
-        rdb_dict['sig_fwhm'] = sig_fwhm_row
+        rdb_dict['per_epoch_DDV'][row] = guess5
+        rdb_dict['per_epoch_DDVRMS'][row] = bulk_error5
+        rdb_dict['per_epoch_DDDV'][row] = guess6
+        rdb_dict['per_epoch_DDDVRMS'][row] = bulk_error6
+        rdb_dict['fwhm'][row] = fwhm_row
+        rdb_dict['sig_fwhm'][row] = sig_fwhm_row
 
     # ---------------------------------------------------------------------
     # Per-band per region RV measurements
@@ -1273,8 +1281,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         for iregion in range(len(region_names)):
             # construct new column name
             cargs = [bands[iband], region_names[iregion]]
-            vrad_colname = 'vrad_{0}_{1}'.format(*cargs)
-            svrad_colname = 'svrad_{0}_{1}'.format(*cargs)
+            vrad_colname = 'vrad_{0}{1}'.format(*cargs)
+            svrad_colname = 'svrad_{0}{1}'.format(*cargs)
             # add new column
             rdb_dict[vrad_colname] = rvs_matrix[:, iband, iregion]
             rdb_dict[svrad_colname] = err_matrix[:, iband, iregion]
@@ -1283,7 +1291,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # ---------------------------------------------------------------------
     rdb_table = Table()
     # loop around columns
-    for colname in rdb_dict:
+    for colname in rdb_dict.keys():
         # add to table
         rdb_table[colname] = rdb_dict[colname]
     # ---------------------------------------------------------------------
@@ -1308,9 +1316,11 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     # create dictionary storage for epochs
     rdb_dict2 = dict()
     # copy columns from rdb_table (as empty lists)
-    for colname in rdb_table:
+    for colname in rdb_table.colnames:
         rdb_dict2[colname] = []
     # -------------------------------------------------------------------------
+    # log progress
+    log.info('Producing LBL RDB 2 table')
     # loop around unique dates
     for idate in tqdm(range(len(udates))):
         # get the date of this iteration
@@ -1320,18 +1330,23 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
         # get masked table
         itable = rdb_table[udate_mask]
         # loop around all keys in rdb_table and populate rdb_dict
-        for colname in rdb_table:
+        for colname in rdb_table.colnames:
             # -----------------------------------------------------------------
             # if table is vrad combine vrad + svrad
             if colname.startswith('vrad'):
                 # get rv and error rv for this udate
                 rvs = itable[colname]
-                errs = itable[colname]
+                errs = itable['s{0}'.format(colname)]
                 # get error^2
                 errs2 = errs ** 2
-                # get 1/error^2
-                rv_value = mp.nansum(rvs / errs2) / mp.nansum(1 / errs2)
-                err_value = np.sqrt(1 / mp.nansum(1 / errs2))
+                # deal with all nans
+                if np.sum(np.isfinite(errs2)) == 0:
+                    rv_value = np.nan
+                    err_value = np.nan
+                else:
+                    # get 1/error^2
+                    rv_value = mp.nansum(rvs / errs2) / mp.nansum(1 / errs2)
+                    err_value = np.sqrt(1 / mp.nansum(1 / errs2))
                 # push into table
                 rdb_dict2[colname].append(rv_value)
                 rdb_dict2['s{0}'.format(colname)].append(err_value)
@@ -1344,17 +1359,17 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
                     rdb_dict2[colname].append(np.mean(itable[colname]))
                 except Exception as _:
                     rdb_dict2[colname].append(itable[colname][0])
-        # ---------------------------------------------------------------------
-        # convert rdb_dict2 to table
-        # ---------------------------------------------------------------------
-        rdb_table2 = Table()
-        # loop around columns
-        for colname in rdb_dict2:
-            # add to table
-            rdb_table2[colname] = rdb_dict2[colname]
-        # ---------------------------------------------------------------------
-        # return rdb table
-        return rdb_table2
+    # ---------------------------------------------------------------------
+    # convert rdb_dict2 to table
+    # ---------------------------------------------------------------------
+    rdb_table2 = Table()
+    # loop around columns
+    for colname in rdb_dict2.keys():
+        # add to table
+        rdb_table2[colname] = rdb_dict2[colname]
+    # ---------------------------------------------------------------------
+    # return rdb table
+    return rdb_table2
 
 
 def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
@@ -1380,13 +1395,15 @@ def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
     # storage for output table
     rdb_dict3 = dict()
     # fill columns with empty lists similar to rdb_table2
-    for colname in rdb_table2:
+    for colname in rdb_table2.colnames:
         rdb_dict3[colname] = []
     # -------------------------------------------------------------------------
     # get unique wave files
     uwaves = np.unique(rdb_table2[kw_wavefile])
+    # log progress
+    log.info('Producing LBL drift table')
     # loop around unique wave files
-    for uwavefile in uwaves:
+    for uwavefile in tqdm(uwaves):
         # find all entries that match this wave file
         wave_mask = rdb_table2 == uwavefile
         # get table for these entries
@@ -1473,7 +1490,7 @@ def make_drift_table(inst: InstrumentsType, rdb_table2: Table) -> Table:
     # ---------------------------------------------------------------------
     rdb_table3 = Table()
     # loop around columns
-    for colname in rdb_dict3:
+    for colname in rdb_dict3.keys():
         # add to table
         rdb_table3[colname] = rdb_dict3[colname]
     # ---------------------------------------------------------------------
@@ -1501,11 +1518,13 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # storage for output table
     rdb_dict4 = dict()
     # fill columns with empty lists similar to rdb_table2
-    for colname in rdb_table:
+    for colname in rdb_table.colnames:
         rdb_dict4[colname] = []
     # -------------------------------------------------------------------------
     # get the types
     filenames = rdb_table[kw_filename]
+    # log progress
+    log.info('Producing LBL RDB drift corrected table')
     # loop around the wave files of this type
     for row in tqdm(range(len(filenames))):
         # create a mask of all files that match in drift file
@@ -1514,7 +1533,7 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
         # deal with no files present - cannot correct drift
         if np.sum(file_mask) == 0:
             # loop around all columns
-            for colname in rdb_dict4:
+            for colname in rdb_dict4.keys():
                 # -------------------------------------------------------------
                 # if column is vrad correct for reference
                 if colname.startswith('vrad'):
@@ -1535,7 +1554,7 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
             # get position in the drift table
             pos = np.where(file_mask)[0]
             # loop around all columns
-            for colname in rdb_dict4:
+            for colname in rdb_dict4.keys():
                 # -------------------------------------------------------------
                 # if column is vrad correct for reference
                 if colname.startswith('vrad'):
@@ -1565,7 +1584,7 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # ---------------------------------------------------------------------
     rdb_table4 = Table()
     # loop around columns
-    for colname in rdb_dict4:
+    for colname in rdb_dict4.keys():
         # add to table
         rdb_table4[colname] = rdb_dict4[colname]
     # ---------------------------------------------------------------------

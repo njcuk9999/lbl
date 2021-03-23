@@ -85,7 +85,7 @@ class Spirou(Instrument):
         self.params.set('COMPILE_BINNED_BAND2', 'J', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND2', 'H', source=func_name)
+        self.params.set('COMPILE_BINNED_BAND3', 'H', source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
@@ -149,7 +149,7 @@ class Spirou(Instrument):
         # define the SNR in chosen order
         self.params.set('KW_EXT_SNR', 'EXTSN035', source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'EXTSN035', source=func_name)
+        self.params.set('KW_BJD', 'BJD', source=func_name)
         # define the shape code dx value
         self.params.set('KW_SHAPE_DX', 'SHAPE_DX', source=func_name)
         # define the shape code dy value
@@ -507,7 +507,7 @@ class Spirou(Instrument):
             return float(mid_exp_time)
         else:
             # convert bjd to mjd
-            bjd_mjd = Time(bjd, format='jd').mjd.value
+            bjd_mjd = Time(bjd, format='jd').mjd
             # return bjd in mjd
             return float(bjd_mjd)
 

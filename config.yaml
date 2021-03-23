@@ -31,7 +31,10 @@ PLOT_COMPUTE_CCF: False
 PLOT_COMPUTE_LINES: False
 
 # set whether to do the compil cumulative plot
-PLOT_COMPIL_CUMUL: False
+PLOT_COMPIL_CUMUL: True
 
 # Define whether to do the compil binned plot
-PLOT_COMPIL_BINNED: False
+PLOT_COMPIL_BINNED: True
+
+# Define whether to skip done files
+SKIP_DONE: False

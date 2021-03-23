@@ -53,30 +53,44 @@ def check_file_exists(filename: str, required: bool = True) -> bool:
         return False
 
 
-def make_dir(path: str, directory: str, kind: str) -> str:
+def make_dir(path: str, directory: str, kind: str,
+             subdir: Union[str, None] = None,
+             verbose: bool = True) -> str:
     """
     Make a directory
 
-    :param path:
-    :param directory:
-    :param kind:
-    :return:
+    :param path: str, path directory will be created in
+    :param directory: str, directory to create
+    :param kind: str, what is the directory (for error message)
+    :param verbose: bool, if True prints when directory exists
+
+    :return: str, the absolute path created
     """
 
     # construct absolute path
-    abspath = Path(path).joinpath(directory)
+    if subdir is None:
+        abspath = Path(path).joinpath(directory)
+    else:
+        abspath = Path(path).joinpath(directory, subdir)
     # check if directory exists
     if abspath.exists():
-        msg = '{0} directory exists (Path={1})'
-        margs = [kind, str(abspath)]
-        log.general(msg.format(*margs))
+        if verbose:
+            msg = '{0} directory exists (Path={1})'
+            margs = [kind, str(abspath)]
+            log.general(msg.format(*margs))
         # return absolute path directory
         return str(abspath)
     # else try to create directory
     else:
         try:
             # make directory path
-            abspath.mkdir()
+            if subdir is None:
+                abspath.mkdir()
+            elif abspath.parent.exists():
+                abspath.mkdir()
+            else:
+                abspath.parent.mkdir()
+                abspath.mkdir()
             # return absolute path directory
             return str(abspath)
         except Exception as e:
@@ -324,18 +338,20 @@ def load_table(filename: str,
     return table
 
 
-def write_table(filename: str, table: Table, fmt: str = 'fits'):
+def write_table(filename: str, table: Table, fmt: str = 'fits',
+                overwrite: bool = True):
     """
     Standard way to write a table to disk
 
     :param filename: str, the absolute path to write the table to
     :param table: astropy.table.Table, the table to write
     :param fmt: str, astropy.table format
+    :param overwrite: bool, if True overwrites existing file
 
     :return: None
     """
     try:
-        table.write(filename, format=fmt)
+        table.write(filename, format=fmt, overwrite=overwrite)
     except Exception as e:
         emsg = 'Cannot write table {0} to disk \n\t{1}: {2}'
         eargs = [filename, type(e), str(e)]

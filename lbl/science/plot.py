@@ -233,7 +233,7 @@ def compil_cumulative_plot(inst: InstrumentsType, vrange: List[np.ndarray],
     if not inst.params['PLOT']:
         return
     # plot specific switch
-    if not inst.params['PLOT_COMPUTE_LINES']:
+    if not inst.params['PLOT_COMPIL_CUMUL']:
         return
     # -------------------------------------------------------------------------
     # set up plot
@@ -321,7 +321,7 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     frames[0].legend(loc=0)
     # construct axis titles
     title0 = '{0} velocity'.format(band1_name)
-    title1 = '{0} velocity difference'
+    title1 = '{0} velocity difference'.format(colour_name)
     # set labels
     frames[0].set(xlabel='rjd', ylabel='RV [m/s]', title=title0)
     frames[1].set(xlabel='rjd', ylabel='RV [m/s]', title=title1)

@@ -74,9 +74,9 @@ params.set(key='INSTRUMENT', value=None, source=__NAME__,
            arg='--instrument', dtype=str, not_none=True)
 
 # Define whether to skip done files
-params.set(key='SKIP_DONE', value=True, source=__NAME__,
+params.set(key='SKIP_DONE', value=False, source=__NAME__,
            desc='Whether to skip done files',
-           arg='--skip', dtype=bool, options=[True, False])
+           arg='--skip', dtype=bool)
 
 # =============================================================================
 # Define common parameters (between compute / compil)
@@ -179,7 +179,7 @@ params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=8, source=__NAME__,
 # define the suffix to give the rdb files
 params.set(key='RDB_SUFFIX', value='', source=__NAME__,
            desc='The suffix to give the rdb files',
-           arg='--subbfix_rdb', dtype=str)
+           arg='--suffix_rdb', dtype=str)
 
 # define the plot order for the compute rv model plot
 params.set('COMPUTE_MODEL_PLOT_ORDERS', value=None, source=__NAME__,
@@ -242,28 +242,34 @@ params.set('FP_STD_LIST', None, source=__NAME__,
 # Define whether to do any plots
 params.set(key='PLOT', value=False, source=__NAME__,
            desc='Whether to do plots for the compute function',
-           arg='--plot', dtype=bool, options=[True, False])
+           arg='--plot', dtype=bool)
 
 # Define whether to do the compute ccf plot
 params.set(key='PLOT_COMPUTE_CCF', value=False, source=__NAME__,
            desc='Whether to do the compute ccf plot',
-           arg='--plotccf', dtype=bool, options=[True, False])
+           arg='--plotccf', dtype=bool)
 
 # Define whether to do the compute line plot
 params.set(key='PLOT_COMPUTE_LINES', value=False, source=__NAME__,
            desc='Whether to do the compute line plot',
-           arg='--plotline', dtype=bool, options=[True, False])
+           arg='--plotline', dtype=bool)
 
 # Define whether to do the compil cumulative plot
 params.set(key='PLOT_COMPIL_CUMUL', value=False, source=__NAME__,
            desc='Whether to do the compil cumulative plot',
-           arg='--plotcumul', dtype=bool, options=[True, False])
+           arg='--plotcumul', dtype=bool)
 
 # Define whether to do the compil binned plot
 params.set(key='PLOT_COMPIL_BINNED', value=False, source=__NAME__,
-           desc='Whether to to the compil binned plot',
-           arg='--plotbinned', dtype=bool, options=[True, False])
+           desc='Whether to do the compil binned plot',
+           arg='--plotbinned', dtype=bool)
 
+# =============================================================================
+# Define other parameters
+# =============================================================================
+# define some storage of command line arguments used
+params.set(key='COMMAND_LINE_ARGS', value=None, source=__NAME__,
+           desc='storage of command line arguments used')
 
 # =============================================================================
 # Define header keys
@@ -447,7 +453,7 @@ params.set(key='KW_SHAPE_D', value=None, source=__NAME__, not_none=True,
 
 # define the reference header key (must also be in rdb table) to
 #    distinguish FP calibration files from FP simultaneous files
-params.set(key='KW_REF_KEY', value=None, source=__NAME__, non_none=True,
+params.set(key='KW_REF_KEY', value=None, source=__NAME__, not_none=True,
            desc='define the reference header key (must also be in rdb table) '
                 'to distinguish FP calibration files from FP simultaneous '
                 'files')
