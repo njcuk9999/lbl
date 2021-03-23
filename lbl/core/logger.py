@@ -31,7 +31,7 @@ NO_THEME = [False, 'False', 'OFF', 'off', 'Off', 'None']
 class Log:
     def __init__(self, **kwargs):
         # get the logger
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger(base.__package__)
         # set the default value to one below between INFO and DEBUG level
         self.baselevel = logging.DEBUG
         # add a new level (GENERAL)

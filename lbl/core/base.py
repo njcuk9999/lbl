@@ -17,6 +17,7 @@ __NAME__ = 'base.py'
 __version__ = '0.0.001'
 __date__ = '2021-03-15'
 __authors__ = 'Neil Cook, Etienne Artigau'
+__package__ = 'lbl'
 
 # currently supported instruments
 INSTRUMENTS = ['SPIROU']

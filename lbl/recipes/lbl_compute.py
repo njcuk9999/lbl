@@ -68,7 +68,8 @@ def main(**kwargs):
     # load instrument
     inst = select.load_instrument(args)
     # print splash
-    select.splash(name=__STRNAME__, instrument=inst.name)
+    select.splash(name=__STRNAME__, instrument=inst.name,
+                  cmdargs=inst.params['COMMAND_LINE_ARGS'])
     # run __main__
     try:
         return __main__(inst)
