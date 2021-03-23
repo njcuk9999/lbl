@@ -11,7 +11,7 @@ Line by line code for radial velocity
     - [Step 3: Install python 3.8 and python requirements](#step-3-install-python-38-and-required-modules)
     - [Step 4: Add to PYTHONPATH](#step-4-add-to-the-pythonpath-environment)
 2. [Using LBL compute](#2-using-lbl-compute)
-3. [Using LBL compil](#3-using-lbl-compil)
+3. [Using LBL compile](#3-using-lbl-compil)
 4. [The config file](#4-the-configuration-file)
 
 ---
@@ -89,6 +89,9 @@ export PYTHONPATH={LBL_ROOT}:$PYTHONPATH
 export PATH={LBL_ROOT}:{LBL_ROOT}/lbl/recipes/:$PATH
 ```
 
+
+Note remember to source your profile after making these changes.
+
 [back to top](#contents)
 
 ---
@@ -97,11 +100,32 @@ export PATH={LBL_ROOT}:{LBL_ROOT}/lbl/recipes/:$PATH
 
 [back to top](#contents)
 
+Simply use the following (once configuration file set up correctly)
+```bash
+lbl_compute.py --config=config.yaml
+```
+
+All valid command line arguments can be found using:
+```bash
+lbl_compute.py --help
+```
+
 ---
 
-# 3. Using LBL Compil
+# 3. Using LBL Compile
 
 [back to top](#contents)
+
+Simply use the following (once configuration file set up correctly)
+
+```bash
+lbl_compile.py --config=config.yaml
+```
+
+All valid command line arguments can be found using:
+```bash
+lbl_compile.py --help
+```
 
 ---
 
