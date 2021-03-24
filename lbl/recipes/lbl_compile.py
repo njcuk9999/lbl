@@ -66,6 +66,8 @@ def main(**kwargs):
     args = select.parse_args(ARGS_COMPIL, kwargs, DESCRIPTION_COMPIL)
     # load instrument
     inst = select.load_instrument(args)
+    # move log file (now we have data directory)
+    misc.move_log(inst.params['DATA_DIR'], __NAME__)
     # print splash
     select.splash(name=__STRNAME__, instrument=inst.name,
                   cmdargs=inst.params['COMMAND_LINE_ARGS'])
