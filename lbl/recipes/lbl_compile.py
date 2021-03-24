@@ -69,17 +69,21 @@ def main(**kwargs):
     # move log file (now we have data directory)
     misc.move_log(inst.params['DATA_DIR'], __NAME__)
     # print splash
-    select.splash(name=__STRNAME__, instrument=inst.name,
+    misc.splash(name=__STRNAME__, instrument=inst.name,
                   cmdargs=inst.params['COMMAND_LINE_ARGS'])
     # run __main__
     try:
-        return __main__(inst)
+        namespace = __main__(inst)
     except LblException as e:
         raise LblException(e.message)
     except Exception as e:
         emsg = 'Unexpected lbl_compile error: {0}: {1}'
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
+    # end code
+    misc.end(__NAME__)
+    # return local namespace
+    return namespace
 
 
 def __main__(inst: InstrumentsType, **kwargs):

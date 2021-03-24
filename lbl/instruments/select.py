@@ -207,27 +207,6 @@ def load_instrument(args: ParamDict) -> InstrumentsType:
     return inst
 
 
-def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None):
-    # print splash
-    msgs = ['']
-    msgs += ['*' * 79]
-    msgs += ['\t{0}']
-    msgs += ['\t\tVERSION: {1}']
-    msgs += ['\t\tINSTRUMENT: {2}']
-    msgs += ['*' * 79]
-    msgs += ['']
-    margs = [name, __version__, instrument]
-    # loop through messages
-    for msg in msgs:
-        log.info(msg.format(*margs))
-    # add command line arguments (if not None)
-    if cmdargs is not None:
-        log.info('Command line arguments:')
-        # loop around arguments and add
-        for cmdmsg in cmdargs:
-            log.info(cmdmsg)
-
-
 # =============================================================================
 # Start of code
 # =============================================================================

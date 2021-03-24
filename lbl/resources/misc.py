@@ -12,10 +12,13 @@ Created on 2021-03-23
 import os
 from pathlib import Path
 import shutil
+from typing import List, Union
 
 from lbl.core import base
 from lbl.core import io
 from lbl.core import logger
+from lbl.core import base_classes
+
 
 # =============================================================================
 # Define variables
@@ -24,7 +27,8 @@ __NAME__ = 'resources.misc.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
-
+# get classes
+log = base_classes.log
 
 # =============================================================================
 # Define functions
@@ -78,7 +82,48 @@ def move_log(data_dir: str, recipe: str):
     # move log file
     log = logger.Log(filename=log_path)
     # update global call
-    logger.log = log
+    base_classes.log = log
+
+
+def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None):
+    # print splash
+    msgs = ['']
+    msgs += ['*' * 79]
+    msgs += ['\t{0}']
+    msgs += ['\t\tVERSION: {1}']
+    msgs += ['\t\tINSTRUMENT: {2}']
+    msgs += ['*' * 79]
+    msgs += ['']
+    margs = [name, __version__, instrument]
+    # loop through messages
+    for msg in msgs:
+        log.info(msg.format(*margs))
+    # add command line arguments (if not None)
+    if cmdargs is not None:
+        log.info('Command line arguments:')
+        # loop around arguments and add
+        for cmdmsg in cmdargs:
+            log.info(cmdmsg)
+
+
+def end(recipe: str):
+    """
+    print and end statement
+
+    :param recipe: str, the recipe name
+
+    :return: None - prints to screen / log
+    """
+    # print splash
+    msgs = ['']
+    msgs += ['*' * 79]
+    msgs += ['{0} finished successfully']
+    msgs += ['*' * 79]
+    msgs += ['']
+    margs = [recipe]
+    # loop through messages
+    for msg in msgs:
+        log.info(msg.format(*margs))
 
 
 # =============================================================================
