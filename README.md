@@ -135,3 +135,20 @@ lbl_compile.py --help
 [back to top](#contents)
 
 ---
+
+# 45. Things that the LBL code is *NOT* meant to do
+
+The purpose of the LBL library of codes is to optimally determine stellar velocities from a set of input extracted science frames. We fully understand that a number of data processing steps are required *prior* to the LBL computation and that the science analysis to derive keplerian orbits will require many more tools. We do not intend to cover the following items with the LBL, and the user is exected to perform these tasks prior/after the LBL analysis to obtain scientifically meaningful results:
+
+- Extraction of the science data.
+- Telluric absorption correction.
+- OH line subtraction.
+- Proper parsing of the objects in sub-directory; if you put files from different objects in a folder and call it as if they were from the same target, the code will not work.
+- Proper matching of science, mask and template targets. You can use a G star as a template for a late-M and the code will run... but the results will be useless!
+- Scientific analysis of the RV time series, keplerian fits, GP filtering.
+- Fancy plotting; the LBL code returns big csv tables and these can be used to generate many different plots.
+
+[back to top](#contents)
+
+
+---
