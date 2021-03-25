@@ -13,6 +13,7 @@ Line by line code for radial velocity
 2. [Using LBL compute](#2-using-lbl-compute)
 3. [Using LBL compile](#3-using-lbl-compil)
 4. [The config file](#4-the-configuration-file)
+5. [Things that the LBL code is NOT meant to do](#5-things-that-the-lbl-code-is-not-meant-to-do)
 
 ---
 
@@ -136,7 +137,7 @@ lbl_compile.py --help
 
 ---
 
-# 45. Things that the LBL code is *NOT* meant to do
+# 5 Things that the LBL code is NOT meant to do
 
 The purpose of the LBL library of codes is to optimally determine stellar velocities from a set of input extracted science frames. We fully understand that a number of data processing steps are required *prior* to the LBL computation and that the science analysis to derive keplerian orbits will require many more tools. We do not intend to cover the following items with the LBL, and the user is exected to perform these tasks prior/after the LBL analysis to obtain scientifically meaningful results:
 
@@ -148,7 +149,7 @@ The purpose of the LBL library of codes is to optimally determine stellar veloci
 - Scientific analysis of the RV time series, keplerian fits, GP filtering.
 - Fancy plotting; the LBL code returns big csv tables and these can be used to generate many different plots.
 
-[back to top](#contents)
 
+[back to top](#contents)
 
 ---
