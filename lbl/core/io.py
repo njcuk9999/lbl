@@ -53,6 +53,30 @@ def check_file_exists(filename: str, required: bool = True) -> bool:
         return False
 
 
+def check_directory(directory: str) -> str:
+    """
+    Checks 1. if directory exists 2. if directory is a directory
+
+    :param directory: str, the directory to check
+
+    :return: str, returns the directory after checking
+    """
+    # make directory a real path
+    directory = os.path.realpath(directory)
+    # check that directory path exists
+    if not os.path.exists(directory):
+        emsg = 'Directory "{0}" does not exist'
+        eargs = [directory]
+        raise LblException(emsg.format(*eargs))
+    # check that directory is actually a directory
+    if not os.path.isdir(directory):
+        emsg = 'Directory "{0}" does not exist'
+        eargs = [directory]
+        raise LblException(emsg.format(*eargs))
+    # return directory
+    return directory
+
+
 def make_dir(path: str, directory: str, kind: str,
              subdir: Union[str, None] = None,
              verbose: bool = True) -> str:
