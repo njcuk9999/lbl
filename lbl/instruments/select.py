@@ -48,6 +48,8 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     Parse the arguments 'args' using params (and their Const instances)
     if value in kwargs override default value in params
 
+    PRIORITY: defaults << yaml << python << command-line
+
     :param argnames: list of strings, the arguments to add to command line
     :param kwargs: dictionary, the function call arguments to add
     :param description: str, the program description (for the help)
@@ -87,12 +89,12 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             # parse argument
             parser.add_argument(const.argument, **pkwargs)
     # -------------------------------------------------------------------------
-    # update params value with kwargs
+    # look for 'config_file' in kwargs
     for kwarg in kwargs:
         # force kwarg to upper case
         kwargname = kwarg.upper()
-        # only if in params
-        if kwargname in params:
+        # only add config_file
+        if kwargname == 'CONFIG_FILE':
             inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
     # -------------------------------------------------------------------------
     # load parsed args into inputs
@@ -132,6 +134,14 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
                 if yaml_inputs[argname] not in [None, 'None']:
                     inputs.set(argname, yaml_inputs[argname],
                                source=func_name + '[YAML]')
+    # -------------------------------------------------------------------------
+    # update params value with kwargs
+    for kwarg in kwargs:
+        # force kwarg to upper case
+        kwargname = kwarg.upper()
+        # only if in params
+        if kwargname in params:
+            inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
     # -------------------------------------------------------------------------
     # storage of command line arguments
     inputs.set('COMMAND_LINE_ARGS', value=[], source=func_name)
