@@ -71,7 +71,7 @@ conda activate lbl-env
 #### Installing modules (venv, manually or conda):
 Then install packages with `pip`
 ```bash
-cd {LBL_ROOT}/lbl
+cd {LBL_ROOT}
 pip install -r requirements.txt
 ```
 
@@ -87,7 +87,8 @@ can source
 For bash:
 ```shell
 export PYTHONPATH={LBL_ROOT}:$PYTHONPATH
-export PATH={LBL_ROOT}:{LBL_ROOT}/lbl/recipes/:$PATH
+export PATH={LBL_ROOT}:$PATH
+export PATH={LBL_ROOT}/lbl/recipes/:$PATH
 ```
 
 
