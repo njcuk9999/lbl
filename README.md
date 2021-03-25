@@ -137,7 +137,7 @@ lbl_compile.py --help
 
 ---
 
-# 5 Things that the LBL code is NOT meant to do
+# 5. Things that the LBL code is NOT meant to do
 
 The purpose of the LBL library of codes is to optimally determine stellar velocities from a set of input extracted science frames. We fully understand that a number of data processing steps are required *prior* to the LBL computation and that the science analysis to derive keplerian orbits will require many more tools. We do not intend to cover the following items with the LBL, and the user is exected to perform these tasks prior/after the LBL analysis to obtain scientifically meaningful results:
 
