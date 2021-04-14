@@ -66,8 +66,10 @@ def main(**kwargs):
     args = select.parse_args(ARGS_COMPIL, kwargs, DESCRIPTION_COMPIL)
     # load instrument
     inst = select.load_instrument(args)
+    # get data directory
+    data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
-    misc.move_log(inst.params['DATA_DIR'], __NAME__)
+    misc.move_log(data_dir, __NAME__)
     # print splash
     misc.splash(name=__STRNAME__, instrument=inst.name,
                   cmdargs=inst.params['COMMAND_LINE_ARGS'])
@@ -112,7 +114,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
     # get data directory
-    data_dir = inst.params['DATA_DIR']
+    data_dir = io.check_directory(inst.params['DATA_DIR'])
     # copy over readme
     misc.copy_readme(data_dir)
     # make sub directory based on object science and object template
