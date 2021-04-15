@@ -702,7 +702,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
         # ---------------------------------------------------------------------
         # debug plot dictionary for plotting later
-        if iteration == 1:
+        if iteration == 0:
             plot_dict['WAVEGRID'] = nwavegrid
             plot_dict['MODEL'] = model
             plot_dict['PLOT_ORDERS'] = model_plot_orders
