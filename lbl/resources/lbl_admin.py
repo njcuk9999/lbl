@@ -11,7 +11,6 @@ import argparse
 from astropy.table import Table, vstack
 import os
 from typing import Union
-import sys
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -208,7 +207,6 @@ def create_directories(config_file: str = 'None'):
             log.general('Created dir: {0}'.format(outdir))
         else:
             log.warning('Could not create dir: {0}'.format(outdir))
-
 
 
 # =============================================================================

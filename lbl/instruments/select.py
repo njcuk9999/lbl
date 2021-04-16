@@ -100,7 +100,8 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
         kwargname = kwarg.upper()
         # make sure these are in default_values
         if kwargname not in list(default_values.keys()):
-            raise LblException('Argument {0} is invalid'.format(kwarg))
+            emsg = 'Python Argument "{0}" is invalid'
+            raise LblException(emsg.format(kwarg))
         # only add config_file
         if kwargname == 'CONFIG_FILE':
             inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
@@ -138,6 +139,12 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
                 yaml_inputs = yaml.load(yfile, yaml.FullLoader)
             # add these inputs to inputs
             for argname in yaml_inputs:
+                # upper case argument
+                argname = argname.upper()
+                # make sure these are in default_values
+                if argname not in list(default_values.keys()):
+                    emsg = 'Yaml Argument "{0}" is invalid'
+                    raise LblException(emsg.format(argname))
                 # skip Nones
                 if yaml_inputs[argname] not in [None, 'None']:
                     inputs.set(argname, yaml_inputs[argname],
@@ -147,6 +154,10 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     for kwarg in kwargs:
         # force kwarg to upper case
         kwargname = kwarg.upper()
+        # make sure these are in default_values
+        if kwargname not in list(default_values.keys()):
+            emsg = 'Python Argument "{0}" is invalid'
+            raise LblException(emsg.format(kwarg))
         # only if in params
         if kwargname in params:
             inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
