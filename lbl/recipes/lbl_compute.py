@@ -183,6 +183,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     ccf_ewidth = None
     # flag to take a completely new rv measurement
     reset_rv = True
+    # Inside the RV code, we'll measure the velocity of the template to have a proper systemic velocity
+    # on the first iteration of the first file, we'll compute it and have a finite value. If not finite
+    # we'll assume it's zero inside the code (we're not setting to zero as it could be zero for real)
+    # and measure the offset from there.
+    model_velocity = np.inf
     # time stats
     mean_time, std_time, time_left = np.nan, np.nan, ''
     all_durations = []
@@ -211,6 +216,13 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.2 get lbl rv file and check whether it exists
         # ---------------------------------------------------------------------
         lblrv_file, lblrv_exists = inst.get_lblrv_file(science_file, lblrv_dir)
+
+        #TODO
+        if lblrv_exists and not np.isfinite(model_velocity):
+            sci_hdr = io.load_header(lblrv_file, kind='science fits file')
+            model_velocity = io.get_hkey(sci_hdr, inst.params['KW_MODELVEL'])
+            log.general('We read model velo = {:.2f} m/s'.format(model_velocity))
+
         # if file exists and we are skipping done files
         if lblrv_exists and inst.params['SKIP_DONE']:
             # log message about skipping
@@ -265,7 +277,7 @@ def __main__(inst: InstrumentsType, **kwargs):
                                   ref_table=ref_table, blaze=blaze,
                                   systemic_all=systemic_all,
                                   mjdate_all=mjdate_all, ccf_ewidth=ccf_ewidth,
-                                  reset_rv=reset_rv)
+                                  reset_rv=reset_rv, model_velocity = model_velocity)
         # get back ref_table and outputs
         ref_table, outputs = cout
         # ---------------------------------------------------------------------
@@ -274,6 +286,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         mjdate_all = outputs['MJDATE_ALL']
         reset_rv = outputs['RESET_RV']
         ccf_ewidth = outputs['CCF_EW']
+        model_velocity = outputs['MODEL_VELOCITY']
+
         all_durations.append(outputs['TOTAL_DURATION'])
         # ---------------------------------------------------------------------
         # 6.8 save to file

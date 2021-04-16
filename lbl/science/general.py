@@ -491,7 +491,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                splines: Dict[str, Any], ref_table: Dict[str, Any],
                blaze: np.ndarray, systemic_all: np.ndarray,
                mjdate_all: np.ndarray, ccf_ewidth: Union[float, None] = None,
-               reset_rv: bool = True) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+               reset_rv: bool = True, model_velocity: float = np.inf) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Compute the RV using a line-by-line analysis
 
@@ -567,6 +567,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # instrument specific berv --> use instrument method
     berv = inst.get_berv(sci_hdr)
+
+    # weighting of one everywhere
+    ccf_weight = np.ones_like(ref_table['WEIGHT_LINE'],dtype = float)
+
     # -------------------------------------------------------------------------
     # Systemic velocity estimate
     # -------------------------------------------------------------------------
@@ -574,8 +578,6 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     if reset_rv:
         # if we are not using FP file
         if 'FP' not in object_science:
-            # weighting of one everywhere
-            ccf_weight = np.ones_like(ref_table['WEIGHT_LINE'])
             # calculate the rough CCF RV estimate
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
                                           ref_table['WAVE_START'], ccf_weight)
@@ -648,9 +650,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # update model, dmodel, ddmodel, dddmodel
         # ---------------------------------------------------------------------
         # loop around each order and update model, dmodel, ddmodel, dddmodel
+
+        if np.isfinite(model_velocity):
+            model_offset = float(model_velocity)
+        else:
+            model_offset = 0
+
         for order_num in range(sci_data.shape[0]):
             # doppler shifted wave grid for this order
-            wave_ord = mp.doppler_shift(wavegrid[order_num], -sys_rv)
+            wave_ord = mp.doppler_shift(wavegrid[order_num], -sys_rv-model_offset)
             # get the blaze for this order
             blaze_ord = blaze[order_num]
             # get the low-frequency component out
@@ -709,6 +717,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             plot_dict['LINE_ORDERS'] = []
             plot_dict['WW_ORD_LINE'] = []
             plot_dict['SPEC_ORD_LINE'] = []
+
+        if not np.isfinite(model_velocity):
+            sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
+                                          ref_table['WAVE_START'], ccf_weight)
+            model_velocity = -sys_model_rv+sys_rv
+            log.general('model velocity {:.2f} m/s'.format(model_velocity))
+            continue
+
         # ---------------------------------------------------------------------
         # loop through all lines
         for line_it in range(0, len(orders)):
@@ -924,6 +940,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['CCF_EW'] = ccf_ewidth
     outputs['HP_WIDTH'] = hp_width
     outputs['TOTAL_DURATION'] = total_time
+    outputs['MODEL_VELOCITY'] = model_velocity
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs
