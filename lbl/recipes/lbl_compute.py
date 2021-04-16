@@ -216,13 +216,12 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.2 get lbl rv file and check whether it exists
         # ---------------------------------------------------------------------
         lblrv_file, lblrv_exists = inst.get_lblrv_file(science_file, lblrv_dir)
-
-        #TODO
+        # If output file exists then get the model velocity from here
         if lblrv_exists and not np.isfinite(model_velocity):
-            sci_hdr = io.load_header(lblrv_file, kind='science fits file')
-            model_velocity = io.get_hkey(sci_hdr, inst.params['KW_MODELVEL'])
-            log.general('We read model velo = {:.2f} m/s'.format(model_velocity))
-
+            lblrv_hdr = io.load_header(lblrv_file, kind='lblrv fits file')
+            model_velocity = io.get_hkey(lblrv_hdr, inst.params['KW_MODELVEL'])
+            largs = [model_velocity]
+            log.general('We read model velo = {0:.2f} m/s'.format(*largs))
         # if file exists and we are skipping done files
         if lblrv_exists and inst.params['SKIP_DONE']:
             # log message about skipping
@@ -277,7 +276,8 @@ def __main__(inst: InstrumentsType, **kwargs):
                                   ref_table=ref_table, blaze=blaze,
                                   systemic_all=systemic_all,
                                   mjdate_all=mjdate_all, ccf_ewidth=ccf_ewidth,
-                                  reset_rv=reset_rv, model_velocity = model_velocity)
+                                  reset_rv=reset_rv,
+                                  model_velocity=model_velocity)
         # get back ref_table and outputs
         ref_table, outputs = cout
         # ---------------------------------------------------------------------

@@ -261,7 +261,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
 
 def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
                  sci_data: np.ndarray, wave_mask: np.ndarray,
-                 weight_line: np.ndarray) -> Tuple[float, float]:
+                 weight_line: np.ndarray, kind: str) -> Tuple[float, float]:
     """
     Perform a rough CCF calculation of the science data
 
@@ -270,6 +270,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     :param sci_data: spectrum
     :param wave_mask: list of wavelength centers of mask lines
     :param weight_line: list of weights for each mask line
+    :param kind: the kind of file we are doing the ccf on (for logging)
 
     :return: tuple, 1. systemic velocity estimate, 2. ccf ewidth
     """
@@ -353,8 +354,8 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # fit ccf
     ccf_fit = mp.gauss_fit_s(dvgrid, *gcoeffs)
     # log ccf velocity
-    msg = '\t\tCCF velocity = {0:.2f} m/s'
-    margs = [-systemic_velocity, ccf_ewidth]
+    msg = '\t\tCCF velocity ({0}) = {1:.2f} m/s'
+    margs = [kind, -systemic_velocity]
     log.general(msg.format(*margs))
     # -------------------------------------------------------------------------
     # debug plot
@@ -491,7 +492,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                splines: Dict[str, Any], ref_table: Dict[str, Any],
                blaze: np.ndarray, systemic_all: np.ndarray,
                mjdate_all: np.ndarray, ccf_ewidth: Union[float, None] = None,
-               reset_rv: bool = True, model_velocity: float = np.inf) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+               reset_rv: bool = True, model_velocity: float = np.inf
+               ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Compute the RV using a line-by-line analysis
 
@@ -509,6 +511,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     :param ccf_ewidth: None or float, the ccf_ewidth to use (if set)
     :param reset_rv: bool, whether convergence failed in previous
                                iteration (first iteration always False)
+    :param model_velocity: float, inf if not set but if set doesn't recalculate
+                           model velocity
 
     :return: tuple, 1. the reference table dict, 2. the output dictionary
     """
@@ -580,7 +584,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         if 'FP' not in object_science:
             # calculate the rough CCF RV estimate
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
-                                          ref_table['WAVE_START'], ccf_weight)
+                                          ref_table['WAVE_START'], ccf_weight,
+                                          kind='science')
             # if ccf width is not set then set it and log message
             if ccf_ewidth is None:
                 ccf_ewidth = float(ewidth)
@@ -649,16 +654,16 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # update model, dmodel, ddmodel, dddmodel
         # ---------------------------------------------------------------------
-        # loop around each order and update model, dmodel, ddmodel, dddmodel
-
+        # get model offset
         if np.isfinite(model_velocity):
             model_offset = float(model_velocity)
         else:
             model_offset = 0
-
+        # loop around each order and update model, dmodel, ddmodel, dddmodel
         for order_num in range(sci_data.shape[0]):
             # doppler shifted wave grid for this order
-            wave_ord = mp.doppler_shift(wavegrid[order_num], -sys_rv-model_offset)
+            shift = -sys_rv - model_offset
+            wave_ord = mp.doppler_shift(wavegrid[order_num], shift)
             # get the blaze for this order
             blaze_ord = blaze[order_num]
             # get the low-frequency component out
@@ -717,14 +722,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             plot_dict['LINE_ORDERS'] = []
             plot_dict['WW_ORD_LINE'] = []
             plot_dict['SPEC_ORD_LINE'] = []
-
+        # calculate the CCF for the model (if we don't have model_velocity)
         if not np.isfinite(model_velocity):
             sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
-                                          ref_table['WAVE_START'], ccf_weight)
-            model_velocity = -sys_model_rv+sys_rv
-            log.general('model velocity {:.2f} m/s'.format(model_velocity))
+                                                      ref_table['WAVE_START'],
+                                                      ccf_weight, kind='model')
+            model_velocity = -sys_model_rv + sys_rv
+            log.general('Model velocity {:.2f} m/s'.format(model_velocity))
+            # we don't want to continue this run if we have model_velocity
             continue
-
         # ---------------------------------------------------------------------
         # loop through all lines
         for line_it in range(0, len(orders)):
@@ -996,14 +1002,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     wave_min = inst.params['COMPIL_WAVE_MIN']
     wave_max = inst.params['COMPIL_WAVE_MAX']
     max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
-
     obj_sci = inst.params['OBJECT_SCIENCE']
-
+    ccf_ew_fp = inst.params['COMPIL_FP_EWID']
     # get the ccf e-width column name
     ccf_ew_col = inst.params['KW_CCF_EW']
-
     # get the header keys to add to rdb_table
-    header_keys = inst.rdb_columns()
+    header_keys, fp_flags = inst.rdb_columns()
     # get base names
     lblrvbasenames = []
     for lblrvfile in lblrvfiles:
@@ -1085,13 +1089,18 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # fill in header keys
         # ---------------------------------------------------------------------
         for key in header_keys:
-            if key in rvhdr:
+            # deal with FP flags
+            if obj_sci == 'FP' and fp_flags[key]:
+                rdb_dict[key][row] = np.nan
+            # if we have key add the value
+            elif key in rvhdr:
                 rdb_dict[key][row] = rvhdr[key]
-            # print a warning
+            # else print a warning and add a NaN
             else:
                 wmsg = 'Key {0} not present in file {1}'
                 wargs = [key, lblrvfiles[row]]
                 log.warning(wmsg.format(*wargs))
+                rdb_dict[key][row] = np.nan
         # ---------------------------------------------------------------------
         # Read all lines for this file and load into arrays
         # ---------------------------------------------------------------------
@@ -1218,15 +1227,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # same for the dddv
         guess6, bulk_error6 = mp.odd_ratio_mean(dddv[row], dddvrms[row])
         # ---------------------------------------------------------------------
-
+        # deal with having a FP (CCF_EW_ROW doesn't really make sense)
         if obj_sci == 'FP':
             # Default value for the FP
-            # TODO --> add a default FP line width
-            ccf_ew_row = 5.0
+            ccf_ew_row = float(ccf_ew_fp)
         else:
             # get the ccf_ew
             ccf_ew_row = rdb_dict[ccf_ew_col][row]
-
         # work out the fwhm (1 sigma * sigma value)
         fwhm_row = mp.fwhm() * (ccf_ew_row + guess5 / ccf_ew_row)
         sig_fwhm_row = mp.fwhm() * (bulk_error5 / ccf_ew_row)

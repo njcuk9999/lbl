@@ -56,7 +56,8 @@ class Const:
                  arg: Union[str, None] = None,
                  dtype: Union[Type, None] = None,
                  options: Union[list, None] = None,
-                 comment: Union[str, None] = None):
+                 comment: Union[str, None] = None,
+                 fp_flag: bool = False):
         """
         Constant class (for storing properties of constants)
 
@@ -84,6 +85,8 @@ class Const:
         self.options = deepcopy(options)
         # the comment for a fits header
         self.comment = deepcopy(comment)
+        # set the fp flag
+        self.fp_flag = bool(fp_flag)
 
     def __str__(self) -> str:
         return 'Const[{0}]'.format(self.key)
@@ -98,7 +101,8 @@ class Const:
         :return: new Const instance
         """
         return Const(self.key, self.source, self.description,
-                     self.argument, self.dtype, self.options)
+                     self.argument, self.dtype, self.options, self.comment,
+                     self.fp_flag)
 
 
 class ParamDict(UserDict):
@@ -118,8 +122,8 @@ class ParamDict(UserDict):
     def set(self, key: str, value: Any, source: Union[str, None] = None,
             desc: Union[str, None] = None, arg: Union[str, None] = None,
             dtype: Union[Type, None] = None, not_none: bool = False,
-            options: Union[list, None] = None, 
-            comment: Union[str, None] = None):
+            options: Union[list, None] = None,
+            comment: Union[str, None] = None, fp_flag: bool = False):
         """
         Set a parameter in the dictionary y[key] = value
 
@@ -137,6 +141,7 @@ class ParamDict(UserDict):
                         argparse
         :param comment: str or None, if set this is the comment to add to a
                         fits header
+        :param fp_flag: bool, if True this key should not be used for FP files
 
         :return: None - updates dict
         """
@@ -149,7 +154,7 @@ class ParamDict(UserDict):
         self.__setitem__(key, value)
         # set instance
         self.instances[key] = Const(key, source, desc, arg, dtype, options,
-                                    comment)
+                                    comment, fp_flag)
 
     def __setitem__(self, key: Any, value: Any):
         """
