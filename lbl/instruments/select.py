@@ -33,6 +33,7 @@ __authors__ = base.__authors__
 # load classes
 ParamDict = base_classes.ParamDict
 log = base_classes.log
+LblException = base_classes.LblException
 # instruments list
 InstrumentsType = Union[default.Instrument, spirou.Spirou,
                         harps.Harps, None]
@@ -93,6 +94,9 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     for kwarg in kwargs:
         # force kwarg to upper case
         kwargname = kwarg.upper()
+        # make sure these are in default_values
+        if kwargname not in list(default_values.keys()):
+            raise LblException('Argument {0} is invalid'.format(kwarg))
         # only add config_file
         if kwargname == 'CONFIG_FILE':
             inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
@@ -105,7 +109,6 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             if args[argname] is None:
                 if argname not in inputs.not_none:
                     continue
-
         # we set the input
         cmd_inputs.set(argname, args[argname], source=func_name + '[CMD]')
     # -------------------------------------------------------------------------
