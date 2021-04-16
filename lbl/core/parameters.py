@@ -294,6 +294,7 @@ params.set(key='KW_MID_EXP_TIME', value=None, source=__NAME__,
 params.set(key='KW_SNR', value=None, source=__NAME__,
            desc='snr key in header', not_none=True)
 
+# TODO --> not required for FP
 # define the BERV keyword
 params.set(key='KW_BERV', value=None, source=__NAME__,
            desc='the barycentric correction keyword', not_none=True)
@@ -307,6 +308,7 @@ params.set(key='KW_NITERATIONS', value='ITE_RV', source=__NAME__,
            desc='the number of iterations',
            comment='Num iterations to reach sigma accuracy')
 
+# TODO --> not required for FP
 # define the systemic velocity in m/s
 params.set(key='KW_SYSTEMIC_VELO', value='SYSTVELO', source=__NAME__,
            desc='the systemic velocity in m/s',
@@ -355,6 +357,7 @@ params.set(key='KW_MJDATE', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_EXPTIME', value=None, source=__NAME__, not_none=False,
            desc='the exposure time of the observation')
 
+# TODO --> not required for FP
 # define the airmass of the observation
 params.set(key='KW_AIRMASS', value=None, source=__NAME__, not_none=False,
            desc='the airmass of the observation')
@@ -367,10 +370,12 @@ params.set(key='KW_FILENAME', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_DATE', value=None, source=__NAME__, not_none=False,
            desc='the human date of the observation')
 
+# TODO --> not required for FP
 # define the tau_h20 of the observation
 params.set(key='KW_TAU_H2O', value=None, source=__NAME__, not_none=False,
            desc='the tau_h20 of the observation')
 
+# TODO --> not required for FP
 # define the tau_other of the observation
 params.set(key='KW_TAU_OTHERS', value=None, source=__NAME__, not_none=False,
            desc='the tau_other of the observation')
@@ -387,10 +392,12 @@ params.set(key='KW_WAVETIME', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_WAVEFILE', value=None, source=__NAME__, not_none=False,
            desc='the filename of the wave solution')
 
+# TODO --> not required for FP
 # define the telluric preclean velocity of water absorbers
 params.set(key='KW_TLPDVH2O', value=None, source=__NAME__, not_none=False,
            desc='the telluric preclean velocity of water absorbers')
 
+# TODO --> not required for FP
 # define the telluric preclean velocity of other absorbers
 params.set(key='KW_TLPDVOTR', value=None, source=__NAME__, not_none=False,
            desc='the telluric preclean velocity of other absorbers')
@@ -415,14 +422,17 @@ params.set(key='KW_RHOMB2', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_CDEN_P', value=None, source=__NAME__, not_none=False,
            desc='the calib-reference density')
 
+# TODO --> not required for FP
 # define the SNR goal per pixel per frame
 params.set(key='KW_SNRGOAL', value=None, source=__NAME__, not_none=False,
            desc='the SNR goal per pixel per frame')
 
+# TODO --> not required for FP
 # define the SNR in chosen order
 params.set(key='KW_EXT_SNR', value=None, source=__NAME__, not_none=False,
            desc='the SNR in chosen order')
 
+# TODO --> not required for FP
 # define the barycentric julian date
 params.set(key='KW_BJD', value=None, source=__NAME__, not_none=False,
            desc='The barycentric julian date')
