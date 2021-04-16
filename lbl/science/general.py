@@ -1432,7 +1432,7 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
     # loop around unique wave files
     for uwavefile in tqdm(uwaves):
         # find all entries that match this wave file
-        wave_mask = rdb_table == uwavefile
+        wave_mask = rdb_table[kw_wavefile] == uwavefile
         # get table for these entries
         itable = rdb_table[wave_mask]
         # get a list of filenames
@@ -1456,7 +1456,7 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
                 # if observation is in the standard list of observations
                 if types[row] in std_list:
                     # loop around column names
-                    for colname in itable:
+                    for colname in itable.colnames:
                         # -----------------------------------------------------
                         # if column is vrad correct for reference
                         if colname.startswith('vrad'):
@@ -1487,7 +1487,7 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
                 # else we have a reference file - just add it as is
                 else:
                     # loop around column names
-                    for colname in itable:
+                    for colname in itable.colnames:
                         rdb_dict3[colname].append(itable[colname][row])
         # ---------------------------------------------------------------------
         # else we don't have a reference file present --> set to NaN
@@ -1495,7 +1495,7 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
             # loop around the wave files of this type
             for row in range(len(types)):
                 # loop around column names
-                for colname in itable:
+                for colname in itable.colnames:
                     # ---------------------------------------------------------
                     # if column is vrad correct for reference
                     if colname.startswith('vrad'):
