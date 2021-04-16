@@ -17,7 +17,7 @@ from lbl.core import io
 from lbl.instruments import select
 from lbl.science import general
 from lbl.science import plot
-from lbl.resources import misc
+from lbl.resources import lbl_misc
 
 # =============================================================================
 # Define variables
@@ -69,9 +69,9 @@ def main(**kwargs):
     # get data directory
     data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
-    misc.move_log(data_dir, __NAME__)
+    lbl_misc.move_log(data_dir, __NAME__)
     # print splash
-    misc.splash(name=__STRNAME__, instrument=inst.name,
+    lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
                   cmdargs=inst.params['COMMAND_LINE_ARGS'])
     # run __main__
     try:
@@ -83,7 +83,7 @@ def main(**kwargs):
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
     # end code
-    misc.end(__NAME__)
+    lbl_misc.end(__NAME__)
     # return local namespace
     return namespace
 
@@ -113,19 +113,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
-    # get data directory
-    data_dir = io.check_directory(inst.params['DATA_DIR'])
-    # copy over readme
-    misc.copy_readme(data_dir)
-    # make sub directory based on object science and object template
-    obj_subdir = inst.science_template_subdir()
-    # make lblrv directory
-    lblrv_dir = io.make_dir(data_dir, inst.params['LBLRV_SUBDIR'], 'LBL RV',
-                            subdir=obj_subdir)
-    # make lbl rdb directory
-    lbl_rdb_dir = io.make_dir(data_dir, inst.params['LBLRDB_SUBDIR'], 'LBL rdb')
-    # make the plot directory
-    plot_dir = io.make_dir(data_dir, 'plots', 'Plot')
+    dirout = select.make_all_directories(inst)
+    mask_dir, template_dir, calib_dir, science_dir = dirout[:4]
+    lblrv_dir, lbl_reftable_dir, lbl_rdb_dir, plot_dir = dirout[4:]
     # -------------------------------------------------------------------------
     # Step 2: set filenames
     # -------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from lbl.core import io
 from lbl.instruments import spirou
 from lbl.instruments import harps
 from lbl.instruments import default
+from lbl.resources import lbl_misc
 
 # =============================================================================
 # Define variables
@@ -44,7 +45,8 @@ InstrumentsList = (default.Instrument, spirou.Spirou, harps.Harps)
 # Define functions
 # =============================================================================
 def parse_args(argnames: List[str], kwargs: Dict[str, Any],
-               description: Union[str, None] = None) -> ParamDict:
+               description: Union[str, None] = None,
+               parse: bool = True) -> ParamDict:
     """
     Parse the arguments 'args' using params (and their Const instances)
     if value in kwargs override default value in params
@@ -59,7 +61,8 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     # set function name
     func_name = __NAME__ + '.parse_args'
     # get parser
-    parser = argparse.ArgumentParser(description=description)
+    if parse:
+        parser = argparse.ArgumentParser(description=description)
     # get params
     params = parameters.params.copy()
     # get default values
@@ -71,24 +74,25 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     cmd_inputs = ParamDict()
     # -------------------------------------------------------------------------
     # add args from sys.argv
-    for argname in argnames:
-        if argname in params:
-            # get constant
-            const = params.instances[argname]
-            # skip constants without argument / dtype
-            if const.argument is None or const.dtype is None:
-                continue
-            # deal with bool
-            if const.dtype is bool:
-                pkwargs = dict(dest=const.key, default=params[argname],
-                               action='store_true', help=const.description)
-            else:
-                pkwargs = dict(dest=const.key, type=const.dtype,
-                               default=params[argname],
-                               action='store', help=const.description,
-                               choices=const.options)
-            # parse argument
-            parser.add_argument(const.argument, **pkwargs)
+    if parse:
+        for argname in argnames:
+            if argname in params:
+                # get constant
+                const = params.instances[argname]
+                # skip constants without argument / dtype
+                if const.argument is None or const.dtype is None:
+                    continue
+                # deal with bool
+                if const.dtype is bool:
+                    pkwargs = dict(dest=const.key, default=params[argname],
+                                   action='store_true', help=const.description)
+                else:
+                    pkwargs = dict(dest=const.key, type=const.dtype,
+                                   default=params[argname],
+                                   action='store', help=const.description,
+                                   choices=const.options)
+                # parse argument
+                parser.add_argument(const.argument, **pkwargs)
     # -------------------------------------------------------------------------
     # look for 'config_file' in kwargs
     for kwarg in kwargs:
@@ -102,15 +106,16 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
     # -------------------------------------------------------------------------
     # load parsed args into inputs
-    args = vars(parser.parse_args())
-    for argname in args:
-        if argname in inputs:
-            # check whether None is allowed
-            if args[argname] is None:
-                if argname not in inputs.not_none:
-                    continue
-        # we set the input
-        cmd_inputs.set(argname, args[argname], source=func_name + '[CMD]')
+    if parse:
+        args = vars(parser.parse_args())
+        for argname in args:
+            if argname in inputs:
+                # check whether None is allowed
+                if args[argname] is None:
+                    if argname not in inputs.not_none:
+                        continue
+            # we set the input
+            cmd_inputs.set(argname, args[argname], source=func_name + '[CMD]')
     # -------------------------------------------------------------------------
     # we need to copy config_file into inputs - in general we copy command line
     #   arguments after - but we need the config one to load it
@@ -219,6 +224,43 @@ def load_instrument(args: ParamDict) -> InstrumentsType:
     # return instrument instances
     return inst
 
+
+def make_all_directories(inst: Union[InstrumentsType]) -> List[str]:
+
+    # get params
+    params = inst.params
+    # get data directory
+    data_dir = io.check_directory(params['DATA_DIR'])
+    # copy over readme
+    lbl_misc.copy_readme(data_dir)
+    # make mask directory
+    mask_dir = io.make_dir(data_dir, params['MASK_SUBDIR'], 'Mask')
+    # make template directory
+    template_dir = io.make_dir(data_dir, params['TEMPLATE_SUBDIR'],
+                               'Templates')
+    # make calib directory (for blaze and wave solutions)
+    calib_dir = io.make_dir(data_dir, params['CALIB_SUBDIR'], 'Calib')
+    # make science directory (for S2D files)
+    science_dir = io.make_dir(data_dir, params['SCIENCE_SUBDIR'],
+                              'Science')
+    # make sub directory based on object science and object template
+    obj_subdir = inst.science_template_subdir()
+    # make lblrv directory
+    lblrv_dir = io.make_dir(data_dir, params['LBLRV_SUBDIR'], 'LBL RV',
+                            subdir=obj_subdir)
+    # make lbl reftable directory
+    lbl_reftable_dir = io.make_dir(data_dir, params['LBLREFTAB_SUBDIR'],
+                                   'LBL reftable')
+    # make lbl rdb directory
+    lbl_rdb_dir = io.make_dir(data_dir, params['LBLRDB_SUBDIR'],
+                              'LBL rdb')
+    # make the plot directory
+    plot_dir = io.make_dir(data_dir, 'plots', 'Plot')
+    # store output directories
+    out = [mask_dir, template_dir, calib_dir, science_dir, lblrv_dir,
+           lbl_reftable_dir, lbl_rdb_dir, plot_dir]
+    # return output directories
+    return out
 
 # =============================================================================
 # Start of code

@@ -7,14 +7,17 @@ Created on 2021-04-09
 
 @author: cook
 """
+import argparse
 from astropy.table import Table, vstack
 import os
 from typing import Union
+import sys
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import parameters
 from lbl.instruments import select
+from lbl.resources import lbl_misc
 
 # =============================================================================
 # Define variables
@@ -25,6 +28,8 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # get classes
 log = base_classes.log
+LblException = base_classes.LblException
+QArg = lbl_misc.QuickArg
 
 # -----------------------------------------------------------------------------
 # define the working directory
@@ -33,13 +38,21 @@ WORKSPACE = '/data/spirou/data/misc/lbltest/'
 PARAM_FULL_YAML = 'full_config.yaml'
 # define the parameter readme table file (copied into full README.md)
 PARAM_README = 'param_readme.md'
-
 # -----------------------------------------------------------------------------
-# mode:
-# mode 1: make parameter table for readme
-#mode = 1
-# mode 2: make yaml
-mode = 2
+# deal with arguments
+parser = argparse.ArgumentParser(description='Admin LBL code - see arguments '
+                                             'for options')
+# add quick arguments
+pargs = dict()
+pargs['--create_dirs'] = QArg( help='Create input directories')
+pargs['--make_readme'] = QArg(help='Run make read me script')
+pargs['--make_full_yaml'] = QArg(help='Run full config yaml script')
+pargs['--config'] = QArg(action=None,
+                         help='The config yaml file (required for '
+                              'some scripts)')
+# loop around args and add back to parser
+for key in pargs:
+    parser.add_argument(key, **pargs[key].kwargs())
 
 
 # =============================================================================
@@ -171,15 +184,54 @@ def make_full_config_yaml(table: Table):
         for line in lines:
             yamlfile.write(line + '\n')
 
+
+def create_directories(config_file: str = 'None'):
+    """
+    Create all directories using config file
+
+    :param config_file:
+    :return:
+    """
+    # make sure config file exists
+    if not os.path.exists(config_file) or config_file == 'None':
+        emsg = 'Config file must exists (current value = {0})'
+        raise LblException(emsg.format(config_file))
+    # deal with parsing arguments
+    args = select.parse_args([], dict(config_file=config_file), '', parse=False)
+    # load instrument
+    inst = select.load_instrument(args)
+    # make directories
+    ourdirs = select.make_all_directories(inst)
+    # check and log creation
+    for outdir in ourdirs:
+        if os.path.exists(outdir):
+            log.general('Created dir: {0}'.format(outdir))
+        else:
+            log.warning('Could not create dir: {0}'.format(outdir))
+
+
+
 # =============================================================================
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
-
-    if mode == 1:
+    # -------------------------------------------------------------------------
+    # get input arguments (all switches)
+    args = parser.parse_args()
+    # splash
+    lbl_misc.splash('LBL Admin', 'None', lbl_misc.quick_args(args, pargs))
+    # -------------------------------------------------------------------------
+    # run create directories (if True)
+    if args.create_dirs:
+        create_directories(args.config)
+    # -------------------------------------------------------------------------
+    # run make read me (if True)
+    if args.make_readme:
         table = make_param_table('SPIROU')
         make_readme_param_table(table)
-    if mode == 2:
+    # -------------------------------------------------------------------------
+    # run make full yaml config file (if True)
+    if args.make_full_yaml:
         table = make_param_table('SPIROU')
         make_full_config_yaml(table)
 
