@@ -228,6 +228,9 @@ class Instrument:
         header = self.set_hkey(header, 'KW_PDATE', value=Time.now().fits)
         # add which lbl instrument was used
         header = self.set_hkey(header, 'KW_INSTRUMENT', value=self.name)
+        # add the template velocity from CCF
+        header = self.set_hkey(header, 'KW_MODELVEL',
+                               value=outputs['MODEL_VELOCITY'])
         # ---------------------------------------------------------------------
         # Convert ref table dictionary to table
         # ---------------------------------------------------------------------
