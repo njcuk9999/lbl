@@ -996,8 +996,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     wave_min = inst.params['COMPIL_WAVE_MIN']
     wave_max = inst.params['COMPIL_WAVE_MAX']
     max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
+
+    obj_sci = inst.params['OBJECT_SCIENCE']
+
     # get the ccf e-width column name
     ccf_ew_col = inst.params['KW_CCF_EW']
+
     # get the header keys to add to rdb_table
     header_keys = inst.rdb_columns()
     # get base names
@@ -1214,8 +1218,15 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # same for the dddv
         guess6, bulk_error6 = mp.odd_ratio_mean(dddv[row], dddvrms[row])
         # ---------------------------------------------------------------------
-        # get the ccf_ew
-        ccf_ew_row = rdb_dict[ccf_ew_col][row]
+
+        if obj_sci == 'FP':
+            # Default value for the FP
+            # TODO --> add a default FP line width
+            ccf_ew_row = 5.0
+        else:
+            # get the ccf_ew
+            ccf_ew_row = rdb_dict[ccf_ew_col][row]
+
         # work out the fwhm (1 sigma * sigma value)
         fwhm_row = mp.fwhm() * (ccf_ew_row + guess5 / ccf_ew_row)
         sig_fwhm_row = mp.fwhm() * (bulk_error5 / ccf_ew_row)
