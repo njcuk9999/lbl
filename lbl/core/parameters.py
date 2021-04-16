@@ -201,6 +201,11 @@ params.set('COMPIL_MAX_PIXEL_WIDTH', None, source=__NAME__,
            desc='The maximum pixel width allowed for lines [pixels]',
            not_none=True)
 
+# define the CCF e-width to use for FP files
+params.set('COMPIL_FP_EWID', None, source=__NAME__,
+           desc='define the CCF e-width to use for FP files',
+           not_none=True)
+
 # define the first band (from get_binned_parameters) to plot (band1)
 params.set('COMPILE_BINNED_BAND1', None, source=__NAME__,
            desc='The first band (from get_binned_parameters) to plot (band1)',
@@ -294,10 +299,10 @@ params.set(key='KW_MID_EXP_TIME', value=None, source=__NAME__,
 params.set(key='KW_SNR', value=None, source=__NAME__,
            desc='snr key in header', not_none=True)
 
-# TODO --> not required for FP
 # define the BERV keyword
 params.set(key='KW_BERV', value=None, source=__NAME__,
-           desc='the barycentric correction keyword', not_none=True)
+           desc='the barycentric correction keyword', not_none=True,
+           fp_flag=True)
 
 # define the Blaze calibration file
 params.set(key='KW_BLAZE_FILE', value=None, source=__NAME__,
@@ -308,11 +313,10 @@ params.set(key='KW_NITERATIONS', value='ITE_RV', source=__NAME__,
            desc='the number of iterations',
            comment='Num iterations to reach sigma accuracy')
 
-# TODO --> not required for FP
 # define the systemic velocity in m/s
 params.set(key='KW_SYSTEMIC_VELO', value='SYSTVELO', source=__NAME__,
            desc='the systemic velocity in m/s',
-           comment='systemic velocity in m/s')
+           comment='systemic velocity in m/s', fp_flag=True)
 
 # define the rms to photon noise ratio
 params.set(key='KW_RMS_RATIO', value='RMSRATIO', source=__NAME__,
@@ -357,10 +361,9 @@ params.set(key='KW_MJDATE', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_EXPTIME', value=None, source=__NAME__, not_none=False,
            desc='the exposure time of the observation')
 
-# TODO --> not required for FP
 # define the airmass of the observation
 params.set(key='KW_AIRMASS', value=None, source=__NAME__, not_none=False,
-           desc='the airmass of the observation')
+           desc='the airmass of the observation', fp_flag=True)
 
 # define the filename of the observation
 params.set(key='KW_FILENAME', value=None, source=__NAME__, not_none=False,
@@ -370,15 +373,13 @@ params.set(key='KW_FILENAME', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_DATE', value=None, source=__NAME__, not_none=False,
            desc='the human date of the observation')
 
-# TODO --> not required for FP
 # define the tau_h20 of the observation
 params.set(key='KW_TAU_H2O', value=None, source=__NAME__, not_none=False,
-           desc='the tau_h20 of the observation')
+           desc='the tau_h20 of the observation', fp_flag=True)
 
-# TODO --> not required for FP
 # define the tau_other of the observation
 params.set(key='KW_TAU_OTHERS', value=None, source=__NAME__, not_none=False,
-           desc='the tau_other of the observation')
+           desc='the tau_other of the observation', fp_flag=True)
 
 # define the DPRTYPE of the observation
 params.set(key='KW_DPRTYPE', value=None, source=__NAME__, not_none=False,
@@ -392,15 +393,15 @@ params.set(key='KW_WAVETIME', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_WAVEFILE', value=None, source=__NAME__, not_none=False,
            desc='the filename of the wave solution')
 
-# TODO --> not required for FP
 # define the telluric preclean velocity of water absorbers
 params.set(key='KW_TLPDVH2O', value=None, source=__NAME__, not_none=False,
-           desc='the telluric preclean velocity of water absorbers')
+           desc='the telluric preclean velocity of water absorbers',
+           fp_flag=True)
 
-# TODO --> not required for FP
 # define the telluric preclean velocity of other absorbers
 params.set(key='KW_TLPDVOTR', value=None, source=__NAME__, not_none=False,
-           desc='the telluric preclean velocity of other absorbers')
+           desc='the telluric preclean velocity of other absorbers',
+           fp_flag=True)
 
 # define the wave solution calibration filename
 params.set(key='KW_CDBWAVE', value=None, source=__NAME__, not_none=False,
@@ -422,20 +423,17 @@ params.set(key='KW_RHOMB2', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_CDEN_P', value=None, source=__NAME__, not_none=False,
            desc='the calib-reference density')
 
-# TODO --> not required for FP
 # define the SNR goal per pixel per frame
 params.set(key='KW_SNRGOAL', value=None, source=__NAME__, not_none=False,
-           desc='the SNR goal per pixel per frame')
+           desc='the SNR goal per pixel per frame', fp_flag=True)
 
-# TODO --> not required for FP
 # define the SNR in chosen order
 params.set(key='KW_EXT_SNR', value=None, source=__NAME__, not_none=False,
-           desc='the SNR in chosen order')
+           desc='the SNR in chosen order', fp_flag=True)
 
-# TODO --> not required for FP
 # define the barycentric julian date
 params.set(key='KW_BJD', value=None, source=__NAME__, not_none=False,
-           desc='The barycentric julian date')
+           desc='The barycentric julian date', fp_flag=True)
 
 # define the shape code dx value
 params.set(key='KW_SHAPE_DX', value=None, source=__NAME__, not_none=False,

@@ -1003,10 +1003,11 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     wave_max = inst.params['COMPIL_WAVE_MAX']
     max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
     obj_sci = inst.params['OBJECT_SCIENCE']
+    ccf_ew_fp = inst.params['COMPIL_FP_EWID']
     # get the ccf e-width column name
     ccf_ew_col = inst.params['KW_CCF_EW']
     # get the header keys to add to rdb_table
-    header_keys = inst.rdb_columns()
+    header_keys, fp_flags = inst.rdb_columns()
     # get base names
     lblrvbasenames = []
     for lblrvfile in lblrvfiles:
@@ -1088,13 +1089,18 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # fill in header keys
         # ---------------------------------------------------------------------
         for key in header_keys:
-            if key in rvhdr:
+            # deal with FP flags
+            if obj_sci == 'FP' and fp_flags[key]:
+                rdb_dict[key][row] = np.nan
+            # if we have key add the value
+            elif key in rvhdr:
                 rdb_dict[key][row] = rvhdr[key]
-            # print a warning
+            # else print a warning and add a NaN
             else:
                 wmsg = 'Key {0} not present in file {1}'
                 wargs = [key, lblrvfiles[row]]
                 log.warning(wmsg.format(*wargs))
+                rdb_dict[key][row] = np.nan
         # ---------------------------------------------------------------------
         # Read all lines for this file and load into arrays
         # ---------------------------------------------------------------------
@@ -1224,8 +1230,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # deal with having a FP (CCF_EW_ROW doesn't really make sense)
         if obj_sci == 'FP':
             # Default value for the FP
-            # TODO --> add a default FP line width
-            ccf_ew_row = 5.0
+            ccf_ew_row = float(ccf_ew_fp)
         else:
             # get the ccf_ew
             ccf_ew_row = rdb_dict[ccf_ew_col][row]

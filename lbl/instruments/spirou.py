@@ -13,7 +13,7 @@ import glob
 import numpy as np
 import os
 import requests
-from typing import Dict, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -79,6 +79,8 @@ class Spirou(Instrument):
         self.params.set('COMPIL_WAVE_MAX', 2500, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
+        # define the CCF e-width to use for FP files
+        self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define the first band (from get_binned_parameters) to plot (band1)
         self.params.set('COMPILE_BINNED_BAND1', 'H', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
@@ -434,12 +436,13 @@ class Spirou(Instrument):
         # return the berv measurement (in m/s)
         return berv
 
-    def rdb_columns(self):
+    def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
         """
         Define the fits header columns names to add to the RDB file
         These should be references to keys in params
 
-        :return:
+        :return: tuple, 1. np.array of strings (the keys), 2. list of bools
+                 the flags whether these keys should be used with FP files
         """
         # there are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
@@ -454,13 +457,25 @@ class Spirou(Instrument):
                     'KW_CCF_EW']
         # convert to actual keys (not references to keys)
         keys = []
+        fp_flags = []
         for drs_key in drs_keys:
+            # initial set fp flag to False
+            fp_flag = False
+            #
             if drs_key in self.params:
                 keys.append(self.params[drs_key])
+                # look for fp flag
+                instance = self.params.instances[drs_key]
+                if instance is not None:
+                    if instance.fp_flag is not None:
+                        fp_flag = True
+
             else:
                 keys.append(drs_key)
+            # append fp flags
+            fp_flags.append(fp_flag)
         # return a numpy array
-        return np.array(keys)
+        return np.array(keys), fp_flags
 
     def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
         """
