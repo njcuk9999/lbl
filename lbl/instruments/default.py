@@ -332,7 +332,7 @@ class Instrument:
         """
         _ = self
         # load table
-        table = io.load_table(filename, kind='LBL rdb fits table')
+        table = io.load_table(filename, kind='LBL rdb fits table', fmt='rdb')
         # return table
         return table
 

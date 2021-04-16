@@ -184,7 +184,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # else we have a file which can be corrected (if drift file exists)
     elif os.path.exists(drift_file):
         # load drift table
-        drift_table = io.load_table(drift_file, kind='Drift table')
+        drift_table = io.load_table(drift_file, kind='Drift table', fmt='rdb')
         # create rdb corrected for drift table
         rdb_table3 = general.correct_rdb_drift(inst, rdb_table, drift_table)
         # log creation of rdb corrected table
