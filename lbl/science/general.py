@@ -1088,6 +1088,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # fill in header keys
         # ---------------------------------------------------------------------
+
+        # TODO -> Neil, it's all wrong! Bad bad bad
         for key in header_keys:
             # deal with FP flags
             if obj_sci == 'FP' and fp_flags[key]:
@@ -1577,7 +1579,8 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
         # else we have file(s) - use the first
         else:
             # get position in the drift table
-            pos = np.where(file_mask)[0]
+            # TODO --> There should be a single item here, hence the 2nd zero
+            pos = np.where(file_mask)[0][0]
             # loop around all columns
             for colname in rdb_dict4.keys():
                 # -------------------------------------------------------------
