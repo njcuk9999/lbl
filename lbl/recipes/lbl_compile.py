@@ -168,7 +168,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         drift_table = general.make_drift_table(inst, rdb_table)
         # log creation of drift table
         msg = 'Writing drift file: {0}'
-        log.info(msg.format(drift_table))
+        log.info(msg.format(drift_file))
         # write the drift table
         io.write_table(drift_file, drift_table, fmt='rdb')
     # else we have a file which can be corrected (if drift file exists)
