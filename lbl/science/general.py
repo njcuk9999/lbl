@@ -383,10 +383,13 @@ def get_scaling_ratio(spectrum1: np.ndarray,
 
     # find good values (non NaN)
     good = np.isfinite(spectrum1) & np.isfinite(spectrum2)
-    # do not include points 5 sigma away from spectrum 1
-    good &= np.abs(spectrum1) < mp.estimate_sigma(spectrum1) * 5
-    # do not include points 5 sigma away from spectrum 2
-    good &= np.abs(spectrum2) < mp.estimate_sigma(spectrum2) * 5
+
+    with warnings.catch_warnings(record=True) as _:
+        # do not include points 5 sigma away from spectrum 1
+        good &= np.abs(spectrum1) < mp.estimate_sigma(spectrum1) * 5
+        # do not include points 5 sigma away from spectrum 2
+        good &= np.abs(spectrum2) < mp.estimate_sigma(spectrum2) * 5
+
     # first estimate of amplitude sqrt(ratio of squares)
     ratio = mp.nansum(spectrum1_2[good]) / mp.nansum(spectrum2_2[good])
     amp = np.sqrt(ratio)
@@ -398,7 +401,8 @@ def get_scaling_ratio(spectrum1: np.ndarray,
         sigma_res = mp.estimate_sigma(residuals)
         # re-calculate good mask
         good = np.isfinite(spectrum1) & np.isfinite(spectrum2)
-        good &= np.abs(residuals / sigma_res) < 3
+        with warnings.catch_warnings(record = True) as _:
+            good &= np.abs(residuals / sigma_res) < 3
         # calculate amp scale
         part1 = mp.nansum(residuals[good] * spectrum2[good])
         part2 = mp.nansum(spectrum1_2[good])
