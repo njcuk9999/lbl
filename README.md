@@ -89,6 +89,7 @@ For bash:
 export PYTHONPATH={LBL_ROOT}:$PYTHONPATH
 export PATH={LBL_ROOT}:$PATH
 export PATH={LBL_ROOT}/lbl/recipes/:$PATH
+export PATH={LBL_ROOT}/lbl/resources/:$PATH
 ```
 
 
@@ -138,6 +139,15 @@ on the computer.
 
 This file contains by default only some of the parameters one can edit.
 These can then be used in `lbl_compute` and `lbl_compile.
+
+You can create directories that are the same are your `DATA_DIR` by using
+```bash
+lbl_admin.py --create_dirs --config=config.yaml
+```
+where config.yaml includes the path to the config.yaml file you copied (do not
+use the one in the github directory).
+
+You can then use lbl_compute or lbl_compile
 
 ```bash
 lbl_compute.py --config=config.yaml
