@@ -316,7 +316,7 @@ params.set(key='KW_NITERATIONS', value='ITE_RV', source=__NAME__,
 # define the systemic velocity in m/s
 params.set(key='KW_SYSTEMIC_VELO', value='SYSTVELO', source=__NAME__,
            desc='the systemic velocity in m/s',
-           comment='systemic velocity in m/s', fp_flag=True)
+           comment='systemic velocity in m/s')
 
 # define the rms to photon noise ratio
 params.set(key='KW_RMS_RATIO', value='RMSRATIO', source=__NAME__,
@@ -425,11 +425,11 @@ params.set(key='KW_CDEN_P', value=None, source=__NAME__, not_none=False,
 
 # define the SNR goal per pixel per frame
 params.set(key='KW_SNRGOAL', value=None, source=__NAME__, not_none=False,
-           desc='the SNR goal per pixel per frame', fp_flag=True)
+           desc='the SNR goal per pixel per frame')
 
 # define the SNR in chosen order
 params.set(key='KW_EXT_SNR', value=None, source=__NAME__, not_none=False,
-           desc='the SNR in chosen order', fp_flag=True)
+           desc='the SNR in chosen order')
 
 # define the barycentric julian date
 params.set(key='KW_BJD', value=None, source=__NAME__, not_none=False,

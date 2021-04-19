@@ -1088,9 +1088,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # fill in header keys
         # ---------------------------------------------------------------------
-
         # TODO -> Neil, it's all wrong! Bad bad bad
-        for key in header_keys:
+        for ikey, key in enumerate(header_keys):
             # deal with FP flags
             if obj_sci == 'FP' and fp_flags[key]:
                 rdb_dict[key][row] = np.nan

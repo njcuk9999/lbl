@@ -461,15 +461,16 @@ class Spirou(Instrument):
         for drs_key in drs_keys:
             # initial set fp flag to False
             fp_flag = False
-            #
+            # if key is in params we can add the value to keys
             if drs_key in self.params:
                 keys.append(self.params[drs_key])
-                # look for fp flag
+                # we can also look for fp flag - this is either True or False
+                #    if True we skip this key for FP files - default is False
+                #    (i.e. not to skip)
                 instance = self.params.instances[drs_key]
                 if instance is not None:
                     if instance.fp_flag is not None:
-                        fp_flag = True
-
+                        fp_flag = instance.fp_flag
             else:
                 keys.append(drs_key)
             # append fp flags

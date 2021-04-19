@@ -57,7 +57,7 @@ class Const:
                  dtype: Union[Type, None] = None,
                  options: Union[list, None] = None,
                  comment: Union[str, None] = None,
-                 fp_flag: bool = False):
+                 fp_flag: Union[bool, None] = None):
         """
         Constant class (for storing properties of constants)
 
@@ -104,6 +104,53 @@ class Const:
                      self.argument, self.dtype, self.options, self.comment,
                      self.fp_flag)
 
+    def update(self, key: str, source: Union[str, None] = None,
+               desc: Union[str, None] = None,
+               arg: Union[str, None] = None,
+               dtype: Union[Type, None] = None,
+               options: Union[list, None] = None,
+               comment: Union[str, None] = None,
+               fp_flag: Union[bool, None] = None) -> 'Const':
+        """
+        Update a constant class - if value is None do not update
+
+        :param key: str, the key to set in dictionary
+        :param source: str or None, if set the source of the parameter
+        :param desc: str or None, if set the description of the parameter
+        :param arg: str or None, the command argument
+        :param dtype: Type or None, the type of object (for argparse) only
+                      required if arg is set
+        :param options: list or None, the options (choices) to allow for
+                argparse
+        :param comment: str or None, if set this is the comment to add to a
+                        fits header
+        """
+        if key is None:
+            key = self.key
+        # update source
+        if source is None:
+            source = self.source
+        # set description
+        if desc is None:
+            desc = self.description
+        # set arg (for run time argument)
+        if arg is None:
+            arg = self.argument
+        # set the dtype
+        if dtype is None:
+            dtype = self.dtype
+        # the allowed options for argparse (choices)
+        if options is None:
+            options = self.options
+        # the comment for a fits header
+        if comment is None:
+            comment = self.comment
+        # set the fp flag
+        if fp_flag is None:
+            fp_flag = self.fp_flag
+        # return ne instance
+        return Const(key, source, desc, arg, dtype, options, comment, fp_flag)
+
 
 class ParamDict(UserDict):
     def __init__(self, *args, **kwargs):
@@ -123,7 +170,8 @@ class ParamDict(UserDict):
             desc: Union[str, None] = None, arg: Union[str, None] = None,
             dtype: Union[Type, None] = None, not_none: bool = False,
             options: Union[list, None] = None,
-            comment: Union[str, None] = None, fp_flag: bool = False):
+            comment: Union[str, None] = None,
+            fp_flag: Union[bool, None] = None):
         """
         Set a parameter in the dictionary y[key] = value
 
@@ -152,9 +200,18 @@ class ParamDict(UserDict):
             self.not_none.append(key)
         # set item
         self.__setitem__(key, value)
-        # set instance
-        self.instances[key] = Const(key, source, desc, arg, dtype, options,
-                                    comment, fp_flag)
+        # ---------------------------------------------------------------------
+        # update / add instance
+        # ---------------------------------------------------------------------
+        # args for const
+        cargs = [key, source, desc, arg, dtype, options, comment, fp_flag]
+        # if instance already exists we just want to update keys that should
+        #   be updated (i.e. not None)
+        if key in self.instances and self.instances[key] is not None:
+            self.instances[key] = self.instances[key].update(*cargs)
+        # else we set instance from scratch
+        else:
+            self.instances[key] = Const(*cargs)
 
     def __setitem__(self, key: Any, value: Any):
         """
@@ -183,12 +240,12 @@ class ParamDict(UserDict):
         # return from supers dictionary storage
         value = self.data[key]
         # deal with not none and value is None
-        if value is None:
-            if key in self.not_none:
-                emsg = ('Key {0} is None - it must be set by the instrument,'
-                        'function inputs, command line or yaml file.')
-                eargs = [key]
-                raise LblException(emsg.format(*eargs))
+        # if value is None:
+        #     if key in self.not_none:
+        #         emsg = ('Key {0} is None - it must be set by the instrument,'
+        #                 'function inputs, command line or yaml file.')
+        #         eargs = [key]
+        #         raise LblException(emsg.format(*eargs))
         # return value
         return value
 
