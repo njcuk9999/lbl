@@ -1577,7 +1577,8 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
         # else we have file(s) - use the first
         else:
             # get position in the drift table
-            pos = np.where(file_mask)[0]
+            # TODO --> There should be a single item here, hence the 2nd zero
+            pos = np.where(file_mask)[0][0]
             # loop around all columns
             for colname in rdb_dict4.keys():
                 # -------------------------------------------------------------
