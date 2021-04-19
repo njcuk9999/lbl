@@ -1138,7 +1138,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 pdf = pdf + pdf_weight
         # fit the probability density function
         guess = [med_velo, 500.0, np.max(pdf), 0.0, 0.0]
-        pdf_coeffs, _ = curve_fit(mp.gauss_fit_s, vrange, pdf, p0=guess)
+        with warnings.catch_warnings(record=True) as _:
+            pdf_coeffs, _ = curve_fit(mp.gauss_fit_s, vrange, pdf, p0=guess)
         pdf_fit = mp.gauss_fit_s(vrange, *pdf_coeffs)
         # append values to plot lists
         vrange_all.append(vrange)
