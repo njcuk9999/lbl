@@ -89,6 +89,8 @@ class Spirou(Instrument):
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
         self.params.set('COMPILE_BINNED_BAND3', 'H', source=func_name)
+        # define the reference wavelength used in the slope fitting in nm
+        self.params.set('COMPIL_SLOPE_REF_WAVE', 1600, source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)

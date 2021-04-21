@@ -1008,6 +1008,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
     obj_sci = inst.params['OBJECT_SCIENCE']
     ccf_ew_fp = inst.params['COMPIL_FP_EWID']
+    reference_wavelength = inst.params['COMPIL_SLOPE_REF_WAVE']
     # get the ccf e-width column name
     ccf_ew_col = inst.params['KW_CCF_EW']
     # get the header keys to add to rdb_table
@@ -1036,6 +1037,15 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
     # for DACE, derived from de DDV
     rdb_dict['sig_fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
+    # velocity at a reference wavelength fitting for the chromatic slope
+    rdb_dict['vrad_achromatic'] = np.zeros_like(lblrvfiles, dtype=float)
+    # error on achromatic velocity
+    rdb_dict['svrad_achromatic'] = np.zeros_like(lblrvfiles, dtype=float)
+    # chromatic slope
+    rdb_dict['vrad_chromatic_slope'] = np.zeros_like(lblrvfiles, dtype=float)
+    # error in chromatic slope
+    rdb_dict['svrad_chromatic_slope'] = np.zeros_like(lblrvfiles, dtype=float)
+
     # add header keys
     for hdr_key in header_keys:
         # empty elements in a list for each key to fill
@@ -1232,6 +1242,68 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # same for the dddv
         guess6, bulk_error6 = mp.odd_ratio_mean(dddv[row], dddvrms[row])
         # ---------------------------------------------------------------------
+        # fit a slope to the rv
+        # ---------------------------------------------------------------------
+        # probability that the point is drawn from the distribution described
+        #     by uncertainties. We assume that outliers have 1e-4 likelihood
+        #     and a flat prior
+        prob_good = np.ones_like(rvs[row])
+
+        # keep track of velocity at previous step to see if fit converges
+        prev_velo = np.inf
+        # initializing values
+        # velocity at reference wavelength m/s/um
+        achromatic_velo, sig_achromatic_velo = np.nan, np.nan
+        # chromatic slope of velocity
+        chromatic_slope, sig_chromatic_slope = np.nan, np.nan
+        # store count
+        itr_count = 1
+        # loop around 10 iterations (but break on convergence)
+        while itr_count <= 10:
+            # find finite points
+            good = np.isfinite(dvrms[row]) & np.isfinite(rvs[row])
+            # get valid wave and subtract reference wavelength
+            valid_wave = rvtable0['WAVE_START'][good] - reference_wavelength
+            # get valid rv an dv drms
+            valid_rv = rvs[row][good]
+            valid_dvrms = dvrms[row][good]
+            # get weights for the np.polyval fit. Do *not* use the square of
+            # error bars for weight (see polyfit help)
+            weight_lin_fit = prob_good[good] / valid_dvrms
+            # fitting the lines with weights
+            scoeffs, scov = np.polyfit(valid_wave, valid_rv, 1,
+                                       w=weight_lin_fit, cov=True)
+            # work out the fitted vector
+            sfit = np.polyval(scoeffs, valid_wave)
+            # work out how many sigma off we are from the fit
+            nsig = (valid_rv - sfit)/valid_dvrms
+            # work out the likelihood of the line being a valid point
+            gpart = np.exp(-0.5 * nsig**2)
+            prob_good[good] = (1 + 1.0e-4) * gpart / (1.0e-4 + gpart)
+            # get the slope and velocity from the fit
+            achromatic_velo = scoeffs[1]
+            # expressed in m/s/um, hence the *1000 to go from nm (wave grid)
+            chromatic_slope = scoeffs[0] * 1000
+            # errors from covariance matrix
+            sig_chromatic_slope = np.sqrt(scov[0, 0]) * 1000
+            sig_achromatic_velo = np.sqrt(scov[1, 1])
+            # see whether we need another iteration
+            if np.abs(achromatic_velo - prev_velo) < 0.1 * sig_achromatic_velo:
+                # if within 10% of errors break
+                break
+            # else we update the previous velocity
+            else:
+                prev_velo = float(achromatic_velo)
+                # add to the count (for logging)
+                itr_count += 1
+        # ---------------------------------------------------------------------
+        # log the calculated slope and velocity
+        msg = ('chromatic_slope = {0:.2f}+-{1:.2f} m/s/um, '
+               'velocity at 1.6µm = {2:.2f}+-{3:.2f} m/s\n\titerations={4}')
+        margs = [chromatic_slope, sig_chromatic_slope, achromatic_velo,
+                 sig_achromatic_velo, itr_count]
+        log.general(msg.format(*margs))
+        # ---------------------------------------------------------------------
         # deal with having a FP (CCF_EW_ROW doesn't really make sense)
         if obj_sci == 'FP':
             # Default value for the FP
@@ -1252,6 +1324,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['per_epoch_DDDVRMS'][row] = bulk_error6
         rdb_dict['fwhm'][row] = fwhm_row
         rdb_dict['sig_fwhm'][row] = sig_fwhm_row
+        rdb_dict['vrad_achromatic'][row] = achromatic_velo
+        rdb_dict['svrad_achromatic'][row] = sig_achromatic_velo
+        rdb_dict['vrad_chromatic_slope'][row] = chromatic_slope
+        rdb_dict['svrad_chromatic_slope'][row] = sig_chromatic_slope
 
     # ---------------------------------------------------------------------
     # Per-band per region RV measurements

@@ -225,6 +225,13 @@ params.set('COMPILE_BINNED_BAND3', None, source=__NAME__,
                 'this is used for colour (band2 - band3)',
            not_none=True)
 
+# define the reference wavelength used in the slope fitting  in nm
+# TODO: NOTE: 1600 FOR SPIROU: 550 for HARPS
+params.set('COMPIL_SLOPE_REF_WAVE', None, source=__NAME__,
+           desc='define the reference wavelength used in the slope '
+                'fitting in nm',
+           not_none=True)
+
 # define the FP reference string that defines that an FP observation was
 #    a reference (calibration) file - should be a list of strings
 params.set('FP_REF_LIST', None, source=__NAME__,
