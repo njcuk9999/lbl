@@ -14,7 +14,6 @@ from astropy.table import Table
 import numpy as np
 import os
 from scipy import stats
-from scipy.optimize import curve_fit
 from tqdm import tqdm
 from typing import Any, Dict, List, Tuple, Union
 import warnings
@@ -274,6 +273,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
 
     :return: tuple, 1. systemic velocity estimate, 2. ccf ewidth
     """
+    func_name = __NAME__ + '.rough_ccf_rv()'
     # -------------------------------------------------------------------------
     # get parameters
     rv_min = inst.params['ROUGH_CCF_MIN_RV']
@@ -377,10 +377,11 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     #    guess[3]: float, the dc level
     #    guess[4]: float, the float (x-x0) * slope
     guess = [dvgrid[ccfmax], rv_ewid_guess, ccf_amp, ccf_dc, 0.0]
+    # set specific func name for curve fit errors
+    sfuncname = '{0}.KIND={1}'.format(func_name, kind)
     # push into curve fit
-    # TODO: catch bad and skip this observation
-    with warnings.catch_warnings(record=True) as _:
-        gcoeffs, pcov = curve_fit(mp.gauss_fit_s, dvgrid, ccf_vector, p0=guess)
+    gcoeffs, pcov = mp.curve_fit(mp.gauss_fit_s, dvgrid, ccf_vector, p0=guess,
+                                 funcname=sfuncname)
     # record the systemic velocity and the FWHM
     systemic_velocity = gcoeffs[0]
     ccf_ewidth = gcoeffs[1]
@@ -1032,6 +1033,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
 
     :return: astropy.table.Table, the RDB table (row per observation)
     """
+    # set function name
+    func_name = __NAME__ + '.make_rdb_table()'
     # -------------------------------------------------------------------------
     # get parameters
     # -------------------------------------------------------------------------
@@ -1185,9 +1188,23 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 pdf = pdf + pdf_weight
         # fit the probability density function
         guess = [med_velo, 500.0, np.max(pdf), 0.0, 0.0]
-        with warnings.catch_warnings(record=True) as _:
-            pdf_coeffs, _ = curve_fit(mp.gauss_fit_s, vrange, pdf, p0=guess)
-        pdf_fit = mp.gauss_fit_s(vrange, *pdf_coeffs)
+        # set specific func name for curve fit errors
+        sfuncname = '{0}.RDB1-ROW[{1}]'.format(func_name, row)
+        # try to compute curve fit
+        try:
+            pdf_coeffs, _ = mp.curve_fit(mp.gauss_fit_s, vrange, pdf, p0=guess,
+                                         funcname=sfuncname)
+            # fit pdf function
+            pdf_fit = mp.gauss_fit_s(vrange, *pdf_coeffs)
+        except base_classes.LblCurveFitException as e:
+            wmsg = 'CurveFit exception - skipping file'
+            wmsg += '\n\tFile = {0}'.format(lblrvfiles[row])
+            wmsg += '\n\tP0 = {0}'.format(e.p0)
+            wmsg += '\n\tFunction = {0}'.format(e.func)
+            wmsg += '\n\tError: {0}'.format(e.error)
+            log.warning(wmsg)
+            # do not add this file
+            continue
         # append values to plot lists
         vrange_all.append(vrange)
         pdf_all.append(pdf)

@@ -14,9 +14,12 @@ import copy
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
 from scipy.special import erf
+from scipy import optimize
 from typing import Tuple, Union
+import warnings
 
 from lbl.core import base
+from lbl.core import base_classes
 
 # try to import bottleneck module
 # noinspection PyBroadException
@@ -644,6 +647,41 @@ def estimate_sigma(tmp: np.ndarray, sigma=1.0) -> float:
     lower = np.nanpercentile(tmp, 100 - p1)
     # return the mean of these two bounds
     return (upper - lower) / 2.0
+
+
+
+def curve_fit(*args, funcname: Union[str, None] = None, **kwargs):
+    """
+    Wrapper around curve_fit to catch a curve_fit error
+
+    :param args: args passed to curve_fit
+    :param funcname: str or None, if set this is the function that called
+                     curve_fit
+    :param kwargs: kwargs passed to curve_fit
+    :return: return of curve_fit
+    """
+    # deal with no funcname defined
+    if funcname is None:
+        funcname = __NAME__ = '.curve_fit()'
+    # try to run curve fit
+    try:
+        with warnings.catch_warnings(record=True) as _:
+            return optimize.curve_fit(*args, **kwargs)
+    # deal with exception
+    except Exception as e:
+        p0 = kwargs.get('p0', 'Not Set')
+        x = kwargs.get('xdata', [])
+        y = kwargs.get('ydata', [])
+        f = kwargs.get('f', None)
+        error = '{0}: {1}'.format(type(e), str(e))
+        # get error message
+        emsg = 'CurveFitException'
+        emsg += '\n\tFunction = {0}'.format(funcname)
+        emsg += '\n\tP0: {0}'.format(p0)
+        emsg += '\n\t{0}'.format(error)
+        # raise an LBL CurveFit Exception
+        raise base_classes.LblCurveFitException(emsg, x=x, y=y, f=f, p0=p0,
+                                                func=funcname, error=error)
 
 
 # =============================================================================

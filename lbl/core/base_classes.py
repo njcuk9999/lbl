@@ -50,6 +50,40 @@ class LblException(Exception):
         return self.message
 
 
+class LblCurveFitException(Exception):
+    def __init__(self, message: str, x=None, y=None, f=None,
+                 p0=None, func=None, error=None):
+        """
+        Constructor for LBL CurveFit Exception
+
+        :param message: str, the message to add to log + raise msg
+        :param x: the x data passed to curve_fit
+        :param y: the y data passed to curve_fit
+        :param f: the function passed to curve_fit
+        :param p0: the p0 (guess) passed to curve_fit
+        :param func: str, the function name where curve_fit was called
+        :param error: str or None, if set this is the error that caused the
+                      original exception
+        """
+        self.message = message
+        self.x = x
+        self.y = y
+        self.f = f
+        self.p0 = p0
+        self.func = func
+        self.error = error
+        # log error
+        log.error(self.message)
+
+    def __str__(self) -> str:
+        """
+        String representation of the Exception
+
+        :return: return string representation
+        """
+        return self.message
+
+
 class Const:
     def __init__(self, key: str, source: Union[str, None] = None,
                  desc: Union[str, None] = None,
