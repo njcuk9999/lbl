@@ -92,10 +92,6 @@ ROUGH_CCF_MIN_RV: '-300000.0'
 ## Default = 300000.0   SPIROU_VALUE = 300000.0
 ROUGH_CCF_MAX_RV: 300000.0
 
-# The rough CCF rv step in m/s
-## Default = 500   SPIROU_VALUE = 500
-ROUGH_CCF_RV_STEP: 500
-
 # The rough CCF ewidth guess for fit in m/s
 ## Default = 2000   SPIROU_VALUE = 2000
 ROUGH_CCF_EWIDTH_GUESS: 2000

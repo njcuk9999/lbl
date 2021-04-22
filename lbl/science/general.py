@@ -278,7 +278,6 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # get parameters
     rv_min = inst.params['ROUGH_CCF_MIN_RV']
     rv_max = inst.params['ROUGH_CCF_MAX_RV']
-    rv_step = inst.params['ROUGH_CCF_RV_STEP']
     rv_ewid_guess = inst.params['ROUGH_CCF_EWIDTH_GUESS']
     # -------------------------------------------------------------------------
     # if we have a 2D array make it 1D (but ignore overlapping regions)
@@ -312,23 +311,57 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
         wavegrid2 = wavegrid[mask]
         sci_data2 = sci_data[mask]
     # -------------------------------------------------------------------------
+    # Make a magic grid to use in the CCF
+    # -------------------------------------------------------------------------
     # spline the science data
     spline_sp = mp.iuv_spline(wavegrid2, sci_data2, k=1, ext=1)
+    # min wavelength in domain
+    wave0 = np.nanmin(wavegrid2)
+    # maxwavelength in domain
+    wave1 = np.nanmax(wavegrid2)
+    # velocity step in m/s
+    med_rv = np.nanmedian(wavegrid2 / np.gradient(wavegrid2))
+    rv_step = speed_of_light_ms / med_rv
+    # get the length of the magic vector
+    logwaveratio = np.log(wave1/wave0)
+    len_magic = int(np.ceil(logwaveratio * speed_of_light_ms/rv_step))
+    # get the positions for "magic length"
+    plen_magic = np.arange(len_magic)
+    # define the magic grid to use in ccf
+    magic_grid = np.exp((plen_magic/len_magic) * logwaveratio) * wave0
+    # spline the magic grid
+    magic_spline = spline_sp(magic_grid)
+    # define a spline across the magic grid
+    index_spline = mp.iuv_spline(magic_grid, np.arange(len(magic_grid)))
+    # we find the position along the magic grid for the CCF lines
+    index_mask = np.array(index_spline(wave_mask) + 0.5, dtype=int)
+
     # -------------------------------------------------------------------------
     # perform the CCF
     # -------------------------------------------------------------------------
-    # define a delta velocity grid - in m/s for the CCF
-    dvgrid = np.arange(rv_min, rv_max, rv_step)
-    # set up the ccf vector
-    ccf_vector = np.zeros_like(dvgrid)
-    # log the we are computing the CCF
-    log.general('\tComputing CCF')
-    # loop around dv elements
-    for dv_element in range(len(dvgrid)):
-        # calculate the spline on to the doppler shifted dv value
-        shift = spline_sp(mp.doppler_shift(wave_mask, dvgrid[dv_element]))
-        # ccf is the sum of these shifts
-        ccf_vector[dv_element] = mp.nansum(weight_line * shift)
+    # define the steps from min to max (in rv steps) - in pixels
+    istep = np.arange(int(rv_min/rv_step), int(rv_max/rv_step))
+    # define the dv grid from the initial steps in pixels * rv step
+    dvgrid = istep * rv_step
+    # set up the CCF vector for all rv elements
+    ccf_vector = np.zeros(len(istep))
+    # define a mask that only keeps certain index values
+    keep_line = index_mask > (rv_max/rv_step) + 2
+    keep_line &= index_mask < len(magic_spline) - (rv_max/rv_step) - 2
+    # only keep the indices and weights within the keep line mask
+    index_mask = index_mask[keep_line]
+    weight_line = weight_line[keep_line]
+    # now loop around the dv elements
+    for dv_element in range(len(istep)):
+        # get the ccf for each index (and multiply by weight of the line
+        ccf_indices = magic_spline[index_mask-istep[dv_element]] * weight_line
+        # ccf vector at this dv element is the sum of these ccf values
+        ccf_vector[dv_element] = mp.nansum(ccf_indices)
+
+    # high-pass the CCF just to be really sure that we are finding a true CCF
+    # peak and not a spurious excursion in the low-frequencies
+    ccf_vector -= mp.lowpassfilter(ccf_vector, 10)
+
     # -------------------------------------------------------------------------
     # fit the CCF
     # -------------------------------------------------------------------------

@@ -139,10 +139,6 @@ params.set(key='ROUGH_CCF_MIN_RV', value=-3e5, source=__NAME__,
 params.set(key='ROUGH_CCF_MAX_RV', value=3e5, source=__NAME__,
            desc='The rough CCF rv maximum limit in m/s')
 
-# define the rough CCF rv step in m/s
-params.set(key='ROUGH_CCF_RV_STEP', value=500, source=__NAME__,
-           desc='The rough CCF rv step in m/s')
-
 # define the rough CCF ewidth guess for fit in m/s
 params.set(key='ROUGH_CCF_EWIDTH_GUESS', value=2000, source=__NAME__,
            desc='The rough CCF ewidth guess for fit in m/s')
