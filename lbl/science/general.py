@@ -424,6 +424,9 @@ def get_scaling_ratio(spectrum1: np.ndarray,
         # do not include points 5 sigma away from spectrum 2
         good &= np.abs(spectrum2) < mp.estimate_sigma(spectrum2) * 5
 
+    # There may be no valid pixel in the order, if that's the case, we set the amplitude to NaN
+    if np.any(good):
+        return np.nan
     # first estimate of amplitude sqrt(ratio of squares)
     ratio = mp.nansum(spectrum1_2[good]) / mp.nansum(spectrum2_2[good])
     amp = np.sqrt(ratio)
@@ -579,6 +582,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     converge_thres = inst.params['COMPUTE_RV_BULK_ERROR_CONVERGENCE']
     # define the maximum number of iterations deemed to lead to a good RV
     max_good_num_iters = inst.params['COMPUTE_RV_MAX_N_GOOD_ITERS']
+    # define the number of sigma to clip based on the rms away from the model
+    #   (sigma clips science data)
+    rms_sigclip_thres = inst.params['COMPUTE_RMS_SIGCLIP_THRES']
     # -------------------------------------------------------------------------
     # deal with noise model
     if use_noise_model:
@@ -737,6 +743,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # if we are not using a noise model - estimate the noise
         if not use_noise_model:
             rms = estimate_noise_model(sci_data, model)
+            # work out the number of sigma away from the model
+            nsig = (sci_data-model)/rms
+            # mask for nsigma
+            sigmask = np.abs(nsig) > rms_sigclip_thres
+            # apply sigma clip to the science data
+            sci_data[sigmask] = np.nan
+
         # ---------------------------------------------------------------------
         # work out dv line-by-line
         # ---------------------------------------------------------------------

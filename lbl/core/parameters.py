@@ -169,6 +169,12 @@ params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=0.2, source=__NAME__,
 params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=8, source=__NAME__,
            desc='The maximum number of iterations deemed to lead to a good RV')
 
+# define the number of sigma to clip based on the rms away from the model
+#   (sigma clips science data)
+params.set(key='COMPUTE_RMS_SIGCLIP_THRES', value=5, source=__NAME__,
+           desc='define the number of sigma to clip based on the rms away '
+                'from the model (sigma clips science data)')
+
 # =============================================================================
 # Define compil parameters
 # =============================================================================
