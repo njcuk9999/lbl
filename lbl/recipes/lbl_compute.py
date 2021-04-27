@@ -247,6 +247,12 @@ def __main__(inst: InstrumentsType, **kwargs):
                 log.general(msg.format(*margs))
                 # skip
                 continue
+            else:
+                # log message
+                msg = '\t\tSNR > {0} (SNR = {1}), passed SNR criteria'
+                margs = [snr_limit, snr_value]
+                log.general(msg.format(*margs))
+
         # ---------------------------------------------------------------------
         # 6.7 compute rv
         # ---------------------------------------------------------------------

@@ -1,0 +1,40 @@
+# Example YAML file for use in LBL
+
+# Set instrument name
+INSTRUMENT: HARPS
+
+# Set data directory
+DATA_DIR: /data/harps/lbl/
+
+# Set science object name
+OBJECT_SCIENCE: PROXIMA
+
+# Set template object name
+OBJECT_TEMPLATE: PROXIMA
+
+# Set the science input file string
+INPUT_FILE: '*e2ds*A.fits'
+
+# Set blaze file (None for default)
+BLAZE_FILE: HARPS.2014-09-02T21_06_48.529_blaze_A.fits
+
+# Set template file (None for default)
+TEMPLATE_FILE: None
+
+# Set whether to plot any plots
+PLOT: True
+
+# Set whether to do the compute ccf plot
+PLOT_COMPUTE_CCF: True
+
+# Set whether to do the compute line plot
+PLOT_COMPUTE_LINES: True
+
+# set whether to do the compil cumulative plot
+PLOT_COMPIL_CUMUL: True
+
+# Define whether to do the compil binned plot
+PLOT_COMPIL_BINNED: True
+
+# Define whether to skip done files
+SKIP_DONE: False

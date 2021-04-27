@@ -121,8 +121,6 @@ class Spirou(Instrument):
         self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
         self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
-        # define the filename of the observation
-        self.params.set('KW_FILENAME', 'FILENAME', source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
         # define the tau_h20 of the observation
@@ -422,7 +420,7 @@ class Spirou(Instrument):
 
     def get_berv(self, sci_hdr: fits.Header) -> float:
         """
-        Get the Barycenteric correction for the RV
+        Get the Barycenteric correction for the RV in m/s
 
         :param sci_hdr: fits.Header, the science header
 
@@ -446,9 +444,9 @@ class Spirou(Instrument):
         :return: tuple, 1. np.array of strings (the keys), 2. list of bools
                  the flags whether these keys should be used with FP files
         """
-        # there are defined in params
+        # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
-                    'KW_AIRMASS', 'KW_FILENAME', 'KW_DATE',
+                    'KW_AIRMASS', 'KW_DATE',
                     'KW_BERV', 'KW_TAU_H2O', 'KW_TAU_OTHERS',
                     'KW_DPRTYPE', 'KW_NITERATIONS',
                     'KW_SYSTEMIC_VELO', 'KW_WAVETIME', 'KW_WAVEFILE',

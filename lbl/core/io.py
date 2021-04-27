@@ -185,6 +185,8 @@ def get_hkey(header: fits.Header, key: str,
 
     :return: Any, the value of header[key]
     """
+    # set function name
+    func_name = __NAME__ + '.get_hkey()'
     # deal with no filename
     if filename is None:
         filename = 'Unknown'
@@ -196,6 +198,8 @@ def get_hkey(header: fits.Header, key: str,
             emsg = 'Cannot use key {0} from header: {1} \n\t{2}: {3}'
             eargs = [key, filename, type(e), str(e)]
             raise LblException(emsg.format(*eargs))
+    elif not required:
+        return None
     else:
         emsg = 'Key {0} not found in header: {1}'
         eargs = [key, filename]

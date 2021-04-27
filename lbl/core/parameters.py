@@ -228,7 +228,6 @@ params.set('COMPILE_BINNED_BAND3', None, source=__NAME__,
            not_none=True)
 
 # define the reference wavelength used in the slope fitting  in nm
-# TODO: NOTE: 1600 FOR SPIROU: 550 for HARPS
 params.set('COMPIL_SLOPE_REF_WAVE', None, source=__NAME__,
            desc='define the reference wavelength used in the slope '
                 'fitting in nm',
@@ -373,10 +372,6 @@ params.set(key='KW_EXPTIME', value=None, source=__NAME__, not_none=False,
 # define the airmass of the observation
 params.set(key='KW_AIRMASS', value=None, source=__NAME__, not_none=False,
            desc='the airmass of the observation', fp_flag=True)
-
-# define the filename of the observation
-params.set(key='KW_FILENAME', value=None, source=__NAME__, not_none=False,
-           desc='the filename of the observation')
 
 # define the human date of the observation
 params.set(key='KW_DATE', value=None, source=__NAME__, not_none=False,

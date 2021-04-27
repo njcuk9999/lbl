@@ -424,8 +424,9 @@ def get_scaling_ratio(spectrum1: np.ndarray,
         # do not include points 5 sigma away from spectrum 2
         good &= np.abs(spectrum2) < mp.estimate_sigma(spectrum2) * 5
 
-    # There may be no valid pixel in the order, if that's the case, we set the amplitude to NaN
-    if np.any(good):
+    # There may be no valid pixel in the order, if that's the case, we set
+    # the amplitude to NaN
+    if np.sum(good) == 0:
         return np.nan
     # first estimate of amplitude sqrt(ratio of squares)
     ratio = mp.nansum(spectrum1_2[good]) / mp.nansum(spectrum2_2[good])
@@ -1094,7 +1095,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['vrad_chromatic_slope'] = np.zeros_like(lblrvfiles, dtype=float)
     # error in chromatic slope
     rdb_dict['svrad_chromatic_slope'] = np.zeros_like(lblrvfiles, dtype=float)
-
+    # get filename column
+    rdb_dict['FILENAME'] = [[]] * len(lblrvfiles)
     # add header keys
     for hdr_key in header_keys:
         # empty elements in a list for each key to fill
@@ -1148,6 +1150,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['rjd'][row] = inst.get_rjd_value(rvhdr)
         # fill in plot date
         rdb_dict['plot_date'][row] = inst.get_plot_date(rvhdr)
+        # ---------------------------------------------------------------------
+        # fill in filename
+        # ---------------------------------------------------------------------
+        rdb_dict['FILENAME'][row] = os.path.basename(lblrvfiles[row])
         # ---------------------------------------------------------------------
         # fill in header keys
         # ---------------------------------------------------------------------
@@ -1681,8 +1687,6 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     :return: astropy.table.Table - the rdb per observation corrected for drift
              where a drift exists (else vrad and svrad are NaN)
     """
-    # get filename keyword
-    kw_filename = inst.params['KW_FILENAME']
     # -------------------------------------------------------------------------
     # storage for output table
     rdb_dict4 = dict()
@@ -1691,13 +1695,13 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
         rdb_dict4[colname] = []
     # -------------------------------------------------------------------------
     # get the types
-    filenames = rdb_table[kw_filename]
+    filenames = rdb_table['FILENAME']
     # log progress
     log.info('Producing LBL RDB drift corrected table')
     # loop around the wave files of this type
     for row in tqdm(range(len(filenames))):
         # create a mask of all files that match in drift file
-        file_mask = filenames[row] == drift_table[kw_filename]
+        file_mask = filenames[row] == drift_table['FILENAME']
         # ---------------------------------------------------------------------
         # deal with no files present - cannot correct drift
         if np.sum(file_mask) == 0:
