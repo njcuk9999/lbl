@@ -12,7 +12,6 @@ from astropy.io import fits
 import glob
 import numpy as np
 import os
-import requests
 from typing import Any, Dict, List, Tuple, Union
 
 from lbl.core import base
@@ -321,7 +320,6 @@ class Harps(Instrument):
             blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze
-
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,

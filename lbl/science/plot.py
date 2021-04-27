@@ -88,8 +88,8 @@ def plot_blank(inst: InstrumentsType, **kwargs):
 
 
 def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
-             ccf_vector: np.ndarray, ccf_fit: np.ndarray,
-             gcoeffs: np.ndarray):
+                     ccf_vector: np.ndarray, ccf_fit: np.ndarray,
+                     gcoeffs: np.ndarray):
     """
     CCF Debug plot
 
@@ -193,7 +193,7 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
                 frame.plot(ww_ord_line[line_it], spec_ord_line[line_it],
                            color=colour, label=label2)
     # construct title
-    title = ('Line spectrum {0}\nOBJ_SCI={1} OBJ_TEMP={2}')
+    title = 'Line spectrum {0}\nOBJ_SCI={1} OBJ_TEMP={2}'
     if len(plot_orders) == 1:
         targs = ['order {0}'.format(plot_orders[0])]
     else:
@@ -265,7 +265,7 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     This is the binned in bands plot (doesn't look at individual regions)
 
     :param inst:  Instrument, instrument this plot is used for
-    :param kwargs: replace with explicit keyword arguments
+    :param rdb_table: astropy.table.Table - the rdb table
 
     :return: None - plots
     """
@@ -309,7 +309,7 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
 
     # plot band 1
     frames[0].errorbar(rjd, nvrad_band1, fmt='.r', yerr=svrad_band1, alpha=0.2,
-               label=band1_name)
+                       label=band1_name)
     # plot all vrad
     frames[0].errorbar(rjd, nvrad, fmt='.k', yerr=svrad, alpha=0.8,
                        label='all')

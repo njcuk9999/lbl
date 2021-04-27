@@ -439,7 +439,7 @@ def get_scaling_ratio(spectrum1: np.ndarray,
         sigma_res = mp.estimate_sigma(residuals)
         # re-calculate good mask
         good = np.isfinite(spectrum1) & np.isfinite(spectrum2)
-        with warnings.catch_warnings(record = True) as _:
+        with warnings.catch_warnings(record=True) as _:
             good &= np.abs(residuals / sigma_res) < 3
         # calculate amp scale
         part1 = mp.nansum(residuals[good] * spectrum2[good])
@@ -618,7 +618,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     berv = inst.get_berv(sci_hdr)
 
     # weighting of one everywhere
-    ccf_weight = np.ones_like(ref_table['WEIGHT_LINE'],dtype = float)
+    ccf_weight = np.ones_like(ref_table['WEIGHT_LINE'], dtype=float)
 
     # -------------------------------------------------------------------------
     # Systemic velocity estimate
@@ -1034,7 +1034,7 @@ def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
 # Define compil functions
 # =============================================================================
 def make_rdb_table(inst: InstrumentsType, rdbfile: str,
-                  lblrvfiles: np.ndarray, plot_dir: str) -> Table:
+                   lblrvfiles: np.ndarray, plot_dir: str) -> Table:
     """
     Make the primary rdb table (row per observation)
 
@@ -1278,6 +1278,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         diff1 = rvs[:, line_it] - rv_per_epoch_model[:, line_it]
         err1 = dvrms[:, line_it]
         # try to guess the odd ratio mean
+        # noinspection PyBroadException
         try:
             guess2, bulk_error2 = mp.odd_ratio_mean(diff1, err1)
             per_line_mean[line_it] = guess2
@@ -1534,6 +1535,7 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             #   just take the first value
             elif 'vrad' not in colname:
                 # try to produce the mean of rdb table
+                # noinspection PyBroadException
                 try:
                     rdb_dict2[colname].append(np.mean(itable[colname]))
                 except Exception as _:
@@ -1673,14 +1675,13 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
     return rdb_table3
 
 
-def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
+def correct_rdb_drift(rdb_table: Table,
                       drift_table: Table) -> Table:
     """
     Correct RDB table for drifts (where entry exists in both drift table
     and in rdb_table (based on KW_FILENAME keyword) when entry does not exist
     vrad and svrad are set to NaN
 
-    :param inst: Instrument instance
     :param rdb_table: astropy.table.Table - the RDB 1 table per observation
     :param drift_table: astropy.table.Table - the drift table per observation
 

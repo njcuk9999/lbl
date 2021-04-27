@@ -72,7 +72,7 @@ def main(**kwargs):
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                  cmdargs=inst.params['COMMAND_LINE_ARGS'])
+                    cmdargs=inst.params['COMMAND_LINE_ARGS'])
     # run __main__
     try:
         namespace = __main__(inst)
@@ -176,7 +176,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # load drift table
         drift_table = io.load_table(drift_file, kind='Drift table', fmt='rdb')
         # create rdb corrected for drift table
-        rdb_table3 = general.correct_rdb_drift(inst, rdb_table, drift_table)
+        rdb_table3 = general.correct_rdb_drift(rdb_table, drift_table)
         # log creation of rdb corrected table
         msg = 'Writing RDB corrected for drift file: {0}'
         log.info(msg.format(rdbfile3))

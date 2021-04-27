@@ -74,10 +74,10 @@ def main(**kwargs):
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                cmdargs=inst.params['COMMAND_LINE_ARGS'])
+                    cmdargs=inst.params['COMMAND_LINE_ARGS'])
     # run __main__
     try:
-        namespace =  __main__(inst)
+        namespace = __main__(inst)
     except LblException as e:
         raise LblException(e.message)
     except Exception as e:

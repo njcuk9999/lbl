@@ -158,6 +158,8 @@ class Const:
                 argparse
         :param comment: str or None, if set this is the comment to add to a
                         fits header
+        :param fp_flag: bool - if set means that this const should not be used
+                        for FP (normally for header keys only)
         """
         if key is None:
             key = self.key

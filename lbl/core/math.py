@@ -649,7 +649,6 @@ def estimate_sigma(tmp: np.ndarray, sigma=1.0) -> float:
     return (upper - lower) / 2.0
 
 
-
 def curve_fit(*args, funcname: Union[str, None] = None, **kwargs):
     """
     Wrapper around curve_fit to catch a curve_fit error
@@ -662,18 +661,18 @@ def curve_fit(*args, funcname: Union[str, None] = None, **kwargs):
     """
     # deal with no funcname defined
     if funcname is None:
-        funcname = __NAME__ = '.curve_fit()'
+        funcname = __NAME__ + '.curve_fit()'
     # try to run curve fit
     try:
         with warnings.catch_warnings(record=True) as _:
             return optimize.curve_fit(*args, **kwargs)
     # deal with exception
-    except Exception as e:
+    except Exception as err:
         p0 = kwargs.get('p0', 'Not Set')
         x = kwargs.get('xdata', [])
         y = kwargs.get('ydata', [])
         f = kwargs.get('f', None)
-        error = '{0}: {1}'.format(type(e), str(e))
+        error = '{0}: {1}'.format(type(err), str(err))
         # get error message
         emsg = 'CurveFitException'
         emsg += '\n\tFunction = {0}'.format(funcname)

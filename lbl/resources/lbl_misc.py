@@ -29,6 +29,7 @@ __authors__ = base.__authors__
 # get classes
 log = base_classes.log
 
+
 # =============================================================================
 # Define functions
 # =============================================================================
@@ -47,7 +48,7 @@ def copy_readme(data_dir: str):
     # get out directory
     outpath = Path(data_dir)
     # check / make the outpath
-    io.make_dir(outpath, '', 'Data', verbose=False)
+    io.make_dir(str(outpath), '', 'Data', verbose=False)
     # construct path to read me
     input_path = inpath.joinpath('data_str_readme.md')
     # construct new path to read me
@@ -67,6 +68,7 @@ def move_log(data_dir: str, recipe: str):
     :param recipe: str, the name of the code used
     :return:
     """
+    global log
     # check that log dir exists
     log_path = io.make_dir(data_dir, 'log', 'log')
     # make log file
@@ -126,18 +128,17 @@ def end(recipe: str):
     return
 
 
-class QuickArg():
+class QuickArg:
     def __init__(self, action: Union[str, None] = 'store_true',
-                 help: str = ''):
+                 helpstr: str = ''):
         """
         quick arg construct when not using default approach (only use for tools)
 
-        :param name: str, the name for this argument i.e. --arg
         :param action: str, store true or store constant
-        :param help:
+        :param helpstr:
         """
         self.action = action
-        self.help = help
+        self.helpstr = helpstr
         if action == 'store_true':
             self.switch = True
         else:
@@ -148,7 +149,7 @@ class QuickArg():
         Used to pass these to argparse as **kwargs
         :return:
         """
-        return dict(action=self.action, help=self.help)
+        return dict(action=self.action, help=self.helpstr)
 
 
 def quick_args(args: Any, quickargs: Dict[str, QuickArg]):

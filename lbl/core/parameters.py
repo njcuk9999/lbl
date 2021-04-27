@@ -472,7 +472,8 @@ params.set(key='KW_REF_KEY', value=None, source=__NAME__, not_none=True,
 
 # Template/model velocity from CCF
 params.set(key='KW_MODELVEL', value=None, source=__NAME__, not_none=True,
-           desc='Template/model velocity from CCF', comment = 'Template velo. from CCF [m/s]')
+           desc='Template/model velocity from CCF',
+           comment='Template velo. from CCF [m/s]')
 
 # =============================================================================
 # Start of code

@@ -56,13 +56,17 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     :param argnames: list of strings, the arguments to add to command line
     :param kwargs: dictionary, the function call arguments to add
     :param description: str, the program description (for the help)
-    :return:
+    :param parse: bool, if True parses arguments from command line (default),
+                  if False does not check command line for arguments
+    :return: ParamDict, the parameter dictionary of constants
     """
     # set function name
     func_name = __NAME__ + '.parse_args'
     # get parser
     if parse:
         parser = argparse.ArgumentParser(description=description)
+    else:
+        parser = None
     # get params
     params = parameters.params.copy()
     # get default values
@@ -272,6 +276,7 @@ def make_all_directories(inst: Union[InstrumentsType]) -> List[str]:
            lbl_reftable_dir, lbl_rdb_dir, plot_dir]
     # return output directories
     return out
+
 
 # =============================================================================
 # Start of code

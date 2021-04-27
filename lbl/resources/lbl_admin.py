@@ -43,15 +43,15 @@ parser = argparse.ArgumentParser(description='Admin LBL code - see arguments '
                                              'for options')
 # add quick arguments
 pargs = dict()
-pargs['--create_dirs'] = QArg( help='Create input directories')
-pargs['--make_readme'] = QArg(help='Run make read me script')
-pargs['--make_full_yaml'] = QArg(help='Run full config yaml script')
+pargs['--create_dirs'] = QArg(helpstr='Create input directories')
+pargs['--make_readme'] = QArg(helpstr='Run make read me script')
+pargs['--make_full_yaml'] = QArg(helpstr='Run full config yaml script')
 pargs['--config'] = QArg(action=None,
-                         help='The config yaml file (required for '
-                              'some scripts)')
+                         helpstr='The config yaml file (required for '
+                                 'some scripts)')
 # loop around args and add back to parser
-for key in pargs:
-    parser.add_argument(key, **pargs[key].kwargs())
+for _key in pargs:
+    parser.add_argument(_key, **pargs[_key].kwargs())
 
 
 # =============================================================================
@@ -73,9 +73,9 @@ def make_param_table(instrument: Union[str, None] = 'SPIROU') -> Table:
         # set up fake kwargs
         kwargs = dict(instrument=instrument)
         # deal with parsing arguments
-        args = select.parse_args(args_compute, kwargs, '')
+        cargs = select.parse_args(args_compute, kwargs, '')
         # load instrument
-        inst = select.load_instrument(args)
+        inst = select.load_instrument(cargs)
         # load params from instrument
         params = inst.params.copy()
     else:
@@ -83,11 +83,11 @@ def make_param_table(instrument: Union[str, None] = 'SPIROU') -> Table:
 
     # create table elemetns
     keys, dvalues, ivalues, comments = [], [], [], []
-    for key in params:
-        keys.append(str(key))
-        dvalues.append(str(gparams[key]))
-        ivalues.append(str(params[key]))
-        comments.append(str(gparams.instances[key].description))
+    for pkey in params:
+        keys.append(str(pkey))
+        dvalues.append(str(gparams[pkey]))
+        ivalues.append(str(params[pkey]))
+        comments.append(str(gparams.instances[pkey].description))
 
     table = Table()
     table['KEY'] = keys
@@ -215,23 +215,23 @@ def create_directories(config_file: str = 'None'):
 if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # get input arguments (all switches)
-    args = parser.parse_args()
+    _args = parser.parse_args()
     # splash
-    lbl_misc.splash('LBL Admin', 'None', lbl_misc.quick_args(args, pargs))
+    lbl_misc.splash('LBL Admin', 'None', lbl_misc.quick_args(_args, pargs))
     # -------------------------------------------------------------------------
     # run create directories (if True)
-    if args.create_dirs:
-        create_directories(args.config)
+    if _args.create_dirs:
+        create_directories(_args.config)
     # -------------------------------------------------------------------------
     # run make read me (if True)
-    if args.make_readme:
-        table = make_param_table('SPIROU')
-        make_readme_param_table(table)
+    if _args.make_readme:
+        _table = make_param_table('SPIROU')
+        make_readme_param_table(_table)
     # -------------------------------------------------------------------------
     # run make full yaml config file (if True)
-    if args.make_full_yaml:
-        table = make_param_table('SPIROU')
-        make_full_config_yaml(table)
+    if _args.make_full_yaml:
+        _table = make_param_table('SPIROU')
+        make_full_config_yaml(_table)
 
 
 # =============================================================================

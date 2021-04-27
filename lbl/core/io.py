@@ -81,11 +81,12 @@ def make_dir(path: str, directory: str, kind: str,
              subdir: Union[str, None] = None,
              verbose: bool = True) -> str:
     """
-    Make a directory
+    Make a directory path will be path/directory/subdir or path/directory
 
     :param path: str, path directory will be created in
     :param directory: str, directory to create
     :param kind: str, what is the directory (for error message)
+    :param subdir: str or None, if set adds a sub directory to path
     :param verbose: bool, if True prints when directory exists
 
     :return: str, the absolute path created
@@ -182,11 +183,14 @@ def get_hkey(header: fits.Header, key: str,
     :param header: fits.Header, a fits header
     :param key: str, the key to get from header
     :param filename: str, the filename associated with the header
+    :param required: bool, if True this parameter is required and will raise
+                     an exception when not found, if False will return None
+                     on False
 
     :return: Any, the value of header[key]
     """
     # set function name
-    func_name = __NAME__ + '.get_hkey()'
+    _ = __NAME__ + '.get_hkey()'
     # deal with no filename
     if filename is None:
         filename = 'Unknown'
