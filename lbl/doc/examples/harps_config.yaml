@@ -25,10 +25,10 @@ TEMPLATE_FILE: None
 PLOT: True
 
 # Set whether to do the compute ccf plot
-PLOT_COMPUTE_CCF: True
+PLOT_COMPUTE_CCF: False
 
 # Set whether to do the compute line plot
-PLOT_COMPUTE_LINES: True
+PLOT_COMPUTE_LINES: False
 
 # set whether to do the compil cumulative plot
 PLOT_COMPIL_CUMUL: True
@@ -37,4 +37,4 @@ PLOT_COMPIL_CUMUL: True
 PLOT_COMPIL_BINNED: True
 
 # Define whether to skip done files
-SKIP_DONE: False
+SKIP_DONE: True

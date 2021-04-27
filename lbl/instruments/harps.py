@@ -142,6 +142,9 @@ class Harps(Instrument):
         # define the original object name
         self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
                         source=func_name)
+        # define the SNR goal per pixel per frame (can not exist - will be
+        #   set to zero)
+        self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
         # define the SNR in chosen order
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO DRS SPE EXT SN47',
                         source=func_name)
@@ -526,7 +529,7 @@ class Harps(Instrument):
         red_end = [402.823, 554.926, 698.914, 838.945, 1083.325]
         # ---------------------------------------------------------------------
         # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
+        region_names = ['', '_0-2044', '_2044-4088']
         # lower x pixel bin point [pixels]
         region_low = [0, 0, 2048]
         # upper x pixel bin point [pixels]

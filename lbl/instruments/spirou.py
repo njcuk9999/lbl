@@ -147,7 +147,8 @@ class Spirou(Instrument):
         self.params.set('KW_RHOMB2', 'SBRHB2_P', source=func_name)
         # define the calib-reference density
         self.params.set('KW_CDEN_P', 'SBCDEN_P', source=func_name)
-        # define the SNR goal per pixel per frame
+        # define the SNR goal per pixel per frame (can not exist - will be
+        #   set to zero)
         self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
         # define the SNR in chosen order
         self.params.set('KW_EXT_SNR', 'EXTSN035', source=func_name)
