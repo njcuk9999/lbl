@@ -14,7 +14,6 @@ from astropy.table import Table
 import numpy as np
 import os
 from scipy import stats
-from tqdm import tqdm
 from typing import Any, Dict, List, Tuple, Union
 import warnings
 
@@ -1049,6 +1048,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     """
     # set function name
     func_name = __NAME__ + '.make_rdb_table()'
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # -------------------------------------------------------------------------
     # get parameters
     # -------------------------------------------------------------------------
@@ -1490,6 +1491,10 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
 
     :return: astropy.table.Table, the RDB table (row per epoch)
     """
+    # set function name
+    _ = __NAME__ + '.make_rdb_table2()'
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # get the epoch groupings and epoch values
     epoch_groups, epoch_values = inst.get_epoch_groups(rdb_table)
     # -------------------------------------------------------------------------
@@ -1563,6 +1568,10 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
     :return: astropy.table.Table, the RDB table per epoch corrected for the
              calibration file
     """
+    # set function name
+    _ = __NAME__ + '.make_drift_table()'
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # get wave file key
     kw_wavefile = inst.params['KW_WAVEFILE']
     # get type key
@@ -1675,19 +1684,24 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
     return rdb_table3
 
 
-def correct_rdb_drift(rdb_table: Table,
+def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
                       drift_table: Table) -> Table:
     """
     Correct RDB table for drifts (where entry exists in both drift table
     and in rdb_table (based on KW_FILENAME keyword) when entry does not exist
     vrad and svrad are set to NaN
 
+    :param inst: Instrument instance
     :param rdb_table: astropy.table.Table - the RDB 1 table per observation
     :param drift_table: astropy.table.Table - the drift table per observation
 
     :return: astropy.table.Table - the rdb per observation corrected for drift
              where a drift exists (else vrad and svrad are NaN)
     """
+    # set function name
+    _ = __NAME__ + '.make_drift_table()'
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # -------------------------------------------------------------------------
     # storage for output table
     rdb_dict4 = dict()

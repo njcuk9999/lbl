@@ -31,6 +31,24 @@ __now__ = Time.now()
 AstropyTime = Time
 AstropyTimeDelta = TimeDelta
 
+
+# must define the tqdm module as we need to turn it off in certain circumstances
+def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
+    """
+    Get the tqdm module in on or off mode
+
+    :return: function, the tqdm method (or class with a call)
+    """
+    # this will replace tqdm with the return of the first arg
+    def _tqdm(*args, **kwargs):
+        return args[0]
+    # if we want to use tqdm then use it
+    if use_tqdm and verbose == 2:
+        from tqdm import tqdm as _tqdm
+    # return the tqdm function (or a placeholder that does nothing)
+    return _tqdm
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

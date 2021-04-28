@@ -38,3 +38,12 @@ PLOT_COMPIL_BINNED: True
 
 # Define whether to skip done files
 SKIP_DONE: False
+
+# Verbosity (default is 2)
+#     0=only warnings/errors
+#     1=info/warnings/errors,'
+#     2=general/info/warning/errors
+VERBOSE: 2
+
+# Whether to use tqdm module in loops (only when verbose=2)
+USE_TQDM: True

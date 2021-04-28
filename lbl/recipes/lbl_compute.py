@@ -46,7 +46,7 @@ ARGS_COMPUTE = [
                 # plotting
                 'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
                 # other
-                'SKIP_DONE'
+                'SKIP_DONE', 'VERBOSE', 'PROGRAM',
                 ]
 # TODO: Etienne - Fill out
 DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
@@ -67,14 +67,14 @@ def main(**kwargs):
     # deal with parsing arguments
     args = select.parse_args(ARGS_COMPUTE, kwargs, DESCRIPTION_COMPUTE)
     # load instrument
-    inst = select.load_instrument(args)
+    inst = select.load_instrument(args, logger=log)
     # get data directory
     data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                    cmdargs=inst.params['COMMAND_LINE_ARGS'])
+                    cmdargs=inst.params['COMMAND_LINE_ARGS'], logger=log)
     # run __main__
     try:
         namespace = __main__(inst)
@@ -85,7 +85,7 @@ def main(**kwargs):
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
     # end code
-    lbl_misc.end(__NAME__)
+    lbl_misc.end(__NAME__, logger=log)
     # return local namespace
     return namespace
 

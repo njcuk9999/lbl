@@ -78,6 +78,22 @@ params.set(key='SKIP_DONE', value=False, source=__NAME__,
            desc='Whether to skip done files',
            arg='--skip', dtype=bool)
 
+# Define the verbosity level
+params.set(key='VERBOSE', value=2, source=__NAME__, options=[0, 1, 2],
+           desc='Verbosity 0=only warnings/errors, 1=info/warnings/errors,'
+                '2=general/info/warning/errors  (default is 2)',
+           arg='--verbose', dtype=int)
+
+# Define whether to use tqdm (if verbose = 2)
+params.set(key='USE_TQDM', value=True, source=__NAME__, dtype=int,
+           desc='Whether to use tqdm module in loops (only for verbose=2)')
+
+# Define whether to add program id to the logging message
+params.set(key='PROGRAM', value=None, source=__NAME__, dtype=str,
+           desc='Whether to add program id to the logging message',
+           arg='--program')
+
+
 # =============================================================================
 # Define common parameters (between compute / compil)
 # =============================================================================

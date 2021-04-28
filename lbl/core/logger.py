@@ -34,6 +34,9 @@ class Log:
         self.logger = logging.getLogger(base.__package__)
         # set the default value to one below between INFO and DEBUG level
         self.baselevel = logging.DEBUG
+        # define the levels
+        self.INFO = logging.INFO
+        self.WARNING = logging.WARNING
         # add a new level (GENERAL)
         self.GENERAL = 15
         logging.addLevelName(self.GENERAL, 'GENERAL')
@@ -45,6 +48,18 @@ class Log:
         self.theme = kwargs.get('theme', None)
         self.confmt = self.format_class(theme=self.theme)
         self.filefmt = self.format_class(theme='OFF')
+        # set program to None
+        self.program = None
+        # add console
+        self.console_verbosity = 2
+        self._add_console(self.console_verbosity, level=self.GENERAL)
+        # if we have a filename defined add a file logger
+        if kwargs.get('filename', False):
+            self.add_log_file(kwargs['filename'])
+
+    def _add_console(self, verbose: int, level: int):
+        # set console verbosity level
+        self.console_verbosity = verbose
         # clean any handlers in logging currently
         for _ in range(len(self.logger.handlers)):
             self.logger.handlers.pop()
@@ -55,12 +70,32 @@ class Log:
         # set the format from console format
         consolehandler.setFormatter(self.confmt)
         # set the default level (INFO)
-        consolehandler.setLevel(self.GENERAL)
+        consolehandler.setLevel(level)
         # add to the logger
         self.logger.addHandler(consolehandler)
-        # if we have a filename defined add a file logger
-        if kwargs.get('filename', False):
-            self.add_log_file(kwargs['filename'])
+
+    def _update_console(self, verbose: int, level: int,
+                        program: Union[str, None] = None):
+        """
+        Update the console
+
+        :param verbose:
+        :param level:
+        :param program:
+        :return:
+        """
+        # set console verbosity level
+        self.console_verbosity = verbose
+        self.program = program
+        # update console fmt
+        self.confmt = self.format_class(theme=self.theme, program=program)
+        self.filefmt = self.format_class(theme='OFF', program=program)
+        # loop around handlers and change level
+        for it in range(len(self.logger.handlers)):
+            if type(self.logger.handlers[it]) == logging.StreamHandler:
+                self.logger.handlers[it].setLevel(level)
+            # set the format from console format
+            self.logger.handlers[it].setFormatter(self.confmt)
 
     def add_log_file(self, filepath: str, level: Union[str, int, None] = None):
         # get the File Handler
@@ -112,26 +147,62 @@ class Log:
                     handler.setLevel(record)
 
     def general(self, message: str, *args, **kwargs):
+        self.update_console(self.console_verbosity, self.program)
         self.logger._log(self.GENERAL, message, args, **kwargs)
 
     def info(self, message: str, *args, **kwargs):
+        self.update_console(self.console_verbosity, self.program)
         self.logger.info(message, *args, **kwargs)
 
     def warning(self, message: str, *args, **kwargs):
+        self.update_console(self.console_verbosity, self.program)
         self.logger.warning(message, *args, **kwargs)
 
     def error(self, message: str, *args, **kwargs):
+        self.update_console(self.console_verbosity, self.program)
         self.logger.error(message, *args, **kwargs)
+
+    def update_console(self, verbose: int = 2,
+                       program: Union[str, None] = None):
+        """
+        Update the text printed to console
+            0=only warnings/errors
+            1=info/warnings/errors,'
+            2=general/info/warning/errors
+
+        :param verbose: int, either 0, 1, 2 see above for definition
+        :param program: str, if set changes the program message (default None)
+
+        :return: None, updates consolehandler
+        """
+        if verbose == 2:
+            # set the default console level to GENERAL
+            self._update_console(verbose, self.GENERAL, program)
+        elif verbose == 1:
+            # set the default console level to INFO
+            self._update_console(verbose, self.INFO, program)
+        elif verbose == 0:
+            # set the default console level to WARNING
+            self._update_console(verbose, self.WARNING, program)
+        else:
+            # set the default console level to GENERAL
+            self._update_console(verbose, self.GENERAL, program)
 
 
 # Custom formatter
 class ConsoleFormat(logging.Formatter):
 
-    def __init__(self, fmt: str = "%(levelno)s: %(msg)s", theme=None):
+    def __init__(self, fmt: str = "%(levelno)s: %(msg)s", theme=None,
+                 program: Union[str, None] = None):
         # get colours
         self.cprint = Colors(theme=theme)
         # define default format
-        self.fmt = '%(asctime)s.%(msecs)03d | %(levelname)-1.1s | %(message)s'
+        if program is not None:
+            self.fmt = '%(asctime)s.%(msecs)03d|%(levelname)-1.1s|'
+            self.fmt += program + '| %(message)s'
+        else:
+            self.fmt = ('%(asctime)s.%(msecs)03d|%(levelname)-1.1s'
+                        '| %(message)s')
         self.default = logging.Formatter(self.fmt, datefmt='%Y-%m-%d %H:%M:%S')
         # define empty format
         self.empty_fmt = '%(message)s'

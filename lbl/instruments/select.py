@@ -19,6 +19,7 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import parameters
 from lbl.core import io
+from lbl.core import logger
 from lbl.instruments import spirou
 from lbl.instruments import harps
 from lbl.instruments import default
@@ -197,11 +198,13 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     return inputs
 
 
-def load_instrument(args: ParamDict) -> InstrumentsType:
+def load_instrument(args: ParamDict,
+                    logger: Union[logger.Log, None] = None) -> InstrumentsType:
     """
     Load an instrument
 
     :param args: ParamDict, the parameter dictionary of inputs
+    :param logger: Log instance or None - passed to keep parameters
 
     :return: Instrument instance
     """
@@ -236,6 +239,15 @@ def load_instrument(args: ParamDict) -> InstrumentsType:
             # get source
             inst.params.set(argname, args[argname],
                             source=args.instances[argname].source)
+    # -------------------------------------------------------------------------
+    # update log verbosity level and program name
+    verbose = inst.params.get('VERBOSE', 2)
+    program = inst.params.get('PROGRAM', None)
+    if logger is not None:
+        logger.update_console(verbose, program)
+    else:
+        log.update_console(verbose, program)
+    # -------------------------------------------------------------------------
     # return instrument instances
     return inst
 

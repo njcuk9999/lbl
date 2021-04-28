@@ -86,7 +86,11 @@ def move_log(data_dir: str, recipe: str):
     base_classes.log = log
 
 
-def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None):
+def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None,
+           logger: Union[logger.Log, None] = None):
+    # deal with no logger
+    if logger is None:
+        logger = log
     # print splash
     msgs = ['']
     msgs += ['*' * 79]
@@ -98,16 +102,16 @@ def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None):
     margs = [name, __version__, instrument]
     # loop through messages
     for msg in msgs:
-        log.info(msg.format(*margs))
+        logger.info(msg.format(*margs))
     # add command line arguments (if not None)
     if cmdargs is not None:
-        log.info('Command line arguments:')
+        logger.info('Command line arguments:')
         # loop around arguments and add
         for cmdmsg in cmdargs:
-            log.info(cmdmsg)
+            logger.info(cmdmsg)
 
 
-def end(recipe: str):
+def end(recipe: str, logger: Union[logger.Log, None] = None):
     """
     print and end statement
 
@@ -115,6 +119,9 @@ def end(recipe: str):
 
     :return: None - prints to screen / log
     """
+    # deal with no logger
+    if logger is None:
+        logger = log
     # print splash
     msgs = ['']
     msgs += ['*' * 79]
@@ -124,7 +131,7 @@ def end(recipe: str):
     margs = [recipe]
     # loop through messages
     for msg in msgs:
-        log.info(msg.format(*margs))
+        logger.info(msg.format(*margs))
     return
 
 
