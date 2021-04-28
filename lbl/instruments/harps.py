@@ -67,8 +67,7 @@ class Harps(Instrument):
         # define the mask
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the High pass width in km/s
-        # Question: Should be 500 but test with 223
-        self.params.set('HP_WIDTH', 223, source=func_name)
+        self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
@@ -95,9 +94,11 @@ class Harps(Instrument):
         self.params.set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
+        # Question: Check DRP TYPE for STAR,FP file
         self.params.set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
+        # Question: Check DRP TYPE for STAR,FP file
         self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
 
         # ---------------------------------------------------------------------
@@ -522,11 +523,11 @@ class Harps(Instrument):
         """
         # ---------------------------------------------------------------------
         # define the band names
-        bands = ['u', 'g', 'r', 'i', 'z']
+        bands = ['u', 'g', 'r']
         # define the blue end of each band [nm]
-        blue_end = [360.804, 467.178, 614.112, 745.789, 892.278]
+        blue_end = [360.804, 467.178, 614.112]
         # define the red end of each band [nm]
-        red_end = [402.823, 554.926, 698.914, 838.945, 1083.325]
+        red_end = [402.823, 554.926, 698.914]
         # ---------------------------------------------------------------------
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088']
