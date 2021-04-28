@@ -20,7 +20,7 @@ __authors__: str = 'Neil Cook, Etienne Artigau'
 __package__: str = 'lbl'
 
 # currently supported instruments
-INSTRUMENTS = ['SPIROU']
+INSTRUMENTS = ['SPIROU', 'HARPS']
 
 # log variables
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')
