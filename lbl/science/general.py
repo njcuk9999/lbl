@@ -1709,20 +1709,15 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     for colname in rdb_table.colnames:
         rdb_dict4[colname] = []
     # -------------------------------------------------------------------------
-    # get the types
-    filenames = rdb_table['FILENAME']
-    # cut the suffix after the unique odometer name
-    filenames = [ff.split('_')[0] for ff in filenames]
-
-    # cut the suffix after the unique odometer name
-    drift_table['FILENAME'] =  [ff.split('_')[0] for ff in drift_table['FILENAME']]
+    # get the time for cross-matching between the drift file and science
+    timestamp = rdb_table['rjd']
 
     # log progress
     log.info('Producing LBL RDB drift corrected table')
     # loop around the wave files of this type
-    for row in tqdm(range(len(filenames))):
+    for row in tqdm(range(len(timestamp))):
         # create a mask of all files that match in drift file
-        file_mask = filenames[row] == drift_table['FILENAME']
+        file_mask = timestamp[row] == drift_table['rjd']
         # ---------------------------------------------------------------------
         # deal with no files present - cannot correct drift
         if np.sum(file_mask) == 0:
