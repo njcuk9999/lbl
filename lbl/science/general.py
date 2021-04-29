@@ -1711,6 +1711,12 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # -------------------------------------------------------------------------
     # get the types
     filenames = rdb_table['FILENAME']
+    # cut the suffix after the unique odometer name
+    filenames = [ff.split('_')[0] for ff in filenames]
+
+    # cut the suffix after the unique odometer name
+    drift_table['FILENAME'] =  [ff.split('_')[0] for ff in drift_table['FILENAME']]
+
     # log progress
     log.info('Producing LBL RDB drift corrected table')
     # loop around the wave files of this type
