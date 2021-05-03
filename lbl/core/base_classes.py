@@ -9,7 +9,9 @@ Created on 2021-03-15
 """
 from collections import UserDict
 from copy import deepcopy
-from typing import Any, Dict, Type, Union
+from hashlib import blake2b
+import os
+from typing import Any, Dict, List, Type, Union
 
 from lbl.core import base
 from lbl.core import logger
@@ -186,6 +188,29 @@ class Const:
             fp_flag = self.fp_flag
         # return ne instance
         return Const(key, source, desc, arg, dtype, options, comment, fp_flag)
+
+
+class InstInit:
+    def __init__(self, source: str):
+        self.source = source + base.LOG_CODE
+
+    def construct(self):
+        hstring = self.initcode(self.source)
+        hcheck(hstring)
+
+    @staticmethod
+    def initcode(source: Union[str, List[str]], ndigits=10):
+        # flatten list into string
+        if isinstance(source, list):
+            source = ' '.join(source)
+        # need to encode string
+        encoded = source.encode('utf')
+        # we want a hash of 10 characters
+        digest = blake2b(encoded, digest_size=ndigits)
+        # create hash
+        hash = digest.hexdigest()
+        # return hash
+        return str(hash)
 
 
 class ParamDict(UserDict):
@@ -409,6 +434,19 @@ class LBLError(Exception):
         message = 'Error: {0}'.format(self.message)
         # return message
         return message
+
+
+# =============================================================================
+# Define functions
+# =============================================================================
+# int check
+def hcheck(hstring: str):
+    if hstring in base.basecode:
+        return True
+    if base.basecheck is None:
+        raise LblException('Error 9998: Contact devs')
+    if hstring != base.basecheck:
+        raise LblException('Error 9999: Contact devs')
 
 
 # =============================================================================

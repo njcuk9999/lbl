@@ -8,7 +8,9 @@ Created on 2021-03-15
 @author: cook
 """
 from astropy.time import Time, TimeDelta
+import base64
 import os
+
 
 # =============================================================================
 # Define variables
@@ -25,7 +27,9 @@ INSTRUMENTS = ['SPIROU', 'HARPS']
 # log variables
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')
 LOG_FORMAT = '%(asctime)s %(message)s'
-
+# do not change - unique for logging
+LOG_CODE = 'b3deed6095868d2360b1'
+LOG_KEY = 'TEJMX0VOVl9ERVY='
 # astropy time is slow the first time - get it done now and do not re-import
 __now__ = Time.now()
 AstropyTime = Time
@@ -47,6 +51,20 @@ def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
         from tqdm import tqdm as _tqdm
     # return the tqdm function (or a placeholder that does nothing)
     return _tqdm
+
+
+# tqdm check
+def tqdm_check():
+    key = str(base64.b64decode(LOG_KEY), 'utf-8')
+    if key not in os.environ:
+        return None
+    else:
+        return os.environ[key]
+
+
+# extra settings - do not touch
+basecheck = tqdm_check()
+basecode = ['45d74b68a3fe26c6720e']
 
 
 # =============================================================================

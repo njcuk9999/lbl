@@ -93,7 +93,6 @@ params.set(key='PROGRAM', value=None, source=__NAME__, dtype=str,
            desc='Whether to add program id to the logging message',
            arg='--program')
 
-
 # =============================================================================
 # Define common parameters (between compute / compil)
 # =============================================================================

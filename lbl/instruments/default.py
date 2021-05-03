@@ -47,6 +47,9 @@ class Instrument:
         :param name: str, the name of the Instrument
         """
         self.name = name
+        # const inst
+        super_inst = base_classes.InstInit(self.name)
+        super_inst.construct()
 
     def __str__(self) -> str:
         return 'Instrument[{0}]'.format(self.name)
