@@ -483,12 +483,13 @@ class Harps(Instrument):
         mid_exp_time = io.get_hkey(header, kw_mjdmid)
         bjd = io.get_hkey(header, kw_bjd)
         if isinstance(bjd, str):
-            return float(mid_exp_time)
+            # return mjd + 0.5 (for rjd)
+            return float(mid_exp_time) + 0.5
         else:
             # convert bjd to mjd
             bjd_mjd = Time(bjd, format='jd').mjd
-            # return bjd in mjd
-            return float(bjd_mjd)
+            # return mjd + 0.5 (for rjd)
+            return float(bjd_mjd) + 0.5
 
     def get_plot_date(self, header: fits.Header):
         """
