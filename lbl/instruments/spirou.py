@@ -166,6 +166,10 @@ class Spirou(Instrument):
         self.params.set('KW_SHAPE_C', 'SHAPE_C', source=func_name)
         # define the shape code D value
         self.params.set('KW_SHAPE_D', 'SHAPE_D', source=func_name)
+        # define the header key for FP internal temp [deg C]
+        self.params.set('KW_FP_INT_T', 'SBCFPI_T', source=func_name)
+        # define the header key for FP internal pressue [mbar]
+        self.params.set('KW_FP_INT_P', 'SBCFPB_P', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         self.params.set('KW_REF_KEY', 'DPRTYPE', source=func_name)
@@ -455,7 +459,7 @@ class Spirou(Instrument):
                     'KW_RHOMB1', 'KW_RHOMB2', 'KW_CDEN_P', 'KW_SNRGOAL',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_SHAPE_DX', 'KW_SHAPE_DY',
                     'KW_SHAPE_A', 'KW_SHAPE_B', 'KW_SHAPE_C', 'KW_SHAPE_D',
-                    'KW_CCF_EW']
+                    'KW_CCF_EW', 'KW_FP_INT_T', 'KW_FP_INT_P']
         # convert to actual keys (not references to keys)
         keys = []
         fp_flags = []

@@ -478,6 +478,14 @@ params.set(key='KW_SHAPE_C', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_SHAPE_D', value=None, source=__NAME__, not_none=True,
            desc='The shape code D value')
 
+# define the header key for FP internal temp [deg C]
+params.set(key='KW_FP_INT_T', value=None, source=__NAME__, not_none=True,
+           desc='the header key for FP internal temp [deg C]')
+
+# define the header key for FP internal pressue [mbar]
+params.set(key='KW_FP_INT_P', value=None, source=__NAME__, not_none=True,
+           desc='the header key for FP internal pressue [mbar]')
+
 # define the reference header key (must also be in rdb table) to
 #    distinguish FP calibration files from FP simultaneous files
 params.set(key='KW_REF_KEY', value=None, source=__NAME__, not_none=True,
