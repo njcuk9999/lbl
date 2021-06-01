@@ -107,6 +107,8 @@ params.set(key='OBJECT_TEMPLATE', value=None, source=__NAME__,
                 '(If None set to OBJECT_SCIENCE)',
            arg='--obj_template', dtype=str)
 
+params.set(key='OBJECT_DPRTYPES', value=['OBJ', 'POLAR'])
+
 # =============================================================================
 # Define compute parameters
 # =============================================================================
@@ -403,6 +405,10 @@ params.set(key='KW_TAU_OTHERS', value=None, source=__NAME__, not_none=False,
 # define the DPRTYPE of the observation
 params.set(key='KW_DPRTYPE', value=None, source=__NAME__, not_none=False,
            desc='the DPRTYPE of the observation')
+
+# define the FIBER of the observation
+params.set(key='KW_FIBER', value=None, source=__NAME__, not_none=False,
+           desc='define the FIBER of the observation')
 
 # define the observation time (mjd) of the wave solution
 params.set(key='KW_WAVETIME', value=None, source=__NAME__, not_none=False,

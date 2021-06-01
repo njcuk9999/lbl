@@ -129,6 +129,8 @@ class Spirou(Instrument):
         self.params.set('KW_TAU_OTHERS', 'TAU_OTHE', source=func_name)
         # define the DPRTYPE of the observation
         self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
+        # define the DPRTYPE of the observation
+        self.params.set('KW_FIBER', 'FIBER', source=func_name)
         # define the observation time (mjd) of the wave solution
         self.params.set('KW_WAVETIME', 'WAVETIME', source=func_name)
         # define the filename of the wave solution
@@ -433,13 +435,28 @@ class Spirou(Instrument):
         """
         # get BERV header key
         hdr_key = self.params['KW_BERV']
-        # BERV depends on whether object is FP or not
-        if 'FP' not in self.params['OBJECT_SCIENCE']:
+        # get DPRTYPE from header
+        dprfibtype = self.get_dpr_fibtype(sci_hdr)
+        # BERV only required for objects (specific DPRTYPE)
+        if dprfibtype in self.params['OBJECT_DPRTYPES']:
             berv = io.get_hkey(sci_hdr, hdr_key) * 1000
         else:
             berv = 0.0
         # return the berv measurement (in m/s)
         return berv
+
+    def get_dpr_fibtype(self, hdr: fits.Header) -> str:
+
+        # get dprtype
+        dprtype = io.get_hkey(hdr, self.params['KW_DPRTYPE'])
+        fiber = io.get_hkey(hdr, self.params['KW_FIBER'])
+        # split fiber
+        dprfibtypes = dprtype.split('_')
+        # get fiber type
+        if fiber in ['AB', 'A', 'B']:
+            return dprfibtypes[0]
+        else:
+            return dprfibtypes[1]
 
     def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
         """
