@@ -44,7 +44,6 @@ InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value
 
-
 # =============================================================================
 # Define compute functions
 # =============================================================================
@@ -1230,6 +1229,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         pdf_all.append(pdf)
         pdf_fit_all.append(pdf_fit)
 
+
     # construct plot name
     plot_name = os.path.basename(rdbfile.replace('.rdb', '')) + '_cumul.pdf'
     plot_path = os.path.join(plot_dir, plot_name)
@@ -1250,7 +1250,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         diff = rvs[line_it] - mp.nanmedian(rvs[line_it])
         nsig = diff / dvrms[line_it]
         # force a std dev of 1
-        dvrms[line_it] = dvrms[line_it] * mp.estimate_sigma(nsig)
+        # TODO : have the normalization to sigma as an option
+        dvrms[line_it] = dvrms[line_it] #* mp.estimate_sigma(nsig)
         # use the odd ratio mean to guess vrad and svrad
         orout1 = mp.odd_ratio_mean(rvs[line_it], dvrms[line_it])
         # add to output table
@@ -1376,15 +1377,20 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         log.general(msg.format(*margs))
         # ---------------------------------------------------------------------
         # deal with having a FP (CCF_EW_ROW doesn't really make sense)
-        if obj_sci == 'FP':
-            # Default value for the FP
+        # get the ccf_ew
+        # if an FP, then ccf_ew_row is zero and it is set to the default FP value
+        # We do not check against the OBJECT name as some user may have more complex
+        # naming schemes and/or stars may have FP within the string sequence
+        # (ALFPER ... or who knows!)
+
+        ccf_ew_row = rdb_dict[ccf_ew_col][row]
+        # TODO -> make this smarter if we have LFC or HC
+        if ccf_ew_row == 0:
             ccf_ew_row = float(ccf_ew_fp)
-        else:
-            # get the ccf_ew
-            ccf_ew_row = rdb_dict[ccf_ew_col][row]
+
         # work out the fwhm (1 sigma * sigma value)
-        fwhm_row = mp.fwhm() * (ccf_ew_row + guess5 / ccf_ew_row)
-        sig_fwhm_row = mp.fwhm() * (bulk_error5 / ccf_ew_row)
+        fwhm_row = mp.fwhm()*(ccf_ew_row + guess5 / ccf_ew_row)
+        sig_fwhm_row = mp.fwhm()*(bulk_error5 / ccf_ew_row)
         # ---------------------------------------------------------------------
         # update rdb table
         rdb_dict['vrad'][row] = guess4
