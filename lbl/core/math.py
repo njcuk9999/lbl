@@ -329,13 +329,14 @@ if not HAS_NUMBA:
 # Set "nopython" mode for best performance, equivalent to @nji
 @jit(nopython=True)
 def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
-                   odd_ratio: float = 1e-4, nmax: int = 10):
+                   odd_ratio: float = 2e-4, nmax: int = 10):
     """
     Provide values and corresponding errors and compute a weighted mean
 
     :param value: np.array (1D), value array
     :param error: np.array (1D), uncertainties for value array
     :param odd_ratio: float, the probability that the point is bad
+                    Recommended value in Artigau et al. 2021 : f0 = 0.002
     :param nmax: int, number of iterations to pass through
     :return:
     """
@@ -354,14 +355,17 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
     odd_good = np.ones(len(error2))
     # loop around until we do all required iterations
     for _ in range(nmax):
-        # model points as gaussian
-        gfit = np.exp(-0.5 * ((value - guess) ** 2 / error2))
+
+        # model points as gaussian weighted by likelihood of being a valid point
+        # nearly but not exactly one for low-sigma values
+        gfit = (1 - odd_ratio) * np.exp(-0.5 * ((value - guess) ** 2 / error2))
         # find the probability that a point is bad
         odd_bad = odd_ratio / (gfit + odd_ratio)
         # find the probability that a point is good
         odd_good = 1 - odd_bad
         # calculate the weights based on the probability of being good
         weights = odd_good / error2
+
         # update the guess based on the weights
         if np.sum(np.isfinite(weights)) == 0:
             guess = np.nan
