@@ -16,8 +16,8 @@ import os
 # Define variables
 # =============================================================================
 __NAME__: str = 'base.py'
-__version__: str = '0.0.013'
-__date__: str = '2021-06-01'
+__version__: str = '0.0.014'
+__date__: str = '2021-07-02'
 __authors__: str = 'Neil Cook, Etienne Artigau'
 __package__: str = 'lbl'
 
@@ -45,6 +45,7 @@ def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
     """
     # this will replace tqdm with the return of the first arg
     def _tqdm(*args, **kwargs):
+        _ = kwargs
         return args[0]
     # if we want to use tqdm then use it
     if use_tqdm and verbose == 2:
