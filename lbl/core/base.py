@@ -45,6 +45,7 @@ def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
     """
     # this will replace tqdm with the return of the first arg
     def _tqdm(*args, **kwargs):
+        _ = kwargs
         return args[0]
     # if we want to use tqdm then use it
     if use_tqdm and verbose == 2:
