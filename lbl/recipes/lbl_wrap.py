@@ -13,6 +13,9 @@ from astropy.table import Table
 
 from lbl import compute
 from lbl import compil
+from lbl import template
+from lbl import mask
+from lbl import noise
 
 # =============================================================================
 # Start of code
@@ -29,6 +32,18 @@ if __name__ == "__main__":
         # get the object science name and object template name
         object_science = todo_table['OBJ_SCI'][row]
         object_template = todo_table['OBJ_TEMPLATE'][row]
+        # make the template (if not present)
+        template(instrument=instrument, data_dir=data_dir,
+                 object_science=object_science,
+                 object_template=object_template)
+        # make the mask (if not present)
+        mask(instrument=instrument, data_dir=data_dir,
+             object_science=object_science,
+             object_template=object_template)
+        # make the noise model (if not present)
+        noise(instrument=instrument, data_dir=data_dir,
+              object_science=object_science,
+              object_template=object_template)
         # run the compute code
         compute(instrument=instrument, data_dir=data_dir,
                 object_science=object_science,

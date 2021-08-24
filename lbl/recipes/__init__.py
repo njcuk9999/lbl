@@ -11,10 +11,19 @@ Created on 2021-03-15
 """
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_compile
+from lbl.recipes import lbl_template
+from lbl.recipes import lbl_mask
+from lbl.recipes import lbl_noise
 
 # =============================================================================
 # Define variables
 # =============================================================================
+# alias to lbl template
+template = lbl_template
+# alias to lbl mask
+mask = lbl_mask
+# alias to lbl noise
+noise = lbl_noise
 # alias to lbl compute
 compute = lbl_compute
 # alias to lbl compile
