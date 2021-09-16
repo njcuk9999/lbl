@@ -1510,6 +1510,16 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     for colname in rdb_table.colnames:
         rdb_dict2[colname] = []
     # -------------------------------------------------------------------------
+    # Determine columsn that use weighted mean
+    vrad_colnames = [cn for cn in rdb_table.colnames if cn.startswith("vrad")]
+    svrad_colnames = [
+        cn for cn in rdb_table.colnames if cn.startswith("svrad")
+    ]
+    wmean_pairs = dict(zip(vrad_colnames, svrad_colnames))
+    wmean_pairs["per_epoch_DDV"] = "per_epoch_DDVRMS"
+    wmean_pairs["per_epoch_DDDV"] = "per_epoch_DDDVRMS"
+    wmean_pairs["fwhm"] = "sig_fwhm"
+    # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB 2 table')
     # loop around unique dates
@@ -1523,11 +1533,11 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
         # loop around all keys in rdb_table and populate rdb_dict
         for colname in rdb_table.colnames:
             # -----------------------------------------------------------------
-            # if table is vrad combine vrad + svrad
-            if colname.startswith('vrad'):
+            # if column requires wmean, combine value and error
+            if colname in wmean_pairs:
                 # get rv and error rv for this udate
                 rvs = itable[colname]
-                errs = itable['s{0}'.format(colname)]
+                errs = itable[wmean_pairs[colname]]
                 # get error^2
                 errs2 = errs ** 2
                 # deal with all nans
@@ -1540,11 +1550,11 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
                     err_value = np.sqrt(1 / mp.nansum(1 / errs2))
                 # push into table
                 rdb_dict2[colname].append(rv_value)
-                rdb_dict2['s{0}'.format(colname)].append(err_value)
+                rdb_dict2[wmean_pairs[colname]].append(err_value)
             # -----------------------------------------------------------------
-            # if not vrad or svrad then try to mean the column or if not
+            # if no weighted mean indication, try to mean the column or if not
             #   just take the first value
-            elif 'vrad' not in colname:
+            elif colname not in wmean_pairs.values():
                 # try to produce the mean of rdb table
                 # noinspection PyBroadException
                 try:
