@@ -1536,20 +1536,20 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             # if column requires wmean, combine value and error
             if colname in wmean_pairs:
                 # get rv and error rv for this udate
-                rvs = itable[colname]
+                vals = itable[colname]
                 errs = itable[wmean_pairs[colname]]
                 # get error^2
                 errs2 = errs ** 2
                 # deal with all nans
                 if np.sum(np.isfinite(errs2)) == 0:
-                    rv_value = np.nan
+                    value = np.nan
                     err_value = np.nan
                 else:
                     # get 1/error^2
-                    rv_value = mp.nansum(rvs / errs2) / mp.nansum(1 / errs2)
+                    value = mp.nansum(vals / errs2) / mp.nansum(1 / errs2)
                     err_value = np.sqrt(1 / mp.nansum(1 / errs2))
                 # push into table
-                rdb_dict2[colname].append(rv_value)
+                rdb_dict2[colname].append(value)
                 rdb_dict2[wmean_pairs[colname]].append(err_value)
             # -----------------------------------------------------------------
             # if no weighted mean indication, try to mean the column or if not
