@@ -1510,7 +1510,7 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     for colname in rdb_table.colnames:
         rdb_dict2[colname] = []
     # -------------------------------------------------------------------------
-    # Determine columsn that use weighted mean
+    # Determine columns that use weighted mean
     vrad_colnames = [cn for cn in rdb_table.colnames if cn.startswith("vrad")]
     svrad_colnames = [
         cn for cn in rdb_table.colnames if cn.startswith("svrad")
@@ -1535,7 +1535,7 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             # -----------------------------------------------------------------
             # if column requires wmean, combine value and error
             if colname in wmean_pairs:
-                # get rv and error rv for this udate
+                # get value and error for this udate
                 vals = itable[colname]
                 errs = itable[wmean_pairs[colname]]
                 # get error^2
