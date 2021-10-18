@@ -211,6 +211,10 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.3 load science file
         # ---------------------------------------------------------------------
         sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
+        # flag calibration file
+        if inst.flag_calib(sci_hdr):
+            model_velocity = 0
+
         # ---------------------------------------------------------------------
         # 6.4 load blaze if not set above
         # ---------------------------------------------------------------------
@@ -261,7 +265,8 @@ def __main__(inst: InstrumentsType, **kwargs):
                                   systemic_all=systemic_all,
                                   mjdate_all=mjdate_all, ccf_ewidth=ccf_ewidth,
                                   reset_rv=reset_rv,
-                                  model_velocity=model_velocity)
+                                  model_velocity=model_velocity,
+                                  science_file=science_file)
         # get back ref_table and outputs
         ref_table, outputs = cout
         # ---------------------------------------------------------------------

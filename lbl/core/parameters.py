@@ -266,6 +266,12 @@ params.set('FP_STD_LIST', None, source=__NAME__,
                 'strings',
            not_none=True)
 
+# define readout noise per instrument (assumes ~5e- and 10 pixels)
+params.set('READ_OUT_NOISE', None, source=__NAME__,
+           desc='define readout noise per instrument (assumes ~5e- and '
+                '10 pixels)',
+           not_none=True)
+
 # =============================================================================
 # Define plot parameters
 # =============================================================================

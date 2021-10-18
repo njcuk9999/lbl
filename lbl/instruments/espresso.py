@@ -3,7 +3,7 @@
 """
 SPIRou instrument class here: instrument specific settings
 
-Created on 2021-03-15
+Created on 2021-05-27
 
 @author: cook
 """
@@ -12,8 +12,7 @@ from astropy.io import fits
 import glob
 import numpy as np
 import os
-import requests
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -25,7 +24,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.spirou.py'
+__NAME__ = 'instruments.espresso.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -40,10 +39,10 @@ log = base_classes.log
 # =============================================================================
 # Define Spirou class
 # =============================================================================
-class Spirou(Instrument):
+class Espresso(Instrument):
     def __init__(self, params: base_classes.ParamDict):
         # call to super function
-        super().__init__('SPIROU')
+        super().__init__('ESPRESSO')
         # set parameters for instrument
         self.params = params
         # override params
@@ -60,123 +59,111 @@ class Spirou(Instrument):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.Spirou.override()'
+        func_name = __NAME__ + '.Espresso.override()'
         # set parameters to update
-        self.params.set('INSTRUMENT', 'SPIROU', source=func_name)
+        self.params.set('INSTRUMENT', 'ESPRESSO', source=func_name)
         # define the default science input files
-        self.params.set('INPUT_FILE', '*e2dsff*AB.fits', source=func_name)
+        self.params.set('INPUT_FILE', 'ES_*.fits', source=func_name)
         # define the mask
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
+        # Question: Espresso value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [35], source=func_name)
+        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MIN', 900, source=func_name)
+        self.params.set('COMPIL_WAVE_MIN', 450, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', 2500, source=func_name)
+        self.params.set('COMPIL_WAVE_MAX', 750, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define the CCF e-width to use for FP files
-        self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
+        # Question: Espresso value?
+        self.params.set('COMPIL_FP_EWID', 3.0, source=func_name)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.params.set('COMPILE_BINNED_BAND1', 'H', source=func_name)
+
+        self.params.set('COMPILE_BINNED_BAND1', 'g', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND2', 'J', source=func_name)
+
+        self.params.set('COMPILE_BINNED_BAND2', 'r', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND3', 'H', source=func_name)
-        # define the reference wavelength used in the slope fitting in nm
-        self.params.set('COMPIL_SLOPE_REF_WAVE', 1600, source=func_name)
+        self.params.set('COMPILE_BINNED_BAND3', 'i', source=func_name)
+
+        self.params.set('COMPIL_SLOPE_REF_WAVE', 650, source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
-        self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
+        # Question: Check DRP TYPE for STAR,FP file
+        self.params.set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
-        self.params.set('FP_STD_LIST', ['OBJ_FP', 'POLAR_FP'], source=func_name)
-        # define readout noise per instrument (assumes ~5e- and 10 pixels)
-        self.params.set('READ_OUT_NOISE', 30, source=func_name)
+        # Question: Check DRP TYPE for STAR,FP file
+        self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
 
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define wave coeff key in header
-        self.params.set('KW_WAVECOEFFS', 'WAVE{0:04d}', source=func_name)
+
+        # TODO -> not relevant for ESPRESSO, remove ?
+        self.params.set('KW_WAVECOEFFS', 'NONE',
+                        source=func_name)
         # define wave num orders key in header
-        self.params.set('KW_WAVEORDN', 'WAVEORDN', source=func_name)
+        self.params.set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
+                        source=func_name)
         # define wave degree key in header
-        self.params.set('KW_WAVEDEGN', 'WAVEDEGN', source=func_name)
+        self.params.set('KW_WAVEDEGN', 'HIERARCH ESO DRS CAL TH DEG LL',
+                        source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'MJDMID', source=func_name)
-        # define snr keyword
-        self.params.set('KW_SNR', 'EXTSN035', source=func_name)
-        # define berv keyword
-        self.params.set('KW_BERV', 'BERV', source=func_name)
-        # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'CDBBLAZE', source=func_name)
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
+                        source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'MJDATE', source=func_name)
+        self.params.set('KW_MJDATE', 'HIERARCH ESO QC BJD', source=func_name)
+        # define snr keyword
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER100',
+                        source=func_name)
+        # define berv keyword
+        self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
+        # define the Blaze calibration file
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 CATG',
+                        source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
+        self.params.set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
+                        source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
+        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL3 AIRM START',
+                        source=func_name)
         # define the human date of the observation
-        self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
-        # define the tau_h20 of the observation
-        self.params.set('KW_TAU_H2O', 'TAU_H2O', source=func_name)
-        # define the tau_other of the observation
-        self.params.set('KW_TAU_OTHERS', 'TAU_OTHE', source=func_name)
+        self.params.set('KW_DATE', 'DATE', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
-        # define the DPRTYPE of the observation
-        self.params.set('KW_FIBER', 'FIBER', source=func_name)
-        # define the observation time (mjd) of the wave solution
-        self.params.set('KW_WAVETIME', 'WAVETIME', source=func_name)
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO DPR TYPE',
+                        source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'WAVEFILE', source=func_name)
-        # define the telluric preclean velocity of water absorbers
-        self.params.set('KW_TLPDVH2O', 'TLPDVH2O', source=func_name)
-        # define the telluric preclean velocity of other absorbers
-        self.params.set('KW_TLPDVOTR', 'TLPDVOTR', source=func_name)
-        # define the wave solution calibration filename
-        self.params.set('KW_CDBWAVE', 'CDBWAVE', source=func_name)
+        self.params.set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
+                        source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'OBJNAME', source=func_name)
-        # define the rhomb 1 predefined position
-        self.params.set('KW_RHOMB1', 'SBRHB1_P', source=func_name)
-        # define the rhomb 2 predefined position
-        self.params.set('KW_RHOMB2', 'SBRHB2_P', source=func_name)
-        # define the calib-reference density
-        self.params.set('KW_CDEN_P', 'SBCDEN_P', source=func_name)
+        self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
+                        source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
+
+        # TODO -> no equivalent in ESPRESSO
+        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'EXTSN035', source=func_name)
+
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER100',
+                        source=func_name)
+
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'BJD', source=func_name)
-        # define the shape code dx value
-        self.params.set('KW_SHAPE_DX', 'SHAPE_DX', source=func_name)
-        # define the shape code dy value
-        self.params.set('KW_SHAPE_DY', 'SHAPE_DY', source=func_name)
-        # define the shape code A value
-        self.params.set('KW_SHAPE_A', 'SHAPE_A', source=func_name)
-        # define the shape code B value
-        self.params.set('KW_SHAPE_B', 'SHAPE_B', source=func_name)
-        # define the shape code C value
-        self.params.set('KW_SHAPE_C', 'SHAPE_C', source=func_name)
-        # define the shape code D value
-        self.params.set('KW_SHAPE_D', 'SHAPE_D', source=func_name)
-        # define the header key for FP internal temp [deg C]
-        self.params.set('KW_FP_INT_T', 'SBCFPI_T', source=func_name)
-        # define the header key for FP internal pressue [mbar]
-        self.params.set('KW_FP_INT_P', 'SBCFPB_P', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'DPRTYPE', source=func_name)
+
+        self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
+
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
 
@@ -219,7 +206,7 @@ class Spirou(Instrument):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_s1d_{0}_sc1d_v_file_AB.fits'.format(objname)
+            basename = 'Template_{0}_ESPRESSO.fits'.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path
@@ -353,7 +340,7 @@ class Spirou(Instrument):
                           header: Union[fits.Header, None] = None
                           ) -> np.ndarray:
         """
-        Get a wave solution from a file (for SPIROU this is from the header)
+        Get a wave solution from a file (for Espresso this is from the header)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
@@ -364,88 +351,25 @@ class Spirou(Instrument):
 
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
-        # get header keys
-        kw_wavecoeffs = self.params['KW_WAVECOEFFS']
-        kw_waveordn = self.params['KW_WAVEORDN']
-        kw_wavedegn = self.params['KW_WAVEDEGN']
+        # load wave map
+        wavemap = fits.getdata(science_filename,ext=4)
         # ---------------------------------------------------------------------
-        # get header
-        if header is None or data is None:
-            sci_data, sci_hdr = io.load_fits(science_filename,
-                                             'wave fits file')
-        else:
-            sci_data, sci_hdr = data, header
-        # ---------------------------------------------------------------------
-        # get the data shape
-        nby, nbx = sci_data.shape
-        # get xpix
-        xpix = np.arange(nbx)
-        # ---------------------------------------------------------------------
-        # get wave order from header
-        waveordn = io.get_hkey(sci_hdr, kw_waveordn, science_filename)
-        wavedegn = io.get_hkey(sci_hdr, kw_wavedegn, science_filename)
-        # get the wave 2d list
-        wavecoeffs = io.get_hkey_2d(sci_hdr, key=kw_wavecoeffs,
-                                    dim1=waveordn, dim2=wavedegn + 1,
-                                    filename=science_filename)
-        # ---------------------------------------------------------------------
-        # convert to wave map
-        wavemap = np.zeros([waveordn, nbx])
-        for order_num in range(waveordn):
-            wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1], xpix)
+        # Espresso wave solution is in Angstrom - convert to nm for consistency
+        wavemap = wavemap / 10.0
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
 
-    def drift_condition(self, table_row: Table.Row) -> bool:
+    def load_bad_hdr_keys(self) -> Tuple[list, Any]:
         """
-        Extra drift condition on a column to identify the correct reference
-        file
-
-        :param table_row: astropy.table.row.Row - the row of the table
-                          to check against
-
-        :return: True if reference file, False else-wise
-        """
-        # get the correct prefix for FILENAME
-        filename = str(table_row['FILENAME'])
-        filename = filename.replace('_FP_FP_lbl.fits', '')
-        # get the correct prefix for WAVEFILE
-        wavefile = table_row['WAVEFILE']
-        wavefile = wavefile.replace('_wave_night_C.fits', '')
-        wavefile = wavefile.replace('_wavesol_master_C.fits', '')
-        # return test statement
-        return filename == wavefile
-
-    def load_bad_hdr_keys(self) -> Tuple[np.ndarray, str]:
-        """
-        Load the bad values and bad key for spirou
+        Load the bad values and bad key for Espresso -- not used currently
 
         :return: tuple, 1. the list of bad values, 2. the bad key in
                  a file header to check against bad values
         """
-        # set up googlesheet parameters
-        url_base = ('https://docs.google.com/spreadsheets/d/'
-                    '{}/gviz/tq?tqx=out:csv&sheet={}')
-        sheet_id = '1gvMp1nHmEcKCUpxsTxkx-5m115mLuQIGHhxJCyVoZCM'
-        worksheet = 0
-        bad_odo_url = url_base.format(sheet_id, worksheet)
-        # log progress
-        msg = 'Loading bad odometer codes from spreadsheet'
-        log.general(msg)
-        # fetch data
-        data = requests.get(bad_odo_url)
-        tbl = Table.read(data.text, format='ascii')
-        # get bad keys
-        bad_values = np.array(tbl['ODOMETER']).astype(str)
-        # define bad file header key
-        bad_key = 'EXPNUM'
-        # log number of bad values loaded
-        msg = '\t{0} bad values loaded'
-        margs = [len(bad_values)]
-        log.general(msg.format(*margs))
-        # return the
-        return bad_values, bad_key
+        # currently no bad keys for HARPS
+        # return an empty list and bad_hdr_key = None
+        return [], None
 
     def get_berv(self, sci_hdr: fits.Header) -> float:
         """
@@ -455,13 +379,8 @@ class Spirou(Instrument):
 
         :return:
         """
-        # get BERV header key
-        hdr_key = self.params['KW_BERV']
-        # get BERV (if not a calibration)
-        if not self.flag_calib(sci_hdr):
-            berv = io.get_hkey(sci_hdr, hdr_key) * 1000
-        else:
-            berv = 0.0
+        # ESPRESSO data is always BERV corrected from the starting point
+        berv = 0.0
         # return the berv measurement (in m/s)
         return berv
 
@@ -471,26 +390,8 @@ class Spirou(Instrument):
 
         :return:
         """
-        # get DPRTYPE from header
-        dprfibtype = self.get_dpr_fibtype(sci_hdr)
-        # return True if we have a calibration
-        if dprfibtype in ['FP', 'HC', 'LFC', 'FLAT', 'DARK']:
-            return True
-        else:
-            return False
-
-    def get_dpr_fibtype(self, hdr: fits.Header) -> str:
-
-        # get dprtype
-        dprtype = io.get_hkey(hdr, self.params['KW_DPRTYPE'])
-        fiber = io.get_hkey(hdr, self.params['KW_FIBER'])
-        # split fiber
-        dprfibtypes = dprtype.split('_')
-        # get fiber type
-        if fiber in ['AB', 'A', 'B']:
-            return dprfibtypes[0]
-        else:
-            return dprfibtypes[1]
+        # always False for carmenes (assumes no calibrations)
+        return False
 
     def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
         """
@@ -503,14 +404,9 @@ class Spirou(Instrument):
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE',
-                    'KW_BERV', 'KW_TAU_H2O', 'KW_TAU_OTHERS',
-                    'KW_DPRTYPE', 'KW_NITERATIONS',
-                    'KW_SYSTEMIC_VELO', 'KW_WAVETIME', 'KW_WAVEFILE',
-                    'KW_TLPDVH2O', 'KW_TLPDVOTR', 'KW_CDBWAVE', 'KW_OBJNAME',
-                    'KW_RHOMB1', 'KW_RHOMB2', 'KW_CDEN_P', 'KW_SNRGOAL',
-                    'KW_EXT_SNR', 'KW_BJD', 'KW_SHAPE_DX', 'KW_SHAPE_DY',
-                    'KW_SHAPE_A', 'KW_SHAPE_B', 'KW_SHAPE_C', 'KW_SHAPE_D',
-                    'KW_CCF_EW', 'KW_FP_INT_T', 'KW_FP_INT_P']
+                    'KW_BERV', 'KW_DPRTYPE', 'KW_NITERATIONS',
+                    'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_OBJNAME',
+                    'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)
         keys = []
         fp_flags = []
@@ -615,20 +511,20 @@ class Spirou(Instrument):
         """
         # ---------------------------------------------------------------------
         # define the band names
-        bands = ['Y', 'gapYJ', 'J', 'gapJH', 'H', 'gapHK', 'K', 'redK']
+        bands = ['u', 'g', 'r', 'i']
+
+        mid = np.array([354, 475, 752, 866],dtype = float)
         # define the blue end of each band [nm]
-        blue_end = [900.0, 1113.400, 1153.586, 1354.422, 1462.897, 1808.544,
-                    1957.792, 2343.105]
+        blue_end = mid -  np.array([100,121/2,277/2,114/2],dtype = float)
         # define the red end of each band [nm]
-        red_end = [1113.4, 1153.586, 1354.422, 1462.897, 1808.544, 1957.792,
-                   2343.105, 2500.000]
+        red_end = mid+np.array([121/2,277/2,114/2,96/2],dtype = float)
         # ---------------------------------------------------------------------
         # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
+        region_names = ['', '_0-2044', '_2044-4088']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [0, 0, 2048]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [4096, 2048, 4096]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

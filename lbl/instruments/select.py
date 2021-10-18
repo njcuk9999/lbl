@@ -21,6 +21,8 @@ from lbl.core import parameters
 from lbl.core import io
 from lbl.core import logger
 from lbl.instruments import spirou
+from lbl.instruments import espresso
+from lbl.instruments import carmenes
 from lbl.instruments import harps
 from lbl.instruments import default
 from lbl.resources import lbl_misc
@@ -228,6 +230,12 @@ def load_instrument(args: ParamDict,
     # select HARPS
     elif instrument.upper() == 'HARPS':
         inst = harps.Harps(params)
+    # select CARMENES
+    elif instrument.upper() == 'CARMENES':
+        inst = carmenes.Carmenes(params)
+
+    elif instrument.upper() == 'ESPRESSO':
+        inst = espresso.Espresso(params)
     # else instrument is invalid
     else:
         emsg = 'Instrument name "{0}" invalid'

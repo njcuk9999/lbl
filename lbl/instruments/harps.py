@@ -100,6 +100,8 @@ class Harps(Instrument):
         #    was NOT a reference file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
         self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
+        # define readout noise per instrument (assumes ~5e- and 10 pixels)
+        self.params.set('READ_OUT_NOISE', 15, source=func_name)
 
         # ---------------------------------------------------------------------
         # Header keywords
@@ -405,6 +407,15 @@ class Harps(Instrument):
             berv = 0.0
         # return the berv measurement (in m/s)
         return berv
+
+    def flag_calib(self, sci_hdr: fits.Header) -> bool:
+        """
+        Flag a file as a calibration file
+
+        :return:
+        """
+        # always False for carmenes (assumes no calibrations)
+        return False
 
     def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
         """

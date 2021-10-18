@@ -47,9 +47,6 @@ class Instrument:
         :param name: str, the name of the Instrument
         """
         self.name = name
-        # const inst
-        super_inst = base_classes.InstInit(self.name)
-        super_inst.construct()
 
     def __str__(self) -> str:
         return 'Instrument[{0}]'.format(self.name)
@@ -477,6 +474,19 @@ class Instrument:
         _ = science_filename, data, header
         raise self._not_implemented('get_wave_solution')
 
+    def drift_condition(self, table_row: Table.Row):
+        """
+        Extra drift condition on a column to identify the correct reference
+        file
+
+        :param table_row: astropy.table.row.Row - the row of the table
+                          to check against
+
+        :return: True if reference file, False else-wise
+        """
+        _ = table_row
+        raise self._not_implemented('drift_condition')
+
     def load_bad_hdr_keys(self):
         """
         Load the bad values and bad key for spirou
@@ -496,6 +506,15 @@ class Instrument:
         """
         _ = sci_hdr
         raise self._not_implemented('get_berv')
+
+    def flag_calib(self, sci_hdr: fits.Header):
+        """
+        Flag a file as a calibration file
+
+        :return:
+        """
+        _ = self, fits.Header
+        raise self._not_implemented('flag_calib')
 
     def rdb_columns(self):
         """
