@@ -14,7 +14,7 @@ from astropy.table import Table
 import numpy as np
 import os
 from pathlib import Path
-from typing import Any, List, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import warnings
 
 from lbl.core import base
@@ -122,6 +122,52 @@ def make_dir(path: str, directory: str, kind: str,
             emsg = 'Cannot create {0} directory. Path={1} \n\t{2}: {3}'
             eargs = [kind, str(abspath), type(e), str(e)]
             raise LblException(emsg.format(*eargs))
+
+
+def find_files(path_list: List[Path],
+               prefix: Optional[str] = None,
+               suffix: Optional[str] = None,
+               contains: Optional[str] = None,
+               hkeys: Optional[Dict[str, Union[List[str], str]]] = None,
+               use_tqdm: bool = True):
+    # get tqdm
+    tqdm = base.tqdm_module(use_tqdm, log.console_verbosity)
+    # storage for valid files
+    valid_files = []
+    # loop around files
+    for filename in tqdm(path_list):
+        # assume file is valid at start
+        valid = True
+        # deal with prefix
+        if prefix is not None:
+            if not str(filename).startswith(prefix):
+                continue
+        # deal with suffix
+        if suffix is not None:
+            if not str(filename).endswith(suffix):
+                continue
+        # deal with contains
+        if contains is not None:
+            if contains not in str(filename):
+                continue
+        # deal with header keys
+        if hkeys is not None:
+            # skip non-fits file
+            if not str(filename).endswith('.fits'):
+                continue
+            # load header
+            hdr = load_header(str(filename), 'fits file')
+
+            valid = True
+            # loop around hkeys
+            for hkey in hkeys:
+                # check value
+                valid &= filter_by_hkey(hdr, hkey, hkeys[hkey])
+        # add to valid files if we have got to here
+        if valid:
+            valid_files.append(filename)
+
+    return valid_files
 
 
 # =============================================================================
@@ -253,6 +299,30 @@ def get_hkey_2d(header: fits.Header, key: str,
                 raise LblException(emsg.format(*eargs))
     # return values
     return values
+
+
+def filter_by_hkey(header: fits.Header, key: str,
+                   values: Union[List[str], str]) -> bool:
+    """
+    Filter by a header key (returns True if valid)
+
+    :param header: fits header, the header to check
+    :param key: str, the key in the header to check
+    :param values: a list of string values to check against the header value
+    :return:
+    """
+    # deal with key not in header
+    if key not in header:
+        return False
+    # deal with non list values
+    if not isinstance(values, (list, np.ndarray)):
+        values = [values]
+    # loop around values
+    for value in values:
+        if str(header[key]) == str(value):
+            return True
+    # if we get here return False
+    return False
 
 
 # complex write inputs

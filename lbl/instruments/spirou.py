@@ -12,7 +12,9 @@ from astropy.io import fits
 import glob
 import numpy as np
 import os
+from pathlib import Path
 import requests
+import shutil
 from typing import Dict, List, Tuple, Union
 
 from lbl.core import base
@@ -131,7 +133,11 @@ class Spirou(Instrument):
         self.params.set('KW_TAU_OTHERS', 'TAU_OTHE', source=func_name)
         # define the DPRTYPE of the observation
         self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
-        # define the DPRTYPE of the observation
+        # define the output type of the file
+        self.params.set('KW_OUTPUT', 'DRSOUTID', source=func_name)
+        # define the drs object name
+        self.params.set('KW_DRSOBJN', 'DRSOBJN', source=func_name)
+        # define the fiber of the observation,
         self.params.set('KW_FIBER', 'FIBER', source=func_name)
         # define the observation time (mjd) of the wave solution
         self.params.set('KW_WAVETIME', 'WAVETIME', source=func_name)
@@ -663,6 +669,190 @@ class Spirou(Instrument):
         epoch_values = np.array(rdb_table[kw_date])
         # return the epoch groupings and epoch values
         return epoch_groups, epoch_values
+
+    def find_inputs(self):
+        """
+        Find the input files for an instrument and copy them to the correct
+        places
+
+        :return:
+        """
+        # get parameters
+        params = self.params
+        # get tqdm
+        tqdm = base.tqdm_module(params['USE_TQDM'], log.console_verbosity)
+        # get data directory
+        datadir = io.check_directory(params['DATA_DIR'])
+        # --------------------------------------------------------------------
+        # ask user for path
+        found = False
+        upath = ''
+        # loop until user path exists
+        while not found:
+            upath = input('\nEnter raw path to search for files:\t')
+            if os.path.exists(upath):
+                found = True
+            else:
+                log.warning('\nError: Path does not exist. Please try again.')
+        # convert to Path
+        upath = Path(upath)
+        # search raw path for files
+        files = list(upath.rglob('*.fits'))
+        # --------------------------------------------------------------------
+        # locate files
+        # --------------------------------------------------------------------
+        # print progress
+        log.general('Locating sym FP files')
+        # find sym FP e2dsff files
+        suffix = '_pp_e2dsff_C.fits'
+        symfp_keys = dict()
+        symfp_keys[params['KW_DPRTYPE']] = ['POLAR_FP', 'OBJ_FP']
+        symfp_keys[params['KW_OUTPUT']] = ['EXT_E2DS_FF']
+        symfp_files = io.find_files(files, suffix=suffix, hkeys=symfp_keys)
+        # print number found
+        log.general('\tFound {0} sym FP files'.format(len(symfp_files)))
+        # remove these from files
+        files = list(np.array(files)[~np.in1d(files, symfp_files)])
+        # --------------------------------------------------------------------
+        # print progress
+        log.general('Locating FP_FP files')
+        # find FP_FP e2dsff files
+        fpfp_keys = dict()
+        contains = '_pp_e2dsff_AB.fits'
+        fpfp_keys[params['KW_DPRTYPE']] = ['FP_FP']
+        fpfp_keys[params['KW_OUTPUT']] = ['EXT_E2DS_FF']
+        fpfp_files = io.find_files(files, contains=contains, hkeys=fpfp_keys)
+        # print number found
+        log.general('\tFound {0} FP_FP files'.format(len(fpfp_files)))
+        # remove these from files
+        files = list(np.array(files)[~np.in1d(files, fpfp_files)])
+        # --------------------------------------------------------------------
+        # print progress
+        log.general('Locating Science files')
+        # find science tcorr files
+        suffix = 'o_pp_e2dsff_tcorr_AB.fits'
+        sci_keys = dict()
+        sci_keys[params['KW_DPRTYPE']] = ['POLAR_FP', 'OBJ_FP',
+                                               'POLAR_DARK', 'OBJ_DARK']
+        sci_keys[params['KW_DRSOBJN']] = [params['OBJECT_SCIENCE']]
+        sci_keys[params['KW_OUTPUT']] = ['TELLU_OBJ']
+        science_files = io.find_files(files, suffix=suffix, hkeys=sci_keys)
+        # print number found
+        log.general('\tFound {0} Science files'.format(len(science_files)))
+        # remove these from files
+        files = list(np.array(files)[~np.in1d(files, science_files)])
+
+        # --------------------------------------------------------------------
+        # print progress
+        log.general('Locating Template files')
+        # find template files
+        if params['TEMPLATE_FILE'] in ['None', '', None]:
+            suffix = 'Template_s1d_{0}_sc1d_v_file_AB.fits'
+            suffix = suffix.format(params['OBJECT_TEMPLATE'])
+        else:
+            suffix = params['TEMPLATE_FILE']
+        temp_files = io.find_files(files, suffix=suffix)
+        # print number found
+        log.general('\tFound {0} Template files'.format(len(temp_files)))
+        # remove these from files
+        files = list(np.array(files)[~np.in1d(files, temp_files)])
+        # --------------------------------------------------------------------
+        # print progress
+        log.general('Locating Mask files')
+        # find mask files
+        suffix = '_pos.fits'
+        mask_files = io.find_files(files, suffix=suffix)
+        # print number found
+        log.general('\tFound {0} Mask files'.format(len(temp_files)))
+        # remove these from files
+        files = list(np.array(files)[~np.in1d(files, mask_files)])
+        # --------------------------------------------------------------------
+        # print progress
+        log.general('Locating Blaze files')
+        # find blaze files
+        if params['BLAZE_FILE'] not in ['None', '', None]:
+            suffix = '_blaze_AB.fits'
+            blaze_keys = dict()
+            blaze_keys[params['KW_OUTPUT']] = ['FF_BLAZE']
+        else:
+            suffix = params['BLAZE_FILE']
+            blaze_keys = None
+        blaze_files = io.find_files(files, suffix=suffix, hkeys=blaze_keys)
+        # print number found
+        log.general('\tFound {0} Blaze files'.format(len(temp_files)))
+        # --------------------------------------------------------------------
+        # copy files
+        # --------------------------------------------------------------------
+        # get directories
+        science_dir = io.make_dir(datadir, params['SCIENCE_SUBDIR'], 'Science',
+                                  subdir=params['OBJECT_SCIENCE'])
+        fp_dir = io.make_dir(datadir, params['SCIENCE_SUBDIR'], 'Science',
+                                  subdir='FP')
+        template_dir = io.make_dir(datadir, params['TEMPLATE_SUBDIR'],
+                                   'Templates')
+        mask_dir = io.make_dir(datadir, params['MASK_SUBDIR'], 'Mask')
+        calib_dir = io.make_dir(datadir, params['CALIB_SUBDIR'], 'Calib')
+        # --------------------------------------------------------------------
+        # copy science
+        # --------------------------------------------------------------------
+        # log progress
+        log.general('Copying science files')
+        # loop around science files
+        for science_file in tqdm(science_files):
+            # get infile
+            infile = str(science_file)
+            outfile = os.path.join(science_dir, os.path.basename(infile))
+            # copy
+            shutil.copy(infile, outfile)
+        # --------------------------------------------------------------------
+        # copy fps
+        # --------------------------------------------------------------------
+        # log progress
+        log.general('Copying FP files')
+        # loop around science files
+        for fp_file in tqdm(symfp_files + fpfp_files):
+            # get infile
+            infile = str(fp_file)
+            outfile = os.path.join(fp_dir, os.path.basename(infile))
+            # copy
+            shutil.copy(infile, outfile)
+        # --------------------------------------------------------------------
+        # copy template files
+        # --------------------------------------------------------------------
+        # log progress
+        log.general('Copying template files')
+        # loop around science files
+        for temp_file in tqdm(temp_files):
+            # get infile
+            infile = str(temp_file)
+            outfile = os.path.join(template_dir, os.path.basename(infile))
+            # copy
+            shutil.copy(infile, outfile)
+        # --------------------------------------------------------------------
+        # copy mask files
+        # --------------------------------------------------------------------
+        # log progress
+        log.general('Copying mask files')
+        # loop around science files
+        for mask_file in tqdm(mask_files):
+            # get infile
+            infile = str(mask_file)
+            outfile = os.path.join(mask_dir, os.path.basename(infile))
+            # copy
+            shutil.copy(infile, outfile)
+        # --------------------------------------------------------------------
+        # copy blaze files
+        # --------------------------------------------------------------------
+        # log progress
+        log.general('Copying blaze files')
+        # loop around science files
+        for blaze_file in tqdm(blaze_files):
+            # get infile
+            infile = str(blaze_file)
+            outfile = os.path.join(calib_dir, os.path.basename(infile))
+            # copy
+            shutil.copy(infile, outfile)
+
 
 
 # =============================================================================

@@ -587,6 +587,16 @@ class Instrument:
         # return the epoch groupings and epoch values
         raise self._not_implemented('get_epoch_groups')
 
+    def find_inputs(self):
+        """
+        Find the input files for an instrument and copy them to the correct
+        places
+
+        :return:
+        """
+        # return the epoch groupings and epoch values
+        raise self._not_implemented('find_inputs')
+
 
 # =============================================================================
 # Start of code
