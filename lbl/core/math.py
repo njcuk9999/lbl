@@ -329,7 +329,8 @@ if not HAS_NUMBA:
 # Set "nopython" mode for best performance, equivalent to @nji
 @jit(nopython=True)
 def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
-                   odd_ratio: float = 2e-4, nmax: int = 10):
+                   odd_ratio: float = 2e-4, nmax: int = 10,
+                   conv_cut=1e-2) -> Tuple[float, float]:
     """
     Provide values and corresponding errors and compute a weighted mean
 
@@ -337,8 +338,11 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
     :param error: np.array (1D), uncertainties for value array
     :param odd_ratio: float, the probability that the point is bad
                     Recommended value in Artigau et al. 2021 : f0 = 0.002
-    :param nmax: int, number of iterations to pass through
-    :return:
+    :param nmax: int, maximum number of iterations to pass through
+    :param conv_cut: float, the convergence cut criteria - how precise we have
+                     to get
+
+    :return: tuple, 1. the weighted mean, 2. the error on weighted mean
     """
     # deal with NaNs in value or error
     keep = np.isfinite(value) & np.isfinite(error)
@@ -347,15 +351,21 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
         return np.nan, np.nan
     # remove NaNs from arrays
     value, error = value[keep], error[keep]
-    # take a first guess at the mean (the median)
-    guess = np.median(value)
     # work out some values to speed up loop
     error2 = error ** 2
-    # just if nmax == 0
-    odd_good = np.ones(len(error2))
+    # placeholders for the "while" below
+    guess_prev = np.inf
+    # the 'guess' must be started as close as we possibly can to the actual
+    # value. Starting beyond ~3 sigma (or whatever the odd_ratio implies)
+    # would lead to the rejection of pretty much all points and would
+    # completely mess the convergence of the loop
+    guess = np.nanmedian(value)
+    bulk_error = 1.0
+    ite = 0
     # loop around until we do all required iterations
-    for _ in range(nmax):
-
+    while (np.abs(guess - guess_prev) / bulk_error > conv_cut) and (ite < nmax):
+        # store the previous guess
+        guess_prev = np.array(guess)
         # model points as gaussian weighted by likelihood of being a valid point
         # nearly but not exactly one for low-sigma values
         gfit = (1 - odd_ratio) * np.exp(-0.5 * ((value - guess) ** 2 / error2))
@@ -365,14 +375,15 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
         odd_good = 1 - odd_bad
         # calculate the weights based on the probability of being good
         weights = odd_good / error2
-
         # update the guess based on the weights
         if np.sum(np.isfinite(weights)) == 0:
             guess = np.nan
         else:
             guess = np.nansum(value * weights) / np.nansum(weights)
-    # work out the bulk error
-    bulk_error = np.sqrt(1.0 / np.nansum(odd_good / error2))
+            # work out the bulk error
+            bulk_error = np.sqrt(1.0 / np.nansum(odd_good / error2))
+        # keep track of the number of iterations
+        ite += 1
     # return the guess and bulk error
     return guess, bulk_error
 
