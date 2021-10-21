@@ -1,7 +1,7 @@
 # Example YAML file for use in LBL
 
 # Set instrument name
-INSTRUMENT: SPIROU
+INSTRUMENT: ESPRESSO
 
 # Set data directory
 DATA_DIR: /data/lbl/data/espresso/

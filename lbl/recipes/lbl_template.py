@@ -113,7 +113,6 @@ def __main__(inst: InstrumentsType, **kwargs):
     template_file = inst.template_file(template_dir, required=False)
     # science filenames
     science_files = inst.science_files(science_dir)
-
     # -------------------------------------------------------------------------
     # Step 3: Deal with reference file (first file)
     # -------------------------------------------------------------------------
@@ -135,9 +134,6 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 4: Loop around each file and load into cube
     # -------------------------------------------------------------------------
-    # TODO: store table of parameters for template
-    #       FILENAME, other header cols?
-
     # create a cube that contains one line for each file
     flux_cube = np.zeros([len(wavemap), len(science_files)])
     # weight cube to account for order overlap
@@ -145,7 +141,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     # science table
     sci_table = dict()
     # loop around files
-    for it, filename in tqdm(science_files):
+    for it, filename in enumerate(science_files):
+        # print progress
+        msg = 'Processing file {0} of {1}'
+        margs = [it + 1, len(science_files)]
+        log.general(msg.format(*margs))
         # select the first science file as a reference file
         sci_image, sci_hdr = inst.load_science(filename)
         # get wave solution for reference file
@@ -159,25 +159,25 @@ def __main__(inst: InstrumentsType, **kwargs):
         if berv != 0.0:
             sci_wave = mp.doppler_shift(sci_wave, -1e3 * berv)
         # loop around each order
-        for order_num in tqdm(range(len(sci_image.shape[0])), leave=False):
+        for order_num in tqdm(range(sci_image.shape[0])):
             # get this orders flux and wave
             osci_image = sci_image[order_num]
             osci_wave = sci_wave[order_num]
             # check that all points for this order are zero
             if np.sum(osci_wave == 0) != 0:
                 # log message about skipping this order
-                msg = ('File {0} Order {1}: Some points in wavelength '
+                msg = ('\tOrder {0}: Some points in wavelength '
                        'grid are zero. Skipping order.')
-                log.info(msg.format(it + 1, order_num))
+                log.info(msg.format(order_num))
                 # skip this order
                 continue
             # check that the grid increases or decreases in a monotonic way
             gradwave = np.gradient(osci_wave)
             # check the signs of wave map gradient
             if np.sign(np.min(gradwave)) != np.sign(np.max(gradwave)):
-                msg = ('File {0} Order {1}: Wavelength grid curves around. '
+                msg = ('\tOrder {0}: Wavelength grid curves around. '
                        'Skipping order')
-                log.info(msg.format(it + 1, order_num))
+                log.info(msg.format(order_num))
             # keep track of valid pixels and their fractional contribution to
             #  the model
             keep = np.isfinite(sci_image[order_num])
@@ -205,10 +205,13 @@ def __main__(inst: InstrumentsType, **kwargs):
     flux_cube[bad_domain] = np.nan
     # set the weighting of bad pixels to 1
     weight_cube[bad_domain] = 1
+    # -------------------------------------------------------------------------
+    # print progress
+    log.general('Calculating template')
     # divide by the weights (to correct for overlapping orders)
     flux_cube = flux_cube / weight_cube
     # normalize each slice of the cube by its median
-    for it in range(len(science_files)):
+    for it in tqdm(range(len(science_files))):
         flux_cube[:, it] = flux_cube[:, it] / np.nanmedian(flux_cube[:, it])
 
     # get the median and +/- 1 sigma values for the cube
