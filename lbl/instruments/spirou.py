@@ -128,9 +128,9 @@ class Spirou(Instrument):
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
         # define the tau_h20 of the observation
-        self.params.set('KW_TAU_H2O', 'TAU_H2O', source=func_name)
+        self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
-        self.params.set('KW_TAU_OTHERS', 'TAU_OTHE', source=func_name)
+        self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
         self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
         # define the output type of the file
