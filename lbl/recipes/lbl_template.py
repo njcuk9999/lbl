@@ -14,6 +14,7 @@ import numpy as np
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.science import general
 from lbl.resources import lbl_misc
@@ -34,22 +35,18 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_COMPUTE = [
+ARGS_TEMPLATE = [
                 # core
                 'INSTRUMENT', 'CONFIG_FILE',
                 # directory
-                'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
-                'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
+                'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
                 # science
-                'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
-                'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
-                # plotting
-                'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
+                'OBJECT_SCIENCE', 'OBJECT_TEMPLATE'
                 # other
-                'SKIP_DONE', 'VERBOSE', 'PROGRAM',
+                'VERBOSE', 'PROGRAM',
                 ]
 # TODO: Etienne - Fill out
-DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
+DESCRIPTION_TEMPLATE = 'Use this code to compute the LBL rv'
 
 
 # =============================================================================
@@ -65,7 +62,7 @@ def main(**kwargs):
     :return:
     """
     # deal with parsing arguments
-    args = select.parse_args(ARGS_COMPUTE, kwargs, DESCRIPTION_COMPUTE)
+    args = select.parse_args(ARGS_TEMPLATE, kwargs, DESCRIPTION_TEMPLATE)
     # load instrument
     inst = select.load_instrument(args, logger=log)
     # get data directory
@@ -91,7 +88,148 @@ def main(**kwargs):
 
 
 def __main__(inst: InstrumentsType, **kwargs):
-    pass
+    # -------------------------------------------------------------------------
+    # deal with debug
+    if inst is None or inst.params is None:
+        # deal with parsing arguments
+        args = select.parse_args(ARGS_TEMPLATE, kwargs, DESCRIPTION_TEMPLATE)
+        # load instrument
+        inst = select.load_instrument(args)
+        # assert inst type (for python typing later)
+        amsg = 'inst must be a valid Instrument class'
+        assert isinstance(inst, InstrumentsList), amsg
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
+    # -------------------------------------------------------------------------
+    # Step 1: Set up data directory
+    # -------------------------------------------------------------------------
+    dirout = select.make_all_directories(inst)
+    mask_dir, template_dir, calib_dir, science_dir = dirout[:4]
+    lblrv_dir, lbl_reftable_dir, lbl_rdb_dir, plot_dir = dirout[4:]
+    # -------------------------------------------------------------------------
+    # Step 2: Check and set filenames
+    # -------------------------------------------------------------------------
+    # template filename
+    template_file = inst.template_file(template_dir, required=False)
+    # science filenames
+    science_files = inst.science_files(science_dir)
+
+    # -------------------------------------------------------------------------
+    # Step 3: Deal with reference file (first file)
+    # -------------------------------------------------------------------------
+    # select the first science file as a reference file
+    refimage, refhdr =  inst.load_science(science_files[0])
+    # get wave solution for reference file
+    refwave = inst.get_wave_solution(science_files[0], refimage, refhdr)
+    # get domain coverage
+    wavemin, wavemax = np.nanmin(refwave), np.nanmax(refwave)
+    # work out a valid velocity step in km/s
+    velostep = general.pix_velocity_step(refwave)
+    # grid step in a convenient fraction of 1 km/s
+    grid_step = 1e3 * np.floor(velostep * 2) / 4
+    if grid_step == 0:
+        grid_step = 250.0
+    # grid scale for the template
+    wavemap = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
+                                     dv_grid=grid_step)
+    # -------------------------------------------------------------------------
+    # Step 4: Loop around each file and load into cube
+    # -------------------------------------------------------------------------
+    # TODO: store table of parameters for template
+    #       FILENAME, other header cols?
+
+    # create a cube that contains one line for each file
+    flux_cube = np.zeros([len(wavemap), len(science_files)])
+    # weight cube to account for order overlap
+    weight_cube = np.zeros([len(wavemap), len(science_files)])
+    # science table
+    sci_table = dict()
+    # loop around files
+    for it, filename in tqdm(science_files):
+        # select the first science file as a reference file
+        sci_image, sci_hdr = inst.load_science(filename)
+        # get wave solution for reference file
+        sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
+        # get the berv
+        berv = inst.get_berv(sci_hdr)
+        # populate science table
+        sci_table = inst.populate_sci_table(filename, sci_table, sci_hdr,
+                                            berv=berv)
+        # apply berv if required
+        if berv != 0.0:
+            sci_wave = mp.doppler_shift(sci_wave, -1e3 * berv)
+        # loop around each order
+        for order_num in tqdm(range(len(sci_image.shape[0])), leave=False):
+            # get this orders flux and wave
+            osci_image = sci_image[order_num]
+            osci_wave = sci_wave[order_num]
+            # check that all points for this order are zero
+            if np.sum(osci_wave == 0) != 0:
+                # log message about skipping this order
+                msg = ('File {0} Order {1}: Some points in wavelength '
+                       'grid are zero. Skipping order.')
+                log.info(msg.format(it + 1, order_num))
+                # skip this order
+                continue
+            # check that the grid increases or decreases in a monotonic way
+            gradwave = np.gradient(osci_wave)
+            # check the signs of wave map gradient
+            if np.sign(np.min(gradwave)) != np.sign(np.max(gradwave)):
+                msg = ('File {0} Order {1}: Wavelength grid curves around. '
+                       'Skipping order')
+                log.info(msg.format(it + 1, order_num))
+            # keep track of valid pixels and their fractional contribution to
+            #  the model
+            keep = np.isfinite(sci_image[order_num])
+            # spline the flux and valid pixel mask
+            spline_flux = mp.iuv_spline(osci_wave[keep], osci_image[keep],
+                                        k=1, ext=1)
+            spline_mask = mp.iuv_spline(osci_wave, keep, k=1, ext=1)
+            # spline onto destination wave grid
+            s1d_flux = spline_flux(wavemap)
+            s1d_weight = spline_mask(wavemap)
+            # calculate where the weights are good
+            bad_domain = s1d_weight < 0.95
+            # only keep points with >95% contribution from valid pixels
+            s1d_flux[bad_domain] = 0.0
+            s1d_weight[bad_domain] = 0.0
+            # push into flux and weight cubes
+            flux_cube[:, it] += s1d_flux
+            weight_cube[:, it] += s1d_weight
+    # -------------------------------------------------------------------------
+    # Creation of the template
+    # -------------------------------------------------------------------------
+    # points are not valid where weight is zero or flux_cube is exactly zero
+    bad_domain = (weight_cube == 0) | (flux_cube == 0)
+    # set the bad fluxes to NaN
+    flux_cube[bad_domain] = np.nan
+    # set the weighting of bad pixels to 1
+    weight_cube[bad_domain] = 1
+    # divide by the weights (to correct for overlapping orders)
+    flux_cube = flux_cube / weight_cube
+    # normalize each slice of the cube by its median
+    for it in range(len(science_files)):
+        flux_cube[:, it] = flux_cube[:, it] / np.nanmedian(flux_cube[:, it])
+
+    # get the median and +/- 1 sigma values for the cube
+    p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84], axis=1)
+    # calculate the rms of each wavelength element
+    rms = (p84 - p16) / 2
+
+    # -------------------------------------------------------------------------
+    # Write template
+    # -------------------------------------------------------------------------
+    # Save template to disk
+    log.general('Saving template to file: {0}'.format(template_file))
+    # get props
+    props = dict(wavelength=wavemap, flux=p50, eflux=rms, rms=rms)
+    # write table
+    general.write_template(template_file, props, sci_table)
+
+    # -------------------------------------------------------------------------
+    # return local namespace
+    # -------------------------------------------------------------------------
+    return locals()
 
 
 # =============================================================================
@@ -99,7 +237,7 @@ def __main__(inst: InstrumentsType, **kwargs):
 # =============================================================================
 if __name__ == "__main__":
     # print hello world
-    print('Hello World')
+    ll = main()
 
 # =============================================================================
 # End of code

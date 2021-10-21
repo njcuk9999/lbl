@@ -257,6 +257,41 @@ def spline_template(inst: InstrumentsType, template_file: str,
     return sps
 
 
+def pix_velocity_step(wave_vector: np.ndarray):
+    # work out the velocity scale
+    dwave = np.gradient(wave_vector, axis=1)
+    velostep = mp.nanmedian(dwave / wave_vector) * speed_of_light_ms / 1e3
+    return velostep
+
+
+def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 0.5):
+    """
+    magic grid is a standard way of representing a wavelength vector it is set
+    so that each element is exactly dv_grid step in velocity. If you shift
+    your velocity, then you have a simple translation of this vector.
+
+    :param wave0:
+    :param wave1:
+    :param dv_grid:
+    :return:
+    """
+    # default for the function is 500 m/s
+    # the arithmetic is a but confusing here, you first find how many
+    # elements you have on your grid, then pass it to an exponential
+    # the first element is exactely wave0, the last element is NOT
+    # exactly wave1, but is very close and is set to get your exact
+    # step in velocity
+    # get the length of the magic vector
+    logwaveratio = np.log(wave1/wave0)
+    len_magic = int(np.ceil(logwaveratio * speed_of_light_ms/dv_grid))
+    # get the positions for "magic length"
+    plen_magic = np.arange(len_magic)
+    # define the magic grid to use in ccf
+    magic_grid = np.exp((plen_magic/len_magic) * logwaveratio) * wave0
+    # return the magic grid
+    return magic_grid
+
+
 def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
                  sci_data: np.ndarray, wave_mask: np.ndarray,
                  weight_line: np.ndarray, kind: str) -> Tuple[float, float]:
@@ -321,13 +356,8 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # velocity step in m/s
     med_rv = np.nanmedian(wavegrid2 / np.gradient(wavegrid2))
     rv_step = speed_of_light_ms / med_rv
-    # get the length of the magic vector
-    logwaveratio = np.log(wave1/wave0)
-    len_magic = int(np.ceil(logwaveratio * speed_of_light_ms/rv_step))
-    # get the positions for "magic length"
-    plen_magic = np.arange(len_magic)
-    # define the magic grid to use in ccf
-    magic_grid = np.exp((plen_magic/len_magic) * logwaveratio) * wave0
+    # get the magic wave grid
+    magic_grid = get_magic_grid(wave0, wave1)
     # spline the magic grid
     magic_spline = spline_sp(magic_grid)
     # define a spline across the magic grid
@@ -1887,6 +1917,45 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # ---------------------------------------------------------------------
     # return rdb table
     return rdb_table4
+
+
+# =============================================================================
+# Template and Mask functions
+# =============================================================================
+def write_template(template_file: str, props: dict, sci_table: dict):
+    """
+    Write the template file to disk
+
+    :param template_file: str, the file and path to write to
+    :param props: dict, the template columns
+    :param sci_table: dict, the science table in dictionary form
+    :return:
+    """
+    # construct a new hdu list
+    hdulist = fits.HDUList()
+    # populate primary header
+    header = fits.Header()
+    header['NFILES'] = len(sci_table['FILENAME'])
+    # add to hdu list
+    hdulist.append(fits.PrimaryHDU(header=header))
+    # -------------------------------------------------------------------------
+    # create main table
+    table1 = Table()
+    table1['wavelength'] = props['wavelength']
+    table1['flux'] = props['flux']
+    table1['eflux'] = props['eflux']
+    table1['rms'] = props['rms']
+    # add to hdulist
+    hdulist.append(fits.BinTableHDU(data=table1))
+    # -------------------------------------------------------------------------
+    # construct table 2 - the science list
+    table2 = Table()
+    for key in sci_table:
+        table2[key] = sci_table[key]
+    # add to hdulist
+    hdulist.append(fits.BinTableHDU(data=table2))
+    # -------------------------------------------------------------------------
+    hdulist.writeto(template_file, overwrite=True)
 
 
 # =============================================================================

@@ -211,7 +211,7 @@ class Spirou(Instrument):
         # return absolute path
         return abspath
 
-    def template_file(self, directory: str) -> str:
+    def template_file(self, directory: str, required: bool = True) -> str:
         """
         Make the absolute path for the template file
 
@@ -231,7 +231,8 @@ class Spirou(Instrument):
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        io.check_file_exists(abspath)
+        if required:
+            io.check_file_exists(abspath)
         # return absolute path
         return abspath
 
@@ -470,6 +471,36 @@ class Spirou(Instrument):
             berv = 0.0
         # return the berv measurement (in m/s)
         return berv
+
+    def populate_sci_table(self, filename: str, tdict: dict,
+                           sci_hdr: fits.Header, berv: float = 0.0) -> dict:
+        """
+        Populate the science table
+
+        :param tdict:
+        :param berv:
+        :return:
+        """
+        # these are defined in params
+        drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR']
+        # add the filename
+        tdict = self.add_dict_list_value(tdict, 'FILENAME', filename)
+        # loop around header keys
+        for drs_key in drs_keys:
+            # if key is in params we can add the value to keys
+            if drs_key in self.params:
+                key = self.params[drs_key]
+            else:
+                key = str(drs_key)
+            # get value from header
+            value = sci_hdr.get(key, 'NULL')
+            # add to tdict
+            tdict = self.add_dict_list_value(tdict, key, value)
+        # add the berv separately
+        tdict = self.add_dict_list_value(tdict, 'BERV', berv)
+        # return updated storage dictionary
+        return tdict
 
     def flag_calib(self, sci_hdr: fits.Header) -> bool:
         """

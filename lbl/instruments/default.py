@@ -387,7 +387,7 @@ class Instrument:
         _ = directory
         raise self._not_implemented('mask_file')
 
-    def template_file(self, directory: str):
+    def template_file(self, directory: str, required: bool = True):
         """
         Make the absolute path for the template file
 
@@ -507,6 +507,18 @@ class Instrument:
         _ = sci_hdr
         raise self._not_implemented('get_berv')
 
+    def populate_sci_table(self, filename: str, tdict: dict,
+                           sci_hdr: fits.Header, berv: float = 0.0):
+        """
+        Populate the science table
+
+        :param sci_hdr:
+        :param berv:
+        :return:
+        """
+        _ = filename, tdict, sci_hdr, berv
+        raise self._not_implemented('get_berv')
+
     def flag_calib(self, sci_hdr: fits.Header):
         """
         Flag a file as a calibration file
@@ -596,6 +608,26 @@ class Instrument:
         """
         # return the epoch groupings and epoch values
         raise self._not_implemented('find_inputs')
+
+    def add_dict_list_value(self, store: Dict[str, Any], key: str,
+                             value: Any) -> Dict[str, list]:
+        """
+        Add a value to a dictionary store
+
+        :param store: dict, the storage dictionary to store lists in
+        :param key: str, the key to add/update dictionary
+        :param value: Any, the value to add to the dictionary key list
+
+        :return: dict, the updated store
+        """
+        # if we don't have key add it
+        if key not in store:
+            store[key] = [value]
+        # if we do append the list
+        else:
+            store[key].append(value)
+        # return the dictionary
+        return store
 
 
 # =============================================================================
