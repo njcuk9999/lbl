@@ -365,7 +365,7 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
     # loop around until we do all required iterations
     while (np.abs(guess - guess_prev) / bulk_error > conv_cut) and (ite < nmax):
         # store the previous guess
-        guess_prev = np.array(guess)
+        guess_prev = float(guess)
         # model points as gaussian weighted by likelihood of being a valid point
         # nearly but not exactly one for low-sigma values
         gfit = (1 - odd_ratio) * np.exp(-0.5 * ((value - guess) ** 2 / error2))
