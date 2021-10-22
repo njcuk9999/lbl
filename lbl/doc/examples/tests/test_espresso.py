@@ -44,6 +44,10 @@ num = 0
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
+    # TODO: add template test
+
+    # TODO: add mask test
+
     # run compile
     tbl1 = compute(object_science=objs[num], object_template=templates[num],
                    **keyword_args)

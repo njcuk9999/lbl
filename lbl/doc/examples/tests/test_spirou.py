@@ -25,6 +25,10 @@ gl699_config_file = working + 'spirou_gl699_config.yaml'
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
+    # TODO: add template test
+
+    # TODO: add mask test
+
     # run compute
     #tbl1a = compute(config_file=fp_config_file)
     tbl1b = compute(config_file=gl699_config_file)
