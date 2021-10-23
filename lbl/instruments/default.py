@@ -80,16 +80,18 @@ class Instrument:
         _ = self, filename
         return io.load_table(filename, kind='mask table')
 
-    def load_template(self, filename: str) -> Table:
+    def load_template(self, filename: str, get_hdr: bool = False) -> Table:
         """
         Load a template
 
         :param filename: str, absolute path to filename
+        :param get_hdr: bool, whether to get the head or not
 
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
         _ = self, filename
-        return io.load_table(filename, kind='template fits file')
+        return io.load_table(filename, kind='template fits file',
+                             get_hdr=get_hdr)
 
     def set_hkey(self, header: fits.Header, key: str, value: Any,
                  comment: Union[str, None] = None) -> fits.Header:
@@ -376,7 +378,7 @@ class Instrument:
     # -------------------------------------------------------------------------
     # Methods that MUST be overridden by the child instrument class
     # -------------------------------------------------------------------------
-    def mask_file(self, directory):
+    def mask_file(self, directory: str, required: bool = True):
         """
         Make the absolute path for the mask file
 
@@ -628,6 +630,102 @@ class Instrument:
             store[key].append(value)
         # return the dictionary
         return store
+
+    def get_stellar_model_format_dict(self, params: base_classes.ParamDict
+                                      ) -> dict:
+        """
+        Get the format dictionary for the stellar model URLS from
+        the supplied header
+
+        :param params: ParamDict, the parameter dictionary of constants for
+                       this instrument
+
+        :return:
+        """
+        # default uses the phoenix models from goettigen
+
+        # TODO: finish this function
+
+        # set up format dictionary
+        fdict = dict()
+        # ---------------------------------------------------------------------
+        # define the temperature range of the grids
+        teff_min = 3000
+        teff_max = 6000
+        teff_step = 100
+        teff_range = np.arange(teff_min, teff_max + teff_step, teff_step)
+        # ---------------------------------------------------------------------
+        # define a z range of the grids
+        z_min = 0.0
+        z_max = 0.0
+        z_step = 1.0
+        z_range = np.arange(z_min, z_max + z_step, z_step)
+        # ---------------------------------------------------------------------
+        # define a log g range of the grids
+        logg_min = 0.0
+        logg_max = 6.0
+        logg_step = 0.5
+        logg_range = np.arange(logg_min, logg_max + logg_step, logg_step)
+        # ---------------------------------------------------------------------
+        # define a Fe/H range of the grids
+        feh_min = 0.0
+        feh_max = 0.0
+        feh_step = 1.0
+        feh_range = np.arange(feh_min, feh_max + feh_step, feh_step)
+        # ---------------------------------------------------------------------
+        # define a alpha range of the grids
+        alpha_min = 0.0
+        alpha_max = 0.0
+        alpha_step = 0.2
+        alpha_range = np.arange(alpha_min, alpha_max + alpha_step, alpha_step)
+        # ---------------------------------------------------------------------
+        # get default teff
+        if params['OBJECT_TEFF'] in ['None', '', None]:
+            log.error('Teff is require. Please add OBJECT_TEFF to config')
+            input_teff = np.inf
+        else:
+            input_teff = params['OBJECT_TEFF']
+        # need to convert this to a closest teff
+        teff = _get_closest(input_teff, teff_range)
+        # ---------------------------------------------------------------------
+        # get the closest log g
+        logg = _get_closest(params['OBJECT_LOGG'], logg_range)
+        # ---------------------------------------------------------------------
+        # get the closest Fe/H
+        z_value = _get_closest(params['OBJECT_FEH'], feh_range)
+        # ---------------------------------------------------------------------
+        # get the closest Fe/H
+        feh = _get_closest(params['OBJECT_Z'], z_range)
+        # ---------------------------------------------------------------------
+        # get the  closest Fe/H
+        alpha = _get_closest(params['OBJECT_ALPHA'], alpha_range)
+        # ---------------------------------------------------------------------
+        # add to format dictionary
+        fdict['TRANGE'] = teff_range
+        fdict['TEMPERATURE'] = teff
+        fdict['LOGG'] = logg
+        fdict['ZVALUE'] = z_value
+        fdict['FEH'] = feh
+        fdict['ALPHA'] = alpha
+        # return the format dictionary
+        return fdict
+
+
+# =============================================================================
+# worker functions
+# =============================================================================
+def _get_closest(value: float, values: np.ndarray):
+    """
+    Find the closest value to an array of values
+
+    :param value: float, the value to find the closest of
+    :param values: np.ndarray, the values in which to choose a closest value
+    :return:
+    """
+    # find the position of the closest
+    pos = np.argmin(abs(value - values))
+    # return the closest value
+    return values[pos]
 
 
 # =============================================================================

@@ -158,11 +158,14 @@ class Harps(Instrument):
         self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
+        # the temperature of the object
+        # TODO: how do we get the temperature for HARPS?
+        self.params.set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
     # -------------------------------------------------------------------------
-    def mask_file(self, directory: str) -> str:
+    def mask_file(self, directory: str, required: bool = True) -> str:
         """
         Make the absolute path for the mask file
 
@@ -180,7 +183,8 @@ class Harps(Instrument):
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        io.check_file_exists(abspath)
+        if required:
+            io.check_file_exists(abspath)
         # return absolute path
         return abspath
 

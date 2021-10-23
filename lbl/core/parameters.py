@@ -301,6 +301,56 @@ params.set(key='PLOT_COMPIL_BINNED', value=False, source=__NAME__,
            arg='--plotbinned', dtype=bool)
 
 # =============================================================================
+# Define template and mask parameters
+# =============================================================================
+# Define the wave url for the stellar models
+params.set(key='STELLAR_WAVE_URL', value=None, source=__NAME__,
+           desc='the wave url for the stellar models',
+           dtype=str, not_none=True)
+
+# Define the wave file for the stellar models (using wget)
+params.set(key='STELLAR_WAVE_FILE', value=None, source=__NAME__,
+           desc='the wave file for the stellar models (using wget)',
+           dtype=str, not_none=True)
+
+# Define the stellar model url
+params.set(key='STELLAR_MODEL_URL', value=None, source=__NAME__,
+           desc='the stellar model url',
+           dtype=str, not_none=True)
+
+# Define the stellar model file name (using wget, with appriopriate format
+#     cards)
+params.set(key='STELLAR_MODEL_FILE', value=None, source=__NAME__,
+           desc='Define the stellar model file name (using wget, with '
+                'appriopriate format cards)',
+           dtype=str, not_none=True)
+
+# Define the object temperature (stellar model)
+params.set(key='OBJECT_TEFF', value=None, source=__NAME__,
+           desc='the object temperature (stellar model)', arg='--obj_temp',
+           dtype=float)
+
+# Define the object surface gravity (log g) (stellar model)
+params.set(key='OBJECT_LOGG', value=None, source=__NAME__,
+           desc='the object surface gravity (log g) (stellar model)',
+           arg='--obj_logg', dtype=float, not_none=True)
+
+# Define the object Fe/H  (stellar model)
+params.set(key='OBJECT_FEH', value=None, source=__NAME__,
+           desc='the object Fe/H  (stellar model)',
+           arg='--obj_feh', dtype=float, not_none=True)
+
+# Define the object Z (stellar model)
+params.set(key='OBJECT_Z', value=None, source=__NAME__,
+           desc='the object Z (stellar model)',
+           arg='--obj_z', dtype=float, not_none=True)
+
+# Define the object alpha (stellar model)
+params.set(key='OBJECT_ALPHA', value=None, source=__NAME__,
+           desc='the object alpha (stellar model)',
+           arg='--obj_alpha', dtype=float, not_none=True)
+
+# =============================================================================
 # Define other parameters
 # =============================================================================
 # define some storage of command line arguments used

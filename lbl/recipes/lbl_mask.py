@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-# CODE NAME HERE
+lbl_mask
 
-# CODE DESCRIPTION HERE
+Build mask for the template for use in LBL compute/compile
 
 Created on 2021-08-24
 
@@ -34,22 +34,18 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_COMPUTE = [
-                # core
-                'INSTRUMENT', 'CONFIG_FILE',
-                # directory
-                'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
-                'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
-                # science
-                'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
-                'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
-                # plotting
-                'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
-                # other
-                'SKIP_DONE', 'VERBOSE', 'PROGRAM',
-                ]
+ARGS_MASK = [# core
+             'INSTRUMENT', 'CONFIG_FILE',
+             # directory
+             'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',
+             # science
+             'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
+             'OBJECT_LOGG', 'OBJECT_FEH', 'OBJECT_Z', 'OBJECT_ALPHA',
+             # other
+             'VERBOSE', 'PROGRAM',
+            ]
 # TODO: Etienne - Fill out
-DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
+DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'
 
 
 # =============================================================================
@@ -65,7 +61,7 @@ def main(**kwargs):
     :return:
     """
     # deal with parsing arguments
-    args = select.parse_args(ARGS_COMPUTE, kwargs, DESCRIPTION_COMPUTE)
+    args = select.parse_args(ARGS_MASK, kwargs, DESCRIPTION_MASK)
     # load instrument
     inst = select.load_instrument(args, logger=log)
     # get data directory
@@ -91,7 +87,62 @@ def main(**kwargs):
 
 
 def __main__(inst: InstrumentsType, **kwargs):
-    pass
+    # -------------------------------------------------------------------------
+    # deal with debug
+    if inst is None or inst.params is None:
+        # deal with parsing arguments
+        args = select.parse_args(ARGS_MASK, kwargs, DESCRIPTION_MASK)
+        # load instrument
+        inst = select.load_instrument(args)
+        # assert inst type (for python typing later)
+        amsg = 'inst must be a valid Instrument class'
+        assert isinstance(inst, InstrumentsList), amsg
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
+    # -------------------------------------------------------------------------
+    # Step 1: Set up data directory
+    # -------------------------------------------------------------------------
+    dparams = select.make_all_directories(inst)
+    mask_dir, template_dir = dparams['MASK_DIR'], dparams['TEMPLATE_DIR']
+    models_dir = dparams['MODELS_DIR']
+    # -------------------------------------------------------------------------
+    # Step 2: Check and set filenames
+    # -------------------------------------------------------------------------
+    # mask filename
+    mask_file = inst.mask_file(mask_dir, required=False)
+    # template filename
+    template_file = inst.template_file(template_dir)
+    # get template file
+    template_image, template_hdr = inst.load_template(template_file,
+                                                      get_hdr=True)
+    # see if the template is a calibration template
+    flag_calib = inst.flag_calib(template_hdr)
+    # -------------------------------------------------------------------------
+    # Step 3: Get the Goettingen Phoenix models
+    # -------------------------------------------------------------------------
+    general.get_stellar_models(inst, )
+
+    # -------------------------------------------------------------------------
+    # Step 4: Find correct model for this template
+    # -------------------------------------------------------------------------
+
+
+    # -------------------------------------------------------------------------
+    # Step 5: Define a line mask for the model
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+    # Step 6: Work out systemic velocity for the template
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+    # Step 7: Write masks to file
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+    # return local namespace
+    # -------------------------------------------------------------------------
+    return locals()
 
 
 # =============================================================================
@@ -99,7 +150,7 @@ def __main__(inst: InstrumentsType, **kwargs):
 # =============================================================================
 if __name__ == "__main__":
     # print hello world
-    print('Hello World')
+    ll = main()
 
 # =============================================================================
 # End of code

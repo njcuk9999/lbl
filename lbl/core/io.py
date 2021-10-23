@@ -11,6 +11,7 @@ Created on 2021-03-15
 """
 from astropy.io import fits
 from astropy.table import Table
+import copy
 import numpy as np
 import os
 from pathlib import Path
@@ -30,6 +31,12 @@ __authors__ = base.__authors__
 # get classes
 LblException = base_classes.LblException
 log = base_classes.log
+# set forbidden header keys (not to be copied)
+FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
+                  'EXTEND', 'COMMENT', 'CRVAL1', 'CRPIX1', 'CDELT1',
+                  'CRVAL2', 'CRPIX2', 'CDELT2', 'BSCALE', 'BZERO',
+                  'PHOT_IM', 'FRAC_OBJ', 'FRAC_SKY', 'FRAC_BB',
+                  'NEXTEND', '', 'HISTORY']
 
 
 # =============================================================================
@@ -325,6 +332,29 @@ def filter_by_hkey(header: fits.Header, key: str,
     return False
 
 
+def copy_header(header1: fits.Header, header2: fits.Header) -> fits.Header:
+    """
+    Copy all non-forbidden header keys from header2 to header1
+
+    :param header1: header to update
+    :param header2: header to copy from
+
+    :return: fits.Header, header1 updated with keys from header2
+    """
+    # loop around all keys from header 2
+    for key in header2:
+        # skip forbidden keys
+        if key in FORBIDDEN_KEYS:
+            continue
+        # get value and comment from header2
+        value = copy.deepcopy(header2[key])
+        comment = str(header2.comments[key])
+        # push into header 1
+        header1[key] = (value, comment)
+    # return header 1
+    return header1
+
+
 # complex write inputs
 FitsData = Union[List[Union[Table, np.ndarray, None]], Table, np.ndarray, None]
 FitsHeaders = Union[List[Union[fits.Header, None]], fits.Header, None]
@@ -413,9 +443,9 @@ def write_fits(filename: str, data: FitsData = None,
 # =============================================================================
 # Define table functions
 # =============================================================================
-def load_table(filename: str,
-               kind: Union[str, None] = None,
-               fmt: str = 'fits') -> Table:
+def load_table(filename: str, kind: Union[str, None] = None,
+               fmt: str = 'fits', get_hdr: bool = False
+               ) -> Union[Table, Tuple[Table, fits.Header]]:
     """
     Standard way to load table
 
@@ -423,6 +453,7 @@ def load_table(filename: str,
     :param kind: the kind (for error message)
     :param fmt: str, the format of the table (i.e. csv or fits)
                    defaults to 'fits'
+    :param get_hdr: bool, whether to get the header or not
 
     :return: astropy.table.Table, the table loaded
     """
@@ -437,7 +468,12 @@ def load_table(filename: str,
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
-    return table
+    # deal with obtaining table header
+    if get_hdr:
+        hdr = fits.getheader(filename)
+        return table, hdr
+    else:
+        return table
 
 
 def write_table(filename: str, table: Table, fmt: str = 'fits',

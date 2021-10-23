@@ -46,7 +46,7 @@ ARGS_TEMPLATE = [
                 'VERBOSE', 'PROGRAM',
                 ]
 # TODO: Etienne - Fill out
-DESCRIPTION_TEMPLATE = 'Use this code to compute the LBL rv'
+DESCRIPTION_TEMPLATE = 'Use this code to create the LBL template'
 
 
 # =============================================================================
@@ -103,9 +103,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
-    dirout = select.make_all_directories(inst)
-    mask_dir, template_dir, calib_dir, science_dir = dirout[:4]
-    lblrv_dir, lbl_reftable_dir, lbl_rdb_dir, plot_dir = dirout[4:]
+    dparams = select.make_all_directories(inst)
+    template_dir, science_dir = dparams['TEMPLATE_DIR'], dparams['SCIENCE_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
@@ -227,7 +226,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get props
     props = dict(wavelength=wavemap, flux=p50, eflux=rms, rms=rms)
     # write table
-    general.write_template(template_file, props, sci_table)
+    general.write_template(template_file, props, refhdr, sci_table)
 
     # -------------------------------------------------------------------------
     # return local namespace

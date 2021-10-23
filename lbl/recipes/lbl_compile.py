@@ -114,9 +114,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
-    dirout = select.make_all_directories(inst)
-    mask_dir, template_dir, calib_dir, science_dir = dirout[:4]
-    lblrv_dir, lbl_reftable_dir, lbl_rdb_dir, plot_dir = dirout[4:]
+    dparams = select.make_all_directories(inst)
+    mask_dir, template_dir = dparams['MASK_DIR'], dparams['TEMPLATE_DIR']
+    calib_dir, science_dir = dparams['CALIB_DIR'], dparams['SCIENCE_DIR']
+    lblrv_dir, lbl_reftable_dir = dparams['LBLRV_DIR'], dparams['LBLRT_DIR']
+    lbl_rdb_dir, plot_dir = dparams['LBL_RDB_DIR'], dparams['PLOT_DIR']
     # -------------------------------------------------------------------------
     # Step 2: set filenames
     # -------------------------------------------------------------------------

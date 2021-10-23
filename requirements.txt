@@ -7,3 +7,4 @@ matplotlib==3.3.4
 tqdm==4.58.0
 pyyaml==5.4.1
 requests==2.25.1
+wget==3.2

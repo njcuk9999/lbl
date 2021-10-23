@@ -16,6 +16,7 @@ import os
 from scipy import stats
 from typing import Any, Dict, List, Tuple, Union
 import warnings
+import wget
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -1922,7 +1923,41 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
 # =============================================================================
 # Template and Mask functions
 # =============================================================================
-def write_template(template_file: str, props: dict, sci_table: dict):
+def get_stellar_models(inst: InstrumentsType):
+
+    # get parameters from instrument class
+    params = inst.params
+    # get stellar model wave url
+    wave_url = params['STELLAR_WAVE_URL']
+    # get stellar model wave file
+    wavefile = params['STELLAR_WAVE_FILE']
+    # get stellar model url
+    model_url = params['STELLAR_MODEL_URL']
+    # get stellar model file
+    modelfile = params['STELLAR_MODEL_FILE']
+    # construct path of to save wave file
+
+
+
+    # get the output path for the wave file
+    wavefile_outdir =
+    # get the outpth path for the model files
+    modelfile_outdir =
+
+
+
+    # get instrument specific format dictionary
+    fkwargs = inst.get_stellar_model_format_dict(params)
+    # get wave file (now format cards)
+    wget.download(wavefile.format(**fkwargs), out=)
+
+
+
+
+
+
+def write_template(template_file: str, props: dict, sci_hdr: fits.Header,
+                   sci_table: dict):
     """
     Write the template file to disk
 
@@ -1935,7 +1970,11 @@ def write_template(template_file: str, props: dict, sci_table: dict):
     hdulist = fits.HDUList()
     # populate primary header
     header = fits.Header()
-    header['NFILES'] = len(sci_table['FILENAME'])
+    # copy header from reference header
+    header = io.copy_header(header, sci_hdr)
+    # add custom keys
+    header['NTFILES'] = (len(sci_table['FILENAME']),
+                        'Number of files used to construct template')
     # add to hdu list
     hdulist.append(fits.PrimaryHDU(header=header))
     # -------------------------------------------------------------------------

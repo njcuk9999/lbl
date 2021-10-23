@@ -260,8 +260,15 @@ def load_instrument(args: ParamDict,
     return inst
 
 
-def make_all_directories(inst: Union[InstrumentsType]) -> List[str]:
+def make_all_directories(inst: Union[InstrumentsType]) -> ParamDict:
+    """
+    Make all directories and return directory parameter dictionary
 
+    :param inst:
+    :return:
+    """
+    # set fucntion name
+    func_name = __NAME__ + '.make_all_directories()'
     # get params
     params = inst.params
     # get data directory
@@ -291,11 +298,25 @@ def make_all_directories(inst: Union[InstrumentsType]) -> List[str]:
                               'LBL rdb')
     # make the plot directory
     plot_dir = io.make_dir(data_dir, 'plots', 'Plot')
+    # make the model directory
+    model_dir = io.make_dir(data_dir, 'models', 'Model')
+    # -------------------------------------------------------------------------
     # store output directories
-    out = [mask_dir, template_dir, calib_dir, science_dir, lblrv_dir,
-           lbl_reftable_dir, lbl_rdb_dir, plot_dir]
+    props = ParamDict()
+    # set properties
+    props.set('DATA_DIR', value=data_dir, source=func_name)
+    props.set('MASK_DIR', value=mask_dir, source=func_name)
+    props.set('TEMPLATE_DIR', value=template_dir, source=func_name)
+    props.set('CALIB_DIR', value=calib_dir, source=func_name)
+    props.set('SCIENCE_DIR', value=science_dir, source=func_name)
+    props.set('OBJ_SUBDIR', value=obj_subdir, source=func_name)
+    props.set('LBLRV_DIR', value=lblrv_dir, source=func_name)
+    props.set('LBLRT_DIR', value=lbl_reftable_dir, source=func_name)
+    props.set('LBL_RDB_DIR', value=lbl_rdb_dir, source=func_name)
+    props.set('PLOT_DIR', value=plot_dir, source=func_name)
+    props.set('MODELS_DIR', value=model_dir, source=func_name)
     # return output directories
-    return out
+    return props
 
 
 # =============================================================================

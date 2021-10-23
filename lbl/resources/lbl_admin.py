@@ -200,9 +200,12 @@ def create_directories(config_file: str = 'None'):
     # load instrument
     inst = select.load_instrument(args)
     # make directories
-    ourdirs = select.make_all_directories(inst)
+    dparams = select.make_all_directories(inst)
     # check and log creation
-    for outdir in ourdirs:
+    for dkey in dparams:
+        # get the directory entry
+        outdir = dparams[dkey]
+        # create if if it doesn't exist
         if os.path.exists(outdir):
             log.general('Created dir: {0}'.format(outdir))
         else:

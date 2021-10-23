@@ -149,28 +149,27 @@ class Espresso(Instrument):
                         source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-
         # TODO -> no equivalent in ESPRESSO
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER100',
                         source=func_name)
-
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
 
         self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
-
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
+        # the temperature of the object
+        # TODO: how do we get the temperature for ESPRESSO?
+        self.params.set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
     # -------------------------------------------------------------------------
-    def mask_file(self, directory: str) -> str:
+    def mask_file(self, directory: str, required: bool = True) -> str:
         """
         Make the absolute path for the mask file
 
@@ -188,7 +187,8 @@ class Espresso(Instrument):
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        io.check_file_exists(abspath)
+        if required:
+            io.check_file_exists(abspath)
         # return absolute path
         return abspath
 
