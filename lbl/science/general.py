@@ -1145,10 +1145,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['rjd'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['vrad'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['svrad'] = np.zeros_like(lblrvfiles, dtype=float)
-    rdb_dict['per_epoch_DDV'] = np.zeros_like(lblrvfiles, dtype=float)
-    rdb_dict['per_epoch_DDVRMS'] = np.zeros_like(lblrvfiles, dtype=float)
-    rdb_dict['per_epoch_DDDV'] = np.zeros_like(lblrvfiles, dtype=float)
-    rdb_dict['per_epoch_DDDVRMS'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['d2v'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['sd2v'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['d3v'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['sd3v'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['local_file_name'] = np.array(lblrvbasenames)
     # time for matplotlib
     rdb_dict['plot_date'] = np.zeros_like(lblrvfiles, dtype=float)
@@ -1263,13 +1263,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # use the odd mean ratio to calculate ddv and ddvrms
         ddv_guess, ddv_bulk_error = mp.odd_ratio_mean(ddv, ddvrms)
         # push into rdb_dict
-        rdb_dict['per_epoch_DDV'][row] = ddv_guess
-        rdb_dict['per_epoch_DDVRMS'][row] = ddv_bulk_error
+        rdb_dict['d2v'][row] = ddv_guess
+        rdb_dict['sd2v'][row] = ddv_bulk_error
         # use the odd mean ratio to calculate dddv and dddvrms
         dddv_guess, dddv_bulk_error = mp.odd_ratio_mean(dddv, dddvrms)
         # push into rdb_dict
-        rdb_dict['per_epoch_DDDV'][row] = dddv_guess
-        rdb_dict['per_epoch_DDDVRMS'][row] = dddv_bulk_error
+        rdb_dict['d3v'][row] = dddv_guess
+        rdb_dict['sd3v'][row] = dddv_bulk_error
         # ---------------------------------------------------------------------
         # if we don't have a calibration add plot values
         if not flag_calib:
@@ -1505,8 +1505,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             ccf_ew_row = float(ccf_ew_fp)
 
         # work out the fwhm (1 sigma * sigma value)
-        per_epoch_ddv = rdb_dict['per_epoch_DDV'][row]
-        per_epoch_ddvrms = rdb_dict['per_epoch_DDVRMS'][row]
+        per_epoch_ddv = rdb_dict['d2v'][row]
+        per_epoch_ddvrms = rdb_dict['d3v'][row]
         fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_ddv/ccf_ew_row)
         sig_fwhm_row = mp.fwhm() * (per_epoch_ddvrms/ccf_ew_row)
         # ---------------------------------------------------------------------
@@ -1636,11 +1636,11 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             vrad_colnames.append(colname)
         if colname.startswith('svrad'):
             svrad_colnames.append(colname)
-    # determine the wiehgted mean
+    # determine the weighted mean
     wmean_pairs = dict(zip(vrad_colnames, svrad_colnames))
-    wmean_pairs["per_epoch_DDV"] = "per_epoch_DDVRMS"
-    wmean_pairs["per_epoch_DDDV"] = "per_epoch_DDDVRMS"
-    wmean_pairs["fwhm"] = "sig_fwhm"
+    wmean_pairs['d2v'] = 'sd2v'
+    wmean_pairs['d3v'] = 'sd3v'
+    wmean_pairs['fwhm'] = 'sig_fwhm'
     # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB 2 table')
