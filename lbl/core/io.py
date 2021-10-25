@@ -350,7 +350,8 @@ def copy_header(header1: fits.Header, header2: fits.Header) -> fits.Header:
         value = copy.deepcopy(header2[key])
         comment = str(header2.comments[key])
         # push into header 1
-        header1[key] = (value, comment)
+        with warnings.catch_warnings(record=True) as _:
+            header1[key] = (value, comment)
     # return header 1
     return header1
 
@@ -407,7 +408,12 @@ def write_fits(filename: str, data: FitsData = None,
         log.warning(wmsg.format(*wargs))
     # add primary header
     if header[0] is not None:
-        hdu0.header = header[0]
+        # must append keys for primary extension
+        for key in header[0]:
+            value = header[0][key]
+            comment = header[0].comments[key]
+            with warnings.catch_warnings(record=True) as _:
+                hdu0.header[key] = (value, comment)
     # add primary extension to hdu list
     hdus = [hdu0]
     # -------------------------------------------------------------------------
@@ -432,7 +438,8 @@ def write_fits(filename: str, data: FitsData = None,
     # try to write to disk
     hdulist = fits.HDUList(hdus)
     try:
-        hdulist.writeto(filename, overwrite=True)
+        with warnings.catch_warnings(record=True) as _:
+            hdulist.writeto(filename, overwrite=True)
     except Exception as e:
         # construct error message
         emsg = 'Could not write file: {0}\n\t{1}: {2}'

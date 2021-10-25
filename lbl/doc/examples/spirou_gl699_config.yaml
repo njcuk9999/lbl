@@ -12,6 +12,9 @@ OBJECT_SCIENCE: GL699
 # Set template object name
 OBJECT_TEMPLATE: GL699
 
+# Set the object Teff (for mask creation)
+OBJECT_TEFF: 3224
+
 # Set the science input file string
 INPUT_FILE: '*e2dsff*AB.fits'
 

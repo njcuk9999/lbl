@@ -336,6 +336,48 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     plt.close()
 
 
+
+def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
+                  ccf_vector: np.ndarray, sys_vel: float):
+    """
+    CCF Debug plot
+
+    :param inst: Instrument, instrument this plot is used for
+    :param dvgrid: np.ndarray, the rv velocity grid
+    :param ccf_vector: np.ndarray, the ccf vector
+    :param ccf_fit: np.ndarray, the ccf fit vector
+    :param gcoeffs: np.ndarray the ccf fit coefficients
+
+    :return: None - plots
+    """
+    # import matplotlib
+    plt = import_matplotlib()
+    # -------------------------------------------------------------------------
+    # this is a plot skip if this is True
+    if not inst.params['PLOT']:
+        return
+    # plot specific switch
+    if not inst.params['PLOT_MASK_CCF']:
+        return
+    # -------------------------------------------------------------------------
+    # set up plot
+    fig, frame = plt.subplots(ncols=1, nrows=1)
+    # -------------------------------------------------------------------------
+    # plot functions here
+    frame.plot(dvgrid, ccf_vector)
+    # construct title
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE'],
+             sys_vel]
+    title = 'OBJ_SCI={0} OBJ_TEMP={1}\nSystem Velocity: {2:.4f} km/s '
+    # set labels and title
+    frame.set(xlabel='Velocity [km/s]', ylabel='CCF contrast',
+              title=title.format(*targs))
+    # -------------------------------------------------------------------------
+    # show and close plot
+    plt.show()
+    plt.close()
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

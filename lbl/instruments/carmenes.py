@@ -64,8 +64,10 @@ class Carmenes(Instrument):
         self.params.set('INSTRUMENT', 'CARMENES', source=func_name)
         # define the default science input files
         self.params.set('INPUT_FILE', '*e2ds*A.fits', source=func_name)
-        # define the mask
+        # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
+        # define the mask type
+        self.params.set('MASK_TYPE', 'pos', source=func_name)
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
@@ -102,6 +104,31 @@ class Carmenes(Instrument):
         #    was NOT a reference file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
         self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
+        # define readout noise per instrument (assumes ~5e- and 10 pixels)
+        self.params.set('READ_OUT_NOISE', 15, source=func_name)
+        # Define the wave url for the stellar models
+        self.params.set('STELLAR_WAVE_URL', source=func_name,
+                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
+                              'HiResFITS/')
+        # Define the wave file for the stellar models (using wget)
+        self.params.set('STELLAR_WAVE_FILE', source=func_name,
+                        value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
+        # Define the stellar model url
+        self.params.set('STELLAR_MODEL_URL', source=func_name,
+                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
+                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                              '{ZSTR}{ASTR}/')
+        # Define the stellar model file name (using wget, with appropriate
+        #     format  cards)
+        self.params.set('STELLAR_MODEL_FILE', source=func_name,
+                        value='lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}'
+                              '.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits')
+        # Define the object surface gravity (log g) (stellar model)
+        self.params.set('OBJECT_LOGG', value=4.5, source=func_name)
+        # Define the object Z (stellar model)
+        self.params.set('OBJECT_Z', value=0.0, source=func_name)
+        # Define the object alpha (stellar model)
+        self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
 
         # ---------------------------------------------------------------------
         # Header keywords
@@ -110,12 +137,10 @@ class Carmenes(Instrument):
         # TODO -> not relevant for CARMENES
         self.params.set('KW_WAVECOEFFS', 'NONE',
                         source=func_name)
-
         # TODO -> not relevant for CARMENES
         # define wave num orders key in header
         self.params.set('KW_WAVEORDN', 'NONE',
                         source=func_name)
-
         # TODO -> not relevant for CARMENES
         # define wave degree key in header
         self.params.set('KW_WAVEDEGN', 'NONE',
@@ -125,58 +150,41 @@ class Carmenes(Instrument):
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'HIERARCH CARACAL BJD', source=func_name)
-
         # define snr keyword
         self.params.set('KW_SNR', 'HIERARCH CARACAL FOX SNR 50',
                         source=func_name)
         # define berv keyword
         self.params.set('KW_BERV', 'HIERARCH CARACAL BERV', source=func_name)
-
         # TODO -> not relevant for CARMENES
         # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'NONE',
-                        source=func_name)
-
+        self.params.set('KW_BLAZE_FILE', 'NONE', source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'EXPTIME',
-                        source=func_name)
+        self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS',
-                        source=func_name)
-
+        self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
-
         # TODO -> not relevant for CARMENES
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'NONE',
-                        source=func_name)
-
+        self.params.set('KW_DPRTYPE', 'NONE', source=func_name)
         # TODO -> not relevant for CARMENES
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'NONE',
-                        source=func_name)
+        self.params.set('KW_WAVEFILE', 'NONE', source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'OBJECT',
-                        source=func_name)
+        self.params.set('KW_OBJNAME', 'OBJECT', source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-
         # TODO -> not relevant for CARMENES
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
-
         # TODO -> not relevant for CARMENES
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'NONE',
-                        source=func_name)
-
+        self.params.set('KW_EXT_SNR', 'NONE', source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH CARACAL BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         # TODO -> not relevant for CARMENES
         self.params.set('KW_REF_KEY', 'NONE', source=func_name)
-
         # TODO -> not relevant for CARMENES
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'NONE', source=func_name)

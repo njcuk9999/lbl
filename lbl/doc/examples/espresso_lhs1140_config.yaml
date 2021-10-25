@@ -12,6 +12,9 @@ OBJECT_SCIENCE: LHS-1140
 # Set template object name
 OBJECT_TEMPLATE: LHS-1140
 
+# Set the object Teff (for mask creation)
+OBJECT_TEFF: 3600
+
 # Set the science input file string
 INPUT_FILE: '*.fits'
 

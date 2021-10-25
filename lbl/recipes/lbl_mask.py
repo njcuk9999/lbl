@@ -10,10 +10,12 @@ Created on 2021-08-24
 @author: cook
 """
 import numpy as np
+import os
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.science import general
 from lbl.resources import lbl_misc
@@ -40,9 +42,11 @@ ARGS_MASK = [# core
              'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',
              # science
              'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
-             'OBJECT_LOGG', 'OBJECT_FEH', 'OBJECT_Z', 'OBJECT_ALPHA',
+             'OBJECT_LOGG', 'OBJECT_Z', 'OBJECT_ALPHA',
+             # plotting
+             'PLOT', 'PLOT_MASK_CCF',
              # other
-             'VERBOSE', 'PROGRAM',
+             'OVERWRITE', 'VERBOSE', 'PROGRAM',
             ]
 # TODO: Etienne - Fill out
 DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'
@@ -113,31 +117,59 @@ def __main__(inst: InstrumentsType, **kwargs):
     # template filename
     template_file = inst.template_file(template_dir)
     # get template file
-    template_image, template_hdr = inst.load_template(template_file,
+    template_table, template_hdr = inst.load_template(template_file,
                                                       get_hdr=True)
     # see if the template is a calibration template
     flag_calib = inst.flag_calib(template_hdr)
-    # -------------------------------------------------------------------------
-    # Step 3: Get the Goettingen Phoenix models
-    # -------------------------------------------------------------------------
-    general.get_stellar_models(inst, )
 
     # -------------------------------------------------------------------------
-    # Step 4: Find correct model for this template
+    # Step 3: Check if mask exists
     # -------------------------------------------------------------------------
+    if os.path.exists(mask_file) and not inst.params['OVERWRITE']:
+        # log that mask exist
+        msg = 'Mask {0} exists. Skipping mask creation. '
+        log.warning(msg.format(mask_file))
+        log.warning('Set --overwrite to recalculate mask')
+        # return here
+        return locals()
 
+    # -------------------------------------------------------------------------
+    # Step 4: Find correct Goettingen Phoenix models and get them if not present
+    # -------------------------------------------------------------------------
+    m_wavemap, m_spectrum = general.get_stellar_models(inst, models_dir)
 
     # -------------------------------------------------------------------------
-    # Step 5: Define a line mask for the model
+    # Step 5: Find the lines (regions of sign change in the derivative)
     # -------------------------------------------------------------------------
+    line_table = general.find_mask_lines(inst, template_table)
 
     # -------------------------------------------------------------------------
     # Step 6: Work out systemic velocity for the template
     # -------------------------------------------------------------------------
+    if not flag_calib:
+        # work out the systemic velocity in km/s
+        sys_vel = general.mask_systemic_velocity(inst, line_table, m_wavemap,
+                                                 m_spectrum)
+        # update line_table for the systemic velocity
+        line_table['ll_mask_s'] = mp.doppler_shift(line_table['ll_mask_s'],
+                                                   1000 * sys_vel)
+        line_table['ll_mask_e'] = mp.doppler_shift(line_table['ll_mask_e'],
+                                                   1000 * sys_vel)
+    else:
+        sys_vel = np.nan
 
     # -------------------------------------------------------------------------
     # Step 7: Write masks to file
     # -------------------------------------------------------------------------
+    # get the positive and negative masks
+    neg_mask = line_table['w_mask'] > 0
+    pos_mask = line_table['w_mask'] < 0
+    # now normalize the weights
+    norm = np.nanmean(np.abs(line_table['w_mask']))
+    line_table['w_mask'] = line_table['w_mask'] / norm
+    # write mask to file
+    inst.write_mask(mask_file, line_table, pos_mask, neg_mask, sys_vel,
+                    template_hdr)
 
     # -------------------------------------------------------------------------
     # return local namespace

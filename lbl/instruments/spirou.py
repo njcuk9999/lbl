@@ -67,8 +67,10 @@ class Spirou(Instrument):
         self.params.set('INSTRUMENT', 'SPIROU', source=func_name)
         # define the default science input files
         self.params.set('INPUT_FILE', '*e2dsff*AB.fits', source=func_name)
-        # define the mask
+        # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
+        # define the mask type
+        self.params.set('MASK_TYPE', 'pos', source=func_name)
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
@@ -101,6 +103,29 @@ class Spirou(Instrument):
         self.params.set('FP_STD_LIST', ['OBJ_FP', 'POLAR_FP'], source=func_name)
         # define readout noise per instrument (assumes ~5e- and 10 pixels)
         self.params.set('READ_OUT_NOISE', 30, source=func_name)
+        # Define the wave url for the stellar models
+        self.params.set('STELLAR_WAVE_URL', source=func_name,
+                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
+                              'HiResFITS/')
+        # Define the wave file for the stellar models (using wget)
+        self.params.set('STELLAR_WAVE_FILE', source=func_name,
+                        value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
+        # Define the stellar model url
+        self.params.set('STELLAR_MODEL_URL', source=func_name,
+                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
+                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                              '{ZSTR}{ASTR}/')
+        # Define the stellar model file name (using wget, with appropriate
+        #     format  cards)
+        self.params.set('STELLAR_MODEL_FILE', source=func_name,
+                        value='lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}'
+                              '.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits')
+        # Define the object surface gravity (log g) (stellar model)
+        self.params.set('OBJECT_LOGG', value=4.5, source=func_name)
+        # Define the object Z (stellar model)
+        self.params.set('OBJECT_Z', value=0.0, source=func_name)
+        # Define the object alpha (stellar model)
+        self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
 
         # ---------------------------------------------------------------------
         # Header keywords
@@ -199,13 +224,15 @@ class Spirou(Instrument):
 
         :return: absolute path to mask file
         """
+        # get type of mask
+        mask_type = self.params['MASK_TYPE']
         # deal with no object
         if self.params['OBJECT_SCIENCE'] is None:
             raise LblException('OBJECT_SCIENCE name must be defined')
         else:
             objname = self.params['OBJECT_SCIENCE']
         # define base name
-        basename = '{0}_pos.fits'.format(objname)
+        basename = '{0}_{1}.fits'.format(objname, mask_type)
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists

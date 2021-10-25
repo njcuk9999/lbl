@@ -12,6 +12,9 @@ OBJECT_SCIENCE: PROXIMA
 # Set template object name
 OBJECT_TEMPLATE: PROXIMA
 
+# Set the object Teff (for mask creation)
+OBJECT_TEFF: 3042
+
 # Set the science input file string
 INPUT_FILE: '*e2ds*A.fits'
 

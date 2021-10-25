@@ -221,12 +221,10 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Write template
     # -------------------------------------------------------------------------
-    # Save template to disk
-    log.general('Saving template to file: {0}'.format(template_file))
     # get props
     props = dict(wavelength=wavemap, flux=p50, eflux=rms, rms=rms)
     # write table
-    general.write_template(template_file, props, refhdr, sci_table)
+    inst.write_template(template_file, props, refhdr, sci_table)
 
     # -------------------------------------------------------------------------
     # return local namespace

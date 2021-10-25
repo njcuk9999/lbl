@@ -45,6 +45,8 @@ log = base_classes.log
 InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value
+speed_of_light_kms = constants.c.value / 1000.0
+
 
 # =============================================================================
 # Define compute functions
@@ -1923,10 +1925,21 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
 # =============================================================================
 # Template and Mask functions
 # =============================================================================
-def get_stellar_models(inst: InstrumentsType):
+def get_stellar_models(inst: InstrumentsType, model_dir: str
+                       ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get the stellar models required for this instrument / observation
+    (based on params and the get_stellar_model_format_dict from the instrument)
 
+    :param inst: instrument class instance
+    :param model_dir: str, the model directory path
+
+    :return: tuple, 1. np.ndarray: the model wave map and 2. np.ndarray: the
+             model spectrum to be used
+    """
     # get parameters from instrument class
     params = inst.params
+    # -------------------------------------------------------------------------
     # get stellar model wave url
     wave_url = params['STELLAR_WAVE_URL']
     # get stellar model wave file
@@ -1935,66 +1948,221 @@ def get_stellar_models(inst: InstrumentsType):
     model_url = params['STELLAR_MODEL_URL']
     # get stellar model file
     modelfile = params['STELLAR_MODEL_FILE']
-    # construct path of to save wave file
-
-
-
+    # -------------------------------------------------------------------------
     # get the output path for the wave file
-    wavefile_outdir =
+    wavefile_outdir = str(model_dir)
     # get the outpth path for the model files
-    modelfile_outdir =
-
-
-
+    modelfile_outdir = str(model_dir)
+    # -------------------------------------------------------------------------
     # get instrument specific format dictionary
     fkwargs = inst.get_stellar_model_format_dict(params)
-    # get wave file (now format cards)
-    wget.download(wavefile.format(**fkwargs), out=)
+    # -------------------------------------------------------------------------
+    # get the full download links
+    wavefile_url = (wave_url + wavefile).format(**fkwargs)
+    modelfile_url = (model_url + modelfile).format(**fkwargs)
+    # -------------------------------------------------------------------------
+    # get the full output paths (including files)
+    wavefile_outfile = os.path.join(wavefile_outdir, wavefile)
+    model_outfile = os.path.join(modelfile_outdir, modelfile)
+    # get the full wave output file and model output file
+    out_wavefile = wavefile_outfile.format(**fkwargs)
+    out_model = model_outfile.format(**fkwargs)
+    # -------------------------------------------------------------------------
+    # check if we already have the wave file
+    if not os.path.exists(out_wavefile):
+        # print that we are downloading wave file
+        msg = 'Downloading model wave file. \n\t{0}'
+        log.general(msg.format(wavefile_url))
+        # get wave file (now format cards)
+        wget.download(wavefile_url, out=out_wavefile)
+    else:
+        # print that we are downloading wave file
+        msg = 'Found model wave file. \n\t{0}'
+        log.general(msg.format(out_wavefile))
+    # -------------------------------------------------------------------------
+    # check if we already have the model
+    if not os.path.exists(out_model):
+        # print that we are downloading model file
+        msg = 'Downloading model spectrum. \n\t{0}'
+        log.general(msg.format(modelfile_url))
+        # get wave file (now format cards)
+        wget.download(modelfile_url, out=out_model)
+    else:
+        # print that we are downloading model file
+        msg = 'Found model spectrum. \n\t{0}'
+        log.general(msg.format(out_model))
+    # -------------------------------------------------------------------------
+    # load the model wave file and the model spectrum
+    m_wavemap, _ = io.load_fits(out_wavefile)
+    m_spectrum, _ = io.load_fits(out_model)
+    # -------------------------------------------------------------------------
+    # model wavemap is in Angstrom -> convert to nm
+    m_wavemap = m_wavemap / 10.0
+    # -------------------------------------------------------------------------
+    # return the wavefile and model file to be used
+    return m_wavemap, m_spectrum
 
 
-
-
-
-
-def write_template(template_file: str, props: dict, sci_hdr: fits.Header,
-                   sci_table: dict):
+def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     """
-    Write the template file to disk
+    Get the mask lines from the template data
 
-    :param template_file: str, the file and path to write to
-    :param props: dict, the template columns
-    :param sci_table: dict, the science table in dictionary form
+    :param inst:
+    :param template_table:
     :return:
     """
-    # construct a new hdu list
-    hdulist = fits.HDUList()
-    # populate primary header
-    header = fits.Header()
-    # copy header from reference header
-    header = io.copy_header(header, sci_hdr)
-    # add custom keys
-    header['NTFILES'] = (len(sci_table['FILENAME']),
-                        'Number of files used to construct template')
-    # add to hdu list
-    hdulist.append(fits.PrimaryHDU(header=header))
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
+    # get the wave and flux vectors for the tempalte
+    t_wave = np.array(template_table['wavelength'])
+    t_flux = np.array(template_table['flux'])
     # -------------------------------------------------------------------------
-    # create main table
-    table1 = Table()
-    table1['wavelength'] = props['wavelength']
-    table1['flux'] = props['flux']
-    table1['eflux'] = props['eflux']
-    table1['rms'] = props['rms']
-    # add to hdulist
-    hdulist.append(fits.BinTableHDU(data=table1))
+    # TODO: Question: is setting the flux to 0 a good idea??
+    # remove NaNs prior to convolution
+    t_flux[np.isnan(t_flux)] = 0
     # -------------------------------------------------------------------------
-    # construct table 2 - the science list
-    table2 = Table()
-    for key in sci_table:
-        table2[key] = sci_table[key]
-    # add to hdulist
-    hdulist.append(fits.BinTableHDU(data=table2))
+    # smooth the spectrum to avoid lines that coincide with small-scale noise
+    #   excursion
+    t_flux = np.convolve(t_flux, np.ones(5), mode='same')
     # -------------------------------------------------------------------------
-    hdulist.writeto(template_file, overwrite=True)
+    # find the first and second derivative of the flux
+    dflux = np.gradient(t_flux)
+    ddflux = np.gradient(dflux)
+    # -------------------------------------------------------------------------
+    # lines are regions there is a sign change in the derivative of the flux
+    #   we also have some checks for NaNs
+    cond1 = np.sign(dflux[1:]) != np.sign(dflux[:-1])
+    cond2 = np.isfinite(ddflux[1:])
+    cond3 = np.isfinite(dflux[1:])
+    cond4 = np.isfinite(dflux[:-1])
+    # get the position where all these condition are True
+    line = np.where(cond1 & cond2 & cond3 & cond4)[0]
+    # -------------------------------------------------------------------------
+    # create vectors for the outputs
+    # start of a line
+    ll_mask_s = np.zeros_like(line, dtype=float)
+    # end of a line
+    ll_mask_e = np.zeros_like(line, dtype=float)
+    # depth of line relative to continuum
+    depth = np.zeros_like(line, dtype=float)
+    # -------------------------------------------------------------------------
+    # the weight is the second derivative of the flux. The sharper the line,
+    # the more weight we give it
+    # weight of the line is not used in LBL but nice to document
+    w_mask = ddflux[line]
+    f_mask = t_flux[line]
+    # -------------------------------------------------------------------------
+    # find the bits of continuum on either side of line and find depth
+    #    relative to that
+    depth[1:-1] = 1 - f_mask[1:-1] / (0.5 * (f_mask[0:-2]+f_mask[2:]))
+    # -------------------------------------------------------------------------
+    # print progress
+    log.general('Finding mask lines')
+    # loop around each line and populate the start and ends of the line
+    for it in tqdm(range(len(line))):
+        # get pixel start and end
+        start, end = line[it], line[it] + 2
+        # ---------------------------------------------------------------------
+        # we perform a linear interpolation to find the exact wavelength
+        # where the derivatives goes to zero
+        coeffs = np.polyfit(dflux[start:end], t_wave[start:end], 1)
+        # we only want the center
+        wave_cent = coeffs[1]
+        # ---------------------------------------------------------------------
+        # we offset that wavelength by the systemic velocity and subtract
+        #   half the line width
+        # TODO: Qusetion dv is 0??
+        dv = 0.0
+        part1 = (1 + (-dv / 2) / speed_of_light_kms)
+        part2 = (1 - (-dv / 2) / speed_of_light_kms)
+        correction1 = np.sqrt(part1 / part2)
+        ll_mask_s[it] = wave_cent * correction1
+        # ---------------------------------------------------------------------
+        # same but for the upper bound to the line position
+        part1 = (1 + (dv / 2) / speed_of_light_kms)
+        part2 = (1 - (dv / 2) / speed_of_light_kms)
+        correction2 = np.sqrt(part1 / part2)
+        ll_mask_e[it] = wave_cent * correction2
+    # -------------------------------------------------------------------------
+    # store in a table for on going use
+    table = Table()
+    table['ll_mask_s'] = ll_mask_s
+    table['ll_mask_e'] = ll_mask_e
+    table['w_mask'] = w_mask
+    table['value'] = f_mask
+    table['depth'] = depth
+    # return the mask table
+    return table
+
+
+
+def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
+                           m_wavemap: np.ndarray,
+                           m_spectrum: np.ndarray) -> float:
+    """
+    Measure the systemic velocity of a mask compared to a model
+
+    :param line_table:
+    :param m_wavefile:
+    :param m_spectrum:
+    :return:
+    """
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
+    # create a spline of the model spectrum
+    smodel = mp.iuv_spline(m_wavemap, m_spectrum)
+
+    # assume a zero velocity and search around it
+    dv0 = 0.0
+    # TODO: Question: if scale is 1.0 do we need it?
+    scale = 1.0
+    # get the center of the lines
+    wave_cent = 0.5 * (line_table['ll_mask_s'] + line_table['ll_mask_e'])
+
+    # get a dv range to search across
+    dvs = np.arange(-200, 200 + 0.5, 0.5)
+    # apply a scale to the grid
+    dvs = dvs * scale
+    # work out the negative mask
+    neg_mask = line_table['w_mask'] > 0
+
+    # get the negative masked vectors
+    weight_tmp = line_table['w_mask'][neg_mask]
+    wave_tmp = wave_cent[neg_mask]
+    # -------------------------------------------------------------------------
+    # print progress
+    log.general('Calculating CCF for each DV element')
+    # storage for the CCF outputs
+    ccf = np.zeros_like(dvs)
+    # calculate the CCF for each dv element
+    for it in tqdm(range(len(dvs))):
+        # get the wave grid at this rv element
+        wave_it = mp.doppler_shift(wave_tmp, dvs[it] * 1000)
+        # get the model on this wave grid
+        model_it = smodel(wave_it)
+        # calculate the ccf (just the sum of weights * model)
+        ccf[it] = np.sum(weight_tmp * model_it)
+    # robust polyfit on the ccf
+    ccf_coeffs = mp.robust_polyfit(dvs, ccf, 3, 5)
+    # remove gradients in the ccf
+    ccf = ccf / np.polyval(ccf_coeffs[0], dvs)
+    # -------------------------------------------------------------------------
+    # find the exact position of the minimum
+    pix_min = np.argmin(ccf)
+    pstart, pend = pix_min - 1, pix_min + 2
+    # fit a quadratic
+    fit_coeffs = np.polyfit(dvs[pstart:pend], ccf[pstart:pend], 2)
+    # work out the systemic velocity
+    sys_vel = -0.5 * fit_coeffs[1] / fit_coeffs[0]
+    # display system velocity
+    msg = 'System velocity for {0} is {1:.3f} km/s'
+    log.general(msg.format(inst.params['OBJECT_TEMPLATE'], sys_vel))
+    # -------------------------------------------------------------------------
+    # ccf plot
+    plot.mask_plot_ccf(inst, dvs, ccf, sys_vel)
+    # -------------------------------------------------------------------------
+    # return the systemic velocity
+    return sys_vel
 
 
 # =============================================================================

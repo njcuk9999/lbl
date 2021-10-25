@@ -78,6 +78,11 @@ params.set(key='SKIP_DONE', value=False, source=__NAME__,
            desc='Whether to skip done files',
            arg='--skip', dtype=bool)
 
+# Define whether to skip done files
+params.set(key='OVERWRITE', value=False, source=__NAME__,
+           desc='Whether to overwrite files that already exist',
+           arg='--overwrite', dtype=bool)
+
 # Define the verbosity level
 params.set(key='VERBOSE', value=2, source=__NAME__, options=[0, 1, 2],
            desc='Verbosity 0=only warnings/errors, 1=info/warnings/errors,'
@@ -107,7 +112,9 @@ params.set(key='OBJECT_TEMPLATE', value=None, source=__NAME__,
                 '(If None set to OBJECT_SCIENCE)',
            arg='--obj_template', dtype=str)
 
-params.set(key='OBJECT_DPRTYPES', value=['OBJ', 'POLAR'])
+# define the mask type (pos, neg, full)
+params.set(key='MASK_TYPE', value='pos',
+           desc='the mask type (pos, neg, full)', dtype=str)
 
 # =============================================================================
 # Define compute parameters
@@ -300,6 +307,11 @@ params.set(key='PLOT_COMPIL_BINNED', value=False, source=__NAME__,
            desc='Whether to do the compil binned plot',
            arg='--plotbinned', dtype=bool)
 
+# Define whether to do the mask ccf plot
+params.set(key='PLOT_MASK_CCF', value=False, source=__NAME__,
+           desc='whether to do the mask ccf plot',
+           arg='--plotmaskccf', dtype=bool)
+
 # =============================================================================
 # Define template and mask parameters
 # =============================================================================
@@ -334,11 +346,6 @@ params.set(key='OBJECT_TEFF', value=None, source=__NAME__,
 params.set(key='OBJECT_LOGG', value=None, source=__NAME__,
            desc='the object surface gravity (log g) (stellar model)',
            arg='--obj_logg', dtype=float, not_none=True)
-
-# Define the object Fe/H  (stellar model)
-params.set(key='OBJECT_FEH', value=None, source=__NAME__,
-           desc='the object Fe/H  (stellar model)',
-           arg='--obj_feh', dtype=float, not_none=True)
 
 # Define the object Z (stellar model)
 params.set(key='OBJECT_Z', value=None, source=__NAME__,
@@ -559,6 +566,7 @@ params.set(key='KW_REF_KEY', value=None, source=__NAME__, not_none=True,
 params.set(key='KW_MODELVEL', value=None, source=__NAME__, not_none=True,
            desc='Template/model velocity from CCF',
            comment='Template velo. from CCF [m/s]')
+
 
 # =============================================================================
 # Start of code

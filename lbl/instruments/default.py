@@ -375,6 +375,97 @@ class Instrument:
         if self.params['OBJECT_TEMPLATE'] is None:
             self.params.set('OBJECT_TEMPLATE', value=objname, source=func_name)
 
+    def write_template(self, template_file: str, props: dict,
+                       sci_hdr: fits.Header, sci_table: dict):
+        """
+        Write the template file to disk
+
+        :param template_file: str, the file and path to write to
+        :param props: dict, the template columns
+        :param sci_table: dict, the science table in dictionary form
+        :return:
+        """
+        # construct a new hdu list
+        hdulist = fits.HDUList()
+        # populate primary header
+        header = fits.Header()
+        # copy header from reference header
+        header = io.copy_header(header, sci_hdr)
+        # add custom keys
+        header = self.set_hkey(header, 'KW_NTFILES', len(sci_table['FILENAME']))
+        header = self.set_hkey(header, 'KW_VERSION', __version__)
+        header = self.set_hkey(header, 'KW_VDATE', __date__)
+        header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
+        header = self.set_hkey(header, 'KW_INSTRUMENT',
+                               self.params['INSTRUMENT'])
+        # ---------------------------------------------------------------------
+        # create main table
+        table1 = Table()
+        table1['wavelength'] = props['wavelength']
+        table1['flux'] = props['flux']
+        table1['eflux'] = props['eflux']
+        table1['rms'] = props['rms']
+        # ---------------------------------------------------------------------
+        # construct table 2 - the science list
+        table2 = Table()
+        for key in sci_table:
+            table2[key] = sci_table[key]
+        # ---------------------------------------------------------------------
+        # Save template to disk
+        log.general('Saving template to file: {0}'.format(template_file))
+        # ---------------------------------------------------------------------
+        # write to file
+        io.write_fits(template_file, data=[None, table1, table2],
+                      header=[header, None, None],
+                      dtype=[None, 'table', 'table'])
+
+    def write_mask(self, mask_file: str, line_table: Table,
+                   pos_mask: np.ndarray, neg_mask: np.ndarray,
+                   sys_vel: float, template_hdr: fits.Header):
+        """
+        Write the mask (in lbl_mask) to disk
+
+        :param mask_file: str, the mask path and default filename
+        :param line_table: astropy table, the line table to add
+        :param pos_mask: np.array, the positive weights mask
+        :param neg_mask: np.array, the negative weights mask
+        :param sys_vel: float, the systemic velocity for the object
+        :param template_hdr: fits.Header, the template header (to be copied
+                             to the template)
+
+        :return:
+        """
+        # get the mask type for the default mask name
+        mask_type = self.params['MASK_TYPE']
+        # set up the three outputs
+        masks = [pos_mask, neg_mask, np.ones_like(pos_mask, dtype=bool)]
+        extensions = ['pos', 'neg', 'full']
+        # ---------------------------------------------------------------------
+        # loop around each file
+        for it in range(len(masks)):
+            # get mask
+            mask = masks[it]
+            # get filename
+            new_mask_file = mask_file.replace(mask_type, extensions[it])
+            # set up primary HDU
+            header = fits.Header()
+            # copy header from reference header
+            header = io.copy_header(header, template_hdr)
+            # add keys
+            header = self.set_hkey(header, 'KW_SYSTEMIC_VELO', sys_vel * 1000)
+            header = self.set_hkey(header, 'KW_VERSION', __version__)
+            header = self.set_hkey(header, 'KW_VDATE', __date__)
+            header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
+            header = self.set_hkey(header, 'KW_INSTRUMENT',
+                                   self.params['INSTRUMENT'])
+            # log writing
+            msg = 'Writing mask file to disk: {0}'
+            log.general(msg.format(new_mask_file))
+            # write to file
+            io.write_fits(new_mask_file, data=[None, line_table[mask]],
+                          header=[header, None],
+                          dtype=[None, 'table'])
+
     # -------------------------------------------------------------------------
     # Methods that MUST be overridden by the child instrument class
     # -------------------------------------------------------------------------
@@ -637,15 +728,13 @@ class Instrument:
         Get the format dictionary for the stellar model URLS from
         the supplied header
 
+        default uses the phoenix models from Goettigen
+
         :param params: ParamDict, the parameter dictionary of constants for
                        this instrument
 
         :return:
         """
-        # default uses the phoenix models from goettigen
-
-        # TODO: finish this function
-
         # set up format dictionary
         fdict = dict()
         # ---------------------------------------------------------------------
@@ -667,12 +756,6 @@ class Instrument:
         logg_step = 0.5
         logg_range = np.arange(logg_min, logg_max + logg_step, logg_step)
         # ---------------------------------------------------------------------
-        # define a Fe/H range of the grids
-        feh_min = 0.0
-        feh_max = 0.0
-        feh_step = 1.0
-        feh_range = np.arange(feh_min, feh_max + feh_step, feh_step)
-        # ---------------------------------------------------------------------
         # define a alpha range of the grids
         alpha_min = 0.0
         alpha_max = 0.0
@@ -692,21 +775,24 @@ class Instrument:
         logg = _get_closest(params['OBJECT_LOGG'], logg_range)
         # ---------------------------------------------------------------------
         # get the closest Fe/H
-        z_value = _get_closest(params['OBJECT_FEH'], feh_range)
-        # ---------------------------------------------------------------------
-        # get the closest Fe/H
-        feh = _get_closest(params['OBJECT_Z'], z_range)
+        zvalue = _get_closest(params['OBJECT_Z'], z_range)
         # ---------------------------------------------------------------------
         # get the  closest Fe/H
         alpha = _get_closest(params['OBJECT_ALPHA'], alpha_range)
         # ---------------------------------------------------------------------
         # add to format dictionary
-        fdict['TRANGE'] = teff_range
-        fdict['TEMPERATURE'] = teff
-        fdict['LOGG'] = logg
-        fdict['ZVALUE'] = z_value
-        fdict['FEH'] = feh
-        fdict['ALPHA'] = alpha
+        fdict['TEFF'] = '{0:05d}'.format(int(teff))
+        fdict['LOGG'] = '{0:.2f}'.format(logg)
+        fdict['ZVALUE'] = '{0:.1f}'.format(zvalue)
+        if zvalue == 0:
+            fdict['ZSTR'] = 'Z-0.0'
+        else:
+            fdict['ZSTR'] = 'Z{0:+.1f}'.format(zvalue)
+        fdict['AVALUE'] = alpha
+        if alpha != 0:
+            fdict['ASTR'] = '.Alpha={0:+.2f}'.format(alpha)
+        else:
+            fdict['ASTR'] = ''
         # return the format dictionary
         return fdict
 

@@ -56,6 +56,10 @@ OBJECT_SCIENCE: None
 ## Default = None   SPIROU_VALUE = None
 OBJECT_TEMPLATE: None
 
+# Set the object Teff (for mask creation)
+## Default = None   SPIROU_VALUE = None
+OBJECT_TEFF: 3224
+
 # Blaze file to use (must be present in the CALIB directory)
 ## Default = None   SPIROU_VALUE = None
 BLAZE_FILE: None

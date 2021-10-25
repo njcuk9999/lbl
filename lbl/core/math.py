@@ -698,6 +698,45 @@ def curve_fit(*args, funcname: Union[str, None] = None, **kwargs):
                                                 func=funcname, error=error)
 
 
+def robust_polyfit(x: np.ndarray, y: np.ndarray, degree: int,
+                   nsigcut: float) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    A robust polyfit (iterating on the residuals) until nsigma is below the
+    nsigcut threshold. Takes care of NaNs before fitting
+
+    :param x: np.ndarray, the x array to pass to np.polyval
+    :param y: np.ndarray, the y array to pass to np.polyval
+    :param degree: int, the degree of polynomial fit passed to np.polyval
+    :param nsigcut: float, the threshold sigma required to return result
+    :return:
+    """
+    # set up mask
+    keep = np.isfinite(y)
+    # set the nsigmax to infinite
+    nsigmax = np.inf
+    # set the fit as unset at first
+    fit = None
+    # while sigma is greater than sigma cut keep fitting
+    while nsigmax > nsigcut:
+        # calculate the polynomial fit (of the non-NaNs)
+        fit = np.polyfit(x[keep], y[keep], degree)
+        # calculate the residuals of the polynomial fit
+        res = y - np.polyval(fit, x)
+        # work out the new sigma values
+        sig = np.nanmedian(np.abs(res))
+        if sig == 0:
+            nsig = np.zeros_like(res)
+            nsig[res != 0] = np.inf
+        else:
+            nsig = np.abs(res) / sig
+        # work out the maximum sigma
+        nsigmax = np.max(nsig[keep])
+        # re-work out the keep criteria
+        keep = nsig < nsigcut
+    # return the fit and the mask of good values
+    return np.array(fit), np.array(keep)
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

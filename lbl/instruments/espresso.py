@@ -64,8 +64,10 @@ class Espresso(Instrument):
         self.params.set('INSTRUMENT', 'ESPRESSO', source=func_name)
         # define the default science input files
         self.params.set('INPUT_FILE', 'ES_*.fits', source=func_name)
-        # define the mask
+        # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
+        # define the mask type
+        self.params.set('MASK_TYPE', 'pos', source=func_name)
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
@@ -83,16 +85,14 @@ class Espresso(Instrument):
         # Question: Espresso value?
         self.params.set('COMPIL_FP_EWID', 3.0, source=func_name)
         # define the first band (from get_binned_parameters) to plot (band1)
-
         self.params.set('COMPILE_BINNED_BAND1', 'g', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-
         self.params.set('COMPILE_BINNED_BAND2', 'r', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
         self.params.set('COMPILE_BINNED_BAND3', 'i', source=func_name)
-
+        # define the reference wavelength used in the slope fitting in nm
         self.params.set('COMPIL_SLOPE_REF_WAVE', 650, source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
@@ -102,6 +102,31 @@ class Espresso(Instrument):
         #    was NOT a reference file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
         self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
+        # define readout noise per instrument (assumes ~5e- and 10 pixels)
+        self.params.set('READ_OUT_NOISE', 15, source=func_name)
+        # Define the wave url for the stellar models
+        self.params.set('STELLAR_WAVE_URL', source=func_name,
+                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
+                              'HiResFITS/')
+        # Define the wave file for the stellar models (using wget)
+        self.params.set('STELLAR_WAVE_FILE', source=func_name,
+                        value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
+        # Define the stellar model url
+        self.params.set('STELLAR_MODEL_URL', source=func_name,
+                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
+                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                              '{ZSTR}{ASTR}/')
+        # Define the stellar model file name (using wget, with appropriate
+        #     format  cards)
+        self.params.set('STELLAR_MODEL_FILE', source=func_name,
+                        value='lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}'
+                              '.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits')
+        # Define the object surface gravity (log g) (stellar model)
+        self.params.set('OBJECT_LOGG', value=4.5, source=func_name)
+        # Define the object Z (stellar model)
+        self.params.set('OBJECT_Z', value=0.0, source=func_name)
+        # Define the object alpha (stellar model)
+        self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
 
         # ---------------------------------------------------------------------
         # Header keywords
@@ -109,8 +134,7 @@ class Espresso(Instrument):
         # define wave coeff key in header
 
         # TODO -> not relevant for ESPRESSO, remove ?
-        self.params.set('KW_WAVECOEFFS', 'NONE',
-                        source=func_name)
+        self.params.set('KW_WAVECOEFFS', 'NONE', source=func_name)
         # define wave num orders key in header
         self.params.set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
                         source=func_name)
@@ -139,8 +163,7 @@ class Espresso(Instrument):
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO DPR TYPE',
-                        source=func_name)
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO DPR TYPE', source=func_name)
         # define the filename of the wave solution
         self.params.set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
                         source=func_name)
@@ -158,7 +181,6 @@ class Espresso(Instrument):
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-
         self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
