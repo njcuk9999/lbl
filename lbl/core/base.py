@@ -16,9 +16,9 @@ import os
 # Define variables
 # =============================================================================
 __NAME__: str = 'base.py'
-__version__: str = '0.0.016'
-__date__: str = '2021-10-20'
-__authors__: str = 'Neil Cook, Etienne Artigau'
+__version__: str = '0.0.017'
+__date__: str = '2021-10-25'
+__authors__: str = 'Neil Cook, Etienne Artigau,Thomas Vandel'
 __package__: str = 'lbl'
 
 # currently supported instruments
