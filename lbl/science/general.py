@@ -2017,7 +2017,6 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     t_wave = np.array(template_table['wavelength'])
     t_flux = np.array(template_table['flux'])
     # -------------------------------------------------------------------------
-    # TODO: Question: is setting the flux to 0 a good idea??
     # remove NaNs prior to convolution
     t_flux[np.isnan(t_flux)] = 0
     # -------------------------------------------------------------------------
@@ -2069,20 +2068,11 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
         # we only want the center
         wave_cent = coeffs[1]
         # ---------------------------------------------------------------------
-        # we offset that wavelength by the systemic velocity and subtract
-        #   half the line width
-        # TODO: Qusetion dv is 0??
-        dv = 0.0
-        part1 = (1 + (-dv / 2) / speed_of_light_kms)
-        part2 = (1 - (-dv / 2) / speed_of_light_kms)
-        correction1 = np.sqrt(part1 / part2)
-        ll_mask_s[it] = wave_cent * correction1
+        # set the start equal to the center of the line
+        ll_mask_s[it] = wave_cent
         # ---------------------------------------------------------------------
-        # same but for the upper bound to the line position
-        part1 = (1 + (dv / 2) / speed_of_light_kms)
-        part2 = (1 - (dv / 2) / speed_of_light_kms)
-        correction2 = np.sqrt(part1 / part2)
-        ll_mask_e[it] = wave_cent * correction2
+        # set the end equal to the center of the line
+        ll_mask_e[it] = wave_cent
     # -------------------------------------------------------------------------
     # store in a table for on going use
     table = Table()
@@ -2111,21 +2101,12 @@ def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # create a spline of the model spectrum
     smodel = mp.iuv_spline(m_wavemap, m_spectrum)
-
-    # assume a zero velocity and search around it
-    dv0 = 0.0
-    # TODO: Question: if scale is 1.0 do we need it?
-    scale = 1.0
     # get the center of the lines
     wave_cent = 0.5 * (line_table['ll_mask_s'] + line_table['ll_mask_e'])
-
     # get a dv range to search across
     dvs = np.arange(-200, 200 + 0.5, 0.5)
-    # apply a scale to the grid
-    dvs = dvs * scale
     # work out the negative mask
     neg_mask = line_table['w_mask'] > 0
-
     # get the negative masked vectors
     weight_tmp = line_table['w_mask'][neg_mask]
     wave_tmp = wave_cent[neg_mask]

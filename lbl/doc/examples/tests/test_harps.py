@@ -11,6 +11,8 @@ Created on 2021-10-18
 """
 from lbl import compil
 from lbl import compute
+from lbl import mask
+from lbl import template
 
 # =============================================================================
 # Define variables
@@ -36,6 +38,7 @@ keyword_args['INPUT_FILE'] = working + 'science/Proxima-tc/HARPS*_e2ds_A.fits'
 # add objects
 objs = ['Proxima-tc']
 templates = ['Proxima-tc']
+teffs = [3042]
 # set which object to run
 num = 0
 
@@ -45,15 +48,17 @@ num = 0
 # =============================================================================
 if __name__ == "__main__":
 
-    # TODO: add template test
-
-    # TODO: add mask test
-
-    # run compile
-    tbl1 = compute(object_science=objs[num], object_template=templates[num],
+    # run template
+    tbl0 = template(object_science=objs[num], object_template=templates[num],
+                    **keyword_args)
+    # run mask code
+    tbl1 = mask(object_science=objs[num], object_template=templates[num],
+                object_teff=teffs[num], **keyword_args)
+    # run compute
+    tbl2 = compute(object_science=objs[num], object_template=templates[num],
                    **keyword_args)
-
-    tbl2 = compil(object_science=objs[num], object_template=templates[num],
+    # run compile
+    tbl3 = compil(object_science=objs[num], object_template=templates[num],
                   **keyword_args)
 
 # =============================================================================
