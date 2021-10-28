@@ -23,8 +23,8 @@ from lbl.resources import lbl_misc
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'lbl_compute.py'
-__STRNAME__ = 'LBL Compute'
+__NAME__ = 'lbl_template.py'
+__STRNAME__ = 'LBL Template'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -120,13 +120,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get wave solution for reference file
     refwave = inst.get_wave_solution(science_files[0], refimage, refhdr)
     # get domain coverage
-    wavemin, wavemax = np.nanmin(refwave), np.nanmax(refwave)
-    # work out a valid velocity step in km/s
-    velostep = general.pix_velocity_step(refwave)
-    # grid step in a convenient fraction of 1 km/s
-    grid_step = 1e3 * np.floor(velostep * 2) / 4
-    if grid_step == 0:
-        grid_step = 250.0
+    wavemin, wavemax = float(np.nanmin(refwave)), float(np.nanmax(refwave))
+    # work out a valid velocity step in m/s
+    grid_step = general.get_velocity_step(refwave)
     # grid scale for the template
     wavemap = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
                                      dv_grid=grid_step)

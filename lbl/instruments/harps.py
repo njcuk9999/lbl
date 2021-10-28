@@ -287,10 +287,12 @@ class Harps(Instrument):
 
         :return: float, systemic velocity in m/s
         """
+        # get systemic velocity key
+        sysvelkey = self.params['KW_SYSTEMIC_VELO']
         # load the mask header
         mask_hdr = io.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
-        systemic_vel = -1000 * io.get_hkey(mask_hdr, 'SYSTVEL')
+        systemic_vel = -io.get_hkey(mask_hdr, sysvelkey)
         # return systemic velocity in m/s
         return systemic_vel
 
@@ -462,7 +464,7 @@ class Harps(Instrument):
             # get value from header
             value = sci_hdr.get(key, 'NULL')
             # add to tdict
-            tdict = self.add_dict_list_value(tdict, key, value)
+            tdict = self.add_dict_list_value(tdict, drs_key, value)
         # add the berv separately
         tdict = self.add_dict_list_value(tdict, 'BERV', berv)
         # return updated storage dictionary

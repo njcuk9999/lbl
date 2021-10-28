@@ -259,23 +259,44 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # return splines
     return sps
 
+def get_velocity_step(wave_vector: np.ndarray, rounding: bool = True) -> float:
+    """
+    Return the velocity step in m/s
 
-def pix_velocity_step(wave_vector: np.ndarray):
-    # work out the velocity scale
-    dwave = np.gradient(wave_vector, axis=1)
+    :param wave_vector: np.array, the wave grid
+
+    :return: float, the grid step in m/s
+    """
+    # get the gradient of the wave length solution
+    # deal with 1D wave vector
+    if len(wave_vector.shape) == 1:
+        dwave = np.gradient(wave_vector)
+    # deal with 2D wave vector
+    else:
+        dwave = np.gradient(wave_vector, axis=1)
+    # get the velocity step [in km/s]
     velostep = mp.nanmedian(dwave / wave_vector) * speed_of_light_ms / 1e3
-    return velostep
+    # if we are not rounding then we return the full velocity step
+    if not rounding:
+        # return grid step in m/s
+        return velostep * 1000
+    # grid step in a convenient fraction of 1 km/s
+    grid_step = 1e3 * np.floor(velostep * 2) / 4
+    if grid_step == 0:
+        grid_step = 250.0
+    # return grid step in m/s
+    return grid_step
 
 
-def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 0.5):
+def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 500):
     """
     magic grid is a standard way of representing a wavelength vector it is set
     so that each element is exactly dv_grid step in velocity. If you shift
     your velocity, then you have a simple translation of this vector.
 
-    :param wave0:
-    :param wave1:
-    :param dv_grid:
+    :param wave0: first wavelength element
+    :param wave1: second wavelength element
+    :param dv_grid: grid size in m/s
     :return:
     """
     # default for the function is 500 m/s
@@ -353,14 +374,16 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # spline the science data
     spline_sp = mp.iuv_spline(wavegrid2, sci_data2, k=1, ext=1)
     # min wavelength in domain
-    wave0 = np.nanmin(wavegrid2)
+    wave0 = float(np.nanmin(wavegrid2))
     # maxwavelength in domain
-    wave1 = np.nanmax(wavegrid2)
+    wave1 = float(np.nanmax(wavegrid2))
     # velocity step in m/s
     med_rv = np.nanmedian(wavegrid2 / np.gradient(wavegrid2))
     rv_step = speed_of_light_ms / med_rv
+    # work out a valid velocity step in m/s
+    grid_step = get_velocity_step(wavegrid2)
     # get the magic wave grid
-    magic_grid = get_magic_grid(wave0, wave1)
+    magic_grid = get_magic_grid(wave0, wave1, dv_grid=grid_step)
     # spline the magic grid
     magic_spline = spline_sp(magic_grid)
     # define a spline across the magic grid

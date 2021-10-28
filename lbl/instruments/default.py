@@ -385,8 +385,6 @@ class Instrument:
         :param sci_table: dict, the science table in dictionary form
         :return:
         """
-        # construct a new hdu list
-        hdulist = fits.HDUList()
         # populate primary header
         header = fits.Header()
         # copy header from reference header

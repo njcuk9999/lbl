@@ -24,8 +24,8 @@ from lbl.resources import lbl_misc
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'lbl_compute.py'
-__STRNAME__ = 'LBL Compute'
+__NAME__ = 'lbl_mask.py'
+__STRNAME__ = 'LBL Mask'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__

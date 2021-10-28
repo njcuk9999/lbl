@@ -24,6 +24,9 @@ BLAZE_FILE: None
 # Set template file (None for default)
 TEMPLATE_FILE: None
 
+# Overwrite current mask file (if present)
+OVERWRITE: True
+
 # Set whether to plot any plots
 PLOT: True
 

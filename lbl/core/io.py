@@ -412,6 +412,10 @@ def write_fits(filename: str, data: FitsData = None,
         for key in header[0]:
             value = header[0][key]
             comment = header[0].comments[key]
+            # skip comments
+            if isinstance(value, fits.header._HeaderCommentaryCards):
+                continue
+            # add key
             with warnings.catch_warnings(record=True) as _:
                 hdu0.header[key] = (value, comment)
     # add primary extension to hdu list

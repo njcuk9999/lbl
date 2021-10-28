@@ -33,6 +33,7 @@ keyword_args['PLOT_COMPIL_BINNED'] = keyword_args['PLOT']
 keyword_args['SKIP_DONE'] = False
 keyword_args['MASK_SUBDIR'] = working + 'masks'
 keyword_args['INPUT_FILE'] = working + 'science/Proxima-tc/HARPS*_e2ds_A.fits'
+keyword_args['OVERWRITE'] = True
 # add objects
 objs = ['Proxima-tc']
 templates = ['Proxima-tc']

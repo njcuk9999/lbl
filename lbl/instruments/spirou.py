@@ -182,6 +182,10 @@ class Spirou(Instrument):
         self.params.set('KW_RHOMB2', 'SBRHB2_P', source=func_name)
         # define the calib-reference density
         self.params.set('KW_CDEN_P', 'SBCDEN_P', source=func_name)
+        # define the FP Internal Temp: FPBody(deg C)
+        self.params.set('KW_FPI_TEMP', 'SBCFPI_T', source=func_name)
+        # define the FP External Temp: FPBody(deg C)
+        self.params.set('KW_FPE_TEMP', 'SBCFPE_T', source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
         self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
@@ -315,10 +319,12 @@ class Spirou(Instrument):
 
         :return: float, systemic velocity in m/s
         """
+        # get systemic velocity key
+        sysvelkey = self.params['KW_SYSTEMIC_VELO']
         # load the mask header
         mask_hdr = io.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
-        systemic_vel = -1000 * io.get_hkey(mask_hdr, 'SYSTVEL')
+        systemic_vel = -io.get_hkey(mask_hdr, sysvelkey)
         # return systemic velocity in m/s
         return systemic_vel
 
@@ -526,7 +532,7 @@ class Spirou(Instrument):
             # get value from header
             value = sci_hdr.get(key, 'NULL')
             # add to tdict
-            tdict = self.add_dict_list_value(tdict, key, value)
+            tdict = self.add_dict_list_value(tdict, drs_key, value)
         # add the berv separately
         tdict = self.add_dict_list_value(tdict, 'BERV', berv)
         # return updated storage dictionary
@@ -577,7 +583,8 @@ class Spirou(Instrument):
                     'KW_RHOMB1', 'KW_RHOMB2', 'KW_CDEN_P', 'KW_SNRGOAL',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_SHAPE_DX', 'KW_SHAPE_DY',
                     'KW_SHAPE_A', 'KW_SHAPE_B', 'KW_SHAPE_C', 'KW_SHAPE_D',
-                    'KW_CCF_EW', 'KW_FP_INT_T', 'KW_FP_INT_P']
+                    'KW_CCF_EW', 'KW_FP_INT_T', 'KW_FP_INT_P', 'KW_FPI_TEMP',
+                    'KW_FPE_TEMP']
         # convert to actual keys (not references to keys)
         keys = []
         fp_flags = []

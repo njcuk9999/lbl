@@ -33,6 +33,7 @@ keyword_args['PLOT_COMPIL_BINNED'] = keyword_args['PLOT']
 keyword_args['SKIP_DONE'] = False
 keyword_args['MASK_SUBDIR'] = working + 'masks'
 keyword_args['INPUT_FILE'] = working + 'science/LHS-1140-tc/ES*.fits'
+keyword_args['OVERWRITE'] = True
 # add objects
 objs = ['LHS-1140']
 templates = ['LHS-1140']

@@ -511,6 +511,14 @@ params.set(key='KW_RHOMB2', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_CDEN_P', value=None, source=__NAME__, not_none=False,
            desc='the calib-reference density')
 
+# define the FP Internal Temp: FPBody(deg C)
+params.set(key='KW_FPI_TEMP', value=None, source=__NAME__, not_none=False,
+           desc='the FP Internal Temp: FPBody(deg C)')
+
+# define the FP External Temp: FPBody(deg C)
+params.set(key='KW_FPE_TEMP', value=None, source=__NAME__, not_none=False,
+           desc='the FP External Temp: FPBody(deg C)')
+
 # define the SNR goal per pixel per frame
 params.set(key='KW_SNRGOAL', value=None, source=__NAME__, not_none=False,
            desc='the SNR goal per pixel per frame')
