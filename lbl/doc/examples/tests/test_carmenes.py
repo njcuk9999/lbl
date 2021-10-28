@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-# CODE NAME HERE
-
-# CODE DESCRIPTION HERE
+Test of the LBL for CARMENES (TOI-1452)
 
 Created on 2021-10-18
 
-@author: artigau
+@author: artigau, cook
 """
 from lbl import compil
 from lbl import compute

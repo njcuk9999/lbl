@@ -134,9 +134,13 @@ def __main__(inst: InstrumentsType, **kwargs):
         return locals()
 
     # -------------------------------------------------------------------------
-    # Step 4: Find correct Goettingen Phoenix models and get them if not present
+    # Step 4: Find correct Goettingen Phoenix models and get them if not
+    #         present - only done for non calibration files
     # -------------------------------------------------------------------------
-    m_wavemap, m_spectrum = general.get_stellar_models(inst, models_dir)
+    if not flag_calib:
+        m_wavemap, m_spectrum = general.get_stellar_models(inst, models_dir)
+    else:
+        m_wavemap, m_spectrum = None, None
 
     # -------------------------------------------------------------------------
     # Step 5: Find the lines (regions of sign change in the derivative)
@@ -156,7 +160,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         line_table['ll_mask_e'] = mp.doppler_shift(line_table['ll_mask_e'],
                                                    1000 * sys_vel)
     else:
-        sys_vel = np.nan
+        sys_vel = 0.0
 
     # -------------------------------------------------------------------------
     # Step 7: Write masks to file
