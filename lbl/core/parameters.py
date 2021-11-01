@@ -575,6 +575,10 @@ params.set(key='KW_MODELVEL', value=None, source=__NAME__, not_none=True,
            desc='Template/model velocity from CCF',
            comment='Template velo. from CCF [m/s]')
 
+# Number of template files used in template
+params.set(key='KW_NTFILES', value='LBLNTMPL', source=__NAME__, not_none=True,
+           desc='Number of files used in template construction',
+           comment='Number of files used in template construction')
 
 # =============================================================================
 # Start of code
