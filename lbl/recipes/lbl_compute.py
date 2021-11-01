@@ -221,7 +221,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.4 load blaze if not set above
         # ---------------------------------------------------------------------
         if blaze is None:
-            blaze = inst.load_blaze_from_science(sci_hdr, calib_dir)
+            blaze = inst.load_blaze_from_science(sci_data, sci_hdr, calib_dir)
         # ---------------------------------------------------------------------
         # 6.5 check for bad files (via a header key)
         # ---------------------------------------------------------------------

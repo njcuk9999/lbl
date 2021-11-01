@@ -332,11 +332,14 @@ class Harps(Instrument):
             # return numpy array of files
             return files
 
-    def load_blaze_from_science(self, sci_hdr: fits.Header,
+    def load_blaze_from_science(self, sci_image: np.ndarray,
+                                sci_hdr: fits.Header,
                                 calib_directory: str) -> np.ndarray:
         """
         Load the blaze file using a science file header
 
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
         :param sci_hdr: fits.Header - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)

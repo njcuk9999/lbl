@@ -9,6 +9,8 @@ Created on 2021-08-24
 
 @author: cook
 """
+import warnings
+
 import numpy as np
 
 from lbl.core import base
@@ -18,6 +20,7 @@ from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.science import general
 from lbl.resources import lbl_misc
+from lbl.science import apero
 
 
 # =============================================================================
@@ -105,6 +108,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     dparams = select.make_all_directories(inst)
     template_dir, science_dir = dparams['TEMPLATE_DIR'], dparams['SCIENCE_DIR']
+    calib_dir = dparams['CALIB_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
@@ -112,6 +116,13 @@ def __main__(inst: InstrumentsType, **kwargs):
     template_file = inst.template_file(template_dir, required=False)
     # science filenames
     science_files = inst.science_files(science_dir)
+    # blaze filename (None if not set)
+    blaze_file = inst.blaze_file(calib_dir)
+    # load blaze file if set
+    if blaze_file is not None:
+        blaze = inst.load_blaze(blaze_file)
+    else:
+        blaze = None
     # -------------------------------------------------------------------------
     # Step 3: Deal with reference file (first file)
     # -------------------------------------------------------------------------
@@ -124,15 +135,15 @@ def __main__(inst: InstrumentsType, **kwargs):
     # work out a valid velocity step in m/s
     grid_step = general.get_velocity_step(refwave)
     # grid scale for the template
-    wavemap = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
-                                     dv_grid=grid_step)
+    wavegrid = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
+                                      dv_grid=grid_step)
     # -------------------------------------------------------------------------
     # Step 4: Loop around each file and load into cube
     # -------------------------------------------------------------------------
     # create a cube that contains one line for each file
-    flux_cube = np.zeros([len(wavemap), len(science_files)])
+    flux_cube = np.zeros([len(wavegrid), len(science_files)])
     # weight cube to account for order overlap
-    weight_cube = np.zeros([len(wavemap), len(science_files)])
+    weight_cube = np.zeros([len(wavegrid), len(science_files)])
     # science table
     sci_table = dict()
     # loop around files
@@ -145,6 +156,9 @@ def __main__(inst: InstrumentsType, **kwargs):
         sci_image, sci_hdr = inst.load_science(filename)
         # get wave solution for reference file
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
+        # load blaze (just ones if not needed)
+        if blaze is None:
+            blaze = inst.load_blaze_from_science(sci_image, sci_hdr, calib_dir)
         # get the berv
         berv = inst.get_berv(sci_hdr)
         # populate science table
@@ -152,45 +166,13 @@ def __main__(inst: InstrumentsType, **kwargs):
                                             berv=berv)
         # apply berv if required
         if berv != 0.0:
-            sci_wave = mp.doppler_shift(sci_wave, -1e3 * berv)
-        # loop around each order
-        for order_num in tqdm(range(sci_image.shape[0])):
-            # get this orders flux and wave
-            osci_image = sci_image[order_num]
-            osci_wave = sci_wave[order_num]
-            # check that all points for this order are zero
-            if np.sum(osci_wave == 0) != 0:
-                # log message about skipping this order
-                msg = ('\tOrder {0}: Some points in wavelength '
-                       'grid are zero. Skipping order.')
-                log.info(msg.format(order_num))
-                # skip this order
-                continue
-            # check that the grid increases or decreases in a monotonic way
-            gradwave = np.gradient(osci_wave)
-            # check the signs of wave map gradient
-            if np.sign(np.min(gradwave)) != np.sign(np.max(gradwave)):
-                msg = ('\tOrder {0}: Wavelength grid curves around. '
-                       'Skipping order')
-                log.info(msg.format(order_num))
-            # keep track of valid pixels and their fractional contribution to
-            #  the model
-            keep = np.isfinite(sci_image[order_num])
-            # spline the flux and valid pixel mask
-            spline_flux = mp.iuv_spline(osci_wave[keep], osci_image[keep],
-                                        k=1, ext=1)
-            spline_mask = mp.iuv_spline(osci_wave, keep, k=1, ext=1)
-            # spline onto destination wave grid
-            s1d_flux = spline_flux(wavemap)
-            s1d_weight = spline_mask(wavemap)
-            # calculate where the weights are good
-            bad_domain = s1d_weight < 0.95
-            # only keep points with >95% contribution from valid pixels
-            s1d_flux[bad_domain] = 0.0
-            s1d_weight[bad_domain] = 0.0
-            # push into flux and weight cubes
-            flux_cube[:, it] += s1d_flux
-            weight_cube[:, it] += s1d_weight
+            sci_wave = mp.doppler_shift(sci_wave, berv)
+        # compute s1d from e2ds
+        s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
+                                                 sci_image, blaze, wavegrid)
+        # push into arrays
+        flux_cube[:, it] = s1d_flux
+        weight_cube[:, it] = s1d_weight
     # -------------------------------------------------------------------------
     # Creation of the template
     # -------------------------------------------------------------------------
@@ -210,15 +192,17 @@ def __main__(inst: InstrumentsType, **kwargs):
         flux_cube[:, it] = flux_cube[:, it] / np.nanmedian(flux_cube[:, it])
 
     # get the median and +/- 1 sigma values for the cube
-    p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84], axis=1)
-    # calculate the rms of each wavelength element
-    rms = (p84 - p16) / 2
+    log.general('Calculate 16th, 50th and 84th percentiles')
+    with warnings.catch_warnings(record=True) as _:
+        p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84], axis=1)
+        # calculate the rms of each wavelength element
+        rms = (p84 - p16) / 2
 
     # -------------------------------------------------------------------------
     # Write template
     # -------------------------------------------------------------------------
     # get props
-    props = dict(wavelength=wavemap, flux=p50, eflux=rms, rms=rms)
+    props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
 

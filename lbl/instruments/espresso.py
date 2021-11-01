@@ -333,30 +333,23 @@ class Espresso(Instrument):
             # return numpy array of files
             return files
 
-    def load_blaze_from_science(self, sci_hdr: fits.Header,
+    def load_blaze_from_science(self, sci_image: np.ndarray,
+                                sci_hdr: fits.Header,
                                 calib_directory: str) -> np.ndarray:
         """
         Load the blaze file using a science file header
 
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
         :param sci_hdr: fits.Header - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
         :return: None
         """
-        # get blaze file from science header
-        blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath)
-        # read blaze file (data and header)
-        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
-        # normalize blaze per order
-        for order_num in range(blaze.shape[0]):
-            # normalize by the 90% percentile
-            norm = np.nanpercentile(blaze[order_num], 90)
-            # apply to blaze
-            blaze[order_num] = blaze[order_num] / norm
+        # no blaze required - set to ones
+        blaze = np.ones_like(sci_image)
+        # do not require header or calib directory
+        _ = sci_hdr, calib_directory
         # return blaze
         return blaze
 
