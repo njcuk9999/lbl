@@ -4,7 +4,7 @@
 INSTRUMENT: HARPS
 
 # Set data directory
-DATA_DIR: /data/harps/lbl/
+DATA_DIR: /scratch3/lbl/data/harps/
 
 # Set science object name
 OBJECT_SCIENCE: PROXIMA

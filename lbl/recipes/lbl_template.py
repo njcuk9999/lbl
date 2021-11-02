@@ -149,7 +149,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # loop around files
     for it, filename in enumerate(science_files):
         # print progress
-        msg = 'Processing file {0} of {1}'
+        msg = 'Processing E2DS->S1D for file {0} of {1}'
         margs = [it + 1, len(science_files)]
         log.general(msg.format(*margs))
         # select the first science file as a reference file

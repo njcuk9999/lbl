@@ -4,7 +4,7 @@
 INSTRUMENT: SPIROU
 
 # Set data directory
-DATA_DIR: /data/lbl/data/spirou/
+DATA_DIR: /scratch3/lbl/data/spirou/
 
 # Set science object name
 OBJECT_SCIENCE: FP
