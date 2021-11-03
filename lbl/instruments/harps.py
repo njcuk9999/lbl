@@ -257,7 +257,8 @@ class Harps(Instrument):
         # return absolute path
         return abspath
 
-    def load_blaze(self, filename: str) -> Union[np.ndarray, None]:
+    def load_blaze(self, filename: str,
+                   normalize: bool = True) -> Union[np.ndarray, None]:
         """
         Load a blaze file
 
@@ -268,12 +269,14 @@ class Harps(Instrument):
         _ = self
         if filename is not None:
             blaze, _ = io.load_fits(filename, kind='blaze fits file')
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # deal with normalizing per order
+            if normalize:
+                # normalize blaze per order
+                for order_num in range(blaze.shape[0]):
+                    # normalize by the 90% percentile
+                    norm = np.nanpercentile(blaze[order_num], 90)
+                    # apply to blaze
+                    blaze[order_num] = blaze[order_num] / norm
             # return blaze
             return blaze
         else:
@@ -334,7 +337,8 @@ class Harps(Instrument):
 
     def load_blaze_from_science(self, sci_image: np.ndarray,
                                 sci_hdr: fits.Header,
-                                calib_directory: str) -> np.ndarray:
+                                calib_directory: str,
+                                normalize: bool = True) -> np.ndarray:
         """
         Load the blaze file using a science file header
 
@@ -353,12 +357,14 @@ class Harps(Instrument):
         io.check_file_exists(abspath)
         # read blaze file (data and header)
         blaze, _ = io.load_fits(abspath, kind='blaze fits file')
-        # normalize blaze per order
-        for order_num in range(blaze.shape[0]):
-            # normalize by the 90% percentile
-            norm = np.nanpercentile(blaze[order_num], 90)
-            # apply to blaze
-            blaze[order_num] = blaze[order_num] / norm
+        # normalize by order
+        if normalize:
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze
 
