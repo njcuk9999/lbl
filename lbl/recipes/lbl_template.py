@@ -120,7 +120,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     blaze_file = inst.blaze_file(calib_dir)
     # load blaze file if set
     if blaze_file is not None:
-        blaze = inst.load_blaze(blaze_file)
+        blaze = inst.load_blaze(blaze_file, normalize=False)
     else:
         blaze = None
     # -------------------------------------------------------------------------
@@ -149,7 +149,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # loop around files
     for it, filename in enumerate(science_files):
         # print progress
-        msg = 'Processing file {0} of {1}'
+        msg = 'Processing E2DS->S1D for file {0} of {1}'
         margs = [it + 1, len(science_files)]
         log.general(msg.format(*margs))
         # select the first science file as a reference file
@@ -158,7 +158,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
         # load blaze (just ones if not needed)
         if blaze is None:
-            blaze = inst.load_blaze_from_science(sci_image, sci_hdr, calib_dir)
+            blaze = inst.load_blaze_from_science(sci_image, sci_hdr, calib_dir,
+                                                 normalize=False)
         # get the berv
         berv = inst.get_berv(sci_hdr)
         # populate science table
@@ -166,7 +167,7 @@ def __main__(inst: InstrumentsType, **kwargs):
                                             berv=berv)
         # apply berv if required
         if berv != 0.0:
-            sci_wave = mp.doppler_shift(sci_wave, berv)
+            sci_wave = mp.doppler_shift(sci_wave, -berv)
         # compute s1d from e2ds
         s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
                                                  sci_image, blaze, wavegrid)

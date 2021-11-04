@@ -379,7 +379,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     wave1 = float(np.nanmax(wavegrid2))
     # velocity step in m/s
     med_rv = np.nanmedian(wavegrid2 / np.gradient(wavegrid2))
-    rv_step = speed_of_light_ms / med_rv
+    # rv_step = speed_of_light_ms / med_rv
     # work out a valid velocity step in m/s
     grid_step = get_velocity_step(wavegrid2)
     # get the magic wave grid
@@ -395,14 +395,14 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # perform the CCF
     # -------------------------------------------------------------------------
     # define the steps from min to max (in rv steps) - in pixels
-    istep = np.arange(int(rv_min/rv_step), int(rv_max/rv_step))
+    istep = np.arange(int(rv_min/grid_step), int(rv_max/grid_step))
     # define the dv grid from the initial steps in pixels * rv step
-    dvgrid = istep * rv_step
+    dvgrid = istep * grid_step
     # set up the CCF vector for all rv elements
     ccf_vector = np.zeros(len(istep))
     # define a mask that only keeps certain index values
-    keep_line = index_mask > (rv_max/rv_step) + 2
-    keep_line &= index_mask < len(magic_spline) - (rv_max/rv_step) - 2
+    keep_line = index_mask > (rv_max/grid_step) + 2
+    keep_line &= index_mask < len(magic_spline) - (rv_max/grid_step) - 2
     # only keep the indices and weights within the keep line mask
     index_mask = index_mask[keep_line]
     weight_line = weight_line[keep_line]
@@ -684,6 +684,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # deal with first estimate of RV / CCF equivalent width
     if reset_rv:
         # if we are not using FP file
+        # TODO: remove FP
         if 'FP' not in object_science:
             # calculate the rough CCF RV estimate
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
@@ -704,9 +705,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         closest = np.argmin(mjdate - mjdate_all)
         # get the closest system rv to this observation
         sys_rv = systemic_all[closest] + berv
-        # log using
-        msg = '\tUsing systemic rv={0:.4f} m/s from MJD={1}'
-        margs = [sys_rv, mjdate_all[closest]]
+        # log the systemic velocity and the berv
+        msg = '\tUsing Systemic velocity: {0:.4f} m/s  BERV: {1:.4f} m/s'
+        margs = [-systemic_all[closest], -berv]
+        log.general(msg.format(*margs))
+        # log using the sys_Rv
+        msg = '\tSystemic rv + berv={0:.4f} m/s from MJD={1}'
+        margs = [-sys_rv, mjdate_all[closest]]
         log.general(msg.format(*margs))
     # -------------------------------------------------------------------------
     # iteration loop
@@ -2076,7 +2081,8 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     # -------------------------------------------------------------------------
     # find the bits of continuum on either side of line and find depth
     #    relative to that
-    depth[1:-1] = 1 - f_mask[1:-1] / (0.5 * (f_mask[0:-2]+f_mask[2:]))
+    with warnings.catch_warnings(record=True) as _:
+        depth[1:-1] = 1 - f_mask[1:-1] / (0.5 * (f_mask[0:-2]+f_mask[2:]))
     # -------------------------------------------------------------------------
     # print progress
     log.general('Finding mask lines')

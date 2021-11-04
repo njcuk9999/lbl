@@ -255,7 +255,7 @@ def __main__(inst: InstrumentsType, **kwargs):
                 continue
             else:
                 # log message
-                msg = '\t\tSNR > {0} (SNR = {1}), passed SNR criteria'
+                msg = '\t\tSNR > {0} (SNR = {1:.4f}), passed SNR criteria'
                 margs = [snr_limit, snr_value]
                 log.general(msg.format(*margs))
 

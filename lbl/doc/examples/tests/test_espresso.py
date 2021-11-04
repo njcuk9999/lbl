@@ -16,7 +16,7 @@ from lbl import template
 # Define variables
 # =============================================================================
 # define working directory
-working = '/data/lbl/data/espresso/'
+working = '/scratch3/lbl/data/espresso/'
 # create keyword argument dictionary
 keyword_args = dict()
 # add keyword arguments

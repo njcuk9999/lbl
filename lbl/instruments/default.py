@@ -500,7 +500,8 @@ class Instrument:
         _ = self, directory
         raise self._not_implemented('blaze_file')
 
-    def load_blaze(self, filename: str):
+    def load_blaze(self, filename: str,
+                   normalize: bool = True):
         """
         Load a blaze file
 
@@ -508,7 +509,7 @@ class Instrument:
 
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
-        _ = self, filename
+        _ = self, filename, normalize
         raise self._not_implemented('load_blaze')
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
@@ -533,7 +534,8 @@ class Instrument:
         raise self._not_implemented('science_files')
 
     def load_blaze_from_science(self, sci_image: np.ndarray,
-                                sci_hdr: fits.Header, calib_directory: str):
+                                sci_hdr: fits.Header, calib_directory: str,
+                                normalize: bool = True):
         """
         Load the blaze file using a science file header
 
@@ -545,7 +547,7 @@ class Instrument:
 
         :return: None
         """
-        _ = sci_hdr
+        _ = sci_image, sci_hdr, calib_directory, normalize
         raise self._not_implemented('science_files')
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,

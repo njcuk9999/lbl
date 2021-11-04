@@ -16,7 +16,7 @@ from lbl import template
 # Define variables
 # =============================================================================
 # define working directory
-working = '/data/lbl/bin/lbl/lbl/doc/examples/'
+working = '/scratch3/lbl/bin/lbl/lbl/doc/examples/'
 # create keyword argument dictionary
 fp_config_file = working + 'spirou_fp_config.yaml'
 gl699_config_file = working + 'spirou_gl699_config.yaml'
@@ -28,7 +28,7 @@ gl699_config_file = working + 'spirou_gl699_config.yaml'
 if __name__ == "__main__":
 
     # run template
-    # tbl0a = template(config_file=fp_config_file)
+    tbl0a = template(config_file=fp_config_file)
     tbl0b = template(config_file=gl699_config_file)
     # run mask code
     tbl1a = mask(config_file=fp_config_file)
