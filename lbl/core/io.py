@@ -482,6 +482,9 @@ def load_table(filename: str, kind: Union[str, None] = None,
     # deal with obtaining table header
     if get_hdr:
         hdr = fits.getheader(filename)
+        # deal with main header in extension 1 (not primary)
+        if len(hdr) < 10:
+            hdr = fits.getheader(filename, ext=1)
         return table, hdr
     else:
         return table
