@@ -36,7 +36,7 @@ FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
                   'EXTEND', 'COMMENT', 'CRVAL1', 'CRPIX1', 'CDELT1',
                   'CRVAL2', 'CRPIX2', 'CDELT2', 'BSCALE', 'BZERO',
                   'PHOT_IM', 'FRAC_OBJ', 'FRAC_SKY', 'FRAC_BB',
-                  'NEXTEND', '', 'HISTORY']
+                  'NEXTEND', '', 'HISTORY', 'XTENSION']
 
 
 # =============================================================================
@@ -412,6 +412,12 @@ def write_fits(filename: str, data: FitsData = None,
         for key in header[0]:
             value = header[0][key]
             comment = header[0].comments[key]
+            # skip keys already present
+            if key in hdu0.header:
+                continue
+            # skip forbidden keys
+            if key in FORBIDDEN_KEYS:
+                continue
             # skip comments
             if isinstance(value, fits.header._HeaderCommentaryCards):
                 continue
