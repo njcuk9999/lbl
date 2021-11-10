@@ -121,6 +121,7 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
             msg = ('\tOrder {0}: Wavelength grid curves around. '
                    'Skipping order')
             log.info(msg.format(order_num))
+            continue
         # create the splines for this order
         spline_sp = mp.iuv_spline(owave[valid], oe2ds, k=5, ext=1)
         spline_bl = mp.iuv_spline(owave[valid], oblaze, k=1, ext=1)
@@ -143,6 +144,8 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
         weight[useful_range] += spline_bl(wavegrid[useful_range])
         out_spec[useful_range] += spline_sp(wavegrid[useful_range])
 
+    # where out_spec is exactly zero set to NaN
+    out_spec[out_spec == 0] = np.nan
     # return properties
     return out_spec, weight
 

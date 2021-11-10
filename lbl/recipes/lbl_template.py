@@ -168,6 +168,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         # apply berv if required
         if berv != 0.0:
             sci_wave = mp.doppler_shift(sci_wave, -berv)
+        # set exactly zeros to NaNs
+        sci_image[sci_image == 0] = np.nan
         # compute s1d from e2ds
         s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
                                                  sci_image, blaze, wavegrid)
