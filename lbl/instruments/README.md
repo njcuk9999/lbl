@@ -3,11 +3,18 @@
 - This contains instrument python scripts (and `select.py`)
 
 - Each instrument contains a class i.e. for SPIRou:
-```python
-from lbl.core import base_classes
 
-class Spirou(base_classes.Instrument):
+```python
+from lbl.instruments import default
+
+
+class Spirou(default.Instrument):
     def __init__(self, params):
+        # call to super function
+        # noinspection PyTypeChecker
+        super().__init__("SPIROU")
+        # set parameters for instrument
+        self.params = params
         # constructor
         pass
 

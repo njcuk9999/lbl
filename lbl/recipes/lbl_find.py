@@ -7,13 +7,10 @@ Created on 2021-10-18
 
 @author: cook
 """
-import numpy as np
-
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
-from lbl.science import general
 from lbl.resources import lbl_misc
 
 
@@ -32,9 +29,11 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_FIND = [# core
+ARGS_FIND = [
+             # core
              'INSTRUMENT', 'CONFIG_FILE']
 DESCRIPTION_FIND = 'Find LBL input files for an instrument'
+
 
 # =============================================================================
 # Define functions
@@ -51,14 +50,14 @@ def main(**kwargs):
     # deal with parsing arguments
     args = select.parse_args(ARGS_FIND, kwargs, DESCRIPTION_FIND)
     # load instrument
-    inst = select.load_instrument(args, logger=log)
+    inst = select.load_instrument(args, plogger=log)
     # get data directory
     data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                    cmdargs=inst.params['COMMAND_LINE_ARGS'], logger=log)
+                    cmdargs=inst.params['COMMAND_LINE_ARGS'], plogger=log)
     # run __main__
     try:
         namespace = __main__(inst)
@@ -69,7 +68,7 @@ def main(**kwargs):
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
     # end code
-    lbl_misc.end(__NAME__, logger=log)
+    lbl_misc.end(__NAME__, plogger=log)
     # return local namespace
     return namespace
 
@@ -99,6 +98,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # find input files for this instrument
     inst.find_inputs()
+    # return locals
+    return locals()
 
 
 # =============================================================================

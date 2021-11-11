@@ -127,7 +127,10 @@ class Harps(Instrument):
         self.params.set('OBJECT_Z', value=0.0, source=func_name)
         # Define the object alpha (stellar model)
         self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
-
+        # blaze smoothing size (s1d template)
+        self.params.set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
+        # blaze threshold (s1d template)
+        self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -195,6 +198,7 @@ class Harps(Instrument):
         Make the absolute path for the mask file
 
         :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to mask file
         """
@@ -218,6 +222,7 @@ class Harps(Instrument):
         Make the absolute path for the template file
 
         :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to template file
         """
@@ -263,8 +268,9 @@ class Harps(Instrument):
         Load a blaze file
 
         :param filename: str, absolute path to filename
+        :param normalize: bool, if True normalized the blaze per order
 
-        :return: tuple, data (np.ndarray) and header (fits.Header)
+        :return: data (np.ndarray) or None
         """
         _ = self
         if filename is not None:
@@ -338,7 +344,8 @@ class Harps(Instrument):
     def load_blaze_from_science(self, sci_image: np.ndarray,
                                 sci_hdr: fits.Header,
                                 calib_directory: str,
-                                normalize: bool = True) -> np.ndarray:
+                                normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
         """
         Load the blaze file using a science file header
 
@@ -347,7 +354,10 @@ class Harps(Instrument):
         :param sci_hdr: fits.Header - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
-        :return: None
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
         """
         # get blaze file from science header
         blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
@@ -366,7 +376,7 @@ class Harps(Instrument):
                 # apply to blaze
                 blaze[order_num] = blaze[order_num] / norm
         # return blaze
-        return blaze
+        return blaze, False
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
@@ -454,9 +464,13 @@ class Harps(Instrument):
         """
         Populate the science table
 
-        :param tdict:
-        :param berv:
-        :return:
+        :param filename: str, the filename of the science image
+        :param tdict: dictionary, the storage dictionary for science table
+                      can be empty or have previous rows to append to
+        :param sci_hdr: fits Header, the header of the science image
+        :param berv: float, the berv value to add to storage dictionary
+
+        :return: dict, a dictionary table of the science parameters
         """
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',

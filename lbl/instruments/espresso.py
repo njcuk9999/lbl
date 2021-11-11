@@ -127,7 +127,10 @@ class Espresso(Instrument):
         self.params.set('OBJECT_Z', value=0.0, source=func_name)
         # Define the object alpha (stellar model)
         self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
-
+        # blaze smoothing size (s1d template)
+        self.params.set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
+        # blaze threshold (s1d template)
+        self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -196,6 +199,7 @@ class Espresso(Instrument):
         Make the absolute path for the mask file
 
         :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to mask file
         """
@@ -219,6 +223,7 @@ class Espresso(Instrument):
         Make the absolute path for the template file
 
         :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to template file
         """
@@ -264,8 +269,9 @@ class Espresso(Instrument):
         Load a blaze file
 
         :param filename: str, absolute path to filename
+        :param normalize: bool, if True normalized the blaze per order
 
-        :return: tuple, data (np.ndarray) and header (fits.Header)
+        :return: data (np.ndarray) or None
         """
         _ = self
         if filename is not None:
@@ -338,8 +344,8 @@ class Espresso(Instrument):
 
     def load_blaze_from_science(self, sci_image: np.ndarray,
                                 sci_hdr: fits.Header,
-                                calib_directory: str,
-                                normalize: bool = True) -> np.ndarray:
+                                calib_directory: str, normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
         """
         Load the blaze file using a science file header
 
@@ -348,14 +354,63 @@ class Espresso(Instrument):
         :param sci_hdr: fits.Header - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
-        :return: None
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
         """
         # no blaze required - set to ones
         blaze = np.ones_like(sci_image)
         # do not require header or calib directory
         _ = sci_hdr, calib_directory, normalize
         # return blaze
-        return blaze
+        return blaze, True
+
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # espresso has 2 orders per 'true' order so have to take every other
+        #   wave element
+        wave_cen = wave_cen[::2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # ---------------------------------------------------------------------
+        # use the fit to get the blaze assuming a sinc**2 profile.
+        # The minima of a given order corresponds to the position of the
+        # consecutive orders
+        # ---------------------------------------------------------------------
+        # storage for the calculated blaze
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # get the center of this order (with a small offset to avoid
+            #  a division by zero in the sinc at phase = 0
+            owave_cen = owave[len(owave)//2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1/owave)
+            # calculate the phase of the sinc**2
+            phase = np.pi * (owave - owave_cen)/period
+            # assume the sinc profile. There is a factor 2 difference in the
+            #   phase as the sinc is squared. sin**2 has a period that is a
+            #   factor of 2 shorter than the sin
+            blaze[order_num] = (np.sin(phase)/phase) ** 2
+        # un-correct the science image
+        sci_image = sci_image * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
@@ -374,7 +429,7 @@ class Espresso(Instrument):
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
         # load wave map
-        wavemap = fits.getdata(science_filename,ext=4)
+        wavemap = fits.getdata(science_filename, ext=4)
         # ---------------------------------------------------------------------
         # Espresso wave solution is in Angstrom - convert to nm for consistency
         wavemap = wavemap / 10.0
@@ -411,9 +466,13 @@ class Espresso(Instrument):
         """
         Populate the science table
 
-        :param tdict:
-        :param berv:
-        :return:
+        :param filename: str, the filename of the science image
+        :param tdict: dictionary, the storage dictionary for science table
+                      can be empty or have previous rows to append to
+        :param sci_hdr: fits Header, the header of the science image
+        :param berv: float, the berv value to add to storage dictionary
+
+        :return: dict, a dictionary table of the science parameters
         """
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
@@ -435,7 +494,6 @@ class Espresso(Instrument):
         tdict = self.add_dict_list_value(tdict, 'BERV', berv)
         # return updated storage dictionary
         return tdict
-
 
     def flag_calib(self, sci_hdr: fits.Header) -> bool:
         """
@@ -566,11 +624,11 @@ class Espresso(Instrument):
         # define the band names
         bands = ['u', 'g', 'r', 'i']
 
-        mid = np.array([354, 475, 752, 866],dtype = float)
+        mid = np.array([354, 475, 752, 866], dtype=float)
         # define the blue end of each band [nm]
-        blue_end = mid -  np.array([100,121/2,277/2,114/2],dtype = float)
+        blue_end = mid - np.array([100, 121/2, 277/2, 114/2], dtype=float)
         # define the red end of each band [nm]
-        red_end = mid+np.array([121/2,277/2,114/2,96/2],dtype = float)
+        red_end = mid + np.array([121/2, 277/2, 114/2, 96/2], dtype=float)
         # ---------------------------------------------------------------------
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088']

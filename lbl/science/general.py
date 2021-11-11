@@ -26,7 +26,6 @@ from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import plot
 
-
 # =============================================================================
 # Define variables
 # =============================================================================
@@ -259,11 +258,13 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # return splines
     return sps
 
+
 def get_velocity_step(wave_vector: np.ndarray, rounding: bool = True) -> float:
     """
     Return the velocity step in m/s
 
     :param wave_vector: np.array, the wave grid
+    :param rounding: bool, if True applies rounding (to the nearest 250 m/s)
 
     :return: float, the grid step in m/s
     """
@@ -306,12 +307,12 @@ def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 500):
     # exactly wave1, but is very close and is set to get your exact
     # step in velocity
     # get the length of the magic vector
-    logwaveratio = np.log(wave1/wave0)
-    len_magic = int(np.ceil(logwaveratio * speed_of_light_ms/dv_grid))
+    logwaveratio = np.log(wave1 / wave0)
+    len_magic = int(np.ceil(logwaveratio * speed_of_light_ms / dv_grid))
     # get the positions for "magic length"
     plen_magic = np.arange(len_magic)
     # define the magic grid to use in ccf
-    magic_grid = np.exp((plen_magic/len_magic) * logwaveratio) * wave0
+    magic_grid = np.exp((plen_magic / len_magic) * logwaveratio) * wave0
     # return the magic grid
     return magic_grid
 
@@ -378,7 +379,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # maxwavelength in domain
     wave1 = float(np.nanmax(wavegrid2))
     # velocity step in m/s
-    med_rv = np.nanmedian(wavegrid2 / np.gradient(wavegrid2))
+    # med_rv = np.nanmedian(wavegrid2 / np.gradient(wavegrid2))
     # rv_step = speed_of_light_ms / med_rv
     # work out a valid velocity step in m/s
     grid_step = get_velocity_step(wavegrid2)
@@ -395,21 +396,21 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # perform the CCF
     # -------------------------------------------------------------------------
     # define the steps from min to max (in rv steps) - in pixels
-    istep = np.arange(int(rv_min/grid_step), int(rv_max/grid_step))
+    istep = np.arange(int(rv_min / grid_step), int(rv_max / grid_step))
     # define the dv grid from the initial steps in pixels * rv step
     dvgrid = istep * grid_step
     # set up the CCF vector for all rv elements
     ccf_vector = np.zeros(len(istep))
     # define a mask that only keeps certain index values
-    keep_line = index_mask > (rv_max/grid_step) + 2
-    keep_line &= index_mask < len(magic_spline) - (rv_max/grid_step) - 2
+    keep_line = index_mask > (rv_max / grid_step) + 2
+    keep_line &= index_mask < len(magic_spline) - (rv_max / grid_step) - 2
     # only keep the indices and weights within the keep line mask
     index_mask = index_mask[keep_line]
     weight_line = weight_line[keep_line]
     # now loop around the dv elements
     for dv_element in range(len(istep)):
         # get the ccf for each index (and multiply by weight of the line
-        ccf_indices = magic_spline[index_mask-istep[dv_element]] * weight_line
+        ccf_indices = magic_spline[index_mask - istep[dv_element]] * weight_line
         # ccf vector at this dv element is the sum of these ccf values
         ccf_vector[dv_element] = mp.nansum(ccf_indices)
 
@@ -610,10 +611,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                                iteration (first iteration always False)
     :param model_velocity: float, inf if not set but if set doesn't recalculate
                            model velocity
+    :param science_file: str, the science file name (required for some
+                         instruments)
 
     :return: tuple, 1. the reference table dict, 2. the output dictionary
     """
-
     # -------------------------------------------------------------------------
     # get parameters from inst.params
     # -------------------------------------------------------------------------
@@ -650,7 +652,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # rms = get_noise_model(science_files)
         rms = np.zeros_like(sci_data)
     else:
-        rms = np.sqrt(np.abs(sci_data) + readout_noise**2)
+        rms = np.sqrt(np.abs(sci_data) + readout_noise ** 2)
     # -------------------------------------------------------------------------
     # copy science data
     sci_data0 = np.array(sci_data)
@@ -808,7 +810,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         if not use_noise_model:
             rms = estimate_noise_model(sci_data, model)
             # work out the number of sigma away from the model
-            nsig = (sci_data-model)/rms
+            nsig = (sci_data - model) / rms
             # mask for nsigma
             sigmask = np.abs(nsig) > rms_sigclip_thres
             # apply sigma clip to the science data
@@ -816,7 +818,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         else:
             for order_num in range(sci_data.shape[0]):
                 # work out normalised residual
-                tmp = (sci_data[order_num]-model[order_num])/rms[order_num]
+                tmp = (sci_data[order_num] - model[order_num]) / rms[order_num]
                 # robust estimate of sigma value
                 scale = mp.estimate_sigma(tmp)
                 # update the rms based on the sigma scale value
@@ -943,13 +945,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # TODO -> mean line flux
             denominator = np.nansum(model_seg ** 2 * weight_mask ** 2)
 
-            if (sum_weight_mask != 0) and (denominator !=0):
+            if (sum_weight_mask != 0) and (denominator != 0):
                 # subtract off normalized science sum
                 scisum = mp.nansum(sci_seg * weight_mask)
-                sci_seg = sci_seg - (scisum/sum_weight_mask)
+                sci_seg = sci_seg - (scisum / sum_weight_mask)
                 # subtract off normalized model sum
                 modsum = mp.nansum(model_seg * weight_mask)
-                model_seg = model_seg - (modsum/sum_weight_mask)
+                model_seg = model_seg - (modsum / sum_weight_mask)
 
             diff_seg = (sci_seg - model_seg) * weight_mask
             # work out the sum of the rms
@@ -995,8 +997,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         #    the slope is 1 for absolute values close to zero.
         # TODO -> put these values in a look-up table somewhere!!!
         # ... no, not that smart after all
-        #rv_mean = erfinv(rv_mean / 2250) * 2500
-        nsig = (dv - rv_mean)  / dvrms
+        # rv_mean = erfinv(rv_mean / 2250) * 2500
+        nsig = (dv - rv_mean) / dvrms
         # remove nans
         nsig = nsig[np.isfinite(nsig)]
         # remove sigma outliers
@@ -1374,7 +1376,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # nsig = diff / dvrms[line_it]
             # force a std dev of 1
             # TODO : have the normalization to sigma as an option
-            #dvrms[line_it] = dvrms[line_it] #* mp.estimate_sigma(nsig)
+            # dvrms[line_it] = dvrms[line_it] #* mp.estimate_sigma(nsig)
             # use the odd ratio mean to guess vrad and svrad
             orout1 = mp.odd_ratio_mean(rvs[line_it], dvrms[line_it])
             # add to output table
@@ -1404,10 +1406,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # try to guess the odd ratio mean
             # noinspection PyBroadException
             try:
-                #corr_rms = mp.estimate_sigma(diff1 / err1)
-                #if corr_rms<.2:
+                # corr_rms = mp.estimate_sigma(diff1 / err1)
+                # if corr_rms<.2:
                 #    print(corr_rms,line_it)
-                #err1*=corr_rms # updating the per-line RMS, also updates dvrms[:,line_it]
+                # err1*=corr_rms # updating the per-line RMS, also updates dvrms[:,line_it]
                 guess2, bulk_error2 = mp.odd_ratio_mean(diff1, err1)
                 per_line_mean[line_it] = guess2
                 per_line_error[line_it] = bulk_error2
@@ -1487,8 +1489,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # TODO -> errors compared to the bulk of error bar values.
             # TODO -> only done if some errors are equal to zero.
             if np.min(valid_dvrms) == 0:
-                threshold = np.nanpercentile(valid_dvrms,1)
-                suspicious = valid_dvrms<threshold
+                threshold = np.nanpercentile(valid_dvrms, 1)
+                suspicious = valid_dvrms < threshold
                 valid_dvrms[suspicious] = threshold
 
             weight_lin_fit = prob_good[good] / valid_dvrms
@@ -1499,9 +1501,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # work out the fitted vector
             sfit = np.polyval(scoeffs, valid_wave)
             # work out how many sigma off we are from the fit
-            nsig = (valid_rv - sfit)/valid_dvrms
+            nsig = (valid_rv - sfit) / valid_dvrms
             # work out the likelihood of the line being a valid point
-            gpart = np.exp(-0.5 * nsig**2)
+            gpart = np.exp(-0.5 * nsig ** 2)
             prob_good[good] = (1 + 1.0e-4) * gpart / (1.0e-4 + gpart)
             # get the slope and velocity from the fit
             achromatic_velo = scoeffs[1]
@@ -1535,8 +1537,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # work out the fwhm (1 sigma * sigma value)
         per_epoch_ddv = rdb_dict['d2v'][row]
         per_epoch_ddvrms = rdb_dict['d3v'][row]
-        fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_ddv/ccf_ew_row)
-        sig_fwhm_row = mp.fwhm() * (per_epoch_ddvrms/ccf_ew_row)
+        fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_ddv / ccf_ew_row)
+        sig_fwhm_row = mp.fwhm() * (per_epoch_ddvrms / ccf_ew_row)
         # ---------------------------------------------------------------------
         # update rdb table
         rdb_dict['fwhm'][row] = fwhm_row
@@ -1559,23 +1561,21 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         region_low = binned_dict['region_low']
         region_high = binned_dict['region_high']
         # get the shape of the binned parameters
-        #bshape = (len(lblrvfiles), len(bands), len(region_names))
+        # bshape = (len(lblrvfiles), len(bands), len(region_names))
         # make a rv and error matrix based on these binned params
-        #rvs_matrix = np.full(bshape, np.nan)
-        #err_matrix = np.full(bshape, np.nan)
+        # rvs_matrix = np.full(bshape, np.nan)
+        # err_matrix = np.full(bshape, np.nan)
         # loop around files
-        #for row in range(len(lblrvfiles)):
+        # for row in range(len(lblrvfiles)):
         # get the residuals and dvrms for this rv file
         if flag_calib:
             # rvs[row] - rv_per_line_model[row]
-            tmp_rv = np.array(rvs_row, dtype = float)
+            tmp_rv = np.array(rvs_row, dtype=float)
             # dvrms[row]
-            tmp_err = np.array(err, dtype = float)
+            tmp_err = np.array(err, dtype=float)
         else:
             tmp_rv = rvs[row] - rv_per_line_model[row]
             tmp_err = dvrms[row]
-
-
 
         # loop around the bands
         for iband in range(len(bands)):
@@ -2082,7 +2082,7 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     # find the bits of continuum on either side of line and find depth
     #    relative to that
     with warnings.catch_warnings(record=True) as _:
-        depth[1:-1] = 1 - f_mask[1:-1] / (0.5 * (f_mask[0:-2]+f_mask[2:]))
+        depth[1:-1] = 1 - f_mask[1:-1] / (0.5 * (f_mask[0:-2] + f_mask[2:]))
     # -------------------------------------------------------------------------
     # print progress
     log.general('Finding mask lines')
@@ -2114,17 +2114,18 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     return table
 
 
-
 def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
                            m_wavemap: np.ndarray,
                            m_spectrum: np.ndarray) -> float:
     """
     Measure the systemic velocity of a mask compared to a model
 
-    :param line_table:
-    :param m_wavefile:
-    :param m_spectrum:
-    :return:
+    :param inst: the instrument class
+    :param line_table: astropy table, the table of lines
+    :param m_wavemap: np.ndarray, the 1D model wave map
+    :param m_spectrum: np.ndarray, the 1D model flux spectrum
+
+    :return: float, the systemic velocity
     """
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)

@@ -34,16 +34,30 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 
+
 # =============================================================================
 # Define functions
 # =============================================================================
 def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
                 blaze: np.ndarray, wavegrid: np.ndarray
                 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    E2DS to S1D function (taken from apero - with adjustments)
 
-    # move to params?
-    smooth_size = 20
-    blazethres = 0.2
+    :param params: ParamDict, parameter dictionary of constants
+    :param wavemap: np.ndarray (2D), the wave map for the E2DS
+    :param e2ds: np.ndarray (2D), the E2DS 2D numpy array (norders x npixels)
+                 must not be blaze corrected
+    :param blaze: np.ndarray (2D), the blaze function of the E2DS - used for
+                  weighting orders
+    :param wavegrid: np.ndarray (1D), the output s1d wave grid
+
+    :return: tuple, 1. np.array (1D) the s1d flux, 2. np.array (1D) the weight
+             assigned to each order
+    """
+    # get quantities from parameter dictionary of constants
+    smooth_size = params['BLAZE_SMOOTH_SIZE']
+    blazethres = params['BLAZE_THRESHOLD']
     # -------------------------------------------------------------------------
     # get size from e2ds
     nord, npix = e2ds.shape
@@ -89,7 +103,7 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
     # by performing a spline of both the blaze and the spectrum
     # -------------------------------------------------------------------------
     out_spec = np.zeros_like(wavegrid)
-    out_spec_err = np.zeros_like(wavegrid)
+    # out_spec_err = np.zeros_like(wavegrid)
     weight = np.zeros_like(wavegrid)
     # loop around all orders
     for order_num in range(nord):

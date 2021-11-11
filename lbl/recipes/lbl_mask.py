@@ -36,7 +36,8 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_MASK = [# core
+ARGS_MASK = [
+             # core
              'INSTRUMENT', 'CONFIG_FILE',
              # directory
              'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',
@@ -67,14 +68,14 @@ def main(**kwargs):
     # deal with parsing arguments
     args = select.parse_args(ARGS_MASK, kwargs, DESCRIPTION_MASK)
     # load instrument
-    inst = select.load_instrument(args, logger=log)
+    inst = select.load_instrument(args, plogger=log)
     # get data directory
     data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                    cmdargs=inst.params['COMMAND_LINE_ARGS'], logger=log)
+                    cmdargs=inst.params['COMMAND_LINE_ARGS'], plogger=log)
     # run __main__
     try:
         namespace = __main__(inst)
@@ -85,7 +86,7 @@ def main(**kwargs):
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
     # end code
-    lbl_misc.end(__NAME__, logger=log)
+    lbl_misc.end(__NAME__, plogger=log)
     # return local namespace
     return namespace
 

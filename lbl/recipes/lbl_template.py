@@ -67,14 +67,14 @@ def main(**kwargs):
     # deal with parsing arguments
     args = select.parse_args(ARGS_TEMPLATE, kwargs, DESCRIPTION_TEMPLATE)
     # load instrument
-    inst = select.load_instrument(args, logger=log)
+    inst = select.load_instrument(args, plogger=log)
     # get data directory
     data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                    cmdargs=inst.params['COMMAND_LINE_ARGS'], logger=log)
+                    cmdargs=inst.params['COMMAND_LINE_ARGS'], plogger=log)
     # run __main__
     try:
         namespace = __main__(inst)
@@ -85,7 +85,7 @@ def main(**kwargs):
         eargs = [type(e), str(e)]
         raise LblException(emsg.format(*eargs))
     # end code
-    lbl_misc.end(__NAME__, logger=log)
+    lbl_misc.end(__NAME__, plogger=log)
     # return local namespace
     return namespace
 
@@ -127,7 +127,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 3: Deal with reference file (first file)
     # -------------------------------------------------------------------------
     # select the first science file as a reference file
-    refimage, refhdr =  inst.load_science(science_files[0])
+    refimage, refhdr = inst.load_science(science_files[0])
     # get wave solution for reference file
     refwave = inst.get_wave_solution(science_files[0], refimage, refhdr)
     # get domain coverage
@@ -158,8 +158,14 @@ def __main__(inst: InstrumentsType, **kwargs):
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
         # load blaze (just ones if not needed)
         if blaze is None:
-            blaze = inst.load_blaze_from_science(sci_image, sci_hdr, calib_dir,
-                                                 normalize=False)
+            bargs = [sci_image, sci_hdr, calib_dir]
+            blaze, blaze_flag = inst.load_blaze_from_science(*bargs,
+                                                             normalize=False)
+        else:
+            blaze_flag = False
+        # deal with not having blaze (for s1d weighting)
+        if blaze_flag:
+            sci_image, blaze = inst.no_blaze_corr(sci_image, sci_wave)
         # get the berv
         berv = inst.get_berv(sci_hdr)
         # populate science table

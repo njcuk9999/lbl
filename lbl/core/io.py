@@ -419,6 +419,7 @@ def write_fits(filename: str, data: FitsData = None,
             if key in FORBIDDEN_KEYS:
                 continue
             # skip comments
+            # noinspection PyProtectedMember
             if isinstance(value, fits.header._HeaderCommentaryCards):
                 continue
             # add key

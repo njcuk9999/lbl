@@ -8,7 +8,6 @@ Created on 2021-03-15
 @author: cook
 """
 from astropy.time import Time, TimeDelta
-import base64
 import os
 
 
