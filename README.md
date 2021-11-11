@@ -9,9 +9,9 @@ Line by line code for radial velocity
     - [Step 1: Download from github](#step-1-download-the-github-repository)
     - [Step 2: Choose your branch](#step-2-choose-your-branch)
     - [Step 3: Install python 3.8 and python requirements](#step-3-install-python-38-and-required-modules)
-    - [Step 4: Add to PYTHONPATH](#step-4-add-to-the-pythonpath-environment)
+    - [Step 4: Add to PYTHONPATH](#step-4-add-to-the-path-and-pythonpath-environment)
 2. [Using LBL compute](#2-using-lbl-compute)
-3. [Using LBL compile](#3-using-lbl-compil)
+3. [Using LBL compile](#3-using-lbl-compile)
 4. [The config file](#4-the-configuration-file)
 5. [Things that the LBL code is NOT meant to do](#5-things-that-the-lbl-code-is-not-meant-to-do)
 

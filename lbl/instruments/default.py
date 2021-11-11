@@ -382,6 +382,8 @@ class Instrument:
 
         :param template_file: str, the file and path to write to
         :param props: dict, the template columns
+        :param sci_hdr: fits Header, an input file header to copy the header
+                        from to the new template file
         :param sci_table: dict, the science table in dictionary form
         :return:
         """
@@ -472,6 +474,7 @@ class Instrument:
         Make the absolute path for the mask file
 
         :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to mask file
         """
@@ -483,6 +486,7 @@ class Instrument:
         Make the absolute path for the template file
 
         :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to template file
         """
@@ -506,8 +510,9 @@ class Instrument:
         Load a blaze file
 
         :param filename: str, absolute path to filename
+        :param normalize: bool, if True normalized the blaze per order
 
-        :return: tuple, data (np.ndarray) and header (fits.Header)
+        :return: data (np.ndarray) or None
         """
         _ = self, filename, normalize
         raise self._not_implemented('load_blaze')
@@ -544,11 +549,26 @@ class Instrument:
         :param sci_hdr: fits.Header - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
+        :param normalize: bool, if True normalized the blaze per order
 
-        :return: None
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
         """
         _ = sci_image, sci_hdr, calib_directory, normalize
         raise self._not_implemented('science_files')
+
+    def no_blaze_corr(self, sci_image: np.ndarray, sci_wave: np.ndarray):
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        _ = sci_image, sci_wave
+        raise self._not_implemented('no_blaze_corr')
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
@@ -607,9 +627,13 @@ class Instrument:
         """
         Populate the science table
 
-        :param sci_hdr:
-        :param berv:
-        :return:
+        :param filename: str, the filename of the science image
+        :param tdict: dictionary, the storage dictionary for science table
+                      can be empty or have previous rows to append to
+        :param sci_hdr: fits Header, the header of the science image
+        :param berv: float, the berv value to add to storage dictionary
+
+        :return: dict, a dictionary table of the science parameters
         """
         _ = filename, tdict, sci_hdr, berv
         raise self._not_implemented('get_berv')
@@ -704,8 +728,9 @@ class Instrument:
         # return the epoch groupings and epoch values
         raise self._not_implemented('find_inputs')
 
-    def add_dict_list_value(self, store: Dict[str, Any], key: str,
-                             value: Any) -> Dict[str, list]:
+    @staticmethod
+    def add_dict_list_value(store: Dict[str, Any], key: str,
+                            value: Any) -> Dict[str, list]:
         """
         Add a value to a dictionary store
 
@@ -724,8 +749,8 @@ class Instrument:
         # return the dictionary
         return store
 
-    def get_stellar_model_format_dict(self, params: base_classes.ParamDict
-                                      ) -> dict:
+    @staticmethod
+    def get_stellar_model_format_dict(params: base_classes.ParamDict) -> dict:
         """
         Get the format dictionary for the stellar model URLS from
         the supplied header

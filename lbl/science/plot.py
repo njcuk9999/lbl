@@ -336,7 +336,6 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     plt.close()
 
 
-
 def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
                   ccf_vector: np.ndarray, sys_vel: float):
     """
@@ -345,8 +344,7 @@ def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     :param inst: Instrument, instrument this plot is used for
     :param dvgrid: np.ndarray, the rv velocity grid
     :param ccf_vector: np.ndarray, the ccf vector
-    :param ccf_fit: np.ndarray, the ccf fit vector
-    :param gcoeffs: np.ndarray the ccf fit coefficients
+    :param sys_vel: float, the systemic velocity
 
     :return: None - plots
     """

@@ -201,12 +201,12 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
 
 
 def load_instrument(args: ParamDict,
-                    logger: Union[logger.Log, None] = None) -> InstrumentsType:
+                    plogger: Union[logger.Log, None] = None) -> InstrumentsType:
     """
     Load an instrument
 
     :param args: ParamDict, the parameter dictionary of inputs
-    :param logger: Log instance or None - passed to keep parameters
+    :param plogger: Log instance or None - passed to keep parameters
 
     :return: Instrument instance
     """
@@ -251,8 +251,8 @@ def load_instrument(args: ParamDict,
     # update log verbosity level and program name
     verbose = inst.params.get('VERBOSE', 2)
     program = inst.params.get('PROGRAM', None)
-    if logger is not None:
-        logger.update_console(verbose, program)
+    if plogger is not None:
+        plogger.update_console(verbose, program)
     else:
         log.update_console(verbose, program)
     # -------------------------------------------------------------------------

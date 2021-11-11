@@ -87,10 +87,10 @@ def move_log(data_dir: str, recipe: str):
 
 
 def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None,
-           logger: Union[logger.Log, None] = None):
+           plogger: Union[logger.Log, None] = None):
     # deal with no logger
-    if logger is None:
-        logger = log
+    if plogger is None:
+        plogger = log
     # print splash
     msgs = ['']
     msgs += ['*' * 79]
@@ -102,26 +102,27 @@ def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None,
     margs = [name, __version__, instrument]
     # loop through messages
     for msg in msgs:
-        logger.info(msg.format(*margs))
+        plogger.info(msg.format(*margs))
     # add command line arguments (if not None)
     if cmdargs is not None:
-        logger.info('Command line arguments:')
+        plogger.info('Command line arguments:')
         # loop around arguments and add
         for cmdmsg in cmdargs:
-            logger.info(cmdmsg)
+            plogger.info(cmdmsg)
 
 
-def end(recipe: str, logger: Union[logger.Log, None] = None):
+def end(recipe: str, plogger: Union[logger.Log, None] = None):
     """
     print and end statement
 
     :param recipe: str, the recipe name
+    :param plogger: the logger instance class
 
     :return: None - prints to screen / log
     """
     # deal with no logger
-    if logger is None:
-        logger = log
+    if plogger is None:
+        plogger = log
     # print splash
     msgs = ['']
     msgs += ['*' * 79]
@@ -131,7 +132,7 @@ def end(recipe: str, logger: Union[logger.Log, None] = None):
     margs = [recipe]
     # loop through messages
     for msg in msgs:
-        logger.info(msg.format(*margs))
+        plogger.info(msg.format(*margs))
     return
 
 
@@ -178,6 +179,7 @@ def quick_args(args: Any, quickargs: Dict[str, QuickArg]):
             else:
                 listargs.append('{0}={1}'.format(qarg, args.__dict__[arg]))
     return listargs
+
 
 # =============================================================================
 # Start of code

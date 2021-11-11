@@ -148,6 +148,7 @@ class Log:
 
     def general(self, message: str, *args, **kwargs):
         self.update_console(self.console_verbosity, self.program)
+        # noinspection PyProtectedMember
         self.logger._log(self.GENERAL, message, args, **kwargs)
 
     def info(self, message: str, *args, **kwargs):
@@ -225,6 +226,7 @@ class ConsoleFormat(logging.Formatter):
     def format(self, record):
         # Save the original format configured by the user
         # when the logger formatter was instantiated
+        # noinspection PyProtectedMember
         format_orig = self._style._fmt
         # Replace the original format with one customized by logging level
         if record.levelno < logging.INFO:

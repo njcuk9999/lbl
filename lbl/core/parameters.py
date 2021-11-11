@@ -357,6 +357,15 @@ params.set(key='OBJECT_ALPHA', value=None, source=__NAME__,
            desc='the object alpha (stellar model)',
            arg='--obj_alpha', dtype=float, not_none=True)
 
+# blaze smoothing size (s1d template)
+params.set(key='BLAZE_SMOOTH_SIZE', value=None, source=__NAME__,
+           desc='blaze smoothing size (s1d template)', dtype=float,
+           not_none=True)
+
+# blaze threshold (s1d template)
+params.set(key='BLAZE_THRESHOLD', value=None, source=__NAME__,
+           desc='blaze threshold (s1d template)', dtype=float, not_none=True)
+
 # =============================================================================
 # Define other parameters
 # =============================================================================
