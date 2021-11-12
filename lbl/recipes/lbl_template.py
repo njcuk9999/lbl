@@ -159,13 +159,14 @@ def __main__(inst: InstrumentsType, **kwargs):
         # load blaze (just ones if not needed)
         if blaze is None:
             bargs = [sci_image, sci_hdr, calib_dir]
-            blaze, blaze_flag = inst.load_blaze_from_science(*bargs,
-                                                             normalize=False)
+            bout = inst.load_blaze_from_science(*bargs, normalize=False)
+            blazeimage, blaze_flag = bout
         else:
             blaze_flag = False
+            blazeimage = np.array(blaze)
         # deal with not having blaze (for s1d weighting)
         if blaze_flag:
-            sci_image, blaze = inst.no_blaze_corr(sci_image, sci_wave)
+            sci_image, blazeimage = inst.no_blaze_corr(sci_image, sci_wave)
         # get the berv
         berv = inst.get_berv(sci_hdr)
         # populate science table
@@ -176,7 +177,8 @@ def __main__(inst: InstrumentsType, **kwargs):
             sci_wave = mp.doppler_shift(sci_wave, -berv)
         # compute s1d from e2ds
         s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                 sci_image, blaze, wavegrid)
+                                                 sci_image, blazeimage,
+                                                 wavegrid)
         # push into arrays
         flux_cube[:, it] = s1d_flux
         weight_cube[:, it] = s1d_weight
@@ -198,6 +200,23 @@ def __main__(inst: InstrumentsType, **kwargs):
     for it in tqdm(range(len(science_files))):
         flux_cube[:, it] = flux_cube[:, it] / np.nanmedian(flux_cube[:, it])
 
+    # copy
+    flux_cube0 = np.array(flux_cube)
+    # get the pixel hp_width [needs to be in m/s]
+    hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step))
+    # -------------------------------------------------------------------------
+    if not inst.flag_calib(refhdr):
+        with warnings.catch_warnings(record=True) as _:
+            # calculate the median of the big cube
+            median = mp.nanmedian(flux_cube, axis=1)
+            # iterate until low frequency gone
+            for sci_it in range(flux_cube.shape[1]):
+                # remove the stellar features
+                ratio = flux_cube[:, sci_it] / median
+                # apply median filtered ratio (low frequency removal)
+                lowpass = mp.medfilt_1d(ratio, hp_width)
+                flux_cube[:, sci_it] /= lowpass
+    # -------------------------------------------------------------------------
     # get the median and +/- 1 sigma values for the cube
     log.general('Calculate 16th, 50th and 84th percentiles')
     with warnings.catch_warnings(record=True) as _:

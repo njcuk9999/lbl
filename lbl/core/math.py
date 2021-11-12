@@ -15,6 +15,7 @@ import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
 from scipy.special import erf
 from scipy import optimize
+from scipy import signal
 from typing import Tuple, Union
 import warnings
 
@@ -735,6 +736,35 @@ def robust_polyfit(x: np.ndarray, y: np.ndarray, degree: int,
         keep = nsig < nsigcut
     # return the fit and the mask of good values
     return np.array(fit), np.array(keep)
+
+
+def medfilt_1d(a: Union[list, np.ndarray],
+               window: Union[None, int] = None) -> np.ndarray:
+    """
+    Bottleneck or scipy.signal implementation of medfilt depending on imports
+
+    :param a: numpy array, Input array. If `a` is not an array, a conversion
+              is attempted.
+    :param window: int, The number of elements in the moving window.
+
+    :type a: np.ndarray
+    :type window: int
+
+    :return: the 1D median filtered array of `a` (int, float or np.ndarray)
+    """
+    # check bottleneck functionality
+    if HAS_BOTTLENECK:
+        # get half window size
+        half_window = window // 2
+        # need to shift
+        a1 = np.append(a, [np.nan] * half_window)
+        # median filter (via bottleneck function)
+        y = bn.move_median(a1, window=window, min_count=half_window)
+        # return shifted bottleneck function
+        return y[half_window:]
+    else:
+        # return scipy function
+        return signal.medfilt(a, kernel_size=window)
 
 
 # =============================================================================
