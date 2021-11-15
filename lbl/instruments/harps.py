@@ -429,7 +429,7 @@ class Harps(Instrument):
         # ---------------------------------------------------------------------
         # HARPS wave solution is in air - convert to vacuum
         n_index = mp.air_index(wavemap)
-        wavemap = wavemap / n_index
+        wavemap = wavemap * n_index
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap

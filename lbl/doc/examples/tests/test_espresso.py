@@ -25,7 +25,7 @@ keyword_args['DATA_DIR'] = working
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = None
 keyword_args['TEMPLATE_FILE'] = 'Template_LHS-1140.fits'
-keyword_args['PLOT'] = False
+keyword_args['PLOT'] = True
 keyword_args['PLOT_COMPUTE_CCF'] = True
 keyword_args['PLOT_COMPUTE_LINES'] = True
 keyword_args['PLOT_COMPIL_CUMUL'] = True
@@ -47,12 +47,12 @@ num = 0
 # =============================================================================
 if __name__ == "__main__":
 
-    # run template
-    tbl0 = template(object_science=objs[num], object_template=templates[num],
-                    **keyword_args)
-    # run mask code
-    tbl1 = mask(object_science=objs[num], object_template=templates[num],
-                object_teff=teffs[num], **keyword_args)
+    # # run template
+    # tbl0 = template(object_science=objs[num], object_template=templates[num],
+    #                 **keyword_args)
+    # # run mask code
+    # tbl1 = mask(object_science=objs[num], object_template=templates[num],
+    #             object_teff=teffs[num], **keyword_args)
     # run compute
     tbl2 = compute(object_science=objs[num], object_template=templates[num],
                    **keyword_args)
