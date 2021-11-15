@@ -427,6 +427,10 @@ class Harps(Instrument):
         # HARPS wave solution is in Angstrom - convert to nm for consistency
         wavemap = wavemap / 10.0
         # ---------------------------------------------------------------------
+        # HARPS wave solution is in air - convert to vacuum
+        n_index = mp.air_index(wavemap)
+        wavemap = wavemap / n_index
+        # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
 

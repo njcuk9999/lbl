@@ -767,6 +767,31 @@ def medfilt_1d(a: Union[list, np.ndarray],
         return signal.medfilt(a, kernel_size=window)
 
 
+def air_index(wavelength: Union[np.ndarray, float], temp: float=15.0,
+              pressure: float = 760.0) -> Union[np.ndarray, float]:
+    """
+    transform the wavelength in vacuum on the air
+    wavelength in nm, t=temperature in C, p=pressure in millibar
+
+    From EA via Romain Allart (For HARPS specifically)
+
+    :param wavelength: np.array - vector of wavelengths
+    :param temp: float, air temperature in degrees C
+    :param pressure: float, air pressure in millibar
+
+    :return: depending on input a np.array of refractive indexes or a single
+             refractive index
+    """
+    part1 = 1e-6 * pressure * (1 + (1.049-0.0157*temp) * 1e-6 * pressure)
+    part2 = 720.883 * (1 + 0.003661 * temp)
+    part3 = 64.328 + 29498.1/(146-(1e3/wavelength)**2)
+    part4 = 255.4 / (41-(1e3/wavelength)**2)
+    # get the refractive index
+    n = ((part1 / part2) * (part3 + part4)) + 1
+
+    return n
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

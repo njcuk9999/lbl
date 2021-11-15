@@ -2045,12 +2045,13 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     t_wave = np.array(template_table['wavelength'])
     t_flux = np.array(template_table['flux'])
     # -------------------------------------------------------------------------
-    # remove NaNs prior to convolution
-    t_flux[np.isnan(t_flux)] = 0
-    # -------------------------------------------------------------------------
     # smooth the spectrum to avoid lines that coincide with small-scale noise
     #   excursion
-    t_flux = np.convolve(t_flux, np.ones(5), mode='same')
+    t_flux_tmp = np.zeros_like(t_flux)
+    for offset in range(-2, 3):
+        t_flux_tmp += np.roll(t_flux, offset)
+    # copy over original vector
+    t_flux = np.array(t_flux_tmp)
     # -------------------------------------------------------------------------
     # find the first and second derivative of the flux
     dflux = np.gradient(t_flux)
