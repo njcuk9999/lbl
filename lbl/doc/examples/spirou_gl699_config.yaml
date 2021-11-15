@@ -28,7 +28,7 @@ TEMPLATE_FILE: None
 OVERWRITE: True
 
 # Set whether to plot any plots
-PLOT: True
+PLOT: False
 
 # Set whether to do the compute ccf plot
 PLOT_COMPUTE_CCF: False
