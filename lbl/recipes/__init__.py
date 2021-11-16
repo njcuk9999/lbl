@@ -9,6 +9,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+from lbl.recipes import lbl_clean
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_template
@@ -18,6 +19,8 @@ from lbl.recipes import lbl_noise
 # =============================================================================
 # Define variables
 # =============================================================================
+# alias to lbl clean
+clean = lbl_clean
 # alias to lbl template
 template = lbl_template
 # alias to lbl mask
