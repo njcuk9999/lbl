@@ -50,6 +50,8 @@ class Log:
         self.filefmt = self.format_class(theme='OFF')
         # set program to None
         self.program = None
+        # save path
+        self.filepath = None
         # add console
         self.console_verbosity = 2
         self._add_console(self.console_verbosity, level=self.GENERAL)
@@ -98,6 +100,8 @@ class Log:
             self.logger.handlers[it].setFormatter(self.confmt)
 
     def add_log_file(self, filepath: str, level: Union[str, int, None] = None):
+        # set file path
+        self.filepath = filepath
         # get the File Handler
         filehandler = logging.FileHandler(str(filepath))
         # set the name (so we can access it later)

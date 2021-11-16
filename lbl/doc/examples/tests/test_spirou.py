@@ -7,6 +7,7 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
+from lbl import clean
 from lbl import compil
 from lbl import compute
 from lbl import mask
@@ -26,13 +27,14 @@ gl699_config_file = working + 'spirou_gl699_config.yaml'
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
-
-    # run template
-    #tbl0a = template(config_file=fp_config_file)
-    tbl0b = template(config_file=gl699_config_file)
-    # run mask code
-    tbl1a = mask(config_file=fp_config_file)
-    tbl1b = mask(config_file=gl699_config_file)
+    # run clean (reset everything)
+    _ = clean(config_file=gl699_config_file)
+    # # run template
+    # tbl0a = template(config_file=fp_config_file)
+    # tbl0b = template(config_file=gl699_config_file)
+    # # run mask code
+    # tbl1a = mask(config_file=fp_config_file)
+    # tbl1b = mask(config_file=gl699_config_file)
     # run compute
     tbl2a = compute(config_file=fp_config_file)
     tbl2b = compute(config_file=gl699_config_file)

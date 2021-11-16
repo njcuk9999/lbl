@@ -12,6 +12,7 @@ Created on 2021-03-17
 import argparse
 from copy import deepcopy
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Union
 import yaml
 
@@ -136,6 +137,9 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
         if inputs['CONFIG_FILE'] is not None:
             # get config file
             config_file = inputs['CONFIG_FILE']
+            # check if config file is path or str
+            if not isinstance(config_file, (str, Path)):
+                raise LblException('config file not a valid path or string')
             # check if exists
             if not io.check_file_exists(config_file):
                 emsg = 'config file = "{0}" does not exist'

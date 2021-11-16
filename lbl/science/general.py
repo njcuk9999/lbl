@@ -82,6 +82,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['WAVE_END'] = np.array(table['WAVE_END'])
         ref_dict['WEIGHT_LINE'] = np.array(table['WEIGHT_LINE'])
         ref_dict['XPIX'] = np.array(table['XPIX'])
+        ref_dict['LINE_SNR'] = np.array(table['LINE_SNR'])
         # ratio of expected VS actual RMS in difference of model vs line
         ref_dict['RMSRATIO'] = np.array(table['RMSRATIO'])
         # effective number of pixels in line
@@ -107,6 +108,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         wavegrid = inst.get_wave_solution(science_files[0])
         # storage for vectors
         order, wave_start, wave_end, weight_line, xpix = [], [], [], [], []
+        line_snr = []
         # loop around orders
         for order_num in range(wavegrid.shape[0]):
             # get the min max wavelengths for this order
@@ -131,6 +133,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
                 xspline = mp.iuv_spline(wavegrid[order_num], xgrid)
                 # get the x pixel vector for mask
                 xpix += list(xspline(mask_table['ll_mask_s'][good][:-1]))
+                # get the line snr
+                line_snr += list(mask_table['line_snr'][good][:-1])
         # make xpix a numpy array
         xpix = np.array(xpix)
         # add to reference dictionary
@@ -139,6 +143,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['WAVE_END'] = np.array(wave_end)
         ref_dict['WEIGHT_LINE'] = np.array(weight_line)
         ref_dict['XPIX'] = xpix
+        ref_dict['LINE_SNR'] = np.array(line_snr)
         # ratio of expected VS actual RMS in difference of model vs line
         ref_dict['RMSRATIO'] = np.zeros_like(xpix, dtype=float)
         # effective number of pixels in line
@@ -155,6 +160,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['CHI2'] = np.zeros_like(xpix, dtype=float)
         # probability of valid considering the chi2 CDF for the number of DOF
         ref_dict['CHI2_VALID_CDF'] = np.zeros_like(xpix, dtype=float)
+
 
         # ---------------------------------------------------------------------
         # convert ref_dict to table (for saving to disk
@@ -319,7 +325,8 @@ def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 500):
 
 def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
                  sci_data: np.ndarray, wave_mask: np.ndarray,
-                 weight_line: np.ndarray, kind: str) -> Tuple[float, float]:
+                 weight_line: np.ndarray, kind: str,
+                 line_snr: np.ndarray) -> Tuple[float, float]:
     """
     Perform a rough CCF calculation of the science data
 
@@ -329,6 +336,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     :param wave_mask: list of wavelength centers of mask lines
     :param weight_line: list of weights for each mask line
     :param kind: the kind of file we are doing the ccf on (for logging)
+    :param line_snr: list of snr for each line
 
     :return: tuple, 1. systemic velocity estimate, 2. ccf ewidth
     """
@@ -338,6 +346,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     rv_min = inst.params['ROUGH_CCF_MIN_RV']
     rv_max = inst.params['ROUGH_CCF_MAX_RV']
     rv_ewid_guess = inst.params['ROUGH_CCF_EWIDTH_GUESS']
+    snr_min = inst.params['MASK_SNR_MIN']
     # -------------------------------------------------------------------------
     # if we have a 2D array make it 1D (but ignore overlapping regions)
     if wavegrid.shape[0] > 1:
@@ -404,6 +413,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # define a mask that only keeps certain index values
     keep_line = index_mask > (rv_max / grid_step) + 2
     keep_line &= index_mask < len(magic_spline) - (rv_max / grid_step) - 2
+    keep_line &= line_snr > snr_min
     # only keep the indices and weights within the keep line mask
     index_mask = index_mask[keep_line]
     weight_line = weight_line[keep_line]
@@ -416,7 +426,8 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
 
     # high-pass the CCF just to be really sure that we are finding a true CCF
     # peak and not a spurious excursion in the low-frequencies
-    ccf_vector -= mp.lowpassfilter(ccf_vector, 10)
+    rfit, _ = mp.robust_polyfit(dvgrid, ccf_vector, 2, 5)
+    ccf_vector -= np.polyval(rfit, dvgrid)
 
     # -------------------------------------------------------------------------
     # fit the CCF
@@ -440,12 +451,15 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
                                  funcname=sfuncname)
     # record the systemic velocity and the FWHM
     systemic_velocity = gcoeffs[0]
-    ccf_ewidth = gcoeffs[1]
+    ccf_ewidth = abs(gcoeffs[1])
     # fit ccf
     ccf_fit = mp.gauss_fit_s(dvgrid, *gcoeffs)
     # log ccf velocity
     msg = '\t\tCCF velocity ({0}) = {1:.2f} m/s'
     margs = [kind, -systemic_velocity]
+    log.general(msg.format(*margs))
+    msg = '\t\tCCF FWHM ({0}) = {1:.1f} m/s'
+    margs = [kind, mp.fwhm() * ccf_ewidth]
     log.general(msg.format(*margs))
     # -------------------------------------------------------------------------
     # debug plot
@@ -508,12 +522,13 @@ def get_scaling_ratio(spectrum1: np.ndarray,
     return amp
 
 
-def estimate_noise_model(spectrum: np.ndarray, model: np.ndarray,
-                         npoints: int = 100) -> np.ndarray:
+def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
+                         model: np.ndarray, hpwidth: float) -> np.ndarray:
     """
     Estimate the noise on spectrum given the model
 
     :param spectrum: np.ndarray, the spectrum
+    :param wavegrid: np.ndarray, the wave grid for the spectrum
     :param model: np.ndarray, the model
     :param npoints: int, the number of points to spline across
 
@@ -523,17 +538,21 @@ def estimate_noise_model(spectrum: np.ndarray, model: np.ndarray,
     rms = np.zeros_like(spectrum)
     # loop around each order and estimate noise model
     for order_num in range(spectrum.shape[0]):
+        # get the wavelength for this order
+        waveord = wavegrid[order_num]
+        # calculate the number of points for the sliding error rms
+        npoints = get_velo_scale(waveord, hpwidth)
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
         # get the pixels along the model to spline at (box centers)
-        indices = np.arange(0, model.shape[1], npoints)
+        indices = np.arange(0, model.shape[1], npoints//4)
         # store the sigmas
         sigma = np.zeros_like(indices, dtype=float)
         # loop around each pixel and work out sigma value
         for it in range(len(indices)):
             # get start and end values for this box
-            istart = indices[it] - npoints
-            iend = indices[it] + npoints
+            istart = indices[it] - npoints//2
+            iend = indices[it] + npoints//2
             # fix boundary problems
             if istart < 0:
                 istart = 0
@@ -691,7 +710,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # calculate the rough CCF RV estimate
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
                                           ref_table['WAVE_START'], ccf_weight,
-                                          kind='science')
+                                          kind='science',
+                                          line_snr=ref_table['LINE_SNR'])
             # if ccf width is not set then set it and log message
             if ccf_ewidth is None:
                 ccf_ewidth = float(ewidth)
@@ -808,7 +828,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # if we are not using a noise model - estimate the noise
         if not use_noise_model:
-            rms = estimate_noise_model(sci_data, model)
+            rms = estimate_noise_model(sci_data, wavegrid, model, hp_width)
             # work out the number of sigma away from the model
             nsig = (sci_data - model) / rms
             # mask for nsigma
@@ -848,9 +868,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             plot_dict['SPEC_ORD_LINE'] = []
         # calculate the CCF for the model (if we don't have model_velocity)
         if not np.isfinite(model_velocity):
+            rkwargs = dict(kind='model', line_snr=ref_table['LINE_SNR'])
             sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
                                                       ref_table['WAVE_START'],
-                                                      ccf_weight, kind='model')
+                                                      ccf_weight, **rkwargs)
             model_velocity = -sys_model_rv + sys_rv
             log.general('Model velocity {:.2f} m/s'.format(model_velocity))
             # we don't want to continue this run if we have model_velocity
@@ -2048,6 +2069,10 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     # get the wave and flux vectors for the tempalte
     t_wave = np.array(template_table['wavelength'])
     t_flux = np.array(template_table['flux'])
+    with warnings.catch_warnings(record=True) as _:
+        t_snr = t_flux / template_table['rms']
+        # remove infinite values
+        t_snr[np.isinf(t_snr)] = np.nan
     # -------------------------------------------------------------------------
     # smooth the spectrum to avoid lines that coincide with small-scale noise
     #   excursion
@@ -2083,6 +2108,7 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     # weight of the line is not used in LBL but nice to document
     w_mask = ddflux[line]
     f_mask = t_flux[line]
+    snr_mask = t_snr[line]
     # -------------------------------------------------------------------------
     # find the bits of continuum on either side of line and find depth
     #    relative to that
@@ -2115,6 +2141,7 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     table['w_mask'] = w_mask
     table['value'] = f_mask
     table['depth'] = depth
+    table['line_snr'] = abs(depth * snr_mask)
     # return the mask table
     return table
 

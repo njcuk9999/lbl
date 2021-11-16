@@ -7,6 +7,7 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
+from lbl import clean
 from lbl import compil
 from lbl import compute
 from lbl import mask
@@ -46,13 +47,15 @@ num = 0
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
-
-    # # run template
-    # tbl0 = template(object_science=objs[num], object_template=templates[num],
-    #                 **keyword_args)
-    # # run mask code
-    # tbl1 = mask(object_science=objs[num], object_template=templates[num],
-    #             object_teff=teffs[num], **keyword_args)
+    # run clean (reset everything)
+    _ = clean(object_science=objs[num], object_template=templates[num],
+                    **keyword_args)
+    # run template
+    tbl0 = template(object_science=objs[num], object_template=templates[num],
+                    **keyword_args)
+    # run mask code
+    tbl1 = mask(object_science=objs[num], object_template=templates[num],
+                object_teff=teffs[num], **keyword_args)
     # run compute
     tbl2 = compute(object_science=objs[num], object_template=templates[num],
                    **keyword_args)

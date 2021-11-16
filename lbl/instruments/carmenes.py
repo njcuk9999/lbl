@@ -118,6 +118,8 @@ class Carmenes(Instrument):
                         value='ftp://phoenix.astro.physik.uni-goettingen.de/'
                               'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
+        # Define the minimum allowed SNR in a pixel to add it to the mask
+        self.params.set('MASK_SNR_MIN', value=5, source=func_name)
         # Define the stellar model file name (using wget, with appropriate
         #     format  cards)
         self.params.set('STELLAR_MODEL_FILE', source=func_name,

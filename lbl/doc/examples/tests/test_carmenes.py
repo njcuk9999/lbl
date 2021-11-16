@@ -7,6 +7,7 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
+from lbl import clean
 from lbl import compil
 from lbl import compute
 from lbl import mask
@@ -46,7 +47,9 @@ num = 0
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
-
+    # run clean (reset everything)
+    _ = clean(object_science=objs[num], object_template=templates[num],
+                    **keyword_args)
     # run template
     tbl0 = template(object_science=objs[num], object_template=templates[num],
                     **keyword_args)

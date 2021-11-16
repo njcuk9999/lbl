@@ -24,7 +24,8 @@ noise = recipes.lbl_noise.main
 compute = recipes.lbl_compute.main
 # compile recipe
 compil = recipes.lbl_compile.main
-
+# clean recipe
+clean = recipes.lbl_clean.main
 
 # =============================================================================
 # Define functions

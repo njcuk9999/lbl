@@ -12,6 +12,7 @@ Created on 2021-03-15
 from astropy.io import fits
 from astropy.table import Table
 import copy
+import glob
 import numpy as np
 import os
 from pathlib import Path
@@ -175,6 +176,33 @@ def find_files(path_list: List[Path],
             valid_files.append(filename)
 
     return valid_files
+
+
+def clean_directory(path: str, logmsg: bool = True):
+    """
+    Remove all files from a directory
+
+    :param path: str, path to clean
+
+    :return: None, removes files
+    """
+    # if directory does not exist do not clean
+    if not os.path.exists(path):
+        return
+    # log cleaning
+    log.general('Cleaning directory {0}'.format(path))
+    # loop around files
+    files = glob.glob(os.path.join(path, '*'))
+    # loop around files
+    for filename in files:
+        # if filename is a file then remove it
+        if os.path.isfile(filename):
+            try:
+                if logmsg:
+                    log.general('\t\tRemoving file: {0}'.format(filename))
+                os.remove(filename)
+            except:
+                pass
 
 
 # =============================================================================

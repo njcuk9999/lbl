@@ -330,6 +330,11 @@ params.set(key='STELLAR_MODEL_URL', value=None, source=__NAME__,
            desc='the stellar model url',
            dtype=str, not_none=True)
 
+# Define the minimum allowed SNR in a pixel to add it to the mask
+params.set(key='MASK_SNR_MIN', value=None, source=__NAME__,
+           desc='the minimum allowed SNR in a pixel to add it to the mask',
+           dtype=float, not_none=True)
+
 # Define the stellar model file name (using wget, with appriopriate format
 #     cards)
 params.set(key='STELLAR_MODEL_FILE', value=None, source=__NAME__,
