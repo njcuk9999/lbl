@@ -1251,9 +1251,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # work out for cumulative plot for first file
     # -------------------------------------------------------------------------
     # median velocity for first file rv table
-    med_velo = mp.nanmedian(rvtable0['DV'])
+    med_velo = mp.nanmedian(rvtable0['dv'])
     # work out the best lines (less than 5 sigma)
-    best_mask = rvtable0['SDV'] < np.nanpercentile(rvtable0['SDV'], 5.0)
+    best_mask = rvtable0['sdv'] < np.nanpercentile(rvtable0['sdv'], 5.0)
     # list for plot storage
     vrange_all, pdf_all, pdf_fit_all = [], [], []
 
@@ -1300,12 +1300,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration we set the rvs and dvrms from rv table
         if not flag_calib:
-            rvs[row] = rvtable[good]['DV']
-            dvrms[row] = rvtable[good]['SDV']
+            rvs[row] = rvtable[good]['dv']
+            dvrms[row] = rvtable[good]['sdv']
         # else we calcualte it using odd ratio mean
         else:
-            cal_rv = np.array(rvtable[good]['DV'], dtype=float)
-            cal_dvrms = np.array(rvtable[good]['SDV'], dtype=float)
+            cal_rv = np.array(rvtable[good]['dv'], dtype=float)
+            cal_dvrms = np.array(rvtable[good]['sdv'], dtype=float)
             # estimate using odd ratio mean
             cal_guess, cal_bulk_error = mp.odd_ratio_mean(cal_rv, cal_dvrms)
             # push into rdb_dict
