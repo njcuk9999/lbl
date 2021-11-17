@@ -1557,7 +1557,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
 
         # work out the fwhm (1 sigma * sigma value)
         per_epoch_ddv = rdb_dict['d2v'][row]
-        per_epoch_ddvrms = rdb_dict['d3v'][row]
+        per_epoch_ddvrms = rdb_dict['sd2v'][row]
         # calculate the mean full width half max
         mean_fwhm = mp.fwhm() * ccf_ew_row
 

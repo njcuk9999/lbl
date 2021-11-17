@@ -163,10 +163,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     ccf_ewidth = None
     # flag to take a completely new rv measurement
     reset_rv = True
-    # Inside the RV code, we'll measure the velocity of the template to have a proper systemic velocity
-    # on the first iteration of the first file, we'll compute it and have a finite value. If not finite
-    # we'll assume it's zero inside the code (we're not setting to zero as it could be zero for real)
-    # and measure the offset from there.
+    # Inside the RV code, we'll measure the velocity of the template to have
+    #     a proper systemic velocity on the first iteration of the first file,
+    #     we'll compute it and have a finite value. If not finite
+    #     we'll assume it's zero inside the code (we're not setting to zero
+    #     as it could be zero for real) and measure the offset from there.
     model_velocity = np.inf
     # time stats
     mean_time, std_time, time_left = np.nan, np.nan, ''
