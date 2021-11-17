@@ -233,13 +233,13 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # get the derivative of the flux
     dflux = np.gradient(tflux) / grad_log_wave / speed_of_light_ms
     # get the 2nd derivative of the flux
-    ddflux = np.gradient(dflux) / grad_log_wave / speed_of_light_ms
+    d2flux = np.gradient(dflux) / grad_log_wave / speed_of_light_ms
     # get the 3rd derivative of the flux
-    dddflux = np.gradient(ddflux) / grad_log_wave / speed_of_light_ms
+    d3flux = np.gradient(d2flux) / grad_log_wave / speed_of_light_ms
     # -------------------------------------------------------------------------
     # we create the spline of the template to be used everywhere later
     valid = np.isfinite(tflux) & np.isfinite(dflux)
-    valid &= np.isfinite(ddflux) & np.isfinite(dddflux)
+    valid &= np.isfinite(d2flux) & np.isfinite(d3flux)
     # -------------------------------------------------------------------------
     # doppler shift wave grid with respect to systemic velocity
     ntwave = mp.doppler_shift(twave[valid], -systemic_vel)
@@ -253,8 +253,8 @@ def spline_template(inst: InstrumentsType, template_file: str,
     sps['spline0'] = mp.iuv_spline(ntwave, tflux0[valid], k=k_order, ext=1)
     sps['spline'] = mp.iuv_spline(ntwave, tflux[valid], k=k_order, ext=1)
     sps['dspline'] = mp.iuv_spline(ntwave, dflux[valid], k=k_order, ext=1)
-    sps['ddspline'] = mp.iuv_spline(ntwave, ddflux[valid], k=k_order, ext=1)
-    sps['dddspline'] = mp.iuv_spline(ntwave, dddflux[valid], k=k_order, ext=1)
+    sps['d2spline'] = mp.iuv_spline(ntwave, d2flux[valid], k=k_order, ext=1)
+    sps['d3spline'] = mp.iuv_spline(ntwave, d3flux[valid], k=k_order, ext=1)
     # -------------------------------------------------------------------------
     # we create a mask to know if the splined point  is valid
     tmask = np.isfinite(tflux).astype(float)
@@ -746,23 +746,23 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     model = np.zeros_like(sci_data)
     model0 = np.zeros_like(sci_data)
     dmodel = np.zeros_like(sci_data)
-    ddmodel = np.zeros_like(sci_data)
-    dddmodel = np.zeros_like(sci_data)
+    d2model = np.zeros_like(sci_data)
+    d3model = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
     spline0 = splines['spline0']
     spline = splines['spline']
     dspline = splines['dspline']
-    ddspline = splines['ddspline']
-    dddspline = splines['dddspline']
+    d2spline = splines['d2spline']
+    d3spline = splines['d3spline']
     spline_mask = splines['spline_mask']
-    # set up storage for the dv, ddv, ddv and corresponding rms values
+    # set up storage for the dv, d2v, d3v and corresponding rms values
     #    fill with NaNs
     dv = np.full(len(ref_table['WAVE_START']), np.nan)
-    ddv = np.full(len(ref_table['WAVE_START']), np.nan)
-    dddv = np.full(len(ref_table['WAVE_START']), np.nan)
-    dvrms = np.full(len(ref_table['WAVE_START']), np.nan)
-    ddvrms = np.full(len(ref_table['WAVE_START']), np.nan)
-    dddvrms = np.full(len(ref_table['WAVE_START']), np.nan)
+    d2v = np.full(len(ref_table['WAVE_START']), np.nan)
+    d3v = np.full(len(ref_table['WAVE_START']), np.nan)
+    sdv = np.full(len(ref_table['WAVE_START']), np.nan)
+    sd2v = np.full(len(ref_table['WAVE_START']), np.nan)
+    sd3v = np.full(len(ref_table['WAVE_START']), np.nan)
     # stoarge for final rv values
     rv_final = np.full(len(ref_table['WAVE_START']), np.nan)
     # storage for plotting
@@ -782,14 +782,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # get start time
         start_time = Time.now()
         # ---------------------------------------------------------------------
-        # update model, dmodel, ddmodel, dddmodel
+        # update model, dmodel, d2model, d3model
         # ---------------------------------------------------------------------
         # get model offset
         if np.isfinite(model_velocity):
             model_offset = float(model_velocity)
         else:
             model_offset = 0
-        # loop around each order and update model, dmodel, ddmodel, dddmodel
+        # loop around each order and update model, dmodel, d2model, d3model
         for order_num in range(sci_data.shape[0]):
             # doppler shifted wave grid for this order
             shift = -sys_rv - model_offset
@@ -816,13 +816,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 med_model0 = mp.nanmedian(model0[order_num])
                 med_sci_data_0 = mp.nanmedian(sci_data0[order_num])
                 # normalize by the median
-                model0[order_num] = model0[order_num] / med_model0
+                with warnings.catch_warnings(record=True):
+                    model0[order_num] = model0[order_num] / med_model0
                 # multiply by the median of the original spectrum
-                model0[order_num] = model0[order_num] * med_sci_data_0
+                with warnings.catch_warnings(record=True):
+                    model0[order_num] = model0[order_num] * med_sci_data_0
             # update the other splines
             dmodel[order_num] = dspline(wave_ord) * blaze_ord * amp
-            ddmodel[order_num] = ddspline(wave_ord) * blaze_ord * amp
-            dddmodel[order_num] = dddspline(wave_ord) * blaze_ord * amp
+            d2model[order_num] = d2spline(wave_ord) * blaze_ord * amp
+            d3model[order_num] = d3spline(wave_ord) * blaze_ord * amp
         # ---------------------------------------------------------------------
         # estimate rms
         # ---------------------------------------------------------------------
@@ -873,7 +875,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                                                       ref_table['WAVE_START'],
                                                       ccf_weight, **rkwargs)
             model_velocity = -sys_model_rv + sys_rv
-            log.general('Model velocity {:.2f} m/s'.format(model_velocity))
+            log.general('\tModel velocity {:.2f} m/s'.format(model_velocity))
             # we don't want to continue this run if we have model_velocity
             continue
         # ---------------------------------------------------------------------
@@ -898,8 +900,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             rms_ord = rms[order_num]
             model_ord = model[order_num]
             dmodel_ord = dmodel[order_num]
-            ddmodel_ord = ddmodel[order_num]
-            dddmodel_ord = dddmodel[order_num]
+            d2model_ord = d2model[order_num]
+            d3model_ord = d3model[order_num]
             blaze_ord = blaze[order_num]
             # -----------------------------------------------------------------
             # get the start and end wavelengths and pixels for this line
@@ -951,8 +953,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # derivative of the segment
             d_seg = dmodel_ord[x_start: x_end + 1] * weight_mask
             # keep track of second and third derivatives
-            dd_seg = ddmodel_ord[x_start: x_end + 1] * weight_mask
-            ddd_seg = dddmodel_ord[x_start: x_end + 1] * weight_mask
+            d2_seg = d2model_ord[x_start: x_end + 1] * weight_mask
+            d3_seg = d3model_ord[x_start: x_end + 1] * weight_mask
             # residual of the segment
             # TODO -> investigate data type problem
             # data type should work in the sum below. Does
@@ -984,19 +986,19 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             #    From bouchy 2001 equation, RV error for each pixel
             # -----------------------------------------------------------------
             bout = bouchy_equation_line(d_seg, diff_seg, mean_rms)
-            dv[line_it], dvrms[line_it] = bout
+            dv[line_it], sdv[line_it] = bout
             # -----------------------------------------------------------------
             # work out the 2nd derivative
             #    From bouchy 2001 equation, RV error for each pixel
             # -----------------------------------------------------------------
-            bout = bouchy_equation_line(dd_seg, diff_seg, mean_rms)
-            ddv[line_it], ddvrms[line_it] = bout
+            bout = bouchy_equation_line(d2_seg, diff_seg, mean_rms)
+            d2v[line_it], sd2v[line_it] = bout
             # -----------------------------------------------------------------
             # work out the 3rd derivative
             #    From bouchy 2001 equation, RV error for each pixel
             # -----------------------------------------------------------------
-            bout = bouchy_equation_line(ddd_seg, diff_seg, mean_rms)
-            dddv[line_it], dddvrms[line_it] = bout
+            bout = bouchy_equation_line(d3_seg, diff_seg, mean_rms)
+            d3v[line_it], sd3v[line_it] = bout
             # -----------------------------------------------------------------
             # ratio of expected VS actual RMS in difference of model vs line
             ref_table['RMSRATIO'][line_it] = mp.nanstd(diff_seg) / mean_rms
@@ -1011,7 +1013,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
         # ---------------------------------------------------------------------
         # get the best etimate of the velocity and update sline
-        rv_mean, bulk_error = mp.odd_ratio_mean(dv, dvrms)
+        rv_mean, bulk_error = mp.odd_ratio_mean(dv, sdv)
 
         # update rv_mean value with the response curve from template.
         #    An rv_mean value is always under-estimated in absolute value but
@@ -1019,7 +1021,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # TODO -> put these values in a look-up table somewhere!!!
         # ... no, not that smart after all
         # rv_mean = erfinv(rv_mean / 2250) * 2500
-        nsig = (dv - rv_mean) / dvrms
+        nsig = (dv - rv_mean) / sdv
         # remove nans
         nsig = nsig[np.isfinite(nsig)]
         # remove sigma outliers
@@ -1062,14 +1064,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # update reference table
     # -------------------------------------------------------------------------
     # express to have sign fine relative to convention
-    ref_table['RV'] = -rv_final
-    ref_table['DVRMS'] = dvrms
+    ref_table['dv'] = -rv_final
+    ref_table['sdv'] = sdv
     # adding to the fits table the 2nd derivative projection
-    ref_table['DDV'] = ddv
-    ref_table['DDVRMS'] = ddvrms
+    ref_table['d2v'] = d2v
+    ref_table['sd2v'] = d2v
     # adding to the fits table the 3rd derivative projection
-    ref_table['DDDV'] = dddv
-    ref_table['DDDVRMS'] = dddvrms
+    ref_table['d3v'] = d3v
+    ref_table['sd2v'] = sd3v
     # calculate the chi2 cdf
     chi2_cdf = 1 - stats.chi2.cdf(ref_table['CHI2'], ref_table['NPIXLINE'])
     ref_table['CHI2_VALID_CDF'] = chi2_cdf
@@ -1203,9 +1205,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['local_file_name'] = np.array(lblrvbasenames)
     # time for matplotlib
     rdb_dict['plot_date'] = np.zeros_like(lblrvfiles, dtype=float)
-    # for DACE, derived from de DDV
+    # dW from paper (equation 11)
+    rdb_dict['dW'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['sdW'] = np.zeros_like(lblrvfiles, dtype=float)
+    # for DACE, derived from d2v
     rdb_dict['fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
-    # for DACE, derived from de DDV
+    # for DACE, derived from d2v
     rdb_dict['sig_fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
     # velocity at a reference wavelength fitting for the chromatic slope
     rdb_dict['vrad_achromatic'] = np.zeros_like(lblrvfiles, dtype=float)
@@ -1246,9 +1251,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # work out for cumulative plot for first file
     # -------------------------------------------------------------------------
     # median velocity for first file rv table
-    med_velo = mp.nanmedian(rvtable0['RV'])
+    med_velo = mp.nanmedian(rvtable0['DV'])
     # work out the best lines (less than 5 sigma)
-    best_mask = rvtable0['DVRMS'] < np.nanpercentile(rvtable0['DVRMS'], 5.0)
+    best_mask = rvtable0['SDV'] < np.nanpercentile(rvtable0['SDV'], 5.0)
     # list for plot storage
     vrange_all, pdf_all, pdf_fit_all = [], [], []
 
@@ -1295,32 +1300,32 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration we set the rvs and dvrms from rv table
         if not flag_calib:
-            rvs[row] = rvtable[good]['RV']
-            dvrms[row] = rvtable[good]['DVRMS']
+            rvs[row] = rvtable[good]['DV']
+            dvrms[row] = rvtable[good]['SDV']
         # else we calcualte it using odd ratio mean
         else:
-            cal_rv = np.array(rvtable[good]['RV'], dtype=float)
-            cal_dvrms = np.array(rvtable[good]['DVRMS'], dtype=float)
+            cal_rv = np.array(rvtable[good]['DV'], dtype=float)
+            cal_dvrms = np.array(rvtable[good]['SDV'], dtype=float)
             # estimate using odd ratio mean
             cal_guess, cal_bulk_error = mp.odd_ratio_mean(cal_rv, cal_dvrms)
             # push into rdb_dict
             rdb_dict['vrad'][row] = cal_guess
             rdb_dict['svrad'][row] = cal_bulk_error
-        # get the ddv, ddvrms, dddv and dddvrms values from table
-        ddv = np.array(rvtable[good]['DDV'], dtype=float)
-        ddvrms = np.array(rvtable[good]['DDVRMS'], dtype=float)
-        dddv = np.array(rvtable[good]['DDDV'], dtype=float)
-        dddvrms = np.array(rvtable[good]['DDDVRMS'], dtype=float)
-        # use the odd mean ratio to calculate ddv and ddvrms
-        ddv_guess, ddv_bulk_error = mp.odd_ratio_mean(ddv, ddvrms)
+        # get the d2v, sd2v, d3v and sd3v values from table
+        d2v = np.array(rvtable[good]['d2v'], dtype=float)
+        sd2v = np.array(rvtable[good]['sd2v'], dtype=float)
+        d3v = np.array(rvtable[good]['d3v'], dtype=float)
+        sd3v = np.array(rvtable[good]['sd3v'], dtype=float)
+        # use the odd mean ratio to calculate d2v and sd2v
+        d2v_guess, d2v_bulk_error = mp.odd_ratio_mean(d2v, sd2v)
         # push into rdb_dict
-        rdb_dict['d2v'][row] = ddv_guess
-        rdb_dict['sd2v'][row] = ddv_bulk_error
-        # use the odd mean ratio to calculate dddv and dddvrms
-        dddv_guess, dddv_bulk_error = mp.odd_ratio_mean(dddv, dddvrms)
+        rdb_dict['d2v'][row] = d2v_guess
+        rdb_dict['sd2v'][row] = d2v_bulk_error
+        # use the odd mean ratio to calculate d3v and sd3v
+        d3v_guess, d3v_bulk_error = mp.odd_ratio_mean(d3v, sd3v)
         # push into rdb_dict
-        rdb_dict['d3v'][row] = dddv_guess
-        rdb_dict['sd3v'][row] = dddv_bulk_error
+        rdb_dict['d3v'][row] = d3v_guess
+        rdb_dict['sd3v'][row] = d3v_bulk_error
         # ---------------------------------------------------------------------
         # if we don't have a calibration add plot values
         if not flag_calib:
@@ -1463,9 +1468,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # if we have a calibration load the lbl rv file
         if flag_calib:
             rvtable, rvhdr = inst.load_lblrv_file(lblrvfiles[row])
-            residuals = np.array(rvtable['RV'])
+            residuals = np.array(rvtable['dv'])
             # get the error
-            err = np.array(rvtable['DVRMS'])
+            err = np.array(rvtable['sdv'])
             rvs_row = residuals
         else:
             # get the residuals of the rvs to the rv per line model
@@ -1556,14 +1561,21 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             ccf_ew_row = float(ccf_ew_fp)
 
         # work out the fwhm (1 sigma * sigma value)
-        per_epoch_ddv = rdb_dict['d2v'][row]
-        per_epoch_ddvrms = rdb_dict['sd2v'][row]
+        d2v = rdb_dict['d2v'][row]
+        sd2v = rdb_dict['sd2v'][row]
+        # ---------------------------------------------------------------------
+        # this is the dW in the paper
+        #   see equation 11 in paper dW = FWHM * dFWHM
+        dw = d2v * 8 * np.log(2)
+        sdw = sd2v * 8 * np.log(2)
+        rdb_dict['dW'][row] = dw
+        rdb_dict['sdW'][row] = sdw
+        # ---------------------------------------------------------------------
         # calculate the mean full width half max
         mean_fwhm = mp.fwhm() * ccf_ew_row
-
-        # fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_ddv / ccf_ew_row)
-        fwhm_row = mean_fwhm + per_epoch_ddv / mean_fwhm
-        sig_fwhm_row = per_epoch_ddvrms / mean_fwhm
+        # fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_d2v / ccf_ew_row)
+        fwhm_row = mean_fwhm + dw / mean_fwhm
+        sig_fwhm_row = sdw / mean_fwhm
         # ---------------------------------------------------------------------
         # update rdb table
         rdb_dict['fwhm'][row] = fwhm_row
