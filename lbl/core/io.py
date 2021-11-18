@@ -192,7 +192,7 @@ def clean_directory(path: str, logmsg: bool = True):
     # log cleaning
     log.general('Cleaning directory {0}'.format(path))
     # loop around files
-    files = glob.glob(os.path.join(path, '*'))
+    files = glob.glob(os.path.join(path, '*'), recursive=True)
     # loop around files
     for filename in files:
         # if filename is a file then remove it
