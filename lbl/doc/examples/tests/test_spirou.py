@@ -28,6 +28,7 @@ gl699_config_file = working + 'spirou_gl699_config.yaml'
 # =============================================================================
 if __name__ == "__main__":
     # # run clean (reset everything)
+    _ = clean(config_file=fp_config_file)
     _ = clean(config_file=gl699_config_file)
     # # run template
     tbl0a = template(config_file=fp_config_file)
