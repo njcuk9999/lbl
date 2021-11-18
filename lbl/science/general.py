@@ -83,6 +83,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['WEIGHT_LINE'] = np.array(table['WEIGHT_LINE'])
         ref_dict['XPIX'] = np.array(table['XPIX'])
         ref_dict['LINE_SNR'] = np.array(table['LINE_SNR'])
+        ref_dict['LINE_DEPTH'] = np.array(table['LINE_DEPTH'])
+        ref_dict['LOCAL_FLUX'] = np.array(table['LOCAL_FLUX'])
         # ratio of expected VS actual RMS in difference of model vs line
         ref_dict['RMSRATIO'] = np.array(table['RMSRATIO'])
         # effective number of pixels in line
@@ -108,7 +110,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         wavegrid = inst.get_wave_solution(science_files[0])
         # storage for vectors
         order, wave_start, wave_end, weight_line, xpix = [], [], [], [], []
-        line_snr = []
+        line_snr, line_depth, local_flux = [], [], []
         # loop around orders
         for order_num in range(wavegrid.shape[0]):
             # get the min max wavelengths for this order
@@ -135,6 +137,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
                 xpix += list(xspline(mask_table['ll_mask_s'][good][:-1]))
                 # get the line snr
                 line_snr += list(mask_table['line_snr'][good][:-1])
+                line_depth += list(mask_table['depth'][good][:-1])
+                local_flux += list(mask_table['local_flux'][good][:-1])
         # make xpix a numpy array
         xpix = np.array(xpix)
         # add to reference dictionary
@@ -144,6 +148,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['WEIGHT_LINE'] = np.array(weight_line)
         ref_dict['XPIX'] = xpix
         ref_dict['LINE_SNR'] = np.array(line_snr)
+        ref_dict['LINE_DEPTH'] = np.array(line_depth)
+        ref_dict['LOCAL_FLUX'] = np.array(local_flux)
         # ratio of expected VS actual RMS in difference of model vs line
         ref_dict['RMSRATIO'] = np.zeros_like(xpix, dtype=float)
         # effective number of pixels in line
@@ -160,7 +166,6 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['CHI2'] = np.zeros_like(xpix, dtype=float)
         # probability of valid considering the chi2 CDF for the number of DOF
         ref_dict['CHI2_VALID_CDF'] = np.zeros_like(xpix, dtype=float)
-
 
         # ---------------------------------------------------------------------
         # convert ref_dict to table (for saving to disk
@@ -1067,7 +1072,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     ref_table['sdv'] = sdv
     # adding to the fits table the 2nd derivative projection
     ref_table['d2v'] = d2v
-    ref_table['sd2v'] = d2v
+    ref_table['sd2v'] = sd2v
     # adding to the fits table the 3rd derivative projection
     ref_table['d3v'] = d3v
     ref_table['sd3v'] = sd3v
