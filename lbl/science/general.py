@@ -138,7 +138,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
                 # get the line snr
                 line_snr += list(mask_table['line_snr'][good][:-1])
                 line_depth += list(mask_table['depth'][good][:-1])
-                local_flux += list(mask_table['local_flux'][good][:-1])
+                local_flux += list(mask_table['value'][good][:-1])
         # make xpix a numpy array
         xpix = np.array(xpix)
         # add to reference dictionary
