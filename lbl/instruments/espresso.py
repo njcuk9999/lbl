@@ -152,7 +152,7 @@ class Espresso(Instrument):
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'HIERARCH ESO QC BJD', source=func_name)
         # define snr keyword
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER100',
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER100 SNR',
                         source=func_name)
         # define berv keyword
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
@@ -168,9 +168,10 @@ class Espresso(Instrument):
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO DPR TYPE', source=func_name)
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+                        source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
+        self.params.set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL15 NAME',
                         source=func_name)
         # define the original object name
         self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',

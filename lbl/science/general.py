@@ -704,9 +704,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # deal with first estimate of RV / CCF equivalent width
     if reset_rv:
-        # if we are not using FP file
-        # TODO: remove FP
-        if 'FP' not in object_science:
+        # if we are not using calibration file
+        if not inst.flag_calib(sci_hdr):
             # calculate the rough CCF RV estimate
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
                                           ref_table['WAVE_START'], ccf_weight,
@@ -1071,7 +1070,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     ref_table['sd2v'] = d2v
     # adding to the fits table the 3rd derivative projection
     ref_table['d3v'] = d3v
-    ref_table['sd2v'] = sd3v
+    ref_table['sd3v'] = sd3v
     # calculate the chi2 cdf
     chi2_cdf = 1 - stats.chi2.cdf(ref_table['CHI2'], ref_table['NPIXLINE'])
     ref_table['CHI2_VALID_CDF'] = chi2_cdf
