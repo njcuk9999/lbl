@@ -181,7 +181,7 @@ class Espresso(Instrument):
         # TODO -> no equivalent in ESPRESSO
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER100',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER100 SNR',
                         source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
