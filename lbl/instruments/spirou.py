@@ -872,7 +872,7 @@ class Spirou(Instrument):
             blaze_keys = None
         blaze_files = io.find_files(files, suffix=suffix, hkeys=blaze_keys)
         # print number found
-        log.general('\tFound {0} Blaze files'.format(len(temp_files)))
+        log.general('\tFound {0} Blaze files'.format(len(blaze_files)))
         # --------------------------------------------------------------------
         # copy files
         # --------------------------------------------------------------------

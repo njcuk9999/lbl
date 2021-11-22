@@ -155,7 +155,7 @@ def find_files(path_list: List[Path],
             if not str(filename).endswith(suffix):
                 continue
         # deal with contains
-        if contains is not None:
+        if contains not in [None, 'None', '', 'Null']:
             if contains not in str(filename):
                 continue
         # deal with header keys
