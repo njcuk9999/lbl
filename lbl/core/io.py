@@ -147,11 +147,11 @@ def find_files(path_list: List[Path],
         # assume file is valid at start
         valid = True
         # deal with prefix
-        if prefix is not None:
+        if prefix not in [None, 'None', '', 'Null']:
             if not str(filename).startswith(prefix):
                 continue
         # deal with suffix
-        if suffix is not None:
+        if suffix not in [None, 'None', '', 'Null']:
             if not str(filename).endswith(suffix):
                 continue
         # deal with contains
