@@ -863,7 +863,7 @@ class Spirou(Instrument):
         # print progress
         log.general('Locating Blaze files')
         # find blaze files
-        if params['BLAZE_FILE'] not in ['None', '', None]:
+        if params['BLAZE_FILE'] in ['None', '', None]:
             suffix = '_blaze_AB.fits'
             blaze_keys = dict()
             blaze_keys[params['KW_OUTPUT']] = ['FF_BLAZE']
