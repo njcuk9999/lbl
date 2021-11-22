@@ -1,0 +1,52 @@
+# Example YAML file for use in LBL
+
+# Set instrument name
+INSTRUMENT: SPIROU
+
+# Set data directory
+DATA_DIR: /scratch3/lbl/data/spirou06132/
+
+# Set science object name
+OBJECT_SCIENCE: FP
+
+# Set template object name
+OBJECT_TEMPLATE: FP
+
+# Set the science input file string
+INPUT_FILE: '*e2dsff*.fits'
+
+# Set blaze file (None for default)
+BLAZE_FILE: None
+
+# Set template file (None for default)
+TEMPLATE_FILE: None
+
+# Overwrite current mask file (if present)
+OVERWRITE: True
+
+# Set whether to plot any plots
+PLOT: False
+
+# Set whether to do the compute ccf plot
+PLOT_COMPUTE_CCF: False
+
+# Set whether to do the compute line plot
+PLOT_COMPUTE_LINES: False
+
+# set whether to do the compil cumulative plot
+PLOT_COMPIL_CUMUL: True
+
+# Define whether to do the compil binned plot
+PLOT_COMPIL_BINNED: True
+
+# Define whether to skip done files
+SKIP_DONE: False
+
+# Verbosity (default is 2)
+#     0=only warnings/errors
+#     1=info/warnings/errors,'
+#     2=general/info/warning/errors
+VERBOSE: 2
+
+# Whether to use tqdm module in loops (only when verbose=2)
+USE_TQDM: True
