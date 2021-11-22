@@ -137,7 +137,7 @@ def find_files(path_list: List[Path],
                suffix: Optional[str] = None,
                contains: Optional[str] = None,
                hkeys: Optional[Dict[str, Union[List[str], str]]] = None,
-               use_tqdm: bool = True):
+               use_tqdm: bool = True) -> List[str]:
     # get tqdm
     tqdm = base.tqdm_module(use_tqdm, log.console_verbosity)
     # storage for valid files

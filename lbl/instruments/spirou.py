@@ -860,17 +860,21 @@ class Spirou(Instrument):
         # remove these from files
         files = list(np.array(files)[~np.in1d(files, mask_files)])
         # --------------------------------------------------------------------
-        # print progress
-        log.general('Locating Blaze files')
-        # find blaze files
-        if params['BLAZE_FILE'] in ['None', '', None]:
-            suffix = '_blaze_AB.fits'
-            blaze_keys = dict()
-            blaze_keys[params['KW_OUTPUT']] = ['FF_BLAZE']
-        else:
-            suffix = params['BLAZE_FILE']
-            blaze_keys = None
-        blaze_files = io.find_files(files, suffix=suffix, hkeys=blaze_keys)
+        # storage of blaze files
+        blaze_files = []
+        # loop around fibers
+        for fiber in ['AB', 'C']:
+            # print progress
+            log.general('Locating Blaze {0} files'.format(fiber))
+            # find blaze files
+            if params['BLAZE_FILE'] in ['None', '', None]:
+                suffix = '_blaze_{0}.fits'.format(fiber)
+                blaze_keys = dict()
+                blaze_keys[params['KW_OUTPUT']] = ['FF_BLAZE']
+            else:
+                suffix = params['BLAZE_FILE']
+                blaze_keys = None
+            blaze_files += io.find_files(files, suffix=suffix, hkeys=blaze_keys)
         # print number found
         log.general('\tFound {0} Blaze files'.format(len(blaze_files)))
         # --------------------------------------------------------------------
