@@ -31,9 +31,9 @@ if __name__ == "__main__":
     # # run clean (reset everything)
     _ = clean(config_file=fp_config_file)
     _ = clean(config_file=gl699_config_file)
-    # find files
-    _ = lbl_find.main(instrument='SPIROU', config_file=gl699_config_file)
-    _ = lbl_find.main(instrument='SPIROU', config_file=fp_config_file)
+    # # find files
+    # _ = lbl_find.main(instrument='SPIROU', config_file=gl699_config_file)
+    # _ = lbl_find.main(instrument='SPIROU', config_file=fp_config_file)
     # # run template
     tbl0a = template(config_file=fp_config_file)
     tbl0b = template(config_file=gl699_config_file)

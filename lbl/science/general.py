@@ -1617,7 +1617,22 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         else:
             tmp_rv = rvs[row] - rv_per_line_model[row]
             tmp_err = dvrms[row]
-
+        # ---------------------------------------------------------------------
+        # populate columns with zeros (if not present)
+        # ---------------------------------------------------------------------
+        # loop around the bands
+        for iband in range(len(bands)):
+            # loop around the regions
+            for iregion in range(len(region_names)):
+                cargs = [bands[iband], region_names[iregion]]
+                vrad_colname = 'vrad_{0}{1}'.format(*cargs)
+                svrad_colname = 'svrad_{0}{1}'.format(*cargs)
+                # add new column if not present
+                if vrad_colname not in rdb_dict:
+                    rdb_dict[vrad_colname] = lblrv_zeros.copy()
+                if svrad_colname not in rdb_dict:
+                    rdb_dict[svrad_colname] = lblrv_zeros.copy()
+        # ---------------------------------------------------------------------
         # loop around the bands
         for iband in range(len(bands)):
             # make a mask based on the band (can use rvtable0 as wave start
@@ -1648,17 +1663,11 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 guess7, bulk_error7 = mp.odd_ratio_mean(tmp_rv[comb_mask],
                                                         tmp_err[comb_mask])
                 # -------------------------------------------------------------
-
+                # get column names to add these bands/regions
                 cargs = [bands[iband], region_names[iregion]]
                 vrad_colname = 'vrad_{0}{1}'.format(*cargs)
                 svrad_colname = 'svrad_{0}{1}'.format(*cargs)
-
-                # add new column if not present
-                if vrad_colname not in rdb_dict:
-                    rdb_dict[vrad_colname] = lblrv_zeros.copy()
-                if svrad_colname not in rdb_dict:
-                    rdb_dict[svrad_colname] = lblrv_zeros.copy()
-
+                # add to rdb_dict
                 rdb_dict[vrad_colname][row] = guess7
                 rdb_dict[svrad_colname][row] = bulk_error7
     # ---------------------------------------------------------------------
