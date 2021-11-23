@@ -104,6 +104,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         assert isinstance(inst, InstrumentsList), amsg
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
+    # must force object science to object template
+    inst.params['OBJECT_SCIENCE'] = str(inst.params['OBJECT_TEMPLATE'])
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
