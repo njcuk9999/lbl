@@ -12,6 +12,7 @@ Created on 2021-08-24
 import warnings
 
 import numpy as np
+import os
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -126,7 +127,17 @@ def __main__(inst: InstrumentsType, **kwargs):
     else:
         blaze = None
     # -------------------------------------------------------------------------
-    # Step 3: Deal with reference file (first file)
+    # Step 3: Check if mask exists
+    # -------------------------------------------------------------------------
+    if os.path.exists(template_file) and not inst.params['OVERWRITE']:
+        # log that mask exist
+        msg = 'Template {0} exists. Skipping template creation. '
+        log.warning(msg.format(template_file))
+        log.warning('Set --overwrite to recalculate mask')
+        # return here
+        return locals()
+    # -------------------------------------------------------------------------
+    # Step 4: Deal with reference file (first file)
     # -------------------------------------------------------------------------
     # select the first science file as a reference file
     refimage, refhdr = inst.load_science(science_files[0])
@@ -140,7 +151,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     wavegrid = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
                                       dv_grid=grid_step)
     # -------------------------------------------------------------------------
-    # Step 4: Loop around each file and load into cube
+    # Step 5: Loop around each file and load into cube
     # -------------------------------------------------------------------------
     # create a cube that contains one line for each file
     flux_cube = np.zeros([len(wavegrid), len(science_files)])
@@ -187,7 +198,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         flux_cube[:, it] = s1d_flux
         weight_cube[:, it] = s1d_weight
     # -------------------------------------------------------------------------
-    # Creation of the template
+    # Step 6. Creation of the template
     # -------------------------------------------------------------------------
     # points are not valid where weight is zero or flux_cube is exactly zero
     bad_domain = (weight_cube == 0) | (flux_cube == 0)
@@ -229,7 +240,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         rms = (p84 - p16) / 2
 
     # -------------------------------------------------------------------------
-    # Write template
+    # Step 7. Write template
     # -------------------------------------------------------------------------
     # get props
     props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms)
