@@ -23,6 +23,7 @@ keyword_args = dict()
 # add keyword arguments
 keyword_args['INSTRUMENT'] = 'CARMENES'
 keyword_args['DATA_DIR'] = working
+keyword_args['DATA_TYPE'] = 'SCIENCE'
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = None
 keyword_args['TEMPLATE_FILE'] = 'Template_TOI-1452.fits'
@@ -49,7 +50,7 @@ num = 0
 if __name__ == "__main__":
     # run clean (reset everything)
     _ = clean(object_science=objs[num], object_template=templates[num],
-                    **keyword_args)
+              **keyword_args)
     # run template
     tbl0 = template(object_science=objs[num], object_template=templates[num],
                     **keyword_args)

@@ -38,7 +38,7 @@ log = base_classes.log
 # add arguments (must be in parameters.py)
 ARGS_MASK = [
              # core
-             'INSTRUMENT', 'CONFIG_FILE',
+             'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
              # directory
              'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',
              # science
@@ -115,6 +115,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
+    # check data type
+    general.check_data_type(inst.params['DATA_TYPE'])
     # mask filename
     mask_file = inst.mask_file(mask_dir, required=False)
     # template filename
@@ -123,7 +125,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     template_table, template_hdr = inst.load_template(template_file,
                                                       get_hdr=True)
     # see if the template is a calibration template
-    flag_calib = inst.flag_calib(template_hdr)
+    flag_calib = inst.params['DATA_TYPE'] != 'SCIENCE'
 
     # -------------------------------------------------------------------------
     # Step 3: Check if mask exists

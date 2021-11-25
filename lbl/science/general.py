@@ -14,7 +14,7 @@ from astropy.table import Table
 import numpy as np
 import os
 from scipy import stats
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import warnings
 import wget
 
@@ -710,7 +710,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # deal with first estimate of RV / CCF equivalent width
     if reset_rv:
         # if we are not using calibration file
-        if not inst.flag_calib(sci_hdr):
+        if inst.params['DATA_TYPE'] == 'SCIENCE':
             # calculate the rough CCF RV estimate
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
                                           ref_table['WAVE_START'], ccf_weight,
@@ -1237,7 +1237,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # load table and header
     rvtable0, rvhdr0 = inst.load_lblrv_file(lblrvfiles[0])
     # flag a calibration file
-    flag_calib = inst.flag_calib(rvhdr0)
+    flag_calib = inst.params['DATA_TYPE'] != 'SCIENCE'
     # do not consider lines below wave_min limit
     good = rvtable0['WAVE_START'] > wave_min
     # do not consider lines above wave_max limit
@@ -2003,6 +2003,25 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
 # =============================================================================
 # Template and Mask functions
 # =============================================================================
+def check_data_type(data_type: Optional[str]):
+    """
+    Check the data type is correct - must be SCIENCE or FP or LFC
+
+    param data_type: str or None, the data type set by user
+
+    :return: None, just raises error if incorrect
+    """
+    if data_type in [None, 'None', '', 'Null']:
+        emsg = ('DATA_TYPE must be SCIENCE or FP or LFC. '
+                'DATA_TYPE currently unset')
+        raise base_classes.LblException(emsg)
+
+    if data_type not in ['SCIENCE', 'FP', 'LFC']:
+        emsg = ('DATA_TYPE must be SCIENCE or FP or LFC. '
+                'DATA_TYPE = {0}').format(data_type)
+        raise base_classes.LblException(emsg)
+
+
 def get_stellar_models(inst: InstrumentsType, model_dir: str
                        ) -> Tuple[np.ndarray, np.ndarray]:
     """

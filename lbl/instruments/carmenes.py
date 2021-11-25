@@ -67,7 +67,9 @@ class Carmenes(Instrument):
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
-        self.params.set('MASK_TYPE', 'pos', source=func_name)
+        self.params.set('SCIENCE_MASK_TYPE', 'pos', source=func_name)
+        self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
+        self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
@@ -209,13 +211,17 @@ class Carmenes(Instrument):
 
         :return: absolute path to mask file
         """
+        # get data type
+        data_type = self.params['DATA_TYPE']
+        # get type of mask
+        mask_type = self.params['{0}_MASK_TYPE'.format(data_type)]
         # deal with no object
         if self.params['OBJECT_SCIENCE'] is None:
             raise LblException('OBJECT_SCIENCE name must be defined')
         else:
             objname = self.params['OBJECT_SCIENCE']
         # define base name
-        basename = '{0}_pos.fits'.format(objname)
+        basename = '{0}_{1}.fits'.format(objname, mask_type)
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
@@ -347,6 +353,28 @@ class Carmenes(Instrument):
             files = np.sort(files)
             # return numpy array of files
             return files
+
+    def sort_science_files(self, science_files: List[str]) -> List[str]:
+        """
+        Sort science files (instrument specific)
+
+        :param science_files: list of strings - list of science files
+
+        :return: list of strings - sorted list of science files
+        """
+        times = []
+        # loop around science files
+        for science_file in science_files:
+            # load header
+            sci_hdr = io.load_header(science_file)
+            # get time
+            times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
+        # get sort mask
+        sortmask = np.argsort(times)
+        # apply sort mask
+        science_files = np.array(science_files)[sortmask]
+        # return sorted files
+        return list(science_files)
 
     def load_blaze_from_science(self, sci_image: np.ndarray,
                                 sci_hdr: fits.Header,

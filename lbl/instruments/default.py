@@ -538,6 +538,17 @@ class Instrument:
         _ = directory
         raise self._not_implemented('science_files')
 
+    def sort_science_files(self, science_files: List[str]) -> List[str]:
+        """
+        Sort science files (instrument specific)
+
+        :param science_files: list of strings - list of science files
+
+        :return: list of strings - sorted list of science files
+        """
+        # default, don't sort just return
+        return science_files
+
     def load_blaze_from_science(self, sci_image: np.ndarray,
                                 sci_hdr: fits.Header, calib_directory: str,
                                 normalize: bool = True):
@@ -638,16 +649,7 @@ class Instrument:
         _ = filename, tdict, sci_hdr, berv
         raise self._not_implemented('get_berv')
 
-    def flag_calib(self, sci_hdr: fits.Header):
-        """
-        Flag a file as a calibration file
-
-        :return:
-        """
-        _ = self, fits.Header
-        raise self._not_implemented('flag_calib')
-
-    def filter_calibrations(self, science_files: List[str]) -> List[str]:
+    def filter_files(self, science_files: List[str]) -> List[str]:
         """
         Filter calibrations - no simutaenous calibrations
 

@@ -6,6 +6,9 @@ INSTRUMENT: HARPS
 # Set data directory
 DATA_DIR: /scratch3/lbl/data/harps/
 
+# Set the data type (SCIENCE, FP or LFC)
+DATA_TYPE: SCIENCE
+
 # Set science object name
 OBJECT_SCIENCE: PROXIMA
 

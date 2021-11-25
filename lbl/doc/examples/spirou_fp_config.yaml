@@ -6,11 +6,20 @@ INSTRUMENT: SPIROU
 # Set data directory
 DATA_DIR: /scratch3/lbl/data/spirou/
 
+# Set the data type (SCIENCE, FP or LFC)
+DATA_TYPE: FP
+
 # Set science object name
 OBJECT_SCIENCE: FP
 
 # Set template object name
 OBJECT_TEMPLATE: FP
+
+# Define the earliest file allowed for template construction
+TEMP_MJDSTART: 58850
+
+# Define the latest file allowed for template construction
+TEMP_MJDEND: 59600
 
 # Set the science input file string
 INPUT_FILE: '*e2dsff*.fits'

@@ -23,6 +23,7 @@ keyword_args = dict()
 # add keyword arguments
 keyword_args['INSTRUMENT'] = 'ESPRESSO'
 keyword_args['DATA_DIR'] = working
+keyword_args['DATA_TYPE'] = 'SCIENCE'
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = None
 keyword_args['TEMPLATE_FILE'] = 'Template_LHS-1140.fits'

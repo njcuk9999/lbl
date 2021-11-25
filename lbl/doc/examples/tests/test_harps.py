@@ -23,6 +23,7 @@ keyword_args = dict()
 # add keyword arguments
 keyword_args['INSTRUMENT'] = 'HARPS'
 keyword_args['DATA_DIR'] = working
+keyword_args['DATA_TYPE'] = 'SCIENCE'
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
 keyword_args['TEMPLATE_FILE'] = 'Template_Proxima-tc_HARPS.fits'

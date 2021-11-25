@@ -6,6 +6,9 @@ INSTRUMENT: SPIROU
 # Set data directory
 DATA_DIR: /scratch3/lbl/data/spirou06132/
 
+# Set the data type (SCIENCE, FP or LFC)
+DATA_TYPE: SCIENCE
+
 # Set science object name
 OBJECT_SCIENCE: GL699
 

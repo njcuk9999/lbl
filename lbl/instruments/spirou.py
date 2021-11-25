@@ -70,7 +70,9 @@ class Spirou(Instrument):
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
-        self.params.set('MASK_TYPE', 'pos', source=func_name)
+        self.params.set('SCIENCE_MASK_TYPE', 'pos', source=func_name)
+        self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
+        self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
@@ -132,12 +134,10 @@ class Spirou(Instrument):
         self.params.set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
         # blaze threshold (s1d template)
         self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
-        # define the earliest allowed FP calibration used for template
-        #     construction
-        self.params.set('FP_CAL_MJDSTART', value=58850)
-        # define the latest allowed FP calibration used for template
-        #     construction
-        self.params.set('FP_CAL_MJDEND', value=59600)
+        # define the earliest allowed file used for template construction
+        self.params.set('TEMP_MJDSTART', value=None)
+        # define the latest allowed file used for template construction
+        self.params.set('TEMP_MJDEND', value=None)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -240,8 +240,10 @@ class Spirou(Instrument):
 
         :return: absolute path to mask file
         """
+        # get data type
+        data_type = self.params['DATA_TYPE']
         # get type of mask
-        mask_type = self.params['MASK_TYPE']
+        mask_type = self.params['{0}_MASK_TYPE'.format(data_type)]
         # deal with no object
         if self.params['OBJECT_SCIENCE'] is None:
             raise LblException('OBJECT_SCIENCE name must be defined')
@@ -380,6 +382,28 @@ class Spirou(Instrument):
             files = np.sort(files)
             # return numpy array of files
             return files
+
+    def sort_science_files(self, science_files: List[str]) -> List[str]:
+        """
+        Sort science files (instrument specific)
+
+        :param science_files: list of strings - list of science files
+
+        :return: list of strings - sorted list of science files
+        """
+        times = []
+        # loop around science files
+        for science_file in science_files:
+            # load header
+            sci_hdr = io.load_header(science_file)
+            # get time
+            times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
+        # get sort mask
+        sortmask = np.argsort(times)
+        # apply sort mask
+        science_files = np.array(science_files)[sortmask]
+        # return sorted files
+        return list(science_files)
 
     def load_blaze_from_science(self, sci_image: np.ndarray,
                                 sci_hdr: fits.Header,
@@ -528,7 +552,7 @@ class Spirou(Instrument):
         # get BERV header key
         hdr_key = self.params['KW_BERV']
         # get BERV (if not a calibration)
-        if not self.flag_calib(sci_hdr):
+        if not self.params['DATA_TYPE'] != 'SCIENCE':
             berv = io.get_hkey(sci_hdr, hdr_key) * 1000
         else:
             berv = 0.0
@@ -569,21 +593,7 @@ class Spirou(Instrument):
         # return updated storage dictionary
         return tdict
 
-    def flag_calib(self, sci_hdr: fits.Header) -> bool:
-        """
-        Flag a file as a calibration file
-
-        :return:
-        """
-        # get DPRTYPE from header
-        dprfibtype = self.get_dpr_fibtype(sci_hdr)
-        # return True if we have a calibration
-        if dprfibtype in ['FP', 'HC', 'LFC', 'FLAT', 'DARK']:
-            return True
-        else:
-            return False
-
-    def filter_calibrations(self, science_files: List[str]) -> List[str]:
+    def filter_files(self, science_files: List[str]) -> List[str]:
         """
         Filter calibrations - no simutaenous calibrations
 
@@ -591,34 +601,46 @@ class Spirou(Instrument):
 
         :return: list of str, the filters calibration filenames
         """
+        # get mjd start and end
+        start = self.params['TEMP_MJDSTART']
+        end = self.params['TEMP_MJDEND']
+        # if we have a science observation and start and end are None we don't
+        #   need to filter
+        mcond1 = self.params['DATA_TYPE'] == 'SCIENCE'
+        mcond2 = start in [None, 'None', '']
+        mcond3 = end in [None, 'None', '']
+        # return all files if this is the case
+        if mcond2 and mcond3 and mcond1:
+            return science_files
         # select the first science file as a reference file
         refimage, refhdr = self.load_science(science_files[0])
         ref_fibertype = self.get_dpr_fibtype(refhdr)
-        # if first file is not a calibration assume all files are not calibrations
-        if not self.flag_calib(refhdr):
-            return science_files
         # storage
         keep_files = []
         # loop around science files
         for science_file in science_files:
             # load science file header
             sci_hdr = io.load_header(science_file)
-            # get the fiber type for AB and C
-            sci_fiber = self.get_dpr_fibtype(sci_hdr, fiber='AB')
-            ref_fiber = self.get_dpr_fibtype(sci_hdr, fiber='C')
-            # i.e. FP_FP or HC_HC or LFC_LFC
-            cond1 = sci_fiber == ref_fiber
+            # find out if we have a calibration
+            if not mcond1:
+                # get dprtype in each fiber
+                sci_fiber = self.get_dpr_fibtype(sci_hdr, fiber='AB')
+                ref_fiber = self.get_dpr_fibtype(sci_hdr, fiber='C')
+                # i.e. FP_FP or LFC_LFC
+                cond1 = sci_fiber == ref_fiber
+            else:
+                cond1 = True
             # -----------------------------------------------------------------
             # must check time frame (if present) for FP
             cond2, cond3 = True, True
-            if sci_fiber == 'FP':
-                mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
-                # check start time for FP calibration
-                if not self.params['FP_CAL_MJDSTART'] in [None, 'None', '']:
-                    cond2 = mjdmid >= self.params['FP_CAL_MJDSTART']
-                # check end time for FP calibration
-                if not self.params['FP_CAL_MJDEND'] in [None, 'None', '']:
-                    cond3 = mjdmid <= self.params['FP_CAL_MJDEND']
+            # get mjdmid
+            mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
+            # check start time for FP calibration
+            if not mcond2:
+                cond2 = mjdmid >= start
+            # check end time for FP calibration
+            if not mcond3:
+                cond3 = mjdmid <= end
             # -----------------------------------------------------------------
             # if all conditions are met keep files
             if cond1 and cond2 and cond3:
@@ -626,26 +648,36 @@ class Spirou(Instrument):
             # -----------------------------------------------------------------
         # if we have no files break here
         if len(keep_files) == 0:
-            emsg = ('Object is classified as a calibration however none of'
-                    'the files provided have:')
-            emsg += '\n\tDPRTYPE={0}_{0}'
+            # deal with calibration
+            if not mcond1:
+                emsg = ('Object is classified as a calibration however none of'
+                        'the files provided have:')
+                emsg += '\n\tDPRTYPE={0}_{0}'
+            # deal with science
+            else:
+                emsg = ('Object is classified as science however none of the'
+                        'files provide have:')
             # add info about the range of files (if FP files)
-            if ref_fibertype == 'FP':
-                if not self.params['FP_CAL_MJDSTART'] in [None, 'None', '']:
-                    emsg += '\n\tMJDMID>{1}'
-                if not self.params['FP_CAL_MJDEND'] in [None, 'None', '']:
-                    emsg += '\n\tMJDMID<{2}'
+            if not mcond2:
+                emsg += '\n\tMJDMID>{1}'
+            if not mcond3:
+                emsg += '\n\tMJDMID<{2}'
             # tell the user what they can do to fix this - we don't want emails
             emsg += ('\nPlease define a template and do not run the '
-                     'template code or add some valid {0}_{0} files')
+                     'template code or add some valid files')
             # get error arguments
-            eargs = [ref_fibertype, self.params['FP_CAL_MJDSTART'],
-                     self.params['FP_CAL_MJDEND']]
+            eargs = [ref_fibertype, start, end]
             # raise exception - we need some files to make a template!
             raise base_classes.LblException(emsg.format(*eargs))
         else:
-            msg = ('Object is classified as a calibration. Found {1} files'
-                   ' with {0}_{0}, ignoring {2} other files')
+            # deal with calibration
+            if mcond1:
+                msg = ('Object is classified as a calibration. Found {1} files'
+                       ' with {0}_{0}, ignoring {2} other files')
+            # deal with science
+            else:
+                msg = ('Object is classified as science. Found {1} files'
+                       ' with {0}_{0}, ignoring {2} other files')
             margs = [ref_fibertype, len(keep_files),
                      len(science_files) - len(keep_files)]
             log.info(msg.format(*margs))

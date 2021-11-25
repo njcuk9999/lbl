@@ -41,7 +41,7 @@ log = base_classes.log
 # add arguments (must be in parameters.py)
 ARGS_TEMPLATE = [
                 # core
-                'INSTRUMENT', 'CONFIG_FILE',
+                'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
                 # directory
                 'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
                 # science
@@ -106,6 +106,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # must force object science to object template
     inst.params['OBJECT_SCIENCE'] = str(inst.params['OBJECT_TEMPLATE'])
+    # check data type
+    general.check_data_type(inst.params['DATA_TYPE'])
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
@@ -140,7 +142,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 4: Deal with reference file (first file)
     # -------------------------------------------------------------------------
     # may need to filter out calibrations
-    science_files = inst.filter_calibrations(science_files)
+    science_files = inst.filter_files(science_files)
     # select the first science file as a reference file
     refimage, refhdr = inst.load_science(science_files[0])
     # get wave solution for reference file
@@ -222,7 +224,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get the pixel hp_width [needs to be in m/s]
     hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step))
     # -------------------------------------------------------------------------
-    if not inst.flag_calib(refhdr):
+    if inst.params['DATA_TYPE'] == 'SCIENCE':
         with warnings.catch_warnings(record=True) as _:
             # calculate the median of the big cube
             median = mp.nanmedian(flux_cube, axis=1)

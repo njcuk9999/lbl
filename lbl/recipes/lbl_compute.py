@@ -36,7 +36,7 @@ log = base_classes.log
 # add arguments (must be in parameters.py)
 ARGS_COMPUTE = [
                 # core
-                'INSTRUMENT', 'CONFIG_FILE',
+                'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
                 # directory
                 'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
                 'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
@@ -123,6 +123,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
+    # check data type
+    general.check_data_type(inst.params['DATA_TYPE'])
     # mask filename
     mask_file = inst.mask_file(mask_dir)
     # template filename
@@ -131,6 +133,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     blaze_file = inst.blaze_file(calib_dir)
     # science filenames
     science_files = inst.science_files(science_dir)
+    # sort science files by date (speeds up computation)
+    science_files = inst.sort_science_files(science_files)
     # reftable filename (None if not set)
     reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir)
     # -------------------------------------------------------------------------
@@ -215,7 +219,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # ---------------------------------------------------------------------
         sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
         # flag calibration file
-        if inst.flag_calib(sci_hdr):
+        if inst.params['DATA_TYPE'] != 'SCIENCE':
             model_velocity = 0
 
         # ---------------------------------------------------------------------

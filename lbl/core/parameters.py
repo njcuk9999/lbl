@@ -112,8 +112,21 @@ params.set(key='OBJECT_TEMPLATE', value=None, source=__NAME__,
                 '(If None set to OBJECT_SCIENCE)',
            arg='--obj_template', dtype=str)
 
+# Set the data type (science, FP or LFC)
+params.set(key='DATA_TYPE', value=None, source=__NAME__,
+           desc='Set the data type (science, FP or LFC)', dtype=str,
+           arg='--data_type', not_none=True)
+
 # define the mask type (pos, neg, full)
-params.set(key='MASK_TYPE', value='pos',
+params.set(key='SCIENCE_MASK_TYPE', value='pos',
+           desc='the mask type (pos, neg, full)', dtype=str)
+
+# define the mask type (pos, neg, full)
+params.set(key='FP_MASK_TYPE', value='neg',
+           desc='the mask type (pos, neg, full)', dtype=str)
+
+# define the mask type (pos, neg, full)
+params.set(key='LFC_MASK_TYPE', value='neg',
            desc='the mask type (pos, neg, full)', dtype=str)
 
 # =============================================================================
@@ -371,13 +384,13 @@ params.set(key='BLAZE_SMOOTH_SIZE', value=None, source=__NAME__,
 params.set(key='BLAZE_THRESHOLD', value=None, source=__NAME__,
            desc='blaze threshold (s1d template)', dtype=float, not_none=True)
 
-# define the earliest allowed FP calibration used for template construction
-params.set(key='FP_CAL_MJDSTART', value=None, source=__NAME__,
+# define the earliest allowed file used for template construction
+params.set(key='TEMPLATE_MJDSTART', value=None, source=__NAME__,
            desc='the earliest allowed FP calibration used for template '
                 'construction (None for unset)', dtype=float)
 
-# define the latest allowed FP calibration used for template construction
-params.set(key='FP_CAL_MJDEND', value=None, source=__NAME__,
+# define the latest allowed file used for template construction
+params.set(key='TEMPLATE_MJDEND', value=None, source=__NAME__,
            desc='the latest allowed FP calibration used for template '
                 'construction (None for unset)', dtype=float)
 
