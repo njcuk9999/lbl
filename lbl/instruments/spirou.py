@@ -648,7 +648,7 @@ class Spirou(Instrument):
                    ' with {0}_{0}, ignoring {2} other files')
             margs = [ref_fibertype, len(keep_files),
                      len(science_files) - len(keep_files)]
-            log.error(msg.format(*margs))
+            log.info(msg.format(*margs))
         # return only files with DPRTYPE same in both fibers
         return keep_files
 
