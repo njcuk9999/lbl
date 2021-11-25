@@ -222,6 +222,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # copy
     flux_cube0 = np.array(flux_cube)
     # get the pixel hp_width [needs to be in m/s]
+    grid_step = general.get_velocity_step(refwave, rounding=False)
+
     hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step))
     # -------------------------------------------------------------------------
     if inst.params['DATA_TYPE'] == 'SCIENCE':
@@ -233,8 +235,26 @@ def __main__(inst: InstrumentsType, **kwargs):
                 # remove the stellar features
                 ratio = flux_cube[:, sci_it] / median
                 # apply median filtered ratio (low frequency removal)
-                lowpass = mp.medfilt_1d(ratio, hp_width)
+                lowpass = mp.lowpassfilter(ratio, hp_width)
                 flux_cube[:, sci_it] /= lowpass
+    else:
+        with warnings.catch_warnings(record=True) as _:
+            # calculate the median of the big cube
+            median = mp.nanmedian(flux_cube, axis=1)
+            # mask to keep only FP peaks and avoid dividing
+            # two small values (minima between lines in median and
+            # individual spectrum) when computing the lowpass
+            peaks = median > mp.lowpassfilter(median,hp_width)
+            # iterate until low frequency gone
+            for sci_it in range(flux_cube.shape[1]):
+                # remove the stellar features
+                ratio = flux_cube[:, sci_it] / median
+                ratio[~peaks] = np.nan
+
+                # apply median filtered ratio (low frequency removal)
+                lowpass = mp.lowpassfilter(ratio, hp_width)
+                flux_cube[:, sci_it] /= lowpass
+
     # -------------------------------------------------------------------------
     # get the median and +/- 1 sigma values for the cube
     log.general('Calculate 16th, 50th and 84th percentiles')
