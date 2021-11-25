@@ -25,7 +25,7 @@ TEMP_MJDEND: 59600
 INPUT_FILE: '*e2dsff*.fits'
 
 # Set blaze file (None for default)
-BLAZE_FILE: A87ACF59FD_pp_blaze_AB.fits
+BLAZE_FILE: None
 
 # Set template file (None for default)
 TEMPLATE_FILE: None
