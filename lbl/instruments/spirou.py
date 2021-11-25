@@ -132,6 +132,12 @@ class Spirou(Instrument):
         self.params.set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
         # blaze threshold (s1d template)
         self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
+        # define the earliest allowed FP calibration used for template
+        #     construction
+        self.params.set('FP_CAL_MJDSTART', value=58850)
+        # define the latest allowed FP calibration used for template
+        #     construction
+        self.params.set('FP_CAL_MJDEND', value=59600)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -601,13 +607,40 @@ class Spirou(Instrument):
             sci_fiber = self.get_dpr_fibtype(sci_hdr, fiber='AB')
             ref_fiber = self.get_dpr_fibtype(sci_hdr, fiber='C')
             # i.e. FP_FP or HC_HC or LFC_LFC
-            if sci_fiber == ref_fiber:
+            cond1 = sci_fiber == ref_fiber
+            # -----------------------------------------------------------------
+            # must check time frame (if present) for FP
+            cond2, cond3 = True, True
+            if sci_fiber == 'FP':
+                mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
+                # check start time for FP calibration
+                if not self.params['FP_CAL_MJDSTART'] in [None, 'None', '']:
+                    cond2 = mjdmid >= self.params['FP_CAL_MJDSTART']
+                # check end time for FP calibration
+                if not self.params['FP_CAL_MJDEND'] in [None, 'None', '']:
+                    cond3 = mjdmid <= self.params['FP_CAL_MJDEND']
+            # -----------------------------------------------------------------
+            # if all conditions are met keep files
+            if cond1 and cond2 and cond3:
                 keep_files.append(science_file)
+            # -----------------------------------------------------------------
         # if we have no files break here
         if len(keep_files) == 0:
             emsg = ('Object is classified as a calibration however none of'
-                    'the files provided have {0}_{0}')
-            eargs = [ref_fibertype]
+                    'the files provided have:')
+            emsg += '\n\tDPRTYPE={0}_{0}'
+            # add info about the range of files (if FP files)
+            if ref_fibertype == 'FP':
+                if not self.params['FP_CAL_MJDSTART'] in [None, 'None', '']:
+                    emsg += '\n\tMJDMID>{1}'
+                if not self.params['FP_CAL_MJDEND'] in [None, 'None', '']:
+                    emsg += '\n\tMJDMID<{2}'
+            # tell the user what they can do to fix this - we don't want emails
+            emsg += ('\nPlease define a template and do not run the '
+                     'template code or add some valid {0}_{0} files')
+            # get error arguments
+            eargs = [ref_fibertype, self.params['FP_CAL_MJDSTART'],
+                     self.params['FP_CAL_MJDEND']]
             # raise exception - we need some files to make a template!
             raise base_classes.LblException(emsg.format(*eargs))
         else:

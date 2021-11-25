@@ -371,6 +371,16 @@ params.set(key='BLAZE_SMOOTH_SIZE', value=None, source=__NAME__,
 params.set(key='BLAZE_THRESHOLD', value=None, source=__NAME__,
            desc='blaze threshold (s1d template)', dtype=float, not_none=True)
 
+# define the earliest allowed FP calibration used for template construction
+params.set(key='FP_CAL_MJDSTART', value=None, source=__NAME__,
+           desc='the earliest allowed FP calibration used for template '
+                'construction (None for unset)', dtype=float)
+
+# define the latest allowed FP calibration used for template construction
+params.set(key='FP_CAL_MJDEND', value=None, source=__NAME__,
+           desc='the latest allowed FP calibration used for template '
+                'construction (None for unset)', dtype=float)
+
 # =============================================================================
 # Define other parameters
 # =============================================================================
