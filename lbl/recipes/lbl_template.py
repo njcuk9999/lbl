@@ -139,6 +139,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 4: Deal with reference file (first file)
     # -------------------------------------------------------------------------
+    # may need to filter out calibrations
+    science_files = inst.filter_calibrations(science_files)
     # select the first science file as a reference file
     refimage, refhdr = inst.load_science(science_files[0])
     # get wave solution for reference file

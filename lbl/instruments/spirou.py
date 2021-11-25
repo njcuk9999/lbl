@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import requests
 import shutil
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -577,11 +577,43 @@ class Spirou(Instrument):
         else:
             return False
 
-    def get_dpr_fibtype(self, hdr: fits.Header) -> str:
+    def filter_calibrations(self, science_files: List[str]) -> List[str]:
+        """
+        Filter calibrations - no simutaenous calibrations
+
+        :param science_files: list of science filenames
+
+        :return: list of str, the filters calibration filenames
+        """
+        # select the first science file as a reference file
+        refimage, refhdr = self.load_science(science_files[0])
+
+        # if first file is not a calibration assume all files are not calibrations
+        if not self.flag_calib(refhdr):
+            return science_files
+        # storage
+        keep_files = []
+        # loop around science files
+        for science_file in science_files:
+            # load science file header
+            sci_hdr = io.load_header(science_file)
+            # get the fiber type for AB and C
+            sci_fiber = self.get_dpr_fibtype(sci_hdr, fiber='AB')
+            ref_fiber = self.get_dpr_fibtype(sci_hdr, fiber='C')
+            # i.e. FP_FP or HC_HC or LFC_LFC
+            if sci_fiber == ref_fiber:
+                keep_files.append(science_file)
+        # return only files with DPRTYPE same in both fibers
+        return keep_files
+
+    def get_dpr_fibtype(self, hdr: fits.Header,
+                        fiber: Optional[str] = None) -> str:
 
         # get dprtype
         dprtype = io.get_hkey(hdr, self.params['KW_DPRTYPE'])
-        fiber = io.get_hkey(hdr, self.params['KW_FIBER'])
+        # deal with getting fiber
+        if fiber is None:
+            fiber = io.get_hkey(hdr, self.params['KW_FIBER'])
         # split fiber
         dprfibtypes = dprtype.split('_')
         # get fiber type

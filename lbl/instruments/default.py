@@ -12,7 +12,7 @@ from astropy.table import Table
 import glob
 import numpy as np
 import os
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -646,6 +646,17 @@ class Instrument:
         """
         _ = self, fits.Header
         raise self._not_implemented('flag_calib')
+
+    def filter_calibrations(self, science_files: List[str]) -> List[str]:
+        """
+        Filter calibrations - no simutaenous calibrations
+
+        :param science_files: list of science filenames
+
+        :return: list of str, the filters calibration filenames
+        """
+        # return all science files by default
+        return science_files
 
     def rdb_columns(self):
         """
