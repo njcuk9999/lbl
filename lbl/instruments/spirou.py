@@ -135,9 +135,9 @@ class Spirou(Instrument):
         # blaze threshold (s1d template)
         self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
         # define the earliest allowed file used for template construction
-        self.params.set('TEMP_MJDSTART', value=None)
+        self.params.set('TEMPLATE_MJDSTART', value=None)
         # define the latest allowed file used for template construction
-        self.params.set('TEMP_MJDEND', value=None)
+        self.params.set('TEMPLATE_MJDEND', value=None)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -602,8 +602,8 @@ class Spirou(Instrument):
         :return: list of str, the filters calibration filenames
         """
         # get mjd start and end
-        start = self.params['TEMP_MJDSTART']
-        end = self.params['TEMP_MJDEND']
+        start = self.params['TEMPLATE_MJDSTART']
+        end = self.params['TEMPLATE_MJDEND']
         # if we have a science observation and start and end are None we don't
         #   need to filter
         mcond1 = self.params['DATA_TYPE'] == 'SCIENCE'
@@ -612,6 +612,8 @@ class Spirou(Instrument):
         # return all files if this is the case
         if mcond2 and mcond3 and mcond1:
             return science_files
+        # filtering files
+        log.general('Filtering science files...')
         # select the first science file as a reference file
         refimage, refhdr = self.load_science(science_files[0])
         ref_fibertype = self.get_dpr_fibtype(refhdr)
@@ -676,8 +678,8 @@ class Spirou(Instrument):
                        ' with {0}_{0}, ignoring {2} other files')
             # deal with science
             else:
-                msg = ('Object is classified as science. Found {1} files'
-                       ' with {0}_{0}, ignoring {2} other files')
+                msg = ('Object is classified as science. Found {1} files,'
+                       'ignoring {2} other files')
             margs = [ref_fibertype, len(keep_files),
                      len(science_files) - len(keep_files)]
             log.info(msg.format(*margs))

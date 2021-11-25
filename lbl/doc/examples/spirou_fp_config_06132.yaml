@@ -16,10 +16,10 @@ OBJECT_SCIENCE: FP
 OBJECT_TEMPLATE: FP
 
 # Define the earliest file allowed for template construction
-TEMP_MJDSTART: 58850
+TEMPLATE_MJDSTART: 58850
 
 # Define the latest file allowed for template construction
-TEMP_MJDEND: 59600
+TEMPLATE_MJDEND: 59600
 
 # Set the science input file string
 INPUT_FILE: '*e2dsff*.fits'

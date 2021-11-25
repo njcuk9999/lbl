@@ -226,12 +226,15 @@ def __main__(inst: InstrumentsType, **kwargs):
 
     hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step))
     # -------------------------------------------------------------------------
+    # applying low pass filter
+    log.general('\tApplying low pass filter to cube')
+    # deal with science
     if inst.params['DATA_TYPE'] == 'SCIENCE':
         with warnings.catch_warnings(record=True) as _:
             # calculate the median of the big cube
             median = mp.nanmedian(flux_cube, axis=1)
             # iterate until low frequency gone
-            for sci_it in range(flux_cube.shape[1]):
+            for sci_it in tqdm(range(flux_cube.shape[1])):
                 # remove the stellar features
                 ratio = flux_cube[:, sci_it] / median
                 # apply median filtered ratio (low frequency removal)
@@ -246,7 +249,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             # individual spectrum) when computing the lowpass
             peaks = median > mp.lowpassfilter(median,hp_width)
             # iterate until low frequency gone
-            for sci_it in range(flux_cube.shape[1]):
+            for sci_it in tqdm(range(flux_cube.shape[1])):
                 # remove the stellar features
                 ratio = flux_cube[:, sci_it] / median
                 ratio[~peaks] = np.nan
@@ -257,7 +260,7 @@ def __main__(inst: InstrumentsType, **kwargs):
 
     # -------------------------------------------------------------------------
     # get the median and +/- 1 sigma values for the cube
-    log.general('Calculate 16th, 50th and 84th percentiles')
+    log.general('\tCalculate 16th, 50th and 84th percentiles')
     with warnings.catch_warnings(record=True) as _:
         p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84], axis=1)
         # calculate the rms of each wavelength element

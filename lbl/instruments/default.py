@@ -435,8 +435,10 @@ class Instrument:
 
         :return:
         """
-        # get the mask type for the default mask name
-        mask_type = self.params['MASK_TYPE']
+        # get data type
+        data_type = self.params['DATA_TYPE']
+        # get type of mask
+        mask_type = self.params['{0}_MASK_TYPE'.format(data_type)]
         # set up the three outputs
         masks = [pos_mask, neg_mask, np.ones_like(pos_mask, dtype=bool)]
         extensions = ['pos', 'neg', 'full']
@@ -657,8 +659,64 @@ class Instrument:
 
         :return: list of str, the filters calibration filenames
         """
-        # return all science files by default
-        return science_files
+        # get mjd start and end
+        start = self.params['TEMPLATE_MJDSTART']
+        end = self.params['TEMPLATE_MJDEND']
+        # if we have a science observation and start and end are None we don't
+        #   need to filter
+        mcond2 = start in [None, 'None', '']
+        mcond3 = end in [None, 'None', '']
+        # return all files if this is the case
+        if mcond2 and mcond3:
+            return science_files
+        # filtering files
+        log.general('Filtering science files...')
+        # storage
+        keep_files = []
+        # loop around science files
+        for science_file in science_files:
+            # load science file header
+            sci_hdr = io.load_header(science_file)
+            # -----------------------------------------------------------------
+            # must check time frame (if present) for FP
+            cond2, cond3 = True, True
+            # get mjdmid
+            mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
+            # check start time for FP calibration
+            if not mcond2:
+                cond2 = mjdmid >= start
+            # check end time for FP calibration
+            if not mcond3:
+                cond3 = mjdmid <= end
+            # -----------------------------------------------------------------
+            # if all conditions are met keep files
+            if cond2 and cond3:
+                keep_files.append(science_file)
+            # -----------------------------------------------------------------
+        # if we have no files break here
+        if len(keep_files) == 0:
+            emsg = ('Object is classified as science however none of the'
+                        'files provide have:')
+            # add info about the range of files (if FP files)
+            if not mcond2:
+                emsg += '\n\tMJDMID>{1}'
+            if not mcond3:
+                emsg += '\n\tMJDMID<{2}'
+            # tell the user what they can do to fix this - we don't want emails
+            emsg += ('\nPlease define a template and do not run the '
+                     'template code or add some valid files')
+            # get error arguments
+            eargs = [start, end]
+            # raise exception - we need some files to make a template!
+            raise base_classes.LblException(emsg.format(*eargs))
+        else:
+            msg = ('Object is classified as science. Found {1} files'
+                   ' ignoring {2} other files')
+            margs = [len(keep_files),
+                     len(science_files) - len(keep_files)]
+            log.info(msg.format(*margs))
+        # return only files with DPRTYPE same in both fibers
+        return keep_files
 
     def rdb_columns(self):
         """
