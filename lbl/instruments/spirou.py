@@ -587,7 +587,7 @@ class Spirou(Instrument):
         """
         # select the first science file as a reference file
         refimage, refhdr = self.load_science(science_files[0])
-
+        ref_fibertype = self.get_dpr_fibtype(refhdr)
         # if first file is not a calibration assume all files are not calibrations
         if not self.flag_calib(refhdr):
             return science_files
@@ -603,6 +603,19 @@ class Spirou(Instrument):
             # i.e. FP_FP or HC_HC or LFC_LFC
             if sci_fiber == ref_fiber:
                 keep_files.append(science_file)
+        # if we have no files break here
+        if len(keep_files) == 0:
+            emsg = ('Object is classified as a calibration however none of'
+                    'the files provided have {0}_{0}')
+            eargs = [ref_fibertype]
+            # raise exception - we need some files to make a template!
+            raise base_classes.LblException(emsg.format(*eargs))
+        else:
+            msg = ('Object is classified as a calibration. Found {1} files'
+                   ' with {0}_{0}, ignoring {2} other files')
+            margs = [ref_fibertype, len(keep_files),
+                     len(science_files) - len(keep_files)]
+            log.error(msg.format(*margs))
         # return only files with DPRTYPE same in both fibers
         return keep_files
 
