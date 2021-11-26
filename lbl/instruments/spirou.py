@@ -186,7 +186,7 @@ class Spirou(Instrument):
         # define the wave solution calibration filename
         self.params.set('KW_CDBWAVE', 'CDBWAVE', source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'OBJNAME', source=func_name)
+        self.params.set('KW_OBJNAME', 'OBJECT', source=func_name)
         # define the rhomb 1 predefined position
         self.params.set('KW_RHOMB1', 'SBRHB1_P', source=func_name)
         # define the rhomb 2 predefined position

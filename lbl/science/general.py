@@ -1266,6 +1266,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB 1 table')
+    # store any missing keys
+    missing_keys = dict()
     # loop around lbl rv files
     for row in tqdm(range(len(lblrvfiles))):
         # ---------------------------------------------------------------------
@@ -1286,6 +1288,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # fill in header keys
         # ---------------------------------------------------------------------
+        # loop around header keys
         for ikey, key in enumerate(header_keys):
             # deal with FP flags
             if obj_sci == 'FP' and fp_flags[ikey]:
@@ -1295,9 +1298,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 rdb_dict[key][row] = rvhdr[key]
             # else print a warning and add a NaN
             else:
-                wmsg = 'Key {0} not present in file {1}'
-                wargs = [key, lblrvfiles[row]]
-                log.warning(wmsg.format(*wargs))
+                # add to missing keys dict counter
+                if key in missing_keys:
+                    missing_keys[key] += 1
+                else:
+                    missing_keys[key] = 1
+                # set value to NaN
                 rdb_dict[key][row] = np.nan
         # ---------------------------------------------------------------------
         # Read all lines for this file and load into arrays
@@ -1379,6 +1385,17 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             pdf_all.append(pdf)
             pdf_fit_all.append(pdf_fit)
     # -------------------------------------------------------------------------
+    # display missing keys
+    if len(missing_keys) > 0:
+        wmsg = ('The following header keys were not present in some files. '
+                'These values will be set to NaN in the rdb table.')
+        log.warning(wmsg)
+        # loop around missing keys
+        for missing_key in missing_keys:
+            wmsg = '\t{0}: missing in {1} file(s)'
+            log.warning(wmsg.format(missing_key, missing_keys[missing_key]))
+
+    # -------------------------------------------------------------------------
     # cumulative plot
     # -------------------------------------------------------------------------
     # plot if not a calibration
@@ -1430,7 +1447,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # compute the per-line bias
         for line_it in tqdm(range(len(per_line_mean))):
             # get the difference and error for each line
-            diff1 = rvs[:, line_it] - np.nanmedian(rvs[:, line_it])
+            with warnings.catch_warnings(record=True) as _:
+                diff1 = rvs[:, line_it] - np.nanmedian(rvs[:, line_it])
             # here we avoid having a shallow copy
             err1 = np.array(dvrms[:, line_it])
             # try to guess the odd ratio mean
@@ -1439,7 +1457,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 # corr_rms = mp.estimate_sigma(diff1 / err1)
                 # if corr_rms<.2:
                 #    print(corr_rms,line_it)
-                # err1*=corr_rms # updating the per-line RMS, also updates dvrms[:,line_it]
+                # err1*=corr_rms # updating the per-line RMS,
+                # also updates dvrms[:,line_it]
                 guess2, bulk_error2 = mp.odd_ratio_mean(diff1, err1)
                 per_line_mean[line_it] = guess2
                 per_line_error[line_it] = bulk_error2
@@ -1746,8 +1765,9 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
                     err_value = np.nan
                 else:
                     # get 1/error^2
-                    value = mp.nansum(vals / errs2) / mp.nansum(1 / errs2)
-                    err_value = np.sqrt(1 / mp.nansum(1 / errs2))
+                    with warnings.catch_warnings(record=True) as _:
+                        value = mp.nansum(vals / errs2) / mp.nansum(1 / errs2)
+                        err_value = np.sqrt(1 / mp.nansum(1 / errs2))
                     # push into table
                 rdb_dict2[colname].append(value)
                 rdb_dict2[wmean_pairs[colname]].append(err_value)
