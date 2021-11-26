@@ -1828,7 +1828,6 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
     log.info('Producing LBL drift table')
     # store rows which do not have reference file
     no_ref_files = []
-    has_ref_files = []
     # loop around unique wave files
     for uwavefile in tqdm(uwaves):
         # find all entries that match this wave file

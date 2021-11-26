@@ -49,7 +49,7 @@ PLOT_COMPIL_CUMUL: True
 PLOT_COMPIL_BINNED: True
 
 # Define whether to skip done files
-SKIP_DONE: False
+SKIP_DONE: True
 
 # Verbosity (default is 2)
 #     0=only warnings/errors
