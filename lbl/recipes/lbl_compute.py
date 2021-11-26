@@ -74,7 +74,7 @@ def main(**kwargs):
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                    cmdargs=inst.params['COMMAND_LINE_ARGS'], plogger=log)
+                    params=args, plogger=log)
     # run __main__
     try:
         namespace = __main__(inst)
@@ -190,6 +190,9 @@ def __main__(inst: InstrumentsType, **kwargs):
         margs = [it + 1, len(science_files), nleft]
         log.info(msg.format(*margs))
         log.info('*' * 79)
+        # add which science file is being processed
+        msg = '\t Science file = {0}'
+        log.general(msg.format(science_file))
         # add time stats
         if count > 3:
             msgs = ['\tDuration per file {0:.2f}+-{1:.2f} s']

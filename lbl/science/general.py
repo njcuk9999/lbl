@@ -1291,7 +1291,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # loop around header keys
         for ikey, key in enumerate(header_keys):
             # deal with FP flags
-            if obj_sci == 'FP' and fp_flags[ikey]:
+            if flag_calib and fp_flags[ikey]:
                 rdb_dict[key][row] = np.nan
             # if we have key add the value
             elif key in rvhdr:
@@ -1826,6 +1826,9 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
     uwaves = np.unique(rdb_table[kw_wavefile])
     # log progress
     log.info('Producing LBL drift table')
+    # store rows which do not have reference file
+    no_ref_files = []
+    has_ref_files = []
     # loop around unique wave files
     for uwavefile in tqdm(uwaves):
         # find all entries that match this wave file
@@ -1892,6 +1895,8 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
         # ---------------------------------------------------------------------
         # else we don't have a reference file present --> set to NaN
         else:
+            # record no ref present
+            no_ref_files.append(uwavefile)
             # loop around the wave files of this type
             for row in range(len(types)):
                 # loop around column names
@@ -1910,6 +1915,13 @@ def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
                     # else we have a non vrad / svrad column - add as is
                     else:
                         rdb_dict3[colname].append(itable[colname][row])
+    # ---------------------------------------------------------------------
+    # report on number of files without reference
+    wmsg = 'Number of references not present = {0}/{1}'
+    log.warning(wmsg.format(len(no_ref_files), len(uwaves)))
+    # loop around files with no reference
+    for no_ref_file in no_ref_files:
+        log.warning('\t- {0}'.format(no_ref_file))
     # ---------------------------------------------------------------------
     # convert rdb_dict3 to table
     # ---------------------------------------------------------------------
@@ -1950,9 +1962,12 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # -------------------------------------------------------------------------
     # get the time for cross-matching between the drift file and science
     timestamp = rdb_table['rjd']
-
+    # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB drift corrected table')
+    # store vrad = NaN rows
+    no_value = 0
+    nan_vrad = dict()
     # loop around the wave files of this type
     for row in tqdm(range(len(timestamp))):
         # create a mask of all files that match in drift file
@@ -1960,6 +1975,8 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
         # ---------------------------------------------------------------------
         # deal with no files present - cannot correct drift
         if np.sum(file_mask) == 0:
+            # keep track of the number of NaNs
+            no_value += 1
             # loop around all columns
             for colname in rdb_dict4.keys():
                 # -------------------------------------------------------------
@@ -1988,6 +2005,12 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
                 if colname.startswith('vrad'):
                     # get vrad drift
                     vrad_drift = drift_table[colname][pos]
+                    # keep track of the number of NaNs
+                    if np.isnan(vrad_drift):
+                        if colname in nan_vrad:
+                            nan_vrad[colname] += 1
+                        else:
+                            nan_vrad[colname] = 1
                     # correct vrad
                     vrad_corr = rdb_table[colname][row] - vrad_drift
                     # correct value
@@ -2008,7 +2031,16 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
                 else:
                     rdb_dict4[colname].append(rdb_table[colname][row])
     # ---------------------------------------------------------------------
-    # convert rdb_dict3 to table
+    # report on no values
+    if no_value > 0:
+        wmsg = '{0}/{1} row(s) have no drift value (set to Nan)'
+        log.warning(wmsg.format(no_value, len(rdb_table)))
+    # report on nan values in vrad columns
+    for colname in nan_vrad:
+        wmsg = '{0}/{1} rows(s) of {2} have NaN drift values'
+        log.warning(wmsg.format(nan_vrad[colname], len(rdb_table), colname))
+    # ---------------------------------------------------------------------
+    # convert rdb_dict4 to table
     # ---------------------------------------------------------------------
     rdb_table4 = Table()
     # loop around columns

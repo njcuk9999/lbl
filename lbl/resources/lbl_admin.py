@@ -219,8 +219,11 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # get input arguments (all switches)
     _args = parser.parse_args()
+    # get fake parameters
+    _params = base_classes.ParamDict()
+    _params['COMMAND_LINE_ARGS'] = lbl_misc.quick_args(_args, pargs)
     # splash
-    lbl_misc.splash('LBL Admin', 'None', lbl_misc.quick_args(_args, pargs))
+    lbl_misc.splash('LBL Admin', 'None', _params)
     # -------------------------------------------------------------------------
     # run create directories (if True)
     if _args.create_dirs:

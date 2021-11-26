@@ -153,10 +153,11 @@ class Carmenes(Instrument):
         self.params.set('KW_WAVEDEGN', 'NONE',
                         source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH CARACAL BJD',
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH CARACAL MJD-OBS',
                         source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'HIERARCH CARACAL BJD', source=func_name)
+        self.params.set('KW_MJDATE', 'HIERARCH CARACAL MJD-OBS',
+                        source=func_name)
         # define snr keyword
         self.params.set('KW_SNR', 'HIERARCH CARACAL FOX SNR 50',
                         source=func_name)
@@ -634,7 +635,7 @@ class Carmenes(Instrument):
             return float(mid_exp_time) + 0.5
         else:
             # convert bjd to mjd
-            bjd_mjd = Time(bjd, format='jd').mjd
+            bjd_mjd = Time(bjd, format='mjd').mjd
             # return mjd + 0.5 (for rjd)
             return float(bjd_mjd) + 0.5
 

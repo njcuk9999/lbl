@@ -73,7 +73,7 @@ def main(**kwargs):
     lbl_misc.move_log(data_dir, __NAME__)
     # print splash
     lbl_misc.splash(name=__STRNAME__, instrument=inst.name,
-                    cmdargs=inst.params['COMMAND_LINE_ARGS'], plogger=log)
+                    params=args, plogger=log)
     # run __main__
     try:
         namespace = __main__(inst)
@@ -166,7 +166,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 5: Produce drift file(s)
     # -------------------------------------------------------------------------
-    if inst.params['OBJECT_SCIENCE'] == 'FP':
+    if inst.params['DATA_TYPE'] == 'FP':
         # make the drift table
         drift_table = general.make_drift_table(inst, rdb_table)
         # log creation of drift table
@@ -177,6 +177,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # else we have a file which can be corrected (if drift file exists)
     elif os.path.exists(drift_file):
         # load drift table
+        log.general('Using drift table: {0}'.format(drift_file))
         drift_table = io.load_table(drift_file, kind='Drift table', fmt='rdb')
         # create rdb corrected for drift table
         rdb_table3 = general.correct_rdb_drift(inst, rdb_table, drift_table)

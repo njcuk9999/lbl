@@ -161,6 +161,8 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
                     inputs.set(argname, yaml_inputs[argname],
                                source=func_name + '[YAML]')
     # -------------------------------------------------------------------------
+    # storage of command line arguments
+    inputs.set('USER_KWARGS', value=[], source=func_name)
     # update params value with kwargs
     for kwarg in kwargs:
         # force kwarg to upper case
@@ -172,6 +174,9 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
         # only if in params
         if kwargname in params:
             inputs.set(kwargname, kwargs[kwarg], source=func_name + ' [KWARGS]')
+            # add to use kwargs
+            msg = '\t{0}="{1}"'.format(kwargname, kwargs[kwarg])
+            inputs['USER_KWARGS'].append(msg)
     # -------------------------------------------------------------------------
     # storage of command line arguments
     inputs.set('COMMAND_LINE_ARGS', value=[], source=func_name)

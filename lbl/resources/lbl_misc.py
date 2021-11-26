@@ -86,7 +86,7 @@ def move_log(data_dir: str, recipe: str):
     base_classes.log = log
 
 
-def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None,
+def splash(name: str, instrument: str, params: base_classes.ParamDict,
            plogger: Union[logger.Log, None] = None):
     # deal with no logger
     if plogger is None:
@@ -103,12 +103,22 @@ def splash(name: str, instrument: str, cmdargs: Union[List[str], None] = None,
     # loop through messages
     for msg in msgs:
         plogger.info(msg.format(*margs))
+
+    # add user args
+    if params is not None:
+        if len(params['USER_KWARGS']) > 0:
+            plogger.info('User keyword arguments:')
+            # loop around arguments and add
+            for cmdmsg in params['USER_KWARGS']:
+                plogger.info(cmdmsg)
+
     # add command line arguments (if not None)
-    if cmdargs is not None:
-        plogger.info('Command line arguments:')
-        # loop around arguments and add
-        for cmdmsg in cmdargs:
-            plogger.info(cmdmsg)
+    if params is not None:
+        if len(params['COMMAND_LINE_ARGS']) > 0:
+            plogger.info('Command line arguments:')
+            # loop around arguments and add
+            for cmdmsg in params['COMMAND_LINE_ARGS']:
+                plogger.info(cmdmsg)
 
 
 def end(recipe: str, plogger: Union[logger.Log, None] = None):

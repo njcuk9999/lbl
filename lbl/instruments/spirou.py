@@ -506,8 +506,10 @@ class Spirou(Instrument):
         filename = filename.replace('_FP_FP_lbl.fits', '')
         # get the correct prefix for WAVEFILE
         wavefile = table_row['WAVEFILE']
-        wavefile = wavefile.replace('_wave_night_C.fits', '')
-        wavefile = wavefile.replace('_wavesol_master_C.fits', '')
+
+        ext = '_{0}.fits'.format('C')
+        wavefile = wavefile.replace('_wave_night' + ext, '')
+        wavefile = wavefile.replace('_wavesol_master' + ext, '')
         # return test statement
         return filename == wavefile
 
