@@ -333,7 +333,7 @@ class Harps(Instrument):
         # check that the object sub-directory exists
         abspath = io.make_dir(directory, objname, 'Science object')
         # set up basename
-        basename = self.params['INPUT_FILE']
+        basename = os.path.basename(self.params['INPUT_FILE'])
         # add to abspath
         abspath = os.path.join(abspath, basename)
         # look for files
