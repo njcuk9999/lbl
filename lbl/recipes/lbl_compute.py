@@ -81,8 +81,8 @@ def main(**kwargs):
     except LblException as e:
         raise LblException(e.message)
     except Exception as e:
-        emsg = 'Unexpected lbl_compute error: {0}: {1}'
-        eargs = [type(e), str(e)]
+        emsg = 'Unexpected {0} error: {1}: {2}'
+        eargs = [__NAME__, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
     # end code
     lbl_misc.end(__NAME__, plogger=log)
