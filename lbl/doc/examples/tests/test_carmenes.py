@@ -33,8 +33,8 @@ keyword_args['PLOT_COMPUTE_LINES'] = True
 keyword_args['PLOT_COMPIL_CUMUL'] = True
 keyword_args['PLOT_COMPIL_BINNED'] = True
 keyword_args['SKIP_DONE'] = False
-keyword_args['MASK_SUBDIR'] = working + 'masks'
-keyword_args['INPUT_FILE'] = working + 'science/TOI-1452-tc/car-*.fits'
+keyword_args['MASK_SUBDIR'] = 'masks'
+keyword_args['INPUT_FILE'] = 'car-*.fits'
 keyword_args['OVERWRITE'] = True
 # add objects
 objs = ['TOI-1452']

@@ -26,7 +26,6 @@ keyword_args['DATA_DIR'] = working
 keyword_args['DATA_TYPE'] = 'SCIENCE'
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
-keyword_args['TEMPLATE_FILE'] = 'Template_Proxima-tc_HARPS.fits'
 keyword_args['PLOT'] = False
 keyword_args['PLOT_COMPUTE_CCF'] = True
 keyword_args['PLOT_COMPUTE_LINES'] = True
@@ -37,9 +36,9 @@ keyword_args['MASK_SUBDIR'] = 'masks'
 keyword_args['INPUT_FILE'] = 'HARPS*_e2ds_A.fits'
 keyword_args['OVERWRITE'] = True
 # add objects
-objs = ['Proxima-tc']
-templates = ['Proxima-tc']
-teffs = [3042]
+objs = ['GL317']
+templates = ['GL317']
+teffs = [3510]
 # set which object to run
 num = 0
 
