@@ -659,6 +659,8 @@ class Instrument:
 
         :return: list of str, the filters calibration filenames
         """
+        # get tqdm
+        tqdm = base.tqdm_module(self.params['USE_TQDM'], log.console_verbosity)
         # get mjd start and end
         start = self.params['TEMPLATE_MJDSTART']
         end = self.params['TEMPLATE_MJDEND']
@@ -674,7 +676,7 @@ class Instrument:
         # storage
         keep_files = []
         # loop around science files
-        for science_file in science_files:
+        for science_file in tqdm(science_files):
             # load science file header
             sci_hdr = io.load_header(science_file)
             # -----------------------------------------------------------------
