@@ -15,6 +15,7 @@ from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_template
 from lbl.recipes import lbl_mask
 from lbl.recipes import lbl_noise
+from lbl.recipes import lbl_preclean
 
 # =============================================================================
 # Define variables
@@ -31,6 +32,8 @@ noise = lbl_noise
 compute = lbl_compute
 # alias to lbl compile
 compil = lbl_compile
+# alias to lbl compile
+preclean = lbl_preclean
 
 # =============================================================================
 # Start of code

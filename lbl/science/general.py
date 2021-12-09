@@ -306,9 +306,9 @@ def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 500):
     so that each element is exactly dv_grid step in velocity. If you shift
     your velocity, then you have a simple translation of this vector.
 
-    :param wave0: first wavelength element
-    :param wave1: second wavelength element
-    :param dv_grid: grid size in m/s
+    :param wave0: float, first wavelength element
+    :param wave1: float, second wavelength element
+    :param dv_grid: float, grid size in m/s
     :return:
     """
     # default for the function is 500 m/s
@@ -1455,7 +1455,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # We should have a threshold in the fraction of 'valid' times the
             #     line has been measured
             # TODO: move 0.7 to parameters
-            if frac_valid[line_it]<0.7:
+            if frac_valid[line_it] < 0.7:
                 per_line_mean[line_it] = np.nan
                 per_line_mean[line_it] = np.nan
                 continue

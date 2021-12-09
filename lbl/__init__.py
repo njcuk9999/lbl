@@ -26,6 +26,8 @@ compute = recipes.lbl_compute.main
 compil = recipes.lbl_compile.main
 # clean recipe
 clean = recipes.lbl_clean.main
+# pre-clean recipe
+preclean = recipes.lbl_preclean.main
 
 # =============================================================================
 # Define functions

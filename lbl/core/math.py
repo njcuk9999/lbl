@@ -598,6 +598,23 @@ def doppler_shift(wavegrid: np.ndarray, velocity: float) -> np.ndarray:
     return wavegrid * np.sqrt(part1 / part2)
 
 
+def gauss_function(x: Union[float, np.ndarray], a: float, x0: float,
+                   sigma: float, dc: float) -> Union[float, np.ndarray]:
+    """
+    A standard 1D gaussian function (for fitting against)
+
+    :param x: numpy array (1D), the x data points
+    :param a: float, the amplitude
+    :param x0: float, the mean position of the gaussian
+    :param sigma: float, the standard deviation (FWHM) of the gaussian
+    :param dc: float, the constant level below the gaussian
+
+    :return gauss: numpy array (1D), size = len(x), the output gaussian
+    """
+    # return gauss function
+    return a * np.exp(-0.5 * ((x - x0) / sigma) ** 2) + dc
+
+
 def gauss_fit_s(x: Union[float, np.ndarray], x0: float, sigma: float,
                 a: float, zp: float, slope: float) -> Union[float, np.ndarray]:
     """

@@ -419,6 +419,53 @@ class Instrument:
                       header=[header, None, None],
                       dtype=[None, 'table', 'table'])
 
+    def write_precleaned(self, precleanded_file: str, props: dict,
+                       sci_hdr: fits.Header):
+        """
+        Write the precleanded_file to disk
+
+        :param precleanded_file: str, the file and path to write to
+        :param props: dictionnary output from the precleaned code
+        :param sci_hdr: fits Header, an input file header to copy the header
+                        from to the new template file
+        :return:
+        """
+        # populate primary header
+        header = fits.Header()
+        # copy header from reference header
+        header = io.copy_header(header, sci_hdr)
+        # add custom keys
+        header = self.set_hkey(header, 'KW_VERSION', __version__)
+        header = self.set_hkey(header, 'KW_VDATE', __date__)
+        header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
+        header = self.set_hkey(header, 'KW_INSTRUMENT', self.params['INSTRUMENT'])
+        header = self.set_hkey(header, 'KW_TAU_H2O', props['pre_cleaned_exponent_water'])
+        header = self.set_hkey(header, 'KW_TAU_OTHERS', props['pre_cleaned_exponent_others'])
+        # set image as pre_cleaned_flux
+        image = props['pre_cleaned_flux']
+        # adding extensions that are not the flux after telluric correction
+        #   (error propagation, wavelength grid)
+        datalist = [None, image]
+        headerlist = [header, None]
+        datatypelist = [None, 'image']
+        with fits.open(props['FILENAME']) as hdulist:
+            for hdu in hdulist[2:]:
+                datalist.append(hdu.data)
+                headerlist.append(hdu.header)
+                if isinstance(hdu,fits.hdu.image.ImageHDU):
+                    datatypelist.append('image')
+                else:
+                    datatypelist.append('table')
+        # ---------------------------------------------------------------------
+        # Save template to disk
+        log.general('Saving pre-cleaned file: {0}'.format(precleanded_file))
+        # ---------------------------------------------------------------------
+        # write to file
+        #TODO -> need to add a "Name" to the first extension.
+        io.write_fits(precleanded_file, data=datalist,
+                      header=headerlist,
+                      dtype=datatypelist)
+
     def write_mask(self, mask_file: str, line_table: Table,
                    pos_mask: np.ndarray, neg_mask: np.ndarray,
                    sys_vel: float, template_hdr: fits.Header):
