@@ -173,6 +173,10 @@ class Carmenes(Instrument):
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
         # TODO -> not relevant for CARMENES
+        # define the tau_h20 of the observation
+        self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
+        # define the tau_other of the observation
+        self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
         self.params.set('KW_DPRTYPE', 'NONE', source=func_name)
         # TODO -> not relevant for CARMENES
@@ -565,9 +569,9 @@ class Carmenes(Instrument):
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE',
-                    'KW_BERV', 'KW_DPRTYPE', 'KW_NITERATIONS',
-                    'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_OBJNAME',
-                    'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
+                    'KW_BERV', 'KW_DPRTYPE', 'KW_TAU_OTHERS', 'KW_DPRTYPE',
+                    'KW_NITERATIONS', 'KW_SYSTEMIC_VELO', 'KW_WAVEFILE',
+                    'KW_OBJNAME', 'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)
         keys = []
         fp_flags = []

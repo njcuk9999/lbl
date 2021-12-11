@@ -913,7 +913,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             wave_end = ref_table['WAVE_END'][line_it]
             x_start, x_end = wave2pix([wave_start, wave_end])
             # round pixel positions to nearest pixel
-            x_start, x_end = int(np.floor(x_start)), int(np.ceil(x_end))
+            x_start, x_end = int(np.floor(x_start)), int(np.floor(x_end))
             # -----------------------------------------------------------------
             # boundary conditions
             if (x_end - x_start) < min_line_width:
@@ -933,12 +933,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if ww_ord[x_start] < wave_start:
                 refdiff = ww_ord[x_start + 1] - wave_start
                 wavediff = ww_ord[x_start + 1] - ww_ord[x_start]
-                weight_mask[0] = refdiff / wavediff
+                weight_mask[0] = 1 - refdiff / wavediff
             # deal with overlapping pixels (after end)
             if ww_ord[x_end + 1] > wave_end:
-                refdiff = ww_ord[x_end] - wave_end
-                wavediff = ww_ord[x_end + 1] - ww_ord[x_end]
-                weight_mask[-1] = 1 - (refdiff / wavediff)
+                refdiff = wave_end - ww_ord[x_end]
+                wavediff = ww_ord[x_end] - ww_ord[x_end-1]
+                weight_mask[-1] = 1-(refdiff / wavediff)
             # get the x pixels
             xpix = np.arange(x_start, len(weight_mask) + x_start)
             # get mean xpix and mean blaze for line
@@ -979,6 +979,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 # subtract off normalized model sum
                 modsum = mp.nansum(model_seg * weight_mask)
                 model_seg = model_seg - (modsum / sum_weight_mask)
+                # to be consistent between the spectrum residuals and model
+                d_sum = mp.nansum(d_seg * weight_mask)
+                d_seg = d_seg - (d_sum / sum_weight_mask)
+                # to be consistent between the spectrum residuals and model
+                d2_sum = mp.nansum(d2_seg * weight_mask)
+                d2_seg = d2_seg - (d2_sum / sum_weight_mask)
+                # to be consistent between the spectrum residuals and model
+                d3_sum = mp.nansum(d3_seg * weight_mask)
+                d3_seg = d3_seg - (d3_sum / sum_weight_mask)
 
             diff_seg = (sci_seg - model_seg) * weight_mask
             # work out the sum of the rms
@@ -1416,19 +1425,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         log.general(msg)
         msg = 'Constructing a per-epoch mean velocity'
         log.general(msg)
-        # loop around lines and generate a first guess for vrad and svrad
-        for line_it in tqdm(range(rvs.shape[0])):
-            # calculate the number of sigma away from median
-            # diff = rvs[line_it] - mp.nanmedian(rvs[line_it])
-            # nsig = diff / dvrms[line_it]
-            # force a std dev of 1
-            # TODO : have the normalization to sigma as an option
-            # dvrms[line_it] = dvrms[line_it] #* mp.estimate_sigma(nsig)
+        # loop around files and generate a first guess for vrad and svrad
+        for file_it in tqdm(range(rvs.shape[0])):
             # use the odd ratio mean to guess vrad and svrad
-            orout1 = mp.odd_ratio_mean(rvs[line_it], dvrms[line_it])
+            orout1 = mp.odd_ratio_mean(rvs[file_it], dvrms[file_it])
             # add to output table
-            rdb_dict['vrad'][line_it] = orout1[0]
-            rdb_dict['svrad'][line_it] = orout1[1]
+            rdb_dict['vrad'][file_it] = orout1[0]
+            rdb_dict['svrad'][file_it] = orout1[1]
         # ---------------------------------------------------------------------
         # Model per epoch
         # ---------------------------------------------------------------------
@@ -1444,8 +1447,18 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         per_line_error = np.zeros(rvs.shape[1])
         # log progress
         log.info('Producing line-by-line mean positions')
+
+        # fraction of valid measurements for given line
+        frac_valid = np.nanmean(np.isfinite(rvs),axis=0)
         # compute the per-line bias
         for line_it in tqdm(range(len(per_line_mean))):
+            # We should have a threshold in the fraction of 'valid' times the
+            #     line has been measured
+            # TODO: move 0.7 to parameters
+            if frac_valid[line_it]<0.7:
+                per_line_mean[line_it] = np.nan
+                per_line_mean[line_it] = np.nan
+                continue
             # get the difference and error for each line
             with warnings.catch_warnings(record=True) as _:
                 diff1 = rvs[:, line_it] - np.nanmedian(rvs[:, line_it])
@@ -1454,10 +1467,6 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # try to guess the odd ratio mean
             # noinspection PyBroadException
             try:
-                # corr_rms = mp.estimate_sigma(diff1 / err1)
-                # if corr_rms<.2:
-                #    print(corr_rms,line_it)
-                # err1*=corr_rms # updating the per-line RMS,
                 # also updates dvrms[:,line_it]
                 guess2, bulk_error2 = mp.odd_ratio_mean(diff1, err1)
                 per_line_mean[line_it] = guess2
@@ -1538,7 +1547,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # TODO -> errors compared to the bulk of error bar values.
             # TODO -> only done if some errors are equal to zero.
             if np.min(valid_dvrms) == 0:
-                threshold = np.nanpercentile(valid_dvrms, 1)
+                # we probably want a slightly lower threshold that the 1%-ile,
+                #    the valid limit is typically lower
+                threshold = np.nanpercentile(valid_dvrms, 1) / 2
                 suspicious = valid_dvrms < threshold
                 valid_dvrms[suspicious] = threshold
 
