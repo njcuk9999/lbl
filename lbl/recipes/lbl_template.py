@@ -49,7 +49,7 @@ ARGS_TEMPLATE = [
                 # other
                 'VERBOSE', 'PROGRAM',
                 ]
-# TODO: Etienne - Fill out
+
 DESCRIPTION_TEMPLATE = 'Use this code to create the LBL template'
 
 

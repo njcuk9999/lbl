@@ -111,9 +111,11 @@ def get_tapas_spl(inst: InstrumentsType) -> Tuple[SplineReturn, SplineReturn]:
     trans_others = tmp_tapas['ABSO_OTHERS']
     trans_water = tmp_tapas['ABSO_WATER']
     # -------------------------------------------------------------------------
-    # Question: do we need to shift if dv = 0?
     # doppler shift wave solution by tapas_dv
-    tapas_wave_shifted = mp.doppler_shift(tapas_wave, tapas_dv * 1000)
+    if tapas_dv != 0.0:
+        tapas_wave_shifted = mp.doppler_shift(tapas_wave, tapas_dv * 1000)
+    else:
+        tapas_wave_shifted = np.array(tapas_wave)
     # define spline function for both, optionally shift the grid
     spl_others = mp.iuv_spline(tapas_wave_shifted, trans_others, k=1, ext=3)
     spl_water = mp.iuv_spline(tapas_wave_shifted, trans_water, k=1, ext=3)

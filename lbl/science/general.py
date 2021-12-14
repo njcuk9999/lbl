@@ -1191,6 +1191,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     wave_min = inst.params['COMPIL_WAVE_MIN']
     wave_max = inst.params['COMPIL_WAVE_MAX']
     max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
+    # get fraction of time a line as been measured
+    frac_time_meas = inst.params['COMPIL_FRAC_TIME_MEAS']
     # obj_sci = inst.params['OBJECT_SCIENCE']
     ccf_ew_fp = inst.params['COMPIL_FP_EWID']
     reference_wavelength = inst.params['COMPIL_SLOPE_REF_WAVE']
@@ -1462,8 +1464,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         for line_it in tqdm(range(len(per_line_mean))):
             # We should have a threshold in the fraction of 'valid' times the
             #     line has been measured
-            # TODO: move 0.7 to parameters
-            if frac_valid[line_it] < 0.7:
+            if frac_valid[line_it] < frac_time_meas:
                 per_line_mean[line_it] = np.nan
                 per_line_mean[line_it] = np.nan
                 continue

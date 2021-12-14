@@ -48,7 +48,7 @@ ARGS_COMPUTE = [
                 # other
                 'SKIP_DONE', 'VERBOSE', 'PROGRAM',
                 ]
-# TODO: Etienne - Fill out
+
 DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
 
 

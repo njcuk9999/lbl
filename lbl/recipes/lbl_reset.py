@@ -40,8 +40,8 @@ ARGS_MASK = [
              'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
              'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
             ]
-# TODO: Etienne - Fill out
-DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'
+
+DESCRIPTION_MASK = 'Use this code to clean out any LBL data from DATA_DIR'
 
 
 # =============================================================================

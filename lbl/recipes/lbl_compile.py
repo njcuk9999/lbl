@@ -47,8 +47,7 @@ ARGS_COMPIL = [
                'SKIP_DONE', 'RDB_SUFFIX', 'VERBOSE', 'PROGRAM',
                ]
 
-# TODO: Etienne - Fill out
-DESCRIPTION_COMPIL = 'Use this code to compile the LBL rdb file'
+DESCRIPTION_COMPIL = 'Use this code to compile the LBL rdb files'
 
 
 # =============================================================================

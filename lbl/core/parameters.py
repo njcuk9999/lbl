@@ -270,6 +270,11 @@ params.set('COMPIL_SLOPE_REF_WAVE', None, source=__NAME__,
                 'fitting in nm',
            not_none=True)
 
+# define a threshold based on the fraction on time a line as been measured
+params.set('COMPIL_FRAC_TIME_MEAS', 0.7, source=__NAME__,
+           desc='a threshold based on the fraction on time a line as '
+                'been measured')
+
 # define the FP reference string that defines that an FP observation was
 #    a reference (calibration) file - should be a list of strings
 params.set('FP_REF_LIST', None, source=__NAME__,

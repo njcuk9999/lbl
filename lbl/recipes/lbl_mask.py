@@ -49,7 +49,7 @@ ARGS_MASK = [
              # other
              'OVERWRITE', 'VERBOSE', 'PROGRAM',
             ]
-# TODO: Etienne - Fill out
+
 DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'
 
 

@@ -494,7 +494,11 @@ class Instrument:
         datalist = [None, image]
         headerlist = [header, None]
         datatypelist = [None, 'image']
+        # open hdulist
         with fits.open(props['FILENAME']) as hdulist:
+            # add the header for extension 1
+            headerlist[1] = hdulist[1].header
+            # loop around and add other extensions
             for hdu in hdulist[2:]:
                 datalist.append(hdu.data)
                 headerlist.append(hdu.header)
@@ -507,10 +511,8 @@ class Instrument:
         log.general('Saving tellu-cleaned file: {0}'.format(write_tellu_file))
         # ---------------------------------------------------------------------
         # write to file
-        # TODO -> need to add a "Name" to the first extension.
         io.write_fits(write_tellu_file, data=datalist,
-                      header=headerlist,
-                      dtype=datatypelist)
+                      header=headerlist, dtype=datatypelist)
 
     def write_mask(self, mask_file: str, line_table: Table,
                    pos_mask: np.ndarray, neg_mask: np.ndarray,
