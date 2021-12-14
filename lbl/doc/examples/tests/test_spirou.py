@@ -31,17 +31,17 @@ if __name__ == "__main__":
     _ = clean(config_file=fp_config_file)
     _ = clean(config_file=gl699_config_file)
     # run template
-    tbl0a = template(config_file=fp_config_file)
-    tbl0b = template(config_file=gl699_config_file)
+    _ = template(config_file=fp_config_file)
+    _ = template(config_file=gl699_config_file)
     # run mask code
-    tbl1a = mask(config_file=fp_config_file)
-    tbl1b = mask(config_file=gl699_config_file)
+    _ = mask(config_file=fp_config_file)
+    _ = mask(config_file=gl699_config_file)
     # run compute
-    tbl2a = compute(config_file=fp_config_file)
-    tbl2b = compute(config_file=gl699_config_file)
+    _ = compute(config_file=fp_config_file)
+    _ = compute(config_file=gl699_config_file)
     # run compile
-    tbl3a = compil(config_file=fp_config_file)
-    tbl3b = compil(config_file=gl699_config_file)
+    _ = compil(config_file=fp_config_file)
+    _ = compil(config_file=gl699_config_file)
 
 # =============================================================================
 # End of code

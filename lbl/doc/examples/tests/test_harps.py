@@ -12,6 +12,7 @@ from lbl import compil
 from lbl import compute
 from lbl import mask
 from lbl import template
+from lbl import preclean
 
 # =============================================================================
 # Define variables
@@ -37,8 +38,8 @@ keyword_args['MASK_SUBDIR'] = 'masks'
 keyword_args['INPUT_FILE'] = 'HARPS*_e2ds_A.fits'
 keyword_args['OVERWRITE'] = True
 # add objects
-objs = ['Proxima-tc']
-templates = ['Proxima-tc']
+objs = ['Proxima']
+templates = ['Proxima']
 teffs = [3042]
 # set which object to run
 num = 0
@@ -51,18 +52,27 @@ if __name__ == "__main__":
     # run clean (reset everything)
     _ = clean(object_science=objs[num], object_template=templates[num],
                     **keyword_args)
+    # run pre-clean
+    _ = preclean(object_science=objs[num], object_template=templates[num],
+                 preclean_use_template=False, **keyword_args)
     # run template
-    tbl0 = template(object_science=objs[num], object_template=templates[num],
-                    **keyword_args)
+    _ = template(object_science=objs[num], object_template=templates[num],
+                 **keyword_args)
+    # run pre-clean
+    _ = preclean(object_science=objs[num], object_template=templates[num],
+                 **keyword_args)
+    # run template
+    _ = template(object_science=objs[num], object_template=templates[num],
+                 **keyword_args)
     # run mask code
-    tbl1 = mask(object_science=objs[num], object_template=templates[num],
-                object_teff=teffs[num], **keyword_args)
+    _ = mask(object_science=objs[num], object_template=templates[num],
+             object_teff=teffs[num], **keyword_args)
     # run compute
-    tbl2 = compute(object_science=objs[num], object_template=templates[num],
-                   **keyword_args)
+    _ = compute(object_science=objs[num], object_template=templates[num],
+                **keyword_args)
     # run compile
-    tbl3 = compil(object_science=objs[num], object_template=templates[num],
-                  **keyword_args)
+    _ = compil(object_science=objs[num], object_template=templates[num],
+               **keyword_args)
 
 # =============================================================================
 # End of code

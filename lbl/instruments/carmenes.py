@@ -536,15 +536,6 @@ class Carmenes(Instrument):
         # return updated storage dictionary
         return tdict
 
-    def flag_calib(self, sci_hdr: fits.Header) -> bool:
-        """
-        Flag a file as a calibration file
-
-        :return:
-        """
-        # always False for carmenes (assumes no calibrations)
-        return False
-
     def get_dpr_fibtype(self, hdr: fits.Header) -> str:
 
         # get dprtype

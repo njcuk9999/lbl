@@ -490,7 +490,8 @@ def write_fits(filename: str, data: FitsData = None,
 # Define table functions
 # =============================================================================
 def load_table(filename: str, kind: Union[str, None] = None,
-               fmt: str = 'fits', get_hdr: bool = False
+               fmt: str = 'fits', get_hdr: bool = False,
+               extname: Optional[str] = None,
                ) -> Union[Table, Tuple[Table, fits.Header]]:
     """
     Standard way to load table
@@ -500,6 +501,7 @@ def load_table(filename: str, kind: Union[str, None] = None,
     :param fmt: str, the format of the table (i.e. csv or fits)
                    defaults to 'fits'
     :param get_hdr: bool, whether to get the header or not
+    :param extname: str or None, if set load a specific extension
 
     :return: astropy.table.Table, the table loaded
     """
@@ -509,7 +511,7 @@ def load_table(filename: str, kind: Union[str, None] = None,
     # try to load fits file
     try:
         with warnings.catch_warnings(record=True) as _:
-            table = Table.read(filename, format=fmt)
+            table = Table.read(filename, format=fmt, hdu=extname)
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]

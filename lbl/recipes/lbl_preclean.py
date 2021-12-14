@@ -9,19 +9,14 @@ Created on 2021-08-24
 
 @author: cook
 """
-import warnings
-
-import numpy as np
 import os
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
-from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.science import general
 from lbl.resources import lbl_misc
-from lbl.science import apero
 from lbl.science import pre_clean
 
 
@@ -105,18 +100,28 @@ def __main__(inst: InstrumentsType, **kwargs):
         assert isinstance(inst, InstrumentsList), amsg
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
-
+    # -------------------------------------------------------------------------
+    # check data before running
+    # -------------------------------------------------------------------------
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
-
+    # check that we want to pre-clean
+    if not inst.params['DO_PRECLEAN']:
+        emsg = 'DO_PRECLEAN set to False for instrument: {0}'
+        eargs = [inst.name]
+        raise base_classes.LblException(emsg.format(*eargs))
     # check that science object is not pre-cleaned
     if inst.params['OBJECT_SCIENCE'].endswith('_tc'):
         emsg = ('Cannot pre-clean a file that has a pre-cleaned object '
                 '(ends with _tc), OBJECT_SCIENCE = {0}')
         eargs = [inst.params['OBJECT_SCIENCE']]
         raise base_classes.LblException(emsg.format(*eargs))
+    # check that we have science data (can only pre-clean science data)
+    if inst.params['DATA_TYPE'] != 'SCIENCE':
+        emsg = ('Can only pre-clean "SCIENCE" data. '
+               'Please set "DATA_TYPE" to "SCIENCE"')
+        raise base_classes.LblException(emsg)
 
-    
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
@@ -172,7 +177,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         e2ds_dict['wavelength'] = sci_wave
         e2ds_dict['AIRMASS'] = sci_hdr[inst.params['KW_AIRMASS']]
         e2ds_dict['OBJECT'] = sci_hdr[inst.params['KW_OBJNAME']]
-        e2ds_dict['BERV'] =  inst.get_berv(sci_hdr)
+        e2ds_dict['BERV'] = inst.get_berv(sci_hdr)
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------
         # do the telluric correction (similar to APERO)
@@ -180,7 +185,7 @@ def __main__(inst: InstrumentsType, **kwargs):
                                             spl_others, spl_water)
         # ---------------------------------------------------------------------
         # write the pre-cleaned file to disk
-        inst.write_precleaned(precleanded_file, e2ds_dict,sci_hdr)
+        inst.write_precleaned(precleanded_file, e2ds_dict, sci_hdr)
 
     # -------------------------------------------------------------------------
     # return local namespace

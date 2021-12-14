@@ -14,6 +14,7 @@ from astropy.table import Table
 import numpy as np
 import os
 from typing import Any, Dict, Tuple, Union
+import wget
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -22,6 +23,7 @@ from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import general
+from lbl.resources import lbl_misc
 
 # =============================================================================
 # Define variables
@@ -49,6 +51,46 @@ SplineReturn = Union[np.IUVSpline, mp.NanSpline]
 # =============================================================================
 # Define functions
 # =============================================================================
+def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
+    """
+    Get the tapas lbl file (either from disk or from online)
+
+    :param inst: Instrument Type instance - the instrument class
+    :param extname: str, the extension name to load
+
+    :return: astropy.table.Table - the Table for extname
+    """
+    # get parameters from inst
+    tapas_url = inst.params['PRECLEAN_TAPAS_URL']
+    data_dir = inst.params['DATA_DIR']
+    # get data directory
+    data_dir = io.check_directory(data_dir)
+    # copy over readme
+    lbl_misc.copy_readme(data_dir)
+    # make other directory
+    tapas_path = io.make_dir(data_dir, 'other', 'Other')
+    # construct tapas file path
+    tapas_file = os.path.basename(tapas_url)
+    tapas_abspath = os.path.join(tapas_path, tapas_file)
+    # check if we have the tapas file
+    if not os.path.exists(tapas_file):
+        # log that we are downloading tapas file
+        msg = 'Downloading tapas file \n\tfrom: {0} \n\tto {1}'
+        margs = [tapas_url, tapas_abspath]
+        log.general(msg.format(*margs))
+        # attempt to download the data
+        try:
+            wget.download(tapas_url, tapas_abspath)
+        except Exception as e:
+            emsg = 'Cannot download tapas file: {0}\n\tError {1}: {2}'
+            eargs = [tapas_url, type(e), str(e)]
+            raise base_classes.LblException(emsg.format(*eargs))
+    # load table
+    tapas_lbl = io.load_table(tapas_abspath, extname=extname)
+    # return the table
+    return tapas_lbl
+
+
 def get_tapas_spl(inst: InstrumentsType) -> Tuple[SplineReturn, SplineReturn]:
     """
     Read table with TAPAS model for 6 molecules.
@@ -58,20 +100,15 @@ def get_tapas_spl(inst: InstrumentsType) -> Tuple[SplineReturn, SplineReturn]:
     """
 
     # get parameters from params
-    tapas_file = inst.params['PRECLEAN_TAPAS_FILE']
     tapas_dv = inst.params['PRECLEAN_DV0']
     # -------------------------------------------------------------------------
-    # load the data
-    if os.path.exists(tapas_file):
-        tmp_tapas = io.load_table(tapas_file)
-    else:
-        emsg = 'TAPAS file {0} does not exist'.format(tapas_file)
-        raise base_classes.LblException(emsg)
+    # get tapas file
+    tmp_tapas = get_tapas_lbl(inst, 'ABSOSPEC')
     # -------------------------------------------------------------------------
     # extract out the wave solution, water and others columns from table
-    tapas_wave = tmp_tapas[0]
-    trans_others = tmp_tapas[1]
-    trans_water = tmp_tapas[2]
+    tapas_wave = tmp_tapas['WAVELENGTH']
+    trans_others = tmp_tapas['ABSO_OTHERS']
+    trans_water = tmp_tapas['ABSO_WATER']
     # -------------------------------------------------------------------------
     # Question: do we need to shift if dv = 0?
     # doppler shift wave solution by tapas_dv
@@ -93,15 +130,11 @@ def load_tellu_masks(inst) -> Tuple[Table, Table]:
     :return: tuple, 1. the others mask, 2. the water mask
     """
     # get parameters from inst
-    use_berv_offset = inst.params['PRECLEAN_USE_BERV_OFFSET']
-    berv_offset = inst.params['PRECLEAN_BERV_OFFSET']
-    others_ccf_file = inst.params['PRECLEAN_OTHER_CCF_FILE']
-    water_ccf_file = inst.params['PRECLEAN_WATER_CCF_FILE']
     mask_domain_lower = inst.params['PRECLEAN_MASK_DOMAIN_LOWER']
     mask_domain_upper = inst.params['PRECLEAN_MASK_DOMAIN_UPPER']
     # -------------------------------------------------------------------------
     # read others file
-    table_others = io.load_table(others_ccf_file)
+    table_others = get_tapas_lbl(inst, 'CCFOTHER')
     # remove domain that is out of bounds
     keep_others = table_others['ll_mask_s'] > mask_domain_lower
     keep_others &= table_others['ll_mask_s'] < mask_domain_upper
@@ -109,23 +142,12 @@ def load_tellu_masks(inst) -> Tuple[Table, Table]:
     table_others = table_others[keep_others]
     # -------------------------------------------------------------------------
     # read water file
-    table_water = io.load_table(water_ccf_file)
+    table_water = get_tapas_lbl(inst, 'CCFWATER')
     # remove domain that is out of bounds
     keep_others = table_water['ll_mask_s'] > mask_domain_lower
     keep_others &= table_water['ll_mask_s'] < mask_domain_upper
     # apply mask to others table
     table_water = table_water[keep_others]
-    # -------------------------------------------------------------------------
-    # if we are using a berv offset apply it to the mask wavelengths
-    if use_berv_offset:
-        # apply to others
-        other_wave_shift = mp.doppler_shift(table_others['ll_mask_s'],
-                                            -berv_offset * 1000)
-        table_others['ll_mask_s'] = other_wave_shift
-        # apply to water
-        water_wave_shift = mp.doppler_shift(table_water['ll_mask_s'],
-                                            -berv_offset * 1000)
-        table_water['ll_mask_s'] = water_wave_shift
     # -------------------------------------------------------------------------
     # return tables for the other mask and water mask
     return table_others, table_water
@@ -236,8 +258,6 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     :return: dictionary the updated e2ds_params with telluric corrected data in
     """
     # get parameters from inst
-    use_berv_offset = inst.params['PRECLEAN_USE_BERV_OFFSET']
-    berv_offset = inst.params['PRECLEAN_BERV_OFFSET']
     force_airmass = inst.params['PRECLEAN_FORCE_AIRMASS']
     ccf_scan_range = inst.params['PRECLEAN_CCF_SCAN_RANGE']
     max_iterations = inst.params['PRECLEAN_MAX_ITERATIONS']
@@ -260,17 +280,21 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     airmass = e2ds_params['AIRMASS']
 
     # -------------------------------------------------------------------------
-    # Load the template (if it exists)
+    # Load the template (if it exists and if we want to use it)
     # -------------------------------------------------------------------------
     # template filename
     template_file = inst.template_file(template_dir, required=False)
     # if we don't have template we use an array of ones
-    if not os.path.exists(template_file):
+    if not inst.params['PRECLEAN_USE_TEMPLATE']:
         # template flag
         template_flag = False
         # proxy for template spline
         template_spl = None
-
+    elif not os.path.exists(template_file):
+        # template flag
+        template_flag = False
+        # proxy for template spline
+        template_spl = None
     else:
         # template flag
         template_flag = True
@@ -315,14 +339,8 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     # -------------------------------------------------------------------------
     # if we have a template apply the berv offset
     if template_flag:
-        # Question: not berv offset --> apply berv?
-        if not use_berv_offset:
-            template_wave = mp.doppler_shift(wave_vector, -berv_offset)
-        else:
-            # Question: why doppler shift at 0??
-            template_wave = mp.doppler_shift(wave_vector, 0)
         # apply wavelength to spline
-        template_vector = template_spl(template_wave)
+        template_vector = template_spl(wave_vector)
     # else our template is just ones
     else:
         template_vector = np.ones_like(wave_vector)
@@ -332,9 +350,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     # removing nans and setting to zero biases a bit the CCF but this should be
     #   okay after we converge
     sp_vector[np.isnan(sp_vector)] = 0
-    # Question: why are we setting NaNs to zero then setting negative
-    #           values to NaNs anyway?
-    sp_vector[sp_vector < 0] = np.nan
+    sp_vector[sp_vector < 0] = 0
     # -------------------------------------------------------------------------
     # Measure the exponents
     # -------------------------------------------------------------------------
@@ -370,10 +386,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     ccf_water = np.zeros_like(ddvec, dtype=float)
 
     # get a wave solution for the tranmission shifted by the berv if required
-    # Question - why is berv_offset positive here and negative elsewhere?
     wave_trans = np.array(wave_vector)
-    if use_berv_offset:
-        wave_trans = mp.doppler_shift(wave_trans, berv_offset * 1000)
     # -------------------------------------------------------------------------
     # counter for the number of iterations (we will stop after a certain number)
     #   if it hasn't converged
@@ -609,8 +622,6 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)
     wave_trans = np.array(wavemap)
-    if use_berv_offset:
-        wave_trans = mp.doppler_shift(wave_trans, berv_offset * 1000)
     # -------------------------------------------------------------------------
     # get the final absorption spectrum to be used on the science data.
     #    No trimming done on the wave grid

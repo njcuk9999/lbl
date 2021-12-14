@@ -138,6 +138,8 @@ class Spirou(Instrument):
         self.params.set('TEMPLATE_MJDSTART', value=None)
         # define the latest allowed file used for template construction
         self.params.set('TEMPLATE_MJDEND', value=None)
+        # define whether to do the pre-clean
+        self.params.set('DO_PRECLEAN', value=False, source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------

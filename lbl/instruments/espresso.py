@@ -530,15 +530,6 @@ class Espresso(Instrument):
         # return updated storage dictionary
         return tdict
 
-    def flag_calib(self, sci_hdr: fits.Header) -> bool:
-        """
-        Flag a file as a calibration file
-
-        :return:
-        """
-        # always False for carmenes (assumes no calibrations)
-        return False
-
     def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
         """
         Define the fits header columns names to add to the RDB file
