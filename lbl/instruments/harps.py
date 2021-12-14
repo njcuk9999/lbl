@@ -135,11 +135,9 @@ class Harps(Instrument):
         self.params.set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
         # blaze threshold (s1d template)
         self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
-
+        # ---------------------------------------------------------------------
         # define whether to do the tellu-clean
         self.params.set('DO_TELLUCLEAN', value=True, source=func_name)
-        # define the tapas file used in tellu-cleaning
-        self.params.set('TELLUCLEAN_TAPAS_URL', value=None, source=func_name)
         # define the dv offset for tellu-cleaning in km/s
         self.params.set('TELLUCLEAN_DV0', value=0, source=func_name)
         # Define the lower wave limit for the absorber spectrum masks in nm
@@ -179,19 +177,19 @@ class Harps(Instrument):
         self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
                         source=func_name)
         # Define the default water absorption to use
-        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=None,
+        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
                         source=func_name)
         # Define the lower limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=None,
+        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
                         source=func_name)
         # Define the upper limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=None,
+        self.params.set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
                         source=func_name)
         # Define the lower limit on valid exponent of other absorbers
-        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=None,
+        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
                         source=func_name)
         # Define the upper limit on valid exponent of other absorbers
-        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=None,
+        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
 
         # ---------------------------------------------------------------------

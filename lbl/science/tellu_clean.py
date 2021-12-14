@@ -74,7 +74,7 @@ def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
     tapas_file = os.path.basename(tapas_url)
     tapas_abspath = os.path.join(tapas_path, tapas_file)
     # check if we have the tapas file
-    if not os.path.exists(tapas_file):
+    if not os.path.exists(tapas_abspath):
         # log that we are downloading tapas file
         msg = 'Downloading tapas file \n\tfrom: {0} \n\tto {1}'
         margs = [tapas_url, tapas_abspath]
@@ -86,6 +86,10 @@ def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
             emsg = 'Cannot download tapas file: {0}\n\tError {1}: {2}'
             eargs = [tapas_url, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
+    # print loading tapas
+    msg = 'Loading tapas file from: {0}'
+    margs = [tapas_abspath]
+    log.general(msg.format(*margs))
     # load table
     tapas_lbl = io.load_table(tapas_abspath, extname=extname)
     # return the table
@@ -279,9 +283,10 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     water_bounds_upper = inst.params['TELLUCLEAN_WATER_BOUNDS_UPPER']
     # get the e2ds flux from e2ds parameters
     e2ds_flux = np.array(e2ds_params['flux'])
+    e2ds_ini_flux = np.array(e2ds_params['flux'])
     wavemap = e2ds_params['wavelength']
     airmass = e2ds_params['AIRMASS']
-
+    objname = e2ds_params['OBJECT']
     # -------------------------------------------------------------------------
     # Load the template (if it exists and if we want to use it)
     # -------------------------------------------------------------------------
@@ -396,6 +401,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     iteration = 0
     # storage for plotting
     plt_ddvecs, plt_ccf_waters, plt_ccf_others = dict(), dict(), dict()
+    sp_tmp, trans = np.zeros_like(sp_vector), np.zeros_like(sp_vector)
     # loop around until criteria met or maximum iterations met
     while (dexpo > 1.0e-4) and (iteration < max_iterations):
         # ---------------------------------------------------------------------
@@ -600,18 +606,19 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
         # print out this iterations values
         if not force_airmass:
             msg = ('{0}:\twater expo={1:.4f}, dry expo={2:.4f}, '
-                   'airmass={3:.4f}, template={4}')
+                   'airmass={3:.4f}, template={4}  dexpo={5:.4f}')
         else:
             msg = ('{0}:\twater expo={1:.4f}, dry expo={2:.4f}, '
-                   'force=True, template={4}')
+                   'force=True, template={4}  dexpo={5:.4f}')
         # args
-        margs = [iteration, expo_water, expo_others, airmass, template_flag]
+        margs = [iteration, expo_water, expo_others, airmass, template_flag,
+                 dexpo]
         # log message
         log.general(msg.format(*margs))
 
         # keep track of the convergence params
-        expo_water_prev = expo_water
-        expo_others_prev = expo_others
+        expo_water_prev = float(expo_water)
+        expo_others_prev = float(expo_others)
         # store vectors for plotting
         plt_ddvecs[iteration] = np.array(ddvec)
         plt_ccf_waters[iteration] = ccf_water
@@ -620,7 +627,11 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
         iteration += 1
     # -------------------------------------------------------------------------
     # plot the ccf vectors for each iteration
-    plot.ccf_vector_plot(inst, plt_ddvecs, plt_ccf_waters, plt_ccf_others)
+    plot.ccf_vector_plot(inst, plt_ddvecs, plt_ccf_waters, plt_ccf_others,
+                         objname)
+    # plot the corrected spectrum
+    plot.tellu_corr_plot(inst, wave_vector, sp_tmp, trans,
+                         template_vector, template_flag, objname)
     # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)
     wave_trans = np.array(wavemap)
@@ -638,9 +649,9 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     abso_e2ds[thres_mask] = np.nan
     # -------------------------------------------------------------------------
     # correct input e2ds image
-    corrected_e2ds = sp_ini_vector / abso_e2ds
+    corrected_e2ds = e2ds_ini_flux / abso_e2ds
     # set any infinite values to NaNs
-    corrected_e2ds[~np.isfinite(sp_ini_vector)] = np.nan
+    corrected_e2ds[~np.isfinite(e2ds_ini_flux)] = np.nan
     # -------------------------------------------------------------------------
     # push back into e2ds array
     e2ds_params['pre_cleaned_flux'] = corrected_e2ds

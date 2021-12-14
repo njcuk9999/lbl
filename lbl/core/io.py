@@ -423,6 +423,9 @@ def write_fits(filename: str, data: FitsData = None,
         header = [None] * len(data)
     elif isinstance(header, fits.Header):
         header = [header]
+    # deal with no names
+    if names is None:
+        names = [None] * len(data)
     # -------------------------------------------------------------------------
     # deal with non list dtype
     if dtype is None:

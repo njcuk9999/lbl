@@ -306,34 +306,40 @@ params.set(key='PLOT', value=False, source=__NAME__,
            arg='--plot', dtype=bool)
 
 # Define whether to do the compute ccf plot
-params.set(key='PLOT_COMPUTE_CCF', value=False, source=__NAME__,
+params.set(key='PLOT_COMPUTE_CCF', value=True, source=__NAME__,
            desc='Whether to do the compute ccf plot',
            arg='--plotccf', dtype=bool)
 
 # Define whether to do the compute line plot
-params.set(key='PLOT_COMPUTE_LINES', value=False, source=__NAME__,
+params.set(key='PLOT_COMPUTE_LINES', value=True, source=__NAME__,
            desc='Whether to do the compute line plot',
            arg='--plotline', dtype=bool)
 
 # Define whether to do the compil cumulative plot
-params.set(key='PLOT_COMPIL_CUMUL', value=False, source=__NAME__,
+params.set(key='PLOT_COMPIL_CUMUL', value=True, source=__NAME__,
            desc='Whether to do the compil cumulative plot',
            arg='--plotcumul', dtype=bool)
 
 # Define whether to do the compil binned plot
-params.set(key='PLOT_COMPIL_BINNED', value=False, source=__NAME__,
+params.set(key='PLOT_COMPIL_BINNED', value=True, source=__NAME__,
            desc='Whether to do the compil binned plot',
            arg='--plotbinned', dtype=bool)
 
 # Define whether to do the mask ccf plot
-params.set(key='PLOT_MASK_CCF', value=False, source=__NAME__,
+params.set(key='PLOT_MASK_CCF', value=True, source=__NAME__,
            desc='whether to do the mask ccf plot',
            arg='--plotmaskccf', dtype=bool)
 
 # Define whether to do the ccf vector plot
-params.set(key='PLOT_CCF_VECTOR_PLOT', value=False, source=__NAME__,
+params.set(key='PLOT_CCF_VECTOR_PLOT', value=True, source=__NAME__,
            desc='whether to do the ccf vector plot',
            arg='--plotccfvec', dtype=bool)
+
+# Define whether to do the tellu correction plot
+params.set(key='PLOT_TELLU_CORR_PLOT', value=True, source=__NAME__,
+           desc='whether to do the tellu correction plot',
+           arg='--plottcorr', dtype=bool)
+
 
 # =============================================================================
 # Define template and mask parameters

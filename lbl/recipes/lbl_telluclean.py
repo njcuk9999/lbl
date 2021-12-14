@@ -23,8 +23,8 @@ from lbl.science import tellu_clean
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'lbl_TELLUCLEAN.py'
-__STRNAME__ = 'LBL TELLUCLEAN'
+__NAME__ = 'lbl_telluclean.py'
+__STRNAME__ = 'LBL Tellu Clean'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__

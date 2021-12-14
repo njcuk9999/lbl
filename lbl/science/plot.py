@@ -12,7 +12,7 @@ Created on 2021-03-17
 from astropy.table import Table
 import matplotlib
 import numpy as np
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -376,7 +376,9 @@ def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     plt.close()
 
 
-def ccf_vector_plot(inst, ddvecs, ccf_waters, ccf_others):
+def ccf_vector_plot(inst: InstrumentsType, ddvecs: Dict[int, np.ndarray],
+                    ccf_waters: Dict[int, np.ndarray],
+                    ccf_others: Dict[int, np.ndarray], objname: str):
     # import matplotlib
     plt = import_matplotlib()
     # this is a plot skip if this is True
@@ -403,8 +405,59 @@ def ccf_vector_plot(inst, ddvecs, ccf_waters, ccf_others):
     # add legend
     frame[0].legend(loc=0)
     frame[1].legend(loc=0)
+    # title
+    plt.suptitle('Object = {0}'.format(objname))
     # show and close plot
-    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+def tellu_corr_plot(inst: InstrumentsType, wave_vector: np.ndarray,
+                    sp_tmp: np.ndarray, trans: np.ndarray,
+                    template_vector: np.ndarray,
+                    template_flag: bool, objname: str):
+    # import matplotlib
+    plt = import_matplotlib()
+    # this is a plot skip if this is True
+    if not inst.params['PLOT']:
+        return
+    if not inst.params['PLOT_TELLU_CORR_PLOT']:
+        return
+    # get parameters from inst
+    trans_threshold = inst.params['TELLUCLEAN_TRANSMISSION_THRESHOLD']
+    mask_domain_lower = inst.params['TELLUCLEAN_MASK_DOMAIN_LOWER']
+    mask_domain_upper = inst.params['TELLUCLEAN_MASK_DOMAIN_UPPER']
+    # normalize spectra
+    med = np.nanmedian(sp_tmp)
+    sp_tmp = sp_tmp / med
+    template = template_vector / np.nanmedian(template_vector)
+    # nan array with transmission lower than our limit
+
+    mask = np.ones_like(trans)
+    mask[trans < np.exp(trans_threshold)] = np.nan
+    mask[~np.isfinite(sp_tmp)] = np.nan
+
+    # mask wave based on domain limits
+    keep = wave_vector > mask_domain_lower
+    keep &= wave_vector < mask_domain_upper
+    # calculate a scaling between sp and trans
+    scale = np.nanpercentile((sp_tmp / trans * mask)[keep], 99.5)
+    # set up plot
+    fig, frame = plt.subplots(ncols=1, nrows=1, sharex='all')
+    # plot functions here
+    frame.plot(wave_vector, sp_tmp / scale, color='red', label='input')
+    frame.plot(wave_vector, sp_tmp / (trans * mask * scale), color='green',
+               label='input/abso', alpha=0.5)
+    frame.plot(wave_vector, trans, color='orange', alpha=0.5)
+    # plot template if present
+    if template_flag:
+        frame.plot(wave_vector, sp_tmp / template, color='cyan', alpha=0.5,
+                   label='sp/template')
+    # add legend
+    frame.legend(loc=0)
+    frame.set(xlabel='Wavelength [nm]', ylabel='Normalized flux\n transmission',
+              title='Object = {0}'.format(objname), ylim=[0, 1.1])
+    # show and close plot
     plt.show()
     plt.close()
 
