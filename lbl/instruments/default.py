@@ -375,6 +375,49 @@ class Instrument:
         if self.params['OBJECT_TEMPLATE'] is None:
             self.params.set('OBJECT_TEMPLATE', value=objname, source=func_name)
 
+    def write_rdb_fits(self, filename: str, rdb_data: Dict[str, Any]):
+        """
+        Write the rdb fits file to disk
+
+        :param filename: str, the filename to save to (it extension is .rdb
+                         changes to .fits)
+        :param rdb_data: dict, the rdb data to add to fits file
+
+        :return: None, writes fits file "filename"
+        """
+        # remove the rdb and add fits
+        filename = filename.replace('.rdb', '.fits')
+        # populate primary header
+        header0 = fits.Header()
+        # add custom keys
+        header0 = self.set_hkey(header0, 'KW_VERSION', __version__)
+        header0 = self.set_hkey(header0, 'KW_VDATE', __date__)
+        header0 = self.set_hkey(header0, 'KW_PDATE', Time.now().iso)
+        header0 = self.set_hkey(header0, 'KW_INSTRUMENT',
+                                self.params['INSTRUMENT'])
+        # set up data extensions
+        datalist = [None, rdb_data['WAVE'],
+                    rdb_data['DV'], rdb_data['SDV'],
+                    rdb_data['D2V'], rdb_data['SD2V'],
+                    rdb_data['D3V'], rdb_data['SD3V'],
+                    rdb_data['RDB0'], rdb_data['RDB']]
+        headerlist = [header0, None, None, None,
+                      None, None, None, None,
+                      None, None]
+        datatypelist = [None, 'image', 'image', 'image',
+                        'image', 'image', 'image', 'image',
+                        'table', 'table']
+        name_list = [None, 'WAVE', 'DV', 'SDV',
+                     'D2V', 'SD2V', 'D3V', 'SD3V',
+                     'RDB0', 'RDB']
+        # ---------------------------------------------------------------------
+        # Save template to disk
+        log.general('Saving pre-cleaned file: {0}'.format(filename))
+        # ---------------------------------------------------------------------
+        # write to file
+        io.write_fits(filename, data=datalist, header=headerlist,
+                      dtype=datatypelist, names=name_list)
+
     def write_template(self, template_file: str, props: dict,
                        sci_hdr: fits.Header, sci_table: dict):
         """
@@ -438,9 +481,12 @@ class Instrument:
         header = self.set_hkey(header, 'KW_VERSION', __version__)
         header = self.set_hkey(header, 'KW_VDATE', __date__)
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
-        header = self.set_hkey(header, 'KW_INSTRUMENT', self.params['INSTRUMENT'])
-        header = self.set_hkey(header, 'KW_TAU_H2O', props['pre_cleaned_exponent_water'])
-        header = self.set_hkey(header, 'KW_TAU_OTHERS', props['pre_cleaned_exponent_others'])
+        header = self.set_hkey(header, 'KW_INSTRUMENT',
+                               self.params['INSTRUMENT'])
+        header = self.set_hkey(header, 'KW_TAU_H2O',
+                               props['pre_cleaned_exponent_water'])
+        header = self.set_hkey(header, 'KW_TAU_OTHERS',
+                               props['pre_cleaned_exponent_others'])
         # set image as pre_cleaned_flux
         image = props['pre_cleaned_flux']
         # adding extensions that are not the flux after telluric correction

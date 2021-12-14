@@ -129,7 +129,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     rdbfile1, rdbfile2, rdbfile3, rdbfile4, drift_file = rdbfiles
 
     # -------------------------------------------------------------------------
-    # Step 3: Produce RDB file
+    # Step 3: Produce RDB file (.rdb and .fits)
     # -------------------------------------------------------------------------
     if os.path.exists(rdbfile1) and inst.params['SKIP_DONE']:
         # log file exists and we are skipping
@@ -138,12 +138,13 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.general(msg.format(*margs))
         # read the rdb file
         rdb_table = inst.load_lblrdb_file(rdbfile1)
-
     # else we generate the rdb file
     else:
         # generate table using make_rdb_table function
-        rdb_table = general.make_rdb_table(inst, rdbfile1, lblrv_files,
+        rdb_data = general.make_rdb_table(inst, rdbfile1, lblrv_files,
                                            plot_dir)
+        # get the rdb table out of rdb data
+        rdb_table = rdb_data['RDB']
         # plot here based on table (not required when loading)
         plot.compil_binned_band_plot(inst, rdb_table)
         # log creation of rdb table
@@ -151,6 +152,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.info(msg.format(rdbfile1))
         # write rdb table
         io.write_table(rdbfile1, rdb_table, fmt='rdb')
+        # write fits file
+        inst.write_rdb_fits(rdbfile1, rdb_data)
 
     # -------------------------------------------------------------------------
     # Step 4: Produce binned (per-epoch) RDB file

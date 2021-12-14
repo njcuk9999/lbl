@@ -391,13 +391,30 @@ FitsDtype = Union[List[Union[str, None]], str, None]
 
 
 def write_fits(filename: str, data: FitsData = None,
-               header: FitsHeaders = None, dtype: FitsDtype = None):
+               header: FitsHeaders = None, dtype: FitsDtype = None,
+               names: Union[List[str], str, None] = None):
+    """
+    Write a fits file to disk
+
+    :param filename: str, the filename to write to
+    :param data: list of tables/images (or a single table/image) to write to
+                 fits file
+    :param header: list of headers (or single header) to write to fits file
+    :param dtype: list of 'image' or 'table' to identify the data types for
+                  writing to fits file
+    :param names: list of names or None, if set this sets the EXTNAMEs for each
+                  extension of the fits file
+
+    :return: None, writes fits file to 'filename'
+    """
     # -------------------------------------------------------------------------
     # deal with non list data
     if data is None:
         data = [None]
+        names = [None]
     elif isinstance(data, (Table, np.ndarray)):
         data = [data]
+        names = [names]
     # -------------------------------------------------------------------------
     # deal with non list header
     if header is None:
@@ -460,6 +477,14 @@ def write_fits(filename: str, data: FitsData = None,
     if len(data) > 1:
         # loop around other extensions
         for ext in range(1, len(data)):
+            # add name of extension if given
+            if names[ext] is not None:
+                # deal with no header
+                if header[ext] is None:
+                    header[ext] = fits.Header()
+                # add extension name to header
+                header[ext]['EXTNAME'] = names[ext]
+            # deal with type = image
             if dtype[ext] == 'image':
                 hdu_ext = fits.ImageHDU(data[ext], header=header[ext])
             elif dtype[ext] == 'table':
