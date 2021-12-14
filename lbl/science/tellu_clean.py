@@ -23,6 +23,7 @@ from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import general
+from lbl.science import plot
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -617,8 +618,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
         iteration += 1
     # -------------------------------------------------------------------------
     # plot the ccf vectors for each iteration
-
-    # TODO: add plot
+    plot.ccf_vector_plot(inst, plt_ddvecs, plt_ccf_waters, plt_ccf_others)
     # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)
     wave_trans = np.array(wavemap)

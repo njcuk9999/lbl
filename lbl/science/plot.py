@@ -376,6 +376,39 @@ def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     plt.close()
 
 
+def ccf_vector_plot(inst, ddvecs, ccf_waters, ccf_others):
+    # import matplotlib
+    plt = import_matplotlib()
+    # this is a plot skip if this is True
+    if not inst.params['PLOT']:
+        return
+    if not inst.params['PLOT_CCF_VECTOR_PLOT']:
+        return
+    # set up plot
+    fig, frame = plt.subplots(ncols=2, nrows=1, sharex='all')
+    # plot functions here
+    for iteration in ddvecs:
+        # get this iterations values
+        ddvec = ddvecs[iteration]
+        ccf_water = ccf_waters[iteration]
+        ccf_other = ccf_others[iteration]
+        # plot ccf water and ccf others
+        frame[0].plot(ddvec, ccf_water, alpha=0.5,
+                      label='Iteration {0}'.format(iteration+1))
+        frame[1].plot(ddvec, ccf_other, alpha=0.5,
+                      label='Iteration {0}'.format(iteration+1))
+    # set labels
+    frame[0].set(xlabel='dv [km/s]', ylabel='ccf power', title='Water ccf')
+    frame[1].set(xlabel='dv [km/s]', ylabel='ccf power', title='Dry ccf')
+    # add legend
+    frame[0].legend(loc=0)
+    frame[1].legend(loc=0)
+    # show and close plot
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

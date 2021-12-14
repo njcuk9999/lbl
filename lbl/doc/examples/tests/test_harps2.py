@@ -7,7 +7,7 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
-from lbl import lbl_clean
+from lbl import lbl_reset
 from lbl import lbl_compil
 from lbl import lbl_compute
 from lbl import lbl_mask
@@ -43,35 +43,34 @@ teffs = [3510]
 # set which object to run
 num = 0
 
-
 # =============================================================================
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    _ = lbl_clean(object_science=objs[num], object_template=templates[num],
-                    **keyword_args)
+    _ = lbl_reset(object_science=objs[num], object_template=templates[num],
+                  **keyword_args)
     # run tellu-clean
     _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
-                 TELLUCLEAN_use_template=False, **keyword_args)
+                       telluclean_use_template=False, **keyword_args)
     # run template
     _ = lbl_template(object_science=objs[num], object_template=templates[num],
-                 **keyword_args)
+                     **keyword_args)
     # run tellu-clean
     _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
-                 **keyword_args)
+                       **keyword_args)
     # run template
     _ = lbl_template(object_science=objs[num], object_template=templates[num],
-                 **keyword_args)
+                     **keyword_args)
     # run mask code
     _ = lbl_mask(object_science=objs[num], object_template=templates[num],
-             object_teff=teffs[num], **keyword_args)
+                 object_teff=teffs[num], **keyword_args)
     # run compute
     _ = lbl_compute(object_science=objs[num], object_template=templates[num],
-                **keyword_args)
+                    **keyword_args)
     # run compile
     _ = lbl_compil(object_science=objs[num], object_template=templates[num],
-               **keyword_args)
+                   **keyword_args)
 
 # =============================================================================
 # End of code

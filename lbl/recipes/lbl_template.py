@@ -247,7 +247,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             # mask to keep only FP peaks and avoid dividing
             # two small values (minima between lines in median and
             # individual spectrum) when computing the lowpass
-            peaks = median > mp.lowpassfilter(median,hp_width)
+            peaks = median > mp.lowpassfilter(median, hp_width)
             # iterate until low frequency gone
             for sci_it in tqdm(range(flux_cube.shape[1])):
                 # remove the stellar features

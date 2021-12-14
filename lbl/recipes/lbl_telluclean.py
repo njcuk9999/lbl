@@ -17,7 +17,7 @@ from lbl.core import io
 from lbl.instruments import select
 from lbl.science import general
 from lbl.resources import lbl_misc
-from lbl.science import pre_clean
+from lbl.science import tellu_clean
 
 
 # =============================================================================
@@ -119,7 +119,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # check that we have science data (can only tellu-clean science data)
     if inst.params['DATA_TYPE'] != 'SCIENCE':
         emsg = ('Can only tellu-clean "SCIENCE" data. '
-               'Please set "DATA_TYPE" to "SCIENCE"')
+                'Please set "DATA_TYPE" to "SCIENCE"')
         raise base_classes.LblException(emsg)
 
     # -------------------------------------------------------------------------
@@ -140,7 +140,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 3: get the TAPAS exponents
     # -------------------------------------------------------------------------
-    spl_others, spl_water = pre_clean.get_tapas_spl(inst)
+    spl_others, spl_water = tellu_clean.get_tapas_spl(inst)
     # -------------------------------------------------------------------------
     # Step 4: Loop around science files and clean
     # -------------------------------------------------------------------------
@@ -153,12 +153,12 @@ def __main__(inst: InstrumentsType, **kwargs):
         if not os.path.exists(outpath):
             os.makedirs(outpath)
         # construct the tellu-cleaned output filename
-        TELLUCLEANded_file = os.path.join(outdir, os.path.basename(filename))
+        tellu_clean_file = os.path.join(outdir, os.path.basename(filename))
         # ---------------------------------------------------------------------
         # if this output file exists and we are skipping done - skip
-        if os.path.exists(TELLUCLEANded_file) and inst.params['SKIP_DONE']:
+        if os.path.exists(tellu_clean_file) and inst.params['SKIP_DONE']:
             msg = 'File {0} exists and SKIP_DONE = True ({1} of {2})'
-            margs = [TELLUCLEANded_file, it + 1, len(science_files)]
+            margs = [tellu_clean_file, it + 1, len(science_files)]
             log.general(msg.format(*margs))
             continue
         # ---------------------------------------------------------------------
@@ -181,11 +181,11 @@ def __main__(inst: InstrumentsType, **kwargs):
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------
         # do the telluric correction (similar to APERO)
-        e2ds_dict = pre_clean.correct_tellu(inst, template_dir, e2ds_dict,
-                                            spl_others, spl_water)
+        e2ds_dict = tellu_clean.correct_tellu(inst, template_dir, e2ds_dict,
+                                              spl_others, spl_water)
         # ---------------------------------------------------------------------
         # write the tellu-cleaned file to disk
-        inst.write_TELLUCLEANed(TELLUCLEANded_file, e2ds_dict, sci_hdr)
+        inst.write_tellu_cleaned(tellu_clean_file, e2ds_dict, sci_hdr)
 
     # -------------------------------------------------------------------------
     # return local namespace

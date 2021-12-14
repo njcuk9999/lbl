@@ -14,6 +14,10 @@ from lbl import recipes
 # =============================================================================
 # Define variables
 # =============================================================================
+# clean recipe
+lbl_reset = recipes.lbl_reset.main
+# tellu-clean recipe
+lbl_telluclean = recipes.lbl_telluclean.main
 # alias to lbl template
 lbl_template = recipes.lbl_template.main
 # alias to lbl mask
@@ -24,10 +28,6 @@ lbl_noise = recipes.lbl_noise.main
 lbl_compute = recipes.lbl_compute.main
 # compile recipe
 lbl_compil = recipes.lbl_compile.main
-# clean recipe
-lbl_clean = recipes.lbl_clean.main
-# tellu-clean recipe
-lbl_telluclean = recipes.lbl_telluclean.main
 
 # =============================================================================
 # Define functions

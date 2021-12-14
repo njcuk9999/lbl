@@ -462,12 +462,12 @@ class Instrument:
                       header=[header, None, None],
                       dtype=[None, 'table', 'table'])
 
-    def write_TELLUCLEANed(self, TELLUCLEANded_file: str, props: dict,
-                       sci_hdr: fits.Header):
+    def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
+                            sci_hdr: fits.Header):
         """
-        Write the TELLUCLEANded_file to disk
+        Write the write_tellu_file to disk
 
-        :param TELLUCLEANded_file: str, the file and path to write to
+        :param write_tellu_file: str, the file and path to write to
         :param props: dictionnary output from the TELLUCLEANed code
         :param sci_hdr: fits Header, an input file header to copy the header
                         from to the new template file
@@ -498,17 +498,17 @@ class Instrument:
             for hdu in hdulist[2:]:
                 datalist.append(hdu.data)
                 headerlist.append(hdu.header)
-                if isinstance(hdu,fits.hdu.image.ImageHDU):
+                if isinstance(hdu, fits.hdu.image.ImageHDU):
                     datatypelist.append('image')
                 else:
                     datatypelist.append('table')
         # ---------------------------------------------------------------------
         # Save template to disk
-        log.general('Saving tellu-cleaned file: {0}'.format(TELLUCLEANded_file))
+        log.general('Saving tellu-cleaned file: {0}'.format(write_tellu_file))
         # ---------------------------------------------------------------------
         # write to file
-        #TODO -> need to add a "Name" to the first extension.
-        io.write_fits(TELLUCLEANded_file, data=datalist,
+        # TODO -> need to add a "Name" to the first extension.
+        io.write_fits(write_tellu_file, data=datalist,
                       header=headerlist,
                       dtype=datatypelist)
 
@@ -791,7 +791,7 @@ class Instrument:
         # if we have no files break here
         if len(keep_files) == 0:
             emsg = ('Object is classified as science however none of the'
-                        'files provide have:')
+                    'files provide have:')
             # add info about the range of files (if FP files)
             if not mcond2:
                 emsg += '\n\tMJDMID>{1}'

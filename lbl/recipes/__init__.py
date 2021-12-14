@@ -9,7 +9,7 @@ Created on 2021-03-15
 
 @author: cook
 """
-from lbl.recipes import lbl_clean
+from lbl.recipes import lbl_reset
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_template

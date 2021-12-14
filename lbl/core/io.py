@@ -183,6 +183,7 @@ def clean_directory(path: str, logmsg: bool = True):
     Remove all files from a directory
 
     :param path: str, path to clean
+    :param logmsg: bool, if True log cleaning
 
     :return: None, removes files
     """
@@ -197,11 +198,12 @@ def clean_directory(path: str, logmsg: bool = True):
     for filename in files:
         # if filename is a file then remove it
         if os.path.isfile(filename):
+            # noinspection PyBroadException
             try:
                 if logmsg:
                     log.general('\t\tRemoving file: {0}'.format(filename))
                 os.remove(filename)
-            except:
+            except Exception as _:
                 pass
 
 

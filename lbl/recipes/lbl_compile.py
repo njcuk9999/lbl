@@ -141,8 +141,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # else we generate the rdb file
     else:
         # generate table using make_rdb_table function
-        rdb_data = general.make_rdb_table(inst, rdbfile1, lblrv_files,
-                                           plot_dir)
+        rdb_data = general.make_rdb_table(inst, rdbfile1, lblrv_files, plot_dir)
         # get the rdb table out of rdb data
         rdb_table = rdb_data['RDB']
         # plot here based on table (not required when loading)

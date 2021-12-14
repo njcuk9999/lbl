@@ -7,7 +7,7 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
-from lbl import lbl_clean
+from lbl import lbl_reset
 from lbl import lbl_compil
 from lbl import lbl_compute
 from lbl import lbl_mask
@@ -22,14 +22,13 @@ working = '/scratch3/lbl/bin/lbl/lbl/doc/examples/'
 fp_config_file = working + 'spirou_fp_config.yaml'
 gl699_config_file = working + 'spirou_gl699_config.yaml'
 
-
 # =============================================================================
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    _ = lbl_clean(config_file=fp_config_file)
-    _ = lbl_clean(config_file=gl699_config_file)
+    _ = lbl_reset(config_file=fp_config_file)
+    _ = lbl_reset(config_file=gl699_config_file)
     # run template
     _ = lbl_template(config_file=fp_config_file)
     _ = lbl_template(config_file=gl699_config_file)

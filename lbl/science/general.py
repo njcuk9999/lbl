@@ -550,14 +550,14 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
         # get the pixels along the model to spline at (box centers)
-        indices = np.arange(0, model.shape[1], npoints//4)
+        indices = np.arange(0, model.shape[1], npoints // 4)
         # store the sigmas
         sigma = np.zeros_like(indices, dtype=float)
         # loop around each pixel and work out sigma value
         for it in range(len(indices)):
             # get start and end values for this box
-            istart = indices[it] - npoints//2
-            iend = indices[it] + npoints//2
+            istart = indices[it] - npoints // 2
+            iend = indices[it] + npoints // 2
             # fix boundary problems
             if istart < 0:
                 istart = 0
@@ -648,7 +648,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # get the pixel hp_width [needs to be in m/s]
     hp_width = inst.params['HP_WIDTH'] * 1000
     # get the object science name
-    object_science = inst.params['OBJECT_SCIENCE']
+    # object_science = inst.params['OBJECT_SCIENCE']
     # get the mid exposure header key
     mid_exp_time_key = inst.params['KW_MID_EXP_TIME']
     # get the number of iterations to do to compute the rv
@@ -937,8 +937,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # deal with overlapping pixels (after end)
             if ww_ord[x_end + 1] > wave_end:
                 refdiff = wave_end - ww_ord[x_end]
-                wavediff = ww_ord[x_end] - ww_ord[x_end-1]
-                weight_mask[-1] = 1-(refdiff / wavediff)
+                wavediff = ww_ord[x_end] - ww_ord[x_end - 1]
+                weight_mask[-1] = 1 - (refdiff / wavediff)
             # get the x pixels
             xpix = np.arange(x_start, len(weight_mask) + x_start)
             # get mean xpix and mean blaze for line
@@ -1191,7 +1191,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     wave_min = inst.params['COMPIL_WAVE_MIN']
     wave_max = inst.params['COMPIL_WAVE_MAX']
     max_pix_wid = inst.params['COMPIL_MAX_PIXEL_WIDTH']
-    obj_sci = inst.params['OBJECT_SCIENCE']
+    # obj_sci = inst.params['OBJECT_SCIENCE']
     ccf_ew_fp = inst.params['COMPIL_FP_EWID']
     reference_wavelength = inst.params['COMPIL_SLOPE_REF_WAVE']
     # get the ccf e-width column name
@@ -1457,7 +1457,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         log.info('Producing line-by-line mean positions')
 
         # fraction of valid measurements for given line
-        frac_valid = np.nanmean(np.isfinite(dv_arr),axis=0)
+        frac_valid = np.nanmean(np.isfinite(dv_arr), axis=0)
         # compute the per-line bias
         for line_it in tqdm(range(len(per_line_mean))):
             # We should have a threshold in the fraction of 'valid' times the

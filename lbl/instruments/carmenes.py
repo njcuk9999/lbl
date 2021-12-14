@@ -495,7 +495,7 @@ class Carmenes(Instrument):
         # get BERV header key
         hdr_key = self.params['KW_BERV']
         # get BERV (if not a calibration)
-        if not self.flag_calib(sci_hdr):
+        if self.params['DATA_TYPE'] == 'SCIENCE':
             berv = io.get_hkey(sci_hdr, hdr_key) * 1000
         else:
             berv = 0.0

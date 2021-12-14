@@ -325,6 +325,11 @@ params.set(key='PLOT_MASK_CCF', value=False, source=__NAME__,
            desc='whether to do the mask ccf plot',
            arg='--plotmaskccf', dtype=bool)
 
+# Define whether to do the ccf vector plot
+params.set(key='PLOT_CCF_VECTOR_PLOT', value=False, source=__NAME__,
+           desc='whether to do the ccf vector plot',
+           arg='--plotccfvec', dtype=bool)
+
 # =============================================================================
 # Define template and mask parameters
 # =============================================================================
@@ -407,7 +412,7 @@ params.set(key='TELLUCLEAN_USE_TEMPLATE', value=True, source=__NAME__,
 
 # define the tapas url used in tellu-cleaning
 params.set(key='TELLUCLEAN_TAPAS_URL',
-           value='http://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits',
+           value='https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits',
            source=__NAME__, desc='the tapas url used in tellu-cleaning',
            not_none=True)
 

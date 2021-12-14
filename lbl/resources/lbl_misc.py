@@ -12,7 +12,7 @@ Created on 2021-03-23
 import os
 from pathlib import Path
 import shutil
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Union
 
 from lbl.core import base
 from lbl.core import io
