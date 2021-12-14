@@ -412,7 +412,7 @@ class Instrument:
                      'RDB0', 'RDB']
         # ---------------------------------------------------------------------
         # Save template to disk
-        log.general('Saving pre-cleaned file: {0}'.format(filename))
+        log.general('Saving tellu-cleaned file: {0}'.format(filename))
         # ---------------------------------------------------------------------
         # write to file
         io.write_fits(filename, data=datalist, header=headerlist,
@@ -462,13 +462,13 @@ class Instrument:
                       header=[header, None, None],
                       dtype=[None, 'table', 'table'])
 
-    def write_precleaned(self, precleanded_file: str, props: dict,
+    def write_TELLUCLEANed(self, TELLUCLEANded_file: str, props: dict,
                        sci_hdr: fits.Header):
         """
-        Write the precleanded_file to disk
+        Write the TELLUCLEANded_file to disk
 
-        :param precleanded_file: str, the file and path to write to
-        :param props: dictionnary output from the precleaned code
+        :param TELLUCLEANded_file: str, the file and path to write to
+        :param props: dictionnary output from the TELLUCLEANed code
         :param sci_hdr: fits Header, an input file header to copy the header
                         from to the new template file
         :return:
@@ -504,11 +504,11 @@ class Instrument:
                     datatypelist.append('table')
         # ---------------------------------------------------------------------
         # Save template to disk
-        log.general('Saving pre-cleaned file: {0}'.format(precleanded_file))
+        log.general('Saving tellu-cleaned file: {0}'.format(TELLUCLEANded_file))
         # ---------------------------------------------------------------------
         # write to file
         #TODO -> need to add a "Name" to the first extension.
-        io.write_fits(precleanded_file, data=datalist,
+        io.write_fits(TELLUCLEANded_file, data=datalist,
                       header=headerlist,
                       dtype=datatypelist)
 

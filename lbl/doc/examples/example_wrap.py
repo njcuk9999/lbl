@@ -7,11 +7,11 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
-from lbl import clean
-from lbl import compil
-from lbl import compute
-from lbl import mask
-from lbl import template
+from lbl import lbl_clean
+from lbl import lbl_compil
+from lbl import lbl_compute
+from lbl import lbl_mask
+from lbl import lbl_template
 
 # =============================================================================
 # Define variables
@@ -46,29 +46,29 @@ if __name__ == "__main__":
     # clean (if used) should be done before running anything else
     if CLEAN:
         for num in range(len(objs)):
-            _ = clean(object_science=objs[num],
+            _ = lbl_clean(object_science=objs[num],
                       object_template=templates[num],
                       **keyword_args)
     # loop around objects
     for num in range(len(objs)):
         # run template
-        tbl0 = template(object_science=objs[num],
+        tbl0 = lbl_template(object_science=objs[num],
                         object_template=templates[num],
                         data_type=data_types[num],
                         **keyword_args)
         # run mask code
-        tbl1 = mask(object_science=objs[num],
+        tbl1 = lbl_mask(object_science=objs[num],
                     object_template=templates[num],
                     object_teff=teffs[num],
                     data_type=data_types[num],
                     **keyword_args)
         # run compute
-        tbl2 = compute(object_science=objs[num],
+        tbl2 = lbl_compute(object_science=objs[num],
                        object_template=templates[num],
                        data_type=data_types[num],
                        **keyword_args)
         # run compile
-        tbl3 = compil(object_science=objs[num],
+        tbl3 = lbl_compil(object_science=objs[num],
                       object_template=templates[num],
                       **keyword_args)
 

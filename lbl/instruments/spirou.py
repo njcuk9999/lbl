@@ -138,8 +138,8 @@ class Spirou(Instrument):
         self.params.set('TEMPLATE_MJDSTART', value=None)
         # define the latest allowed file used for template construction
         self.params.set('TEMPLATE_MJDEND', value=None)
-        # define whether to do the pre-clean
-        self.params.set('DO_PRECLEAN', value=False, source=func_name)
+        # define whether to do the tellu-clean
+        self.params.set('DO_TELLUCLEAN', value=False, source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -181,9 +181,9 @@ class Spirou(Instrument):
         self.params.set('KW_WAVETIME', 'WAVETIME', source=func_name)
         # define the filename of the wave solution
         self.params.set('KW_WAVEFILE', 'WAVEFILE', source=func_name)
-        # define the telluric preclean velocity of water absorbers
+        # define the telluric TELLUCLEAN velocity of water absorbers
         self.params.set('KW_TLPDVH2O', 'TLPDVH2O', source=func_name)
-        # define the telluric preclean velocity of other absorbers
+        # define the telluric TELLUCLEAN velocity of other absorbers
         self.params.set('KW_TLPDVOTR', 'TLPDVOTR', source=func_name)
         # define the wave solution calibration filename
         self.params.set('KW_CDBWAVE', 'CDBWAVE', source=func_name)

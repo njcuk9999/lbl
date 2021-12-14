@@ -7,12 +7,12 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
-from lbl import clean
-from lbl import compil
-from lbl import compute
-from lbl import mask
-from lbl import template
-from lbl import preclean
+from lbl import lbl_clean
+from lbl import lbl_compil
+from lbl import lbl_compute
+from lbl import lbl_mask
+from lbl import lbl_template
+from lbl import lbl_telluclean
 
 # =============================================================================
 # Define variables
@@ -50,31 +50,31 @@ num = 0
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    _ = clean(object_science=objs[num], object_template=templates[num],
+    _ = lbl_clean(object_science=objs[num], object_template=templates[num],
                     **keyword_args)
-    # run pre-clean
-    _ = preclean(object_science=objs[num], object_template=templates[num],
-                 preclean_use_template=False, **keyword_args)
+    # run tellu-clean
+    _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
+                   telluclean_use_template=False, **keyword_args)
     # run template
-    _ = template(object_science=objs[num], object_template=templates[num],
+    _ = lbl_template(object_science=objs[num], object_template=templates[num],
                  **keyword_args)
-    # run pre-clean
-    _ = preclean(object_science=objs[num], object_template=templates[num],
+    # run tellu-clean
+    _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
+                   **keyword_args)
+    # run template
+    _ = lbl_template(object_science=objs[num], object_template=templates[num],
                  **keyword_args)
     # run template
-    _ = template(object_science=objs[num], object_template=templates[num],
-                 **keyword_args)
-    # run template
-    _ = template(object_science=objs[num], object_template=templates[num],
+    _ = lbl_template(object_science=objs[num], object_template=templates[num],
                  **keyword_args)
     # run mask code
-    _ = mask(object_science=objs[num], object_template=templates[num],
+    _ = lbl_mask(object_science=objs[num], object_template=templates[num],
              object_teff=teffs[num], **keyword_args)
     # run compute
-    _ = compute(object_science=objs[num], object_template=templates[num],
+    _ = lbl_compute(object_science=objs[num], object_template=templates[num],
                 **keyword_args)
     # run compile
-    _ = compil(object_science=objs[num], object_template=templates[num],
+    _ = lbl_compil(object_science=objs[num], object_template=templates[num],
                **keyword_args)
 
 # =============================================================================

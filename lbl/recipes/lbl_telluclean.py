@@ -23,8 +23,8 @@ from lbl.science import pre_clean
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'lbl_preclean.py'
-__STRNAME__ = 'LBL Preclean'
+__NAME__ = 'lbl_TELLUCLEAN.py'
+__STRNAME__ = 'LBL TELLUCLEAN'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -105,20 +105,20 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
-    # check that we want to pre-clean
-    if not inst.params['DO_PRECLEAN']:
-        emsg = 'DO_PRECLEAN set to False for instrument: {0}'
+    # check that we want to tellu-clean
+    if not inst.params['DO_TELLUCLEAN']:
+        emsg = 'DO_TELLUCLEAN set to False for instrument: {0}'
         eargs = [inst.name]
         raise base_classes.LblException(emsg.format(*eargs))
-    # check that science object is not pre-cleaned
+    # check that science object is not tellu-cleaned
     if inst.params['OBJECT_SCIENCE'].endswith('_tc'):
-        emsg = ('Cannot pre-clean a file that has a pre-cleaned object '
+        emsg = ('Cannot tellu-clean a file that has a tellu-cleaned object '
                 '(ends with _tc), OBJECT_SCIENCE = {0}')
         eargs = [inst.params['OBJECT_SCIENCE']]
         raise base_classes.LblException(emsg.format(*eargs))
-    # check that we have science data (can only pre-clean science data)
+    # check that we have science data (can only tellu-clean science data)
     if inst.params['DATA_TYPE'] != 'SCIENCE':
-        emsg = ('Can only pre-clean "SCIENCE" data. '
+        emsg = ('Can only tellu-clean "SCIENCE" data. '
                'Please set "DATA_TYPE" to "SCIENCE"')
         raise base_classes.LblException(emsg)
 
@@ -152,18 +152,18 @@ def __main__(inst: InstrumentsType, **kwargs):
         # create this path if it doesn't exist
         if not os.path.exists(outpath):
             os.makedirs(outpath)
-        # construct the pre-cleaned output filename
-        precleanded_file = os.path.join(outdir, os.path.basename(filename))
+        # construct the tellu-cleaned output filename
+        TELLUCLEANded_file = os.path.join(outdir, os.path.basename(filename))
         # ---------------------------------------------------------------------
         # if this output file exists and we are skipping done - skip
-        if os.path.exists(precleanded_file) and inst.params['SKIP_DONE']:
+        if os.path.exists(TELLUCLEANded_file) and inst.params['SKIP_DONE']:
             msg = 'File {0} exists and SKIP_DONE = True ({1} of {2})'
-            margs = [precleanded_file, it + 1, len(science_files)]
+            margs = [TELLUCLEANded_file, it + 1, len(science_files)]
             log.general(msg.format(*margs))
             continue
         # ---------------------------------------------------------------------
         # print progress
-        msg = 'Pre-cleaning E2DS for file {0} of {1}'
+        msg = 'tellu-cleaning E2DS for file {0} of {1}'
         margs = [it + 1, len(science_files)]
         log.general(msg.format(*margs))
         # ---------------------------------------------------------------------
@@ -184,8 +184,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         e2ds_dict = pre_clean.correct_tellu(inst, template_dir, e2ds_dict,
                                             spl_others, spl_water)
         # ---------------------------------------------------------------------
-        # write the pre-cleaned file to disk
-        inst.write_precleaned(precleanded_file, e2ds_dict, sci_hdr)
+        # write the tellu-cleaned file to disk
+        inst.write_TELLUCLEANed(TELLUCLEANded_file, e2ds_dict, sci_hdr)
 
     # -------------------------------------------------------------------------
     # return local namespace

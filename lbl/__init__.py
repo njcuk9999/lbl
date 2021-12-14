@@ -15,19 +15,19 @@ from lbl import recipes
 # Define variables
 # =============================================================================
 # alias to lbl template
-template = recipes.lbl_template.main
+lbl_template = recipes.lbl_template.main
 # alias to lbl mask
-mask = recipes.lbl_mask.main
+lbl_mask = recipes.lbl_mask.main
 # alias to lbl noise
-noise = recipes.lbl_noise.main
+lbl_noise = recipes.lbl_noise.main
 # compute recipe
-compute = recipes.lbl_compute.main
+lbl_compute = recipes.lbl_compute.main
 # compile recipe
-compil = recipes.lbl_compile.main
+lbl_compil = recipes.lbl_compile.main
 # clean recipe
-clean = recipes.lbl_clean.main
-# pre-clean recipe
-preclean = recipes.lbl_preclean.main
+lbl_clean = recipes.lbl_clean.main
+# tellu-clean recipe
+lbl_telluclean = recipes.lbl_telluclean.main
 
 # =============================================================================
 # Define functions

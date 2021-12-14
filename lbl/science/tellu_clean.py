@@ -45,7 +45,7 @@ InstrumentsType = select.InstrumentsType
 speed_of_light_ms = constants.c.value
 speed_of_light_kms = constants.c.value / 1000.0
 # spline typing
-SplineReturn = Union[np.IUVSpline, mp.NanSpline]
+SplineReturn = Union[mp.IUVSpline, mp.NanSpline]
 
 
 # =============================================================================
@@ -61,7 +61,7 @@ def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
     :return: astropy.table.Table - the Table for extname
     """
     # get parameters from inst
-    tapas_url = inst.params['PRECLEAN_TAPAS_URL']
+    tapas_url = inst.params['TELLUCLEAN_TAPAS_URL']
     data_dir = inst.params['DATA_DIR']
     # get data directory
     data_dir = io.check_directory(data_dir)
@@ -100,7 +100,7 @@ def get_tapas_spl(inst: InstrumentsType) -> Tuple[SplineReturn, SplineReturn]:
     """
 
     # get parameters from params
-    tapas_dv = inst.params['PRECLEAN_DV0']
+    tapas_dv = inst.params['TELLUCLEAN_DV0']
     # -------------------------------------------------------------------------
     # get tapas file
     tmp_tapas = get_tapas_lbl(inst, 'ABSOSPEC')
@@ -130,8 +130,8 @@ def load_tellu_masks(inst) -> Tuple[Table, Table]:
     :return: tuple, 1. the others mask, 2. the water mask
     """
     # get parameters from inst
-    mask_domain_lower = inst.params['PRECLEAN_MASK_DOMAIN_LOWER']
-    mask_domain_upper = inst.params['PRECLEAN_MASK_DOMAIN_UPPER']
+    mask_domain_lower = inst.params['TELLUCLEAN_MASK_DOMAIN_LOWER']
+    mask_domain_upper = inst.params['TELLUCLEAN_MASK_DOMAIN_UPPER']
     # -------------------------------------------------------------------------
     # read others file
     table_others = get_tapas_lbl(inst, 'CCFOTHER')
@@ -258,22 +258,22 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     :return: dictionary the updated e2ds_params with telluric corrected data in
     """
     # get parameters from inst
-    force_airmass = inst.params['PRECLEAN_FORCE_AIRMASS']
-    ccf_scan_range = inst.params['PRECLEAN_CCF_SCAN_RANGE']
-    max_iterations = inst.params['PRECLEAN_MAX_ITERATIONS']
-    kwidth = inst.params['PRECLEAN_KERNEL_WID']
-    ex_gau = inst.params['PRECLEAN_GAUSSIAN_SHAPE']
-    wave0 = inst.params['PRECLEAN_WAVE_LOWER']
-    wave1 = inst.params['PRECLEAN_WAVE_UPPER']
-    trans_threshold = inst.params['PRECLEAN_TRANSMISSION_THRESHOLD']
-    sigma_threshold = inst.params['PRECLEAN_SIGMA_THRESHOLD']
-    recenter_ccf = inst.params['PRECLEAN_RECENTER_CCF']
-    recenter_ccf_fit_others = inst.params['PRECLEAN_RECENTER_CCF_FIT_OTHERS']
-    default_water_abso = inst.params['PRECLEAN_DEFAULT_WATER_ABSO']
-    others_bounds_lower = inst.params['PRECLEAN_OTHERS_BOUNDS_LOWER']
-    others_bounds_upper = inst.params['PRECLEAN_OTHERS_BOUNDS_UPPER']
-    water_bounds_lower = inst.params['PRECLEAN_WATER_BOUNDS_LOWER']
-    water_bounds_upper = inst.params['PRECLEAN_WATER_BOUNDS_UPPER']
+    force_airmass = inst.params['TELLUCLEAN_FORCE_AIRMASS']
+    ccf_scan_range = inst.params['TELLUCLEAN_CCF_SCAN_RANGE']
+    max_iterations = inst.params['TELLUCLEAN_MAX_ITERATIONS']
+    kwidth = inst.params['TELLUCLEAN_KERNEL_WID']
+    ex_gau = inst.params['TELLUCLEAN_GAUSSIAN_SHAPE']
+    wave0 = inst.params['TELLUCLEAN_WAVE_LOWER']
+    wave1 = inst.params['TELLUCLEAN_WAVE_UPPER']
+    trans_threshold = inst.params['TELLUCLEAN_TRANSMISSION_THRESHOLD']
+    sigma_threshold = inst.params['TELLUCLEAN_SIGMA_THRESHOLD']
+    recenter_ccf = inst.params['TELLUCLEAN_RECENTER_CCF']
+    recenter_ccf_fit_others = inst.params['TELLUCLEAN_RECENTER_CCF_FIT_OTHERS']
+    default_water_abso = inst.params['TELLUCLEAN_DEFAULT_WATER_ABSO']
+    others_bounds_lower = inst.params['TELLUCLEAN_OTHERS_BOUNDS_LOWER']
+    others_bounds_upper = inst.params['TELLUCLEAN_OTHERS_BOUNDS_UPPER']
+    water_bounds_lower = inst.params['TELLUCLEAN_WATER_BOUNDS_LOWER']
+    water_bounds_upper = inst.params['TELLUCLEAN_WATER_BOUNDS_UPPER']
     # get the e2ds flux from e2ds parameters
     e2ds_flux = np.array(e2ds_params['flux'])
     wavemap = e2ds_params['wavelength']
@@ -285,7 +285,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     # template filename
     template_file = inst.template_file(template_dir, required=False)
     # if we don't have template we use an array of ones
-    if not inst.params['PRECLEAN_USE_TEMPLATE']:
+    if not inst.params['TELLUCLEAN_USE_TEMPLATE']:
         # template flag
         template_flag = False
         # proxy for template spline

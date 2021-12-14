@@ -7,11 +7,11 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
-from lbl import clean
-from lbl import compil
-from lbl import compute
-from lbl import mask
-from lbl import template
+from lbl import lbl_clean
+from lbl import lbl_compil
+from lbl import lbl_compute
+from lbl import lbl_mask
+from lbl import lbl_template
 from lbl.recipes import lbl_find
 
 # =============================================================================
@@ -29,23 +29,23 @@ gl699_config_file = working + 'spirou_gl699_config_06132.yaml'
 # =============================================================================
 if __name__ == "__main__":
     # # run clean (reset everything)
-    _ = clean(config_file=fp_config_file)
-    _ = clean(config_file=gl699_config_file)
+    _ = lbl_clean(config_file=fp_config_file)
+    _ = lbl_clean(config_file=gl699_config_file)
     # # find files
     # _ = lbl_find.main(instrument='SPIROU', config_file=gl699_config_file)
     # _ = lbl_find.main(instrument='SPIROU', config_file=fp_config_file)
     # # run template
-    tbl0a = template(config_file=fp_config_file)
-    tbl0b = template(config_file=gl699_config_file)
+    tbl0a = lbl_template(config_file=fp_config_file)
+    tbl0b = lbl_template(config_file=gl699_config_file)
     # # run mask code
-    tbl1a = mask(config_file=fp_config_file)
-    tbl1b = mask(config_file=gl699_config_file)
+    tbl1a = lbl_mask(config_file=fp_config_file)
+    tbl1b = lbl_mask(config_file=gl699_config_file)
     # run compute
-    tbl2a = compute(config_file=fp_config_file)
-    tbl2b = compute(config_file=gl699_config_file)
+    tbl2a = lbl_compute(config_file=fp_config_file)
+    tbl2b = lbl_compute(config_file=gl699_config_file)
     # run compile
-    tbl3a = compil(config_file=fp_config_file)
-    tbl3b = compil(config_file=gl699_config_file)
+    tbl3a = lbl_compil(config_file=fp_config_file)
+    tbl3b = lbl_compil(config_file=gl699_config_file)
 
 # =============================================================================
 # End of code

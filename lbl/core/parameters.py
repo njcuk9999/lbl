@@ -395,106 +395,106 @@ params.set(key='TEMPLATE_MJDEND', value=None, source=__NAME__,
                 'construction (None for unset)', dtype=float)
 
 # =============================================================================
-# Define telluric pre-cleaning parameters
+# Define telluric tellu-cleaning parameters
 # =============================================================================
-# define whether to do the pre-clean
-params.set(key='DO_PRECLEAN', value=None, source=__NAME__,
-           desc='whether to do the pre-clean', not_none=True)
+# define whether to do the tellu-clean
+params.set(key='DO_TELLUCLEAN', value=None, source=__NAME__,
+           desc='whether to do the tellu-clean', not_none=True)
 
-# define whether to use template in pre-cleaning
-params.set(key='PRECLEAN_USE_TEMPLATE', value=True, source=__NAME__,
-           desc='whether to use template in pre-cleaning')
+# define whether to use template in tellu-cleaning
+params.set(key='TELLUCLEAN_USE_TEMPLATE', value=True, source=__NAME__,
+           desc='whether to use template in tellu-cleaning')
 
-# define the tapas url used in pre-cleaning
-params.set(key='PRECLEAN_TAPAS_URL',
+# define the tapas url used in tellu-cleaning
+params.set(key='TELLUCLEAN_TAPAS_URL',
            value='http://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits',
-           source=__NAME__, desc='the tapas url used in pre-cleaning',
+           source=__NAME__, desc='the tapas url used in tellu-cleaning',
            not_none=True)
 
-# define the dv offset for pre-cleaning in km/s
-params.set(key='PRECLEAN_DV0', value=None, source=__NAME__, not_none=True,
-           desc='the dv offset for pre-cleaning in km/s')
+# define the dv offset for tellu-cleaning in km/s
+params.set(key='TELLUCLEAN_DV0', value=None, source=__NAME__, not_none=True,
+           desc='the dv offset for tellu-cleaning in km/s')
 
 # Define the lower wave limit for the absorber spectrum masks in nm
-params.set(key='PRECLEAN_MASK_DOMAIN_LOWER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_MASK_DOMAIN_LOWER', value=None, source=__NAME__,
            desc='the lower wave limit for the absorber spectrum masks in nm',
            not_none=True)
 
 # Define the upper wave limit for the absorber spectrum masks in nm
-params.set(key='PRECLEAN_MASK_DOMAIN_UPPER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_MASK_DOMAIN_UPPER', value=None, source=__NAME__,
            desc='the upper wave limit for the absorber spectrum masks in nm',
            not_none=True)
 
 # Define whether to force using airmass from header
-params.set(key='PRECLEAN_FORCE_AIRMASS', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_FORCE_AIRMASS', value=None, source=__NAME__,
            desc='whether to force using airmass from header', not_none=True)
 
 # Define the CCF scan range in km/s
-params.set(key='PRECLEAN_CCF_SCAN_RANGE', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_CCF_SCAN_RANGE', value=None, source=__NAME__,
            desc='the CCF scan range in km/s', not_none=True)
 
-# Define the maximum number of iterations for the pre-cleaning loop
-params.set(key='PRECLEAN_MAX_ITERATIONS', value=20, source=__NAME__,
-           desc='the maximum number of iterations for the pre-cleaning loop',
+# Define the maximum number of iterations for the tellu-cleaning loop
+params.set(key='TELLUCLEAN_MAX_ITERATIONS', value=20, source=__NAME__,
+           desc='the maximum number of iterations for the tellu-cleaning loop',
            not_none=True)
 
 # Define the kernel width in pixels
-params.set(key='PRECLEAN_KERNEL_WID', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_KERNEL_WID', value=None, source=__NAME__,
            desc='the kernel width in pixels', not_none=True)
 
 # Define the gaussian shape (2=pure gaussian, >2=boxy)
-params.set(key='PRECLEAN_GAUSSIAN_SHAPE', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_GAUSSIAN_SHAPE', value=None, source=__NAME__,
            desc='the gaussian shape (2=pure gaussian, >2=boxy', not_none=True)
 
 # Define the wave grid lower wavelength limit in nm
-params.set(key='PRECLEAN_WAVE_LOWER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_WAVE_LOWER', value=None, source=__NAME__,
            desc='the wave grid lower wavelength limit in nm', not_none=True)
 
 # Define the wave griv upper wavelength limit
-params.set(key='PRECLEAN_WAVE_UPPER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_WAVE_UPPER', value=None, source=__NAME__,
            desc='the wave grid upper wavelength limit in nm', not_none=True)
 
 # Define the transmission threshold exp(-1) at which tellurics are uncorrectable
-params.set(key='PRECLEAN_TRANSMISSION_THRESHOLD', value=-1, source=__NAME__,
+params.set(key='TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1, source=__NAME__,
            desc='the transmission threshold exp(-1) at which tellurics '
                 'are uncorrectable', not_none=True)
 
 # Define the sigma cut threshold above which pixels are removed from fit
-params.set(key='PRECLEAN_SIGMA_THRESHOLD', value=10, source=__NAME__,
+params.set(key='TELLUCLEAN_SIGMA_THRESHOLD', value=10, source=__NAME__,
            desc='the sigma cut threshold above which pixels are removed '
                 'from fit', not_none=True)
 
 # Define whether to recenter the CCF on the first iteration
-params.set(key='PRECLEAN_RECENTER_CCF', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_RECENTER_CCF', value=None, source=__NAME__,
            desc='whether to recenter the CCF on the first iteration',
            not_none=True)
 
 # Define whether to recenter the CCF of others on the first iteration
-params.set(key='PRECLEAN_RECENTER_CCF_FIT_OTHERS', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=None, source=__NAME__,
            desc='whether to recenter the CCF on the first iteration',
            not_none=True)
 
 # Define the default water absorption to use
-params.set(key='PRECLEAN_DEFAULT_WATER_ABSO', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_DEFAULT_WATER_ABSO', value=None, source=__NAME__,
            desc='the default water absorption to use', not_none=True)
 
 # Define the lower limit on valid exponent of water absorbers
-params.set(key='PRECLEAN_WATER_BOUNDS_LOWER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_WATER_BOUNDS_LOWER', value=None, source=__NAME__,
            desc='the lower limit on valid exponent of water absorbers',
            not_none=True)
 
 # Define the upper limit on valid exponent of water absorbers
-params.set(key='PRECLEAN_WATER_BOUNDS_UPPER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_WATER_BOUNDS_UPPER', value=None, source=__NAME__,
            desc='the upper limit on valid exponent of water absorbers',
            not_none=True)
 
 # Define the lower limit on valid exponent of other absorbers
-params.set(key='PRECLEAN_OTHERS_BOUNDS_LOWER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=None, source=__NAME__,
            desc='the lower limit on valid exponent of other absorbers',
            not_none=True)
 
 # Define the upper limit on valid exponent of other absorbers
-params.set(key='PRECLEAN_OTHERS_BOUNDS_UPPER', value=None, source=__NAME__,
+params.set(key='TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=None, source=__NAME__,
            desc='the upper limit on valid exponent of other absorbers',
            not_none=True)
 
@@ -622,14 +622,14 @@ params.set(key='KW_WAVETIME', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_WAVEFILE', value=None, source=__NAME__, not_none=False,
            desc='the filename of the wave solution')
 
-# define the telluric preclean velocity of water absorbers
+# define the telluric TELLUCLEAN velocity of water absorbers
 params.set(key='KW_TLPDVH2O', value=None, source=__NAME__, not_none=False,
-           desc='the telluric preclean velocity of water absorbers',
+           desc='the telluric TELLUCLEAN velocity of water absorbers',
            fp_flag=True)
 
-# define the telluric preclean velocity of other absorbers
+# define the telluric TELLUCLEAN velocity of other absorbers
 params.set(key='KW_TLPDVOTR', value=None, source=__NAME__, not_none=False,
-           desc='the telluric preclean velocity of other absorbers',
+           desc='the telluric TELLUCLEAN velocity of other absorbers',
            fp_flag=True)
 
 # define the wave solution calibration filename

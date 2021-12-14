@@ -136,56 +136,62 @@ class Harps(Instrument):
         # blaze threshold (s1d template)
         self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
 
-        # define whether to do the pre-clean
-        self.params.set('DO_PRECLEAN', value=True, source=func_name)
-        # define the tapas file used in pre-cleaning
-        self.params.set('PRECLEAN_TAPAS_URL', value=None, source=func_name)
-        # define the dv offset for pre-cleaning in km/s
-        self.params.set('PRECLEAN_DV0', value=0, source=func_name)
+        # define whether to do the tellu-clean
+        self.params.set('DO_TELLUCLEAN', value=True, source=func_name)
+        # define the tapas file used in tellu-cleaning
+        self.params.set('TELLUCLEAN_TAPAS_URL', value=None, source=func_name)
+        # define the dv offset for tellu-cleaning in km/s
+        self.params.set('TELLUCLEAN_DV0', value=0, source=func_name)
         # Define the lower wave limit for the absorber spectrum masks in nm
-        self.params.set('PRECLEAN_MASK_DOMAIN_LOWER', value=500,
+        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=500,
                         source=func_name)
         # Define the upper wave limit for the absorber spectrum masks in nm
-        self.params.set('PRECLEAN_MASK_DOMAIN_UPPER', value=700,
+        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=700,
                         source=func_name)
         # Define whether to force using airmass from header
-        self.params.set('PRECLEAN_FORCE_AIRMASS', value=None, source=func_name)
+        self.params.set('TELLUCLEAN_FORCE_AIRMASS', value=False,
+                        source=func_name)
         # Define the CCF scan range in km/s
-        self.params.set('PRECLEAN_CCF_SCAN_RANGE', value=None, source=func_name)
-        # Define the maximum number of iterations for the pre-cleaning loop
-        self.params.set('PRECLEAN_MAX_ITERATIONS', value=20, source=func_name)
+        self.params.set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
+                        source=func_name)
+        # Define the maximum number of iterations for the tellu-cleaning loop
+        self.params.set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
         # Define the kernel width in pixels
-        self.params.set('PRECLEAN_KERNEL_WID', value=None, source=func_name)
+        self.params.set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
         # Define the gaussian shape (2=pure gaussian, >2=boxy)
-        self.params.set('PRECLEAN_GAUSSIAN_SHAPE', value=None, source=func_name)
+        self.params.set('TELLUCLEAN_GAUSSIAN_SHAPE', value=2.2,
+                        source=func_name)
         # Define the wave grid lower wavelength limit in nm
-        self.params.set('PRECLEAN_WAVE_LOWER', value=None, source=func_name)
+        self.params.set('TELLUCLEAN_WAVE_LOWER', value=350, source=func_name)
         # Define the wave griv upper wavelength limit
-        self.params.set('PRECLEAN_WAVE_UPPER', value=None, source=func_name)
-        # Define the transmission threshold exp(-1) at which tellurics are uncorrectable
-        self.params.set('PRECLEAN_TRANSMISSION_THRESHOLD', value=-1,
+        self.params.set('TELLUCLEAN_WAVE_UPPER', value=750, source=func_name)
+        # Define the transmission threshold exp(-1) at which tellurics are
+        #     uncorrectable
+        self.params.set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
                         source=func_name)
         # Define the sigma cut threshold above which pixels are removed from fit
-        self.params.set('PRECLEAN_SIGMA_THRESHOLD', value=10, source=func_name)
+        self.params.set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
+                        source=func_name)
         # Define whether to recenter the CCF on the first iteration
-        self.params.set('PRECLEAN_RECENTER_CCF', value=None, source=func_name)
+        self.params.set('TELLUCLEAN_RECENTER_CCF', value=False,
+                        source=func_name)
         # Define whether to recenter the CCF of others on the first iteration
-        self.params.set('PRECLEAN_RECENTER_CCF_FIT_OTHERS', value=None,
+        self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
                         source=func_name)
         # Define the default water absorption to use
-        self.params.set('PRECLEAN_DEFAULT_WATER_ABSO', value=None,
+        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=None,
                         source=func_name)
         # Define the lower limit on valid exponent of water absorbers
-        self.params.set('PRECLEAN_WATER_BOUNDS_LOWER', value=None,
+        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=None,
                         source=func_name)
         # Define the upper limit on valid exponent of water absorbers
-        self.params.set('PRECLEAN_WATER_BOUNDS_UPPER', value=None,
+        self.params.set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=None,
                         source=func_name)
         # Define the lower limit on valid exponent of other absorbers
-        self.params.set('PRECLEAN_OTHERS_BOUNDS_LOWER', value=None,
+        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=None,
                         source=func_name)
         # Define the upper limit on valid exponent of other absorbers
-        self.params.set('PRECLEAN_OTHERS_BOUNDS_UPPER', value=None,
+        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=None,
                         source=func_name)
 
         # ---------------------------------------------------------------------

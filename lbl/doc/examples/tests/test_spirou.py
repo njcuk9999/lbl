@@ -7,11 +7,11 @@ Created on 2021-10-18
 
 @author: artigau, cook
 """
-from lbl import clean
-from lbl import compil
-from lbl import compute
-from lbl import mask
-from lbl import template
+from lbl import lbl_clean
+from lbl import lbl_compil
+from lbl import lbl_compute
+from lbl import lbl_mask
+from lbl import lbl_template
 
 # =============================================================================
 # Define variables
@@ -28,20 +28,20 @@ gl699_config_file = working + 'spirou_gl699_config.yaml'
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    _ = clean(config_file=fp_config_file)
-    _ = clean(config_file=gl699_config_file)
+    _ = lbl_clean(config_file=fp_config_file)
+    _ = lbl_clean(config_file=gl699_config_file)
     # run template
-    _ = template(config_file=fp_config_file)
-    _ = template(config_file=gl699_config_file)
+    _ = lbl_template(config_file=fp_config_file)
+    _ = lbl_template(config_file=gl699_config_file)
     # run mask code
-    _ = mask(config_file=fp_config_file)
-    _ = mask(config_file=gl699_config_file)
+    _ = lbl_mask(config_file=fp_config_file)
+    _ = lbl_mask(config_file=gl699_config_file)
     # run compute
-    _ = compute(config_file=fp_config_file)
-    _ = compute(config_file=gl699_config_file)
+    _ = lbl_compute(config_file=fp_config_file)
+    _ = lbl_compute(config_file=gl699_config_file)
     # run compile
-    _ = compil(config_file=fp_config_file)
-    _ = compil(config_file=gl699_config_file)
+    _ = lbl_compil(config_file=fp_config_file)
+    _ = lbl_compil(config_file=gl699_config_file)
 
 # =============================================================================
 # End of code
