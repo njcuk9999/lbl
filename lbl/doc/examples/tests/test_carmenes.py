@@ -28,7 +28,6 @@ keyword_args['DATA_TYPE'] = 'SCIENCE'
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = None
 keyword_args['TEMPLATE_FILE'] = 'Template_TOI-1452.fits'
-keyword_args['PLOT'] = True
 keyword_args['SKIP_DONE'] = False
 keyword_args['MASK_SUBDIR'] = 'masks'
 keyword_args['INPUT_FILE'] = 'car-*.fits'
@@ -44,21 +43,19 @@ num = 0
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
-    # run clean (reset everything)
-    _ = lbl_reset(object_science=objs[num], object_template=templates[num],
-                  **keyword_args)
+    # # run clean (reset everything)
+    # _ = lbl_reset(object_science=objs[num], object_template=templates[num],
+    #               **keyword_args)
+    # # run tellu-clean
+    # _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
+    #                    telluclean_use_template=False, plot=False,
+    #                    **keyword_args)
+    # # run template
+    # _ = lbl_template(object_science=objs[num], object_template=templates[num],
+    #                  **keyword_args)
     # run tellu-clean
     _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
-                       telluclean_use_template=False, **keyword_args)
-    # run template
-    _ = lbl_template(object_science=objs[num], object_template=templates[num],
-                     **keyword_args)
-    # run tellu-clean
-    _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
-                       **keyword_args)
-    # run template
-    _ = lbl_template(object_science=objs[num], object_template=templates[num],
-                     **keyword_args)
+                       plot=True, **keyword_args)
     # run template
     _ = lbl_template(object_science=objs[num], object_template=templates[num],
                      **keyword_args)

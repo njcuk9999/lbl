@@ -153,7 +153,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         if not os.path.exists(outpath):
             os.makedirs(outpath)
         # construct the tellu-cleaned output filename
-        tellu_clean_file = os.path.join(outdir, os.path.basename(filename))
+        tellu_clean_file = os.path.join(outpath, os.path.basename(filename))
         # ---------------------------------------------------------------------
         # if this output file exists and we are skipping done - skip
         if os.path.exists(tellu_clean_file) and inst.params['SKIP_DONE']:
@@ -165,7 +165,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # print progress
         msg = 'tellu-cleaning E2DS for file {0} of {1}'
         margs = [it + 1, len(science_files)]
-        log.general(msg.format(*margs))
+        log.info(msg.format(*margs))
         # ---------------------------------------------------------------------
         # load the science image and header
         sci_image, sci_hdr = inst.load_science(filename)
@@ -176,7 +176,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         e2ds_dict['flux'] = sci_image
         e2ds_dict['wavelength'] = sci_wave
         e2ds_dict['AIRMASS'] = sci_hdr[inst.params['KW_AIRMASS']]
-        e2ds_dict['OBJECT'] = sci_hdr[inst.params['KW_OBJNAME']]
+        e2ds_dict['OBJECT'] = inst.params['OBJECT_SCIENCE']
         e2ds_dict['BERV'] = inst.get_berv(sci_hdr)
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------

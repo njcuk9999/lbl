@@ -28,8 +28,6 @@ keyword_args['DATA_TYPE'] = 'SCIENCE'
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
 keyword_args['TEMPLATE_FILE'] = 'Template_Proxima-tc_HARPS.fits'
-keyword_args['PLOT'] = False
-keyword_args['SKIP_DONE'] = False
 keyword_args['MASK_SUBDIR'] = 'masks'
 keyword_args['INPUT_FILE'] = 'HARPS*_e2ds_A.fits'
 keyword_args['OVERWRITE'] = True
@@ -45,28 +43,35 @@ num = 0
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    _ = lbl_reset(object_science=objs[num], object_template=templates[num],
-                  **keyword_args)
+    # _ = lbl_reset(object_science=objs[num], object_template=templates[num],
+    #               **keyword_args)
+    # # run tellu-clean
+    # _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
+    #                    telluclean_use_template=False, plot=False,
+    #                    **keyword_args)
+    # # run template
+    # _ = lbl_template(object_science=objs[num]+'_tc',
+    #                  object_template=templates[num]+'_tc',
+    #                  plot=False, **keyword_args)
     # run tellu-clean
-    _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
-                       telluclean_use_template=False, **keyword_args)
+    _ = lbl_telluclean(object_science=objs[num],
+                       object_template=templates[num]+'_tc', plot=True,
+                       skip_done=False, **keyword_args)
     # run template
-    _ = lbl_template(object_science=objs[num], object_template=templates[num],
-                     **keyword_args)
-    # run tellu-clean
-    _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
-                       **keyword_args)
-    # run template
-    _ = lbl_template(object_science=objs[num], object_template=templates[num],
+    _ = lbl_template(object_science=objs[num]+'_tc',
+                     object_template=templates[num]+'_tc',
                      **keyword_args)
     # run mask code
-    _ = lbl_mask(object_science=objs[num], object_template=templates[num],
+    _ = lbl_mask(object_science=objs[num]+'_tc',
+                 object_template=templates[num]+'_tc',
                  object_teff=teffs[num], **keyword_args)
     # run compute
-    _ = lbl_compute(object_science=objs[num], object_template=templates[num],
+    _ = lbl_compute(object_science=objs[num]+'_tc',
+                    object_template=templates[num]+'_tc',
                     **keyword_args)
     # run compile
-    _ = lbl_compil(object_science=objs[num], object_template=templates[num],
+    _ = lbl_compil(object_science=objs[num]+'_tc',
+                   object_template=templates[num]+'_tc',
                    **keyword_args)
 
 # =============================================================================

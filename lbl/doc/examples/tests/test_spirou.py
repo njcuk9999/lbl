@@ -17,7 +17,7 @@ from lbl import lbl_template
 # Define variables
 # =============================================================================
 # define working directory
-working = '/scratch3/lbl/bin/lbl/lbl/doc/examples/'
+working = '/scratch3/lbl/bin/lbl/lbl/doc/examples/tests/'
 # create keyword argument dictionary
 fp_config_file = working + 'spirou_fp_config.yaml'
 gl699_config_file = working + 'spirou_gl699_config.yaml'

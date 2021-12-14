@@ -28,6 +28,9 @@ lbl_noise = recipes.lbl_noise.main
 lbl_compute = recipes.lbl_compute.main
 # compile recipe
 lbl_compil = recipes.lbl_compile.main
+# wrapper code
+lbl_wrap = recipes.lbl_wrap.main
+
 
 # =============================================================================
 # Define functions

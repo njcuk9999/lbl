@@ -287,6 +287,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     wavemap = e2ds_params['wavelength']
     airmass = e2ds_params['AIRMASS']
     objname = e2ds_params['OBJECT']
+    berv = e2ds_params['BERV']
     # -------------------------------------------------------------------------
     # Load the template (if it exists and if we want to use it)
     # -------------------------------------------------------------------------
@@ -340,15 +341,15 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     # keep non-overlapping bits
     wave_vector = wavemap.ravel()[keep]
     sp_vector = e2ds_flux.ravel()[keep]
-    # keep a copy of the input spectrum
-    sp_ini_vector = e2ds_flux.ravel()[keep]
     # -------------------------------------------------------------------------
     # shift template onto our wavelength grid
     # -------------------------------------------------------------------------
     # if we have a template apply the berv offset
     if template_flag:
         # apply wavelength to spline
-        template_vector = template_spl(wave_vector)
+        template_wave = mp.doppler_shift(wave_vector, -berv)
+        # apply wavelength to spline
+        template_vector = template_spl(template_wave)
     # else our template is just ones
     else:
         template_vector = np.ones_like(wave_vector)
@@ -429,7 +430,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
         # remove outliers
         sp_tmp[sp_tmp > sigma_cut] = 0.0
         # remove negative pixels
-        sp_tmp[sp_tmp < 0] = 0.0
+        sp_tmp[sp_tmp < 0] = np.nan
         # ---------------------------------------------------------------------
         # compute the CCFs for others and water
         # ---------------------------------------------------------------------
@@ -630,7 +631,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     plot.ccf_vector_plot(inst, plt_ddvecs, plt_ccf_waters, plt_ccf_others,
                          objname)
     # plot the corrected spectrum
-    plot.tellu_corr_plot(inst, wave_vector, sp_tmp, trans,
+    plot.tellu_corr_plot(inst, wave_vector, sp_vector, trans,
                          template_vector, template_flag, objname)
     # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)

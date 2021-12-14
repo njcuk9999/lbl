@@ -497,7 +497,8 @@ class Instrument:
         # open hdulist
         with fits.open(props['FILENAME']) as hdulist:
             # add the header for extension 1
-            headerlist[1] = hdulist[1].header
+            if len(hdulist) > 1:
+                headerlist[1] = hdulist[1].header
             # loop around and add other extensions
             for hdu in hdulist[2:]:
                 datalist.append(hdu.data)
