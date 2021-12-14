@@ -9,16 +9,11 @@ Created on 2021-12-13
 
 @author: cook
 """
-from astropy.io import fits
 from astropy import constants
-from astropy import units as uu
 from astropy.table import Table
 import numpy as np
 import os
-from scipy import stats
-from typing import Any, Dict, List, Optional, Tuple, Union
-import warnings
-import wget
+from typing import Any, Dict, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -136,7 +131,6 @@ def load_tellu_masks(inst) -> Tuple[Table, Table]:
     return table_others, table_water
 
 
-
 def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
                 spl_others: SplineReturn, spl_water: SplineReturn,
                 kwidth: float = 4.95, ex_gau: float = 2.20,
@@ -212,7 +206,7 @@ def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
         trans_out = np.zeros(wave_vector.shape)
         # loop around each order and spline
         for order_num in range(wave_vector.shape[0]):
-            trans_out[order_num] = magic_spline[wave_vector[order_num]]
+            trans_out[order_num] = magic_spline(wave_vector[order_num])
     # else we have a 1D array --> spline full vector at once
     else:
         trans_out = np.array(magic_spline(wave_vector))
@@ -242,22 +236,22 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     :return: dictionary the updated e2ds_params with telluric corrected data in
     """
     # get parameters from inst
-    use_berv_offset = inst.params['PRECLEAN_USE_BERV_OFFSET'] = 'yaml'
-    berv_offset = inst.params['PRECLEAN_BERV_OFFSET'] = 'yaml'
-    force_airmass = inst.params['PRECLEAN_FORCE_AIRMASS'] = 'yaml'
-    ccf_scan_range = inst.params['PRECLEAN_CCF_SCAN_RANGE'] = 'yaml'
-    max_iterations = inst.params['PRECLEAN_MAX_ITERATIONS'] = 20
-    kwidth = inst.params['PRECLEAN_KERNEL_WID'] = 'yaml'
-    ex_gau = inst.params['PRECLEAN_GAUSSIAN_SHAPE'] = 'yaml'
-    wave0 = inst.params['PRECLEAN_WAVE_LOWER'] = 'yaml'
-    wave1 = inst.params['PRECLEAN_WAVE_UPPER'] = 'yaml'
-    trans_threshold = inst.params['PRECLEAN_TRANSMISSION_THRESHOLD'] = -1
-    sigma_threshold = inst.params['PRECLEAN_SIGMA_THRESHOLD'] = 10
-    recenter_ccf = inst.params['PRECLEAN_RECENTER_CCF'] = 'yaml'
-    recenter_ccf_fit_others = inst.params['PRECLEAN_RECENTER_CCF_FIT_OTHERS'] = True # for all but HARPS
-    default_water_abso = inst.params['PRECLEAN_DEFAULT_WATER_ABSO'] = 'yaml'
-    others_bounds_lower = inst.params['PRECLEAN_OTHERS_BOUNDS_LOWER'] = 'yaml'
-    others_bounds_upper = inst.params['PRECLEAN_OTHERS_BOUNDS_UPPER'] = 'yaml'
+    use_berv_offset = inst.params['PRECLEAN_USE_BERV_OFFSET']
+    berv_offset = inst.params['PRECLEAN_BERV_OFFSET']
+    force_airmass = inst.params['PRECLEAN_FORCE_AIRMASS']
+    ccf_scan_range = inst.params['PRECLEAN_CCF_SCAN_RANGE']
+    max_iterations = inst.params['PRECLEAN_MAX_ITERATIONS']
+    kwidth = inst.params['PRECLEAN_KERNEL_WID']
+    ex_gau = inst.params['PRECLEAN_GAUSSIAN_SHAPE']
+    wave0 = inst.params['PRECLEAN_WAVE_LOWER']
+    wave1 = inst.params['PRECLEAN_WAVE_UPPER']
+    trans_threshold = inst.params['PRECLEAN_TRANSMISSION_THRESHOLD']
+    sigma_threshold = inst.params['PRECLEAN_SIGMA_THRESHOLD']
+    recenter_ccf = inst.params['PRECLEAN_RECENTER_CCF']
+    recenter_ccf_fit_others = inst.params['PRECLEAN_RECENTER_CCF_FIT_OTHERS']
+    default_water_abso = inst.params['PRECLEAN_DEFAULT_WATER_ABSO']
+    others_bounds_lower = inst.params['PRECLEAN_OTHERS_BOUNDS_LOWER']
+    others_bounds_upper = inst.params['PRECLEAN_OTHERS_BOUNDS_UPPER']
     water_bounds_lower = inst.params['PRECLEAN_WATER_BOUNDS_LOWER']
     water_bounds_upper = inst.params['PRECLEAN_WATER_BOUNDS_UPPER']
     # get the e2ds flux from e2ds parameters
@@ -540,7 +534,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
             fit_others = np.polyfit(c_amp_others[sortmask_others[:4]],
                                     c_expos_others[sortmask_others[:4]], 1)
             # for water
-            sortmask_water= np.argsort(np.abs(c_amp_water))
+            sortmask_water = np.argsort(np.abs(c_amp_water))
             fit_water = np.polyfit(c_amp_water[sortmask_water[:4]],
                                    c_expos_water[sortmask_water[:4]], 1)
         # otherwise fit a 2nd order polynomial
@@ -598,7 +592,6 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
         margs = [iteration, expo_water, expo_others, airmass, template_flag]
         # log message
         log.general(msg.format(*margs))
-
 
         # keep track of the convergence params
         expo_water_prev = expo_water

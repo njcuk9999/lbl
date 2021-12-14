@@ -109,18 +109,21 @@ def __main__(inst: InstrumentsType, **kwargs):
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
 
+    # check that science object is not pre-cleaned
     if inst.params['OBJECT_SCIENCE'].endswith('_tc'):
         emsg = ('Cannot pre-clean a file that has a pre-cleaned object '
                 '(ends with _tc), OBJECT_SCIENCE = {0}')
         eargs = [inst.params['OBJECT_SCIENCE']]
         raise base_classes.LblException(emsg.format(*eargs))
 
+    
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
     dparams = select.make_all_directories(inst)
     template_dir, science_dir = dparams['TEMPLATE_DIR'], dparams['SCIENCE_DIR']
     calib_dir = dparams['CALIB_DIR']
+
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
@@ -128,15 +131,6 @@ def __main__(inst: InstrumentsType, **kwargs):
     template_file = inst.template_file(template_dir, required=False)
     # science filenames
     science_files = inst.science_files(science_dir)
-
-
-    # TODO -> PATH UNTIL WE HANDLE _PC TEMPLATES PROPERLY
-    # TODO -> merge with the main yaml parameter file
-    pc_params = et.load_yaml(dparams['DATA_DIR']+'/tellu_clean_{}_params.yaml'.format(inst.params['INSTRUMENT']))
-    template_preclean = dparams['TEMPLATE_DIR']+'/Template_{0}_tc_{1}.fits'.format(inst.params['OBJECT_SCIENCE'],
-                                                                                   inst.params['INSTRUMENT'])
-    pc_params['template_file'] = template_preclean
-    # TODO _> end of path
 
     # -------------------------------------------------------------------------
     # Step 3: get the TAPAS exponents
@@ -182,8 +176,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------
         # do the telluric correction (similar to APERO)
-        e2ds_dict = pre_clean.correct_tellu(inst, e2ds_dict, spl_others,
-                                            spl_water)
+        e2ds_dict = pre_clean.correct_tellu(inst, template_dir, e2ds_dict,
+                                            spl_others, spl_water)
         # ---------------------------------------------------------------------
         # write the pre-cleaned file to disk
         inst.write_precleaned(precleanded_file, e2ds_dict,sci_hdr)
