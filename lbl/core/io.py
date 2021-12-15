@@ -282,7 +282,7 @@ def get_hkey(header: fits.Header, key: Union[str, List[str]],
     if isinstance(key, list):
         drskey = ''
         for key_it in key:
-            if key in header:
+            if key_it in header:
                 if header[key_it] != ['None', '', None]:
                     drskey = key_it
                     break
