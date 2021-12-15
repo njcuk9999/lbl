@@ -25,13 +25,8 @@ keyword_args = dict()
 keyword_args['INSTRUMENT'] = 'CARMENES'
 keyword_args['DATA_DIR'] = working
 keyword_args['DATA_TYPE'] = 'SCIENCE'
-keyword_args['TEMPLATE_SUBDIR'] = 'templates'
-keyword_args['BLAZE_FILE'] = None
-keyword_args['TEMPLATE_FILE'] = 'Template_TOI-1452.fits'
-keyword_args['SKIP_DONE'] = False
-keyword_args['MASK_SUBDIR'] = 'masks'
 keyword_args['INPUT_FILE'] = 'car-*.fits'
-keyword_args['OVERWRITE'] = True
+keyword_args['PLOT'] = False
 # add objects
 objs = ['TOI-1452']
 templates = ['TOI-1452']

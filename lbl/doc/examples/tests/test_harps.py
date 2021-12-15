@@ -25,11 +25,9 @@ keyword_args = dict()
 keyword_args['INSTRUMENT'] = 'HARPS'
 keyword_args['DATA_DIR'] = working
 keyword_args['DATA_TYPE'] = 'SCIENCE'
-keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
 keyword_args['INPUT_FILE'] = 'HARPS*_e2ds_A.fits'
 keyword_args['PLOT'] = False
-keyword_args['OVERWRITE'] = True
 # add objects
 objs = ['Proxima']
 templates = ['Proxima']

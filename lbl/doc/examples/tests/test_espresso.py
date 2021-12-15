@@ -25,14 +25,8 @@ keyword_args = dict()
 keyword_args['INSTRUMENT'] = 'ESPRESSO'
 keyword_args['DATA_DIR'] = working
 keyword_args['DATA_TYPE'] = 'SCIENCE'
-keyword_args['TEMPLATE_SUBDIR'] = 'templates'
-keyword_args['BLAZE_FILE'] = None
-keyword_args['TEMPLATE_FILE'] = 'Template_LHS-1140.fits'
-keyword_args['PLOT'] = False
-keyword_args['SKIP_DONE'] = False
-keyword_args['MASK_SUBDIR'] = 'masks'
 keyword_args['INPUT_FILE'] = 'ES*.fits'
-keyword_args['OVERWRITE'] = True
+keyword_args['PLOT'] = False
 # add objects
 objs = ['LHS-1140']
 templates = ['LHS-1140']
