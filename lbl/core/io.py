@@ -567,7 +567,10 @@ def load_table(filename: str, kind: Union[str, None] = None,
     # try to load fits file
     try:
         with warnings.catch_warnings(record=True) as _:
-            table = Table.read(filename, format=fmt, hdu=extname)
+            if extname is not None:
+                table = Table.read(filename, format=fmt, hdu=extname)
+            else:
+                table = Table.read(filename, format=fmt)
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
