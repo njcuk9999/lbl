@@ -320,6 +320,8 @@ def make_all_directories(inst: Union[InstrumentsType]) -> ParamDict:
     props.set('SCIENCE_DIR', value=science_dir, source=func_name)
     props.set('OBJ_SUBDIR', value=obj_subdir, source=func_name)
     props.set('LBLRV_DIR', value=lblrv_dir, source=func_name)
+    props.set('LBLRV_ALL', value=os.path.join(data_dir, params['LBLRV_SUBDIR']),
+              source=func_name)
     props.set('LBLRT_DIR', value=lbl_reftable_dir, source=func_name)
     props.set('LBL_RDB_DIR', value=lbl_rdb_dir, source=func_name)
     props.set('PLOT_DIR', value=plot_dir, source=func_name)

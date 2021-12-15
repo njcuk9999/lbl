@@ -448,7 +448,7 @@ def tellu_corr_plot(inst: InstrumentsType, wave_vector: np.ndarray,
     frame.plot(wave_vector, sp_tmp / scale, color='red', label='input')
     frame.plot(wave_vector, sp_tmp / (trans * mask * scale), color='green',
                label='input/abso', alpha=0.5)
-    frame.plot(wave_vector, trans, color='orange', alpha=0.5)
+    frame.plot(wave_vector, trans, color='orange', alpha=0.5, label='abso')
     # plot template if present
     if template_flag:
         frame.plot(wave_vector, sp_tmp / template, color='cyan', alpha=0.5,
