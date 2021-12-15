@@ -1343,8 +1343,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         sd3v = np.array(rvtable[good]['sd3v'], dtype=float)
         # push these values into array (for saving images later)
         wave_arr[row] = wave_vec
-        d2v_arr[row], sd2v[row] = d2v, sd2v
-        d3v_arr[row], sd3v[row] = d3v, sd3v
+        d2v_arr[row], sd2v_arr[row] = d2v, sd2v
+        d3v_arr[row], sd3v_arr[row] = d3v, sd3v
         # use the odd mean ratio to calculate d2v and sd2v
         d2v_guess, d2v_bulk_error = mp.odd_ratio_mean(d2v, sd2v)
         # push into rdb_dict
