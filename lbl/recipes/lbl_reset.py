@@ -102,12 +102,14 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 2: clean directories
     # -------------------------------------------------------------------------
+    # clean _tc from science directories (tellu cleaned files)
+    io.clean_directory(dparams['SCIENCE_DIR'], dir_suffix='_tc')
     # clean reftable directory
     io.clean_directory(dparams['LBLRT_DIR'])
     # clean rdb directory
     io.clean_directory(dparams['LBL_RDB_DIR'])
     # clean rv directory
-    io.clean_directory(dparams['LBLRV_DIR'])
+    io.clean_directory(dparams['LBLRV_ALL'])
     # clean mask directory
     io.clean_directory(dparams['MASK_DIR'])
     # clean template directory

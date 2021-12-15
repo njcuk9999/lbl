@@ -178,7 +178,8 @@ def find_files(path_list: List[Path],
     return valid_files
 
 
-def clean_directory(path: str, logmsg: bool = True):
+def clean_directory(path: str, logmsg: bool = True,
+                    dir_suffix: str = ''):
     """
     Remove all files from a directory
 
@@ -191,9 +192,19 @@ def clean_directory(path: str, logmsg: bool = True):
     if not os.path.exists(path):
         return
     # log cleaning
-    log.general('Cleaning directory {0}'.format(path))
-    # loop around files
-    files = glob.glob(os.path.join(path, '*'), recursive=True)
+    if len(dir_suffix) == 0:
+        log.general('Cleaning directory {0}'.format(path))
+    else:
+        msg = 'Cleaning directory {0} --suffix={1}'
+        log.general(msg.format(path, dir_suffix))
+    # get all files in path that match filter
+    files = []
+    for _root, _dirs, _files in os.walk(path):
+        # dir_suffix
+        if _root.endswith(dir_suffix):
+            for filename in _files:
+                files.append(os.path.join(_root, filename))
+
     # loop around files
     for filename in files:
         # if filename is a file then remove it
