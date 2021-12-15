@@ -257,7 +257,7 @@ def load_header(filename: str,
     return header.copy()
 
 
-def get_hkey(header: fits.Header, key: str,
+def get_hkey(header: fits.Header, key: Union[str, List[str]],
              filename: Union[str, None] = None,
              required: bool = True) -> Any:
     """
@@ -277,19 +277,34 @@ def get_hkey(header: fits.Header, key: str,
     # deal with no filename
     if filename is None:
         filename = 'Unknown'
+    # -------------------------------------------------------------------------
+    # deal with a list of keys (test all one by one for the correct key)
+    if isinstance(key, list):
+        drskey = ''
+        for key_it in key:
+            if key in header:
+                if header[key_it] != ['None', '', None]:
+                    drskey = key_it
+                    break
+        if len(drskey) == 0:
+            emsg = 'Cannot find keys: {0} in header'
+            raise LblException(emsg.format(' or '.join(key)))
+    else:
+        drskey = str(key)
+    # -------------------------------------------------------------------------
     # test for key in header
-    if key in header:
+    if drskey in header:
         try:
-            return header[key]
+            return header[drskey]
         except Exception as e:
             emsg = 'Cannot use key {0} from header: {1} \n\t{2}: {3}'
-            eargs = [key, filename, type(e), str(e)]
+            eargs = [drskey, filename, type(e), str(e)]
             raise LblException(emsg.format(*eargs))
     elif not required:
         return None
     else:
         emsg = 'Key {0} not found in header: {1}'
-        eargs = [key, filename]
+        eargs = [drskey, filename]
         raise LblException(emsg.format(*eargs))
 
 
