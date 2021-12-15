@@ -27,9 +27,8 @@ keyword_args['DATA_DIR'] = working
 keyword_args['DATA_TYPE'] = 'SCIENCE'
 keyword_args['TEMPLATE_SUBDIR'] = 'templates'
 keyword_args['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
-keyword_args['TEMPLATE_FILE'] = 'Template_Proxima-tc_HARPS.fits'
-keyword_args['MASK_SUBDIR'] = 'masks'
 keyword_args['INPUT_FILE'] = 'HARPS*_e2ds_A.fits'
+keyword_args['PLOT'] = False
 keyword_args['OVERWRITE'] = True
 # add objects
 objs = ['Proxima']
@@ -43,19 +42,19 @@ num = 0
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    # _ = lbl_reset(object_science=objs[num], object_template=templates[num],
-    #               **keyword_args)
-    # # run tellu-clean
-    # _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
-    #                    telluclean_use_template=False, plot=False,
-    #                    **keyword_args)
-    # # run template
-    # _ = lbl_template(object_science=objs[num]+'_tc',
-    #                  object_template=templates[num]+'_tc',
-    #                  plot=False, **keyword_args)
+    _ = lbl_reset(object_science=objs[num], object_template=templates[num],
+                  **keyword_args)
+    # run tellu-clean
+    _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
+                       telluclean_use_template=False,
+                       **keyword_args)
+    # run template
+    _ = lbl_template(object_science=objs[num]+'_tc',
+                     object_template=templates[num]+'_tc',
+                     **keyword_args)
     # run tellu-clean
     _ = lbl_telluclean(object_science=objs[num],
-                       object_template=templates[num]+'_tc', plot=True,
+                       object_template=templates[num]+'_tc',
                        skip_done=False, **keyword_args)
     # run template
     _ = lbl_template(object_science=objs[num]+'_tc',

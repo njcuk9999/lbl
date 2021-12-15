@@ -12,13 +12,12 @@ Created on 2021-03-19
 from astropy.table import Table
 
 from lbl.core import base
-from lbl import lbl_compute
-from lbl import lbl_compil
-from lbl import lbl_template
-from lbl import lbl_mask
-from lbl import lbl_noise
-from lbl import lbl_telluclean
-
+from lbl.recipes import lbl_compute
+from lbl.recipes import lbl_compile
+from lbl.recipes import lbl_template
+from lbl.recipes import lbl_mask
+from lbl.recipes import lbl_noise
+from lbl.recipes import lbl_telluclean
 
 __NAME__ = 'lbl_mask.py'
 __STRNAME__ = 'LBL Mask'
@@ -29,7 +28,18 @@ __authors__ = base.__authors__
 DESCRIPTION_MASK = 'Use this code to wrap around lbl'
 
 # define keys to remove from run params
-REMOVE_KEYS = ['INSTRUMENT', 'DATA_DIR', '']
+REMOVE_KEYS = ['INSTRUMENT', 'DATA_DIR', 'DATA_TYPES',
+               # science keys
+               'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
+               # run keys
+               'RUN_LBL_TELLUCLEAN', 'RUN_LBL_TEMPLATE', 'RUN_LBL_MASK',
+               'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
+               # skip keys
+               'SKIP_LBL_TELLUCLEAN', 'SKIP_LBL_TEMPLATE', 'SKIP_LBL_MASK',
+               'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
+               # general keys already used
+               'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE']
+
 
 # =============================================================================
 # Define functions
@@ -39,8 +49,8 @@ def main(runparams: dict):
     Wrapper around __main__ recipe code (deals with errors and loads instrument
     profile)
 
-    :param kwargs: kwargs to parse to instrument - anything in params can be
-                   parsed (overwrites instrumental and default parameters)
+    :param runparams: dict, parameters to pass to lbl recipes
+
     :return:
     """
     # get key parameters
@@ -50,8 +60,13 @@ def main(runparams: dict):
     object_sciences = runparams['OBJECT_SCIENCE']
     object_templates = runparams['OBJECT_TEMPLATE']
     object_teffs = runparams['OBJECT_TEFF']
-
-
+    # -------------------------------------------------------------------------
+    # push other keyword arguments into keyword arguments dictionary
+    keyword_args = dict()
+    for key in runparams:
+        if key not in REMOVE_KEYS:
+            keyword_args[key] = runparams[key]
+    # -------------------------------------------------------------------------
     # loop around all files
     for num in range(len(object_sciences)):
         # get this iterations values
@@ -59,55 +74,68 @@ def main(runparams: dict):
         object_science = object_sciences[num]
         object_template = object_templates[num]
         object_teff = object_teffs[num]
-
+        # ---------------------------------------------------------------------
         # run all pre-cleaning steps
         if runparams['RUN_LBL_TELLUCLEAN'] and data_type == 'SCIENCE':
             # run telluric cleaning (without template)
-            lbl_telluclean(instrument=instrument, data_dir=data_dir,
-                           object_science=object_science,
-                           object_template=object_template,
-                           skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
-                           telluclean_use_template=False)
+            lbl_telluclean.main(instrument=instrument, data_dir=data_dir,
+                                object_science=object_science,
+                                object_template=object_template,
+                                skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
+                                telluclean_use_template=False,
+                                **keyword_args)
             # make the template (if not present)
-            lbl_template(instrument=instrument, data_dir=data_dir,
-                         object_science=object_science,
-                         object_template=object_template,
-                         overwrite=~runparams['SKIP_LBL_TELLUCLEAN'])
-            lbl_telluclean(instrument=instrument, data_dir=data_dir,
-                           object_science=object_science,
-                           object_template=object_template,
-                           skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
-                           telluclean_use_template=True)
+            lbl_template.main(instrument=instrument, data_dir=data_dir,
+                              object_science=object_science,
+                              object_template=object_template,
+                              overwrite=~runparams['SKIP_LBL_TELLUCLEAN'],
+                              **keyword_args)
+            lbl_telluclean.main(instrument=instrument, data_dir=data_dir,
+                                object_science=object_science,
+                                object_template=object_template,
+                                skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
+                                telluclean_use_template=True,
+                                **keyword_args)
+        # ---------------------------------------------------------------------
         # make the template (if not present)
         if runparams['RUN_LBL_TEMPLATE']:
-            lbl_template(instrument=instrument, data_dir=data_dir,
-                         object_science=object_science,
-                         object_template=object_template,
-                         overwrite=~runparams['SKIP_LBL_TEMPLATE'])
+            lbl_template.main(instrument=instrument, data_dir=data_dir,
+                              object_science=object_science,
+                              object_template=object_template,
+                              overwrite=~runparams['SKIP_LBL_TEMPLATE'],
+                              **keyword_args)
+        # ---------------------------------------------------------------------
         # make the mask (if not present)
         if runparams['RUN_LBL_MASK']:
-            lbl_mask(instrument=instrument, data_dir=data_dir,
-                     object_science=object_science,
-                     object_template=object_template,
-                     object_teff=object_teff,
-                     overwrite=~runparams['SKIP_LBL_MASK'])
+            lbl_mask.main(instrument=instrument, data_dir=data_dir,
+                          object_science=object_science,
+                          object_template=object_template,
+                          object_teff=object_teff,
+                          overwrite=~runparams['SKIP_LBL_MASK'],
+                          **keyword_args)
+        # ---------------------------------------------------------------------
         # # make the noise model (if not present)
         # if runparams['RUN_LBL_NOISE']:
         #     lbl_noise(instrument=instrument, data_dir=data_dir,
         #               object_science=object_science,
-        #               object_template=object_template)
+        #               object_template=object_template,
+        #               **keyword_args)
+        # ---------------------------------------------------------------------
         # run the compute code
         if runparams['RUN_LBL_COMPUTE']:
-            lbl_compute(instrument=instrument, data_dir=data_dir,
-                        object_science=object_science,
-                        object_template=object_template,
-                        skip_done=runparams['SKIP_LBL_COMPUTE'])
+            lbl_compute.main(instrument=instrument, data_dir=data_dir,
+                             object_science=object_science,
+                             object_template=object_template,
+                             skip_done=runparams['SKIP_LBL_COMPUTE'],
+                             **keyword_args)
+        # ---------------------------------------------------------------------
         # run the compile code
         if runparams['RUN_LBL_COMPILE']:
-            lbl_compil(instrument=instrument, data_dir=data_dir,
-                       object_science=object_science,
-                       object_template=object_template,
-                       skip_done=runparams['SKIP_LBL_COMPILE'])
+            lbl_compile.main(instrument=instrument, data_dir=data_dir,
+                             object_science=object_science,
+                             object_template=object_template,
+                             skip_done=runparams['SKIP_LBL_COMPILE'],
+                             **keyword_args)
 
 
 # =============================================================================
@@ -137,7 +165,6 @@ if __name__ == "__main__":
     rparams['SKIP_LBL_COMPILE'] = True
     # run main
     main(rparams)
-
 
 # =============================================================================
 # End of code
