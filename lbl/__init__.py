@@ -9,11 +9,17 @@ Created on 2021-03-15
 
 @author: cook
 """
+from lbl.core import base
 from lbl import recipes
 
 # =============================================================================
 # Define variables
 # =============================================================================
+__NAME__ = 'lbl'
+__STRNAME__ = 'LBL'
+__version__ = base.__version__
+__date__ = base.__date__
+__authors__ = base.__authors__
 # clean recipe
 lbl_reset = recipes.lbl_reset.main
 # tellu-clean recipe
