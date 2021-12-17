@@ -82,6 +82,7 @@ def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
         # attempt to download the data
         try:
             wget.download(tapas_url, tapas_abspath)
+            log.general('\nDownloaded tapas file.')
         except Exception as e:
             emsg = 'Cannot download tapas file: {0}\n\tError {1}: {2}'
             eargs = [tapas_url, type(e), str(e)]
