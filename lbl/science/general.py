@@ -1704,7 +1704,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 finite_mask &= np.isfinite(tmp_rv[comb_mask])
                 # deal with not having enough values (half of total being
                 #    non finite)
-                if np.sum(finite_mask) < np.sum(comb_mask) / 2:
+                if np.sum(finite_mask) < np.sum(comb_mask) / 10:
                     continue
                 # deal with not having enough points in general (min = 5)
                 if np.sum(comb_mask) < 5:
