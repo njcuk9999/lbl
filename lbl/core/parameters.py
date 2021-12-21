@@ -271,7 +271,7 @@ params.set('COMPIL_SLOPE_REF_WAVE', None, source=__NAME__,
            not_none=True)
 
 # define a threshold based on the fraction on time a line as been measured
-params.set('COMPIL_FRAC_TIME_MEAS', 0.7, source=__NAME__,
+params.set('COMPIL_FRAC_TIME_MEAS', 0.1, source=__NAME__,
            desc='a threshold based on the fraction on time a line as '
                 'been measured')
 
