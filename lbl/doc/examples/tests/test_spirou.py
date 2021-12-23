@@ -27,10 +27,10 @@ gl699_config_file = working + 'spirou_gl699_config.yaml'
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    _ = lbl_reset(config_file=fp_config_file)
+    #_ = lbl_reset(config_file=fp_config_file)
     _ = lbl_reset(config_file=gl699_config_file)
     # run template
-    _ = lbl_template(config_file=fp_config_file)
+    #_ = lbl_template(config_file=fp_config_file)
     _ = lbl_template(config_file=gl699_config_file)
     # run mask code
     _ = lbl_mask(config_file=fp_config_file)

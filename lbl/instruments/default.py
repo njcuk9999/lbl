@@ -435,12 +435,16 @@ class Instrument:
         # copy header from reference header
         header = io.copy_header(header, sci_hdr)
         # add custom keys
-        header = self.set_hkey(header, 'KW_NTFILES', len(sci_table['FILENAME']))
         header = self.set_hkey(header, 'KW_VERSION', __version__)
         header = self.set_hkey(header, 'KW_VDATE', __date__)
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        header = self.set_hkey(header, 'KW_TEMPLATE_COVERAGE',
+                               value=props['template_coverage'])
+        header = self.set_hkey(header, 'KW_TEMPLATE_BERVBINS',
+                               value=props['total_nobs_berv'])
+        header = self.set_hkey(header, 'KW_NTFILES', props['template_nobs'])
         # ---------------------------------------------------------------------
         # create main table
         table1 = Table()

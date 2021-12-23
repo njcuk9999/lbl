@@ -163,6 +163,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     weight_cube = np.zeros([len(wavegrid), len(science_files)])
     # science table
     sci_table = dict()
+    # all bervs
+    berv = np.zeros_like(science_files, dtype = float)
     # loop around files
     for it, filename in enumerate(science_files):
         # print progress
@@ -185,13 +187,13 @@ def __main__(inst: InstrumentsType, **kwargs):
         if blaze_flag:
             sci_image, blazeimage = inst.no_blaze_corr(sci_image, sci_wave)
         # get the berv
-        berv = inst.get_berv(sci_hdr)
+        berv[it] = inst.get_berv(sci_hdr)
         # populate science table
         sci_table = inst.populate_sci_table(filename, sci_table, sci_hdr,
-                                            berv=berv)
+                                            berv=berv[it])
         # apply berv if required
-        if berv != 0.0:
-            sci_wave = mp.doppler_shift(sci_wave, -berv)
+        if berv[it] != 0.0:
+            sci_wave = mp.doppler_shift(sci_wave, -berv[it])
         # set exactly zeros to NaNs
         sci_image[sci_image == 0] = np.nan
         # compute s1d from e2ds
@@ -259,10 +261,61 @@ def __main__(inst: InstrumentsType, **kwargs):
                 flux_cube[:, sci_it] /= lowpass
 
     # -------------------------------------------------------------------------
+    # bin cube by BERV (to give equal weighting to epochs)
+    # -------------------------------------------------------------------------
+    # get minimum number of berv bins
+    nmin_bervbin = inst.params['BERVBIN_MIN_ENTRIES']
+    # only for science data
+    if inst.params['DATA_TYPE'] == 'SCIENCE':
+        # get the berv bin centers
+        bervbins = berv // grid_step
+        # find unique berv bins
+        ubervbins = np.unique(bervbins)
+        # storage the number of observations per berv bin
+        nobs_bervbin = np.zeros_like(ubervbins, dtype=int)
+        # get a flux cube for the binned by berv data
+        flux_cube_bervbin = np.full([flux_cube.shape[0], len(bervbins)], np.nan)
+        # loop around unique berv bings and merge entries via median
+        for it, bervbin in enumerate(ubervbins):
+            # get mask for those observations in berv bin
+            good = bervbins == bervbin
+            # count the number of observation in this berv bin
+            n_obs = np.sum(good)
+            # log progress message
+            msg = 'Computing BERV bin {0} of {1}, n files = {2}'
+            margs = [it + 1, len(ubervbins),n_obs]
+            log.general(msg.format(*margs))
+            # deal with minimum number of observations allowed
+            if n_obs < nmin_bervbin:
+                continue
+            # add to the number of observations used
+            nobs_bervbin[it] = n_obs
+            # combine all observations in bin with median
+            with warnings.catch_warnings(record=True) as _:
+                bervmed = np.nanmedian(flux_cube[:,good], axis=1)
+                flux_cube_bervbin[:, it] = bervmed
+        # calculate the number of observations used and berv bins used
+        nfiles = np.sum(nobs_bervbin)
+        total_nobs_berv = np.sum(nobs_bervbin != 0)
+        # calculate the number of observations and the berv coverage
+        template_coverage = total_nobs_berv * grid_step / 1000
+    # else deal with non-science cases
+    else:
+        flux_cube_bervbin = flux_cube
+        # calculate the number of observations used
+        total_nobs_berv = 0
+        # calculate the number of observations and the berv coverage
+        template_coverage = 0
+        # we use all files
+        nfiles = len(science_files)
+
+    # -------------------------------------------------------------------------
     # get the median and +/- 1 sigma values for the cube
-    log.general('\tCalculate 16th, 50th and 84th percentiles')
+    # -------------------------------------------------------------------------
+    log.general('Calculate 16th, 50th and 84th percentiles')
     with warnings.catch_warnings(record=True) as _:
-        p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84], axis=1)
+        p16, p50, p84 = np.nanpercentile(flux_cube_bervbin, [16, 50, 84],
+                                         axis=1)
         # calculate the rms of each wavelength element
         rms = (p84 - p16) / 2
 
@@ -270,7 +323,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 7. Write template
     # -------------------------------------------------------------------------
     # get props
-    props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms)
+    props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms,
+                 template_coverage=template_coverage,
+                 total_nobs_berv=total_nobs_berv, template_nobs=nfiles)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
 

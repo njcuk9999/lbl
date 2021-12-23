@@ -410,6 +410,11 @@ params.set(key='TEMPLATE_MJDEND', value=None, source=__NAME__,
            desc='the latest allowed FP calibration used for template '
                 'construction (None for unset)', dtype=float)
 
+# define the minimum number of observations required for a template berv bin
+params.set('BERVBIN_MIN_ENTRIES', value=3, source=__NAME__,
+           desc='the minimum number of observations required for a '
+                'template berv bin', dtype=int)
+
 # =============================================================================
 # Define telluric tellu-cleaning parameters
 # =============================================================================
@@ -736,6 +741,16 @@ params.set(key='KW_MODELVEL', value=None, source=__NAME__, not_none=True,
 params.set(key='KW_NTFILES', value='LBLNTMPL', source=__NAME__, not_none=True,
            desc='Number of files used in template construction',
            comment='Number of files used in template construction')
+
+# define the berv coverage of a template
+params.set(key='KW_TEMPLATE_COVERAGE', value='LBLTCOVR', source=__NAME__,
+           not_none=True, desc='define the berv coverage of a template',
+           comment='Template BERV coverage in km/s')
+
+# define the number of template berv bins
+params.set(key='KW_TEMPLATE_BERVBINS', value='LBLTBRVB', source=__NAME__,
+           not_none=True, desc='define the number of template berv bins',
+           comment='Number of template BERV bins')
 
 # =============================================================================
 # Start of code
