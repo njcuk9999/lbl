@@ -276,10 +276,10 @@ class Espresso(Instrument):
         # get type of mask
         mask_type = self.params['{0}_MASK_TYPE'.format(data_type)]
         # deal with no object
-        if self.params['OBJECT_SCIENCE'] is None:
-            raise LblException('OBJECT_SCIENCE name must be defined')
+        if self.params['OBJECT_TEMPLATE'] is None:
+            raise LblException('OBJECT_TEMPLATE name must be defined')
         else:
-            objname = self.params['OBJECT_SCIENCE']
+            objname = self.params['OBJECT_TEMPLATE']
         # define base name
         basename = '{0}_{1}.fits'.format(objname, mask_type)
         # get absolute path
