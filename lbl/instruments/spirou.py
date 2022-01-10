@@ -66,7 +66,7 @@ class Spirou(Instrument):
         # set parameters to update
         self.params.set('INSTRUMENT', 'SPIROU', source=func_name)
         # define the default science input files
-        self.params.set('INPUT_FILE', '*e2dsff*AB.fits', source=func_name)
+        self.params.set('INPUT_FILE', '*.fits', source=func_name)
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
