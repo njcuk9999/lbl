@@ -137,7 +137,10 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.warning('Set --overwrite to recalculate mask')
         # return here
         return locals()
-
+    elif os.path.exists(template_file) and inst.params['OVERWRITE']:
+        log.general(f'--overwrite=True. Recalculating mask {mask_file}')
+    else:
+        log.general(f'Could not find {mask_file}. Calculating mask.')
     # -------------------------------------------------------------------------
     # Step 4: Find correct Goettingen Phoenix models and get them if not
     #         present - only done for non calibration files
