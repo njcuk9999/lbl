@@ -138,6 +138,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.warning('Set --overwrite to recalculate mask')
         # return here
         return locals()
+    else:
+        log.general('Could not find template: {0}'.format(template_file))
     # -------------------------------------------------------------------------
     # Step 4: Deal with reference file (first file)
     # -------------------------------------------------------------------------
