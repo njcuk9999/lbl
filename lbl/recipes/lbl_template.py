@@ -138,7 +138,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.warning('Set --overwrite to recalculate mask')
         # return here
         return locals()
-    elif os.path.exists(template_file) and inst.parmas['OVERWRITE']:
+    elif os.path.exists(template_file) and inst.params['OVERWRITE']:
         log.general(f'--overwrite=True. Recalculating template {template_file}')
     else:
         log.general(f'Could not find template. Calculating: {template_file}')
