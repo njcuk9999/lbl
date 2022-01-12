@@ -198,7 +198,7 @@ params.set(key='COMPUTE_LINE_NSIG_THRES', value=8, source=__NAME__,
 
 # define the fraction of the bulk error the rv mean must be above for compute
 #   rv to have converged
-params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=0.2, source=__NAME__,
+params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=0.1, source=__NAME__,
            desc='fraction of the bulk error the rv mean must be above for '
                 'compute rv to have converged')
 
