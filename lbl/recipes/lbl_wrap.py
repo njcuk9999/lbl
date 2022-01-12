@@ -90,7 +90,7 @@ def main(runparams: dict):
                                 data_type=data_type,
                               object_science=object_science,
                               object_template=object_template,
-                              overwrite=~runparams['SKIP_LBL_TELLUCLEAN'],
+                              overwrite=not runparams['SKIP_LBL_TELLUCLEAN'],
                               **keyword_args)
             lbl_telluclean.main(instrument=instrument, data_dir=data_dir,
                                 data_type=data_type,
@@ -106,7 +106,7 @@ def main(runparams: dict):
                                 data_type=data_type,
                               object_science=object_science,
                               object_template=object_template,
-                              overwrite=~runparams['SKIP_LBL_TEMPLATE'],
+                              overwrite=not runparams['SKIP_LBL_TEMPLATE'],
                               **keyword_args)
         # ---------------------------------------------------------------------
         # make the mask (if not present)
@@ -116,7 +116,7 @@ def main(runparams: dict):
                           object_science=object_science,
                           object_template=object_template,
                           object_teff=object_teff,
-                          overwrite=~runparams['SKIP_LBL_MASK'],
+                          overwrite=not runparams['SKIP_LBL_MASK'],
                           **keyword_args)
         # ---------------------------------------------------------------------
         # # make the noise model (if not present)
