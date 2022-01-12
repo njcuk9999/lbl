@@ -319,7 +319,11 @@ def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 500):
     # step in velocity
     # get the length of the magic vector
     logwaveratio = np.log(wave1 / wave0)
-    len_magic = int(np.ceil(logwaveratio * speed_of_light_ms / dv_grid))
+    len_magic = int(np.floor(logwaveratio * speed_of_light_ms / dv_grid))
+    wave1 = np.exp(len_magic * dv_grid / speed_of_light_ms) * wave0
+    # redefining wave1 to have a round number of velocity bins
+    logwaveratio = np.log(wave1 / wave0)
+
     # get the positions for "magic length"
     plen_magic = np.arange(len_magic)
     # define the magic grid to use in ccf
