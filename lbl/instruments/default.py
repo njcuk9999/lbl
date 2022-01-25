@@ -772,7 +772,7 @@ class Instrument:
         if mcond2 and mcond3:
             return science_files
         # filtering files
-        log.general('Filtering science files...')
+        log.general('Filtering {0} files...'.format(self.params['DATA_TYPE']))
         # storage
         keep_files = []
         # loop around science files

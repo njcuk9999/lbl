@@ -605,6 +605,8 @@ class Spirou(Instrument):
 
         :return: list of str, the filters calibration filenames
         """
+        # get tqdm
+        tqdm = base.tqdm_module(self.params['USE_TQDM'], log.console_verbosity)
         # get mjd start and end
         start = self.params['TEMPLATE_MJDSTART']
         end = self.params['TEMPLATE_MJDEND']
@@ -617,14 +619,14 @@ class Spirou(Instrument):
         if mcond2 and mcond3 and mcond1:
             return science_files
         # filtering files
-        log.general('Filtering science files...')
+        log.general('Filtering {0} files...'.format(self.params['DATA_TYPE']))
         # select the first science file as a reference file
         refimage, refhdr = self.load_science(science_files[0])
         ref_fibertype = self.get_dpr_fibtype(refhdr)
         # storage
         keep_files = []
         # loop around science files
-        for science_file in science_files:
+        for science_file in tqdm(science_files):
             # load science file header
             sci_hdr = io.load_header(science_file)
             # find out if we have a calibration
