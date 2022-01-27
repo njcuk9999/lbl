@@ -66,7 +66,7 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
     # to the next. We define a scale for this mask
     # smoothing scale
     # -------------------------------------------------------------------------
-    # define a kernal that goes from -3 to +3 smooth_sizes of the mask
+    # define a kernel that goes from -3 to +3 smooth_sizes of the mask
     xker = np.arange(-smooth_size * 3, smooth_size * 3, 1)
     ker = np.exp(-0.5 * (xker / smooth_size) ** 2)
     # set up the edge vector

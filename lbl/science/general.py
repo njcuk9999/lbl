@@ -25,6 +25,7 @@ from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import plot
+from scipy.stats import pearsonr
 
 # =============================================================================
 # Define variables
@@ -771,6 +772,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     sdv = np.full(len(ref_table['WAVE_START']), np.nan)
     sd2v = np.full(len(ref_table['WAVE_START']), np.nan)
     sd3v = np.full(len(ref_table['WAVE_START']), np.nan)
+    # keep track of the fraction of each line that is valid
+    frac_line_valid = np.zeros(len(ref_table['WAVE_START']))
+
     # stoarge for final rv values
     rv_final = np.full(len(ref_table['WAVE_START']), np.nan)
     # storage for plotting
@@ -969,6 +973,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # not happen with SPIRou data
             sci_seg = sci_ord[x_start:x_end + 1]
             model_seg = model_ord[x_start:x_end + 1]
+
+            # keep track of the fraction of each lines that is not finite
+            frac_mask = np.isfinite(sci_ord[x_start:x_end + 1])
+            frac_line_valid[line_it] = np.mean(frac_mask)
+
             # diff_seg = (sci_seg - model_seg) * weight_mask
             # work out the sum of the weights of the weight mask
             sum_weight_mask = np.sum(weight_mask)
@@ -1092,6 +1101,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # calculate the chi2 cdf
     chi2_cdf = 1 - stats.chi2.cdf(ref_table['CHI2'], ref_table['NPIXLINE'])
     ref_table['CHI2_VALID_CDF'] = chi2_cdf
+    # fraction of each lines that is a valid pixel when computing the dv
+    ref_table['FRAC_LINE_VALID'] = frac_line_valid
     # -------------------------------------------------------------------------
     # update _all arrays
     # -------------------------------------------------------------------------
@@ -1199,6 +1210,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     frac_time_meas = inst.params['COMPIL_FRAC_TIME_MEAS']
     # obj_sci = inst.params['OBJECT_SCIENCE']
     ccf_ew_fp = inst.params['COMPIL_FP_EWID']
+    # get the threshold of pearson-r likelihood of correlation with BERV
+    cut_pearsonr = inst.params['COMPIL_CUT_PEARSONR']
+    # reference wavelength for slope intercept
     reference_wavelength = inst.params['COMPIL_SLOPE_REF_WAVE']
     # get the ccf e-width column name
     ccf_ew_col = inst.params['KW_CCF_EW']
@@ -1268,7 +1282,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     dv_arr, sdv_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
     d2v_arr, sd2v_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
     d3v_arr, sd3v_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
-
+    berv = np.zeros(len(lblrvfiles))
     # -------------------------------------------------------------------------
     # work out for cumulative plot for first file
     # -------------------------------------------------------------------------
@@ -1293,6 +1307,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # load table and header
         rvtable, rvhdr = inst.load_lblrv_file(lblrvfiles[row])
+        # store the berv value for each file
+        berv[row] = inst.get_berv(rvhdr)
         # fix header (instrument specific)
         rvhdr = inst.fix_lblrv_header(rvhdr)
         # fill rjd value
@@ -1464,13 +1480,37 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
 
         # fraction of valid measurements for given line
         frac_valid = np.nanmean(np.isfinite(dv_arr), axis=0)
+
+        # for each line, likelihood that correlation with BERV
+        # is statistically significant. Not correlation with BERV
+        # gives a flat 0 to 1 distribution. Some correlation with
+        # BERV will lead to pile-up at very small values. With a
+        # p=1e-4 value, we would reject 1 or 2 lines for a typical
+        # target in the absence of a True correlation.
+        prob_pearsonr = np.zeros(len(per_line_mean))
         # compute the per-line bias
         for line_it in tqdm(range(len(per_line_mean))):
             # We should have a threshold in the fraction of 'valid' times the
             #     line has been measured
             if frac_valid[line_it] < frac_time_meas:
                 per_line_mean[line_it] = np.nan
+                per_line_error[line_it] = np.nan
+                continue
+
+            # find valid velocity measurements
+            g = np.isfinite(dv_arr[:,line_it])
+            per_line_diff = (dv_arr[:,line_it] - rdb_dict['vrad'])
+            # first output of pearsonr is the the correlation itself.
+            # this is meaningless if we don't know the number of points
+            # that came in. The second term is the likelihood that the
+            # correlation is due to a statistical fluctuation (it significance)
+            # and can be used to flag lines that suspiciously correlate
+            # with BERV.
+            prob_pearsonr[line_it] = pearsonr( berv[g], per_line_diff[g])[1]
+
+            if prob_pearsonr[line_it] < cut_pearsonr:
                 per_line_mean[line_it] = np.nan
+                per_line_error[line_it] = np.nan
                 continue
             # get the difference and error for each line
             with warnings.catch_warnings(record=True) as _:
@@ -1487,7 +1527,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # if odd ratio mean fails push NaNs into arrays
             except Exception as _:
                 per_line_mean[line_it] = np.nan
-                per_line_mean[line_it] = np.nan
+                per_line_error[line_it] = np.nan
 
         # normalize the per-line mean to zero
         guess3, bulk_error3 = mp.odd_ratio_mean(per_line_mean, per_line_error)
@@ -1560,10 +1600,11 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         while itr_count <= 10:
             # find finite points
             good = np.isfinite(err) & np.isfinite(rvs_row)
+            good &= np.isfinite(rv_per_line_model[0])
             # get valid wave and subtract reference wavelength
             valid_wave = rvtable0['WAVE_START'][good] - reference_wavelength
             # get valid rv an dv drms
-            valid_rv = rvs_row[good]
+            valid_rv = (rvs_row - rv_per_line_model[0])[good]
             valid_dvrms = err[good]
             # get weights for the np.polyval fit. Do *not* use the square of
             # error bars for weight (see polyfit help)

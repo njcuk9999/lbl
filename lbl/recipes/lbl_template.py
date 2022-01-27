@@ -152,12 +152,13 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get wave solution for reference file
     refwave = inst.get_wave_solution(science_files[0], refimage, refhdr)
     # get domain coverage
-    wavemin, wavemax = float(np.nanmin(refwave)), float(np.nanmax(refwave))
+    wavemin = inst.params['COMPIL_WAVE_MIN']
+    wavemax = inst.params['COMPIL_WAVE_MAX']
     # work out a valid velocity step in m/s
-    grid_step = general.get_velocity_step(refwave)
+    grid_step_magic = general.get_velocity_step(refwave)
     # grid scale for the template
     wavegrid = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
-                                      dv_grid=grid_step)
+                                      dv_grid=grid_step_magic)
     # -------------------------------------------------------------------------
     # Step 5: Loop around each file and load into cube
     # -------------------------------------------------------------------------
@@ -228,9 +229,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # copy
     flux_cube0 = np.array(flux_cube)
     # get the pixel hp_width [needs to be in m/s]
-    grid_step = general.get_velocity_step(refwave, rounding=False)
+    grid_step_original = general.get_velocity_step(refwave, rounding=False)
 
-    hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step))
+    hp_width = int(np.round(inst.params['HP_WIDTH']*1000 / grid_step_original))
     # -------------------------------------------------------------------------
     # applying low pass filter
     log.general('\tApplying low pass filter to cube')
@@ -272,13 +273,14 @@ def __main__(inst: InstrumentsType, **kwargs):
     # only for science data
     if inst.params['DATA_TYPE'] == 'SCIENCE':
         # get the berv bin centers
-        bervbins = berv // grid_step
+        bervbins = berv // grid_step_original
         # find unique berv bins
         ubervbins = np.unique(bervbins)
         # storage the number of observations per berv bin
         nobs_bervbin = np.zeros_like(ubervbins, dtype=int)
         # get a flux cube for the binned by berv data
-        flux_cube_bervbin = np.full([flux_cube.shape[0], len(bervbins)], np.nan)
+        fcube_shape = [flux_cube.shape[0], len(ubervbins)]
+        flux_cube_bervbin = np.full(fcube_shape, np.nan)
         # loop around unique berv bings and merge entries via median
         for it, bervbin in enumerate(ubervbins):
             # get mask for those observations in berv bin
@@ -302,7 +304,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         nfiles = np.sum(nobs_bervbin)
         total_nobs_berv = np.sum(nobs_bervbin != 0)
         # calculate the number of observations and the berv coverage
-        template_coverage = total_nobs_berv * grid_step / 1000
+        template_coverage = total_nobs_berv * grid_step_original / 1000
     # else deal with non-science cases
     else:
         flux_cube_bervbin = flux_cube

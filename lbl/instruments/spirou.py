@@ -85,6 +85,8 @@ class Spirou(Instrument):
         self.params.set('COMPIL_WAVE_MAX', 2500, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
+        # define min likelihood of correlation with BERV
+        self.params.set('COMPIL_CUT_PEARSONR', 1e-4, source = func_name)
         # define the CCF e-width to use for FP files
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define the first band (from get_binned_parameters) to plot (band1)

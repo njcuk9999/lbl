@@ -240,6 +240,10 @@ params.set('COMPIL_MAX_PIXEL_WIDTH', None, source=__NAME__,
            desc='The maximum pixel width allowed for lines [pixels]',
            not_none=True)
 
+# Max likelihood of correlation with BERV to use line
+params.set('COMPIL_CUT_PEARSONR', 1e-4, source=__NAME__,
+           desc='Max likelihood of correlation with BERV to use line')
+
 # define the CCF e-width to use for FP files
 params.set('COMPIL_FP_EWID', None, source=__NAME__,
            desc='define the CCF e-width to use for FP files',
