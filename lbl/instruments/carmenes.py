@@ -250,7 +250,7 @@ class Carmenes(Instrument):
         # define the SNR in chosen order
         self.params.set('KW_EXT_SNR', 'NONE', source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'HIERARCH CARACAL BJD', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH CARACAL JD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         # TODO -> not relevant for CARMENES
@@ -687,10 +687,8 @@ class Carmenes(Instrument):
             # return mjd + 0.5 (for rjd)
             return float(mid_exp_time) + 0.5
         else:
-            # convert bjd to mjd
-            bjd_mjd = Time(bjd, format='mjd').mjd
-            # return mjd + 0.5 (for rjd)
-            return float(bjd_mjd) + 0.5
+            # bjd is already a rjd for CARMENES
+            return float(bjd)
 
     def get_plot_date(self, header: fits.Header):
         """
