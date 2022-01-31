@@ -846,7 +846,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # work out the number of sigma away from the model
             nsig = (sci_data - model) / rms
             # mask for nsigma
-            sigmask = np.abs(nsig) > rms_sigclip_thres
+            with warnings.catch_warnings(record=True) as _:
+                sigmask = np.abs(nsig) > rms_sigclip_thres
             # apply sigma clip to the science data
             sci_data[sigmask] = np.nan
         else:
