@@ -314,14 +314,26 @@ def __main__(inst: InstrumentsType, **kwargs):
         template_coverage = 0
         # we use all files
         nfiles = len(science_files)
+        # Set uberv bins
+        ubervbins = []
 
     # -------------------------------------------------------------------------
     # get the median and +/- 1 sigma values for the cube
     # -------------------------------------------------------------------------
     log.general('Calculate 16th, 50th and 84th percentiles')
     with warnings.catch_warnings(record=True) as _:
-        p16, p50, p84 = np.nanpercentile(flux_cube_bervbin, [16, 50, 84],
-                                         axis=1)
+        if len(ubervbins) > 3:
+            # to get statistics on the ber-bin rms, we need more than 3
+            # bervbins
+            log.general('computation done per-berv bin')
+            p16, p50, p84 = np.nanpercentile(flux_cube_bervbin, [16, 50, 84],
+                                             axis=1)
+        else:
+            # if too few berv bins, we take stats on whole cube rather than
+            #    per-bervbin
+            log.general('computation done per-file, not per-berv bin')
+            p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
+                                             axis=1)
         # calculate the rms of each wavelength element
         rms = (p84 - p16) / 2
 
