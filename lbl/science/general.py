@@ -436,8 +436,9 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
 
     # high-pass the CCF just to be really sure that we are finding a true CCF
     # peak and not a spurious excursion in the low-frequencies
-    rfit, _ = mp.robust_polyfit(dvgrid, ccf_vector, 2, 5)
-    ccf_vector -= np.polyval(rfit, dvgrid)
+    # high-pass of CCF expressed in pixels, not km/s
+    ccf_hp_width_pix = int(inst.params['COMPUTE_CCF_HP_SCALE']/(grid_step/1000))
+    ccf_vector -= mp.lowpassfilter(ccf_vector, ccf_hp_width_pix)
 
     # -------------------------------------------------------------------------
     # fit the CCF

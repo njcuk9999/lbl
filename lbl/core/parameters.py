@@ -212,6 +212,13 @@ params.set(key='COMPUTE_RMS_SIGCLIP_THRES', value=5, source=__NAME__,
            desc='define the number of sigma to clip based on the rms away '
                 'from the model (sigma clips science data)')
 
+# scale of the high-passing of the CCF in rough-ccf
+# should be a few stellar FWHM. Expressed in km/s
+params.set(key='COMPUTE_CCF_HP_SCALE', value=30, source=__NAME__,
+           desc='scale of the high-passing of the CCF in rough-ccf '
+                'should be a few stellar FWHM. Expressed in km/s')
+
+
 # =============================================================================
 # Define compil parameters
 # =============================================================================
