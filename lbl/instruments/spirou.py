@@ -92,7 +92,7 @@ class Spirou(Instrument):
         # define whether to add the magic "binned wavelength" bands rv
         self.params.set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
         # define the number of bins used in the magic "binned wavelength" bands
-        self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
+        self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 25)
         # define the first band (from get_binned_parameters) to plot (band1)
         self.params.set('COMPILE_BINNED_BAND1', 'H', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
