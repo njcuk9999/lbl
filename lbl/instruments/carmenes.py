@@ -88,6 +88,10 @@ class Carmenes(Instrument):
         self.params.set('COMPIL_CUT_PEARSONR', 1e-4, source = func_name)
         # Question: HARPS value?
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
+        # define whether to add the magic "binned wavelength" bands rv
+        self.params.set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
+        # define the number of bins used in the magic "binned wavelength" bands
+        self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
         self.params.set('COMPILE_BINNED_BAND1', 'g', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
@@ -724,12 +728,14 @@ class Carmenes(Instrument):
         # ---------------------------------------------------------------------
         # define the band names
         bands = ['g', 'r', 'i', 'z']
-
+        # define the mid point of each band
         mid = np.array([475, 752, 866, 962], dtype=float)
         # define the blue end of each band [nm]
         blue_end = mid - np.array([121/2, 277/2, 114/2, 96/2], dtype=float)
         # define the red end of each band [nm]
         red_end = mid + np.array([277/2, 114/2, 96/2, 999], dtype=float)
+        # define whether we should use regions for each band
+        use_regions = [True, True, True, True]
         # ---------------------------------------------------------------------
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088']
@@ -746,6 +752,7 @@ class Carmenes(Instrument):
         binned['region_names'] = region_names
         binned['region_low'] = region_low
         binned['region_high'] = region_high
+        binned['use_regions'] = use_regions
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned

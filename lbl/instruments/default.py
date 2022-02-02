@@ -875,6 +875,57 @@ class Instrument:
         """
         raise self._not_implemented('get_binned_parameters')
 
+    def get_uniform_binned_parameters(self, binned: Dict[str, list]
+                                     ) -> Dict[str, list]:
+        """
+        Define "magic" binned regions from starting wavelength to end wavelength
+        (defined by COMPIL_WAVE_MIN and COMPIL_WAVE_MAX)
+
+        These are binned by wavelength into COMPIL_NUM_MAGIC_BANDS number of
+        bins
+
+        If COMPIL_ADD_MAGIC_BANDS is False this function does not add any
+        magic bins
+
+        :param binned: dict, the binned dictionary from get_binned_parameters
+        :return: dict, the updated binned directory (if COMPIL_ADD_MAGIC_BANDS)
+        """
+        # get the pre-defined start and end wavelenghts
+        wave0 = self.params['COMPIL_WAVE_MIN']
+        wave1 = self.params['COMPIL_WAVE_MAX']
+        # whether to use magic bins
+        use_magic = self.params['COMPIL_ADD_UNIFORM_WAVEBIN']
+        # get the number of bins to use
+        nbins = self.params['COMPIL_NUM_UNIFORM_WAVEBIN']
+        # ---------------------------------------------------------------------
+        # if we aren't using magic bins return here
+        if not use_magic:
+            return binned
+        # ---------------------------------------------------------------------
+        # work out the
+        logwaveratio = np.log(wave1 / wave0)
+        # redefining wave1 to have a round number of velocity bins
+        # get the positions for "magic length"
+        plen_magic = np.arange(nbins + 1)
+        # define the magic grid to use in ccf
+        magic_grid = np.exp((plen_magic / nbins) * logwaveratio) * wave0
+        # work out the mean magic grid positions
+        mean_magic_grid = 0.5 * (magic_grid[:-1] + magic_grid[1:])
+        # loop around mean magic grid (one shorter than magic grid)
+        for v_it, vel in enumerate(mean_magic_grid):
+            # contstruct band name
+            band_name = '{0}nm'.format(int(vel))
+            # append the band name
+            binned['bands'].append(band_name)
+            # blue end is the nth element in magic grid
+            binned['blue_end'].append(magic_grid[v_it])
+            # red end is the nth+1 element in magic grid
+            binned['red_end'].append(magic_grid[v_it] + 1)
+            # make sure we do not use regions for magic binned parameters
+            binned['use_regions'].append(False)
+        # finally return the updated binned dictionary
+        return binned
+
     def get_epoch_groups(self, rdb_table: Table):
         """
         For a given instrument this is how we define epochs

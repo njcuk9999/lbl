@@ -256,6 +256,15 @@ params.set('COMPIL_FP_EWID', None, source=__NAME__,
            desc='define the CCF e-width to use for FP files',
            not_none=True)
 
+# define whether to add the magic "binned wavelength" bands rv
+params.set('COMPIL_ADD_UNIFORM_WAVEBIN', False, source=__NAME__,
+           desc='define whether to add the magic "binned wavelength" bands rv')
+
+# define the number of bins used in the magic "binned wavelength" bands
+params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 15, source=__NAME__,
+           desc='define the number of bins used in the magic "binned '
+                'wavelength" bands')
+
 # define the first band (from get_binned_parameters) to plot (band1)
 params.set('COMPILE_BINNED_BAND1', None, source=__NAME__,
            desc='The first band (from get_binned_parameters) to plot (band1)',

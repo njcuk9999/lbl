@@ -1692,6 +1692,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # get the instrument specific binned parameters
         binned_dict = inst.get_binned_parameters()
+        binned_dict = inst.get_uniform_binned_parameters(binned_dict)
         # get info from binned dictionary
         bands = binned_dict['bands']
         blue_end = binned_dict['blue_end']
@@ -1699,6 +1700,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         region_names = binned_dict['region_names']
         region_low = binned_dict['region_low']
         region_high = binned_dict['region_high']
+        use_regions = binned_dict['use_regions']
         # get the shape of the binned parameters
         # bshape = (len(lblrvfiles), len(bands), len(region_names))
         # make a rv and error matrix based on these binned params
@@ -1720,9 +1722,15 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # loop around the bands
         for iband in range(len(bands)):
+            # decide whether to use regions
+            if use_regions[iband]:
+                band_regions = list(region_names)
+            # if not use just the full domain
+            else:
+                band_regions = ['']
             # loop around the regions
-            for iregion in range(len(region_names)):
-                cargs = [bands[iband], region_names[iregion]]
+            for iregion in range(len(band_regions)):
+                cargs = [bands[iband], band_regions[iregion]]
                 vrad_colname = 'vrad_{0}{1}'.format(*cargs)
                 svrad_colname = 'svrad_{0}{1}'.format(*cargs)
                 # add new column if not present
@@ -1737,11 +1745,21 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             #   is the same for all rvtables)
             band_mask = rvtable0['WAVE_START'] > blue_end[iband]
             band_mask &= rvtable0['WAVE_START'] < red_end[iband]
+            # decide whether to use regions
+            if use_regions[iband]:
+                band_regions = list(region_names)
+                band_region_low = list(region_low)
+                band_region_high = list(region_high)
+            # if not use just the full domain
+            else:
+                band_regions = ['']
+                band_region_low = [-np.inf]
+                band_region_high = [np.inf]
             # loop around the regions
-            for iregion in range(len(region_names)):
+            for iregion in range(len(band_regions)):
                 # mask based on region
-                region_mask = rvtable0['XPIX'] > region_low[iregion]
-                region_mask &= rvtable0['XPIX'] < region_high[iregion]
+                region_mask = rvtable0['XPIX'] > band_region_low[iregion]
+                region_mask &= rvtable0['XPIX'] < band_region_high[iregion]
                 # -------------------------------------------------------------
                 # get combined mask for band and region
                 comb_mask = band_mask & region_mask
@@ -1762,7 +1780,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                                                         tmp_err[comb_mask])
                 # -------------------------------------------------------------
                 # get column names to add these bands/regions
-                cargs = [bands[iband], region_names[iregion]]
+                cargs = [bands[iband], band_regions[iregion]]
                 vrad_colname = 'vrad_{0}{1}'.format(*cargs)
                 svrad_colname = 'svrad_{0}{1}'.format(*cargs)
                 # add to rdb_dict

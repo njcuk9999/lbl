@@ -88,6 +88,10 @@ class Harps(Instrument):
         # define the CCF e-width to use for FP files
         # Question: HARPS value?
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
+        # define whether to add the magic "binned wavelength" bands rv
+        self.params.set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
+        # define the number of bins used in the magic "binned wavelength" bands
+        self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
         self.params.set('COMPILE_BINNED_BAND1', 'r', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
@@ -713,6 +717,8 @@ class Harps(Instrument):
         blue_end = [360.804, 467.178, 614.112]
         # define the red end of each band [nm]
         red_end = [402.823, 554.926, 698.914]
+        # define whether we should use regions for each band
+        use_regions = [True, True, True]
         # ---------------------------------------------------------------------
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088']
@@ -729,6 +735,7 @@ class Harps(Instrument):
         binned['region_names'] = region_names
         binned['region_low'] = region_low
         binned['region_high'] = region_high
+        binned['use_regions'] = use_regions
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned
