@@ -920,7 +920,7 @@ class Instrument:
             # blue end is the nth element in magic grid
             binned['blue_end'].append(magic_grid[v_it])
             # red end is the nth+1 element in magic grid
-            binned['red_end'].append(magic_grid[v_it] + 1)
+            binned['red_end'].append(magic_grid[v_it + 1])
             # make sure we do not use regions for magic binned parameters
             binned['use_regions'].append(False)
         # finally return the updated binned dictionary
