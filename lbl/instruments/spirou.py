@@ -858,13 +858,13 @@ class Spirou(Instrument):
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
-        binned['bands'] = bands
-        binned['blue_end'] = blue_end
-        binned['red_end'] = red_end
-        binned['region_names'] = region_names
-        binned['region_low'] = region_low
-        binned['region_high'] = region_high
-        binned['use_regions'] = use_regions
+        binned['bands'] = list(bands)
+        binned['blue_end'] = list(blue_end)
+        binned['red_end'] = list(red_end)
+        binned['region_names'] = list(region_names)
+        binned['region_low'] = list(region_low)
+        binned['region_high'] = list(region_high)
+        binned['use_regions'] = list(use_regions)
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned
