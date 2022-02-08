@@ -151,6 +151,11 @@ params.set(key='INPUT_FILE', value=None, source=__NAME__,
            arg='--input_file', dtype=str,
            not_none=True)
 
+# override the mask to be used
+params.set(key='MASK_FILE', value='None', source=__NAME__,
+           desc='Override the mask to be used (within mask dir or full path)',
+           arg='--mask_file', dtype=str)
+
 # Define ref table format
 params.set(key='REF_TABLE_FMT', value='csv', source=__NAME__,
            desc='Ref table format (i.e. csv)')

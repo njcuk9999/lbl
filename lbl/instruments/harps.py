@@ -278,14 +278,23 @@ class Harps(Instrument):
         # get type of mask
         mask_type = self.params['{0}_MASK_TYPE'.format(data_type)]
         # deal with no object
-        if self.params['OBJECT_TEMPLATE'] is None:
+        if self.params['MASK_FILE'] not in [None, 'None', '']:
+            # define base name
+            basename = self.params['MASK_FILE']
+            # if basename is full path use this
+            if os.path.exists(basename):
+                abspath = str(basename)
+            else:
+                # get absolute path
+                abspath = os.path.join(directory, basename)
+        elif self.params['OBJECT_TEMPLATE'] is None:
             raise LblException('OBJECT_TEMPLATE name must be defined')
         else:
             objname = self.params['OBJECT_TEMPLATE']
-        # define base name
-        basename = '{0}_{1}.fits'.format(objname, mask_type)
-        # get absolute path
-        abspath = os.path.join(directory, basename)
+            # define base name
+            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            # get absolute path
+            abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
             io.check_file_exists(abspath)
