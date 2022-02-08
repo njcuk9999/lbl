@@ -15,8 +15,8 @@ import os
 # Define variables
 # =============================================================================
 __NAME__: str = 'base.py'
-__version__: str = '0.29.0'
-__date__: str = '2022-01-12'
+__version__: str = '0.30.0'
+__date__: str = '2022-02-08'
 __authors__: str = 'Neil Cook, Etienne Artigau, Thomas Vandal, Charles Cadieux'
 __package__: str = 'lbl'
 
