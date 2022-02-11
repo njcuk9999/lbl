@@ -46,7 +46,7 @@ ARGS_COMPUTE = [
                 # plotting
                 'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
                 # other
-                'SKIP_DONE', 'VERBOSE', 'PROGRAM',
+                'SKIP_DONE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
                 ]
 
 DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'

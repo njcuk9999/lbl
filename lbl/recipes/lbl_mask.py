@@ -47,7 +47,7 @@ ARGS_MASK = [
              # plotting
              'PLOT', 'PLOT_MASK_CCF',
              # other
-             'OVERWRITE', 'VERBOSE', 'PROGRAM',
+             'OVERWRITE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
             ]
 
 DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'
