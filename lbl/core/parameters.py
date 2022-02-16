@@ -300,6 +300,14 @@ params.set('COMPIL_FRAC_TIME_MEAS', 0.1, source=__NAME__,
            desc='a threshold based on the fraction on time a line as '
                 'been measured')
 
+# define a threshold based on the fraction on time a line as been measured
+params.set('COMPIL_FORCE_SIGMA_PER_LINE', False, source=__NAME__,
+           desc='Force the per-line dispersion to match uncertainties. In other'
+                'words, the per-line (vrad-median(vrad))/svrad will be forced '
+                'to a median value of 1 if True. This causes a degradation of '
+                'performances by 5-10% for SPIRou but makes the svrad more '
+                'representative of the expected dispersion in the timeseries.')
+
 # define the FP reference string that defines that an FP observation was
 #    a reference (calibration) file - should be a list of strings
 params.set('FP_REF_LIST', None, source=__NAME__,

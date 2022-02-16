@@ -1218,6 +1218,14 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     reference_wavelength = inst.params['COMPIL_SLOPE_REF_WAVE']
     # get the ccf e-width column name
     ccf_ew_col = inst.params['KW_CCF_EW']
+
+    # Force the per - line dispersion to match uncertainties. In other words,
+    # the per-line (vrad-median(vrad))/svrad will be forced to a median value
+    # of 1 if True. This causes a degradation of performances by 5-10% for
+    # SPIRou but makes the svrad more representative of the expected dispersion
+    # in the timeseries.
+    force_sigma_per_line = inst.params['COMPIL_FORCE_SIGMA_PER_LINE']
+
     # get the header keys to add to rdb_table
     header_keys, fp_flags = inst.rdb_columns()
     # get base names
@@ -1503,15 +1511,17 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             g = np.isfinite(dv_arr[:,line_it])
             per_line_diff = (dv_arr[:,line_it] - rdb_dict['vrad'])
 
-            # forcing sigma of 1 the mean uncertainty per line. The
-            #    uncertainties are therefore representative of the distribution
-            #    for any given line. We keep the spectrum-to-spectrum
-            #    differences and force the correct 1-sigma width in the
-            #    distribution.
-            plratio = per_line_diff / sdv_arr[:, line_it]
-            sig1, sig2 = np.nanpercentile(plratio, [16, 84])
-            sigma = (sig2 - sig1) / 2
-            sdv_arr[:, line_it] = sdv_arr[:, line_it] * sigma
+
+            if force_sigma_per_line:
+                # forcing sigma of 1 the mean uncertainty per line. The
+                #    uncertainties are therefore representative of the distribution
+                #    for any given line. We keep the spectrum-to-spectrum
+                #    differences and force the correct 1-sigma width in the
+                #    distribution.
+                plratio = per_line_diff / sdv_arr[:, line_it]
+                sig1, sig2 = np.nanpercentile(plratio, [16, 84])
+                sigma = (sig2 - sig1) / 2
+                sdv_arr[:, line_it] = sdv_arr[:, line_it] * sigma
 
             # first output of pearsonr is the the correlation itself.
             # this is meaningless if we don't know the number of points
