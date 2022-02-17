@@ -1,0 +1,634 @@
+# -------------------------------------------
+# LBL Full config file (auto-generated)
+# -------------------------------------------
+
+
+# Config file for user settings (absolute path)
+## Default = None   SPIROU_VALUE = None
+CONFIG_FILE: None
+
+# Main data directory (absolute path)
+## Default = None   SPIROU_VALUE = None
+DATA_DIR: None
+
+# mask sub directory (relative to data directory)
+## Default = masks   SPIROU_VALUE = masks
+MASK_SUBDIR: masks
+
+# template sub directory (relative to data directory)
+## Default = templates   SPIROU_VALUE = templates
+TEMPLATE_SUBDIR: templates
+
+# calib sub directory (relative to data directory)
+## Default = calib   SPIROU_VALUE = calib
+CALIB_SUBDIR: calib
+
+# science sub directory (relative to data directory)
+## Default = science   SPIROU_VALUE = science
+SCIENCE_SUBDIR: science
+
+# LBL RV sub directory (relative to data directory)
+## Default = lblrv   SPIROU_VALUE = lblrv
+LBLRV_SUBDIR: lblrv
+
+# LBL ref table sub directory (relative to data directory)
+## Default = lblreftable   SPIROU_VALUE = lblreftable
+LBLREFTAB_SUBDIR: lblreftable
+
+# LBL RDB sub directory (relative to data directory)
+## Default = lblrdb   SPIROU_VALUE = lblrdb
+LBLRDB_SUBDIR: lblrdb
+
+# The instrument to use
+## Default = None   SPIROU_VALUE = SPIROU
+INSTRUMENT: SPIROU
+
+# Whether to skip done files
+## Default = False   SPIROU_VALUE = False
+SKIP_DONE: False
+
+# Whether to overwrite files that already exist
+## Default = False   SPIROU_VALUE = False
+OVERWRITE: False
+
+# Verbosity 0=only warnings/errors, 1=info/warnings/errors,2=general/info/warning/errors  (default is 2)
+## Default = 2   SPIROU_VALUE = 2
+VERBOSE: 2
+
+# Whether to use tqdm module in loops (only for verbose=2)
+## Default = True   SPIROU_VALUE = True
+USE_TQDM: True
+
+# Whether to add program id to the logging message
+## Default = None   SPIROU_VALUE = None
+PROGRAM: None
+
+# The object name for the compute function
+## Default = None   SPIROU_VALUE = None
+OBJECT_SCIENCE: None
+
+# The object name to use for the template (If None set to OBJECT_SCIENCE)
+## Default = None   SPIROU_VALUE = None
+OBJECT_TEMPLATE: None
+
+# Set the data type (science, FP or LFC)
+## Default = None   SPIROU_VALUE = None
+DATA_TYPE: None
+
+# the mask type (pos, neg, full)
+## Default = pos   SPIROU_VALUE = pos
+SCIENCE_MASK_TYPE: pos
+
+# the mask type (pos, neg, full)
+## Default = neg   SPIROU_VALUE = neg
+FP_MASK_TYPE: neg
+
+# the mask type (pos, neg, full)
+## Default = neg   SPIROU_VALUE = neg
+LFC_MASK_TYPE: neg
+
+# Blaze file to use (must be present in the CALIB directory)
+## Default = None   SPIROU_VALUE = None
+BLAZE_FILE: None
+
+# Template file to use (if not defined will try to find template for OBJECT_TEMPLATE) must be present in theTEMPLATES directory
+## Default = None   SPIROU_VALUE = None
+TEMPLATE_FILE: None
+
+# The input file expression to use (i.e. *e2dsff*AB.fits)
+## Default = None   SPIROU_VALUE = *.fits
+INPUT_FILE: '*.fits'
+
+# Override the mask to be used (within mask dir or full path)
+## Default = None   SPIROU_VALUE = None
+MASK_FILE: None
+
+# Ref table format (i.e. csv)
+## Default = csv   SPIROU_VALUE = csv
+REF_TABLE_FMT: csv
+
+# The High pass width [km/s]
+## Default = None   SPIROU_VALUE = 500
+HP_WIDTH: 500
+
+# The SNR cut off threshold
+## Default = None   SPIROU_VALUE = 10
+SNR_THRESHOLD: 10
+
+# Switch whether to use noise model or not for the RMS calculation
+## Default = False   SPIROU_VALUE = False
+USE_NOISE_MODEL: False
+
+# The rough CCF rv minimum limit in m/s
+## Default = -300000.0   SPIROU_VALUE = -300000.0
+ROUGH_CCF_MIN_RV: '-300000.0'
+
+# The rough CCF rv maximum limit in m/s
+## Default = 300000.0   SPIROU_VALUE = 300000.0
+ROUGH_CCF_MAX_RV: 300000.0
+
+# The rough CCF ewidth guess for fit in m/s
+## Default = 2000   SPIROU_VALUE = 2000
+ROUGH_CCF_EWIDTH_GUESS: 2000
+
+# The number of iterations to do to converge during compute RV
+## Default = 10   SPIROU_VALUE = 10
+COMPUTE_RV_N_ITERATIONS: 10
+
+# The plot order for the compute rv model plotthis can be an integer of a list of integers
+## Default = None   SPIROU_VALUE = [35]
+COMPUTE_MODEL_PLOT_ORDERS:
+- 35
+
+# The minimum line width (in pixels) to consider line valid
+## Default = 5   SPIROU_VALUE = 5
+COMPUTE_LINE_MIN_PIX_WIDTH: 5
+
+# The threshold in sigma on nsig (dv / dvrms) to keep valid
+## Default = 8   SPIROU_VALUE = 8
+COMPUTE_LINE_NSIG_THRES: 8
+
+# fraction of the bulk error the rv mean must be above for compute rv to have converged
+## Default = 0.1   SPIROU_VALUE = 0.1
+COMPUTE_RV_BULK_ERROR_CONVERGENCE: 0.1
+
+# The maximum number of iterations deemed to lead to a good RV
+## Default = 8   SPIROU_VALUE = 8
+COMPUTE_RV_MAX_N_GOOD_ITERS: 8
+
+# define the number of sigma to clip based on the rms away from the model (sigma clips science data)
+## Default = 5   SPIROU_VALUE = 5
+COMPUTE_RMS_SIGCLIP_THRES: 5
+
+# scale of the high-passing of the CCF in rough-ccf should be a few stellar FWHM. Expressed in km/s
+## Default = 30   SPIROU_VALUE = 30
+COMPUTE_CCF_HP_SCALE: 30
+
+# The suffix to give the rdb files
+## Default =    SPIROU_VALUE = 
+RDB_SUFFIX: 
+
+# The compil minimum wavelength allowed for lines [nm]
+## Default = None   SPIROU_VALUE = 900
+COMPIL_WAVE_MIN: 900
+
+# The compil maximum wavelength allowed for lines [nm]
+## Default = None   SPIROU_VALUE = 2500
+COMPIL_WAVE_MAX: 2500
+
+# The maximum pixel width allowed for lines [pixels]
+## Default = None   SPIROU_VALUE = 50
+COMPIL_MAX_PIXEL_WIDTH: 50
+
+# Max likelihood of correlation with BERV to use line
+## Default = 0.0001   SPIROU_VALUE = 0.0001
+COMPIL_CUT_PEARSONR: 0.0001
+
+# define the CCF e-width to use for FP files
+## Default = None   SPIROU_VALUE = 5.0
+COMPIL_FP_EWID: 5.0
+
+# define whether to add the magic "binned wavelength" bands rv
+## Default = False   SPIROU_VALUE = True
+COMPIL_ADD_UNIFORM_WAVEBIN: True
+
+# define the number of bins used in the magic "binned wavelength" bands
+## Default = 15   SPIROU_VALUE = 25
+COMPIL_NUM_UNIFORM_WAVEBIN: 25
+
+# The first band (from get_binned_parameters) to plot (band1)
+## Default = None   SPIROU_VALUE = H
+COMPILE_BINNED_BAND1: H
+
+# The second band (from get_binned_parameters) to plot (band2) this is used for colour (band2 - band3)
+## Default = None   SPIROU_VALUE = J
+COMPILE_BINNED_BAND2: J
+
+# The third band (from get_binned_parameters) to plot (band3) this is used for colour (band2 - band3)
+## Default = None   SPIROU_VALUE = H
+COMPILE_BINNED_BAND3: H
+
+# define the reference wavelength used in the slope fitting in nm
+## Default = None   SPIROU_VALUE = 1600
+COMPIL_SLOPE_REF_WAVE: 1600
+
+# a threshold based on the fraction on time a line as been measured
+## Default = 0.1   SPIROU_VALUE = 0.1
+COMPIL_FRAC_TIME_MEAS: 0.1
+
+# Force the per-line dispersion to match uncertainties. In otherwords, the per-line (vrad-median(vrad))/svrad will be forced to a median value of 1 if True. This causes a degradation of performances by 5-10% for SPIRou but makes the svrad more representative of the expected dispersion in the timeseries.
+## Default = False   SPIROU_VALUE = False
+COMPIL_FORCE_SIGMA_PER_LINE: False
+
+# define the FP reference string that defines that an FP observation was a reference (calibration) file - should be a list of strings
+## Default = None   SPIROU_VALUE = ['FP_FP']
+FP_REF_LIST:
+- FP_FP
+
+# # define the FP standard string that defines that an FP observation was NOT a reference file - should be a list of strings
+## Default = None   SPIROU_VALUE = ['OBJ_FP', 'POLAR_FP']
+FP_STD_LIST:
+- OBJ_FP
+- POLAR_FP
+
+# define readout noise per instrument (assumes ~5e- and 10 pixels)
+## Default = None   SPIROU_VALUE = 30
+READ_OUT_NOISE: 30
+
+# Whether to do plots for the compute function
+## Default = False   SPIROU_VALUE = False
+PLOT: False
+
+# Whether to do the compute ccf plot
+## Default = True   SPIROU_VALUE = True
+PLOT_COMPUTE_CCF: True
+
+# Whether to do the compute line plot
+## Default = True   SPIROU_VALUE = True
+PLOT_COMPUTE_LINES: True
+
+# Whether to do the compil cumulative plot
+## Default = True   SPIROU_VALUE = True
+PLOT_COMPIL_CUMUL: True
+
+# Whether to do the compil binned plot
+## Default = True   SPIROU_VALUE = True
+PLOT_COMPIL_BINNED: True
+
+# whether to do the mask ccf plot
+## Default = True   SPIROU_VALUE = True
+PLOT_MASK_CCF: True
+
+# whether to do the ccf vector plot
+## Default = True   SPIROU_VALUE = True
+PLOT_CCF_VECTOR_PLOT: True
+
+# whether to do the tellu correction plot
+## Default = True   SPIROU_VALUE = True
+PLOT_TELLU_CORR_PLOT: True
+
+# the wave url for the stellar models
+## Default = None   SPIROU_VALUE = ftp://phoenix.astro.physik.uni-goettingen.de/HiResFITS/
+STELLAR_WAVE_URL: 'ftp://phoenix.astro.physik.uni-goettingen.de/HiResFITS/'
+
+# the wave file for the stellar models (using wget)
+## Default = None   SPIROU_VALUE = WAVE_PHOENIX-ACES-AGSS-COND-2011.fits
+STELLAR_WAVE_FILE: 'WAVE_PHOENIX-ACES-AGSS-COND-2011.fits'
+
+# the stellar model url
+## Default = None   SPIROU_VALUE = ftp://phoenix.astro.physik.uni-goettingen.de/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/{ZSTR}{ASTR}/
+STELLAR_MODEL_URL: 'ftp://phoenix.astro.physik.uni-goettingen.de/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/{ZSTR}{ASTR}/'
+
+# the minimum allowed SNR in a pixel to add it to the mask
+## Default = None   SPIROU_VALUE = 5
+MASK_SNR_MIN: 5
+
+# Define the stellar model file name (using wget, with appriopriate format cards)
+## Default = None   SPIROU_VALUE = lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits
+STELLAR_MODEL_FILE: 'lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits'
+
+# the object temperature (stellar model)
+## Default = None   SPIROU_VALUE = None
+OBJECT_TEFF: None
+
+# the object surface gravity (log g) (stellar model)
+## Default = None   SPIROU_VALUE = 4.5
+OBJECT_LOGG: 4.5
+
+# the object Z (stellar model)
+## Default = None   SPIROU_VALUE = 0.0
+OBJECT_Z: 0.0
+
+# the object alpha (stellar model)
+## Default = None   SPIROU_VALUE = 0.0
+OBJECT_ALPHA: 0.0
+
+# blaze smoothing size (s1d template)
+## Default = None   SPIROU_VALUE = 20
+BLAZE_SMOOTH_SIZE: 20
+
+# blaze threshold (s1d template)
+## Default = None   SPIROU_VALUE = 0.2
+BLAZE_THRESHOLD: 0.2
+
+# the earliest allowed FP calibration used for template construction (None for unset)
+## Default = None   SPIROU_VALUE = None
+TEMPLATE_MJDSTART: None
+
+# the latest allowed FP calibration used for template construction (None for unset)
+## Default = None   SPIROU_VALUE = None
+TEMPLATE_MJDEND: None
+
+# the minimum number of observations required for a template berv bin
+## Default = 3   SPIROU_VALUE = 3
+BERVBIN_MIN_ENTRIES: 3
+
+# whether to do the tellu-clean
+## Default = None   SPIROU_VALUE = False
+DO_TELLUCLEAN: False
+
+# whether to use template in tellu-cleaning
+## Default = True   SPIROU_VALUE = True
+TELLUCLEAN_USE_TEMPLATE: True
+
+# the tapas url used in tellu-cleaning
+## Default = https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits   SPIROU_VALUE = https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits
+TELLUCLEAN_TAPAS_URL: https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits
+
+# the dv offset for tellu-cleaning in km/s
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_DV0: None
+
+# the lower wave limit for the absorber spectrum masks in nm
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_MASK_DOMAIN_LOWER: None
+
+# the upper wave limit for the absorber spectrum masks in nm
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_MASK_DOMAIN_UPPER: None
+
+# whether to force using airmass from header
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_FORCE_AIRMASS: None
+
+# the CCF scan range in km/s
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_CCF_SCAN_RANGE: None
+
+# the maximum number of iterations for the tellu-cleaning loop
+## Default = 20   SPIROU_VALUE = 20
+TELLUCLEAN_MAX_ITERATIONS: 20
+
+# the kernel width in pixels
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_KERNEL_WID: None
+
+# the gaussian shape (2=pure gaussian, >2=boxy
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_GAUSSIAN_SHAPE: None
+
+# the wave grid lower wavelength limit in nm
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_WAVE_LOWER: None
+
+# the wave grid upper wavelength limit in nm
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_WAVE_UPPER: None
+
+# the transmission threshold exp(-1) at which tellurics are uncorrectable
+## Default = -1   SPIROU_VALUE = -1
+TELLUCLEAN_TRANSMISSION_THRESHOLD: '-1'
+
+# the sigma cut threshold above which pixels are removed from fit
+## Default = 10   SPIROU_VALUE = 10
+TELLUCLEAN_SIGMA_THRESHOLD: 10
+
+# whether to recenter the CCF on the first iteration
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_RECENTER_CCF: None
+
+# whether to recenter the CCF on the first iteration
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_RECENTER_CCF_FIT_OTHERS: None
+
+# the default water absorption to use
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_DEFAULT_WATER_ABSO: None
+
+# the lower limit on valid exponent of water absorbers
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_WATER_BOUNDS_LOWER: None
+
+# the upper limit on valid exponent of water absorbers
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_WATER_BOUNDS_UPPER: None
+
+# the lower limit on valid exponent of other absorbers
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_OTHERS_BOUNDS_LOWER: None
+
+# the upper limit on valid exponent of other absorbers
+## Default = None   SPIROU_VALUE = None
+TELLUCLEAN_OTHERS_BOUNDS_UPPER: None
+
+# storage of command line arguments used
+## Default = None   SPIROU_VALUE = []
+COMMAND_LINE_ARGS:
+- None
+
+# Wave coefficients header key
+## Default = None   SPIROU_VALUE = WAVE{0:04d}
+KW_WAVECOEFFS: WAVE{0:04d}
+
+# wave num orders key in header
+## Default = None   SPIROU_VALUE = WAVEORDN
+KW_WAVEORDN: WAVEORDN
+
+# wave degree key in header
+## Default = None   SPIROU_VALUE = WAVEDEGN
+KW_WAVEDEGN: WAVEDEGN
+
+# mid exposure time in MJD
+## Default = None   SPIROU_VALUE = MJDMID
+KW_MID_EXP_TIME: MJDMID
+
+# snr key in header
+## Default = None   SPIROU_VALUE = EXTSN035
+KW_SNR: EXTSN035
+
+# the barycentric correction keyword
+## Default = None   SPIROU_VALUE = BERV
+KW_BERV: BERV
+
+# The Blaze calibration file
+## Default = None   SPIROU_VALUE = CDBBLAZE
+KW_BLAZE_FILE: CDBBLAZE
+
+# the number of iterations
+## Default = ITE_RV   SPIROU_VALUE = ITE_RV
+KW_NITERATIONS: ITE_RV
+
+# the systemic velocity in m/s
+## Default = SYSTVELO   SPIROU_VALUE = SYSTVELO
+KW_SYSTEMIC_VELO: SYSTVELO
+
+# the rms to photon noise ratio
+## Default = RMSRATIO   SPIROU_VALUE = RMSRATIO
+KW_RMS_RATIO: RMSRATIO
+
+# the e-width of LBL CCF
+## Default = CCF_EW   SPIROU_VALUE = CCF_EW
+KW_CCF_EW: CCF_EW
+
+# the high-pass LBL width [km/s]
+## Default = HP_WIDTH   SPIROU_VALUE = HP_WIDTH
+KW_HP_WIDTH: HP_WIDTH
+
+# the LBL version
+## Default = LBL_VERS   SPIROU_VALUE = LBL_VERS
+KW_VERSION: LBL_VERS
+
+# the LBL version
+## Default = LBLVDATE   SPIROU_VALUE = LBLVDATE
+KW_VDATE: LBLVDATE
+
+# the LBL processed date
+## Default = LBLPDATE   SPIROU_VALUE = LBLPDATE
+KW_PDATE: LBLPDATE
+
+# the LBL processed date
+## Default = LBLINSTR   SPIROU_VALUE = LBLINSTR
+KW_INSTRUMENT: LBLINSTR
+
+# the start time of the observation
+## Default = None   SPIROU_VALUE = MJDATE
+KW_MJDATE: MJDATE
+
+# the exposure time of the observation
+## Default = None   SPIROU_VALUE = EXPTIME
+KW_EXPTIME: EXPTIME
+
+# the airmass of the observation
+## Default = None   SPIROU_VALUE = AIRMASS
+KW_AIRMASS: AIRMASS
+
+# the human date of the observation
+## Default = None   SPIROU_VALUE = DATE-OBS
+KW_DATE: 'DATE-OBS'
+
+# the tau_h20 of the observation
+## Default = None   SPIROU_VALUE = TLPEH2O
+KW_TAU_H2O: TLPEH2O
+
+# the tau_other of the observation
+## Default = None   SPIROU_VALUE = TLPEOTR
+KW_TAU_OTHERS: TLPEOTR
+
+# the DPRTYPE of the observation
+## Default = None   SPIROU_VALUE = DPRTYPE
+KW_DPRTYPE: DPRTYPE
+
+# the output type of the file
+## Default = None   SPIROU_VALUE = DRSOUTID
+KW_OUTPUT: DRSOUTID
+
+# the drs object name
+## Default = None   SPIROU_VALUE = DRSOBJN
+KW_DRSOBJN: DRSOBJN
+
+# define the FIBER of the observation
+## Default = None   SPIROU_VALUE = FIBER
+KW_FIBER: FIBER
+
+# the observation time (mjd) of the wave solution
+## Default = None   SPIROU_VALUE = WAVETIME
+KW_WAVETIME: WAVETIME
+
+# the filename of the wave solution
+## Default = None   SPIROU_VALUE = WAVEFILE
+KW_WAVEFILE: WAVEFILE
+
+# the telluric TELLUCLEAN velocity of water absorbers
+## Default = None   SPIROU_VALUE = TLPDVH2O
+KW_TLPDVH2O: TLPDVH2O
+
+# the telluric TELLUCLEAN velocity of other absorbers
+## Default = None   SPIROU_VALUE = TLPDVOTR
+KW_TLPDVOTR: TLPDVOTR
+
+# the wave solution used
+## Default = None   SPIROU_VALUE = CDBWAVE
+KW_CDBWAVE: CDBWAVE
+
+# the original object name
+## Default = None   SPIROU_VALUE = OBJECT
+KW_OBJNAME: OBJECT
+
+# the rhomb 1 predefined position
+## Default = None   SPIROU_VALUE = SBRHB1_P
+KW_RHOMB1: SBRHB1_P
+
+# the rhomb 2 predefined position
+## Default = None   SPIROU_VALUE = SBRHB2_P
+KW_RHOMB2: SBRHB2_P
+
+# the calib-reference density
+## Default = None   SPIROU_VALUE = SBCDEN_P
+KW_CDEN_P: SBCDEN_P
+
+# the FP Internal Temp: FPBody(deg C)
+## Default = None   SPIROU_VALUE = SBCFPI_T
+KW_FPI_TEMP: SBCFPI_T
+
+# the FP External Temp: FPBody(deg C)
+## Default = None   SPIROU_VALUE = SBCFPE_T
+KW_FPE_TEMP: SBCFPE_T
+
+# the SNR goal per pixel per frame
+## Default = None   SPIROU_VALUE = SNRGOAL
+KW_SNRGOAL: SNRGOAL
+
+# the SNR in chosen order
+## Default = None   SPIROU_VALUE = EXTSN035
+KW_EXT_SNR: EXTSN035
+
+# The barycentric julian date
+## Default = None   SPIROU_VALUE = BJD
+KW_BJD: BJD
+
+# The shape code dx value
+## Default = None   SPIROU_VALUE = SHAPE_DX
+KW_SHAPE_DX: SHAPE_DX
+
+# The shape code dy value
+## Default = None   SPIROU_VALUE = SHAPE_DY
+KW_SHAPE_DY: SHAPE_DY
+
+# The shape code A value
+## Default = None   SPIROU_VALUE = SHAPE_A
+KW_SHAPE_A: SHAPE_A
+
+# The shape code B value
+## Default = None   SPIROU_VALUE = SHAPE_B
+KW_SHAPE_B: SHAPE_B
+
+# The shape code C value
+## Default = None   SPIROU_VALUE = SHAPE_C
+KW_SHAPE_C: SHAPE_C
+
+# The shape code D value
+## Default = None   SPIROU_VALUE = SHAPE_D
+KW_SHAPE_D: SHAPE_D
+
+# the header key for FP internal temp [deg C]
+## Default = None   SPIROU_VALUE = SBCFPI_T
+KW_FP_INT_T: SBCFPI_T
+
+# the header key for FP internal pressue [mbar]
+## Default = None   SPIROU_VALUE = SBCFPB_P
+KW_FP_INT_P: SBCFPB_P
+
+# define the reference header key (must also be in rdb table) to distinguish FP calibration files from FP simultaneous files
+## Default = None   SPIROU_VALUE = DPRTYPE
+KW_REF_KEY: DPRTYPE
+
+# the temperature of the object
+## Default = None   SPIROU_VALUE = OBJTEMP
+KW_TEMPERATURE: OBJTEMP
+
+# Template/model velocity from CCF
+## Default = None   SPIROU_VALUE = MODELVEL
+KW_MODELVEL: MODELVEL
+
+# Number of files used in template construction
+## Default = LBLNTMPL   SPIROU_VALUE = LBLNTMPL
+KW_NTFILES: LBLNTMPL
+
+# define the berv coverage of a template
+## Default = LBLTCOVR   SPIROU_VALUE = LBLTCOVR
+KW_TEMPLATE_COVERAGE: LBLTCOVR
+
+# define the number of template berv bins
+## Default = LBLTBRVB   SPIROU_VALUE = LBLTBRVB
+KW_TEMPLATE_BERVBINS: LBLTBRVB
+

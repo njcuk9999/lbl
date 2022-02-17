@@ -123,7 +123,9 @@ recommended for developmental purposes.
 
 The wrapper allows almost any constant present in LBL to be overridden by the
 user. Note that for the individual LBL recipes these can be put into a 
-`config.yaml` file for the same affect.
+`config.yaml` file for the same effect (Note example configs can be found in
+./doc/examples/parameters you do not need to define every config only the ones
+you wish to change!)
 
 A list of all parameters can be found in section 5
 
