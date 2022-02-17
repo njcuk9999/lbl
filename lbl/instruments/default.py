@@ -406,7 +406,7 @@ class Instrument:
                     param_table]
         headerlist = [header0, None, None, None,
                       None, None, None, None,
-                      None, None]
+                      None, None, None]
         datatypelist = [None, 'image', 'image', 'image',
                         'image', 'image', 'image', 'image',
                         'table', 'table', 'table']

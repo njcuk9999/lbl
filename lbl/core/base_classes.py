@@ -404,10 +404,10 @@ class ParamDict(UserDict):
         for key in list(self.data.keys()):
             # get key and value
             keys.append(key)
-            values.append(self.data[key])
+            values.append(str(self.data[key]))
             # deal with parameters that require an instance (parameters.py)
             if key in self.instances:
-                descriptions.append(self.instances[key].description)
+                descriptions.append(str(self.instances[key].description))
                 sources.append(str(self.instances[key].source))
                 dtypes.append(str(self.instances[key].dtype))
             else:

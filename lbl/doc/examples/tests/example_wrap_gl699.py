@@ -55,22 +55,22 @@ if __name__ == "__main__":
     rparams['RUN_LBL_TELLUCLEAN'] = False
     # Whether to create templates from the data in the science directory
     #   If a template has been supplied from elsewhere this set is NOT required
-    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_TEMPLATE'] = False
     # Whether to create a mask using the template created or supplied
-    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_MASK'] = False
     # Whether to run the LBL compute step - which computes the line by line
     #   for each observation
-    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPUTE'] = False
     # Whether to run the LBL compile step - which compiles the rdb file and
     #   deals with outlier rejection
     rparams['RUN_LBL_COMPILE'] = True
     # whether to skip observations if a file is already on disk (useful when
     #   adding a few new files) there is one for each RUN_XXX step
     rparams['SKIP_LBL_TELLUCLEAN'] = False
-    rparams['SKIP_LBL_TEMPLATE'] = True
-    rparams['SKIP_LBL_MASK'] = True
-    rparams['SKIP_LBL_COMPUTE'] = True
-    rparams['SKIP_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = False
+    rparams['SKIP_LBL_MASK'] = False
+    rparams['SKIP_LBL_COMPUTE'] = False
+    rparams['SKIP_LBL_COMPILE'] = False
     # -------------------------------------------------------------------------
     # Run the wrapper code using the above settings
     # -------------------------------------------------------------------------
