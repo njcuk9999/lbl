@@ -9,8 +9,10 @@ Created on 2021-04-09
 """
 import argparse
 from astropy.table import Table, vstack
+import numpy as np
 import os
-from typing import Union
+import sys
+from typing import List, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -32,7 +34,7 @@ QArg = lbl_misc.QuickArg
 
 # -----------------------------------------------------------------------------
 # define the working directory
-WORKSPACE = '/data/spirou/data/misc/lbltest/'
+WORKSPACE = '/data/lbl/data/misc'
 # define the name for the full param config yaml
 PARAM_FULL_YAML = 'full_config.yaml'
 # define the parameter readme table file (copied into full README.md)
@@ -99,7 +101,7 @@ def make_param_table(instrument: Union[str, None] = 'SPIROU') -> Table:
     return table
 
 
-def make_readme_param_table(table: Table):
+def make_readme_param_table(tables: List[Table]):
 
     # construct filename
     abspath = os.path.join(WORKSPACE, PARAM_README)
@@ -107,22 +109,51 @@ def make_readme_param_table(table: Table):
     # add --- separators
     # -------------------------------------------------------------------------
     sep_dict = dict()
-    # loop around columns
-    for col in table.colnames:
-        maxlen = 0
-        for value in table[col]:
-            if len(value) > maxlen:
-                maxlen = len(value)
-        # add separate for this column
-        sep_dict[col] = ['-' * maxlen]
-    # convert to table
-    toptable = Table()
-    for col in table.colnames:
-        toptable[col] = sep_dict[col]
-    # write full table
-    fulltable = vstack([toptable, table])
-    fulltable.write(abspath, format='ascii.fixed_width', overwrite=True)
 
+    final_table = Table()
+    # loop around all tables
+    for table in tables:
+        # ---------------------------------------------------------------------
+        # just adding a row of --- at the top of table (for each column)
+        # ---------------------------------------------------------------------
+        # loop around columns
+        for col in table.colnames:
+            # skip columns already in sep_dict
+            if col in sep_dict:
+                continue
+            maxlen = 0
+            for value in table[col]:
+                if len(value) > maxlen:
+                    maxlen = len(value)
+            # add separate for this column
+            sep_dict[col] = ['-' * maxlen]
+        # ---------------------------------------------------------------------
+        for col in table.colnames:
+            # skip columns that are already in final table
+            if col in final_table.colnames:
+                continue
+            # add columns
+            final_table[col] = table[col]
+    # -------------------------------------------------------------------------
+    # convert sep_dict to table of ---
+    toptable = Table()
+    for col in final_table.colnames:
+        toptable[col] = sep_dict[col]
+    # -------------------------------------------------------------------------
+    # move description column to end
+    if 'DESCRIPTION' in final_table.colnames:
+        description = np.array(final_table['DESCRIPTION'])
+        del final_table['DESCRIPTION']
+        final_table['DESCRIPTION'] = description
+    # -------------------------------------------------------------------------
+    # write full table
+    fulltable = vstack([toptable, final_table])
+    fulltable.write(abspath, format='ascii.fixed_width', overwrite=True)
+    # write the final table to a csv and fits file
+    final_table.write(abspath.replace('.md', '.fits'), format='fits',
+                      overwrite=True)
+    final_table.write(abspath.replace('.md', '.csv'), format='csv',
+                      overwrite=True)
 
 def make_full_config_yaml(table: Table):
 
@@ -219,6 +250,8 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # get input arguments (all switches)
     _args = parser.parse_args()
+    # reset args
+    sys.argv = sys.argv[0:1]
     # get fake parameters
     _params = base_classes.ParamDict()
     _params['COMMAND_LINE_ARGS'] = lbl_misc.quick_args(_args, pargs)
@@ -231,8 +264,13 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # run make read me (if True)
     if _args.make_readme:
-        _table = make_param_table('SPIROU')
-        make_readme_param_table(_table)
+        # loop around instruments
+        _tables = []
+        for instrument in base.INSTRUMENTS:
+            log.general('Adding instrument {0}'.format(instrument))
+            _table = make_param_table(instrument)
+            _tables.append(_table)
+        make_readme_param_table(_tables)
     # -------------------------------------------------------------------------
     # run make full yaml config file (if True)
     if _args.make_full_yaml:

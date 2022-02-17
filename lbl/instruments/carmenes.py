@@ -100,8 +100,6 @@ class Carmenes(Instrument):
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
         self.params.set('COMPILE_BINNED_BAND3', 'i', source=func_name)
-
-        self.params.set('COMPILE_BINNED_BAND4', 'z', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.params.set('COMPIL_SLOPE_REF_WAVE', 750, source=func_name)
         # define the FP reference string that defines that an FP observation was

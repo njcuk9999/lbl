@@ -664,6 +664,14 @@ params.set(key='KW_TAU_OTHERS', value=None, source=__NAME__, not_none=False,
 params.set(key='KW_DPRTYPE', value=None, source=__NAME__, not_none=False,
            desc='the DPRTYPE of the observation')
 
+# define the output type of the file
+params.set(key='KW_OUTPUT', value=None, source=__NAME__, not_none=False,
+           desc='the output type of the file')
+
+# define the drs object name
+params.set(key='KW_DRSOBJN', value=None, source=__NAME__, not_none=False,
+           desc='the drs object name')
+
 # define the FIBER of the observation
 params.set(key='KW_FIBER', value=None, source=__NAME__, not_none=False,
            desc='define the FIBER of the observation')
@@ -747,15 +755,15 @@ params.set(key='KW_SHAPE_C', value=None, source=__NAME__, not_none=False,
            desc='The shape code C value')
 
 # define the shape code D value
-params.set(key='KW_SHAPE_D', value=None, source=__NAME__, not_none=True,
+params.set(key='KW_SHAPE_D', value=None, source=__NAME__, not_none=False,
            desc='The shape code D value')
 
 # define the header key for FP internal temp [deg C]
-params.set(key='KW_FP_INT_T', value=None, source=__NAME__, not_none=True,
+params.set(key='KW_FP_INT_T', value=None, source=__NAME__, not_none=False,
            desc='the header key for FP internal temp [deg C]')
 
 # define the header key for FP internal pressue [mbar]
-params.set(key='KW_FP_INT_P', value=None, source=__NAME__, not_none=True,
+params.set(key='KW_FP_INT_P', value=None, source=__NAME__, not_none=False,
            desc='the header key for FP internal pressue [mbar]')
 
 # define the reference header key (must also be in rdb table) to
@@ -764,6 +772,10 @@ params.set(key='KW_REF_KEY', value=None, source=__NAME__, not_none=True,
            desc='define the reference header key (must also be in rdb table) '
                 'to distinguish FP calibration files from FP simultaneous '
                 'files')
+
+# define the temperature of the object
+params.set(key='KW_TEMPERATURE', value=None, source=__NAME__, not_none=True,
+           desc='the temperature of the object')
 
 # Template/model velocity from CCF
 params.set(key='KW_MODELVEL', value=None, source=__NAME__, not_none=True,
@@ -784,6 +796,7 @@ params.set(key='KW_TEMPLATE_COVERAGE', value='LBLTCOVR', source=__NAME__,
 params.set(key='KW_TEMPLATE_BERVBINS', value='LBLTBRVB', source=__NAME__,
            not_none=True, desc='define the number of template berv bins',
            comment='Number of template BERV bins')
+
 
 # =============================================================================
 # Start of code

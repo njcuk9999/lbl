@@ -106,11 +106,12 @@ def splash(name: str, instrument: str, params: base_classes.ParamDict,
 
     # add user args
     if params is not None:
-        if len(params['USER_KWARGS']) > 0:
-            plogger.info('User keyword arguments:')
-            # loop around arguments and add
-            for cmdmsg in params['USER_KWARGS']:
-                plogger.info(cmdmsg)
+        if 'USER_KWARGS' in params:
+            if len(params['USER_KWARGS']) > 0:
+                plogger.info('User keyword arguments:')
+                # loop around arguments and add
+                for cmdmsg in params['USER_KWARGS']:
+                    plogger.info(cmdmsg)
 
     # add command line arguments (if not None)
     if params is not None:

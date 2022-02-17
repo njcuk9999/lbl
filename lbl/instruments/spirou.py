@@ -231,10 +231,10 @@ class Spirou(Instrument):
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         self.params.set('KW_REF_KEY', 'DPRTYPE', source=func_name)
-        # velocity of template from CCF
-        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
         self.params.set('KW_TEMPERATURE', 'OBJTEMP', source=func_name)
+        # velocity of template from CCF
+        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
