@@ -1461,8 +1461,6 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # if we don't have a calibration need to guess vrad
     if not flag_calib:
         # log progress
-        msg = 'Forcing a stdev of 1 for all lines'
-        log.general(msg)
         msg = 'Constructing a per-epoch mean velocity'
         log.general(msg)
         # loop around files and generate a first guess for vrad and svrad
@@ -1487,6 +1485,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         per_line_error = np.zeros(dv_arr.shape[1])
         # log progress
         log.info('Producing line-by-line mean positions')
+
+        if force_sigma_per_line:
+            msg = 'Forcing a stdev of 1 for all lines'
+            log.general(msg)
+        else:
+            msg = 'We do not force the mean(svrad) to match per line RMS'
+            log.general(msg)
 
         # fraction of valid measurements for given line
         frac_valid = np.nanmean(np.isfinite(dv_arr), axis=0)
