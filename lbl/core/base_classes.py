@@ -7,6 +7,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+from astropy.table import Table
 from collections import UserDict
 from copy import deepcopy
 from typing import Any, Dict, Type, Union
@@ -389,6 +390,47 @@ class ParamDict(UserDict):
         :return: str, the string representation of the parameter dictionary 
         """
         return self.__str__()
+
+    def param_table(self) -> Table:
+        """
+        Create a parameter table as a snapshot of the current parameters
+        being used
+        :return: a astropy.table table of the parameters currently being used
+        """
+        func_name = __NAME__ + '.ParamDict.param_table()'
+        # storage
+        keys, values, descriptions, sources, dtypes = [], [], [], [], []
+        # get all values from paramets
+        for key in list(self.data.keys()):
+            # get key and value
+            keys.append(key)
+            values.append(self.data[key])
+            # deal with parameters that require an instance (parameters.py)
+            if key in self.instances:
+                descriptions.append(self.instances[key].description)
+                sources.append(str(self.instances[key].source))
+                dtypes.append(str(self.instances[key].dtype))
+            else:
+                descriptions.append('None')
+                sources.append('Unknown')
+                dtypes.append('Unknown')
+        # add some from base
+        keys += ['LBLVERSION', 'LBLDATE', 'LBLAUTHORS', 'TIMENOW']
+        values += [base.__version__, base.__date__, base.__authors__,
+                   base.Time.now().iso]
+        descriptions += ['Current LBL version', 'Current date of LBL version',
+                        'LBL authors', 'Time of parameter snapshot']
+        sources += [func_name] * 4
+        dtypes += ['str', 'str', 'str', 'str']
+        # push into a table
+        ptable = Table()
+        ptable['NAME'] = keys
+        ptable['VALUE'] = values
+        ptable['DESCRIPTION'] = descriptions
+        ptable['SOURCE'] = sources
+        ptable['DATATYPE'] = dtypes
+        # return ptable
+        return ptable
 
 
 class LBLError(Exception):

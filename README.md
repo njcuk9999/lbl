@@ -13,7 +13,8 @@ Line by line code for radial velocity
 2. [Using LBL](#2-using-lbl)
 3. [The config file](#3-the-lbl-parameters)
 4. [Things that the LBL code is NOT meant to do](#4-things-that-the-lbl-code-is-not-meant-to-do)
-5. [List of parameters overridable in LBL](#5-list-of-parameters)
+5. [Outputs explained](#5-outputs-explained)
+6. [List of input parameters overridable in LBL](#6-list-of-input-parameters)
 
 ---
 
@@ -147,7 +148,15 @@ The purpose of the LBL library of codes is to optimally determine stellar veloci
 
 ---
 
-# 5. List of parameters
+# 5. Outputs explained
+
+This section is coming soon!
+
+[back to top](#contents)
+
+---
+
+# 6. List of input parameters
 
 This is a list of overridable parameters for use in the wrapper or config.yaml
 

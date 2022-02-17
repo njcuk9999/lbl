@@ -395,21 +395,24 @@ class Instrument:
         header0 = self.set_hkey(header0, 'KW_PDATE', Time.now().iso)
         header0 = self.set_hkey(header0, 'KW_INSTRUMENT',
                                 self.params['INSTRUMENT'])
+        # construct the parameter table
+        param_table = self.params.param_table()
         # set up data extensions
         datalist = [None, rdb_data['WAVE'],
                     rdb_data['DV'], rdb_data['SDV'],
                     rdb_data['D2V'], rdb_data['SD2V'],
                     rdb_data['D3V'], rdb_data['SD3V'],
-                    rdb_data['RDB0'], rdb_data['RDB']]
+                    rdb_data['RDB0'], rdb_data['RDB'],
+                    param_table]
         headerlist = [header0, None, None, None,
                       None, None, None, None,
                       None, None]
         datatypelist = [None, 'image', 'image', 'image',
                         'image', 'image', 'image', 'image',
-                        'table', 'table']
+                        'table', 'table', 'table']
         name_list = [None, 'WAVE', 'DV', 'SDV',
                      'D2V', 'SD2V', 'D3V', 'SD3V',
-                     'RDB0', 'RDB']
+                     'RDB0', 'RDB', 'PTABLE']
         # ---------------------------------------------------------------------
         # Save template to disk
         log.general('Saving tellu-cleaned file: {0}'.format(filename))
