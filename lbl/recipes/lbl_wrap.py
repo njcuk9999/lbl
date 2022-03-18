@@ -9,14 +9,13 @@ Created on 2021-03-19
 
 @author: cook
 """
-from astropy.table import Table
+import sys
 
 from lbl.core import base
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_template
 from lbl.recipes import lbl_mask
-from lbl.recipes import lbl_noise
 from lbl.recipes import lbl_telluclean
 
 __NAME__ = 'lbl_mask.py'
@@ -53,6 +52,8 @@ def main(runparams: dict):
 
     :return:
     """
+    # reset the sys.argv (arguments from command line aren't used)
+    sys.argv = [__NAME__]
     # get key parameters
     instrument = runparams['INSTRUMENT']
     data_dir = runparams['DATA_DIR']
