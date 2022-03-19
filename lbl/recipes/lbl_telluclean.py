@@ -134,7 +134,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # template filename
     template_file = inst.template_file(template_dir, required=False)
-    # science filenames
+    # science filenames (always non _tc files)
     science_files = inst.science_files(science_dir)
 
     # -------------------------------------------------------------------------
@@ -181,8 +181,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------
         # do the telluric correction (similar to APERO)
-        e2ds_dict = tellu_clean.correct_tellu(inst, template_dir, e2ds_dict,
-                                              spl_others, spl_water)
+        e2ds_dict = tellu_clean.correct_tellu(inst, template_file,
+                                              e2ds_dict, spl_others, spl_water)
         # ---------------------------------------------------------------------
         # write the tellu-cleaned file to disk
         inst.write_tellu_cleaned(tellu_clean_file, e2ds_dict, sci_hdr)

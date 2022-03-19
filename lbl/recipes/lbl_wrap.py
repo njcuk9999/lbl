@@ -88,7 +88,7 @@ def main(runparams: dict):
                                 **keyword_args)
             # make the template (if not present)
             lbl_template.main(instrument=instrument, data_dir=data_dir,
-                                data_type=data_type,
+                              data_type=data_type,
                               object_science=object_science,
                               object_template=object_template,
                               overwrite=not runparams['SKIP_LBL_TELLUCLEAN'],

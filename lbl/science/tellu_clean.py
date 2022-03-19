@@ -245,7 +245,7 @@ def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
     return trans_out
 
 
-def correct_tellu(inst: InstrumentsType, template_dir: str,
+def correct_tellu(inst: InstrumentsType, template_file: str,
                   e2ds_params: Dict[str, Any],
                   spl_others: SplineReturn,
                   spl_water: SplineReturn) -> Dict[str, Any]:
@@ -258,7 +258,7 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     Will fit both water and all dry components of the absoprtion separately
 
     :param inst: InstrumentType instance, the class for this instrument
-    :param template_dir: str, the path to the template directory
+    :param template_file: str, the path to the template file
     :param e2ds_params: dict, the e2ds dictionary of parameters
     :param spl_others: spline, the spline of other absorbers spectrum
     :param spl_water: splien, the spline of water absorbers spectrum
@@ -292,8 +292,6 @@ def correct_tellu(inst: InstrumentsType, template_dir: str,
     # -------------------------------------------------------------------------
     # Load the template (if it exists and if we want to use it)
     # -------------------------------------------------------------------------
-    # template filename
-    template_file = inst.template_file(template_dir, required=False)
     # if we don't have template we use an array of ones
     if not inst.params['TELLUCLEAN_USE_TEMPLATE']:
         # template flag

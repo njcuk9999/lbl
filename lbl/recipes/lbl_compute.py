@@ -132,7 +132,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # blaze filename (None if not set)
     blaze_file = inst.blaze_file(calib_dir)
     # science filenames
-    science_files = inst.science_files(science_dir)
+    science_files = inst.science_files(science_dir, check_tc=True)
     # sort science files by date (speeds up computation)
     science_files = inst.sort_science_files(science_files)
     # reftable filename (None if not set)

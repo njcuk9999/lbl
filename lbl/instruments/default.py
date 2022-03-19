@@ -609,8 +609,7 @@ class Instrument:
         _ = self, directory
         raise self._not_implemented('blaze_file')
 
-    def load_blaze(self, filename: str,
-                   normalize: bool = True):
+    def load_blaze(self, filename: str, normalize: bool = True):
         """
         Load a blaze file
 
@@ -632,7 +631,7 @@ class Instrument:
         """
         raise self._not_implemented('get_mask_systemic_vel')
 
-    def science_files(self, directory: str):
+    def science_files(self, directory: str, check_tc: bool = False):
         """
         List the absolute paths of all science files
 
@@ -642,6 +641,27 @@ class Instrument:
         """
         _ = directory
         raise self._not_implemented('science_files')
+
+    def check_tcorr_objname(self, directory: str, objname: str) -> str:
+        """
+        Check for {objname}_tc files and update the object name if they exist
+
+        :param directory: str, directory
+        :param objname: str, object name
+        :return:
+        """
+        tcorr_objname = objname + '_tc'
+        # create the tcorr path that should exist if tcorr files exist
+        abspath = os.path.join(directory, tcorr_objname)
+        # if it exists change the science name
+        if os.path.exists(abspath):
+            # update params objname
+            self.params['OBJECT_SCIENCE'] = tcorr_objname
+            # return this object name
+            return tcorr_objname
+        else:
+            return objname
+
 
     def sort_science_files(self, science_files: List[str]) -> List[str]:
         """

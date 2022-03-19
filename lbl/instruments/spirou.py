@@ -289,6 +289,9 @@ class Spirou(Instrument):
         self._set_object_template()
         # set template name
         objname = self.params['OBJECT_TEMPLATE']
+
+        self.get_template_name(objname)
+
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
             basename = 'Template_s1d_{0}_sc1d_v_file_AB.fits'.format(objname)
@@ -364,7 +367,8 @@ class Spirou(Instrument):
         # return systemic velocity in m/s
         return systemic_vel
 
-    def science_files(self, directory: str) -> np.ndarray:
+    def science_files(self, directory: str,
+                      check_tc: bool = False) -> np.ndarray:
         """
         List the absolute paths of all science files
 
@@ -380,7 +384,9 @@ class Spirou(Instrument):
         # deal the input file string
         if self.params['INPUT_FILE'] is None:
             raise LblException('INPUT_FILE must be defined')
-
+        # check for tcorr files _tc
+        if check_tc:
+            objname = self.check_tcorr_objname(directory, objname)
         # check that the object sub-directory exists
         abspath = io.make_dir(directory, objname, 'Science object')
         # set up basename
