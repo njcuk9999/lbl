@@ -289,9 +289,6 @@ class Spirou(Instrument):
         self._set_object_template()
         # set template name
         objname = self.params['OBJECT_TEMPLATE']
-
-        self.get_template_name(objname)
-
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
             basename = 'Template_s1d_{0}_sc1d_v_file_AB.fits'.format(objname)
