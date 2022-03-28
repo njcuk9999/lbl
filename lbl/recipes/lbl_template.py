@@ -120,7 +120,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # template filename
     template_file = inst.template_file(template_dir, required=False)
     # science filenames
-    science_files = inst.science_files(science_dir, check_tc=True)
+    science_files = inst.science_files(science_dir)
     # blaze filename (None if not set)
     blaze_file = inst.blaze_file(calib_dir)
     # load blaze file if set

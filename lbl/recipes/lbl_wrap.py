@@ -86,6 +86,9 @@ def main(runparams: dict):
                                 skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
                                 telluclean_use_template=False,
                                 **keyword_args)
+            # update template name
+            if not object_template.endswith('_tc'):
+                object_template = object_template + '_tc'
             # make the template (if not present)
             lbl_template.main(instrument=instrument, data_dir=data_dir,
                               data_type=data_type,
@@ -93,6 +96,8 @@ def main(runparams: dict):
                               object_template=object_template,
                               overwrite=not runparams['SKIP_LBL_TELLUCLEAN'],
                               **keyword_args)
+            # re-run tellu clean with uncorrected science data now using our
+            #  template (made from cleaned science data)
             lbl_telluclean.main(instrument=instrument, data_dir=data_dir,
                                 data_type=data_type,
                                 object_science=object_science,
@@ -100,11 +105,15 @@ def main(runparams: dict):
                                 skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
                                 telluclean_use_template=True,
                                 **keyword_args)
+            # update object name
+            if not object_science.endswith('_tc'):
+                object_science = object_science + '_tc'
+
         # ---------------------------------------------------------------------
         # make the template (if not present)
         if runparams['RUN_LBL_TEMPLATE']:
             lbl_template.main(instrument=instrument, data_dir=data_dir,
-                                data_type=data_type,
+                              data_type=data_type,
                               object_science=object_science,
                               object_template=object_template,
                               overwrite=not runparams['SKIP_LBL_TEMPLATE'],
