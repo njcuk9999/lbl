@@ -83,7 +83,7 @@ def main(runparams: dict):
                                 data_type=data_type,
                                 object_science=object_science,
                                 object_template=object_template,
-                                skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
+                                skip_done=False,
                                 telluclean_use_template=False,
                                 **keyword_args)
             # update template name
@@ -92,9 +92,9 @@ def main(runparams: dict):
             # make the template (if not present)
             lbl_template.main(instrument=instrument, data_dir=data_dir,
                               data_type=data_type,
-                              object_science=object_science,
+                              object_science=object_science + '_tc',
                               object_template=object_template,
-                              overwrite=not runparams['SKIP_LBL_TELLUCLEAN'],
+                              overwrite=True,
                               **keyword_args)
             # re-run tellu clean with uncorrected science data now using our
             #  template (made from cleaned science data)
@@ -102,7 +102,7 @@ def main(runparams: dict):
                                 data_type=data_type,
                                 object_science=object_science,
                                 object_template=object_template,
-                                skip_done=runparams['SKIP_LBL_TELLUCLEAN'],
+                                skip_done=False,
                                 telluclean_use_template=True,
                                 **keyword_args)
             # update object name

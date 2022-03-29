@@ -71,7 +71,7 @@ if __name__ == "__main__":
     rparams['RUN_LBL_COMPILE'] = True
     # whether to skip observations if a file is already on disk (useful when
     #   adding a few new files) there is one for each RUN_XXX step
-    rparams['SKIP_LBL_TELLUCLEAN'] = False
+    #   - Note cannot skip tellu clean
     rparams['SKIP_LBL_TEMPLATE'] = True
     rparams['SKIP_LBL_MASK'] = True
     rparams['SKIP_LBL_COMPUTE'] = True
