@@ -87,7 +87,7 @@ def main(runparams: dict):
             runparams[key] = DEFAULTS[key]
     # -------------------------------------------------------------------------
     # sanity checks on runparams (certain things should not be set together)
-    if runparams['RUN_LBL_MASK']:
+    if runparams['RUN_LBL_MASK'] and 'MASK_FILE' in runparams:
         if runparams['MASK_FILE'] not in [None, 'None', '', 'Null']:
             emsg = ('LBL_WRAP ERROR: Cannot have RUN_LBL_MASK=True and '
                     'MASK_FILE={0} (Must be unset)')

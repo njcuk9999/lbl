@@ -112,6 +112,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     dparams = select.make_all_directories(inst)
     mask_dir, template_dir = dparams['MASK_DIR'], dparams['TEMPLATE_DIR']
     models_dir = dparams['MODELS_DIR']
+    lbl_reftable_dir = dparams['LBLRT_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
@@ -183,6 +184,19 @@ def __main__(inst: InstrumentsType, **kwargs):
     inst.write_mask(mask_file, line_table, pos_mask, neg_mask, sys_vel,
                     template_hdr)
 
+    # -------------------------------------------------------------------------
+    # Step 8: Remove ref table for this mask (we must re-write it)
+    # -------------------------------------------------------------------------
+    # reftable filename (None if not set)
+    reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir,
+                                                         mask_file)
+    # remove ref table if it exists
+    if reftable_exists:
+        # print removal
+        msg = 'Removing old reftable for this mask: {0}'
+        log.warning(msg.format(reftable_file))
+        # remove file
+        os.remove(reftable_file)
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------
