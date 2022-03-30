@@ -12,6 +12,7 @@ Created on 2021-03-19
 import sys
 
 from lbl.core import base
+from lbl.core import base_classes
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_template
@@ -84,6 +85,13 @@ def main(runparams: dict):
     for key in DEFAULTS:
         if key not in runparams:
             runparams[key] = DEFAULTS[key]
+    # -------------------------------------------------------------------------
+    # sanity checks on runparams (certain things should not be set together)
+    if runparams['RUN_LBL_MASK']:
+        if runparams['MASK_FILE'] not in [None, 'None', '', 'Null']:
+            emsg = ('LBL_WRAP ERROR: Cannot have RUN_LBL_MASK=True and '
+                    'MASK_FILE be set')
+            base_classes.LblException(emsg)
     # -------------------------------------------------------------------------
     # loop around all files
     for num in range(len(object_sciences)):
