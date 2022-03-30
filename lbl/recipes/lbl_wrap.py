@@ -90,8 +90,8 @@ def main(runparams: dict):
     if runparams['RUN_LBL_MASK']:
         if runparams['MASK_FILE'] not in [None, 'None', '', 'Null']:
             emsg = ('LBL_WRAP ERROR: Cannot have RUN_LBL_MASK=True and '
-                    'MASK_FILE be set')
-            base_classes.LblException(emsg)
+                    'MASK_FILE={0} (Must be unset)')
+            raise base_classes.LblException(emsg.format(runparams['MASK_FILE']))
     # -------------------------------------------------------------------------
     # loop around all files
     for num in range(len(object_sciences)):

@@ -204,7 +204,7 @@ def check_runparams(rparams: Dict[str, Any], key: str) -> Any:
     if key not in rparams:
         emsg = 'LBL_WRAP ERROR: Must define key {0} in rparams'
         eargs = [key]
-        base_classes.LblException(emsg.format(*eargs))
+        raise base_classes.LblException(emsg.format(*eargs))
     else:
         return rparams[key]
 
