@@ -78,6 +78,9 @@ class Instrument:
         :return: tuple, data (np.ndarray) and header (fits.Header)
         """
         _ = self, filename
+        # print progress
+        log.general('Loaded mask table: {0}'.format(filename))
+        # return mask table
         return io.load_table(filename, kind='mask table')
 
     def load_template(self, filename: str, get_hdr: bool = False) -> Table:
