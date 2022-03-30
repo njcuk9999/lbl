@@ -179,7 +179,8 @@ def find_files(path_list: List[Path],
 
 
 def clean_directory(path: str, logmsg: bool = True,
-                    dir_suffix: str = ''):
+                    dir_suffix: str = '',
+                    include_files: Optional[List[str]] = None):
     """
     Remove all files from a directory
 
@@ -203,6 +204,9 @@ def clean_directory(path: str, logmsg: bool = True,
         # dir_suffix
         if _root.endswith(dir_suffix):
             for filename in _files:
+                if include_files is not None:
+                    if filename not in include_files:
+                        continue
                 files.append(os.path.join(_root, filename))
 
     # loop around files

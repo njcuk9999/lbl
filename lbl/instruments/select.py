@@ -269,7 +269,8 @@ def load_instrument(args: ParamDict,
     return inst
 
 
-def make_all_directories(inst: Union[InstrumentsType]) -> ParamDict:
+def make_all_directories(inst: Union[InstrumentsType],
+                         skip_obj: bool = False) -> ParamDict:
     """
     Make all directories and return directory parameter dictionary
 
@@ -295,7 +296,10 @@ def make_all_directories(inst: Union[InstrumentsType]) -> ParamDict:
     science_dir = io.make_dir(data_dir, params['SCIENCE_SUBDIR'],
                               'Science')
     # make sub directory based on object science and object template
-    obj_subdir = inst.science_template_subdir()
+    if skip_obj:
+        obj_subdir = None
+    else:
+        obj_subdir = inst.science_template_subdir()
     # make lblrv directory
     lblrv_dir = io.make_dir(data_dir, params['LBLRV_SUBDIR'], 'LBL RV',
                             subdir=obj_subdir)

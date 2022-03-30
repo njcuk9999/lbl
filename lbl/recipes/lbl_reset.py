@@ -97,7 +97,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 1: Set up data directories
     # -------------------------------------------------------------------------
-    dparams = select.make_all_directories(inst)
+    dparams = select.make_all_directories(inst, skip_obj=True)
     # -------------------------------------------------------------------------
     # Step 2: clean directories
     # -------------------------------------------------------------------------
@@ -115,6 +115,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     io.clean_directory(dparams['TEMPLATE_DIR'])
     # clean plot directory
     io.clean_directory(dparams['PLOT_DIR'])
+    # clean calib directory
+    io.clean_directory(dparams['CALIB_DIR'],
+                       include_files=inst.params['SAMPLE_WAVE_GRID_FILE'])
     # clean log directory
     logpath = os.path.dirname(base_classes.log.filepath)
     io.clean_directory(logpath)
