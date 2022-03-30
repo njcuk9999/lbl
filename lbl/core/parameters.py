@@ -453,6 +453,10 @@ params.set('BERVBIN_MIN_ENTRIES', value=3, source=__NAME__,
            desc='the minimum number of observations required for a '
                 'template berv bin', dtype=int)
 
+# define the berv bin size in m/s
+params.set('BERVBIN_SIZE', value=3000, source=__NAME__,
+           desc='define the berv bin size in m/s')
+
 # =============================================================================
 # Define telluric tellu-cleaning parameters
 # =============================================================================

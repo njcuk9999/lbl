@@ -270,10 +270,12 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # get minimum number of berv bins
     nmin_bervbin = inst.params['BERVBIN_MIN_ENTRIES']
+    # get the size of the berv bins
+    bervbin_size = inst.params['BERVBIN_SIZE']
     # only for science data
     if inst.params['DATA_TYPE'] == 'SCIENCE':
         # get the berv bin centers
-        bervbins = berv // grid_step_original
+        bervbins = berv // bervbin_size
         # find unique berv bins
         ubervbins = np.unique(bervbins)
         # storage the number of observations per berv bin

@@ -150,6 +150,8 @@ class Spirou(Instrument):
         self.params.set('TEMPLATE_MJDSTART', value=None)
         # define the latest allowed file used for template construction
         self.params.set('TEMPLATE_MJDEND', value=None)
+        # define the size of the berv bins in m/s
+        self.params.set('BERVBIN_SIZE', value=3000)
         # define whether to do the tellu-clean
         self.params.set('DO_TELLUCLEAN', value=False, source=func_name)
         # ---------------------------------------------------------------------

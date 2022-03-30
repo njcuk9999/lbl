@@ -147,6 +147,8 @@ class Harps(Instrument):
         self.params.set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
         # blaze threshold (s1d template)
         self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
+        # define the size of the berv bins in m/s
+        self.params.set('BERVBIN_SIZE', value=3000)
         # ---------------------------------------------------------------------
         # define whether to do the tellu-clean
         self.params.set('DO_TELLUCLEAN', value=True, source=func_name)
