@@ -29,7 +29,8 @@ __authors__ = base.__authors__
 DESCRIPTION_MASK = 'Use this code to wrap around lbl'
 
 # define keys to remove from run params
-REMOVE_KEYS = ['INSTRUMENT', 'DATA_DIR', 'DATA_TYPES',
+REMOVE_KEYS = [# core
+               'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES',
                # science keys
                'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
                # run keys

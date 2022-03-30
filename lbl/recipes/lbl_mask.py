@@ -36,8 +36,7 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_MASK = [
-             # core
+ARGS_MASK = [# core
              'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
              # directory
              'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',

@@ -21,8 +21,8 @@ from lbl.resources import lbl_misc
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'lbl_clean.py'
-__STRNAME__ = 'LBL Clean'
+__NAME__ = 'lbl_reset.py'
+__STRNAME__ = 'LBL Reset'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -33,8 +33,7 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_MASK = [
-             # core
+ARGS_MASK = [# core
              'INSTRUMENT', 'CONFIG_FILE',
              # directory
              'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
