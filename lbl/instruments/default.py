@@ -753,8 +753,10 @@ class Instrument:
             log.general(msg.format(science_file))
             # get wave grid from the supplied filename
             wavegrid = self.get_wave_solution(science_file)
+            header = io.load_header(science_file)
             # write the file to the calibration directory
-            io.write_fits(save_wavegrid_path, data=wavegrid)
+            io.write_fits(save_wavegrid_path, data=[None, wavegrid],
+                          header=[header, None], dtype=[None, 'image'])
             # return the wave grid
             return wavegrid
 
