@@ -1511,11 +1511,14 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_mean[line_it] = np.nan
                 per_line_error[line_it] = np.nan
                 continue
-
             # find valid velocity measurements
-            g = np.isfinite(dv_arr[:,line_it])
+            good = np.isfinite(dv_arr[:,line_it])
             per_line_diff = (dv_arr[:,line_it] - rdb_dict['vrad'])
-
+            # skip if less that 3 valid values for this line
+            if np.sum(good) < 3:
+                per_line_mean[line_it] = np.nan
+                per_line_error[line_it] = np.nan
+                continue
 
             if force_sigma_per_line:
                 # forcing sigma of 1 the mean uncertainty per line. The
@@ -1534,7 +1537,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # correlation is due to a statistical fluctuation (it significance)
             # and can be used to flag lines that suspiciously correlate
             # with BERV.
-            prob_pearsonr[line_it] = pearsonr( berv[g], per_line_diff[g])[1]
+            pout = pearsonr(berv[good], per_line_diff[good])
+            prob_pearsonr[line_it] = pout[1]
 
             if prob_pearsonr[line_it] < cut_pearsonr:
                 per_line_mean[line_it] = np.nan

@@ -17,6 +17,7 @@ from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_template
 from lbl.recipes import lbl_mask
 from lbl.recipes import lbl_telluclean
+from lbl.resources import lbl_misc
 
 __NAME__ = 'lbl_mask.py'
 __STRNAME__ = 'LBL Mask'
@@ -39,6 +40,18 @@ REMOVE_KEYS = ['INSTRUMENT', 'DATA_DIR', 'DATA_TYPES',
                # general keys already used
                'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE']
 
+# Define the default values
+DEFAULTS = dict()
+DEFAULTS['RUN_LBL_TELLUCLEAN'] = False
+DEFAULTS['RUN_LBL_TEMPLATE'] = False
+DEFAULTS['RUN_LBL_MASK'] = False
+DEFAULTS['RUN_LBL_COMPUTE'] = False
+DEFAULTS['RUN_LBL_COMPILE'] = False
+DEFAULTS['SKIP_LBL_TEMPLATE'] = False
+DEFAULTS['SKIP_LBL_MASK'] = False
+DEFAULTS['SKIP_LBL_COMPUTE'] = False
+DEFAULTS['SKIP_LBL_COMPILE'] = False
+
 
 # =============================================================================
 # Define functions
@@ -55,18 +68,22 @@ def main(runparams: dict):
     # reset the sys.argv (arguments from command line aren't used)
     sys.argv = [__NAME__]
     # get key parameters
-    instrument = runparams['INSTRUMENT']
-    data_dir = runparams['DATA_DIR']
-    data_types = runparams['DATA_TYPES']
-    object_sciences = runparams['OBJECT_SCIENCE']
-    object_templates = runparams['OBJECT_TEMPLATE']
-    object_teffs = runparams['OBJECT_TEFF']
+    instrument = lbl_misc.check_runparams(runparams, 'INSTRUMENT')
+    data_dir = lbl_misc.check_runparams(runparams, 'DATA_DIR')
+    data_types = lbl_misc.check_runparams(runparams, 'DATA_TYPES')
+    object_sciences = lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE')
+    object_templates = lbl_misc.check_runparams(runparams, 'OBJECT_TEMPLATE')
+    object_teffs = lbl_misc.check_runparams(runparams, 'OBJECT_TEFF')
     # -------------------------------------------------------------------------
     # push other keyword arguments into keyword arguments dictionary
     keyword_args = dict()
     for key in runparams:
         if key not in REMOVE_KEYS:
             keyword_args[key] = runparams[key]
+    # make sure we have defaults if key not in runparams
+    for key in DEFAULTS:
+        if key not in runparams:
+            runparams[key] = DEFAULTS[key]
     # -------------------------------------------------------------------------
     # loop around all files
     for num in range(len(object_sciences)):
@@ -175,7 +192,6 @@ if __name__ == "__main__":
     rparams['RUN_LBL_COMPUTE'] = True
     rparams['RUN_LBL_COMPILE'] = True
     # whether to skip done files
-    rparams['SKIP_LBL_TELLUCLEAN'] = False
     rparams['SKIP_LBL_TEMPLATE'] = True
     rparams['SKIP_LBL_MASK'] = True
     rparams['SKIP_LBL_COMPUTE'] = True

@@ -192,6 +192,25 @@ def quick_args(args: Any, quickargs: Dict[str, QuickArg]):
     return listargs
 
 
+def check_runparams(rparams: Dict[str, Any], key: str) -> Any:
+    """
+    Check key run parameters
+
+    :param key: str, the key in rparams
+    :param rparams: dict, the rparams dictionary
+
+    :return: the value
+    """
+    if key not in rparams:
+        emsg = 'LBL_WRAP ERROR: Must define key {0} in rparams'
+        eargs = [key]
+        base_classes.LblException(emsg.format(*eargs))
+    else:
+        return rparams[key]
+
+
+
+
 # =============================================================================
 # Start of code
 # =============================================================================
