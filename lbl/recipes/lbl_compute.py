@@ -136,7 +136,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # sort science files by date (speeds up computation)
     science_files = inst.sort_science_files(science_files)
     # reftable filename (None if not set)
-    reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir)
+    reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir,
+                                                         mask_file)
     # -------------------------------------------------------------------------
     # Step 3: Load blaze file if set
     # -------------------------------------------------------------------------
@@ -148,7 +149,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 4: Load or make ref_dict
     # -------------------------------------------------------------------------
     ref_table = general.make_ref_dict(inst, reftable_file, reftable_exists,
-                                      science_files, mask_file)
+                                      science_files, mask_file, calib_dir)
     # get the systemic velocity for mask
     systemic_vel = inst.get_mask_systemic_vel(mask_file)
     # -------------------------------------------------------------------------

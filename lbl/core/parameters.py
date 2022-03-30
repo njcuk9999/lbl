@@ -223,6 +223,11 @@ params.set(key='COMPUTE_CCF_HP_SCALE', value=30, source=__NAME__,
            desc='scale of the high-passing of the CCF in rough-ccf '
                 'should be a few stellar FWHM. Expressed in km/s')
 
+# define the name of the sample wave grid file (saved to the calib dir)
+params.set(key='SAMPLE_WAVE_GRID_FILE', value='sample_wave_grid.fits',
+           source=__NAME__,
+           desc=('define the name of the sample wave grid file '
+                 '(saved to the calib dir)'))
 
 # =============================================================================
 # Define compil parameters
@@ -464,6 +469,14 @@ params.set(key='TELLUCLEAN_TAPAS_URL',
            value='https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits',
            source=__NAME__, desc='the tapas url used in tellu-cleaning',
            not_none=True)
+
+# define the default mask url
+params.set(key='DEFAULT_MASK_URL', value=None, source=__NAME__,
+           desc='define the default mask url', not_none=True)
+
+# define the default mask filename
+params.set(key='DEFAULT_MASK_FILE', value=None, source=__NAME__,
+           desc='define the default mask filename', not_none=True)
 
 # define the dv offset for tellu-cleaning in km/s
 params.set(key='TELLUCLEAN_DV0', value=None, source=__NAME__, not_none=True,

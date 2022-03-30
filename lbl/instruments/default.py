@@ -12,7 +12,7 @@ from astropy.table import Table
 import glob
 import numpy as np
 import os
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -135,20 +135,22 @@ class Instrument:
         _ = self
         return io.load_fits(filename, kind='science fits file')
 
-    def ref_table_file(self, directory: str) -> Tuple[Union[str, None], bool]:
+    def ref_table_file(self, directory: str,
+                       mask_file: str) -> Tuple[Union[str, None], bool]:
         """
         Make the absolute path for the ref_table file (if it exists)
 
         :param directory: str, the directory the file is located at
+        :param mask_file: str, the mask file path
 
         :return: absolute path to ref_table file (if it exists) or None
         """
         # deal with no object template
         self._set_object_template()
         # set object name
-        objname = self.params['OBJECT_TEMPLATE']
+        mask_name = os.path.basename(mask_file).replace('.fits', '')
         # set base name
-        basename = 'ref_table_{0}.csv'.format(objname)
+        basename = 'ref_table_{0}.csv'.format(mask_name)
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
@@ -571,6 +573,27 @@ class Instrument:
                           header=[header, None],
                           dtype=[None, 'table'])
 
+    def get_default_mask(self, directory: str, url: Optional[str] = None,
+                         filename: Optional[str] = None):
+        """
+        Check/Get the default mask and save it in the mask directory
+
+        :param directory: str, the mask directory
+        :param url: str, the url to the default mask
+        :param filename: str, the default mask filename
+
+        :return: None, downloads default mask if not present
+        """
+        # if url is not set or filename is not set return here - we have
+        #   no default mask
+        if url is None or filename is None:
+            return
+        # construct path to mask file
+        default_mask_file = os.path.join(directory, filename)
+        # get file from url
+        io.get_urlfile(url, 'default mask', default_mask_file)
+
+
     # -------------------------------------------------------------------------
     # Methods that MUST be overridden by the child instrument class
     # -------------------------------------------------------------------------
@@ -703,6 +726,35 @@ class Instrument:
         """
         _ = science_filename, data, header
         raise self._not_implemented('get_wave_solution')
+
+    def get_sample_wave_grid(self, calib_dir: str, science_file: str):
+        """
+        Get the sample wave grid
+        """
+        # get the sample wave grid filename
+        sample_wavegrid_file = self.params['SAMPLE_WAVE_GRID_FILE']
+        # get the wave grid path
+        save_wavegrid_path = os.path.join(calib_dir, sample_wavegrid_file)
+        # check if wave grid exists - if it does just load it
+        if os.path.exists(save_wavegrid_path):
+            # print loading
+            msg = 'Loading sample wavegrid: {0}'
+            log.general(msg.format(save_wavegrid_path))
+            # return the wave grid
+            wavegrid, _ = io.load_fits(save_wavegrid_path)
+            return wavegrid
+        # else get it from the wave solution
+        else:
+            # print loading
+            msg = 'Creating sample wavegrid from {0}'
+            log.general(msg.format(science_file))
+            # get wave grid from the supplied filename
+            wavegrid = self.get_wave_solution(science_file)
+            # write the file to the calibration directory
+            io.write_fits(save_wavegrid_path, data=wavegrid)
+            # return the wave grid
+            return wavegrid
+
 
     def drift_condition(self, table_row: Table.Row):
         """

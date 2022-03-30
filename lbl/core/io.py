@@ -12,12 +12,12 @@ Created on 2021-03-15
 from astropy.io import fits
 from astropy.table import Table
 import copy
-import glob
 import numpy as np
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 import warnings
+import wget
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -540,6 +540,36 @@ def write_fits(filename: str, data: FitsData = None,
         emsg = 'Could not write file: {0}\n\t{1}: {2}'
         eargs = [filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
+
+
+def get_urlfile(url: str, name: str, savepath: str):
+    """
+    Get the file from url
+
+    :param url: str, the url to get the file from
+    :param name: str, the name of the file (for logging)
+    :param savepath:, str, the absolute path to the file save location
+
+    :return: None
+    """
+    # check if we have the tapas file
+    if not os.path.exists(savepath):
+        # log that we are downloading tapas file
+        msg = 'Downloading {0} file \n\tfrom: {1} \n\tto {2}'
+        margs = [name, url, savepath]
+        log.general(msg.format(*margs))
+        # attempt to download the data
+        try:
+            wget.download(url, savepath)
+            log.general('\nDownloaded tapas file.')
+        except Exception as e:
+            emsg = 'Cannot download tapas file: {0}\n\tError {1}: {2}'
+            eargs = [url, type(e), str(e)]
+            raise base_classes.LblException(emsg.format(*eargs))
+    # print loading tapas
+    msg = 'Loading {0} file from: {1}'
+    margs = [name, savepath]
+    log.general(msg.format(*margs))
 
 
 # =============================================================================

@@ -73,6 +73,12 @@ class Spirou(Instrument):
         self.params.set('SCIENCE_MASK_TYPE', 'pos', source=func_name)
         self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
+        # define the default mask url and filename
+        self.params.set('DEFAULT_MASK_URL', source=func_name,
+                        value='https://www.astro.umontreal.ca/~artigau/lbl/'
+                              'mdwarf_spirou.fits')
+        self.params.set('DEFAULT_MASK_FILE', source=func_name,
+                        value='mdwarf_spirou.fits')
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
@@ -248,6 +254,9 @@ class Spirou(Instrument):
 
         :return: absolute path to mask file
         """
+        # make sure default mask is downloaded
+        self.get_default_mask(directory, self.params['DEFAULT_MASK_URL'],
+                              self.params['DEFAULT_MASK_FILE'])
         # get data type
         data_type = self.params['DATA_TYPE']
         # get type of mask

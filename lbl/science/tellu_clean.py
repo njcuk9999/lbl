@@ -73,24 +73,8 @@ def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
     # construct tapas file path
     tapas_file = os.path.basename(tapas_url)
     tapas_abspath = os.path.join(tapas_path, tapas_file)
-    # check if we have the tapas file
-    if not os.path.exists(tapas_abspath):
-        # log that we are downloading tapas file
-        msg = 'Downloading tapas file \n\tfrom: {0} \n\tto {1}'
-        margs = [tapas_url, tapas_abspath]
-        log.general(msg.format(*margs))
-        # attempt to download the data
-        try:
-            wget.download(tapas_url, tapas_abspath)
-            log.general('\nDownloaded tapas file.')
-        except Exception as e:
-            emsg = 'Cannot download tapas file: {0}\n\tError {1}: {2}'
-            eargs = [tapas_url, type(e), str(e)]
-            raise base_classes.LblException(emsg.format(*eargs))
-    # print loading tapas
-    msg = 'Loading tapas file from: {0}'
-    margs = [tapas_abspath]
-    log.general(msg.format(*margs))
+    # get file from url (after checking if it exists)
+    io.get_urlfile(tapas_url, 'tapas', tapas_abspath)
     # load table
     tapas_lbl = io.load_table(tapas_abspath, extname=extname)
     # return the table

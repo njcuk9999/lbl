@@ -53,7 +53,7 @@ speed_of_light_kms = constants.c.value / 1000.0
 # =============================================================================
 def make_ref_dict(inst: InstrumentsType, reftable_file: str,
                   reftable_exists: bool, science_files: List[str],
-                  mask_file: str) -> Dict[str, np.ndarray]:
+                  mask_file: str, calib_dir: str) -> Dict[str, np.ndarray]:
     """
     Make the reference table dictionary
 
@@ -63,6 +63,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
                             otherwise we create it
     :param science_files: list of absolute paths to science files
     :param mask_file: absolute path to mask file
+    :param calib_dir: str, the calibration directory
 
     :return:
     """
@@ -108,7 +109,7 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
     # deal with creating table
     else:
         # load wave solution from first science file
-        wavegrid = inst.get_wave_solution(science_files[0])
+        wavegrid = inst.get_sample_wave_grid(calib_dir, science_files[0])
         # storage for vectors
         order, wave_start, wave_end, weight_line, xpix = [], [], [], [], []
         line_snr, line_depth, local_flux = [], [], []
