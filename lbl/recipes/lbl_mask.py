@@ -187,14 +187,14 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 8: Remove ref table for this mask (we must re-write it)
     # -------------------------------------------------------------------------
-    # reftable filename (None if not set)
+    # get ref table filename (None if not set)
     reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir,
                                                          mask_file)
     # remove ref table if it exists
     if reftable_exists:
         # print removal
-        msg = 'Removing old reftable for this mask: {0}'
-        log.warning(msg.format(reftable_file))
+        msg = f'Removing old reftable for this mask: {reftable_file}'
+        log.warning(msg)
         # remove file
         os.remove(reftable_file)
     # -------------------------------------------------------------------------
