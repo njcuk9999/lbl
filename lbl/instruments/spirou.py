@@ -109,6 +109,9 @@ class Spirou(Instrument):
         self.params.set('COMPILE_BINNED_BAND3', 'H', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.params.set('COMPIL_SLOPE_REF_WAVE', 1600, source=func_name)
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.params.set('SAMPLE_WAVE_GRID_FILE',
+                        'sample_wave_grid_spirou.fits', source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)

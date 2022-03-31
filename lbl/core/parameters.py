@@ -224,7 +224,7 @@ params.set(key='COMPUTE_CCF_HP_SCALE', value=30, source=__NAME__,
                 'should be a few stellar FWHM. Expressed in km/s')
 
 # define the name of the sample wave grid file (saved to the calib dir)
-params.set(key='SAMPLE_WAVE_GRID_FILE', value='sample_wave_grid.fits',
+params.set(key='SAMPLE_WAVE_GRID_FILE', value=None, not_none=True,
            source=__NAME__,
            desc=('define the name of the sample wave grid file '
                  '(saved to the calib dir)'))
