@@ -569,6 +569,10 @@ params.set(key='TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=None, source=__NAME__,
            desc='the upper limit on valid exponent of other absorbers',
            not_none=True)
 
+# Define the default convergence limit for the telluric pre-clean
+params.set(key='TELLUCLEAN_CONVERGENCE_LIMIT', value=1.0e-3, source=__NAME__,
+           desc='the default convergence limit for the telluric pre-clean')
+
 # =============================================================================
 # Define other parameters
 # =============================================================================

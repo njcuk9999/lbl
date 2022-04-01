@@ -266,6 +266,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     others_bounds_upper = inst.params['TELLUCLEAN_OTHERS_BOUNDS_UPPER']
     water_bounds_lower = inst.params['TELLUCLEAN_WATER_BOUNDS_LOWER']
     water_bounds_upper = inst.params['TELLUCLEAN_WATER_BOUNDS_UPPER']
+    conv_limit = inst.params['TELLUCLEAN_CONVERGENCE_LIMIT']
     # get the e2ds flux from e2ds parameters
     e2ds_flux = np.array(e2ds_params['flux'])
     e2ds_ini_flux = np.array(e2ds_params['flux'])
@@ -387,7 +388,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     plt_ddvecs, plt_ccf_waters, plt_ccf_others = dict(), dict(), dict()
     sp_tmp, trans = np.zeros_like(sp_vector), np.zeros_like(sp_vector)
     # loop around until criteria met or maximum iterations met
-    while (dexpo > 1.0e-4) and (iteration < max_iterations):
+    while (dexpo > conv_limit) and (iteration < max_iterations):
         # ---------------------------------------------------------------------
         # get the absorption spectrum from exponents describing water and
         #     'others' in absorption
