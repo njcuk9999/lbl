@@ -150,7 +150,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         # write rdb table
         io.write_table(rdbfile1, rdb_table, fmt='rdb')
         # write fits file
-        inst.write_rdb_fits(rdbfile1, rdb_data)
+        if inst.params['WRITE_RDB_FITS']:
+            inst.write_rdb_fits(rdbfile1, rdb_data)
 
     # -------------------------------------------------------------------------
     # Step 4: Produce binned (per-epoch) RDB file
