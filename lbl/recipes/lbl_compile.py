@@ -152,6 +152,9 @@ def __main__(inst: InstrumentsType, **kwargs):
         # write fits file
         if inst.params['WRITE_RDB_FITS']:
             inst.write_rdb_fits(rdbfile1, rdb_data)
+        else:
+            rdbfitsfile = rdbfile1.replace('.rdb', '.fits')
+            log.general('Skipping {0}'.format(rdbfitsfile))
 
     # -------------------------------------------------------------------------
     # Step 4: Produce binned (per-epoch) RDB file
