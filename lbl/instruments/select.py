@@ -25,6 +25,7 @@ from lbl.instruments import spirou
 from lbl.instruments import espresso
 from lbl.instruments import carmenes
 from lbl.instruments import harps
+from lbl.instruments import nirps_ha
 from lbl.instruments import default
 from lbl.resources import lbl_misc
 
@@ -41,8 +42,10 @@ log = base_classes.log
 LblException = base_classes.LblException
 # instruments list
 InstrumentsType = Union[default.Instrument, spirou.Spirou,
-                        harps.Harps, None]
-InstrumentsList = (default.Instrument, spirou.Spirou, harps.Harps)
+                        harps.Harps, espresso.Espresso, carmenes.Carmenes,
+                        nirps_ha.NIRPS_HA]
+InstrumentsList = (default.Instrument, spirou.Spirou, harps.Harps,
+                   espresso.Espresso, carmenes.Carmenes, nirps_ha.NIRPS_HA)
 
 
 # =============================================================================
@@ -242,9 +245,10 @@ def load_instrument(args: ParamDict,
     # select CARMENES
     elif instrument.upper() == 'CARMENES':
         inst = carmenes.Carmenes(params)
-
     elif instrument.upper() == 'ESPRESSO':
         inst = espresso.Espresso(params)
+    elif instrument.upper() == 'NIRPS_HA':
+        inst = nirps_ha.NIRPS_HA(params)
     # else instrument is invalid
     else:
         emsg = 'Instrument name "{0}" invalid'
