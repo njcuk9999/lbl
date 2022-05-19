@@ -98,6 +98,10 @@ params.set(key='PROGRAM', value=None, source=__NAME__, dtype=str,
            desc='Whether to add program id to the logging message',
            arg='--program')
 
+# Define whether to write RDB fits files
+params.set(key='WRITE_RDB_FITS', value=True, source=__NAME__,
+           dtype=bool, desc='whether to write RDB fits files')
+
 # =============================================================================
 # Define common parameters (between compute / compil)
 # =============================================================================
