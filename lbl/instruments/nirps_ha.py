@@ -750,7 +750,6 @@ class NIRPS_HA(Instrument):
                     'KW_DPRTYPE', 'KW_NITERATIONS',
                     'KW_SYSTEMIC_VELO', 'KW_WAVETIME', 'KW_WAVEFILE',
                     'KW_TLPDVH2O', 'KW_TLPDVOTR', 'KW_CDBWAVE', 'KW_OBJNAME',
-                    'KW_RHOMB1', 'KW_RHOMB2', 'KW_CDEN_P', 'KW_SNRGOAL',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_SHAPE_DX', 'KW_SHAPE_DY',
                     'KW_SHAPE_A', 'KW_SHAPE_B', 'KW_SHAPE_C', 'KW_SHAPE_D',
                     'KW_CCF_EW', 'KW_FP_INT_T', 'KW_FP_INT_P', 'KW_FPI_TEMP',
