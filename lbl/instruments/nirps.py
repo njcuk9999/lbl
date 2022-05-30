@@ -27,7 +27,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.nirps_ha.py'
+__NAME__ = 'instruments.nirps.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
