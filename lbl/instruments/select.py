@@ -25,7 +25,7 @@ from lbl.instruments import spirou
 from lbl.instruments import espresso
 from lbl.instruments import carmenes
 from lbl.instruments import harps
-from lbl.instruments import nirps_ha
+from lbl.instruments import nirps
 from lbl.instruments import default
 from lbl.resources import lbl_misc
 
@@ -41,11 +41,34 @@ ParamDict = base_classes.ParamDict
 log = base_classes.log
 LblException = base_classes.LblException
 # instruments list
-InstrumentsType = Union[default.Instrument, spirou.Spirou,
-                        harps.Harps, espresso.Espresso, carmenes.Carmenes,
-                        nirps_ha.NIRPS_HA]
-InstrumentsList = (default.Instrument, spirou.Spirou, harps.Harps,
-                   espresso.Espresso, carmenes.Carmenes, nirps_ha.NIRPS_HA)
+InstrumentsType = Union[default.Instrument,
+                        spirou.Spirou,
+                        harps.Harps,
+                        espresso.Espresso,
+                        carmenes.Carmenes,
+                        nirps.NIRPS_HA,
+                        nirps.NIRPS_HE]
+InstrumentsList = (default.Instrument,
+                   spirou.Spirou,
+                   harps.Harps,
+                   espresso.Espresso,
+                   carmenes.Carmenes,
+                   nirps.NIRPS_HA, nirps.NIRPS_HE)
+
+# Add all the instrument + source combinations and link them to instrument
+#   classes
+#   Format:  InstDict[{INSTRUMENT}][{DATA_SOURCE}]
+InstDict = dict()
+InstDict['SPIROU'] = dict()
+InstDict['SPIROU']['APERO'] = spirou.Spirou
+InstDict['SPIROU']['CADC'] = spirou.Spirou
+InstDict['NIRPS_HA']['APERO'] = nirps.NIRPS_HA
+InstDict['NIRPS_HA']['Geneva'] = nirps.NIRPS_HA_Geneva
+InstDict['NIRPS_HE']['APERO'] = nirps.NIRPS_HE
+InstDict['NIRPS_HE']['Geneva'] = nirps.NIRPS_HE_Geneva
+InstDict['HARPS']['None'] = harps.Harps
+InstDict['CARMENES']['None'] = carmenes.Carmenes
+InstDict['ESPRESSO']['None'] = espresso.Espresso
 
 
 # =============================================================================
@@ -224,11 +247,15 @@ def load_instrument(args: ParamDict,
     """
     # deal with instrument not in args
     if 'INSTRUMENT' not in args:
-        emsg = ('Instrument name must be be defined (yaml, input or '
+        emsg = ('Instrument name must be defined (yaml, input or '
                 'command line)')
+        raise base_classes.LblException(emsg)
+    if 'DATA_SOURCE' not in args:
+        emsg = ('Data source must be defined (yaml, input or command line)')
         raise base_classes.LblException(emsg)
     # set instrument
     instrument = args['INSTRUMENT']
+    data_source = args['DATA_SOURCE']
     # get base params
     params = parameters.params.copy()
     # deal with instrument not being a string
@@ -236,19 +263,21 @@ def load_instrument(args: ParamDict,
         emsg = 'Instrument name must be a string (value={0})'
         eargs = [instrument]
         raise base_classes.LblException(emsg.format(*eargs))
-    # select SPIROU
-    if instrument.upper() == 'SPIROU':
-        inst = spirou.Spirou(params)
-    # select HARPS
-    elif instrument.upper() == 'HARPS':
-        inst = harps.Harps(params)
-    # select CARMENES
-    elif instrument.upper() == 'CARMENES':
-        inst = carmenes.Carmenes(params)
-    elif instrument.upper() == 'ESPRESSO':
-        inst = espresso.Espresso(params)
-    elif instrument.upper() == 'NIRPS_HA':
-        inst = nirps_ha.NIRPS_HA(params)
+    # select instrument (if instrument is allowed)
+    if instrument in InstDict:
+        # get the instrument dict
+        source_dict = InstDict[instrument]
+        # None should only be in there if there are no data sources
+        if 'None' in source_dict.keys():
+            inst = source_dict['None'](params)
+        # use the data source to get instance
+        elif data_source in source_dict:
+            # get the instance from the source dictionary
+            inst = source_dict[data_source](params)
+        else:
+            emsg = 'Data source "{0}" invalid'
+            eargs = [data_source]
+            raise base_classes.LblException(emsg.format(*eargs))
     # else instrument is invalid
     else:
         emsg = 'Instrument name "{0}" invalid'

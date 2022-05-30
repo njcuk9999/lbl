@@ -73,6 +73,11 @@ params.set(key='INSTRUMENT', value=None, source=__NAME__,
            desc='The instrument to use', options=base.INSTRUMENTS,
            arg='--instrument', dtype=str, not_none=True)
 
+# add data source
+params.set(key='DATA_SOURCE', value='None', source=__NAME__,
+           desc='The data source to use',
+           arg='--data_source', dtype=str, not_none=True)
+
 # Define whether to skip done files
 params.set(key='SKIP_DONE', value=False, source=__NAME__,
            desc='Whether to skip done files',
