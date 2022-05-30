@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import requests
 import shutil
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -867,16 +867,13 @@ class NIRPS(Instrument):
         """
         # ---------------------------------------------------------------------
         # define the band names
-        bands = ['Y', 'gapYJ', 'J', 'gapJH', 'H', 'gapHK', 'K', 'redK']
+        bands = ['Y', 'gapYJ', 'J', 'gapJH', 'H', 'gapHK']
         # define the blue end of each band [nm]
-        blue_end = [900.0, 1113.400, 1153.586, 1354.422, 1462.897, 1808.544,
-                    1957.792, 2343.105]
+        blue_end = [900.0, 1113.400, 1153.586, 1354.422, 1462.897, 1808.544]
         # define the red end of each band [nm]
-        red_end = [1113.4, 1153.586, 1354.422, 1462.897, 1808.544, 1957.792,
-                   2343.105, 2500.000]
+        red_end = [1113.4, 1153.586, 1354.422, 1462.897, 1808.544, 1957.792]
         # define whether we should use regions for each band
-        use_regions = [True, True, True, True, True, True,
-                       True, True]
+        use_regions = [True, True, True, True, True, True]
         # ---------------------------------------------------------------------
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
@@ -1142,6 +1139,9 @@ class NIRPS_HA(NIRPS):
                               'mdwarf_nirps_ha.fits')
         self.params.set('DEFAULT_MASK_FILE', source=func_name,
                         value='mdwarf_nirps_ha.fits')
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.params.set('SAMPLE_WAVE_GRID_FILE',
+                        'sample_wave_grid_nirps_ha.fits', source=func_name)
 
 
 class NIRPS_HE(NIRPS):
@@ -1167,7 +1167,9 @@ class NIRPS_HE(NIRPS):
         func_name = __NAME__ + '.NIRPS_HE.override()'
         # first run the inherited method
         super().param_override()
+        # ---------------------------------------------------------------------
         # add keys here
+        # ---------------------------------------------------------------------
         self.params.set('INSTRUMENT', 'NIRPS_HE', source=func_name)
         # define the default mask url and filename
         self.params.set('DEFAULT_MASK_URL', source=func_name,
@@ -1175,6 +1177,9 @@ class NIRPS_HE(NIRPS):
                               'mdwarf_nirps_he.fits')
         self.params.set('DEFAULT_MASK_FILE', source=func_name,
                         value='mdwarf_nirps_he.fits')
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.params.set('SAMPLE_WAVE_GRID_FILE',
+                        'sample_wave_grid_nirps_he.fits', source=func_name)
 
 
 # =============================================================================
@@ -1203,7 +1208,353 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         func_name = __NAME__ + '.NIRPS_HA_Geneva.override()'
         # first run the inherited method
         super().param_override()
-        # add keys here
+        # ---------------------------------------------------------------------
+        # set parameters to update
+        # ---------------------------------------------------------------------
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.params.set('SAMPLE_WAVE_GRID_FILE',
+                        'sample_wave_grid_nirps_ha_geneva.fits',
+                        source=func_name)
+        # define the FP reference string that defines that an FP observation was
+        #    a reference (calibration) file - should be a list of strings
+        self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
+        # define the FP standard string that defines that an FP observation
+        #    was NOT a reference file - should be a list of strings
+        # TODO: change this
+        self.params.set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
+        # ---------------------------------------------------------------------
+        # Header keywords
+        # ---------------------------------------------------------------------
+        # define the key that gives the mid exposure time in MJD
+        # TODO: this is not the mid exposure time
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
+                        source=func_name)
+        # define the start time of the observation
+        self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
+        # define snr keyword
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+                        source=func_name)
+        # define berv keyword
+        self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
+        # define the exposure time of the observation
+        self.params.set('KW_EXPTIME', 'EXPTIME',
+                        source=func_name)
+        # define the airmass of the observation
+        self.params.set('KW_AIRMASS',
+                        ['HIERARCH ESO TEL1 AIRM START',
+                         'HIERARCH ESO TEL2 AIRM START',
+                         'HIERARCH ESO TEL3 AIRM START'],
+                        source=func_name)
+        # define the DPRTYPE of the observation
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+                        source=func_name)
+        # define the human date of the observation
+        self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
+        # define the filename of the wave solution
+        # self.params.set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL15 NAME',
+        #                 source=func_name)
+        # define the original object name
+        self.params.set('KW_OBJNAME', 'OBJECT',
+                        source=func_name)
+        # define the SNR goal per pixel per frame (can not exist - will be
+        #   set to zero)
+        # TODO -> no equivalent in NIRPS Geneva
+        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
+        # define the SNR in chosen order
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+                        source=func_name)
+        # define the barycentric julian date
+        self.params.set('KW_BJD', 'NONE', source=func_name)
+        # define the reference header key (must also be in rdb table) to
+        #    distinguish FP calibration files from FP simultaneous files
+        self.params.set('KW_REF_KEY', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+                        source=func_name)
+        # velocity of template from CCF
+        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
+        # the temperature of the object
+        # TODO: how do we get the temperature for NIRPS Geneva
+        self.params.set('KW_TEMPERATURE', None, source=func_name)
+
+    def template_file(self, directory: str, required: bool = True) -> str:
+        """
+        Make the absolute path for the template file
+
+        :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
+
+        :return: absolute path to template file
+        """
+        # deal with no object template
+        self._set_object_template()
+        # set template name
+        objname = self.params['OBJECT_TEMPLATE']
+        # get template file
+        if self.params['TEMPLATE_FILE'] is None:
+            basename = 'Template_{0}_NIRPS_HA_Geneva.fits'.format(objname)
+        else:
+            basename = self.params['TEMPLATE_FILE']
+        # get absolute path
+        abspath = os.path.join(directory, basename)
+        # check that this file exists
+        if required:
+            io.check_file_exists(abspath)
+        # return absolute path
+        return abspath
+
+    def load_blaze_from_science(self, sci_image: np.ndarray,
+                                sci_hdr: fits.Header,
+                                calib_directory: str, normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
+        """
+        Load the blaze file using a science file header
+
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
+        """
+        # no blaze required - set to ones
+        blaze = np.ones_like(sci_image)
+        # do not require header or calib directory
+        _ = sci_hdr, calib_directory, normalize
+        # return blaze
+        return blaze, True
+
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # espresso has 2 orders per 'true' order so have to take every other
+        #   wave element
+        wave_cen = wave_cen[::2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # ---------------------------------------------------------------------
+        # use the fit to get the blaze assuming a sinc**2 profile.
+        # The minima of a given order corresponds to the position of the
+        # consecutive orders
+        # ---------------------------------------------------------------------
+        # storage for the calculated blaze
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # get the center of this order (with a small offset to avoid
+            #  a division by zero in the sinc at phase = 0
+            owave_cen = owave[len(owave)//2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1/owave)
+            # calculate the phase of the sinc**2
+            phase = np.pi * (owave - owave_cen)/period
+            # assume the sinc profile. There is a factor 2 difference in the
+            #   phase as the sinc is squared. sin**2 has a period that is a
+            #   factor of 2 shorter than the sin
+            blaze[order_num] = (np.sin(phase)/phase) ** 2
+        # un-correct the science image
+        sci_image = sci_image * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
+
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[fits.Header, None] = None
+                          ) -> np.ndarray:
+        """
+        Get a wave solution from a file (for Espresso this is from the header)
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
+        # load wave map
+        wavemap = fits.getdata(science_filename, ext=4)
+        # ---------------------------------------------------------------------
+        # Espresso wave solution is in Angstrom - convert to nm for consistency
+        wavemap = wavemap / 10.0
+        # ---------------------------------------------------------------------
+        # return wave solution map
+        return wavemap
+
+    def load_bad_hdr_keys(self) -> Tuple[list, Any]:
+        """
+        Load the bad values and bad key for Espresso -- not used currently
+
+        :return: tuple, 1. the list of bad values, 2. the bad key in
+                 a file header to check against bad values
+        """
+        # currently no bad keys for HARPS
+        # return an empty list and bad_hdr_key = None
+        return [], None
+
+    def get_berv(self, sci_hdr: fits.Header) -> float:
+        """
+        Get the Barycenteric correction for the RV in m/s
+
+        :param sci_hdr: fits.Header, the science header
+
+        :return:
+        """
+        # ESPRESSO data is always BERV corrected from the starting point
+        berv = 0.0
+        # return the berv measurement (in m/s)
+        return berv
+
+    def populate_sci_table(self, filename: str, tdict: dict,
+                           sci_hdr: fits.Header, berv: float = 0.0) -> dict:
+        """
+        Populate the science table
+
+        :param filename: str, the filename of the science image
+        :param tdict: dictionary, the storage dictionary for science table
+                      can be empty or have previous rows to append to
+        :param sci_hdr: fits Header, the header of the science image
+        :param berv: float, the berv value to add to storage dictionary
+
+        :return: dict, a dictionary table of the science parameters
+        """
+        # these are defined in params
+        drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR']
+        # add the filename
+        tdict = self.add_dict_list_value(tdict, 'FILENAME', filename)
+        # loop around header keys
+        for drs_key in drs_keys:
+            # if key is in params we can add the value to keys
+            if drs_key in self.params:
+                key = self.params[drs_key]
+            else:
+                key = str(drs_key)
+
+            value = sci_hdr.get(key, 'NULL')
+            # add to tdict
+            tdict = self.add_dict_list_value(tdict, drs_key, value)
+        # add the berv separately
+        tdict = self.add_dict_list_value(tdict, 'BERV', berv)
+        # return updated storage dictionary
+        return tdict
+
+    def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
+        """
+        Define the fits header columns names to add to the RDB file
+        These should be references to keys in params
+
+        :return: tuple, 1. np.array of strings (the keys), 2. list of bools
+                 the flags whether these keys should be used with FP files
+        """
+        # these are defined in params
+        drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
+                    'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
+                    'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
+                    'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
+        # convert to actual keys (not references to keys)
+        keys = []
+        fp_flags = []
+        for drs_key in drs_keys:
+            # initial set fp flag to False
+            fp_flag = False
+            # if key is in params we can add the value to keys
+            if drs_key in self.params:
+                keys.append(self.params[drs_key])
+                # we can also look for fp flag - this is either True or False
+                #    if True we skip this key for FP files - default is False
+                #    (i.e. not to skip)
+                instance = self.params.instances[drs_key]
+                if instance is not None:
+                    if instance.fp_flag is not None:
+                        fp_flag = instance.fp_flag
+            else:
+                keys.append(drs_key)
+            # append fp flags
+            fp_flags.append(fp_flag)
+        # return a numpy array
+        return np.array(keys), fp_flags
+
+    def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
+        """
+        Fix the LBL RV header
+
+        :param header: fits.Header, the LBL RV fits file header
+
+        :return: fits.Header, the updated LBL RV fits file header
+        """
+        # get keys from params
+        kw_snrgoal = self.params['KW_SNRGOAL']
+        kw_ccf_ew = self.params['KW_CCF_EW']
+        # ---------------------------------------------------------------------
+        # because FP files don't have an SNR goal
+        if kw_snrgoal not in header:
+            header[kw_snrgoal] = 0
+        # ---------------------------------------------------------------------
+        # deal with not having CCF_EW
+        # TODO: this is template specific
+        if kw_ccf_ew not in header:
+            header[kw_ccf_ew] = 5.5 / mp.fwhm() * 1000
+        # ---------------------------------------------------------------------
+        # return header
+        return header
+
+    def get_rjd_value(self, header: fits.Header) -> float:
+
+        """
+        Get the rjd either from KW_MID_EXP_TIME or KW_BJD
+        time returned is in MJD (not JD)
+
+        :param header: fits.Header - the LBL rv header
+        :return:
+        """
+        # get keys from params
+        kw_mjdmid = self.params['KW_MID_EXP_TIME']
+        kw_bjd = self.params['KW_BJD']
+        # get mjdmid and bjd
+        mid_exp_time = io.get_hkey(header, kw_mjdmid)
+        bjd = io.get_hkey(header, kw_bjd)
+        if isinstance(bjd, str):
+            # return RJD = MJD + 0.5
+            return float(mid_exp_time) + 0.5
+        else:
+            # convert bjd to mjd
+            bjd_mjd = Time(bjd, format='jd').mjd
+            # return RJD = MJD + 0.5
+            return float(bjd_mjd) + 0.5
+
+    def get_plot_date(self, header: fits.Header):
+        """
+        Get the matplotlib plotting date
+
+        :param header: fits.Header - the LBL rv header
+
+        :return: float, the plot date
+        """
+        # get mjdate key
+        kw_mjdate = self.params['KW_MJDATE']
+        # get mjdate
+        mjdate = io.get_hkey(header, kw_mjdate)
+        # convert to plot date and take off JD?
+        plot_date = Time(mjdate, format='mjd').plot_date
+        # return float plot date
+        return float(plot_date)
 
 
 class NIRPS_HE_Geneva(NIRPS_HE):
@@ -1229,7 +1580,353 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         func_name = __NAME__ + '.NIRPS_HE_Geneva.override()'
         # first run the inherited method
         super().param_override()
-        # add keys here
+        # ---------------------------------------------------------------------
+        # set parameters to update
+        # ---------------------------------------------------------------------
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.params.set('SAMPLE_WAVE_GRID_FILE',
+                        'sample_wave_grid_nirps_he_geneva.fits',
+                        source=func_name)
+        # define the FP reference string that defines that an FP observation was
+        #    a reference (calibration) file - should be a list of strings
+        self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
+        # define the FP standard string that defines that an FP observation
+        #    was NOT a reference file - should be a list of strings
+        # TODO: change this
+        self.params.set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
+        # ---------------------------------------------------------------------
+        # Header keywords
+        # ---------------------------------------------------------------------
+        # define the key that gives the mid exposure time in MJD
+        # TODO: this is not the mid exposure time
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
+                        source=func_name)
+        # define the start time of the observation
+        self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
+        # define snr keyword
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+                        source=func_name)
+        # define berv keyword
+        self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
+        # define the exposure time of the observation
+        self.params.set('KW_EXPTIME', 'EXPTIME',
+                        source=func_name)
+        # define the airmass of the observation
+        self.params.set('KW_AIRMASS',
+                        ['HIERARCH ESO TEL1 AIRM START',
+                         'HIERARCH ESO TEL2 AIRM START',
+                         'HIERARCH ESO TEL3 AIRM START'],
+                        source=func_name)
+        # define the DPRTYPE of the observation
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+                        source=func_name)
+        # define the human date of the observation
+        self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
+        # define the filename of the wave solution
+        # self.params.set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL15 NAME',
+        #                 source=func_name)
+        # define the original object name
+        self.params.set('KW_OBJNAME', 'OBJECT',
+                        source=func_name)
+        # define the SNR goal per pixel per frame (can not exist - will be
+        #   set to zero)
+        # TODO -> no equivalent in NIRPS Geneva
+        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
+        # define the SNR in chosen order
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+                        source=func_name)
+        # define the barycentric julian date
+        self.params.set('KW_BJD', 'NONE', source=func_name)
+        # define the reference header key (must also be in rdb table) to
+        #    distinguish FP calibration files from FP simultaneous files
+        self.params.set('KW_REF_KEY', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+                        source=func_name)
+        # velocity of template from CCF
+        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
+        # the temperature of the object
+        # TODO: how do we get the temperature for NIRPS Geneva
+        self.params.set('KW_TEMPERATURE', None, source=func_name)
+
+    def template_file(self, directory: str, required: bool = True) -> str:
+        """
+        Make the absolute path for the template file
+
+        :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
+
+        :return: absolute path to template file
+        """
+        # deal with no object template
+        self._set_object_template()
+        # set template name
+        objname = self.params['OBJECT_TEMPLATE']
+        # get template file
+        if self.params['TEMPLATE_FILE'] is None:
+            basename = 'Template_{0}_NIRPS_HE_Geneva.fits'.format(objname)
+        else:
+            basename = self.params['TEMPLATE_FILE']
+        # get absolute path
+        abspath = os.path.join(directory, basename)
+        # check that this file exists
+        if required:
+            io.check_file_exists(abspath)
+        # return absolute path
+        return abspath
+
+    def load_blaze_from_science(self, sci_image: np.ndarray,
+                                sci_hdr: fits.Header,
+                                calib_directory: str, normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
+        """
+        Load the blaze file using a science file header
+
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
+        """
+        # no blaze required - set to ones
+        blaze = np.ones_like(sci_image)
+        # do not require header or calib directory
+        _ = sci_hdr, calib_directory, normalize
+        # return blaze
+        return blaze, True
+
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # espresso has 2 orders per 'true' order so have to take every other
+        #   wave element
+        wave_cen = wave_cen[::2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # ---------------------------------------------------------------------
+        # use the fit to get the blaze assuming a sinc**2 profile.
+        # The minima of a given order corresponds to the position of the
+        # consecutive orders
+        # ---------------------------------------------------------------------
+        # storage for the calculated blaze
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # get the center of this order (with a small offset to avoid
+            #  a division by zero in the sinc at phase = 0
+            owave_cen = owave[len(owave)//2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1/owave)
+            # calculate the phase of the sinc**2
+            phase = np.pi * (owave - owave_cen)/period
+            # assume the sinc profile. There is a factor 2 difference in the
+            #   phase as the sinc is squared. sin**2 has a period that is a
+            #   factor of 2 shorter than the sin
+            blaze[order_num] = (np.sin(phase)/phase) ** 2
+        # un-correct the science image
+        sci_image = sci_image * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
+
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[fits.Header, None] = None
+                          ) -> np.ndarray:
+        """
+        Get a wave solution from a file (for Espresso this is from the header)
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
+        # load wave map
+        wavemap = fits.getdata(science_filename, ext=4)
+        # ---------------------------------------------------------------------
+        # Espresso wave solution is in Angstrom - convert to nm for consistency
+        wavemap = wavemap / 10.0
+        # ---------------------------------------------------------------------
+        # return wave solution map
+        return wavemap
+
+    def load_bad_hdr_keys(self) -> Tuple[list, Any]:
+        """
+        Load the bad values and bad key for Espresso -- not used currently
+
+        :return: tuple, 1. the list of bad values, 2. the bad key in
+                 a file header to check against bad values
+        """
+        # currently no bad keys for HARPS
+        # return an empty list and bad_hdr_key = None
+        return [], None
+
+    def get_berv(self, sci_hdr: fits.Header) -> float:
+        """
+        Get the Barycenteric correction for the RV in m/s
+
+        :param sci_hdr: fits.Header, the science header
+
+        :return:
+        """
+        # ESPRESSO data is always BERV corrected from the starting point
+        berv = 0.0
+        # return the berv measurement (in m/s)
+        return berv
+
+    def populate_sci_table(self, filename: str, tdict: dict,
+                           sci_hdr: fits.Header, berv: float = 0.0) -> dict:
+        """
+        Populate the science table
+
+        :param filename: str, the filename of the science image
+        :param tdict: dictionary, the storage dictionary for science table
+                      can be empty or have previous rows to append to
+        :param sci_hdr: fits Header, the header of the science image
+        :param berv: float, the berv value to add to storage dictionary
+
+        :return: dict, a dictionary table of the science parameters
+        """
+        # these are defined in params
+        drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR']
+        # add the filename
+        tdict = self.add_dict_list_value(tdict, 'FILENAME', filename)
+        # loop around header keys
+        for drs_key in drs_keys:
+            # if key is in params we can add the value to keys
+            if drs_key in self.params:
+                key = self.params[drs_key]
+            else:
+                key = str(drs_key)
+
+            value = sci_hdr.get(key, 'NULL')
+            # add to tdict
+            tdict = self.add_dict_list_value(tdict, drs_key, value)
+        # add the berv separately
+        tdict = self.add_dict_list_value(tdict, 'BERV', berv)
+        # return updated storage dictionary
+        return tdict
+
+    def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
+        """
+        Define the fits header columns names to add to the RDB file
+        These should be references to keys in params
+
+        :return: tuple, 1. np.array of strings (the keys), 2. list of bools
+                 the flags whether these keys should be used with FP files
+        """
+        # these are defined in params
+        drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
+                    'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
+                    'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
+                    'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
+        # convert to actual keys (not references to keys)
+        keys = []
+        fp_flags = []
+        for drs_key in drs_keys:
+            # initial set fp flag to False
+            fp_flag = False
+            # if key is in params we can add the value to keys
+            if drs_key in self.params:
+                keys.append(self.params[drs_key])
+                # we can also look for fp flag - this is either True or False
+                #    if True we skip this key for FP files - default is False
+                #    (i.e. not to skip)
+                instance = self.params.instances[drs_key]
+                if instance is not None:
+                    if instance.fp_flag is not None:
+                        fp_flag = instance.fp_flag
+            else:
+                keys.append(drs_key)
+            # append fp flags
+            fp_flags.append(fp_flag)
+        # return a numpy array
+        return np.array(keys), fp_flags
+
+    def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
+        """
+        Fix the LBL RV header
+
+        :param header: fits.Header, the LBL RV fits file header
+
+        :return: fits.Header, the updated LBL RV fits file header
+        """
+        # get keys from params
+        kw_snrgoal = self.params['KW_SNRGOAL']
+        kw_ccf_ew = self.params['KW_CCF_EW']
+        # ---------------------------------------------------------------------
+        # because FP files don't have an SNR goal
+        if kw_snrgoal not in header:
+            header[kw_snrgoal] = 0
+        # ---------------------------------------------------------------------
+        # deal with not having CCF_EW
+        # TODO: this is template specific
+        if kw_ccf_ew not in header:
+            header[kw_ccf_ew] = 5.5 / mp.fwhm() * 1000
+        # ---------------------------------------------------------------------
+        # return header
+        return header
+
+    def get_rjd_value(self, header: fits.Header) -> float:
+
+        """
+        Get the rjd either from KW_MID_EXP_TIME or KW_BJD
+        time returned is in MJD (not JD)
+
+        :param header: fits.Header - the LBL rv header
+        :return:
+        """
+        # get keys from params
+        kw_mjdmid = self.params['KW_MID_EXP_TIME']
+        kw_bjd = self.params['KW_BJD']
+        # get mjdmid and bjd
+        mid_exp_time = io.get_hkey(header, kw_mjdmid)
+        bjd = io.get_hkey(header, kw_bjd)
+        if isinstance(bjd, str):
+            # return RJD = MJD + 0.5
+            return float(mid_exp_time) + 0.5
+        else:
+            # convert bjd to mjd
+            bjd_mjd = Time(bjd, format='jd').mjd
+            # return RJD = MJD + 0.5
+            return float(bjd_mjd) + 0.5
+
+    def get_plot_date(self, header: fits.Header):
+        """
+        Get the matplotlib plotting date
+
+        :param header: fits.Header - the LBL rv header
+
+        :return: float, the plot date
+        """
+        # get mjdate key
+        kw_mjdate = self.params['KW_MJDATE']
+        # get mjdate
+        mjdate = io.get_hkey(header, kw_mjdate)
+        # convert to plot date and take off JD?
+        plot_date = Time(mjdate, format='mjd').plot_date
+        # return float plot date
+        return float(plot_date)
 
 
 # =============================================================================

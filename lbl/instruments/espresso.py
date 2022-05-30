@@ -212,14 +212,14 @@ class Espresso(Instrument):
         # ---------------------------------------------------------------------
         # define wave coeff key in header
 
-        # TODO -> not relevant for ESPRESSO, remove ?
-        self.params.set('KW_WAVECOEFFS', 'NONE', source=func_name)
-        # define wave num orders key in header
-        self.params.set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
-                        source=func_name)
-        # define wave degree key in header
-        self.params.set('KW_WAVEDEGN', 'HIERARCH ESO DRS CAL TH DEG LL',
-                        source=func_name)
+        # # TODO -> not relevant for ESPRESSO, remove ?
+        # self.params.set('KW_WAVECOEFFS', 'NONE', source=func_name)
+        # # define wave num orders key in header
+        # self.params.set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
+        #                 source=func_name)
+        # # define wave degree key in header
+        # self.params.set('KW_WAVEDEGN', 'HIERARCH ESO DRS CAL TH DEG LL',
+        #                 source=func_name)
         # define the key that gives the mid exposure time in MJD
         self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
@@ -230,9 +230,9 @@ class Espresso(Instrument):
                         source=func_name)
         # define berv keyword
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
-        # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 CATG',
-                        source=func_name)
+        # # define the Blaze calibration file
+        # self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
+        #                 source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
