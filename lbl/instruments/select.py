@@ -63,12 +63,17 @@ InstDict = dict()
 InstDict['SPIROU'] = dict()
 InstDict['SPIROU']['APERO'] = spirou.Spirou
 InstDict['SPIROU']['CADC'] = spirou.Spirou
+InstDict['NIRPS_HA'] = dict()
 InstDict['NIRPS_HA']['APERO'] = nirps.NIRPS_HA
 InstDict['NIRPS_HA']['Geneva'] = nirps.NIRPS_HA_Geneva
+InstDict['NIRPS_HE'] = dict()
 InstDict['NIRPS_HE']['APERO'] = nirps.NIRPS_HE
 InstDict['NIRPS_HE']['Geneva'] = nirps.NIRPS_HE_Geneva
+InstDict['HARPS'] = dict()
 InstDict['HARPS']['None'] = harps.Harps
+InstDict['CARMENES'] = dict()
 InstDict['CARMENES']['None'] = carmenes.Carmenes
+InstDict['ESPRESSO'] = dict()
 InstDict['ESPRESSO']['None'] = espresso.Espresso
 
 
