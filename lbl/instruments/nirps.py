@@ -1220,26 +1220,29 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
-        # TODO: change this
+        # TODO: change this - probably wont be OBJ_FP
         self.params.set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        # TODO: this is not the mid exposure time
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define berv keyword
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
         # define the airmass of the observation
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_AIRMASS',
                         ['HIERARCH ESO TEL1 AIRM START',
                          'HIERARCH ESO TEL2 AIRM START',
@@ -1261,6 +1264,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # TODO -> no equivalent in NIRPS Geneva
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define the barycentric julian date
@@ -1592,26 +1596,29 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
-        # TODO: change this
+        # TODO: change this - probably wont be OBJ_FP
         self.params.set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        # TODO: this is not the mid exposure time
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define berv keyword
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
         # define the airmass of the observation
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_AIRMASS',
                         ['HIERARCH ESO TEL1 AIRM START',
                          'HIERARCH ESO TEL2 AIRM START',
@@ -1633,6 +1640,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # TODO -> no equivalent in NIRPS Geneva
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
+        # TODO: Check for NIRPS Geneva
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define the barycentric julian date
