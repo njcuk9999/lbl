@@ -1225,8 +1225,6 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
-        # define the fiber of the observation,
-        self.params.set('KW_FIBER', None, source=func_name)
         # define the key that gives the mid exposure time in MJD
         # TODO: Check for NIRPS Geneva
         self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
@@ -1603,8 +1601,6 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
-        # define the fiber of the observation,
-        self.params.set('KW_FIBER', None, source=func_name)
         # define the key that gives the mid exposure time in MJD
         # TODO: Check for NIRPS Geneva
         self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
