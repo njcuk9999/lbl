@@ -46,14 +46,15 @@ InstrumentsType = Union[default.Instrument,
                         harps.Harps,
                         espresso.Espresso,
                         carmenes.Carmenes,
-                        nirps.NIRPS_HA,
-                        nirps.NIRPS_HE]
+                        nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
+                        nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou,
                    harps.Harps,
                    espresso.Espresso,
                    carmenes.Carmenes,
-                   nirps.NIRPS_HA, nirps.NIRPS_HE)
+                   nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
+                   nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva)
 
 # Add all the instrument + source combinations and link them to instrument
 #   classes
