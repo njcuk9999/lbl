@@ -1238,6 +1238,9 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # define berv keyword
         # TODO: Check for NIRPS Geneva
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
+        # define the Blaze calibration file
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL13 NAME',
+                        source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
@@ -1304,76 +1307,6 @@ class NIRPS_HA_Geneva(NIRPS_HA):
             io.check_file_exists(abspath)
         # return absolute path
         return abspath
-
-    def load_blaze_from_science(self, sci_image: np.ndarray,
-                                sci_hdr: fits.Header,
-                                calib_directory: str, normalize: bool = True
-                                ) -> Tuple[np.ndarray, bool]:
-        """
-        Load the blaze file using a science file header
-
-        :param sci_image: np.array - the science image (if we don't have a
-                          blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
-        :param calib_directory: str, the directory containing calibration files
-                                (i.e. containing the blaze files)
-        :param normalize: bool, if True normalized the blaze per order
-
-        :return: the blaze and a flag whether blaze is set to ones (science
-                 image already blaze corrected)
-        """
-        # no blaze required - set to ones
-        blaze = np.ones_like(sci_image)
-        # do not require header or calib directory
-        _ = sci_hdr, calib_directory, normalize
-        # return blaze
-        return blaze, True
-
-    def no_blaze_corr(self, sci_image: np.ndarray,
-                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        If we do not have a blaze we need to create an artificial one so that
-        the s1d has a proper weighting
-
-        :param sci_image: the science image (will be unblazed corrected)
-        :param sci_wave: the wavelength solution for the science image
-
-        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
-        """
-        # get the wave centers for each order
-        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
-        # find the 'diffraction' order for a given 'on-detector' order
-        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
-        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
-        # ---------------------------------------------------------------------
-        # use the fit to get the blaze assuming a sinc**2 profile.
-        # The minima of a given order corresponds to the position of the
-        # consecutive orders
-        # ---------------------------------------------------------------------
-        # storage for the calculated blaze
-        blaze = np.zeros(sci_wave.shape)
-        # loop around each order
-        for order_num in range(sci_wave.shape[0]):
-            # get the wave grid for this order
-            owave = sci_wave[order_num]
-            # get the center of this order (with a small offset to avoid
-            #  a division by zero in the sinc at phase = 0
-            owave_cen = owave[len(owave)//2] + 1e-6
-            # calculate the period of this order
-            period = owave_cen / np.polyval(dfit, 1/owave)
-            # calculate the phase of the sinc**2
-            phase = np.pi * (owave - owave_cen)/period
-            # assume the sinc profile. There is a factor 2 difference in the
-            #   phase as the sinc is squared. sin**2 has a period that is a
-            #   factor of 2 shorter than the sin
-            blaze[order_num] = (np.sin(phase)/phase) ** 2
-        # un-correct the science image
-        sci_image = sci_image * blaze
-        # return un-corrected science image and the calculated blaze
-        return sci_image, blaze
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
@@ -1519,46 +1452,6 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # return header
         return header
 
-    def get_rjd_value(self, header: fits.Header) -> float:
-
-        """
-        Get the rjd either from KW_MID_EXP_TIME or KW_BJD
-        time returned is in MJD (not JD)
-
-        :param header: fits.Header - the LBL rv header
-        :return:
-        """
-        # get keys from params
-        kw_mjdmid = self.params['KW_MID_EXP_TIME']
-        kw_bjd = self.params['KW_BJD']
-        # get mjdmid and bjd
-        mid_exp_time = io.get_hkey(header, kw_mjdmid)
-        bjd = io.get_hkey(header, kw_bjd)
-        if isinstance(bjd, str):
-            # return RJD = MJD + 0.5
-            return float(mid_exp_time) + 0.5
-        else:
-            # convert bjd to mjd
-            bjd_mjd = Time(bjd, format='jd').mjd
-            # return RJD = MJD + 0.5
-            return float(bjd_mjd) + 0.5
-
-    def get_plot_date(self, header: fits.Header):
-        """
-        Get the matplotlib plotting date
-
-        :param header: fits.Header - the LBL rv header
-
-        :return: float, the plot date
-        """
-        # get mjdate key
-        kw_mjdate = self.params['KW_MJDATE']
-        # get mjdate
-        mjdate = io.get_hkey(header, kw_mjdate)
-        # convert to plot date and take off JD?
-        plot_date = Time(mjdate, format='mjd').plot_date
-        # return float plot date
-        return float(plot_date)
 
 
 class NIRPS_HE_Geneva(NIRPS_HE):
@@ -1614,6 +1507,9 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # define berv keyword
         # TODO: Check for NIRPS Geneva
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
+        # define the Blaze calibration file
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL13 NAME',
+                        source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
