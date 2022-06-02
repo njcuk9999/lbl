@@ -141,7 +141,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 3: Load blaze file if set
     # -------------------------------------------------------------------------
     if blaze_file is not None:
-        blaze = inst.load_blaze(blaze_file)
+        blaze = inst.load_blaze(blaze_file, science_filer=science_files[0])
     else:
         blaze = None
     # -------------------------------------------------------------------------
@@ -229,8 +229,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.4 load blaze if not set above
         # ---------------------------------------------------------------------
         if blaze is None:
-            blaze, _ = inst.load_blaze_from_science(sci_data, sci_hdr,
-                                                    calib_dir)
+            blaze, _ = inst.load_blaze_from_science(science_file, sci_data,
+                                                    sci_hdr, calib_dir)
         # ---------------------------------------------------------------------
         # 6.5 check for bad files (via a header key)
         # ---------------------------------------------------------------------

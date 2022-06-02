@@ -343,12 +343,15 @@ class NIRPS(Instrument):
         # return absolute path
         return abspath
 
-    def load_blaze(self, filename: str,
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
                    normalize: bool = True) -> Union[np.ndarray, None]:
         """
         Load a blaze file
 
         :param filename: str, absolute path to filename
+        :param science_File: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
 
         :return: data (np.ndarray) or None
@@ -443,7 +446,8 @@ class NIRPS(Instrument):
         # return sorted files
         return list(science_files)
 
-    def load_blaze_from_science(self, sci_image: np.ndarray,
+    def load_blaze_from_science(self, science_file: str,
+                                sci_image: np.ndarray,
                                 sci_hdr: fits.Header,
                                 calib_directory: str,
                                 normalize: bool = True
@@ -1452,7 +1456,80 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # return header
         return header
 
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
+                   normalize: bool = True) -> Union[np.ndarray, None]:
+        """
+        Load a blaze file
 
+        :param filename: str, absolute path to filename
+        :param science_File: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: data (np.ndarray) or None
+        """
+        _ = self
+        if filename is not None:
+            blaze, _ = io.load_fits(filename, kind='blaze fits file')
+            # load wave (we have to modify the blaze)
+            wavemap = self.get_wave_solution(science_file)
+            # update blaze solution by gradient of wave
+            blaze = blaze * np.gradient(wavemap)
+            # deal with normalizing per order
+            if normalize:
+                # normalize blaze per order
+                for order_num in range(blaze.shape[0]):
+                    # normalize by the 90% percentile
+                    norm = np.nanpercentile(blaze[order_num], 90)
+                    # apply to blaze
+                    blaze[order_num] = blaze[order_num] / norm
+            # return blaze
+            return blaze
+        else:
+            return None
+
+    def load_blaze_from_science(self, science_file: str,
+                                sci_image: np.ndarray,
+                                sci_hdr: fits.Header,
+                                calib_directory: str,
+                                normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
+        """
+        Load the blaze file using a science file header
+
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
+        """
+        # get blaze file from science header
+        blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
+        # construct absolute path
+        abspath = os.path.join(calib_directory, blaze_file)
+        # check that this file exists
+        io.check_file_exists(abspath)
+        # read blaze file (data and header)
+        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        # load wave (we have to modify the blaze)
+        wavemap = self.get_wave_solution(science_file)
+        # update blaze solution by gradient of wave
+        blaze = blaze * np.gradient(wavemap)
+        # normalize by order
+        if normalize:
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
+        # return blaze
+        return blaze, False
 
 class NIRPS_HE_Geneva(NIRPS_HE):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
@@ -1576,76 +1653,6 @@ class NIRPS_HE_Geneva(NIRPS_HE):
             io.check_file_exists(abspath)
         # return absolute path
         return abspath
-
-    def load_blaze_from_science(self, sci_image: np.ndarray,
-                                sci_hdr: fits.Header,
-                                calib_directory: str, normalize: bool = True
-                                ) -> Tuple[np.ndarray, bool]:
-        """
-        Load the blaze file using a science file header
-
-        :param sci_image: np.array - the science image (if we don't have a
-                          blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
-        :param calib_directory: str, the directory containing calibration files
-                                (i.e. containing the blaze files)
-        :param normalize: bool, if True normalized the blaze per order
-
-        :return: the blaze and a flag whether blaze is set to ones (science
-                 image already blaze corrected)
-        """
-        # no blaze required - set to ones
-        blaze = np.ones_like(sci_image)
-        # do not require header or calib directory
-        _ = sci_hdr, calib_directory, normalize
-        # return blaze
-        return blaze, True
-
-    def no_blaze_corr(self, sci_image: np.ndarray,
-                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        If we do not have a blaze we need to create an artificial one so that
-        the s1d has a proper weighting
-
-        :param sci_image: the science image (will be unblazed corrected)
-        :param sci_wave: the wavelength solution for the science image
-
-        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
-        """
-        # get the wave centers for each order
-        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
-        # find the 'diffraction' order for a given 'on-detector' order
-        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
-        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
-        # ---------------------------------------------------------------------
-        # use the fit to get the blaze assuming a sinc**2 profile.
-        # The minima of a given order corresponds to the position of the
-        # consecutive orders
-        # ---------------------------------------------------------------------
-        # storage for the calculated blaze
-        blaze = np.zeros(sci_wave.shape)
-        # loop around each order
-        for order_num in range(sci_wave.shape[0]):
-            # get the wave grid for this order
-            owave = sci_wave[order_num]
-            # get the center of this order (with a small offset to avoid
-            #  a division by zero in the sinc at phase = 0
-            owave_cen = owave[len(owave)//2] + 1e-6
-            # calculate the period of this order
-            period = owave_cen / np.polyval(dfit, 1/owave)
-            # calculate the phase of the sinc**2
-            phase = np.pi * (owave - owave_cen)/period
-            # assume the sinc profile. There is a factor 2 difference in the
-            #   phase as the sinc is squared. sin**2 has a period that is a
-            #   factor of 2 shorter than the sin
-            blaze[order_num] = (np.sin(phase)/phase) ** 2
-        # un-correct the science image
-        sci_image = sci_image * blaze
-        # return un-corrected science image and the calculated blaze
-        return sci_image, blaze
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
@@ -1790,6 +1797,81 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # ---------------------------------------------------------------------
         # return header
         return header
+
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
+                   normalize: bool = True) -> Union[np.ndarray, None]:
+        """
+        Load a blaze file
+
+        :param filename: str, absolute path to filename
+        :param science_File: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: data (np.ndarray) or None
+        """
+        _ = self
+        if filename is not None:
+            blaze, _ = io.load_fits(filename, kind='blaze fits file')
+            # load wave (we have to modify the blaze)
+            wavemap = self.get_wave_solution(science_file)
+            # update blaze solution by gradient of wave
+            blaze = blaze * np.gradient(wavemap)
+            # deal with normalizing per order
+            if normalize:
+                # normalize blaze per order
+                for order_num in range(blaze.shape[0]):
+                    # normalize by the 90% percentile
+                    norm = np.nanpercentile(blaze[order_num], 90)
+                    # apply to blaze
+                    blaze[order_num] = blaze[order_num] / norm
+            # return blaze
+            return blaze
+        else:
+            return None
+
+    def load_blaze_from_science(self, science_file: str,
+                                sci_image: np.ndarray,
+                                sci_hdr: fits.Header,
+                                calib_directory: str,
+                                normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
+        """
+        Load the blaze file using a science file header
+
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
+        """
+        # get blaze file from science header
+        blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
+        # construct absolute path
+        abspath = os.path.join(calib_directory, blaze_file)
+        # check that this file exists
+        io.check_file_exists(abspath)
+        # read blaze file (data and header)
+        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        # load wave (we have to modify the blaze)
+        wavemap = self.get_wave_solution(science_file)
+        # update blaze solution by gradient of wave
+        blaze = blaze * np.gradient(wavemap)
+        # normalize by order
+        if normalize:
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
+        # return blaze
+        return blaze, False
 
     def get_rjd_value(self, header: fits.Header) -> float:
 

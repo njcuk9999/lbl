@@ -335,12 +335,15 @@ class Spirou(Instrument):
         # return absolute path
         return abspath
 
-    def load_blaze(self, filename: str,
-                   normalize: bool = True) -> Union[np.ndarray, None]:
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
+        normalize: bool = True) -> Union[np.ndarray, None]:
         """
         Load a blaze file
 
         :param filename: str, absolute path to filename
+        :param science_File: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
 
         :return: data (np.ndarray) or None
@@ -435,7 +438,8 @@ class Spirou(Instrument):
         # return sorted files
         return list(science_files)
 
-    def load_blaze_from_science(self, sci_image: np.ndarray,
+    def load_blaze_from_science(self, science_file: str,
+                                sci_image: np.ndarray,
                                 sci_hdr: fits.Header,
                                 calib_directory: str,
                                 normalize: bool = True

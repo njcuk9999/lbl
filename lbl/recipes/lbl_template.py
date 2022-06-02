@@ -124,7 +124,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     blaze_file = inst.blaze_file(calib_dir)
     # load blaze file if set
     if blaze_file is not None:
-        blaze = inst.load_blaze(blaze_file, normalize=False)
+        blaze = inst.load_blaze(blaze_file, science_file=science_files[0],
+                                normalize=False)
     else:
         blaze = None
     # -------------------------------------------------------------------------
@@ -181,7 +182,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
         # load blaze (just ones if not needed)
         if blaze is None:
-            bargs = [sci_image, sci_hdr, calib_dir]
+            bargs = [filename, sci_image, sci_hdr, calib_dir]
             bout = inst.load_blaze_from_science(*bargs, normalize=False)
             blazeimage, blaze_flag = bout
         else:
