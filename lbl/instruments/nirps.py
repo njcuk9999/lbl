@@ -1475,7 +1475,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
             # load wave (we have to modify the blaze)
             wavemap = self.get_wave_solution(science_file)
             # update blaze solution by gradient of wave
-            blaze = blaze * np.gradient(wavemap,axis=1)
+            blaze = blaze * np.gradient(wavemap, axis=1)
             # deal with normalizing per order
             if normalize:
                 # normalize blaze per order
@@ -1519,7 +1519,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # load wave (we have to modify the blaze)
         wavemap = self.get_wave_solution(science_file)
         # update blaze solution by gradient of wave
-        blaze = blaze * np.gradient(wavemap,axis=1)
+        blaze = blaze * np.gradient(wavemap, axis=1)
         # normalize by order
         if normalize:
             # normalize blaze per order
@@ -1817,7 +1817,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
             # load wave (we have to modify the blaze)
             wavemap = self.get_wave_solution(science_file)
             # update blaze solution by gradient of wave
-            blaze = blaze * np.gradient(wavemap,axis=1)
+            blaze = blaze * np.gradient(wavemap, axis=1)
             # deal with normalizing per order
             if normalize:
                 # normalize blaze per order
@@ -1861,7 +1861,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # load wave (we have to modify the blaze)
         wavemap = self.get_wave_solution(science_file)
         # update blaze solution by gradient of wave
-        blaze = blaze * np.gradient(wavemap,axis=1)
+        blaze = blaze * np.gradient(wavemap, axis=1)
         # normalize by order
         if normalize:
             # normalize blaze per order

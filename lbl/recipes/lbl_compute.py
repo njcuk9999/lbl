@@ -141,7 +141,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 3: Load blaze file if set
     # -------------------------------------------------------------------------
     if blaze_file is not None:
-        blaze = inst.load_blaze(blaze_file, science_filer=science_files[0])
+        blaze = inst.load_blaze(blaze_file, science_file=science_files[0])
     else:
         blaze = None
     # -------------------------------------------------------------------------
