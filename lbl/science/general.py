@@ -1286,6 +1286,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     good &= rvtable0['NPIXLINE'] < max_pix_wid
     # remove good from rv table
     rvtable0 = rvtable0[good]
+    ref_good_pix = np.array(good) # if a calibration, we'll need this later
     # size of arrays
     nby, nbx = len(lblrvfiles), np.sum(good)
     # set up rv and dvrms
@@ -1598,6 +1599,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # if we have a calibration load the lbl rv file
         if flag_calib:
             rvtable, rvhdr = inst.load_lblrv_file(lblrvfiles[row])
+            rvtable = rvtable[ref_good_pix] # to match dvarr size
             residuals = np.array(rvtable['dv'])
             # get the error
             err = np.array(rvtable['sdv'])
