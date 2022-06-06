@@ -1,6 +1,8 @@
 # lbl
 Line by line code for radial velocity
 
+version 0.38.0 (2022-06-06)
+
 ---
 
 # Contents
