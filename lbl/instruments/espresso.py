@@ -642,7 +642,13 @@ class Espresso(Instrument):
             fp_flag = False
             # if key is in params we can add the value to keys
             if drs_key in self.params:
-                keys.append(self.params[drs_key])
+                # need to deal with keys that define multiple drs keys
+                #   in this case use the original drs_key name
+                key = self.params[drs_key]
+                if isinstance(key, str):
+                    keys.append(key)
+                else:
+                    keys.append(drs_key)
                 # we can also look for fp flag - this is either True or False
                 #    if True we skip this key for FP files - default is False
                 #    (i.e. not to skip)
