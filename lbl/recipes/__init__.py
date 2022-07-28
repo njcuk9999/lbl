@@ -17,6 +17,7 @@ from lbl.recipes import lbl_mask
 from lbl.recipes import lbl_noise
 from lbl.recipes import lbl_telluclean
 from lbl.recipes import lbl_wrap
+from lbl.recipes import lbl_demo
 
 # =============================================================================
 # Start of code
