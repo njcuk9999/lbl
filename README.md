@@ -71,32 +71,13 @@ Then activate the environment
 conda activate lbl-env
 ```
 
-#### Installing modules (venv, manually or conda):
+#### Installing LBL with pip:
+
 Then install packages with `pip`
 ```bash
 cd {LBL_ROOT}
-pip install -r requirements.txt
+pip install -U -e .
 ```
-
-[back to top](#contents)
-
----
-
-## Step 4: Add to the PATH and PYTHONPATH environment
-
-I.e. in `~/.bashrc` or `~/.bash_profile` or `~/.profile` or a sh script you 
-can source
-
-For bash:
-```shell
-export PYTHONPATH={LBL_ROOT}:$PYTHONPATH
-export PATH={LBL_ROOT}:$PATH
-export PATH={LBL_ROOT}/lbl/recipes/:$PATH
-export PATH={LBL_ROOT}/lbl/resources/:$PATH
-```
-
-
-Note remember to source your profile (`~/.bashrc`) after making these changes.
 
 [back to top](#contents)
 
