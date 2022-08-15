@@ -10,8 +10,7 @@ version 0.38.0 (2022-06-06)
 1. [Installation](#1-installation)
     - [Step 1: Download from github](#step-1-download-the-github-repository)
     - [Step 2: Choose your branch](#step-2-choose-your-branch)
-    - [Step 3: Install python 3.8 and python requirements](#step-3-install-python-38-and-required-modules)
-    - [Step 4: Add to PYTHONPATH](#step-4-add-to-the-path-and-pythonpath-environment)
+    - [Step 3: Step 3: Install](#step-3-install)
 2. [Using LBL](#2-using-lbl)
 3. [The config file](#3-the-lbl-parameters)
 4. [Things that the LBL code is NOT meant to do](#4-things-that-the-lbl-code-is-not-meant-to-do)
@@ -58,7 +57,7 @@ experimental functionality currently in development.
 
 ---
 
-## Step 3: Install python 3.8 and required modules
+## Step 3: Install
 Install python 3.8 (either with venv, manually or with conda).
 
 #### With conda:
