@@ -1159,6 +1159,10 @@ class SpirouCADC(Spirou):
         if 'FIBER' not in self.params:
             emsg = 'Keyword FIBER must be set for SPIROU CADC mode'
             base_classes.LblException(emsg)
+        # Set FLUX_EXTENSION_NAME
+        #   - Can be Flux (for e.fits and t.fits)
+        #   - Can be Pol or StokesI or Null1 or Null2 (for p.fits)
+        self.params.set('FLUX_EXTENSION_NAME', 'Flux', source=func_name)
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
@@ -1172,11 +1176,11 @@ class SpirouCADC(Spirou):
         :return: str, the extension name
         """
         # Fiber must be set for SPIROU CADC
-        if 'FIBER' not in self.params:
-            emsg = 'Keyword FIBER must be set for SPIROU CADC mode'
+        if 'FORCE_FIBER' not in self.params:
+            emsg = 'Keyword FORCE_FIBER must be set for SPIROU CADC mode'
             base_classes.LblException(emsg)
         # get fiber from params
-        fiber = self.params['FIBER']
+        fiber = self.params['FORCE_FIBER']
         # return the extension name
         return f'{kind}{fiber}'
 
@@ -1188,10 +1192,23 @@ class SpirouCADC(Spirou):
         :param kind: str, the kind of data
         :return:
         """
+        # Fiber must be set for SPIROU CADC
+        if 'FLUX_EXTENSION_NAME' not in self.params:
+            emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
+                    'SPIROU CADC mode')
+            base_classes.LblException(emsg)
+        if self.params['FLUX_EXTENSION_NAME'] is None:
+            emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
+                    'SPIROU CADC mode')
+            base_classes.LblException(emsg)
+        # flux extname kind
+        flux_extname = self.params['FLUX_EXTENSION_NAME']
+        # full extension name
+        extname = self.get_extname(flux_extname)
         # load the first extension of each
         sci_data, sci_hdr = io.load_fits(science_file,
                                          kind='science Flux extension',
-                                         extname=self.get_extname('Flux'))
+                                         extname=extname)
         # return data and header
         return sci_data, sci_hdr
 

@@ -107,6 +107,17 @@ params.set(key='PROGRAM', value=None, source=__NAME__, dtype=str,
 params.set(key='WRITE_RDB_FITS', value=True, source=__NAME__,
            dtype=bool, desc='whether to write RDB fits files')
 
+# Define fiber of files (required for some modes before reading header
+#    - not used in many modes as we can read header of input files)
+params.set(key='FORCE_FIBER', value=None, source=__NAME__, dtype=str,
+           desc='Fiber of files (required for some modes before reading '
+                'header - not used in many modes as we can read header of '
+                'input files)')
+
+# Define the flux extension name (required for some modes)
+params.set(key='FLUX_EXTENSION_NAME', value=None, source=__NAME__, dtype=str,
+           desc='the flux extension name (required for some modes)')
+
 # =============================================================================
 # Define common parameters (between compute / compil)
 # =============================================================================
