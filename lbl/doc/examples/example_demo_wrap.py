@@ -19,6 +19,11 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # LBL parameters
     # -------------------------------------------------------------------------
+    # You may also add any constant here to override the default value
+    #     (see README for details) - this is NOT recommended for non developers
+    #   Note this may have undesired affects as these parameters apply globally
+    #     for all LBL recipes
+    # -------------------------------------------------------------------------
     # This is the instrument name
     #   Currently supported instruments are SPIROU, HARPS, ESPRESSO, CARMENES
     #                                       NIRPS_HE, NIRPS_HA
@@ -34,10 +39,8 @@ if __name__ == "__main__":
     # The data directory where all data is stored under - this should be an
     #    absolute path
     rparams['DATA_DIR'] = '{DATA_DIR}'
-    # You may also add any constant here to override the default value
-    #     (see README for details) - this is NOT recommended for non developers
-    #   Note this may have undesired affects as these parameters apply globally
-    #     for all LBL recipes
+    # The input file string (including wildcards) - if not set will use all
+    #   files in the science directory (for this object name)
     # rparams['INPUT_FILE'] = '2*e2dsff_AB.fits'
     # -------------------------------------------------------------------------
     # science criteria
