@@ -596,7 +596,6 @@ class Instrument:
         # get file from url
         io.get_urlfile(url, 'default mask', default_mask_file)
 
-
     # -------------------------------------------------------------------------
     # Methods that MUST be overridden by the child instrument class
     # -------------------------------------------------------------------------
@@ -650,6 +649,19 @@ class Instrument:
         """
         _ = self, filename, normalize
         raise self._not_implemented('load_blaze')
+
+    def load_science_file(self, science_file: str):
+        """
+        Load science data and header
+
+        :param science_file: str, the filename to load
+        :param kind: str, the kind of data
+        :return:
+        """
+        # load the first extension of each
+        sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
+        # return data and header
+        return sci_data, sci_hdr
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """

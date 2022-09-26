@@ -220,7 +220,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # ---------------------------------------------------------------------
         # 6.3 load science file
         # ---------------------------------------------------------------------
-        sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
+        sci_data, sci_hdr = inst.load_science_file(science_file)
         # flag calibration file
         if inst.params['DATA_TYPE'] != 'SCIENCE':
             model_velocity = 0

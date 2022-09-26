@@ -1270,7 +1270,14 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     for hdr_key in header_keys:
         # empty elements in a list for each key to fill
         rdb_dict[hdr_key] = [[]] * len(lblrvfiles)
-
+    # add version
+    rdb_dict['LBL_VERSION'] = [base.__version__] * len(lblrvfiles)
+    # add version date
+    rdb_dict['LBL_VDATE'] = [base.__date__] * len(lblrvfiles)
+    # add date now
+    rdb_dict['LBL_PDATE'] = [base.__now__] * len(lblrvfiles)
+    # add local science directory
+    rdb_dict['LBL_SCI_DIR'] = [[]] * len(lblrvfiles)
     # -------------------------------------------------------------------------
     # open first file to set up good mask
     # -------------------------------------------------------------------------
@@ -1331,6 +1338,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # fill in filename
         # ---------------------------------------------------------------------
         rdb_dict['FILENAME'][row] = os.path.basename(lblrvfiles[row])
+        rdb_dict['LBL_SCI_DIR'][row] = os.path.dirname(lblrvfiles[row])
         # ---------------------------------------------------------------------
         # fill in header keys
         # ---------------------------------------------------------------------

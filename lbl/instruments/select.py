@@ -42,14 +42,14 @@ log = base_classes.log
 LblException = base_classes.LblException
 # instruments list
 InstrumentsType = Union[default.Instrument,
-                        spirou.Spirou,
+                        spirou.Spirou, spirou.SpirouCADC,
                         harps.Harps,
                         espresso.Espresso,
                         carmenes.Carmenes,
                         nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
                         nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva]
 InstrumentsList = (default.Instrument,
-                   spirou.Spirou,
+                   spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps,
                    espresso.Espresso,
                    carmenes.Carmenes,
@@ -62,7 +62,7 @@ InstrumentsList = (default.Instrument,
 InstDict = dict()
 InstDict['SPIROU'] = dict()
 InstDict['SPIROU']['APERO'] = spirou.Spirou
-InstDict['SPIROU']['CADC'] = spirou.Spirou
+InstDict['SPIROU']['CADC'] = spirou.SpirouCADC
 InstDict['NIRPS_HA'] = dict()
 InstDict['NIRPS_HA']['APERO'] = nirps.NIRPS_HA
 InstDict['NIRPS_HA']['Geneva'] = nirps.NIRPS_HA_Geneva

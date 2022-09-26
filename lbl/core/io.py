@@ -226,12 +226,16 @@ def clean_directory(path: str, logmsg: bool = True,
 # Define fits functions
 # =============================================================================
 def load_fits(filename: str,
-              kind: Union[str, None] = None) -> Tuple[np.ndarray, fits.Header]:
+              kind: Union[str, None] = None,
+              extnum: Optional[int] = None,
+              extname: Optional[str] = None) -> Tuple[np.ndarray, fits.Header]:
     """
     Standard way to load fits files
 
     :param filename: str, the filename
     :param kind: the kind (for error message)
+    :param extnum: int, the extension number (if not given uses first)
+    :param extname: the extension name (if not given uses extnum)
 
     :return: tuple, the data and the header
     """
@@ -240,8 +244,15 @@ def load_fits(filename: str,
         kind = 'fits file'
     # try to load fits file
     try:
-        data = fits.getdata(filename)
-        header = fits.getheader(filename)
+        if extnum is not None:
+            data = fits.getdata(filename, ext=extnum)
+            header = fits.getheader(filename, ext=extnum)
+        elif extname is not None:
+            data = fits.getdata(filename, extname=extname)
+            header = fits.getheader(filename, extname=extname)
+        else:
+            data = fits.getdata(filename)
+            header = fits.getheader(filename)
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
@@ -250,21 +261,30 @@ def load_fits(filename: str,
 
 
 def load_header(filename: str,
-                kind: Union[str, None] = None) -> fits.Header:
+                kind: Union[str, None] = None,
+                extnum: Optional[int] = None,
+                extname: Optional[str] = None) -> fits.Header:
     """
     Standard way to load fits file header only
 
     :param filename: str, the filename
     :param kind: the kind (for error message)
+    :param extnum: int, the extension number (if not given uses first)
+    :param extname: the extension name (if not given uses extnum)
 
-    :return: tuple, the data and the header
+    :return: FITS header, the header
     """
     # deal with no kind
     if kind is None:
         kind = 'fits file'
     # try to load fits file
     try:
-        header = fits.getheader(filename)
+        if extnum is not None:
+            header = fits.getheader(filename, ext=extnum)
+        elif extname is not None:
+            header = fits.getheader(filename, extname=extname)
+        else:
+            header = fits.getheader(filename)
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
