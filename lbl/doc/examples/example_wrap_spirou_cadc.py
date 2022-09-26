@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Test of the LBL for HARPS (Proxima-tc)
+Test of the LBL using SPIROU (CADC mode)
 
-Created on 2021-10-18
+Created on 2022-09-26
+Last updated 2022-09-26
 
 @author: artigau, cook
 """
