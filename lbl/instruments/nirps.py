@@ -661,7 +661,7 @@ class NIRPS(Instrument):
         # filtering files
         log.general('Filtering {0} files...'.format(self.params['DATA_TYPE']))
         # select the first science file as a reference file
-        refimage, refhdr = self.load_science(science_files[0])
+        refimage, refhdr = self.load_science_file(science_files[0])
         ref_fibertype = self.get_dpr_fibtype(refhdr)
         # storage
         keep_files = []

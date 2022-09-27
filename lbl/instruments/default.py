@@ -124,20 +124,6 @@ class Instrument:
         # return header
         return header
 
-    def load_science(self, filename: str) -> Tuple[np.ndarray, fits.Header]:
-        """
-        Load a science exposure
-
-        Note data should be a 2D array (even if data is 1D)
-        Treat 1D data as a single order?
-
-        :param filename: str, absolute path to filename
-
-        :return: tuple, data (np.ndarray) and header (fits.Header)
-        """
-        _ = self
-        return io.load_fits(filename, kind='science fits file')
-
     def ref_table_file(self, directory: str,
                        mask_file: str) -> Tuple[Union[str, None], bool]:
         """
@@ -650,13 +636,17 @@ class Instrument:
         _ = self, filename, normalize
         raise self._not_implemented('load_blaze')
 
-    def load_science_file(self, science_file: str):
+    def load_science_file(self, science_file: str
+                          ) -> Tuple[np.ndarray, fits.Header]:
         """
-        Load science data and header
+        Load a science exposure
 
-        :param science_file: str, the filename to load
-        :param kind: str, the kind of data
-        :return:
+        Note data should be a 2D array (even if data is 1D)
+        Treat 1D data as a single order?
+
+        :param filename: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (fits.Header)
         """
         # load the first extension of each
         sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')

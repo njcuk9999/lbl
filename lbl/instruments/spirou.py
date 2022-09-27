@@ -676,7 +676,7 @@ class Spirou(Instrument):
         # filtering files
         log.general('Filtering {0} files...'.format(self.params['DATA_TYPE']))
         # select the first science file as a reference file
-        refimage, refhdr = self.load_science(science_files[0])
+        refimage, refhdr = self.load_science_file(science_files[0])
         ref_fibertype = self.get_dpr_fibtype(refhdr)
         # storage
         keep_files = []
@@ -1156,9 +1156,9 @@ class SpirouCADC(Spirou):
         super().param_override()
 
         # Fiber must be set for SPIROU CADC
-        if 'FIBER' not in self.params:
-            emsg = 'Keyword FIBER must be set for SPIROU CADC mode'
-            base_classes.LblException(emsg)
+        if 'FORCE_FIBER' not in self.params:
+            emsg = 'Keyword FORCE_FIBER must be set for SPIROU CADC mode'
+            raise base_classes.LblException(emsg)
         # Set FLUX_EXTENSION_NAME
         #   - Can be Flux (for e.fits and t.fits)
         #   - Can be Pol or StokesI or Null1 or Null2 (for p.fits)
@@ -1178,13 +1178,14 @@ class SpirouCADC(Spirou):
         # Fiber must be set for SPIROU CADC
         if 'FORCE_FIBER' not in self.params:
             emsg = 'Keyword FORCE_FIBER must be set for SPIROU CADC mode'
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         # get fiber from params
         fiber = self.params['FORCE_FIBER']
         # return the extension name
         return f'{kind}{fiber}'
 
-    def load_science_file(self, science_file: str):
+    def load_science_file(self, science_file: str
+                          ) -> Tuple[np.ndarray, fits.Header]:
         """
         Load science data and header
 
@@ -1240,7 +1241,7 @@ class SpirouCADC(Spirou):
         # loaded from science file --> filename not required
         _ = filename
         # load blaze
-        blaze, _ = io.load_fits(filename, kind='blaze fits extension',
+        blaze, _ = io.load_fits(science_file, kind='blaze fits extension',
                                 extname=self.get_extname('Blaze'))
         # deal with normalizing per order
         if normalize:

@@ -167,7 +167,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.info(msg.format(*margs))
         # ---------------------------------------------------------------------
         # load the science image and header
-        sci_image, sci_hdr = inst.load_science(filename)
+        sci_image, sci_hdr = inst.load_science_file(filename)
         # get wave solution for reference file
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
         # push things into an e2ds input/output dictionary

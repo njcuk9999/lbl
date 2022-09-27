@@ -148,7 +148,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # may need to filter out calibrations
     science_files = inst.filter_files(science_files)
     # select the first science file as a reference file
-    refimage, refhdr = inst.load_science(science_files[0])
+    refimage, refhdr = inst.load_science_file(science_files[0])
     # get wave solution for reference file
     refwave = inst.get_wave_solution(science_files[0], refimage, refhdr)
     # get domain coverage
@@ -177,7 +177,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         margs = [it + 1, len(science_files)]
         log.general(msg.format(*margs))
         # select the first science file as a reference file
-        sci_image, sci_hdr = inst.load_science(filename)
+        sci_image, sci_hdr = inst.load_science_file(filename)
         # get wave solution for reference file
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
         # load blaze (just ones if not needed)
