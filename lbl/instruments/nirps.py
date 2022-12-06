@@ -532,9 +532,8 @@ class NIRPS(Instrument):
         wavemap = np.zeros([waveordn, nbx])
         for order_num in range(waveordn):
             # we can have two type of polynomial type
-            #  in future should only be chebyshev
+            #  TODO: in future should only be chebyshev
             if poly_type == 'Chebyshev':
-
                 wavemap[order_num] = mp.val_cheby(wavecoeffs[order_num], xpix,
                                                   domain=[nbx])
             else:
