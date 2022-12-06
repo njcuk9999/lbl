@@ -466,6 +466,11 @@ params.set('BERVBIN_MIN_ENTRIES', value=3, source=__NAME__,
 params.set('BERVBIN_SIZE', value=3000, source=__NAME__,
            desc='define the berv bin size in m/s')
 
+# define the wave solution polynomial type (Chebyshev or numpy)
+params.set('WAVE_POLY_TYPE', value='numpy', source=__NAME__,
+           desc='define the wave solution polynomial type '
+                '(Chebyshev or numpy)')
+
 # =============================================================================
 # Define telluric tellu-cleaning parameters
 # =============================================================================

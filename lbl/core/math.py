@@ -16,7 +16,7 @@ from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
 from scipy.special import erf
 from scipy import optimize
 from scipy import signal
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 import warnings
 
 from lbl.core import base
@@ -807,6 +807,28 @@ def air_index(wavelength: Union[np.ndarray, float], temp: float = 15.0,
     n = ((part1 / part2) * (part3 + part4)) + 1
 
     return n
+
+
+
+def val_cheby(coeffs: np.ndarray, xvector: Union[np.ndarray, int, float],
+              domain: List[float]) -> Union[np.ndarray, int, float]:
+    """
+    Using the output of fit_cheby calculate the fit to x  (i.e. y(x))
+    where y(x) = T0(x) + T1(x) + ... Tn(x)
+
+    :param coeffs: output from fit_cheby
+    :param xvector: x value for the y values with fit
+    :param domain: domain to be transformed to -1 -- 1. This is important to
+    keep the components orthogonal. For SPIRou orders, the default is 0--4088.
+    You *must* use the same domain when getting values with fit_cheby
+    :return: corresponding y values to the x inputs
+    """
+    # transform to a -1 to 1 domain
+    domain_cheby = 2 * (xvector - domain[0]) / (domain[1] - domain[0]) - 1
+    # fit values using the domain and coefficients
+    yvector = np.polynomial.chebyshev.chebval(domain_cheby, coeffs)
+    # return y vector
+    return yvector
 
 
 # =============================================================================

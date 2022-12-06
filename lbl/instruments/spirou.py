@@ -157,6 +157,8 @@ class Spirou(Instrument):
         self.params.set('BERVBIN_SIZE', value=3000)
         # define whether to do the tellu-clean
         self.params.set('DO_TELLUCLEAN', value=False, source=func_name)
+        # define the wave solution polynomial type (Chebyshev or numpy)
+        self.params.set('WAVE_POLY_TYPE', value='Chebyshev', source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -496,6 +498,7 @@ class Spirou(Instrument):
         kw_wavecoeffs = self.params['KW_WAVECOEFFS']
         kw_waveordn = self.params['KW_WAVEORDN']
         kw_wavedegn = self.params['KW_WAVEDEGN']
+        poly_type = self.params['WAVE_POLY_TYPE']
         # ---------------------------------------------------------------------
         # get header
         if header is None or data is None:
@@ -520,7 +523,15 @@ class Spirou(Instrument):
         # convert to wave map
         wavemap = np.zeros([waveordn, nbx])
         for order_num in range(waveordn):
-            wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1], xpix)
+            # we can have two type of polynomial type
+            #  in future should only be chebyshev
+            if poly_type == 'Chebyshev':
+
+                wavemap[order_num] = mp.val_cheby(wavecoeffs[order_num], xpix,
+                                                  domain=[nbx])
+            else:
+                wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1],
+                                                xpix)
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
