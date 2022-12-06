@@ -535,7 +535,7 @@ class NIRPS(Instrument):
             #  TODO: in future should only be chebyshev
             if poly_type == 'Chebyshev':
                 wavemap[order_num] = mp.val_cheby(wavecoeffs[order_num], xpix,
-                                                  domain=[nbx])
+                                                  domain=[0, nbx])
             else:
                 wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1],
                                                 xpix)
