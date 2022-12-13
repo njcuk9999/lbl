@@ -15,9 +15,9 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
+from lbl.resources import lbl_misc
 from lbl.science import general
 from lbl.science import plot
-from lbl.resources import lbl_misc
 
 # =============================================================================
 # Define variables
@@ -34,17 +34,17 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_COMPIL = [# core
-               'INSTRUMENT', 'CONFIG_FILE',
-               # directory
-               'DATA_DIR', 'LBLRV_SUBDIR', 'LBLRDB_SUBDIR',
-               # science
-               'OBJECT_SCIENCE', 'OBJECT_TEMPLATE',
-               # plotting
-               'PLOT', 'PLOT_COMPIL_CUMUL', 'PLOT_COMPIL_BINNED',
-               # other
-               'SKIP_DONE', 'RDB_SUFFIX', 'VERBOSE', 'PROGRAM',
-               ]
+ARGS_COMPIL = [  # core
+    'INSTRUMENT', 'CONFIG_FILE',
+    # directory
+    'DATA_DIR', 'LBLRV_SUBDIR', 'LBLRDB_SUBDIR',
+    # science
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE',
+    # plotting
+    'PLOT', 'PLOT_COMPIL_CUMUL', 'PLOT_COMPIL_BINNED',
+    # other
+    'SKIP_DONE', 'RDB_SUFFIX', 'VERBOSE', 'PROGRAM',
+]
 
 DESCRIPTION_COMPIL = 'Use this code to compile the LBL rdb files'
 

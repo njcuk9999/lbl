@@ -10,23 +10,25 @@ Created on 2021-03-17
 @author: cook
 """
 import argparse
-from copy import deepcopy
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Union
+
 import yaml
 
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.core import parameters
 from lbl.core import io
 from lbl.core import logger
-from lbl.instruments import spirou
-from lbl.instruments import espresso
+from lbl.core import parameters
 from lbl.instruments import carmenes
-from lbl.instruments import harps
-from lbl.instruments import nirps
 from lbl.instruments import default
+from lbl.instruments import espresso
+from lbl.instruments import harps
+from lbl.instruments import harpsn
+from lbl.instruments import nirps
+from lbl.instruments import spirou
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -47,14 +49,16 @@ InstrumentsType = Union[default.Instrument,
                         espresso.Espresso,
                         carmenes.Carmenes,
                         nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
-                        nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva]
+                        nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva,
+                        harpsn.HarpsN]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps,
                    espresso.Espresso,
                    carmenes.Carmenes,
                    nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
-                   nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva)
+                   nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva,
+                   harpsn.HarpsN)
 
 # Add all the instrument + source combinations and link them to instrument
 #   classes
@@ -75,6 +79,8 @@ InstDict['CARMENES'] = dict()
 InstDict['CARMENES']['None'] = carmenes.Carmenes
 InstDict['ESPRESSO'] = dict()
 InstDict['ESPRESSO']['None'] = espresso.Espresso
+InstDict['HARPSN'] = dict()
+InstDict['HARPSN']['None'] = harpsn.HarpsN
 
 
 # =============================================================================

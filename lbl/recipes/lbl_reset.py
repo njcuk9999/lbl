@@ -17,7 +17,6 @@ from lbl.core import io
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 
-
 # =============================================================================
 # Define variables
 # =============================================================================
@@ -33,12 +32,12 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_MASK = [# core
-             'INSTRUMENT', 'CONFIG_FILE',
-             # directory
-             'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
-             'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
-            ]
+ARGS_MASK = [  # core
+    'INSTRUMENT', 'CONFIG_FILE',
+    # directory
+    'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
+    'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
+]
 
 DESCRIPTION_MASK = 'Use this code to clean out any LBL data from DATA_DIR'
 

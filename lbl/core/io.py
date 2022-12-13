@@ -9,15 +9,16 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.io import fits
-from astropy.table import Table
 import copy
-import numpy as np
 import os
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
-import warnings
+
+import numpy as np
 import wget
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes

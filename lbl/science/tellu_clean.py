@@ -9,12 +9,12 @@ Created on 2021-12-13
 
 @author: cook
 """
-from astropy import constants
-from astropy.table import Table
-import numpy as np
 import os
 from typing import Any, Dict, Tuple, Union
-import wget
+
+import numpy as np
+from astropy import constants
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -22,9 +22,9 @@ from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
+from lbl.resources import lbl_misc
 from lbl.science import general
 from lbl.science import plot
-from lbl.resources import lbl_misc
 
 # =============================================================================
 # Define variables

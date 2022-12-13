@@ -15,13 +15,14 @@ import os
 # Define variables
 # =============================================================================
 __NAME__: str = 'base.py'
-__version__: str = '0.42.0'
-__date__: str = '2022-09-26'
+__version__: str = '0.43.0'
+__date__: str = '2022-12-13'
 __authors__: str = 'Neil Cook, Etienne Artigau, Thomas Vandal, Charles Cadieux'
 __package__: str = 'lbl'
 
 # currently supported instruments
-INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA']
+INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
+               'HARPSN']
 
 # log variables
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')

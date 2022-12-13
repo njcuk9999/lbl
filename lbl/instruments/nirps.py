@@ -7,22 +7,22 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.table import Table
-from astropy.io import fits
 import glob
-import numpy as np
 import os
-from pathlib import Path
-import requests
 import shutil
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import requests
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
-
 
 # =============================================================================
 # Define variables
@@ -97,7 +97,7 @@ class NIRPS(Instrument):
         # define the compil minimum wavelength allowed for lines [nm]
         self.params.set('COMPIL_WAVE_MIN', 900, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', 1850, source=func_name)
+        self.params.set('COMPIL_WAVE_MAX', 1950, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define min likelihood of correlation with BERV
@@ -166,6 +166,8 @@ class NIRPS(Instrument):
         self.params.set('BERVBIN_SIZE', value=3000)
         # define whether to do the tellu-clean
         self.params.set('DO_TELLUCLEAN', value=False, source=func_name)
+        # define the wave solution polynomial type (Chebyshev or numpy)
+        self.params.set('WAVE_POLY_TYPE', value='Chebyshev', source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -504,6 +506,7 @@ class NIRPS(Instrument):
         kw_wavecoeffs = self.params['KW_WAVECOEFFS']
         kw_waveordn = self.params['KW_WAVEORDN']
         kw_wavedegn = self.params['KW_WAVEDEGN']
+        poly_type = self.params['WAVE_POLY_TYPE']
         # ---------------------------------------------------------------------
         # get header
         if header is None or data is None:
@@ -528,7 +531,14 @@ class NIRPS(Instrument):
         # convert to wave map
         wavemap = np.zeros([waveordn, nbx])
         for order_num in range(waveordn):
-            wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1], xpix)
+            # we can have two type of polynomial type
+            #  TODO: in future should only be chebyshev
+            if poly_type == 'Chebyshev':
+                wavemap[order_num] = mp.val_cheby(wavecoeffs[order_num], xpix,
+                                                  domain=[0, nbx])
+            else:
+                wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1],
+                                                xpix)
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
@@ -1530,6 +1540,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
                 blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze, False
+
 
 class NIRPS_HE_Geneva(NIRPS_HE):
     def __init__(self, params: base_classes.ParamDict, name: str = None):

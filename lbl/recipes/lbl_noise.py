@@ -15,7 +15,6 @@ from lbl.core import io
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 
-
 # =============================================================================
 # Define variables
 # =============================================================================
@@ -31,19 +30,19 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_COMPUTE = [# core
-                'INSTRUMENT', 'CONFIG_FILE',
-                # directory
-                'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
-                'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
-                # science
-                'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
-                'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
-                # plotting
-                'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
-                # other
-                'SKIP_DONE', 'VERBOSE', 'PROGRAM',
-                ]
+ARGS_COMPUTE = [  # core
+    'INSTRUMENT', 'CONFIG_FILE',
+    # directory
+    'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
+    'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
+    # science
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
+    'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
+    # plotting
+    'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
+    # other
+    'SKIP_DONE', 'VERBOSE', 'PROGRAM',
+]
 # TODO: Etienne - Fill out
 DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
 

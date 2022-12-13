@@ -13,11 +13,11 @@ import sys
 
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_compile
-from lbl.recipes import lbl_template
+from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_mask
 from lbl.recipes import lbl_telluclean
+from lbl.recipes import lbl_template
 from lbl.resources import lbl_misc
 
 __NAME__ = 'lbl_mask.py'
@@ -29,18 +29,18 @@ __authors__ = base.__authors__
 DESCRIPTION_MASK = 'Use this code to wrap around lbl'
 
 # define keys to remove from run params
-REMOVE_KEYS = [# core
-               'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES',
-               # science keys
-               'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
-               # run keys
-               'RUN_LBL_TELLUCLEAN', 'RUN_LBL_TEMPLATE', 'RUN_LBL_MASK',
-               'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
-               # skip keys
-               'SKIP_LBL_TELLUCLEAN', 'SKIP_LBL_TEMPLATE', 'SKIP_LBL_MASK',
-               'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
-               # general keys already used
-               'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE']
+REMOVE_KEYS = [  # core
+    'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES',
+    # science keys
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
+    # run keys
+    'RUN_LBL_TELLUCLEAN', 'RUN_LBL_TEMPLATE', 'RUN_LBL_MASK',
+    'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
+    # skip keys
+    'SKIP_LBL_TELLUCLEAN', 'SKIP_LBL_TEMPLATE', 'SKIP_LBL_MASK',
+    'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
+    # general keys already used
+    'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE']
 
 # Define the default values
 DEFAULTS = dict()
@@ -148,7 +148,7 @@ def main(runparams: dict):
         # make the mask (if not present)
         if runparams['RUN_LBL_MASK']:
             lbl_mask.main(instrument=instrument, data_dir=data_dir,
-                                data_type=data_type,
+                          data_type=data_type,
                           object_science=object_science,
                           object_template=object_template,
                           object_teff=object_teff,
@@ -165,7 +165,7 @@ def main(runparams: dict):
         # run the compute code
         if runparams['RUN_LBL_COMPUTE']:
             lbl_compute.main(instrument=instrument, data_dir=data_dir,
-                                data_type=data_type,
+                             data_type=data_type,
                              object_science=object_science,
                              object_template=object_template,
                              skip_done=runparams['SKIP_LBL_COMPUTE'],
@@ -174,7 +174,7 @@ def main(runparams: dict):
         # run the compile code
         if runparams['RUN_LBL_COMPILE']:
             lbl_compile.main(instrument=instrument, data_dir=data_dir,
-                                data_type=data_type,
+                             data_type=data_type,
                              object_science=object_science,
                              object_template=object_template,
                              skip_done=runparams['SKIP_LBL_COMPILE'],

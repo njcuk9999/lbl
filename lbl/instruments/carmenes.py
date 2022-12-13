@@ -7,19 +7,19 @@ Created on 2021-05-27
 
 @author: cook
 """
-from astropy.table import Table
-from astropy.io import fits
 import glob
-import numpy as np
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
-
 
 # =============================================================================
 # Define variables
@@ -90,7 +90,7 @@ class Carmenes(Instrument):
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define the CCF e-width to use for FP files
         # define min likelihood of correlation with BERV
-        self.params.set('COMPIL_CUT_PEARSONR', -1, source = func_name)
+        self.params.set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # Question: HARPS value?
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define whether to add the magic "binned wavelength" bands rv
@@ -363,7 +363,7 @@ class Carmenes(Instrument):
         return abspath
 
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
-        normalize: bool = True) -> Union[np.ndarray, None]:
+                   normalize: bool = True) -> Union[np.ndarray, None]:
         """
         Load a blaze file
 
@@ -519,15 +519,15 @@ class Carmenes(Instrument):
             owave = sci_wave[order_num]
             # get the center of this order (with a small offset to avoid
             #  a division by zero in the sinc at phase = 0
-            owave_cen = owave[len(owave)//2] + 1e-6
+            owave_cen = owave[len(owave) // 2] + 1e-6
             # calculate the period of this order
-            period = owave_cen / np.polyval(dfit, 1/owave)
+            period = owave_cen / np.polyval(dfit, 1 / owave)
             # calculate the phase of the sinc**2
-            phase = np.pi * (owave - owave_cen)/period
+            phase = np.pi * (owave - owave_cen) / period
             # assume the sinc profile. There is a factor 2 difference in the
             #   phase as the sinc is squared. sin**2 has a period that is a
             #   factor of 2 shorter than the sin
-            blaze[order_num] = (np.sin(phase)/phase) ** 2
+            blaze[order_num] = (np.sin(phase) / phase) ** 2
         # un-correct the science image
         sci_image = sci_image * blaze
         # return un-corrected science image and the calculated blaze
@@ -754,9 +754,9 @@ class Carmenes(Instrument):
         # define the mid point of each band
         mid = np.array([475, 752, 866, 962], dtype=float)
         # define the blue end of each band [nm]
-        blue_end = mid - np.array([121/2, 277/2, 114/2, 96/2], dtype=float)
+        blue_end = mid - np.array([121 / 2, 277 / 2, 114 / 2, 96 / 2], dtype=float)
         # define the red end of each band [nm]
-        red_end = mid + np.array([277/2, 114/2, 96/2, 999], dtype=float)
+        red_end = mid + np.array([277 / 2, 114 / 2, 96 / 2, 999], dtype=float)
         # define whether we should use regions for each band
         use_regions = [True, True, True, True]
         # ---------------------------------------------------------------------

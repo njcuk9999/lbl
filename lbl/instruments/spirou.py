@@ -7,15 +7,16 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.table import Table
-from astropy.io import fits
 import glob
-import numpy as np
 import os
-from pathlib import Path
-import requests
 import shutil
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import requests
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -94,7 +95,7 @@ class Spirou(Instrument):
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define min likelihood of correlation with BERV
-        self.params.set('COMPIL_CUT_PEARSONR', -1, source = func_name)
+        self.params.set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # define the CCF e-width to use for FP files
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define whether to add the magic "binned wavelength" bands rv
@@ -159,6 +160,8 @@ class Spirou(Instrument):
         self.params.set('BERVBIN_SIZE', value=3000)
         # define whether to do the tellu-clean
         self.params.set('DO_TELLUCLEAN', value=False, source=func_name)
+        # define the wave solution polynomial type (Chebyshev or numpy)
+        self.params.set('WAVE_POLY_TYPE', value='Chebyshev', source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -349,7 +352,7 @@ class Spirou(Instrument):
         return abspath
 
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
-        normalize: bool = True) -> Union[np.ndarray, None]:
+                   normalize: bool = True) -> Union[np.ndarray, None]:
         """
         Load a blaze file
 
@@ -519,6 +522,7 @@ class Spirou(Instrument):
         kw_wavecoeffs = self.params['KW_WAVECOEFFS']
         kw_waveordn = self.params['KW_WAVEORDN']
         kw_wavedegn = self.params['KW_WAVEDEGN']
+        poly_type = self.params['WAVE_POLY_TYPE']
         # ---------------------------------------------------------------------
         # get header
         if header is None or data is None:
@@ -543,7 +547,14 @@ class Spirou(Instrument):
         # convert to wave map
         wavemap = np.zeros([waveordn, nbx])
         for order_num in range(waveordn):
-            wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1], xpix)
+            # we can have two type of polynomial type
+            #  TODO: in future should only be chebyshev
+            if poly_type == 'Chebyshev':
+                wavemap[order_num] = mp.val_cheby(wavecoeffs[order_num], xpix,
+                                                  domain=[0, nbx])
+            else:
+                wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1],
+                                                xpix)
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap

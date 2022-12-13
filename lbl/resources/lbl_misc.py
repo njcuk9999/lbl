@@ -10,14 +10,14 @@ Created on 2021-03-23
 @author: cook
 """
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import Any, Dict, Union
 
 from lbl.core import base
+from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import logger
-from lbl.core import base_classes
 
 # =============================================================================
 # Define variables
@@ -207,8 +207,6 @@ def check_runparams(rparams: Dict[str, Any], key: str) -> Any:
         raise base_classes.LblException(emsg.format(*eargs))
     else:
         return rparams[key]
-
-
 
 
 # =============================================================================

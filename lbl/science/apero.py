@@ -9,9 +9,10 @@ Created on 2021-11-01
 
 @author: cook
 """
-import numpy as np
 import warnings
 from typing import Tuple
+
+import numpy as np
 
 from lbl.core import base
 from lbl.core import base_classes

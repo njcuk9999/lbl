@@ -7,16 +7,18 @@ Created on 2021-03-16
 
 @author: cook
 """
-from astropy.io import fits
+import os
+import warnings
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import wget
 from astropy import constants
 from astropy import units as uu
+from astropy.io import fits
 from astropy.table import Table
-import numpy as np
-import os
 from scipy import stats
-from typing import Any, Dict, List, Optional, Tuple, Union
-import warnings
-import wget
+from scipy.stats import pearsonr
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -25,7 +27,6 @@ from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import plot
-from scipy.stats import pearsonr
 
 # =============================================================================
 # Define variables
@@ -438,7 +439,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # high-pass the CCF just to be really sure that we are finding a true CCF
     # peak and not a spurious excursion in the low-frequencies
     # high-pass of CCF expressed in pixels, not km/s
-    ccf_hp_width_pix = int(inst.params['COMPUTE_CCF_HP_SCALE']/(grid_step/1000))
+    ccf_hp_width_pix = int(inst.params['COMPUTE_CCF_HP_SCALE'] / (grid_step / 1000))
     ccf_vector -= mp.lowpassfilter(ccf_vector, ccf_hp_width_pix)
 
     # -------------------------------------------------------------------------
@@ -1293,7 +1294,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     good &= rvtable0['NPIXLINE'] < max_pix_wid
     # remove good from rv table
     rvtable0 = rvtable0[good]
-    ref_good_pix = np.array(good) # if a calibration, we'll need this later
+    ref_good_pix = np.array(good)  # if a calibration, we'll need this later
     # size of arrays
     nby, nbx = len(lblrvfiles), np.sum(good)
     # set up rv and dvrms
@@ -1522,8 +1523,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_error[line_it] = np.nan
                 continue
             # find valid velocity measurements
-            good = np.isfinite(dv_arr[:,line_it])
-            per_line_diff = (dv_arr[:,line_it] - rdb_dict['vrad'])
+            good = np.isfinite(dv_arr[:, line_it])
+            per_line_diff = (dv_arr[:, line_it] - rdb_dict['vrad'])
             # skip if less that 3 valid values for this line
             if np.sum(good) < 3:
                 per_line_mean[line_it] = np.nan
@@ -1607,7 +1608,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # if we have a calibration load the lbl rv file
         if flag_calib:
             rvtable, rvhdr = inst.load_lblrv_file(lblrvfiles[row])
-            rvtable = rvtable[ref_good_pix] # to match dvarr size
+            rvtable = rvtable[ref_good_pix]  # to match dvarr size
             residuals = np.array(rvtable['dv'])
             # get the error
             err = np.array(rvtable['sdv'])

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-HARPS instrument class here: instrument specific settings
+HARPS-N instrument class here: instrument specific settings
 
-Created on 2021-05-27
+Created on 2022-11-16
 
-@author: cook
+@author: r-cloutier
 """
 import glob
 import os
@@ -24,7 +24,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.harps.py'
+__NAME__ = 'instruments.harpsn.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -37,12 +37,12 @@ log = base_classes.log
 
 
 # =============================================================================
-# Define HARPS class
+# Define HARPS-N class
 # =============================================================================
-class Harps(Instrument):
+class HarpsN(Instrument):
     def __init__(self, params: base_classes.ParamDict):
         # call to super function
-        super().__init__('HARPS')
+        super().__init__('HARPSN')
         # set parameters for instrument
         self.params = params
         # override params
@@ -59,9 +59,9 @@ class Harps(Instrument):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.Harps.override()'
+        func_name = __NAME__ + '.HarpsN.override()'
         # set parameters to update
-        self.params.set('INSTRUMENT', 'HARPS', source=func_name)
+        self.params.set('INSTRUMENT', 'HARPSN', source=func_name)
         # define the default science input files
         self.params.set('INPUT_FILE', '*e2ds*A.fits', source=func_name)
         # define the mask table format
@@ -80,7 +80,7 @@ class Harps(Instrument):
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
-        self.params.set('SNR_THRESHOLD', 10, source=func_name)
+        self.params.set('SNR_THRESHOLD', 8, source=func_name)
         # define the plot order for the compute rv model plot
         self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
@@ -213,59 +213,59 @@ class Harps(Instrument):
         # Header keywords
         # ---------------------------------------------------------------------
         # define wave coeff key in header
-        self.params.set('KW_WAVECOEFFS', 'HIERARCH ESO DRS CAL TH COEFF LL{0}',
+        self.params.set('KW_WAVECOEFFS', 'HIERARCH TNG DRS CAL TH COEFF LL{0}',
                         source=func_name)
         # define wave num orders key in header
-        self.params.set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
+        self.params.set('KW_WAVEORDN', 'HIERARCH TNG DRS CAL TH ORDER NBR',
                         source=func_name)
         # define wave degree key in header
-        self.params.set('KW_WAVEDEGN', 'HIERARCH ESO DRS CAL TH DEG LL',
+        self.params.set('KW_WAVEDEGN', 'HIERARCH TNG DRS CAL TH DEG LL',
                         source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO DRS BJD',
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH TNG DRS BJD',
                         source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'HIERARCH ESO DRS BJD', source=func_name)
+        self.params.set('KW_MJDATE', 'HIERARCH TNG DRS BJD', source=func_name)
         # define snr keyword
-        self.params.set('KW_SNR', 'HIERARCH ESO DRS SPE EXT SN47',
+        self.params.set('KW_SNR', 'HIERARCH TNG DRS SPE EXT SN47',
                         source=func_name)
         # define berv keyword
-        self.params.set('KW_BERV', 'HIERARCH ESO DRS BERV', source=func_name)
+        self.params.set('KW_BERV', 'HIERARCH TNG DRS BERV', source=func_name)
         # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO DRS BLAZE FILE',
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH TNG DRS BLAZE FILE',
                         source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'HIERARCH ESO DET WIN1 DIT1',
+        self.params.set('KW_EXPTIME', 'HIERARCH TNG DET WIN1 DIT1',
                         source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
+        self.params.set('KW_AIRMASS', 'AIRMASS',
                         source=func_name)
         # define the human date of the observation
-        self.params.set('KW_DATE', 'DATE', source=func_name)
+        self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
         # define the tau_h20 of the observation
         self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
         self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO DPR TYPE',
+        self.params.set('KW_DPRTYPE', 'HIERARCH TNG DPR TYPE',
                         source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
+        self.params.set('KW_WAVEFILE', 'HIERARCH TNG DRS CAL TH FILE',
                         source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
+        self.params.set('KW_OBJNAME', 'HIERARCH TNG OBS TARG NAME',
                         source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
         self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO DRS SPE EXT SN47',
+        self.params.set('KW_EXT_SNR', 'HIERARCH TNG DRS SPE EXT SN47',
                         source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'HIERARCH ESO DRS BJD', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH TNG DRS BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
+        self.params.set('KW_REF_KEY', 'HIERARCH TNG DPR TYPE', source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
@@ -330,7 +330,7 @@ class Harps(Instrument):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_{0}_HARPS.fits'.format(objname)
+            basename = 'Template_{0}_HARPSN.fits'.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path
