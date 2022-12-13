@@ -26,6 +26,7 @@ from lbl.instruments import espresso
 from lbl.instruments import carmenes
 from lbl.instruments import harps
 from lbl.instruments import nirps
+from lbl.instruments import harpsn
 from lbl.instruments import default
 from lbl.resources import lbl_misc
 
@@ -47,14 +48,16 @@ InstrumentsType = Union[default.Instrument,
                         espresso.Espresso,
                         carmenes.Carmenes,
                         nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
-                        nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva]
+                        nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva,
+                        harpsn.HarpsN]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou,
                    harps.Harps,
                    espresso.Espresso,
                    carmenes.Carmenes,
                    nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
-                   nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva)
+                   nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva,
+                   harpsn.HarpsN)
 
 # Add all the instrument + source combinations and link them to instrument
 #   classes
@@ -75,6 +78,8 @@ InstDict['CARMENES'] = dict()
 InstDict['CARMENES']['None'] = carmenes.Carmenes
 InstDict['ESPRESSO'] = dict()
 InstDict['ESPRESSO']['None'] = espresso.Espresso
+InstDict['HARPSN'] = dict()
+InstDict['HARPSN']['None'] = harpsn.HarpsN
 
 
 # =============================================================================
