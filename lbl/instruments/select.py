@@ -10,24 +10,25 @@ Created on 2021-03-17
 @author: cook
 """
 import argparse
-from copy import deepcopy
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Union
+
 import yaml
 
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.core import parameters
 from lbl.core import io
 from lbl.core import logger
-from lbl.instruments import spirou
-from lbl.instruments import espresso
+from lbl.core import parameters
 from lbl.instruments import carmenes
-from lbl.instruments import harps
-from lbl.instruments import nirps
-from lbl.instruments import harpsn
 from lbl.instruments import default
+from lbl.instruments import espresso
+from lbl.instruments import harps
+from lbl.instruments import harpsn
+from lbl.instruments import nirps
+from lbl.instruments import spirou
 from lbl.resources import lbl_misc
 
 # =============================================================================

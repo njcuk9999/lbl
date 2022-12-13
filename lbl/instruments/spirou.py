@@ -7,22 +7,22 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.table import Table
-from astropy.io import fits
 import glob
-import numpy as np
 import os
-from pathlib import Path
-import requests
 import shutil
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import requests
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
-
 
 # =============================================================================
 # Define variables
@@ -92,7 +92,7 @@ class Spirou(Instrument):
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define min likelihood of correlation with BERV
-        self.params.set('COMPIL_CUT_PEARSONR', -1, source = func_name)
+        self.params.set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # define the CCF e-width to use for FP files
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define whether to add the magic "binned wavelength" bands rv
@@ -338,7 +338,7 @@ class Spirou(Instrument):
         return abspath
 
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
-        normalize: bool = True) -> Union[np.ndarray, None]:
+                   normalize: bool = True) -> Union[np.ndarray, None]:
         """
         Load a blaze file
 

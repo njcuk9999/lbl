@@ -7,9 +7,9 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.time import Time, TimeDelta
 import os
 
+from astropy.time import Time, TimeDelta
 
 # =============================================================================
 # Define variables
@@ -17,7 +17,8 @@ import os
 __NAME__: str = 'base.py'
 __version__: str = '0.39.0'
 __date__: str = '2022-08-15'
-__authors__: str = 'Neil Cook, Etienne Artigau, Thomas Vandal, Charles Cadieux'
+__authors__: str = ('Neil Cook, Etienne Artigau, Thomas Vandal, '
+                    'Charles Cadieux, Ryan Cloutier')
 __package__: str = 'lbl'
 
 # currently supported instruments
@@ -40,10 +41,12 @@ def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
 
     :return: function, the tqdm method (or class with a call)
     """
+
     # this will replace tqdm with the return of the first arg
     def _tqdm(*args, **kwargs):
         _ = kwargs
         return args[0]
+
     # if we want to use tqdm then use it
     if use_tqdm and verbose == 2:
         from tqdm import tqdm as _tqdm

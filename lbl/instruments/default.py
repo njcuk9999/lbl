@@ -7,12 +7,13 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.io import fits
-from astropy.table import Table
 import glob
-import numpy as np
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -596,7 +597,6 @@ class Instrument:
         # get file from url
         io.get_urlfile(url, 'default mask', default_mask_file)
 
-
     # -------------------------------------------------------------------------
     # Methods that MUST be overridden by the child instrument class
     # -------------------------------------------------------------------------
@@ -764,7 +764,6 @@ class Instrument:
                           header=[header, None], dtype=[None, 'image'])
             # return the wave grid
             return wavegrid
-
 
     def drift_condition(self, table_row: Table.Row):
         """
@@ -940,7 +939,7 @@ class Instrument:
         raise self._not_implemented('get_binned_parameters')
 
     def get_uniform_binned_parameters(self, binned: Dict[str, list]
-                                     ) -> Dict[str, list]:
+                                      ) -> Dict[str, list]:
         """
         Define "magic" binned regions from starting wavelength to end wavelength
         (defined by COMPIL_WAVE_MIN and COMPIL_WAVE_MAX)

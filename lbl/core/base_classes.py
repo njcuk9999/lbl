@@ -7,14 +7,14 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.table import Table
 from collections import UserDict
 from copy import deepcopy
 from typing import Any, Dict, Type, Union
 
+from astropy.table import Table
+
 from lbl.core import base
 from lbl.core import logger
-
 
 # =============================================================================
 # Define variables
@@ -419,7 +419,7 @@ class ParamDict(UserDict):
         values += [base.__version__, base.__date__, base.__authors__,
                    base.Time.now().iso]
         descriptions += ['Current LBL version', 'Current date of LBL version',
-                        'LBL authors', 'Time of parameter snapshot']
+                         'LBL authors', 'Time of parameter snapshot']
         sources += [func_name] * 4
         dtypes += ['str', 'str', 'str', 'str']
         # push into a table

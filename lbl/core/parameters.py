@@ -387,7 +387,6 @@ params.set(key='PLOT_TELLU_CORR_PLOT', value=True, source=__NAME__,
            desc='whether to do the tellu correction plot',
            arg='--plottcorr', dtype=bool)
 
-
 # =============================================================================
 # Define template and mask parameters
 # =============================================================================
@@ -831,7 +830,6 @@ params.set(key='KW_TEMPLATE_COVERAGE', value='LBLTCOVR', source=__NAME__,
 params.set(key='KW_TEMPLATE_BERVBINS', value='LBLTBRVB', source=__NAME__,
            not_none=True, desc='define the number of template berv bins',
            comment='Number of template BERV bins')
-
 
 # =============================================================================
 # Start of code

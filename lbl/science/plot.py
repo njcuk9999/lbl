@@ -9,16 +9,16 @@ Created on 2021-03-17
 
 @author: cook
 """
-from astropy.table import Table
+from typing import Any, Dict, List
+
 import matplotlib
 import numpy as np
-from typing import Any, Dict, List, Optional
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import math as mp
 from lbl.instruments import select
-
 
 # =============================================================================
 # Define variables
@@ -80,7 +80,7 @@ def plot_blank(inst: InstrumentsType, **kwargs):
     # set up plot
     fig, frame = plt.subplots(ncols=1, nrows=1)
     # plot functions here
-    _ = frame   # remove this
+    _ = frame  # remove this
     _ = kwargs  # remove this
     # show and close plot
     plt.show()
@@ -294,7 +294,7 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     svrad_band3 = rdb_table['svrad_{0}'.format(band3_name)]
     # get colour (band2 - band3)
     vrad_colour = vrad_band2 - vrad_band3
-    svrad_colour = np.sqrt(svrad_band2**2 + svrad_band3**2)
+    svrad_colour = np.sqrt(svrad_band2 ** 2 + svrad_band3 ** 2)
     # normalize by median value
     nvrad_band1 = vrad_band1 - mp.nanmedian(vrad_band1)
     nvrad = vrad - mp.nanmedian(vrad)
@@ -396,9 +396,9 @@ def ccf_vector_plot(inst: InstrumentsType, ddvecs: Dict[int, np.ndarray],
         ccf_other = ccf_others[iteration]
         # plot ccf water and ccf others
         frame[0].plot(ddvec, ccf_water, alpha=0.5,
-                      label='Iteration {0}'.format(iteration+1))
+                      label='Iteration {0}'.format(iteration + 1))
         frame[1].plot(ddvec, ccf_other, alpha=0.5,
-                      label='Iteration {0}'.format(iteration+1))
+                      label='Iteration {0}'.format(iteration + 1))
     # set labels
     frame[0].set(xlabel='dv [km/s]', ylabel='ccf power', title='Water ccf')
     frame[1].set(xlabel='dv [km/s]', ylabel='ccf power', title='Dry ccf')

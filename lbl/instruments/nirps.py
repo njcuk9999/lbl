@@ -7,22 +7,22 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.table import Table
-from astropy.io import fits
 import glob
-import numpy as np
 import os
-from pathlib import Path
-import requests
 import shutil
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import requests
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
-
 
 # =============================================================================
 # Define variables
@@ -1540,6 +1540,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
                 blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze, False
+
 
 class NIRPS_HE_Geneva(NIRPS_HE):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
