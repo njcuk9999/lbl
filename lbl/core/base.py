@@ -7,9 +7,9 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.time import Time, TimeDelta
 import os
 
+from astropy.time import Time, TimeDelta
 
 # =============================================================================
 # Define variables
@@ -40,10 +40,12 @@ def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
 
     :return: function, the tqdm method (or class with a call)
     """
+
     # this will replace tqdm with the return of the first arg
     def _tqdm(*args, **kwargs):
         _ = kwargs
         return args[0]
+
     # if we want to use tqdm then use it
     if use_tqdm and verbose == 2:
         from tqdm import tqdm as _tqdm
