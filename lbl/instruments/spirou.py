@@ -7,22 +7,22 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.table import Table
-from astropy.io import fits
 import glob
-import numpy as np
 import os
-from pathlib import Path
-import requests
 import shutil
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
+
+import numpy as np
+import requests
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
-
 
 # =============================================================================
 # Define variables
@@ -43,9 +43,12 @@ log = base_classes.log
 # Define Spirou class
 # =============================================================================
 class Spirou(Instrument):
-    def __init__(self, params: base_classes.ParamDict):
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
+        # get the name
+        if name is None:
+            name = 'SPIROU'
         # call to super function
-        super().__init__('SPIROU')
+        super().__init__(name)
         # set parameters for instrument
         self.params = params
         # override params
@@ -92,7 +95,7 @@ class Spirou(Instrument):
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define min likelihood of correlation with BERV
-        self.params.set('COMPIL_CUT_PEARSONR', -1, source = func_name)
+        self.params.set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # define the CCF e-width to use for FP files
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define whether to add the magic "binned wavelength" bands rv
@@ -252,6 +255,17 @@ class Spirou(Instrument):
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
     # -------------------------------------------------------------------------
+    def get_extname(self, kind: str) -> Optional[str]:
+        """
+        Get the extension name based on the kind and params['FIBER'] key
+
+        :param kind: str, the kind of extension we need (Flux, Blaze, Wave)
+
+        :return: str, the extension name
+        """
+        # we always use first extension
+        return None
+
     def mask_file(self, directory: str, required: bool = True) -> str:
         """
         Make the absolute path for the mask file
@@ -338,7 +352,7 @@ class Spirou(Instrument):
         return abspath
 
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
-        normalize: bool = True) -> Union[np.ndarray, None]:
+                   normalize: bool = True) -> Union[np.ndarray, None]:
         """
         Load a blaze file
 
@@ -418,6 +432,16 @@ class Spirou(Instrument):
             # return numpy array of files
             return files
 
+    def load_science_header(self, science_file: str) -> fits.Header:
+        """
+        Load science file header
+
+        :param science_file: str, the science file header
+
+        :return: fits header, the loaded header
+        """
+        return io.load_header(science_file)
+
     def sort_science_files(self, science_files: List[str]) -> List[str]:
         """
         Sort science files (instrument specific)
@@ -430,7 +454,7 @@ class Spirou(Instrument):
         # loop around science files
         for science_file in science_files:
             # load header
-            sci_hdr = io.load_header(science_file)
+            sci_hdr = self.load_science_header(science_file)
             # get time
             times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
         # get sort mask
@@ -663,14 +687,14 @@ class Spirou(Instrument):
         # filtering files
         log.general('Filtering {0} files...'.format(self.params['DATA_TYPE']))
         # select the first science file as a reference file
-        refimage, refhdr = self.load_science(science_files[0])
+        refimage, refhdr = self.load_science_file(science_files[0])
         ref_fibertype = self.get_dpr_fibtype(refhdr)
         # storage
         keep_files = []
         # loop around science files
         for science_file in tqdm(science_files):
             # load science file header
-            sci_hdr = io.load_header(science_file)
+            sci_hdr = self.load_science_header(science_file)
             # find out if we have a calibration
             if not mcond1:
                 # get dprtype in each fiber
@@ -1113,6 +1137,193 @@ class Spirou(Instrument):
             outfile = os.path.join(calib_dir, os.path.basename(infile))
             # copy
             shutil.copy(infile, outfile)
+
+
+# =============================================================================
+# Define Spirou CADC class
+# =============================================================================
+class SpirouCADC(Spirou):
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
+        # get the name
+        if name is None:
+            name = 'SPIROU_CADC'
+        # call to super function
+        super().__init__(params, name)
+        # set parameters for instrument
+        self.params = params
+        # override params
+        self.param_override()
+
+    def param_override(self):
+        """
+        Parameter override for NIRPS_HA Geneva parameters
+        (update default params)
+
+        :return: None - updates self.params
+        """
+        # set function name
+        func_name = __NAME__ + '.SPIROU_CADC.override()'
+        # first run the inherited method
+        super().param_override()
+
+        # Fiber must be set for SPIROU CADC
+        if 'FORCE_FIBER' not in self.params:
+            emsg = 'Keyword FORCE_FIBER must be set for SPIROU CADC mode'
+            raise base_classes.LblException(emsg)
+        # Set FLUX_EXTENSION_NAME
+        #   - Can be Flux (for e.fits and t.fits)
+        #   - Can be Pol or StokesI or Null1 or Null2 (for p.fits)
+        self.params.set('FLUX_EXTENSION_NAME', 'Flux', source=func_name)
+
+    # -------------------------------------------------------------------------
+    # SPIROU SPECIFIC METHODS
+    # -------------------------------------------------------------------------
+    def get_extname(self, kind: str) -> str:
+        """
+        Get the extension name based on the kind and params['FIBER'] key
+
+        :param kind: str, the kind of extension we need (Flux, Blaze, Wave)
+
+        :return: str, the extension name
+        """
+        # Fiber must be set for SPIROU CADC
+        if 'FORCE_FIBER' not in self.params:
+            emsg = 'Keyword FORCE_FIBER must be set for SPIROU CADC mode'
+            raise base_classes.LblException(emsg)
+        # get fiber from params
+        fiber = self.params['FORCE_FIBER']
+        # return the extension name
+        return f'{kind}{fiber}'
+
+    def load_science_file(self, science_file: str
+                          ) -> Tuple[np.ndarray, fits.Header]:
+        """
+        Load science data and header
+
+        :param science_file: str, the filename to load
+        :param kind: str, the kind of data
+        :return:
+        """
+        # Fiber must be set for SPIROU CADC
+        if 'FLUX_EXTENSION_NAME' not in self.params:
+            emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
+                    'SPIROU CADC mode')
+            base_classes.LblException(emsg)
+        if self.params['FLUX_EXTENSION_NAME'] is None:
+            emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
+                    'SPIROU CADC mode')
+            base_classes.LblException(emsg)
+        # flux extname kind
+        flux_extname = self.params['FLUX_EXTENSION_NAME']
+        # full extension name
+        extname = self.get_extname(flux_extname)
+        # load the first extension of each
+        sci_data, sci_hdr = io.load_fits(science_file,
+                                         kind='science Flux extension',
+                                         extname=extname)
+        # return data and header
+        return sci_data, sci_hdr
+
+    def blaze_file(self, directory: str) -> Union[str, None]:
+        """
+        Make the absolute path for the blaze file if set in params
+
+        :param directory: str, the directory the file is located at
+
+        :return: absolute path to blaze file or None (if not set)
+        """
+        # Should always be taken from t.fits extension
+        #   but there is a blaze (so should not be None)
+        return ''
+
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
+                   normalize: bool = True) -> Union[np.ndarray, None]:
+        """
+        Load a blaze file
+
+        :param filename: str, absolute path to filename
+        :param science_File: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: data (np.ndarray) or None
+        """
+        # loaded from science file --> filename not required
+        _ = filename
+        # load blaze
+        blaze, _ = io.load_fits(science_file, kind='blaze fits extension',
+                                extname=self.get_extname('Blaze'))
+        # deal with normalizing per order
+        if normalize:
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
+        # return blaze
+        return blaze
+
+    def load_science_header(self, science_file: str) -> fits.Header:
+        """
+        Load science file header
+
+        :param science_file: str, the science file header
+
+        :return: fits header, the loaded header
+        """
+        return io.load_header(science_file, extname=self.get_extname('Flux'))
+
+    def load_blaze_from_science(self, science_file: str,
+                                sci_image: np.ndarray,
+                                sci_hdr: fits.Header,
+                                calib_directory: str,
+                                normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
+        """
+        Load the blaze file using a science file header
+
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
+        """
+        # we always load CADC blaze from extension
+        # sci_image, sci_hdr and calib_directory are not used
+        _ = sci_image, sci_hdr, calib_directory
+        # this function becomes the same as load_blaze
+        return self.load_blaze('', science_file, normalize), False
+
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[fits.Header, None] = None
+                          ) -> np.ndarray:
+        """
+        Get a wave solution from a file (for SPIROU this is from the header)
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
+        # we load wavelength solution from extension
+        # so we do not use data and header
+        _ = data, header
+        # load wavemap
+        wavemap, _ = io.load_fits(science_filename, 'wave fits extension',
+                                  extname=self.get_extname('Wave'))
+        # return wave solution map
+        return wavemap
 
 
 # =============================================================================

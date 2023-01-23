@@ -15,10 +15,9 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
-from lbl.science import general
 from lbl.resources import lbl_misc
+from lbl.science import general
 from lbl.science import tellu_clean
-
 
 # =============================================================================
 # Define variables
@@ -35,15 +34,15 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_TEMPLATE = [# core
-                 'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
-                 # directory
-                 'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
-                 # science
-                 'OBJECT_SCIENCE', 'OBJECT_TEMPLATE'
-                 # other
-                 'VERBOSE', 'PROGRAM',
-                 ]
+ARGS_TEMPLATE = [  # core
+    'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
+    # directory
+    'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
+    # science
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE'
+    # other
+                      'VERBOSE', 'PROGRAM',
+]
 
 DESCRIPTION_TEMPLATE = 'Use this code to create the LBL template'
 
@@ -167,7 +166,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.info(msg.format(*margs))
         # ---------------------------------------------------------------------
         # load the science image and header
-        sci_image, sci_hdr = inst.load_science(filename)
+        sci_image, sci_hdr = inst.load_science_file(filename)
         # get wave solution for reference file
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
         # push things into an e2ds input/output dictionary

@@ -9,20 +9,19 @@ Created on 2021-08-24
 
 @author: cook
 """
+import os
 import warnings
 
 import numpy as np
-import os
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import select
-from lbl.science import general
 from lbl.resources import lbl_misc
 from lbl.science import apero
-
+from lbl.science import general
 
 # =============================================================================
 # Define variables
@@ -39,15 +38,15 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_TEMPLATE = [# core
-                 'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
-                 # directory
-                 'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
-                 # science
-                 'OBJECT_SCIENCE', 'OBJECT_TEMPLATE'
-                 # other
-                 'VERBOSE', 'PROGRAM',
-                 ]
+ARGS_TEMPLATE = [  # core
+    'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
+    # directory
+    'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
+    # science
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE'
+    # other
+                      'VERBOSE', 'PROGRAM',
+]
 
 DESCRIPTION_TEMPLATE = 'Use this code to create the LBL template'
 
@@ -148,7 +147,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # may need to filter out calibrations
     science_files = inst.filter_files(science_files)
     # select the first science file as a reference file
-    refimage, refhdr = inst.load_science(science_files[0])
+    refimage, refhdr = inst.load_science_file(science_files[0])
     # get wave solution for reference file
     refwave = inst.get_wave_solution(science_files[0], refimage, refhdr)
     # get domain coverage
@@ -169,7 +168,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # science table
     sci_table = dict()
     # all bervs
-    berv = np.zeros_like(science_files, dtype = float)
+    berv = np.zeros_like(science_files, dtype=float)
     # loop around files
     for it, filename in enumerate(science_files):
         # print progress
@@ -177,7 +176,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         margs = [it + 1, len(science_files)]
         log.general(msg.format(*margs))
         # select the first science file as a reference file
-        sci_image, sci_hdr = inst.load_science(filename)
+        sci_image, sci_hdr = inst.load_science_file(filename)
         # get wave solution for reference file
         sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
         # load blaze (just ones if not needed)
@@ -231,7 +230,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get the pixel hp_width [needs to be in m/s]
     grid_step_original = general.get_velocity_step(refwave, rounding=False)
 
-    hp_width = int(np.round(inst.params['HP_WIDTH']*1000 / grid_step_original))
+    hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step_original))
     # -------------------------------------------------------------------------
     # applying low pass filter
     log.general('\tApplying low pass filter to cube')
@@ -291,7 +290,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             n_obs = np.sum(good)
             # log progress message
             msg = 'Computing BERV bin {0} of {1}, n files = {2}'
-            margs = [it + 1, len(ubervbins),n_obs]
+            margs = [it + 1, len(ubervbins), n_obs]
             log.general(msg.format(*margs))
             # deal with minimum number of observations allowed
             if n_obs < nmin_bervbin:
@@ -300,7 +299,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             nobs_bervbin[it] = n_obs
             # combine all observations in bin with median
             with warnings.catch_warnings(record=True) as _:
-                bervmed = np.nanmedian(flux_cube[:,good], axis=1)
+                bervmed = np.nanmedian(flux_cube[:, good], axis=1)
                 flux_cube_bervbin[:, it] = bervmed
         # calculate the number of observations used and berv bins used
         nfiles = np.sum(nobs_bervbin)

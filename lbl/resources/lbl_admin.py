@@ -8,11 +8,12 @@ Created on 2021-04-09
 @author: cook
 """
 import argparse
-from astropy.table import Table, vstack
-import numpy as np
 import os
 import sys
 from typing import List, Union
+
+import numpy as np
+from astropy.table import Table, vstack
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -102,7 +103,6 @@ def make_param_table(instrument: Union[str, None] = 'SPIROU') -> Table:
 
 
 def make_readme_param_table(tables: List[Table]):
-
     # construct filename
     abspath = os.path.join(WORKSPACE, PARAM_README)
     # -------------------------------------------------------------------------
@@ -155,8 +155,8 @@ def make_readme_param_table(tables: List[Table]):
     final_table.write(abspath.replace('.md', '.csv'), format='csv',
                       overwrite=True)
 
-def make_full_config_yaml(table: Table):
 
+def make_full_config_yaml(table: Table):
     # get instrument col name
     icol = None
     for col in table.colnames:
@@ -276,7 +276,6 @@ if __name__ == "__main__":
     if _args.make_full_yaml:
         _table = make_param_table('SPIROU')
         make_full_config_yaml(_table)
-
 
 # =============================================================================
 # End of code

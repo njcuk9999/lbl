@@ -9,15 +9,16 @@ Created on 2021-03-16
 
 @author: cook
 """
-from astropy import constants
 import copy
+import warnings
+from typing import List, Tuple, Union
+
 import numpy as np
-from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
-from scipy.special import erf
+from astropy import constants
 from scipy import optimize
 from scipy import signal
-from typing import List, Tuple, Union
-import warnings
+from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
+from scipy.special import erf
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -807,7 +808,6 @@ def air_index(wavelength: Union[np.ndarray, float], temp: float = 15.0,
     n = ((part1 / part2) * (part3 + part4)) + 1
 
     return n
-
 
 
 def val_cheby(coeffs: np.ndarray, xvector: Union[np.ndarray, int, float],

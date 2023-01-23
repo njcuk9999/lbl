@@ -13,7 +13,6 @@ from lbl.core import io
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 
-
 # =============================================================================
 # Define variables
 # =============================================================================
@@ -29,8 +28,8 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_FIND = [# core
-             'INSTRUMENT', 'CONFIG_FILE']
+ARGS_FIND = [  # core
+    'INSTRUMENT', 'CONFIG_FILE']
 DESCRIPTION_FIND = 'Find LBL input files for an instrument'
 
 

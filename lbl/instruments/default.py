@@ -7,12 +7,13 @@ Created on 2021-03-15
 
 @author: cook
 """
-from astropy.io import fits
-from astropy.table import Table
 import glob
-import numpy as np
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -123,20 +124,6 @@ class Instrument:
             header[key] = (value, comment)
         # return header
         return header
-
-    def load_science(self, filename: str) -> Tuple[np.ndarray, fits.Header]:
-        """
-        Load a science exposure
-
-        Note data should be a 2D array (even if data is 1D)
-        Treat 1D data as a single order?
-
-        :param filename: str, absolute path to filename
-
-        :return: tuple, data (np.ndarray) and header (fits.Header)
-        """
-        _ = self
-        return io.load_fits(filename, kind='science fits file')
 
     def ref_table_file(self, directory: str,
                        mask_file: str) -> Tuple[Union[str, None], bool]:
@@ -596,7 +583,6 @@ class Instrument:
         # get file from url
         io.get_urlfile(url, 'default mask', default_mask_file)
 
-
     # -------------------------------------------------------------------------
     # Methods that MUST be overridden by the child instrument class
     # -------------------------------------------------------------------------
@@ -650,6 +636,23 @@ class Instrument:
         """
         _ = self, filename, normalize
         raise self._not_implemented('load_blaze')
+
+    def load_science_file(self, science_file: str
+                          ) -> Tuple[np.ndarray, fits.Header]:
+        """
+        Load a science exposure
+
+        Note data should be a 2D array (even if data is 1D)
+        Treat 1D data as a single order?
+
+        :param filename: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (fits.Header)
+        """
+        # load the first extension of each
+        sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
+        # return data and header
+        return sci_data, sci_hdr
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
@@ -764,7 +767,6 @@ class Instrument:
                           header=[header, None], dtype=[None, 'image'])
             # return the wave grid
             return wavegrid
-
 
     def drift_condition(self, table_row: Table.Row):
         """
@@ -940,7 +942,7 @@ class Instrument:
         raise self._not_implemented('get_binned_parameters')
 
     def get_uniform_binned_parameters(self, binned: Dict[str, list]
-                                     ) -> Dict[str, list]:
+                                      ) -> Dict[str, list]:
         """
         Define "magic" binned regions from starting wavelength to end wavelength
         (defined by COMPIL_WAVE_MIN and COMPIL_WAVE_MAX)

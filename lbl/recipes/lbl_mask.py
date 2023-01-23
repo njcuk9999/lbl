@@ -9,17 +9,17 @@ Created on 2021-08-24
 
 @author: cook
 """
-import numpy as np
 import os
+
+import numpy as np
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import select
-from lbl.science import general
 from lbl.resources import lbl_misc
-
+from lbl.science import general
 
 # =============================================================================
 # Define variables
@@ -36,18 +36,18 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_MASK = [# core
-             'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
-             # directory
-             'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',
-             # science
-             'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
-             'OBJECT_LOGG', 'OBJECT_Z', 'OBJECT_ALPHA',
-             # plotting
-             'PLOT', 'PLOT_MASK_CCF',
-             # other
-             'OVERWRITE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
-            ]
+ARGS_MASK = [  # core
+    'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
+    # directory
+    'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',
+    # science
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
+    'OBJECT_LOGG', 'OBJECT_Z', 'OBJECT_ALPHA',
+    # plotting
+    'PLOT', 'PLOT_MASK_CCF',
+    # other
+    'OVERWRITE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
+]
 
 DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'
 

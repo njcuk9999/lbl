@@ -10,14 +10,13 @@ Created on 2022-07-28 at 14:38
 @author: cook
 """
 import os
-import wget
 import shutil
+
+import wget
 
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.instruments import select
 from lbl.resources import lbl_misc
-
 
 # =============================================================================
 # Define variables
@@ -124,7 +123,6 @@ if __name__ == "__main__":
     if __name__ == "__main__":
         # start main code
         ll = main()
-
 
 # =============================================================================
 # End of code

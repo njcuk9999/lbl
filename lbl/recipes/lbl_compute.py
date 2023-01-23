@@ -15,9 +15,8 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
-from lbl.science import general
 from lbl.resources import lbl_misc
-
+from lbl.science import general
 
 # =============================================================================
 # Define variables
@@ -34,19 +33,19 @@ ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
-ARGS_COMPUTE = [# core
-                'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
-                # directory
-                'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
-                'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
-                # science
-                'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
-                'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
-                # plotting
-                'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
-                # other
-                'SKIP_DONE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
-                ]
+ARGS_COMPUTE = [  # core
+    'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
+    # directory
+    'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
+    'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
+    # science
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
+    'BLAZE_FILE', 'HP_WIDTH', 'USE_NOISE_MODEL',
+    # plotting
+    'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
+    # other
+    'SKIP_DONE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
+]
 
 DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
 
@@ -220,7 +219,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # ---------------------------------------------------------------------
         # 6.3 load science file
         # ---------------------------------------------------------------------
-        sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
+        sci_data, sci_hdr = inst.load_science_file(science_file)
         # flag calibration file
         if inst.params['DATA_TYPE'] != 'SCIENCE':
             model_velocity = 0

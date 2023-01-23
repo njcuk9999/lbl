@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Test of the LBL for HARPS (Proxima-tc)
+Test of the LBL using SPIROU (APERO mode)
 
 Created on 2021-10-18
+Last updated 2022-09-26
 
 @author: artigau, cook
 """
 from lbl import lbl_wrap
-
 
 # =============================================================================
 # Start of code
@@ -18,6 +18,11 @@ if __name__ == "__main__":
     rparams = dict()
     # -------------------------------------------------------------------------
     # LBL parameters
+    # -------------------------------------------------------------------------
+    # You may also add any constant here to override the default value
+    #     (see README for details) - this is NOT recommended for non developers
+    #   Note this may have undesired affects as these parameters apply globally
+    #     for all LBL recipes
     # -------------------------------------------------------------------------
     # This is the instrument name
     #   Currently supported instruments are SPIROU, HARPS, ESPRESSO, CARMENES
@@ -34,10 +39,8 @@ if __name__ == "__main__":
     # The data directory where all data is stored under - this should be an
     #    absolute path
     rparams['DATA_DIR'] = '/data/spirou/data/lbl/'
-    # You may also add any constant here to override the default value
-    #     (see README for details) - this is NOT recommended for non developers
-    #   Note this may have undesired affects as these parameters apply globally
-    #     for all LBL recipes
+    # The input file string (including wildcards) - if not set will use all
+    #   files in the science directory (for this object name)
     # rparams['INPUT_FILE'] = '2*e2dsff_AB.fits'
     # -------------------------------------------------------------------------
     # science criteria
@@ -87,7 +90,6 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # run main
     lbl_wrap(rparams)
-
 
 # =============================================================================
 # End of code
