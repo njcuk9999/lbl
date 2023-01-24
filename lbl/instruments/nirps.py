@@ -1241,7 +1241,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
+        self.params.set('KW_MID_EXP_TIME', 'NONE',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
@@ -1253,20 +1253,19 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # TODO: Check for NIRPS Geneva
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL13 NAME',
+        # TODO: This gives the blaze file name for fiber A
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL18 NAME',
                         source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
         # define the airmass of the observation
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_AIRMASS',
-                        ['HIERARCH ESO TEL1 AIRM START',
-                         'HIERARCH ESO TEL2 AIRM START',
-                         'HIERARCH ESO TEL3 AIRM START'],
+        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+        self.params.set('KW_DPRTYPE', ['HIERARCH ESO PRO REC1 RAW1 CATG',
+                                       'HIERARCH ESO PRO REC1 RAW2 CATG'],
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
@@ -1285,16 +1284,18 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'NONE', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+        self.params.set('KW_REF_KEY', 'HIERARCH ESO PRO REC1 RAW2 CATG',
                         source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
         # TODO: how do we get the temperature for NIRPS Geneva
         self.params.set('KW_TEMPERATURE', None, source=func_name)
+        # define the wave solution polynomial type (Chebyshev or numpy)
+        self.params.set('WAVE_POLY_TYPE', value='numpy', source=func_name)
 
     def template_file(self, directory: str, required: bool = True) -> str:
         """
@@ -1584,7 +1585,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
+        self.params.set('KW_MID_EXP_TIME', 'NONE',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
@@ -1596,20 +1597,19 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # TODO: Check for NIRPS Geneva
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL13 NAME',
+        # TODO: This gives the blaze file name for fiber A
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL18 NAME',
                         source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
         # define the airmass of the observation
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_AIRMASS',
-                        ['HIERARCH ESO TEL1 AIRM START',
-                         'HIERARCH ESO TEL2 AIRM START',
-                         'HIERARCH ESO TEL3 AIRM START'],
+        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+        self.params.set('KW_DPRTYPE', ['HIERARCH ESO PRO REC1 RAW1 CATG',
+                                       'HIERARCH ESO PRO REC1 RAW2 CATG'],
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
@@ -1628,16 +1628,18 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'NONE', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+        self.params.set('KW_REF_KEY', 'HIERARCH ESO PRO REC1 RAW2 CATG',
                         source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
         # TODO: how do we get the temperature for NIRPS Geneva
         self.params.set('KW_TEMPERATURE', None, source=func_name)
+        # define the wave solution polynomial type (Chebyshev or numpy)
+        self.params.set('WAVE_POLY_TYPE', value='numpy', source=func_name)
 
     def template_file(self, directory: str, required: bool = True) -> str:
         """
