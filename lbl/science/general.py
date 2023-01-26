@@ -1284,17 +1284,23 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # -------------------------------------------------------------------------
     # load table and header
     rvtable0, rvhdr0 = inst.load_lblrv_file(lblrvfiles[0])
+    # get columns of rvtable0
+    wavestart0 = np.array(rvtable0['WAVE_START'] )
+    npixline0 = np.array(rvtable0['NPIXLINE'])
     # flag a calibration file
     flag_calib = inst.params['DATA_TYPE'] != 'SCIENCE'
     # do not consider lines below wave_min limit
-    good = rvtable0['WAVE_START'] > wave_min
+    good = wavestart0 > wave_min
     # do not consider lines above wave_max limit
-    good &= rvtable0['WAVE_START'] < wave_max
+    good &= wavestart0 < wave_max
     # do not consider lines wider than max_pix_wid limit
-    good &= rvtable0['NPIXLINE'] < max_pix_wid
+    good &= npixline0 < max_pix_wid
     # remove good from rv table
     rvtable0 = rvtable0[good]
     ref_good_pix = np.array(good)  # if a calibration, we'll need this later
+    # get columns of rvtable0
+    dv0 = np.array(rvtable0['dv'])
+    sdv0 = np.array(rvtable0['sdv'])
     # size of arrays
     nby, nbx = len(lblrvfiles), np.sum(good)
     # set up rv and dvrms
@@ -1307,9 +1313,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # work out for cumulative plot for first file
     # -------------------------------------------------------------------------
     # median velocity for first file rv table
-    med_velo = mp.nanmedian(rvtable0['dv'])
+    med_velo = mp.nanmedian(dv0)
     # work out the best lines (less than 5 sigma)
-    best_mask = rvtable0['sdv'] < np.nanpercentile(rvtable0['sdv'], 5.0)
+    best_mask = sdv0 < np.nanpercentile(sdv0, 5.0)
     # list for plot storage
     vrange_all, pdf_all, pdf_fit_all = [], [], []
 
