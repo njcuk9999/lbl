@@ -240,7 +240,8 @@ class Espresso(Instrument):
         self.params.set('KW_AIRMASS',
                         ['HIERARCH ESO TEL1 AIRM START',
                          'HIERARCH ESO TEL2 AIRM START',
-                         'HIERARCH ESO TEL3 AIRM START'],
+                         'HIERARCH ESO TEL3 AIRM START',
+                         'HIERARCH ESO TEL4 AIRM START'],
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE', source=func_name)
