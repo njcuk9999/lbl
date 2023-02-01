@@ -76,7 +76,7 @@ class Espresso(Instrument):
         self.params.set('DEFAULT_MASK_FILE', source=func_name,
                         value=None)
         # define the High pass width in km/s
-        self.params.set('HP_WIDTH', 500, source=func_name)
+        self.params.set('HP_WIDTH', 256, source=func_name)
         # define the SNR cut off threshold
         # Question: Espresso value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)

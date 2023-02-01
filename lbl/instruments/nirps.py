@@ -180,7 +180,7 @@ class NIRPS(Instrument):
         # define the key that gives the mid exposure time in MJD
         self.params.set('KW_MID_EXP_TIME', 'MJDMID', source=func_name)
         # define snr keyword
-        self.params.set('KW_SNR', 'EXTSN035', source=func_name)
+        self.params.set('KW_SNR', 'EXTSN060', source=func_name)
         # define berv keyword
         self.params.set('KW_BERV', 'BERV', source=func_name)
         # define the Blaze calibration file
@@ -228,7 +228,7 @@ class NIRPS(Instrument):
         #   set to zero)
         self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'EXTSN035', source=func_name)
+        self.params.set('KW_EXT_SNR', 'EXTSN060', source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'BJD', source=func_name)
         # define the shape code dx value
@@ -315,7 +315,7 @@ class NIRPS(Instrument):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_s1d_{0}_sc1d_v_file_AB.fits'.format(objname)
+            basename = 'Template_s1dv_{0}_sc1d_v_file_AB.fits'.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path
@@ -1008,7 +1008,7 @@ class NIRPS(Instrument):
         log.general('Locating Template files')
         # find template files
         if params['TEMPLATE_FILE'] in ['None', '', None]:
-            suffix = 'Template_s1d_{0}_sc1d_v_file_AB.fits'
+            suffix = 'Template_s1dv_{0}_sc1d_v_file_AB.fits'
             suffix = suffix.format(params['OBJECT_TEMPLATE'])
         else:
             suffix = params['TEMPLATE_FILE']
@@ -1247,7 +1247,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define berv keyword
         # TODO: Check for NIRPS Geneva
@@ -1281,7 +1281,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
@@ -1591,7 +1591,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define berv keyword
         # TODO: Check for NIRPS Geneva
@@ -1625,7 +1625,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
