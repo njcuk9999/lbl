@@ -315,7 +315,7 @@ class NIRPS(Instrument):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_s1dv_{0}_sc1d_v_file_AB.fits'.format(objname)
+            basename = 'Template_s1dv_{0}_sc1d_v_file_A.fits'.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path
@@ -770,7 +770,7 @@ class NIRPS(Instrument):
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE',
                     'KW_BERV', 'KW_TAU_H2O', 'KW_TAU_OTHERS',
-                    'KW_DPRTYPE', 'KW_NITERATIONS',
+                    'KW_DPRTYPE', 'KW_NITERATIONS', 'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_WAVETIME', 'KW_WAVEFILE',
                     'KW_TLPDVH2O', 'KW_TLPDVOTR', 'KW_CDBWAVE', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_SHAPE_DX', 'KW_SHAPE_DY',
@@ -1008,7 +1008,7 @@ class NIRPS(Instrument):
         log.general('Locating Template files')
         # find template files
         if params['TEMPLATE_FILE'] in ['None', '', None]:
-            suffix = 'Template_s1dv_{0}_sc1d_v_file_AB.fits'
+            suffix = 'Template_s1dv_{0}_sc1d_v_file_A.fits'
             suffix = suffix.format(params['OBJECT_TEMPLATE'])
         else:
             suffix = params['TEMPLATE_FILE']
@@ -1418,6 +1418,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
                     'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
+		    'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)
@@ -1762,6 +1763,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
                     'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
+		    'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)
