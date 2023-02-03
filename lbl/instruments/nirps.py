@@ -558,10 +558,9 @@ class NIRPS(Instrument):
         filename = filename.replace('_FP_FP_lbl.fits', '')
         # get the correct prefix for WAVEFILE
         wavefile = table_row['WAVEFILE']
-
-        ext = '_{0}.fits'.format('C')
+        ext = '_{0}.fits'.format('B')
         wavefile = wavefile.replace('_wave_night' + ext, '')
-        wavefile = wavefile.replace('_wavesol_master' + ext, '')
+        wavefile = wavefile.replace('_wavesol_ref' + ext, '')
         # return test statement
         return filename == wavefile
 

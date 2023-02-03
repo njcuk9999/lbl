@@ -577,7 +577,7 @@ class Spirou(Instrument):
 
         ext = '_{0}.fits'.format('C')
         wavefile = wavefile.replace('_wave_night' + ext, '')
-        wavefile = wavefile.replace('_wavesol_master' + ext, '')
+        wavefile = wavefile.replace('_wavesol_ref' + ext, '')
         # return test statement
         return filename == wavefile
 
