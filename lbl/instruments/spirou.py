@@ -577,7 +577,7 @@ class Spirou(Instrument):
 
         ext = '_{0}.fits'.format('C')
         wavefile = wavefile.replace('_wave_night' + ext, '')
-        wavefile = wavefile.replace('_wavesol_master' + ext, '')
+        wavefile = wavefile.replace('_wavesol_ref' + ext, '')
         # return test statement
         return filename == wavefile
 
@@ -786,7 +786,7 @@ class Spirou(Instrument):
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE',
                     'KW_BERV', 'KW_TAU_H2O', 'KW_TAU_OTHERS',
-                    'KW_DPRTYPE', 'KW_NITERATIONS',
+                    'KW_DPRTYPE', 'KW_NITERATIONS', 'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_WAVETIME', 'KW_WAVEFILE',
                     'KW_TLPDVH2O', 'KW_TLPDVOTR', 'KW_CDBWAVE', 'KW_OBJNAME',
                     'KW_RHOMB1', 'KW_RHOMB2', 'KW_CDEN_P', 'KW_SNRGOAL',

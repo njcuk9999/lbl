@@ -641,6 +641,11 @@ params.set(key='KW_NITERATIONS', value='ITE_RV', source=__NAME__,
            desc='the number of iterations',
            comment='Num iterations to reach sigma accuracy')
 
+# define the number of iterations
+params.set(key='KW_RESET_RV', value='RESET_RV', source=__NAME__,
+           desc='Num iterations larger than 10',
+	              comment='Probably bad RV')
+
 # define the systemic velocity in m/s
 params.set(key='KW_SYSTEMIC_VELO', value='SYSTVELO', source=__NAME__,
            desc='the systemic velocity in m/s',

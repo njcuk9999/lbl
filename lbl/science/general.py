@@ -1275,8 +1275,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['LBL_VERSION'] = [base.__version__] * len(lblrvfiles)
     # add version date
     rdb_dict['LBL_VDATE'] = [base.__date__] * len(lblrvfiles)
-    # add date now
-    rdb_dict['LBL_PDATE'] = [base.__now__] * len(lblrvfiles)
+    # add date now (isot format)
+    rdb_dict['LBL_PDATE'] = [base.__now__.isot] * len(lblrvfiles)
     # add local science directory
     rdb_dict['LBL_SCI_DIR'] = [[]] * len(lblrvfiles)
     # -------------------------------------------------------------------------

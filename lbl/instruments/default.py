@@ -204,7 +204,10 @@ class Instrument:
         # add number of iterations
         header = self.set_hkey(header, 'KW_NITERATIONS',
                                value=outputs['NUM_ITERATIONS'])
-        # add systemic velocity in m/s
+	    # add quality flag
+        header = self.set_hkey(header, 'KW_RESET_RV',
+                               value=int(outputs['RESET_RV']))
+	    # add systemic velocity in m/s
         header = self.set_hkey(header, 'KW_SYSTEMIC_VELO',
                                value=outputs['SYSTEMIC_VELOCITY'])
         # add rms to photon noise ratio
