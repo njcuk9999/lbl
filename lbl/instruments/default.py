@@ -204,10 +204,10 @@ class Instrument:
         # add number of iterations
         header = self.set_hkey(header, 'KW_NITERATIONS',
                                value=outputs['NUM_ITERATIONS'])
-	# add quality flag
-        header = self.set_hkey(header, 'KW_RESET_RV', 
+        # add quality flag
+        header = self.set_hkey(header, 'KW_RESET_RV',
                                value=int(outputs['RESET_RV']))
-	# add systemic velocity in m/s
+        # add systemic velocity in m/s
         header = self.set_hkey(header, 'KW_SYSTEMIC_VELO',
                                value=outputs['SYSTEMIC_VELOCITY'])
         # add rms to photon noise ratio
@@ -227,7 +227,7 @@ class Instrument:
         header = self.set_hkey(header, 'KW_INSTRUMENT', value=self.name)
         # add the template velocity from CCF
         header = self.set_hkey(header, 'KW_MODELVEL',
-                               value=outputs['MODEL_VELOCITY'])		       
+                               value=outputs['MODEL_VELOCITY'])
         # ---------------------------------------------------------------------
         # Convert ref table dictionary to table
         # ---------------------------------------------------------------------
