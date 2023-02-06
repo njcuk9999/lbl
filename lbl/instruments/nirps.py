@@ -681,8 +681,8 @@ class NIRPS(Instrument):
             # find out if we have a calibration
             if not mcond1:
                 # get dprtype in each fiber
-                sci_fiber = self.get_dpr_fibtype(sci_hdr, fiber='AB')
-                ref_fiber = self.get_dpr_fibtype(sci_hdr, fiber='C')
+                sci_fiber = self.get_dpr_fibtype(sci_hdr, fiber='A')
+                ref_fiber = self.get_dpr_fibtype(sci_hdr, fiber='B')
                 # i.e. FP_FP or LFC_LFC
                 cond1 = sci_fiber == ref_fiber
             else:
@@ -752,7 +752,7 @@ class NIRPS(Instrument):
         # split fiber
         dprfibtypes = dprtype.split('_')
         # get fiber type
-        if fiber in ['AB', 'A', 'B']:
+        if fiber in ['A', 'B']:
             return dprfibtypes[0]
         else:
             return dprfibtypes[1]
@@ -1030,7 +1030,7 @@ class NIRPS(Instrument):
         # storage of blaze files
         blaze_files = []
         # loop around fibers
-        for fiber in ['AB', 'C']:
+        for fiber in ['A', 'B']:
             # print progress
             log.general('Locating Blaze {0} files'.format(fiber))
             # find blaze files
