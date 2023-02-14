@@ -1240,20 +1240,20 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_MID_EXP_TIME', 'NONE',
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define berv keyword
         # TODO: Check for NIRPS Geneva
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
         # TODO: This gives the blaze file name for fiber A
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL18 NAME',
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL23 NAME',
                         source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
@@ -1263,8 +1263,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', ['HIERARCH ESO PRO REC1 RAW1 CATG',
-                                       'HIERARCH ESO PRO REC1 RAW2 CATG'],
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
@@ -1280,7 +1279,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
@@ -1585,13 +1584,13 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_MID_EXP_TIME', 'NONE',
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define berv keyword
         # TODO: Check for NIRPS Geneva
@@ -1608,8 +1607,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', ['HIERARCH ESO PRO REC1 RAW1 CATG',
-                                       'HIERARCH ESO PRO REC1 RAW2 CATG'],
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
@@ -1625,7 +1623,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
                         source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
