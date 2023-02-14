@@ -1246,7 +1246,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define berv keyword
         # TODO: Check for NIRPS Geneva
@@ -1279,7 +1279,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
@@ -1590,7 +1590,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define berv keyword
         # TODO: Check for NIRPS Geneva
@@ -1623,7 +1623,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
         # TODO: Check for NIRPS Geneva
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER45 SNR',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define the barycentric julian date
         self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
