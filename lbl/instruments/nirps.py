@@ -1597,7 +1597,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
         # TODO: This gives the blaze file name for fiber A
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL18 NAME',
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL23 NAME',
                         source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
