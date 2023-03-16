@@ -1,6 +1,6 @@
-# NIRPS demo
+# NIRPS APERO demo
 
-Example data set to try the lbl on NIRPS data
+Example data set to try the lbl on NIRPS APERO data
 
 ---
 
