@@ -128,11 +128,11 @@ An example data set of Proxima observed with NIRPS with the produced LBL velocit
 
 Here are some examples of LBL runs on different instruments.
 
-- [SPIROU APERO demo (unavailable)](./lbl/doc/examples/SPIROU_APERO_demo/README.md)
-- [NIRPS APERO demo](./lbl/doc/examples/NIRPS_apero_demo/README.md)
+- [SPIROU APERO demo](./lbl/doc/examples/SPIROU_APERO_demo/README.md)
+- [NIRPS APERO demo](./lbl/doc/examples/NIRPS_APERO_demo/README.md)
 - [NIRPS ESO demo](./lbl/doc/examples/NIRPS_ESO_demo/README.md)
-- [HARPS demo (unavailable)](./lbl/doc/examples/HARPS_demo/README.md)
-- [ESPRESSO demo (unavailable)](./lbl/doc/examples/ESPRESSO_demo/README.md)
+- [HARPS demo](./lbl/doc/examples/HARPS_demo/README.md)
+- [ESPRESSO demo](./lbl/doc/examples/ESPRESSO_demo/README.md)
 
 [back to top](#contents)
 
