@@ -14,11 +14,12 @@ version 0.48.0 (2023-02-06) compatible with SPIRou, NIRPS, HARPS, HARPS-N, ESPRE
 2. [Using LBL](#2-using-lbl)
     - [The five LBL recipes](#2-lbl-recipes)
     - [Running LBL](#2-running-lbl)
-3. [The config file](#3-the-lbl-parameters)
-4. [Things that the LBL code is NOT meant to do](#4-things-that-the-lbl-code-is-not-meant-to-do)
-5. [Inputs/Outputs explained](#5-outputs-explained)
-6. [List of input parameters overridable in LBL](#6-list-of-input-parameters)
-7. [Cite](#7-cite)
+3. [LBL Demos](#3-lbl-demos)
+4. [The config file](#4-the-lbl-parameters)
+5. [Things that the LBL code is NOT meant to do](#5-things-that-the-lbl-code-is-not-meant-to-do)
+6. [Inputs/Outputs explained](#6-outputs-explained)
+7. [List of input parameters overridable in LBL](#7-list-of-input-parameters)
+8. [Cite](#8-cite)
 
 ---
 
@@ -123,7 +124,21 @@ An example data set of Proxima observed with NIRPS with the produced LBL velocit
 
 ---
 
-# 3. The LBL parameters
+# 3. LBL Demos
+
+Here are some examples of LBL runs on different instruments.
+
+- [SPIROU APERO demo (unavailable)](./doc/examples/spirou_apero_demo/README.md)
+- [NIRPS APERO demo](./doc/examples/nirps_apero_demo/README.md)
+- [NIRPS ESO demo](./doc/examples/nirps_eso_demo/README.md)
+- [HARPS demo (unavailable)](./doc/examples/harps_demo/README.md)
+- [ESPRESSO demo (unavailable)](./doc/examples/espresso_demo/README.md)
+
+[back to top](#contents)
+
+---
+
+# 4. The LBL parameters
 
 The wrapper allows almost any constant present in LBL to be overridden by the user ([see list](#6-list-of-input-parameters)). However, in most cases, only the following parameters will have to be changed.
 
@@ -144,7 +159,7 @@ The user can decide which recipe to run or skip (if already on disk).
 
 ---
 
-# 4. Things that the LBL code is NOT meant to do
+# 5. Things that the LBL code is NOT meant to do
 
 The purpose of the LBL library of codes is to optimally determine stellar velocities from a set of input extracted science frames. We fully understand that a number of data processing steps are required *prior* to the LBL computation and that the science analysis to derive keplerian orbits will require many more tools. We do not intend to cover the following items with the LBL, and the user is exected to perform these tasks prior/after the LBL analysis to obtain scientifically meaningful results:
 - Extraction of the science data.
@@ -159,7 +174,7 @@ The purpose of the LBL library of codes is to optimally determine stellar veloci
 
 ---
 
-# 5. Inputs/Outputs explained
+# 6. Inputs/Outputs explained
 
 When completed there should be the following directories inside the `{DATA_DIR}` given.
 ```python
@@ -209,7 +224,7 @@ Additional notes:
 
 ---
 
-# 6. List of input parameters
+# 7. List of input parameters
 
 This is a list of overridable parameters for use in the wrapper
 
@@ -376,7 +391,7 @@ This is a list of overridable parameters for use in the wrapper
 
 ---
 
-# 7. Cite
+# 8. Cite
 
 If you make use of the lbl code for you scientific publication, please cite the following:
 
