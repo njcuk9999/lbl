@@ -1135,7 +1135,7 @@ class NIRPS_HA(NIRPS):
 
     def param_override(self):
         """
-        Parameter override for NIRPS_HA Geneva parameters
+        Parameter override for NIRPS_HA ESO parameters
         (update default params)
 
         :return: None - updates self.params
@@ -1171,7 +1171,7 @@ class NIRPS_HE(NIRPS):
 
     def param_override(self):
         """
-        Parameter override for NIRPS_HA Geneva parameters
+        Parameter override for NIRPS_HA ESO parameters
         (update default params)
 
         :return: None - updates self.params
@@ -1196,13 +1196,13 @@ class NIRPS_HE(NIRPS):
 
 
 # =============================================================================
-# Define NIRPS Geneva class - inherit from spirou
+# Define NIRPS ESO class - inherit from spirou
 # =============================================================================
-class NIRPS_HA_Geneva(NIRPS_HA):
+class NIRPS_HA_ESO(NIRPS_HA):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
-            name = 'NIRPS_HA_Geneva'
+            name = 'NIRPS_HA_ESO'
         # call to super function
         super().__init__(params, name)
         # set parameters for instrument
@@ -1212,13 +1212,13 @@ class NIRPS_HA_Geneva(NIRPS_HA):
 
     def param_override(self):
         """
-        Parameter override for NIRPS_HA Geneva parameters
+        Parameter override for NIRPS_HA ESO parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.NIRPS_HA_Geneva.override()'
+        func_name = __NAME__ + '.NIRPS_HA_ESO.override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------
@@ -1226,7 +1226,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # ---------------------------------------------------------------------
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_nirps_ha_geneva.fits',
+                        'sample_wave_grid_nirps_ha_ESO.fits',
                         source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
@@ -1239,17 +1239,17 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define berv keyword
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
         # TODO: This gives the blaze file name for fiber A
@@ -1259,7 +1259,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
         # define the airmass of the observation
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the DPRTYPE of the observation
@@ -1275,10 +1275,10 @@ class NIRPS_HA_Geneva(NIRPS_HA):
                         source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        # TODO -> no equivalent in NIRPS Geneva
+        # TODO -> no equivalent in NIRPS ESO
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define the barycentric julian date
@@ -1290,7 +1290,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        # TODO: how do we get the temperature for NIRPS Geneva
+        # TODO: how do we get the temperature for NIRPS ESO
         self.params.set('KW_TEMPERATURE', None, source=func_name)
         # define the wave solution polynomial type (Chebyshev or numpy)
         self.params.set('WAVE_POLY_TYPE', value='numpy', source=func_name)
@@ -1310,7 +1310,7 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_{0}_NIRPS_HA_Geneva.fits'.format(objname)
+            basename = 'Template_{0}_NIRPS_HA_ESO.fits'.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path
@@ -1542,11 +1542,11 @@ class NIRPS_HA_Geneva(NIRPS_HA):
         return blaze, False
 
 
-class NIRPS_HE_Geneva(NIRPS_HE):
+class NIRPS_HE_ESO(NIRPS_HE):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
-            name = 'NIRPS_HE_Geneva'
+            name = 'NIRPS_HE_ESO'
         # call to super function
         super().__init__(params, name)
         # set parameters for instrument
@@ -1556,13 +1556,13 @@ class NIRPS_HE_Geneva(NIRPS_HE):
 
     def param_override(self):
         """
-        Parameter override for NIRPS_HA Geneva parameters
+        Parameter override for NIRPS_HA ESO parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.NIRPS_HE_Geneva.override()'
+        func_name = __NAME__ + '.NIRPS_HE_ESO.override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------
@@ -1570,7 +1570,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # ---------------------------------------------------------------------
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_nirps_he_geneva.fits',
+                        'sample_wave_grid_nirps_he_ESO.fits',
                         source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
@@ -1583,17 +1583,17 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the start time of the observation
         self.params.set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define berv keyword
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
         # TODO: This gives the blaze file name for fiber A
@@ -1603,7 +1603,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
         # define the airmass of the observation
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the DPRTYPE of the observation
@@ -1619,10 +1619,10 @@ class NIRPS_HE_Geneva(NIRPS_HE):
                         source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        # TODO -> no equivalent in NIRPS Geneva
+        # TODO -> no equivalent in NIRPS ESO
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-        # TODO: Check for NIRPS Geneva
+        # TODO: Check for NIRPS ESO
         self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER55 SNR',
                         source=func_name)
         # define the barycentric julian date
@@ -1634,7 +1634,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        # TODO: how do we get the temperature for NIRPS Geneva
+        # TODO: how do we get the temperature for NIRPS ESO
         self.params.set('KW_TEMPERATURE', None, source=func_name)
         # define the wave solution polynomial type (Chebyshev or numpy)
         self.params.set('WAVE_POLY_TYPE', value='numpy', source=func_name)
@@ -1654,7 +1654,7 @@ class NIRPS_HE_Geneva(NIRPS_HE):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_{0}_NIRPS_HE_Geneva.fits'.format(objname)
+            basename = 'Template_{0}_NIRPS_HE_ESO.fits'.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path

@@ -30,8 +30,8 @@ if __name__ == "__main__":
     rparams['INSTRUMENT'] = 'SPIROU'
     #   Data source must be as follows:
     #       SPIROU: APERO or CADC  (Currently only APERO is supported)
-    #       NIRPS_HA: APERO or Geneva
-    #       NIRPS_HE: APERO or Geneva
+    #       NIRPS_HA: APERO or ESO
+    #       NIRPS_HE: APERO or ESO
     #       CARMENES: None
     #       ESPRESSO: None
     #       HARPS: None
