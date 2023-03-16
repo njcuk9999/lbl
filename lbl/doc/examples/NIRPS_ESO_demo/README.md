@@ -38,7 +38,7 @@ The example data set contains 15 spectra of Proxima Centauri observed during a N
 
 ```bash
 cd {DATA_DIR}
-python NIRPS_wrap.py
+python NIRPS_ESO_wrap.py
 ```
 
 The `NIRPS_ESO_wrap.py` wrapper will run the `lbl_template`, `lbl_mask`, `lbl_compute`, and `lbl_compile` recipes.
