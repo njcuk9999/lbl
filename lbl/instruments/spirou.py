@@ -1156,7 +1156,7 @@ class SpirouCADC(Spirou):
 
     def param_override(self):
         """
-        Parameter override for NIRPS_HA Geneva parameters
+        Parameter override for NIRPS_HA ESO parameters
         (update default params)
 
         :return: None - updates self.params

@@ -1,7 +1,7 @@
 # lbl
-Line by line code for radial velocity
+Line by line code for precision radial velocity described in [Artigau et al. 2022](https://www.doi.org/10.3847/1538-3881/ac7ce6)
 
-version 0.48.0 (2023-02-06)
+version 0.49.0 (2023-03-16) compatible with SPIRou, NIRPS, HARPS, HARPS-N, ESPRESSO, and CARMENES-VIS spectrographs
 
 ---
 
@@ -12,10 +12,14 @@ version 0.48.0 (2023-02-06)
     - [Step 2: Choose your branch](#step-2-choose-your-branch)
     - [Step 3: Install](#step-3-install)
 2. [Using LBL](#2-using-lbl)
-3. [The config file](#3-the-lbl-parameters)
-4. [Things that the LBL code is NOT meant to do](#4-things-that-the-lbl-code-is-not-meant-to-do)
-5. [Outputs explained](#5-outputs-explained)
-6. [List of input parameters overridable in LBL](#6-list-of-input-parameters)
+    - [The five LBL recipes](#2-lbl-recipes)
+    - [Running LBL](#2-running-lbl)
+3. [LBL Demos](#3-lbl-demos)
+4. [The config file](#4-the-lbl-parameters)
+5. [Things that the LBL code is NOT meant to do](#5-things-that-the-lbl-code-is-not-meant-to-do)
+6. [Inputs/Outputs explained](#6-outputs-explained)
+7. [List of input parameters overridable in LBL](#7-list-of-input-parameters)
+8. [Cite](#8-cite)
 
 ---
 
@@ -33,22 +37,19 @@ Note from now on we refer to this directory as `{LBL_ROOT}`
 
 ## Step 2: Choose your branch
 #### Main
-The main branch should be the most stable version but may not be the most
-up-to-date version.
+The main branch should be the most stable version but may not be the most up-to-date version.
 ```bash
 >> git checkout main
 ```
 
 #### Developer
-The developer branch should be generally be a stable and update-to-date, but
-may contain experimental functionality.
+The developer branch should be generally be a stable and update-to-date, but may contain experimental functionality.
 ```bash
 >> git checkout developer
 ```
 
 #### Working
-This is the working branch it may or may not be stable and will probably contain
-experimental functionality currently in development.
+This is the working branch it may or may not be stable and will probably contain experimental functionality currently in development.
 ```bash
 >> git checkout working
 ```
@@ -58,7 +59,7 @@ experimental functionality currently in development.
 ---
 
 ## Step 3: Install
-Install python 3.8 (either with venv, manually or with conda).
+Install python 3.9 (either with venv, manually or with conda).
 
 #### With conda:
 With conda create a new environment:
@@ -83,66 +84,149 @@ pip install -U -e .
 ---
 
 # 2. Using LBL
+### The five LBL recipes
+
+The lbl code consists of a suite of five recipes that can be turned on or off by the user.
+
+```python
+lbl_telluclean  # Basic telluric correction by fitting a TAPAS atmospheric model (Bertaux et al. 2014)
+lbl_template    # Template spectrum generation (from 2D order-by-order spectra to 1D co-added spectrum)
+lbl_mask        # Line mask construction (position of lines and rough systemic velocity measurement)
+lbl_compute     # Velocity computation on all identified lines
+lbl_compile     # Compilation of all individual measurements into a final RV (.rdb file)
+```
+
+Notes: `lbl_telluclean` is currently only available for HARPS and ESPRESSO and is not recommended for near-infrared data (SPIRou, NIRPS-HA, NIRPS-HE) requiring a better telluric correction prior to applying LBL.
 
 [back to top](#contents)
 
-The easiest way to use LBL is use the LBL wrapper.
 
-Examples can be found in the ./doc/examples/ directory without this repository.
+### Running LBL
 
-Essentially all one needs to do is set up a few constants (instrument, 
-data directory, which objects and which steps to run) and then call the wrapper.
 
-In the ./doc/examples/ directory you will find a python script and a juypter
-notebook.
+The LBL calculations are performed on extracted order-by-order (2D) spectra. The user must define a data directory (hereafter `{DATA_DIR}`). The science input files must be placed inside a science directory in `{DATA_DIR}`, separated by objects (e.g., `{DATA_DIR}/science/OBJECT/*.fits`).
 
-It is possible to run each LBL recipe individually however this is only 
-recommended for developmental purposes.
+Blaze calibration files must be placed in `{DATA_DIR}/calib` for optimal template creation (dealing with overlapping orders). The user must also provide the wavelength solutions associated with the science files in `{DATA_DIR}/calib` when not already included in the science headers.
 
----
 
-# 3. The LBL parameters
+The easiest way to run LBL is to use wrapper scripts. Examples of wrapper files can be found in the ./lbl/doc/examples/ directory of this repository.
 
-The wrapper allows almost any constant present in LBL to be overridden by the
-user. Note that for the individual LBL recipes these can be put into a 
-`config.yaml` file for the same effect (Note example configs can be found in
-./doc/examples/parameters you do not need to define every config only the ones
-you wish to change!)
+Essentially all one needs to do is set up a few constants in the wrapper file (instrument, data directory, which objects and which steps to run) and then call the wrapper:
+```bash
+python wrapper.py
+```
 
-A list of all parameters can be found in section 5
+Make sure that the lbl conda environment was previously activated (```conda activate lbl-env```) before launching the LBL.
+
+An example data set of Proxima observed with NIRPS with the produced LBL velocities can be found in the ./lbl/doc/examples/ directory.
 
 [back to top](#contents)
 
 ---
 
-# 4. Things that the LBL code is NOT meant to do
+# 3. LBL Demos
+
+Here are some examples of LBL runs on different instruments.
+
+- [SPIROU APERO demo](./lbl/doc/examples/SPIROU_APERO_demo/README.md)
+- [NIRPS APERO demo](./lbl/doc/examples/NIRPS_APERO_demo/README.md)
+- [NIRPS ESO demo](./lbl/doc/examples/NIRPS_ESO_demo/README.md)
+- [HARPS demo](./lbl/doc/examples/HARPS_demo/README.md)
+- [ESPRESSO demo](./lbl/doc/examples/ESPRESSO_demo/README.md)
+
+[back to top](#contents)
+
+---
+
+# 4. The LBL parameters
+
+The wrapper allows almost any constant present in LBL to be overridden by the user ([see list](#6-list-of-input-parameters)). However, in most cases, only the following parameters will have to be changed.
+
+- `INSTRUMENT`, currently supported instruments are 'SPIROU', 'NIRPS', 'HARPS', 'HARPSN', 'ESPRESSO', and 'CARMENES'
+- `DATA_SOURCE`, specific to SPIRou ('APERO' or 'CADC') and NIRPS ('APERO' or 'ESO')
+- `DATA_DIR`, absolute path to the data directory
+- `DATA_TYPE`, specify if data is 'SCIENCE', 'FP', or 'LFC'
+- `OBJECT_SCIENCE`, name of the object to run LBL (must be the same as defined in the science directory)
+- `OBJECT_TEMPLATE`, name of the template to use (generally the object)
+- `OBJECT_TEFF`, effective temperature of the template star (relevant for mask creation)
+
+The user can decide which recipe to run or skip (if already on disk).
+
+- `RUN_LBL_{RECIPE}`, set to True or False with TELLUCLEAN, TEMPLATE, MASK, COMPUTE, and COMPILE as `{RECIPE}`
+- `SKIP_LBL_{RECIPE}`, set to True or False with TELLUCLEAN, TEMPLATE, MASK, COMPUTE, and COMPILE as `{RECIPE}`
+
+[back to top](#contents)
+
+---
+
+# 5. Things that the LBL code is NOT meant to do
 
 The purpose of the LBL library of codes is to optimally determine stellar velocities from a set of input extracted science frames. We fully understand that a number of data processing steps are required *prior* to the LBL computation and that the science analysis to derive keplerian orbits will require many more tools. We do not intend to cover the following items with the LBL, and the user is exected to perform these tasks prior/after the LBL analysis to obtain scientifically meaningful results:
-
 - Extraction of the science data.
 - Optimal telluric absorption correction.
 - OH line subtraction.
 - Proper parsing of the objects in sub-directory; if you put files from different objects in a folder and call it as if they were from the same target, the code will not work.
 - Proper matching of science, mask and template targets. You can use a G star as a template for a late-M and the code will run... but the results will be useless!
 - Scientific analysis of the RV time series, keplerian fits, GP filtering.
-- Fancy plotting; the LBL code returns big csv tables and these can be used to generate many different plots.
-
-
-[back to top](#contents)
-
----
-
-# 5. Outputs explained
-
-This section is coming soon!
+- Fancy plotting; the LBL code returns big tables and these can be used to generate many different plots.
 
 [back to top](#contents)
 
 ---
 
-# 6. List of input parameters
+# 6. Inputs/Outputs explained
 
-This is a list of overridable parameters for use in the wrapper or config.yaml
+When completed there should be the following directories inside the `{DATA_DIR}` given.
+```python
+calib           # Input calibration files (blaze and wavelength calibrations depending on instrument)
+lblreftable     # LBL reference tables are added here
+log             # Log files are stored here
+models          # Any models downloaded are placed here
+plots           # Any plots saved to disk are put here
+science         # Input spectra are put here (each in {OBJECT_SCIENCE} sub-directories)
+lblrdb          # LBL RDB files are added here
+lblrv           # LBL RV files (in {OBJECT_SCIENCE}_{OBJECT_TEMPLATE} sub-directories) are stored here
+masks           # Mask files for each template are placed here
+other           # Other downloaded files are added here
+templates       # Templates are put here
+```
+
+Notes: Only the `calib` and `science` directories are required in `{DATA_DIR}` to start lbl
+
+### Main radial velocity outputs:
+
+There are two main lbl outputs, a `.fits` and a `.rdb` file in `lblrdb`.
+
+The `.fits` file contains several extensions:
+Wave, DV, SDV, D2V, SD2V, D3V, SD3V images (each 2D with shape number of lines by the number of files), respectively the wavelength start of each line, the first, second, and third derivative measurements and associated errors. The last three extensions (RDB0, RDB, PTABLE) correspond to fits bin tables, RDB0 being the reference table also found in `lblreftable`, RDB the fits bin table equivalent of the `.rdb` file, and PTABLE the parameters used in this LBL run.
+
+The `.rdb` file consist of the following columns:
+- rjd, the reduced Julian day
+- vrad, the radial velocity (first derivative, dv) in m/s
+- svrad, the uncertainty on velocity in m/s
+- d2v, sd2v, d3v, sd3v are the second and third derivatives, and their respective uncertainties
+- fwhm, sig_fwhm, dW and sdW (FWHM and differential FWHM width, related to d2v) and their respective uncertainties
+- vrad_{key} and svrad_{key}, where 'key' relates to a specific measure of the radial velocity:
+    - achromatic
+    - chromatic_slope
+    - photometric_band
+    - photometric_band_{xlow-xhigh}, dividing the detector into pixel chunks
+    - {lambda}nm, divided into chunks (where lambda is the center of the bin)
+
+Additional notes:
+-The `.rdb` file is compatible with DACE ([dace.unige.ch/radialVelocities/](https://dace.unige.ch/radialVelocities/)).
+
+-The lbl2 `.rdb` file is a nightly binned (weighted average) version of the standard lbl `.rdb` file.
+
+-The _tc suffix denotes a file has been cleaned of tellurics within LBL.
+
+[back to top](#contents)
+
+---
+
+# 7. List of input parameters
+
+This is a list of overridable parameters for use in the wrapper
 
 |                                KEY |                                              DEFAULT_VALUE |                                                                                     SPIROU_VALUE |                                                                                      HARPS_VALUE |                                                                                   ESPRESSO_VALUE |                                                                                   CARMENES_VALUE |                                                                                                                                                                                                                                                                                                    DESCRIPTION |
 | ---------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -302,3 +386,19 @@ This is a list of overridable parameters for use in the wrapper or config.yaml
 |                         KW_NTFILES |                                                   LBLNTMPL |                                                                                         LBLNTMPL |                                                                                         LBLNTMPL |                                                                                         LBLNTMPL |                                                                                         LBLNTMPL |                                                                                                                                                                                                                                                                  Number of files used in template construction |
 |               KW_TEMPLATE_COVERAGE |                                                   LBLTCOVR |                                                                                         LBLTCOVR |                                                                                         LBLTCOVR |                                                                                         LBLTCOVR |                                                                                         LBLTCOVR |                                                                                                                                                                                                                                                                         define the berv coverage of a template |
 |               KW_TEMPLATE_BERVBINS |                                                   LBLTBRVB |                                                                                         LBLTBRVB |                                                                                         LBLTBRVB |                                                                                         LBLTBRVB |                                                                                         LBLTBRVB |                                                                                                                                                                                                                                                                        define the number of template berv bins |
+
+[back to top](#contents)
+
+---
+
+# 8. Cite
+
+If you make use of the lbl code for you scientific publication, please cite the following:
+
+    Artigau, E., Cadieux, C., Cook, N. J., et al. 2022, AJ, 164, 84
+
+[Link to ADS](https://ui.adsabs.harvard.edu/abs/2022AJ....164...84A/abstract)
+
+[Link to publisher](https://doi.org/10.3847/1538-3881/ac7ce6)
+
+[back to top](#contents)

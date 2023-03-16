@@ -48,16 +48,16 @@ InstrumentsType = Union[default.Instrument,
                         harps.Harps,
                         espresso.Espresso,
                         carmenes.Carmenes,
-                        nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
-                        nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva,
+                        nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
+                        nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
                         harpsn.HarpsN]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps,
                    espresso.Espresso,
                    carmenes.Carmenes,
-                   nirps.NIRPS_HA, nirps.NIRPS_HA_Geneva,
-                   nirps.NIRPS_HE, nirps.NIRPS_HE_Geneva,
+                   nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
+                   nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
                    harpsn.HarpsN)
 
 # Add all the instrument + source combinations and link them to instrument
@@ -69,10 +69,10 @@ InstDict['SPIROU']['APERO'] = spirou.Spirou
 InstDict['SPIROU']['CADC'] = spirou.SpirouCADC
 InstDict['NIRPS_HA'] = dict()
 InstDict['NIRPS_HA']['APERO'] = nirps.NIRPS_HA
-InstDict['NIRPS_HA']['Geneva'] = nirps.NIRPS_HA_Geneva
+InstDict['NIRPS_HA']['ESO'] = nirps.NIRPS_HA_ESO
 InstDict['NIRPS_HE'] = dict()
 InstDict['NIRPS_HE']['APERO'] = nirps.NIRPS_HE
-InstDict['NIRPS_HE']['Geneva'] = nirps.NIRPS_HE_Geneva
+InstDict['NIRPS_HE']['ESO'] = nirps.NIRPS_HE_ESO
 InstDict['HARPS'] = dict()
 InstDict['HARPS']['None'] = harps.Harps
 InstDict['CARMENES'] = dict()
