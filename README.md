@@ -1,7 +1,8 @@
 # lbl
 Line by line code for precision radial velocity described in [Artigau et al. 2022](https://www.doi.org/10.3847/1538-3881/ac7ce6)
 
-version 0.48.0 (2023-02-06) compatible with SPIRou, NIRPS, HARPS, HARPS-N, ESPRESSO, and CARMENES-VIS spectrographs
+version 0.48.0 (2023-02-06) compatible with SPIRou, NIRPS, HARPS, HARPS-N,
+ESPRESSO, and CARMENES-VIS spectrographs
 
 ---
 
@@ -36,19 +37,22 @@ Note from now on we refer to this directory as `{LBL_ROOT}`
 
 ## Step 2: Choose your branch
 #### Main
-The main branch should be the most stable version but may not be the most up-to-date version.
+The main branch should be the most stable version but may not be the most
+up-to-date version.
 ```bash
 >> git checkout main
 ```
 
 #### Developer
-The developer branch should be generally be a stable and update-to-date, but may contain experimental functionality.
+The developer branch should be generally be a stable and update-to-date, but may
+contain experimental functionality.
 ```bash
 >> git checkout developer
 ```
 
 #### Working
-This is the working branch it may or may not be stable and will probably contain experimental functionality currently in development.
+This is the working branch it may or may not be stable and will probably contain
+experimental functionality currently in development.
 ```bash
 >> git checkout working
 ```
@@ -85,7 +89,8 @@ pip install -U -e .
 # 2. Using LBL
 ### The five LBL recipes
 
-The lbl code consists of a suite of five recipes that can be turned on or off by the user.
+The lbl code consists of a suite of five recipes that can be turned on or off by
+the user.
 
 ```python
 lbl_telluclean  # Basic telluric correction by fitting a TAPAS atmospheric model (Bertaux et al. 2014)
@@ -95,7 +100,9 @@ lbl_compute     # Velocity computation on all identified lines
 lbl_compile     # Compilation of all individual measurements into a final RV (.rdb file)
 ```
 
-Notes: `lbl_telluclean` is currently only available for HARPS and ESPRESSO and is not recommended for near-infrared data (SPIRou, NIRPS-HA, NIRPS-HE) requiring a better telluric correction prior to applying LBL.
+Notes: `lbl_telluclean` is currently only available for HARPS and ESPRESSO and
+is not recommended for near-infrared data (SPIRou, NIRPS-HA, NIRPS-HE) requiring
+a better telluric correction prior to applying LBL.
 
 [back to top](#contents)
 
@@ -103,21 +110,32 @@ Notes: `lbl_telluclean` is currently only available for HARPS and ESPRESSO and i
 ### Running LBL
 
 
-The LBL calculations are performed on extracted order-by-order (2D) spectra. The user must define a data directory (hereafter `{DATA_DIR}`). The science input files must be placed inside a science directory in `{DATA_DIR}`, separated by objects (e.g., `{DATA_DIR}/science/OBJECT/*.fits`).
+The LBL calculations are performed on extracted order-by-order (2D) spectra. The
+user must define a data directory (hereafter `{DATA_DIR}`). The science input
+files must be placed inside a science directory in `{DATA_DIR}`, separated by
+objects (e.g., `{DATA_DIR}/science/OBJECT/*.fits`).
 
-Blaze calibration files must be placed in `{DATA_DIR}/calib` for optimal template creation (dealing with overlapping orders). The user must also provide the wavelength solutions associated with the science files in `{DATA_DIR}/calib` when not already included in the science headers.
+Blaze calibration files must be placed in `{DATA_DIR}/calib` for optimal template
+creation (dealing with overlapping orders). The user must also provide the
+wavelength solutions associated with the science files in `{DATA_DIR}/calib`
+when not already included in the science headers.
 
 
-The easiest way to run LBL is to use wrapper scripts. Examples of wrapper files can be found in the ./lbl/doc/examples/ directory of this repository.
+The easiest way to run LBL is to use wrapper scripts. Examples of wrapper files
+can be found in the ./lbl/doc/examples/ directory of this repository.
 
-Essentially all one needs to do is set up a few constants in the wrapper file (instrument, data directory, which objects and which steps to run) and then call the wrapper:
+Essentially all one needs to do is set up a few constants in the wrapper file
+(instrument, data directory, which objects and which steps to run) and then call
+the wrapper:
 ```bash
 python wrapper.py
 ```
 
-Make sure that the lbl conda environment was previously activated (```conda activate lbl-env```) before launching the LBL.
+Make sure that the lbl conda environment was previously activated
+(```conda activate lbl-env```) before launching the LBL.
 
-An example data set of Proxima observed with NIRPS with the produced LBL velocities can be found in the ./lbl/doc/examples/ directory.
+An example data set of Proxima observed with NIRPS with the produced LBL
+velocities can be found in the ./lbl/doc/examples/ directory.
 
 [back to top](#contents)
 
@@ -125,9 +143,12 @@ An example data set of Proxima observed with NIRPS with the produced LBL velocit
 
 # 3. The LBL parameters
 
-The wrapper allows almost any constant present in LBL to be overridden by the user ([see list](#6-list-of-input-parameters)). However, in most cases, only the following parameters will have to be changed.
+The wrapper allows almost any constant present in LBL to be overridden by the
+user ([see list](#6-list-of-input-parameters)). However, in most cases, only the
+following parameters will have to be changed.
 
-- `INSTRUMENT`, currently supported instruments are 'SPIROU', 'NIRPS', 'HARPS', 'HARPSN', 'ESPRESSO', and 'CARMENES'
+- `INSTRUMENT`, currently supported instruments are 'SPIROU', 'NIRPS', 'HARPS',
+    'HARPSN', 'ESPRESSO', and 'CARMENES'
 - `DATA_SOURCE`, specific to SPIRou ('APERO' or 'CADC') and NIRPS ('APERO' or 'ESO')
 - `DATA_DIR`, absolute path to the data directory
 - `DATA_TYPE`, specify if data is 'SCIENCE', 'FP', or 'LFC'
@@ -376,11 +397,13 @@ This is a list of overridable parameters for use in the wrapper
 
 # 7. Cite
 
-If you make use of the lbl code for you scientific publication, please cite the following:
+If you make use of the lbl code for you scientific publication, please cite the
+following:
 
     Artigau, E., Cadieux, C., Cook, N. J., et al. 2022, AJ, 164, 84
 
 [Link to ADS](https://ui.adsabs.harvard.edu/abs/2022AJ....164...84A/abstract)
+
 [Link to publisher](https://doi.org/10.3847/1538-3881/ac7ce6)
 
 [back to top](#contents)
