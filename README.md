@@ -27,7 +27,7 @@ version 0.49.0 (2023-03-16) compatible with SPIRou, NIRPS, HARPS, HARPS-N, ESPRE
 ### Step 1: Download the github repository
 
 ```bash
->> git clone https://github.com/njcuk9999/lbl
+>> git clone git@github.com:njcuk9999/lbl.git
 ```
 
 or the following (depending on your needs)
