@@ -27,7 +27,7 @@ version 0.49.0 (2023-03-16) compatible with SPIRou, NIRPS, HARPS, HARPS-N, ESPRE
 ### Step 1: Download the github repository
 
 ```bash
->> git clone git@github.com:njcuk9999/lbl.git
+>> git clone https://github.com/njcuk9999/lbl
 ```
 
 or the following (depending on your needs)
@@ -117,17 +117,10 @@ The LBL calculations are performed on extracted order-by-order (2D) spectra. The
 
 Blaze calibration files must be placed in `{DATA_DIR}/calib` for optimal template creation (dealing with overlapping orders). The user must also provide the wavelength solutions associated with the science files in `{DATA_DIR}/calib` when not already included in the science headers.
 
+The easiest way to run LBL is to use wrapper python scripts that set up the controlling parameters and the path ot the data. Some examples of wrapper files can be found in the ./lbl/doc/examples/ directory of this repository and they can be accessed via the links to the demo data in Sec. 3.
 
-The easiest way to run LBL is to use wrapper scripts. Examples of wrapper files can be found in the ./lbl/doc/examples/ directory of this repository.
+Essentially all one needs to do is set up a few constants in the wrapper file (instrument, data directory, which objects and which steps to run) and then call the wrapper, i.e. `python your_wrapper.py`. Make sure that the lbl conda environment was previously activated (```conda activate lbl-env```) before launching the LBL.
 
-Essentially all one needs to do is set up a few constants in the wrapper file (instrument, data directory, which objects and which steps to run) and then call the wrapper:
-```bash
-python wrapper.py
-```
-
-Make sure that the lbl conda environment was previously activated (```conda activate lbl-env```) before launching the LBL.
-
-An example data set of Proxima observed with NIRPS with the produced LBL velocities can be found in the ./lbl/doc/examples/ directory.
 
 [back to top](#contents)
 
@@ -406,8 +399,9 @@ If you make use of the lbl code for you scientific publication, please cite the 
 
     Artigau, E., Cadieux, C., Cook, N. J., et al. 2022, AJ, 164, 84
 
+[Link to publisher](https://doi.org/10.3847/1538-3881/ac7ce6)
+
 [Link to ADS](https://ui.adsabs.harvard.edu/abs/2022AJ....164...84A/abstract)
 
-[Link to publisher](https://doi.org/10.3847/1538-3881/ac7ce6)
 
 [back to top](#contents)
