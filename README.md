@@ -108,9 +108,9 @@ The LBL calculations are performed on extracted order-by-order (2D) spectra. The
 
 Blaze calibration files must be placed in `{DATA_DIR}/calib` for optimal template creation (dealing with overlapping orders). The user must also provide the wavelength solutions associated with the science files in `{DATA_DIR}/calib` when not already included in the science headers.
 
-The easiest way to run LBL is to use wrapper scripts. Examples of wrapper files can be found in the ./lbl/doc/examples/ directory of this repository.
+The easiest way to run LBL is to use wrapper python scripts that set up the controlling parameters and the path ot the data. Some examples of wrapper files can be found in the ./lbl/doc/examples/ directory of this repository and they can be accessed via the links to the demo data in Sec. 3.
 
-Essentially all one needs to do is set up a few constants in the wrapper file (instrument, data directory, which objects and which steps to run) and then call the wrapper, i.e. `python wrapper.py`. Make sure that the lbl conda environment was previously activated (```conda activate lbl-env```) before launching the LBL.
+Essentially all one needs to do is set up a few constants in the wrapper file (instrument, data directory, which objects and which steps to run) and then call the wrapper, i.e. `python your_wrapper.py`. Make sure that the lbl conda environment was previously activated (```conda activate lbl-env```) before launching the LBL.
 
 
 [back to top](#contents)
