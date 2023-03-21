@@ -36,8 +36,6 @@ or the following (depending on your needs)
 >> git clone https://github.com/njcuk9999/lbl
 ```
 
-(Or refer to the steps on the [github page](https://github.com/njcuk9999/lbl))
-
 Note from now on we refer to this directory as `{LBL_ROOT}`
 
 [back to top](#contents)
