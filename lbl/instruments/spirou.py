@@ -73,7 +73,9 @@ class Spirou(Instrument):
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
-        self.params.set('SCIENCE_MASK_TYPE', 'pos', source=func_name)
+        # Note that we use 'full' but only keep local maxima
+        # this is used to improve the CCF for fainter targets
+        self.params.set('SCIENCE_MASK_TYPE', 'full', source=func_name)
         self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename
@@ -357,7 +359,7 @@ class Spirou(Instrument):
         Load a blaze file
 
         :param filename: str, absolute path to filename
-        :param science_File: str, a science file (to load the wave solution
+        :param science_file: str, a science file (to load the wave solution
                              from) we expect this science file wave solution
                              to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
@@ -473,6 +475,7 @@ class Spirou(Instrument):
         """
         Load the blaze file using a science file header
 
+        :param science_file: str, the science file header (not used)
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: fits.Header - the science file header
@@ -483,6 +486,7 @@ class Spirou(Instrument):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
+        _ = science_file
         # get blaze file from science header
         blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
         # construct absolute path
@@ -1041,7 +1045,7 @@ class Spirou(Instrument):
         # print progress
         log.general('Locating Mask files')
         # find mask files
-        suffix = '_pos.fits'
+        suffix = '_full.fits'
         mask_files = io.find_files(files, suffix=suffix)
         # print number found
         log.general('\tFound {0} Mask files'.format(len(temp_files)))
@@ -1201,7 +1205,6 @@ class SpirouCADC(Spirou):
         Load science data and header
 
         :param science_file: str, the filename to load
-        :param kind: str, the kind of data
         :return:
         """
         # Fiber must be set for SPIROU CADC
@@ -1242,7 +1245,7 @@ class SpirouCADC(Spirou):
         Load a blaze file
 
         :param filename: str, absolute path to filename
-        :param science_File: str, a science file (to load the wave solution
+        :param science_file: str, a science file (to load the wave solution
                              from) we expect this science file wave solution
                              to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
@@ -1284,6 +1287,7 @@ class SpirouCADC(Spirou):
         """
         Load the blaze file using a science file header
 
+        :param science_file: str, the science file header
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: fits.Header - the science file header

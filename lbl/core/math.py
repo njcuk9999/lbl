@@ -505,7 +505,8 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     return IUVSpline(x, y, **kwargs)
 
 
-def lowpassfilter(input_vect: np.ndarray, width: int = 101) -> np.ndarray:
+def lowpassfilter(input_vect: np.ndarray, width: int = 101,
+                  k: int = 2) -> np.ndarray:
     """
     Computes a low-pass filter of an input vector.
 
@@ -527,6 +528,7 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101) -> np.ndarray:
 
     :param input_vect: numpy 1D vector, vector to low pass
     :param width: int, width (box size) of the low pass filter
+    :param k: int, order of the spline used (passed to IUVSpline)
 
     :return:
     """
@@ -576,7 +578,7 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101) -> np.ndarray:
         xmed = xmed2
         ymed = ymed2
     # splining the vector
-    spline = iuv_spline(xmed, ymed, k=2, ext=3)
+    spline = iuv_spline(xmed, ymed, k=k, ext=3)
     lowpass = spline(np.arange(len(input_vect)))
     # return the low pass filtered input vector
     return lowpass

@@ -79,7 +79,9 @@ class NIRPS(Instrument):
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
-        self.params.set('SCIENCE_MASK_TYPE', 'pos', source=func_name)
+        # Note that we use 'full' but only keep local maxima
+        # this is used to improve the CCF for fainter targets
+        self.params.set('SCIENCE_MASK_TYPE', 'full', source=func_name)
         self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename
@@ -93,7 +95,7 @@ class NIRPS(Instrument):
         # define the SNR cut off threshold
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [35], source=func_name)
+        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
         self.params.set('COMPIL_WAVE_MIN', 900, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
@@ -351,7 +353,7 @@ class NIRPS(Instrument):
         Load a blaze file
 
         :param filename: str, absolute path to filename
-        :param science_File: str, a science file (to load the wave solution
+        :param science_file: str, a science file (to load the wave solution
                              from) we expect this science file wave solution
                              to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
@@ -457,6 +459,7 @@ class NIRPS(Instrument):
         """
         Load the blaze file using a science file header
 
+        :param science_file: str the science filename (not used)
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: fits.Header - the science file header
@@ -467,6 +470,8 @@ class NIRPS(Instrument):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
+        # unused
+        _ = science_file
         # get blaze file from science header
         blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
         # construct absolute path
@@ -1020,7 +1025,7 @@ class NIRPS(Instrument):
         # print progress
         log.general('Locating Mask files')
         # find mask files
-        suffix = '_pos.fits'
+        suffix = '_full.fits'
         mask_files = io.find_files(files, suffix=suffix)
         # print number found
         log.general('\tFound {0} Mask files'.format(len(temp_files)))
@@ -1121,6 +1126,7 @@ class NIRPS(Instrument):
 # =============================================================================
 # Define NIRPS APERO class
 # =============================================================================
+# noinspection PyPep8Naming
 class NIRPS_HA(NIRPS):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
@@ -1157,6 +1163,7 @@ class NIRPS_HA(NIRPS):
                         'sample_wave_grid_nirps_ha.fits', source=func_name)
 
 
+# noinspection PyPep8Naming
 class NIRPS_HE(NIRPS):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
@@ -1198,6 +1205,7 @@ class NIRPS_HE(NIRPS):
 # =============================================================================
 # Define NIRPS ESO class - inherit from spirou
 # =============================================================================
+# noinspection PyPep8Naming
 class NIRPS_HA_ESO(NIRPS_HA):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
@@ -1253,7 +1261,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
         # TODO: This gives the blaze file name for fiber A
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL23 NAME',
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL24 NAME',
                         source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
@@ -1416,7 +1424,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
                     'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
-		            'KW_RESET_RV',
+                    'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)
@@ -1472,7 +1480,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         Load a blaze file
 
         :param filename: str, absolute path to filename
-        :param science_File: str, a science file (to load the wave solution
+        :param science_file: str, a science file (to load the wave solution
                              from) we expect this science file wave solution
                              to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
@@ -1508,6 +1516,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         """
         Load the blaze file using a science file header
 
+        :param science_file: str, the science file name
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: fits.Header - the science file header
@@ -1542,6 +1551,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         return blaze, False
 
 
+# noinspection PyPep8Naming
 class NIRPS_HE_ESO(NIRPS_HE):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
@@ -1597,7 +1607,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
         # define the Blaze calibration file
         # TODO: This gives the blaze file name for fiber A
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL23 NAME',
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL24 NAME',
                         source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
@@ -1760,7 +1770,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
                     'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
-		            'KW_RESET_RV',
+                    'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)
@@ -1816,7 +1826,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         Load a blaze file
 
         :param filename: str, absolute path to filename
-        :param science_File: str, a science file (to load the wave solution
+        :param science_file: str, a science file (to load the wave solution
                              from) we expect this science file wave solution
                              to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
@@ -1852,6 +1862,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         """
         Load the blaze file using a science file header
 
+        :param science_file: str, the science file name
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: fits.Header - the science file header

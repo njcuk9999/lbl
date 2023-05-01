@@ -201,6 +201,12 @@ params.set(key='ROUGH_CCF_MIN_RV', value=-3e5, source=__NAME__,
 params.set(key='ROUGH_CCF_MAX_RV', value=3e5, source=__NAME__,
            desc='The rough CCF rv maximum limit in m/s')
 
+# define the minimum SNR for the rough CCF. Below that, the CCF is not
+# considered to be reliable
+params.set(key='CCF_SNR_MIN', value=7, source=__NAME__,
+           desc='Minimum SNR of CCF for starting point '
+                'velocity to be considered valid')
+
 # define the rough CCF ewidth guess for fit in m/s
 params.set(key='ROUGH_CCF_EWIDTH_GUESS', value=2000, source=__NAME__,
            desc='The rough CCF ewidth guess for fit in m/s')
@@ -223,9 +229,9 @@ params.set(key='COMPUTE_LINE_NSIG_THRES', value=8, source=__NAME__,
 
 # define the fraction of the bulk error the rv mean must be above for compute
 #   rv to have converged
-params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=0.1, source=__NAME__,
+params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=1.0, source=__NAME__,
            desc='fraction of the bulk error the rv mean must be above for '
-                'compute rv to have converged')
+                'compute rv to perform one more iteration')
 
 # define the maximum number of iterations deemed to lead to a good RV
 params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=8, source=__NAME__,
@@ -644,7 +650,7 @@ params.set(key='KW_NITERATIONS', value='ITE_RV', source=__NAME__,
 # define the number of iterations
 params.set(key='KW_RESET_RV', value='RESET_RV', source=__NAME__,
            desc='Num iterations larger than 10',
-	              comment='Probably bad RV')
+           comment='Probably bad RV')
 
 # define the systemic velocity in m/s
 params.set(key='KW_SYSTEMIC_VELO', value='SYSTVELO', source=__NAME__,

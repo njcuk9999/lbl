@@ -276,7 +276,8 @@ def __main__(inst: InstrumentsType, **kwargs):
                                   mjdate_all=mjdate_all, ccf_ewidth=ccf_ewidth,
                                   reset_rv=reset_rv,
                                   model_velocity=model_velocity,
-                                  science_file=science_file)
+                                  science_file=science_file,
+                                  mask_file=mask_file)
         # get back ref_table and outputs
         ref_table, outputs = cout
         # ---------------------------------------------------------------------

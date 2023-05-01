@@ -122,6 +122,11 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
             # build a mask for mask lines in this order
             good = mask_table['ll_mask_s'] > min_wave
             good &= mask_table['ll_mask_s'] < max_wave
+            # if we pass a 'full' mask, then we only keep local maxima
+            # only valid for science frames
+            if params['DATA_TYPE'] == 'SCIENCE':
+                good &= mask_table['w_mask'] < 0
+
             # if we have values then add to arrays
             if np.sum(good) > 0:
                 # add an order flag
@@ -337,8 +342,7 @@ def get_magic_grid(wave0: float, wave1: float, dv_grid: float = 500):
 
 def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
                  sci_data: np.ndarray, wave_mask: np.ndarray,
-                 weight_line: np.ndarray, kind: str,
-                 line_snr: np.ndarray) -> Tuple[float, float]:
+                 weight_line: np.ndarray, kind: str) -> Tuple[float, float]:
     """
     Perform a rough CCF calculation of the science data
 
@@ -348,7 +352,6 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     :param wave_mask: list of wavelength centers of mask lines
     :param weight_line: list of weights for each mask line
     :param kind: the kind of file we are doing the ccf on (for logging)
-    :param line_snr: list of snr for each line
 
     :return: tuple, 1. systemic velocity estimate, 2. ccf ewidth
     """
@@ -358,7 +361,6 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     rv_min = inst.params['ROUGH_CCF_MIN_RV']
     rv_max = inst.params['ROUGH_CCF_MAX_RV']
     rv_ewid_guess = inst.params['ROUGH_CCF_EWIDTH_GUESS']
-    snr_min = inst.params['MASK_SNR_MIN']
     # -------------------------------------------------------------------------
     # if we have a 2D array make it 1D (but ignore overlapping regions)
     if wavegrid.shape[0] > 1:
@@ -425,7 +427,6 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # define a mask that only keeps certain index values
     keep_line = index_mask > (rv_max / grid_step) + 2
     keep_line &= index_mask < len(magic_spline) - (rv_max / grid_step) - 2
-    keep_line &= line_snr > snr_min
     # only keep the indices and weights within the keep line mask
     index_mask = index_mask[keep_line]
     weight_line = weight_line[keep_line]
@@ -439,24 +440,25 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # high-pass the CCF just to be really sure that we are finding a true CCF
     # peak and not a spurious excursion in the low-frequencies
     # high-pass of CCF expressed in pixels, not km/s
-    ccf_hp_width_pix = int(inst.params['COMPUTE_CCF_HP_SCALE'] / (grid_step / 1000))
-    ccf_vector -= mp.lowpassfilter(ccf_vector, ccf_hp_width_pix)
+    ccf_hp_scale = inst.params['COMPUTE_CCF_HP_SCALE']
+    ccf_hp_width_pix = int(ccf_hp_scale / (grid_step / 1000))
+    ccf_vector /= mp.lowpassfilter(ccf_vector, ccf_hp_width_pix)
 
     # -------------------------------------------------------------------------
     # fit the CCF
     # -------------------------------------------------------------------------
     # get the position of the maximum CCF
-    ccfmax = np.argmax(ccf_vector)
+    ccfmin = np.argmin(ccf_vector)
     # guess the amplitude (minus the dc level)
     ccf_dc = mp.nanmedian(ccf_vector)
-    ccf_amp = ccf_vector[ccfmax] - ccf_dc
+    ccf_amp = ccf_vector[ccfmin] - ccf_dc
     # construct a guess of a guassian fit to the CCF
     #    guess[0]: float, the mean position
     #    guess[1]: float, the ewidth
     #    guess[2]: float, the amplitude
     #    guess[3]: float, the dc level
     #    guess[4]: float, the float (x-x0) * slope
-    guess = [dvgrid[ccfmax], rv_ewid_guess, ccf_amp, ccf_dc, 0.0]
+    guess = [dvgrid[ccfmin], rv_ewid_guess, ccf_amp, ccf_dc, 0.0]
     # set specific func name for curve fit errors
     sfuncname = '{0}.KIND={1}'.format(func_name, kind)
     # push into curve fit
@@ -474,11 +476,26 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     msg = '\t\tCCF FWHM ({0}) = {1:.1f} m/s'
     margs = [kind, mp.fwhm() * ccf_ewidth]
     log.general(msg.format(*margs))
+    msg = '\t\tCCF contrast = {0:.2f}'
+    margs = [gcoeffs[2]]
+    log.general(msg.format(*margs))
+
+    ccf_snr = -gcoeffs[2] / mp.estimate_sigma(ccf_vector)
+    msg = '\t\tCCF SNR = {0:.2f}'
+    margs = [ccf_snr]
+    log.general(msg.format(*margs))
     # -------------------------------------------------------------------------
     # debug plot
     # -------------------------------------------------------------------------
     plot.compute_plot_ccf(inst, dvgrid, ccf_vector, ccf_fit, gcoeffs)
     # -------------------------------------------------------------------------
+    # CCF SNR is too low for this to valid - raise an exception
+    if ccf_snr < inst.params['CCF_SNR_MIN']:
+        emsg = 'CCF SNR must be > {0:.2f}, it is {1:.2f}'
+        eargs = [inst.params['CCF_SNR_MIN'], ccf_snr]
+        log.error(emsg.format(*eargs))
+        # raise base_classes.LblException(emsg.format(*eargs))
+
     # return the systemic velocity and the ewidth
     return systemic_velocity, ccf_ewidth
 
@@ -623,7 +640,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                blaze: np.ndarray, systemic_all: np.ndarray,
                mjdate_all: np.ndarray, ccf_ewidth: Union[float, None] = None,
                reset_rv: bool = True, model_velocity: float = np.inf,
-               science_file: str = '') -> Tuple[Dict[str, Any], Dict[str, Any]]:
+               science_file: str = '', mask_file: str = ''
+               ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Compute the RV using a line-by-line analysis
 
@@ -645,6 +663,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                            model velocity
     :param science_file: str, the science file name (required for some
                          instruments)
+    :param mask_file: str, the mask file name (required for science data types)
 
     :return: tuple, 1. the reference table dict, 2. the output dictionary
     """
@@ -697,20 +716,36 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     wavegrid = inst.get_wave_solution(data=sci_data, header=sci_hdr,
                                       science_filename=science_file)
     # loop around orders
-    for order_num in range(sci_data.shape[0]):
-        # work out the velocity scale
-        width = get_velo_scale(wavegrid[order_num], hp_width)
-        # we high-pass on a scale of ~101 pixels in the e2ds
-        sci_data[order_num] -= mp.lowpassfilter(sci_data[order_num],
-                                                width=width)
+    # for order_num in range(sci_data.shape[0]):
+    #    # work out the velocity scale
+    #    width = get_velo_scale(wavegrid[order_num], hp_width)
+    #    # we high-pass on a scale of ~101 pixels in the e2ds
+    #    sci_data[order_num] -= mp.lowpassfilter(sci_data[order_num],
+    #                                            width=width)
     # -------------------------------------------------------------------------
     # get BERV
     # -------------------------------------------------------------------------
     # instrument specific berv --> use instrument method
     berv = inst.get_berv(sci_hdr)
+    inst.params['BERV'] = berv
 
-    # weighting of one everywhere
-    ccf_weight = np.ones_like(ref_table['WEIGHT_LINE'], dtype=float)
+    width = np.zeros(sci_data.shape[0], dtype=int)
+    for order_num in range(sci_data.shape[0]):  # TODO change back to hp_width
+        # within each order, we determine the median width of lines and
+        # we define the filtering size as 5x that value. This avoids the
+        # hp_width parameter. We don't expect that derivatives of lines
+        # have a significant impact on that scale length
+        lines_in_order = np.where((ref_table['ORDER'] == order_num))[0]
+
+        if len(lines_in_order) < 3:
+            # this order is bad if you have less than 3 lines
+            continue
+        starts = ref_table['WAVE_END'][lines_in_order]
+        ends = ref_table['WAVE_START'][lines_in_order]
+
+        med_line_width = np.nanmedian(starts / ends - 1) * speed_of_light_ms
+        hp_width = 5 * med_line_width
+        width[order_num] = get_velo_scale(wavegrid[order_num], hp_width)
 
     # -------------------------------------------------------------------------
     # Systemic velocity estimate
@@ -720,10 +755,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # if we are not using calibration file
         if inst.params['DATA_TYPE'] == 'SCIENCE':
             # calculate the rough CCF RV estimate
+            mask_table = inst.load_mask(mask_file)
+            # get the mask parameters`
+            wave_mask = np.array(mask_table['ll_mask_s'], dtype=float)
+            ccf_weight = np.array(mask_table['w_mask'], dtype=float)
+
             sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
-                                          ref_table['WAVE_START'], ccf_weight,
-                                          kind='science',
-                                          line_snr=ref_table['LINE_SNR'])
+                                          wave_mask, ccf_weight,
+                                          kind='science')
             # if ccf width is not set then set it and log message
             if ccf_ewidth is None:
                 ccf_ewidth = float(ewidth)
@@ -760,9 +799,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     dmodel = np.zeros_like(sci_data)
     d2model = np.zeros_like(sci_data)
     d3model = np.zeros_like(sci_data)
+    # correction of the model from the low-passed ratio of science to model
+    ratio = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
     spline0 = splines['spline0']
-    spline = splines['spline']
+    # spline = splines['spline']
     dspline = splines['dspline']
     d2spline = splines['d2spline']
     d3spline = splines['d3spline']
@@ -786,6 +827,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     zero_time = Time.now()
     # storage of rmsratio
     stddev_nsig = np.nan
+    # once we reached the threshold for convergenve, we flip this flag for
+    # one last iteration
+    flag_last_iter = False
+    # starting values for condition on the last_iteration = True/False
+    rv_mean = np.inf
+    bulk_error = 1.0
     # loop around iterations
     for iteration in range(compute_rv_n_iters):
         # log iteration
@@ -806,6 +853,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             model_offset = 0
         # loop around each order and update model, dmodel, d2model, d3model
         for order_num in range(sci_data.shape[0]):
+            # flags orders that have <3 lines
+            # do not spend time on this order computing anything
+            if width[order_num] == 0:
+                continue
             # doppler shifted wave grid for this order
             shift = -sys_rv - model_offset
             wave_ord = mp.doppler_shift(wavegrid[order_num], shift)
@@ -818,11 +869,39 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # set spline mask splined values to NaN
             model_mask[smask] = np.nan
             # RV shift the spline and correct for blaze and add model mask
-            model[order_num] = spline(wave_ord) * blaze_ord * model_mask
+            # TODO spline0 or spline depending on the type of filtering and
+            #      normalization
+            model[order_num] = spline0(wave_ord) * blaze_ord * model_mask
+            # we are so close in RV with RV_mean<10*sigma that there is no need
+            # to do the low-pass filtering again
+            if iteration == 0:
+                do_hp = True
+                # nsig_rv_mean = np.inf
+            else:
+                nsig_rv_mean = np.abs(rv_mean) / bulk_error
+                if nsig_rv_mean > 10:
+                    do_hp = True  # too far from 0, do the high-pass filtering
+                else:
+                    do_hp = False
+
+            if do_hp:
+                part1 = sci_data[order_num]
+                part2 = model[order_num]
+                part2[part2 == 0] = np.nan
+                ratio[order_num] = mp.lowpassfilter(part1 / part2, int(width[order_num]), k=3)
+                if order_num == 0:
+                    log.general('\t\tLow-pass match of model to science ratio')
+
+            model[order_num] *= ratio[order_num]
+
             # work out the ratio between spectrum and model
-            amp = get_scaling_ratio(sci_data[order_num], model[order_num])
+            # amp = get_scaling_ratio(sci_data[order_num], model[order_num])
             # apply this scaling ratio to the model
-            model[order_num] = model[order_num] * amp
+            # model[order_num] = model[order_num] * amp
+
+            # corr_model = mp.lowpassfilter(model[order_num] - sci_data[order_num],
+            #                              width=100)
+            # model[order_num] -= corr_model
             # if this is the first iteration update model0
             if iteration == 0:
                 # spline the original template and apply blaze
@@ -837,9 +916,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 with warnings.catch_warnings(record=True):
                     model0[order_num] = model0[order_num] * med_sci_data_0
             # update the other splines
-            dmodel[order_num] = dspline(wave_ord) * blaze_ord * amp
-            d2model[order_num] = d2spline(wave_ord) * blaze_ord * amp
-            d3model[order_num] = d3spline(wave_ord) * blaze_ord * amp
+            # track ratio if relevant
+            dmodel[order_num] = dspline(wave_ord) * blaze_ord * ratio[order_num]
+            # only do the d2 and d3 stuff if on last iteration
+            if flag_last_iter:
+                d2model_ord = d2spline(wave_ord) * blaze_ord * ratio[order_num]
+                d3model_ord = d3spline(wave_ord) * blaze_ord * ratio[order_num]
+                d2model[order_num] = d2model_ord
+                d3model[order_num] = d3model_ord
         # ---------------------------------------------------------------------
         # estimate rms
         # ---------------------------------------------------------------------
@@ -860,6 +944,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 # robust estimate of sigma value
                 scale = mp.estimate_sigma(tmp)
                 # update the rms based on the sigma scale value
+                # TODO keep track of the stats on 'scale' as it should be 1
+                # TODO for the photon-noise limited case.
                 rms[order_num] *= scale
         # ---------------------------------------------------------------------
         # work out dv line-by-line
@@ -884,12 +970,17 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             plot_dict['LINE_ORDERS'] = []
             plot_dict['WW_ORD_LINE'] = []
             plot_dict['SPEC_ORD_LINE'] = []
+            plot_dict['MODEL_ORD_LINE'] = []
         # calculate the CCF for the model (if we don't have model_velocity)
         if not np.isfinite(model_velocity):
-            rkwargs = dict(kind='model', line_snr=ref_table['LINE_SNR'])
+            mask_table = inst.load_mask(mask_file)
+            wave_mask = np.array(mask_table['ll_mask_s'], dtype=float)
+            ccf_weight = np.array(mask_table['w_mask'], dtype=float)
+
             sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
-                                                      ref_table['WAVE_START'],
-                                                      ccf_weight, **rkwargs)
+                                                      wave_mask, ccf_weight,
+                                                      kind='model')
+
             model_velocity = -sys_model_rv + sys_rv
             log.general('\tModel velocity {:.2f} m/s'.format(model_velocity))
             # we don't want to continue this run if we have model_velocity
@@ -916,9 +1007,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             rms_ord = rms[order_num]
             model_ord = model[order_num]
             dmodel_ord = dmodel[order_num]
-            d2model_ord = d2model[order_num]
-            d3model_ord = d3model[order_num]
             blaze_ord = blaze[order_num]
+            # only do the d2 and d3 stuff if on last iteration
+            if flag_last_iter:
+                d2model_ord = d2model[order_num]
+                d3model_ord = d3model[order_num]
+            else:
+                d2model_ord = None
+                d3model_ord = None
             # -----------------------------------------------------------------
             # get the start and end wavelengths and pixels for this line
             wave_start = ref_table['WAVE_START'][line_it]
@@ -965,12 +1061,18 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 plot_dict['LINE_ORDERS'] += [order_num]
                 plot_dict['WW_ORD_LINE'] += [ww_ord[x_start:x_end + 1]]
                 plot_dict['SPEC_ORD_LINE'] += [sci_ord[x_start:x_end + 1]]
+                plot_dict['MODEL_ORD_LINE'] += [model_ord[x_start:x_end + 1]]
             # -----------------------------------------------------------------
             # derivative of the segment
             d_seg = dmodel_ord[x_start: x_end + 1] * weight_mask
-            # keep track of second and third derivatives
-            d2_seg = d2model_ord[x_start: x_end + 1] * weight_mask
-            d3_seg = d3model_ord[x_start: x_end + 1] * weight_mask
+
+            # only do the d2 and d3 stuff if on last iteration
+            if flag_last_iter:
+                # keep track of second and third derivatives
+                d2_seg = d2model_ord[x_start: x_end + 1] * weight_mask
+                d3_seg = d3model_ord[x_start: x_end + 1] * weight_mask
+            else:
+                d2_seg, d3_seg = None, None
             # residual of the segment
             # TODO -> investigate data type problem
             # data type should work in the sum below. Does
@@ -985,26 +1087,31 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # diff_seg = (sci_seg - model_seg) * weight_mask
             # work out the sum of the weights of the weight mask
             sum_weight_mask = np.sum(weight_mask)
-            # TODO -> should be an option to subtraction or not the
-            # TODO -> mean line flux
+
             denominator = np.nansum(model_seg ** 2 * weight_mask ** 2)
 
             if (sum_weight_mask != 0) and (denominator != 0):
                 # subtract off normalized science sum
-                scisum = mp.nansum(sci_seg * weight_mask)
-                sci_seg = sci_seg - (scisum / sum_weight_mask)
+                # scisum = mp.nansum(sci_seg * weight_mask)
+                # sci_seg = sci_seg - (scisum / sum_weight_mask)
                 # subtract off normalized model sum
-                modsum = mp.nansum(model_seg * weight_mask)
-                model_seg = model_seg - (modsum / sum_weight_mask)
+                # modsum = mp.nansum(model_seg * weight_mask)
+                #  model_seg = model_seg - (modsum / sum_weight_mask)
                 # to be consistent between the spectrum residuals and model
-                d_sum = mp.nansum(d_seg * weight_mask)
-                d_seg = d_seg - (d_sum / sum_weight_mask)
-                # to be consistent between the spectrum residuals and model
-                d2_sum = mp.nansum(d2_seg * weight_mask)
-                d2_seg = d2_seg - (d2_sum / sum_weight_mask)
-                # to be consistent between the spectrum residuals and model
-                d3_sum = mp.nansum(d3_seg * weight_mask)
-                d3_seg = d3_seg - (d3_sum / sum_weight_mask)
+                # d_sum = mp.nansum(d_seg * weight_mask)
+
+                # TODO --> check if useful at all
+                # TODO -> should be an option to subtraction or not the
+                # TODO -> mean line flux
+                # d_seg = d_seg# - (d_sum / sum_weight_mask)
+                # only do the d2 and d3 stuff if on last iteration
+                if flag_last_iter:
+                    # to be consistent between the spectrum residuals and model
+                    d2_sum = mp.nansum(d2_seg * weight_mask)
+                    d2_seg = d2_seg - (d2_sum / sum_weight_mask)
+                    # to be consistent between the spectrum residuals and model
+                    d3_sum = mp.nansum(d3_seg * weight_mask)
+                    d3_seg = d3_seg - (d3_sum / sum_weight_mask)
 
             diff_seg = (sci_seg - model_seg) * weight_mask
             # work out the sum of the rms
@@ -1017,27 +1124,33 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # -----------------------------------------------------------------
             bout = bouchy_equation_line(d_seg, diff_seg, mean_rms)
             dv[line_it], sdv[line_it] = bout
-            # -----------------------------------------------------------------
-            # work out the 2nd derivative
-            #    From bouchy 2001 equation, RV error for each pixel
-            # -----------------------------------------------------------------
-            bout = bouchy_equation_line(d2_seg, diff_seg, mean_rms)
-            d2v[line_it], sd2v[line_it] = bout
-            # -----------------------------------------------------------------
-            # work out the 3rd derivative
-            #    From bouchy 2001 equation, RV error for each pixel
-            # -----------------------------------------------------------------
-            bout = bouchy_equation_line(d3_seg, diff_seg, mean_rms)
-            d3v[line_it], sd3v[line_it] = bout
-            # -----------------------------------------------------------------
-            # ratio of expected VS actual RMS in difference of model vs line
-            ref_table['RMSRATIO'][line_it] = mp.nanstd(diff_seg) / mean_rms
-            # effective number of pixels in line
-            ref_table['NPIXLINE'][line_it] = len(diff_seg)
-            # Considering the number of pixels, expected and actual RMS, this
-            #   is the likelihood that the line is actually valid from chi2
-            #   point of view
-            ref_table['CHI2'][line_it] = mp.nansum((diff_seg / mean_rms) ** 2)
+
+            if flag_last_iter:
+                # to be consistent between the spectrum residuals and model
+                # -----------------------------------------------------------------
+                # work out the 2nd derivative
+                #    From bouchy 2001 equation, RV error for each pixel
+                # -----------------------------------------------------------------
+                bout = bouchy_equation_line(d2_seg, diff_seg, mean_rms)
+                d2v[line_it], sd2v[line_it] = bout
+                # -----------------------------------------------------------------
+                # work out the 3rd derivative
+                #    From bouchy 2001 equation, RV error for each pixel
+                # -----------------------------------------------------------------
+                bout = bouchy_equation_line(d3_seg, diff_seg, mean_rms)
+                d3v[line_it], sd3v[line_it] = bout
+
+            # only add stuff to the ref_table if on last iteration
+            if flag_last_iter:
+                # -----------------------------------------------------------------
+                # ratio of expected VS actual RMS in difference of model vs line
+                ref_table['RMSRATIO'][line_it] = mp.nanstd(diff_seg) / mean_rms
+                # effective number of pixels in line
+                ref_table['NPIXLINE'][line_it] = len(diff_seg)
+                # Considering the number of pixels, expected and actual RMS, this
+                #   is the likelihood that the line is actually valid from chi2
+                #   point of view
+                ref_table['CHI2'][line_it] = mp.nansum((diff_seg / mean_rms) ** 2)
         # ---------------------------------------------------------------------
         # calculate the number of sigmas measured vs predicted
 
@@ -1082,10 +1195,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         for msg in msgs:
             log.general('\t\t' + msg.format(*margs))
         # ---------------------------------------------------------------------
-        # do a convergence check
-        if np.abs(rv_mean) < (converge_thres * bulk_error):
+        if flag_last_iter:
             # break here
             break
+        # do a convergence check
+        if np.abs(rv_mean) < (converge_thres * bulk_error):
+            # One more iteration
+            flag_last_iter = True
+
     # -------------------------------------------------------------------------
     # line plot
     # -------------------------------------------------------------------------
@@ -1285,7 +1402,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # load table and header
     rvtable0, rvhdr0 = inst.load_lblrv_file(lblrvfiles[0])
     # get columns of rvtable0
-    wavestart0 = np.array(rvtable0['WAVE_START'] )
+    wavestart0 = np.array(rvtable0['WAVE_START'])
     npixline0 = np.array(rvtable0['NPIXLINE'])
     # flag a calibration file
     flag_calib = inst.params['DATA_TYPE'] != 'SCIENCE'

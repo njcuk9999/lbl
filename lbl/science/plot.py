@@ -115,18 +115,21 @@ def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     fig, frame = plt.subplots(ncols=1, nrows=1)
     # -------------------------------------------------------------------------
     # plot functions here
-    frame.plot(-dvgrid / 1000, ccf_vector)
-    frame.plot(-dvgrid / 1000, ccf_fit)
+    frame.plot(-(dvgrid - inst.params['BERV']) / 1000, ccf_vector)
+    frame.plot(-(dvgrid - inst.params['BERV']) / 1000, ccf_fit)
     # construct title
     targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE'],
-             gcoeffs[0] / 1000, gcoeffs[1] / 1000]
+             -gcoeffs[0] / 1000, gcoeffs[1] / 1000,
+             -(gcoeffs[0] - inst.params['BERV']) / 1000]
     title = ('CCF Plot\nOBJ_SCI={0} OBJ_TEMP={1}\nCCF: cent={2:.4f} km/s '
-             'ewid={3:.4f} km/s')
+             'ewid={3:.4f} km/s\nCCF systemic velo={4:.4f} km/s')
     # set labels and title
-    frame.set(xlabel='RV [km/s]', ylabel='Normalized CCF',
+    frame.set(xlabel='BERV-corrected RV [km/s]', ylabel='Normalized CCF',
               title=title.format(*targs))
     # -------------------------------------------------------------------------
     # show and close plot
+    plt.grid(color='lightgrey', linestyle='--')
+    plt.tight_layout()
     plt.show()
     plt.close()
 
@@ -157,12 +160,13 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
     line_orders = plot_dict['LINE_ORDERS']
     ww_ord_line = plot_dict['WW_ORD_LINE']
     spec_ord_line = plot_dict['SPEC_ORD_LINE']
+    model_ord_line = plot_dict['MODEL_ORD_LINE']
     # deal with plot orders being an integer (we want a list)
     if isinstance(plot_orders, int):
         plot_orders = [plot_orders]
     # -------------------------------------------------------------------------
     # set up plot
-    fig, frame = plt.subplots(ncols=1, nrows=1)
+    fig, frame = plt.subplots(ncols=1, nrows=2, sharex='all')
     # -------------------------------------------------------------------------
     # storage for used labels
     used_labels = []
@@ -175,8 +179,8 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
         else:
             used_labels.append(label1)
         # plot the template
-        frame.plot(wavegrid[ord_num], model[ord_num], color='grey', lw=3,
-                   alpha=0.3, label=label1)
+        frame[0].plot(wavegrid[ord_num], model[ord_num], color='grey', lw=3,
+                      alpha=0.3, label=label1)
         # plot the lines
         for line_it in range(len(line_orders)):
             # get colour of line
@@ -190,8 +194,11 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
                 else:
                     used_labels.append(label2)
                 # plot the line
-                frame.plot(ww_ord_line[line_it], spec_ord_line[line_it],
-                           color=colour, label=label2)
+                frame[0].plot(ww_ord_line[line_it], spec_ord_line[line_it],
+                              color=colour, label=label2)
+                frame[1].plot(ww_ord_line[line_it],
+                              spec_ord_line[line_it] - model_ord_line[line_it],
+                              color=colour, label=label2)
     # construct title
     title = 'Line spectrum {0}\nOBJ_SCI={1} OBJ_TEMP={2}'
     if len(plot_orders) == 1:
@@ -201,9 +208,10 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
         targs = ['orders {0}'.format(','.join(str_orders))]
     targs += [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE']]
     # set labels and title
-    frame.set(xlabel='Wavelength [nm]', ylabel='Arbitrary flux',
-              title=title.format(*targs))
-    frame.legend(loc=0)
+    frame[0].set(ylabel='Arbitrary flux', title=title.format(*targs))
+    frame[1].set(xlabel='Wavelength [nm]', ylabel='Residuals')
+
+    frame[0].legend(loc=0)
     # -------------------------------------------------------------------------
     # show and close plot
     plt.show()
