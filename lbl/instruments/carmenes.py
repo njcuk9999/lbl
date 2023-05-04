@@ -71,8 +71,6 @@ class Carmenes(Instrument):
         self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename
-        self.params.set('DEFAULT_MASK_URL', source=func_name,
-                        value=None)
         self.params.set('DEFAULT_MASK_FILE', source=func_name,
                         value=None)
         # define the High pass width in km/s
@@ -277,7 +275,8 @@ class Carmenes(Instrument):
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC METHODS
     # -------------------------------------------------------------------------
-    def mask_file(self, directory: str, required: bool = True) -> str:
+    def mask_file(self, model_directory: str, mask_directory: str,
+                  required: bool = True) -> str:
         """
         Make the absolute path for the mask file
 
@@ -286,9 +285,9 @@ class Carmenes(Instrument):
 
         :return: absolute path to mask file
         """
-        # make sure default mask is downloaded
-        self.get_default_mask(directory, self.params['DEFAULT_MASK_URL'],
-                              self.params['DEFAULT_MASK_FILE'])
+        # copy the default mask file to the mask directory
+        self.copy_default_mask(model_directory, mask_directory,
+                               self.params['DEFAULT_MASK_FILE'])
         # get data type
         data_type = self.params['DATA_TYPE']
         # get type of mask
@@ -302,7 +301,7 @@ class Carmenes(Instrument):
                 abspath = str(basename)
             else:
                 # get absolute path
-                abspath = os.path.join(directory, basename)
+                abspath = os.path.join(mask_directory, basename)
         elif self.params['OBJECT_TEMPLATE'] is None:
             raise LblException('OBJECT_TEMPLATE name must be defined')
         else:
@@ -310,7 +309,7 @@ class Carmenes(Instrument):
             # define base name
             basename = '{0}_{1}.fits'.format(objname, mask_type)
             # get absolute path
-            abspath = os.path.join(directory, basename)
+            abspath = os.path.join(mask_directory, basename)
         # check that this file exists
         if required:
             io.check_file_exists(abspath)

@@ -214,13 +214,16 @@ def get_velo_scale(wave_vector: np.ndarray, hp_width: float) -> int:
 
 
 def spline_template(inst: InstrumentsType, template_file: str,
-                    systemic_vel: float) -> Dict[str, mp.IUVSpline]:
+                    systemic_vel: float, models_dir: str
+                    ) -> Dict[str, mp.IUVSpline]:
     """
     Calculate all the template splines (for later use)
 
     :param inst: Instrument instance
     :param template_file: str, the absolute path to the template file
     :param systemic_vel: float, the systemic velocity
+    :param models_dir: str, the absolute path to the models directory
+
     :return:
     """
     # log that we are producing all template splines
@@ -229,11 +232,31 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # get the pixel hp_width [needs to be in m/s]
     hp_width = inst.params['HP_WIDTH'] * 1000
     # load the template
+    margs = [template_file]
+    msg = 'Loading template file {}'
+    log.general(msg.format(*margs))
     template_table = inst.load_template(template_file)
     # get properties from template table
     twave = np.array(template_table['wavelength'])
     tflux = np.array(template_table['flux'])
-    tflux0 = np.array(template_table['flux'])
+
+    # some masking to avoid errors later
+    # if we have the n_valid flag in the table, then we must have at least
+    # 1/2 of points valid
+    if 'n_valid' in template_table.colnames:
+        msg = 'We reject points with n_valid < 1/2 max(n_valid)'
+        log.general(msg)
+        # these come out of the APERO pipeline
+        # TODO -> get n_valid in the template code
+        bad = template_table['n_valid'] < np.max(template_table['n_valid']) / 2
+        tflux[bad] = np.nan
+
+    # flag completely spurious data in the template. Negative values
+    # and values > 10x the median are rejected
+    bad = (tflux < 0) | (tflux / np.nanmedian(tflux) > 10)
+    tflux[bad] = np.nan
+
+    tflux0 = np.array(tflux)
     # -------------------------------------------------------------------------
     # work out the velocity scale
     width = get_velo_scale(twave, hp_width)
@@ -268,6 +291,38 @@ def spline_template(inst: InstrumentsType, template_file: str,
     sps['dspline'] = mp.iuv_spline(ntwave, dflux[valid], k=k_order, ext=1)
     sps['d2spline'] = mp.iuv_spline(ntwave, d2flux[valid], k=k_order, ext=1)
     sps['d3spline'] = mp.iuv_spline(ntwave, d3flux[valid], k=k_order, ext=1)
+    # deal with residual projection tables
+    if isinstance(inst.params['RESPROJ_TABLES'], dict):
+        # loop around table
+        for key in inst.params['RESPROJ_TABLES'].keys():
+            # log that we are constructing the spline
+            msg = 'We construct the spline for the "{}" response'
+            log.general(msg.format(key))
+            # construct the path for the spline
+            spline_file = inst.params['RESPROJ_TABLES'][key]
+            spline_path = os.path.join(models_dir, spline_file)
+            # make sure file exists
+            if not os.path.exists(spline_path):
+                emsg = 'RESPROJ Table {0} does not exist'
+                raise LblException(emsg.format(key))
+            # load the table
+            tbl_res = Table.read(spline_path)
+            # give a error if the table does not have the correct columns
+            if 'wavelength' not in tbl_res.colnames:
+                emsg = 'RESPROJ Table {0} must have a "wavelength" column'
+                raise LblException(emsg.format(key))
+            if 'fractional_gradient' not in tbl_res.colnames:
+                emsg = ('RESPROJ Table {0} must have a "fractional_gradient" '
+                        ' column')
+                raise LblException(emsg.format(key))
+            # read the wavelength and fraction gradient columns
+            wave_res = np.array(tbl_res['wavelength'])
+            sp_res = np.array(tbl_res['fractional_gradient'])
+            # make sure we don't have nans for the spline
+            valid_res = np.isfinite(sp_res)
+            # spline and add to spline dictionary
+            sps[key] = mp.iuv_spline(wave_res[valid_res], sp_res[valid_res],
+                                     k=k_order, ext=1)
     # -------------------------------------------------------------------------
     # we create a mask to know if the splined point  is valid
     tmask = np.isfinite(tflux).astype(float)
@@ -493,9 +548,8 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     if ccf_snr < inst.params['CCF_SNR_MIN']:
         emsg = 'CCF SNR must be > {0:.2f}, it is {1:.2f}'
         eargs = [inst.params['CCF_SNR_MIN'], ccf_snr]
-        log.error(emsg.format(*eargs))
-        # raise base_classes.LblException(emsg.format(*eargs))
-
+        raise LblException(emsg.format(*eargs))
+    # -------------------------------------------------------------------------
     # return the systemic velocity and the ewidth
     return systemic_velocity, ccf_ewidth
 
@@ -696,6 +750,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     rms_sigclip_thres = inst.params['COMPUTE_RMS_SIGCLIP_THRES']
     # get readout noise
     readout_noise = inst.params['READ_OUT_NOISE']
+    # flag that we have residual projection tables
+    resproj_flag = isinstance(inst.params['RESPROJ_TABLES'], dict)
     # -------------------------------------------------------------------------
     # deal with noise model
     if not use_noise_model:
@@ -799,6 +855,21 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     dmodel = np.zeros_like(sci_data)
     d2model = np.zeros_like(sci_data)
     d3model = np.zeros_like(sci_data)
+
+    # deal with the projection models
+    proj_model = dict()
+    # only need to fill this if we have residual projection tables
+    if resproj_flag:
+        # loop around residual projection tables
+        for key in inst.params['RESPROJ_TABLES']:
+            # each projection model has a model, proj and sproj
+            #  we fill them with empty arrays to start with
+            proj_model[key] = dict()
+            wave_tmp = np.full(len(ref_table['WAVE_START']), np.nan)
+            proj_model[key]['model'] = np.zeros_like(sci_data)
+            proj_model[key]['proj'] = wave_tmp
+            proj_model[key]['sproj'] = wave_tmp
+
     # correction of the model from the low-passed ratio of science to model
     ratio = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
@@ -924,6 +995,16 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 d3model_ord = d3spline(wave_ord) * blaze_ord * ratio[order_num]
                 d2model[order_num] = d2model_ord
                 d3model[order_num] = d3model_ord
+                # deal with residual projection tables if required
+                if resproj_flag:
+                    # loop around residual project tables
+                    for key in inst.params['RESPROJ_TABLES']:
+                        # calculate spline
+                        rp_spline = splines[key](wave_ord)
+                        # multiply by blaze and ratio
+                        rp_spline = rp_spline * blaze_ord * ratio[order_num]
+                        # add to projection model
+                        proj_model[key]['model'][order_num] = rp_spline
         # ---------------------------------------------------------------------
         # estimate rms
         # ---------------------------------------------------------------------
@@ -1012,6 +1093,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if flag_last_iter:
                 d2model_ord = d2model[order_num]
                 d3model_ord = d3model[order_num]
+                # deal with residual projection tables if required
+                if resproj_flag:
+                    # loop around residual project tables
+                    for key in inst.params['RESPROJ_TABLES']:
+                        # add the model for this order
+                        model_ord = proj_model[key]['model'][order_num]
+                        # add to projection_model
+                        proj_model[key]['model_ord'] = model_ord
             else:
                 d2model_ord = None
                 d3model_ord = None
@@ -1071,6 +1160,16 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 # keep track of second and third derivatives
                 d2_seg = d2model_ord[x_start: x_end + 1] * weight_mask
                 d3_seg = d3model_ord[x_start: x_end + 1] * weight_mask
+                # deal with residual projection tables if required
+                if resproj_flag:
+                    # loop around residual project tables
+                    for key in inst.params['RESPROJ_TABLES']:
+                        # get model_order projection
+                        model_ord = proj_model[key]['model_ord']
+                        # work out the d_seg for this projection
+                        d_seg = model_ord[x_start: x_end + 1] * weight_mask
+                        # add to projection_model
+                        proj_model[key]['d_seg'] = d_seg
             else:
                 d2_seg, d3_seg = None, None
             # residual of the segment
@@ -1088,31 +1187,44 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # work out the sum of the weights of the weight mask
             sum_weight_mask = np.sum(weight_mask)
 
-            denominator = np.nansum(model_seg ** 2 * weight_mask ** 2)
+            # -----------------------------------------------------------------
+            # This is part of the code we had when we had to subtract
+            #   a mean value for each segment as we high-passed
+            #   - no longer used (remove later)
 
-            if (sum_weight_mask != 0) and (denominator != 0):
-                # subtract off normalized science sum
-                # scisum = mp.nansum(sci_seg * weight_mask)
-                # sci_seg = sci_seg - (scisum / sum_weight_mask)
-                # subtract off normalized model sum
-                # modsum = mp.nansum(model_seg * weight_mask)
-                #  model_seg = model_seg - (modsum / sum_weight_mask)
-                # to be consistent between the spectrum residuals and model
-                # d_sum = mp.nansum(d_seg * weight_mask)
-
-                # TODO --> check if useful at all
-                # TODO -> should be an option to subtraction or not the
-                # TODO -> mean line flux
-                # d_seg = d_seg# - (d_sum / sum_weight_mask)
-                # only do the d2 and d3 stuff if on last iteration
-                if flag_last_iter:
-                    # to be consistent between the spectrum residuals and model
-                    d2_sum = mp.nansum(d2_seg * weight_mask)
-                    d2_seg = d2_seg - (d2_sum / sum_weight_mask)
-                    # to be consistent between the spectrum residuals and model
-                    d3_sum = mp.nansum(d3_seg * weight_mask)
-                    d3_seg = d3_seg - (d3_sum / sum_weight_mask)
-
+            # denominator = np.nansum(model_seg ** 2 * weight_mask ** 2)
+            # if (sum_weight_mask != 0) and (denominator != 0):
+            #     # subtract off normalized science sum
+            #     # scisum = mp.nansum(sci_seg * weight_mask)
+            #     # sci_seg = sci_seg - (scisum / sum_weight_mask)
+            #     # subtract off normalized model sum
+            #     # modsum = mp.nansum(model_seg * weight_mask)
+            #     #  model_seg = model_seg - (modsum / sum_weight_mask)
+            #     # to be consistent between the spectrum residuals and model
+            #     # d_sum = mp.nansum(d_seg * weight_mask)
+            #
+            #     # TODO --> check if useful at all
+            #     # TODO -> should be an option to subtraction or not the
+            #     # TODO -> mean line flux
+            #     # d_seg = d_seg# - (d_sum / sum_weight_mask)
+            #     # only do the d2 and d3 stuff if on last iteration
+            #     if flag_last_iter:
+            #         # to be consistent between the spectrum residuals and model
+            #         d2_sum = mp.nansum(d2_seg * weight_mask)
+            #         # to be consistent between the spectrum residuals and model
+            #         d3_sum = mp.nansum(d3_seg * weight_mask)
+            #         # deal with residual projection tables if required
+            #         if resproj_flag:
+            #             # loop around residual project tables
+            #             for key in inst.params['RESPROJ_TABLES']:
+            #                 # get the d_seg value
+            #                 d_seg = proj_model[key]['d_seg']
+            #                 # calculate the sum of the d_seg
+            #                 d_sum = mp.nansum(d_seg * weight_mask)
+            #                 # push into the projection model
+            #                 proj_model[key]['d_sum'] = d_sum
+            # -----------------------------------------------------------------
+            # calculate the difference of this segment (weighted by the mask)
             diff_seg = (sci_seg - model_seg) * weight_mask
             # work out the sum of the rms
             sum_rms = np.sum(rms_ord[x_start: x_end + 1] * weight_mask)
@@ -1127,19 +1239,30 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
             if flag_last_iter:
                 # to be consistent between the spectrum residuals and model
-                # -----------------------------------------------------------------
+                # -------------------------------------------------------------
                 # work out the 2nd derivative
                 #    From bouchy 2001 equation, RV error for each pixel
-                # -----------------------------------------------------------------
+                # -------------------------------------------------------------
                 bout = bouchy_equation_line(d2_seg, diff_seg, mean_rms)
                 d2v[line_it], sd2v[line_it] = bout
-                # -----------------------------------------------------------------
+                # -------------------------------------------------------------
                 # work out the 3rd derivative
                 #    From bouchy 2001 equation, RV error for each pixel
-                # -----------------------------------------------------------------
+                # -------------------------------------------------------------
                 bout = bouchy_equation_line(d3_seg, diff_seg, mean_rms)
                 d3v[line_it], sd3v[line_it] = bout
-
+                # deal with residual projection tables if required
+                if resproj_flag:
+                    # loop around residual project tables
+                    for key in inst.params['RESPROJ_TABLES']:
+                        # get d_seg
+                        d_seg = proj_model[key]['d_seg']
+                        # calculate the bouchy equation
+                        bout = bouchy_equation_line(d_seg, diff_seg, mean_rms)
+                        # push into the projection model
+                        d3key, sd3key = bout
+                        proj_model[key]['proj'][line_it] = d3key
+                        proj_model[key]['sproj'][line_it] = sd3key
             # only add stuff to the ref_table if on last iteration
             if flag_last_iter:
                 # -----------------------------------------------------------------
@@ -1224,6 +1347,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     ref_table['CHI2_VALID_CDF'] = chi2_cdf
     # fraction of each lines that is a valid pixel when computing the dv
     ref_table['FRAC_LINE_VALID'] = frac_line_valid
+    # deal with residual projection tables if required
+    if resproj_flag:
+        # loop around residual project tables
+        for key in inst.params['RESPROJ_TABLES']:
+            # add to the reference table
+            ref_table[key] = proj_model[key]['proj']
+            ref_table['s' + key] = proj_model[key]['sproj']
     # -------------------------------------------------------------------------
     # update _all arrays
     # -------------------------------------------------------------------------
@@ -1337,7 +1467,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     reference_wavelength = inst.params['COMPIL_SLOPE_REF_WAVE']
     # get the ccf e-width column name
     ccf_ew_col = inst.params['KW_CCF_EW']
-
+    # flag whether we have residual projection tables
+    resproj_flag = isinstance(inst.params['RESPROJ_TABLES'], dict)
     # Force the per - line dispersion to match uncertainties. In other words,
     # the per-line (vrad-median(vrad))/svrad will be forced to a median value
     # of 1 if True. This causes a degradation of performances by 5-10% for
@@ -1356,7 +1487,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # -------------------------------------------------------------------------
     # storage for rdb table dictionary
     rdb_dict = dict()
-    # add columns
+    # add columns (dv, sdv, d2v, sd2v, d3v, sd3v, rjd, vrad, svrad)
     rdb_dict['rjd'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['vrad'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['svrad'] = np.zeros_like(lblrvfiles, dtype=float)
@@ -1364,6 +1495,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['sd2v'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['d3v'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['sd3v'] = np.zeros_like(lblrvfiles, dtype=float)
+    # deal with residual projection table
+    if resproj_flag:
+        # loop around keys in resproj tables
+        for key in inst.params['RESPROJ_TABLES']:
+            rdb_dict[key] = np.zeros_like(lblrvfiles, dtype=float)
+            rdb_dict['s' + key] = np.zeros_like(lblrvfiles, dtype=float)
+    # define the local file name
     rdb_dict['local_file_name'] = np.array(lblrvbasenames)
     # time for matplotlib
     rdb_dict['plot_date'] = np.zeros_like(lblrvfiles, dtype=float)
@@ -1425,6 +1563,17 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     dv_arr, sdv_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
     d2v_arr, sd2v_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
     d3v_arr, sd3v_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
+    # projection model for the rdb_dict
+    proj_model = dict()
+    # deal with residual projection table
+    if resproj_flag:
+        # loop around keys in residual projection tables
+        for key in inst.params['RESPROJ_TABLES']:
+            # each projection model as a proj_arr and sproj_arr
+            proj_model[key] = dict()
+            proj_model[key]['proj_arr'] = np.zeros([nby, nbx])
+            proj_model[key]['sproj_arr'] = np.zeros([nby, nbx])
+    # store the berv
     berv = np.zeros(len(lblrvfiles))
     # -------------------------------------------------------------------------
     # work out for cumulative plot for first file
@@ -1499,6 +1648,26 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # push into rdb_dict
             rdb_dict['vrad'][row] = cal_guess
             rdb_dict['svrad'][row] = cal_bulk_error
+        # deal with residual projection tables
+        if resproj_flag:
+            # loop around keys in residual projection tables
+            for key in inst.params['RESPROJ_TABLES']:
+                # check that key is in rvtable
+                if key not in rvtable.colnames:
+                    # log an error
+                    emsg = ('RESPROJ Table key "{0}" not in rvtable.'
+                            'Please do not populat the RESPROJ_TABLES with '
+                            'key {0}')
+                    raise LblException(emsg.format(key))
+                # copy the rvtable array for this residual projection
+                arr = np.array(rvtable[good][key], dtype=float)
+                # copy the rvtable error array for this residual projection
+                sarr = np.array(rvtable[good]['s' + key], dtype=float)
+                # get the guess and bulk error
+                val_guess, val_bulk_error = mp.odd_ratio_mean(arr, sarr)
+                # push into the rdb dictioanry
+                rdb_dict[key][row] = val_guess
+                rdb_dict['s' + key][row] = val_bulk_error
         # get the d2v, sd2v, d3v and sd3v values from table
         wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
         d2v = np.array(rvtable[good]['d2v'], dtype=float)

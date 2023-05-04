@@ -359,6 +359,10 @@ def make_all_directories(inst: Union[InstrumentsType],
     # make the model directory
     model_dir = io.make_dir(data_dir, 'models', 'Model')
     # -------------------------------------------------------------------------
+    # make sure we have all the model files
+    inst.get_model_files(model_dir, inst.params['MODEL_REPO_URL'],
+                         inst.params['MODEL_FILES'])
+    # -------------------------------------------------------------------------
     # store output directories
     props = ParamDict()
     # set properties

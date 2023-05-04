@@ -187,6 +187,8 @@ def clean_directory(path: str, logmsg: bool = True,
 
     :param path: str, path to clean
     :param logmsg: bool, if True log cleaning
+    :param dir_suffix: str, if not '' only clean directories that end with this
+    :param include_files: list of str, if not None only clean files in this list
 
     :return: None, removes files
     """
@@ -588,8 +590,8 @@ def get_urlfile(url: str, name: str, savepath: str):
             wget.download(url, savepath)
             log.general('\nDownloaded tapas file.')
         except Exception as e:
-            emsg = 'Cannot download tapas file: {0}\n\tError {1}: {2}'
-            eargs = [url, type(e), str(e)]
+            emsg = 'Cannot download {0} file: {1}\n\tError {2}: {3}'
+            eargs = [name, url, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
     # print loading tapas
     msg = 'Loading {0} file from: {1}'

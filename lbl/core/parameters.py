@@ -255,6 +255,18 @@ params.set(key='SAMPLE_WAVE_GRID_FILE', value=None, not_none=True,
            desc=('define the name of the sample wave grid file '
                  '(saved to the calib dir)'))
 
+# Dictionary of table name for the file used in the projection against the
+# derivative. Key is to output column name that will propagated into the
+# finale RDB table and the value is the filename of the table. The table must
+# follow a number of caractistics explained on the LBL  website.
+params.set(key='RESPROJ_TABLES', value=None, source=__NAME__,
+           desc=('Dictionary of table name for the file used in the '
+                 'projection against the derivative. Key is to output '
+                 'column name that will propagated into the finale RDB '
+                 'table and the value is the filename of the table. The '
+                 'table must follow a number of caractistics explained '
+                 'on the LBL  website.'), not_none=True)
+
 # =============================================================================
 # Define compil parameters
 # =============================================================================
@@ -498,15 +510,25 @@ params.set(key='DO_TELLUCLEAN', value=None, source=__NAME__,
 params.set(key='TELLUCLEAN_USE_TEMPLATE', value=True, source=__NAME__,
            desc='whether to use template in tellu-cleaning')
 
-# define the tapas url used in tellu-cleaning
-params.set(key='TELLUCLEAN_TAPAS_URL',
-           value='https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits',
-           source=__NAME__, desc='the tapas url used in tellu-cleaning',
-           not_none=True)
+# define the default model repo url
+params.set(key='MODEL_REPO_URL',
+           value='https://www.astro.umontreal.ca/~artigau/lbl/models/',
+           source=__NAME__,
+           desc='define the default model repo url', not_none=True)
 
-# define the default mask url
-params.set(key='DEFAULT_MASK_URL', value=None, source=__NAME__,
-           desc='define the default mask url', not_none=True)
+# define the model files
+MODEL_FILES = dict()
+MODEL_FILES['Mdwarf Temperature Gradient Table'] = 'Mdwarf_temp_gradient.fits'
+MODEL_FILES['Mdwarf Mask [HARPS]'] = 'mdwarf_harps.fits'
+MODEL_FILES['Mdwarf Mask [NIRPS-HA]'] = 'mdwarf_nirps_ha.fits'
+MODEL_FILES['Mdwarf Mask [NIRPS-HE]'] = 'mdwarf_nirps_he.fits'
+MODEL_FILES['Mdwarf Mask [SPIROU]'] = 'mdwarf_spirou.fits'
+MODEL_FILES['Tapas file'] = 'tapas_lbl.fits'
+
+# define a dictionary of model files to be downloaded from the MODEL_REPO_URL
+params.set(key='MODEL_FILES', value=MODEL_FILES, source=__NAME__,
+           desc='define a dictionary of model files to be downloaded from '
+                'the MODEL_REPO_URL', not_none=True)
 
 # define the default mask filename
 params.set(key='DEFAULT_MASK_FILE', value=None, source=__NAME__,

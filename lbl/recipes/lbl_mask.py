@@ -118,7 +118,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
     # mask filename
-    mask_file = inst.mask_file(mask_dir, required=False)
+    mask_file = inst.mask_file(models_dir, mask_dir, required=False)
     # template filename
     template_file = inst.template_file(template_dir)
     # get template file

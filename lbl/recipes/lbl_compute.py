@@ -118,13 +118,14 @@ def __main__(inst: InstrumentsType, **kwargs):
     calib_dir, science_dir = dparams['CALIB_DIR'], dparams['SCIENCE_DIR']
     lblrv_dir, lbl_reftable_dir = dparams['LBLRV_DIR'], dparams['LBLRT_DIR']
     lbl_rdb_dir, plot_dir = dparams['LBL_RDB_DIR'], dparams['PLOT_DIR']
+    models_dir = dparams['MODELS_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
     # mask filename
-    mask_file = inst.mask_file(mask_dir)
+    mask_file = inst.mask_file(models_dir, mask_dir)
     # template filename
     template_file = inst.template_file(template_dir)
     # blaze filename (None if not set)
@@ -153,7 +154,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 5: spline the template
     # -------------------------------------------------------------------------
-    splines = general.spline_template(inst, template_file, systemic_vel)
+    splines = general.spline_template(inst, template_file, systemic_vel,
+                                      models_dir)
     # -------------------------------------------------------------------------
     # Step 6: Loop around science files
     # -------------------------------------------------------------------------

@@ -9,6 +9,7 @@ Created on 2021-03-15
 """
 import glob
 import os
+import shutil
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -566,30 +567,54 @@ class Instrument:
                           header=[header, None],
                           dtype=[None, 'table'])
 
-    def get_default_mask(self, directory: str, url: Optional[str] = None,
-                         filename: Optional[str] = None):
+    def get_model_files(self, directory: str, url: str,
+                        model_dict: Dict[str, str]):
         """
-        Check/Get the default mask and save it in the mask directory
+        Chec/Get the model files from the model repository
 
-        :param directory: str, the mask directory
-        :param url: str, the url to the default mask
-        :param filename: str, the default mask filename
-
-        :return: None, downloads default mask if not present
+        :param directory: str, the model directory to copies files to
+        :param url: str, the url to get the files from
+        :param model_dict: Dict[str, str] - the dictionary of files to get
+                           from the model directory
+        :return:
         """
-        # if url is not set or filename is not set return here - we have
-        #   no default mask
-        if url is None or filename is None:
+        # loop around model files
+        for key in model_dict:
+            # get the filename
+            filename = model_dict[key]
+            # if url is not set or filename is not set return here - we have
+            #   no default mask
+            if url is None or filename is None:
+                return
+            # construct path to mask file
+            model_file = os.path.join(directory, filename)
+            # get file from url
+            io.get_urlfile(url, key, model_file)
+
+    def copy_default_mask(self, model_directory: str, mask_directory: str,
+                          filename: str):
+        """
+        Copy the default mask for this instrument to the mask directory
+
+        :param model_directory: str, the model directory
+        :param mask_directory: str, the mask directory
+        :param filename: str, the filename to copy
+        :return:
+        """
+        in_path = os.path.join(model_directory, filename)
+        out_path = os.path.join(mask_directory, filename)
+        # deal with file already existing
+        if os.path.exists(out_path):
             return
-        # construct path to mask file
-        default_mask_file = os.path.join(directory, filename)
-        # get file from url
-        io.get_urlfile(url, 'default mask', default_mask_file)
+        # only copy if we have a file to copy
+        if os.path.exists(in_path):
+            shutil.copy(in_path, out_path)
 
     # -------------------------------------------------------------------------
     # Methods that MUST be overridden by the child instrument class
     # -------------------------------------------------------------------------
-    def mask_file(self, directory: str, required: bool = True):
+    def mask_file(self, model_directory: str, mask_directory: str,
+                  required: bool = True):
         """
         Make the absolute path for the mask file
 
@@ -598,7 +623,7 @@ class Instrument:
 
         :return: absolute path to mask file
         """
-        _ = directory
+        _ = model_directory, mask_directory
         raise self._not_implemented('mask_file')
 
     def template_file(self, directory: str, required: bool = True):
@@ -1084,8 +1109,8 @@ class Instrument:
         # ---------------------------------------------------------------------
         # get default teff
         if params['OBJECT_TEFF'] in ['None', '', None]:
-            log.error('Teff is require. Please add OBJECT_TEFF to config')
-            input_teff = np.inf
+            emsg = 'Teff is require. Please add OBJECT_TEFF to config'
+            raise LblException(emsg)
         else:
             input_teff = params['OBJECT_TEFF']
         # need to convert this to a closest teff
