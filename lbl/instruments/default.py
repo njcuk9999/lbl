@@ -589,9 +589,9 @@ class Instrument:
             # construct path to mask file
             model_file = os.path.join(directory, filename)
             # update url to include file
-            url = '{0}/{1}'.format(url, filename)
+            fileurl = '{0}/{1}'.format(url, filename)
             # get file from url
-            io.get_urlfile(url, key, model_file)
+            io.get_urlfile(fileurl, key, model_file)
 
     def copy_default_mask(self, model_directory: str, mask_directory: str,
                           filename: str):
