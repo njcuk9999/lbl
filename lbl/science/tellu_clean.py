@@ -11,6 +11,7 @@ Created on 2021-12-13
 """
 import os
 from typing import Any, Dict, Tuple, Union
+import shutil
 
 import numpy as np
 from astropy import constants
@@ -52,7 +53,8 @@ SplineReturn = Union[mp.IUVSpline, mp.NanSpline]
 # =============================================================================
 # Define functions
 # =============================================================================
-def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
+def get_tapas_lbl(inst: InstrumentsType, modeldir: str,
+                  extname: str) -> Table:
     """
     Get the tapas lbl file (either from disk or from online)
 
@@ -62,26 +64,32 @@ def get_tapas_lbl(inst: InstrumentsType, extname: str) -> Table:
     :return: astropy.table.Table - the Table for extname
     """
     # get parameters from inst
-    tapas_url = inst.params['TELLUCLEAN_TAPAS_URL']
+    tapas_file = inst.params['TELLUCLEAN_TAPAS_FILE']
     data_dir = inst.params['DATA_DIR']
     # get data directory
     data_dir = io.check_directory(data_dir)
-    # copy over readme
-    lbl_misc.copy_readme(data_dir)
     # make other directory
     tapas_path = io.make_dir(data_dir, 'other', 'Other')
-    # construct tapas file path
-    tapas_file = os.path.basename(tapas_url)
-    tapas_abspath = os.path.join(tapas_path, tapas_file)
-    # get file from url (after checking if it exists)
-    io.get_urlfile(tapas_url, 'tapas', tapas_abspath)
+    # construct tapas in/out file path
+    tapas_inpath = os.path.join(modeldir, tapas_file)
+    tapas_outpath = os.path.join(tapas_path, tapas_file)
+    # copy tapas file to tapas
+    if os.path.exists(tapas_outpath):
+        pass
+    elif os.path.exists(tapas_inpath):
+        # copy over tapas file
+        shutil.copy(tapas_inpath, tapas_outpath)
+    else:
+        emsg = 'Cannot find tapas file: {0}'
+        raise LblException(emsg.format(tapas_inpath))
     # load table
-    tapas_lbl = io.load_table(tapas_abspath, extname=extname)
+    tapas_lbl = io.load_table(tapas_outpath, extname=extname)
     # return the table
     return tapas_lbl
 
 
-def get_tapas_spl(inst: InstrumentsType) -> Tuple[SplineReturn, SplineReturn]:
+def get_tapas_spl(inst: InstrumentsType, model_dir: str
+                  ) -> Tuple[SplineReturn, SplineReturn]:
     """
     Read table with TAPAS model for 6 molecules.
 
@@ -93,7 +101,7 @@ def get_tapas_spl(inst: InstrumentsType) -> Tuple[SplineReturn, SplineReturn]:
     tapas_dv = inst.params['TELLUCLEAN_DV0']
     # -------------------------------------------------------------------------
     # get tapas file
-    tmp_tapas = get_tapas_lbl(inst, 'ABSOSPEC')
+    tmp_tapas = get_tapas_lbl(inst, model_dir, 'ABSOSPEC')
     # -------------------------------------------------------------------------
     # extract out the wave solution, water and others columns from table
     tapas_wave = tmp_tapas['WAVELENGTH']
@@ -113,7 +121,7 @@ def get_tapas_spl(inst: InstrumentsType) -> Tuple[SplineReturn, SplineReturn]:
     return spl_others, spl_water
 
 
-def load_tellu_masks(inst) -> Tuple[Table, Table]:
+def load_tellu_masks(inst, model_dir: str) -> Tuple[Table, Table]:
     """
     Load telluric masks for others and water content
 
@@ -126,7 +134,7 @@ def load_tellu_masks(inst) -> Tuple[Table, Table]:
     mask_domain_upper = inst.params['TELLUCLEAN_MASK_DOMAIN_UPPER']
     # -------------------------------------------------------------------------
     # read others file
-    table_others = get_tapas_lbl(inst, 'CCFOTHER')
+    table_others = get_tapas_lbl(inst, model_dir, 'CCFOTHER')
     # remove domain that is out of bounds
     keep_others = table_others['ll_mask_s'] > mask_domain_lower
     keep_others &= table_others['ll_mask_s'] < mask_domain_upper
@@ -134,7 +142,7 @@ def load_tellu_masks(inst) -> Tuple[Table, Table]:
     table_others = table_others[keep_others]
     # -------------------------------------------------------------------------
     # read water file
-    table_water = get_tapas_lbl(inst, 'CCFWATER')
+    table_water = get_tapas_lbl(inst, model_dir, 'CCFWATER')
     # remove domain that is out of bounds
     keep_others = table_water['ll_mask_s'] > mask_domain_lower
     keep_others &= table_water['ll_mask_s'] < mask_domain_upper
@@ -232,7 +240,8 @@ def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
 def correct_tellu(inst: InstrumentsType, template_file: str,
                   e2ds_params: Dict[str, Any],
                   spl_others: SplineReturn,
-                  spl_water: SplineReturn) -> Dict[str, Any]:
+                  spl_water: SplineReturn,
+                  model_dir: str) -> Dict[str, Any]:
     """
     Pass an e2ds dictionary and return the telluric-corredted data.
 
@@ -246,6 +255,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     :param e2ds_params: dict, the e2ds dictionary of parameters
     :param spl_others: spline, the spline of other absorbers spectrum
     :param spl_water: splien, the spline of water absorbers spectrum
+    :param model_dir: str, the path to the model directory
 
     :return: dictionary the updated e2ds_params with telluric corrected data in
     """
@@ -354,7 +364,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     dv_others = 0.0
     # -------------------------------------------------------------------------
     # load the masks
-    table_others, table_water = load_tellu_masks(inst)
+    table_others, table_water = load_tellu_masks(inst, model_dir)
     # -------------------------------------------------------------------------
     # start with no correction of abso to get the ccf
     # we start at zero to get a velocity measurement even if we may force to

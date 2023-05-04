@@ -534,6 +534,10 @@ params.set(key='MODEL_FILES', value=MODEL_FILES, source=__NAME__,
 params.set(key='DEFAULT_MASK_FILE', value=None, source=__NAME__,
            desc='define the default mask filename', not_none=True)
 
+# define the tapas file
+params.set(key='TELLUCLEAN_TAPAS_FILE', value='tapas_lbl.fits',
+           source=__NAME__, desc='define the tapas file')
+
 # define the dv offset for tellu-cleaning in km/s
 params.set(key='TELLUCLEAN_DV0', value=None, source=__NAME__, not_none=True,
            desc='the dv offset for tellu-cleaning in km/s')

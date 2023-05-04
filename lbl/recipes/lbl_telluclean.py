@@ -126,7 +126,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     dparams = select.make_all_directories(inst)
     template_dir, science_dir = dparams['TEMPLATE_DIR'], dparams['SCIENCE_DIR']
     calib_dir = dparams['CALIB_DIR']
-
+    model_dir = dparams['MODEL_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
@@ -138,7 +138,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 3: get the TAPAS exponents
     # -------------------------------------------------------------------------
-    spl_others, spl_water = tellu_clean.get_tapas_spl(inst)
+    spl_others, spl_water = tellu_clean.get_tapas_spl(inst, model_dir)
     # -------------------------------------------------------------------------
     # Step 4: Loop around science files and clean
     # -------------------------------------------------------------------------
@@ -180,7 +180,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         # ---------------------------------------------------------------------
         # do the telluric correction (similar to APERO)
         e2ds_dict = tellu_clean.correct_tellu(inst, template_file,
-                                              e2ds_dict, spl_others, spl_water)
+                                              e2ds_dict, spl_others, spl_water,
+                                              model_dir)
         # ---------------------------------------------------------------------
         # write the tellu-cleaned file to disk
         inst.write_tellu_cleaned(tellu_clean_file, e2ds_dict, sci_hdr)
