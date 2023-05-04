@@ -1098,9 +1098,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     # loop around residual project tables
                     for key in inst.params['RESPROJ_TABLES']:
                         # add the model for this order
-                        model_ord = proj_model[key]['model'][order_num]
+                        pmodel_ord = proj_model[key]['model'][order_num]
                         # add to projection_model
-                        proj_model[key]['model_ord'] = model_ord
+                        proj_model[key]['model_ord'] = pmodel_ord
             else:
                 d2model_ord = None
                 d3model_ord = None
@@ -1165,11 +1165,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     # loop around residual project tables
                     for key in inst.params['RESPROJ_TABLES']:
                         # get model_order projection
-                        model_ord = proj_model[key]['model_ord']
+                        pmodel_ord = proj_model[key]['model_ord']
                         # work out the d_seg for this projection
-                        d_seg = model_ord[x_start: x_end + 1] * weight_mask
+                        pd_seg = pmodel_ord[x_start: x_end + 1] * weight_mask
                         # add to projection_model
-                        proj_model[key]['d_seg'] = d_seg
+                        proj_model[key]['d_seg'] = pd_seg
             else:
                 d2_seg, d3_seg = None, None
             # residual of the segment
@@ -1256,13 +1256,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     # loop around residual project tables
                     for key in inst.params['RESPROJ_TABLES']:
                         # get d_seg
-                        d_seg = proj_model[key]['d_seg']
+                        pd_seg = proj_model[key]['d_seg']
                         # calculate the bouchy equation
-                        bout = bouchy_equation_line(d_seg, diff_seg, mean_rms)
+                        pbout = bouchy_equation_line(pd_seg, diff_seg, mean_rms)
                         # push into the projection model
-                        d3key, sd3key = bout
-                        proj_model[key]['proj'][line_it] = d3key
-                        proj_model[key]['sproj'][line_it] = sd3key
+                        pd_key, psd_key = pbout
+                        proj_model[key]['proj'][line_it] = pd_key
+                        proj_model[key]['sproj'][line_it] = psd_key
             # only add stuff to the ref_table if on last iteration
             if flag_last_iter:
                 # -----------------------------------------------------------------
