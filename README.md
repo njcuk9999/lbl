@@ -20,6 +20,7 @@ version 0.52.0 (2023-05-08) compatible with SPIRou, NIRPS, HARPS, HARPS-N, ESPRE
 6. [Inputs/Outputs explained](#6-outputs-explained)
 7. [List of input parameters overridable in LBL](#7-list-of-input-parameters)
 8. [Cite](#8-cite)
+9. [GitHub](#9-github)
 
 ---
 
@@ -400,6 +401,21 @@ If you make use of the lbl code for you scientific publication, please cite the 
 [Link to publisher](https://doi.org/10.3847/1538-3881/ac7ce6)
 
 [Link to ADS](https://ui.adsabs.harvard.edu/abs/2022AJ....164...84A/abstract)
+
+
+[back to top](#contents)
+
+
+---
+
+# 9. GitHub
+
+If you wish to help develop we have a simple branch hierarchy:
+
+1. main branch (long term stable) - No one should make branches from this branch, or push to this branch
+2. developer branch (stable but up-to-date) - No one should make branches from this branch, or push to this branch
+3. working branch - This is where you should make your branches from and push to. Code will be tested and merged into 
+   the developer branch (and subsequently the main branch) from here.
 
 
 [back to top](#contents)
