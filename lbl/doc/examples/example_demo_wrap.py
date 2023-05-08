@@ -80,6 +80,26 @@ if __name__ == "__main__":
     rparams['SKIP_LBL_COMPUTE'] = True
     rparams['SKIP_LBL_COMPILE'] = True
     # -------------------------------------------------------------------------
+    # LBL settings
+    # -------------------------------------------------------------------------
+    # You can change any setting in parameters (or override those changed
+    #   by specific instruments) here
+    # -------------------------------------------------------------------------
+    # Advanced settings
+    #   Do not use without contacting the LBL developers
+    # -------------------------------------------------------------------------
+    # Dictionary of table name for the file used in the projection against the
+    #     derivative. Key is to output column name that will propagate into the
+    #     final RDB table and the value is the filename of the table. The table
+    #     must follow a number of characteristics explained on the LBL website.
+    # rparams['RESPROJ_TABLES'] = []]
+
+    # Rotational velocity parameters, should be a list of two values, one being
+    #     the epsilon and the other one being the vsini in km/s as defined in the
+    #     PyAstronomy.pyasl.rotBroad function
+    # rparams['ROTBROAD'] = []]
+
+    # -------------------------------------------------------------------------
     # Run the wrapper code using the above settings
     # -------------------------------------------------------------------------
     # run main

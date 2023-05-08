@@ -11,7 +11,7 @@ Created on 2021-03-16
 """
 import copy
 import warnings
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 from astropy import constants
@@ -50,6 +50,7 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # get speed of light
 speed_of_light_ms = constants.c.value
+speed_of_light = speed_of_light_ms / 1000.0
 
 
 # =============================================================================
@@ -831,6 +832,88 @@ def val_cheby(coeffs: np.ndarray, xvector: Union[np.ndarray, int, float],
     yvector = np.polynomial.chebyshev.chebval(domain_cheby, coeffs)
     # return y vector
     return yvector
+
+
+def rot_broad(wvl: np.ndarray, flux: np.ndarray, epsilon: float, vsini: float,
+              eff_wvl: Optional[float] = None) -> np.ndarray:
+    """
+    **********************************************************************
+    ***** THIS FUNCTION IS COPIED FROM PyAstronomy/pyasl/rotBroad.py *****
+    ***** AND MODIFIED TO USE THE SAME CONVENTIONS AS THE LBL CODE.  *****
+    ***** AND AVOID DEPENDENCIES ON OTHER PyAstronomy MODULES.       *****
+    **********************************************************************
+
+    Apply rotational broadening using a single broadening kernel.
+    The effect of rotational broadening on the spectrum is
+    wavelength dependent, because the Doppler shift depends
+    on wavelength. This function neglects this dependence, which
+    is weak if the wavelength range is not too large.
+    .. note:: numpy.convolve is used to carry out the convolution
+              and "mode = same" is used. Therefore, the output
+              will be of the same size as the input, but it
+              will show edge effects.
+    Parameters
+    ----------
+    wvl : array
+        The wavelength
+    flux : array
+        The flux
+    epsilon : float
+        Linear limb-darkening coefficient
+    vsini : float
+        Projected rotational velocity in km/s.
+    eff_wvl : float, optional
+        The wavelength at which the broadening
+        kernel is evaluated. If not specified,
+        the mean wavelength of the input will be
+        used.
+    Returns
+    -------
+    Broadened spectrum : array
+        The rotationally broadened output spectrum.
+    """
+    # Wavelength binsize
+    dwl = wvl[1] - wvl[0]
+    # deal with no effective wavelength
+    if eff_wvl is None:
+        eff_wvl = np.mean(wvl)
+    # The number of bins needed to create the broadening kernel
+    binn_half = int(np.floor(((vsini / speed_of_light) * eff_wvl / dwl))) + 1
+    gwvl = (np.arange(4*binn_half) - 2*binn_half) * dwl + eff_wvl
+    # Create the broadening kernel
+    dl = gwvl - eff_wvl
+    # -------------------------------------------------------------------------
+    # this bit is from _Gdl.gdl
+    #    Calculates the broadening profile.
+    # -------------------------------------------------------------------------
+    # set vc
+    vc = vsini / speed_of_light
+    # set eps (make sure it is a float)
+    eps = float(epsilon)
+    # calculate the max vc
+    dlmax = vc * eff_wvl
+    # generate the c1 and c2 parameters
+    c1 = 2 * (1 - eps) / (np.pi * dlmax * (1-eps/3))
+    c2 = eps / (2 * dlmax * (1 - eps/3))
+    # storage for the output
+    bprof = np.zeros(len(dl))
+    # Calculate the broadening profile
+    xvec = dl / dlmax
+    indi0 = np.where(np.abs(xvec) < 1.0)[0]
+    bprof[indi0] = c1 * np.sqrt(1 - xvec[indi0]**2) + c2 * (1 - xvec[indi0]**2)
+    # Correct the normalization for numeric accuracy
+    # The integral of the function is normalized, however, especially in the
+    # case of mild broadening (compared to the wavelength resolution), the
+    # discrete  broadening profile may no longer be normalized, which leads to
+    # a shift of the output spectrum, if not accounted for.
+    bprof /= (np.sum(bprof) * dwl)
+    # -------------------------------------------------------------------------
+    # Remove the zero entries
+    indi = np.where(bprof > 0.0)[0]
+    bprof = bprof[indi]
+    # -------------------------------------------------------------------------
+    result = np.convolve(flux, bprof, mode="same") * dwl
+    return result
 
 
 # =============================================================================

@@ -256,16 +256,25 @@ params.set(key='SAMPLE_WAVE_GRID_FILE', value=None, not_none=True,
                  '(saved to the calib dir)'))
 
 # Dictionary of table name for the file used in the projection against the
-# derivative. Key is to output column name that will propagated into the
-# finale RDB table and the value is the filename of the table. The table must
-# follow a number of caractistics explained on the LBL  website.
+#     derivative. Key is to output column name that will propagate into the
+#     final RDB table and the value is the filename of the table. The table
+#     must follow a number of characteristics explained on the LBL website.
 params.set(key='RESPROJ_TABLES', value=None, source=__NAME__,
            desc=('Dictionary of table name for the file used in the '
                  'projection against the derivative. Key is to output '
-                 'column name that will propagated into the finale RDB '
+                 'column name that will propagate into the finale RDB '
                  'table and the value is the filename of the table. The '
-                 'table must follow a number of caractistics explained '
+                 'table must follow a number of characteristics explained '
                  'on the LBL  website.'), not_none=True)
+
+# Rotational velocity parameters, should be a list of two values, one being
+#     the epsilon and the other one being the vsini in km/s as defined in the
+#     PyAstronomy.pyasl.rotBroad function
+params.set(key='ROTBROAD', value=None, source=__NAME__,
+           desc=('Rotational velocity parameters, should be a list of two '
+                 'values, one being the epsilon and the other one being the '
+                 'vsini in km/s as defined in the PyAstronomy.pyasl.rotBroad'
+                 'function.'), not_none=True)
 
 # =============================================================================
 # Define compil parameters

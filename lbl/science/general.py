@@ -255,7 +255,44 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # and values > 10x the median are rejected
     bad = (tflux < 0) | (tflux / np.nanmedian(tflux) > 10)
     tflux[bad] = np.nan
-
+    # -------------------------------------------------------------------------
+    # Deal with Rotational broadening
+    # -------------------------------------------------------------------------
+    if isinstance(inst.params['ROTBROAD'], tuple):
+        # Apply rotational broadening if inst.params['ROTBROAD'] is
+        # passed as an argument.
+        epsilon = inst.params['ROTBROAD'][0]
+        # TODO check that its 0-1 for epsilon
+        # TODO check that its 1-100 for vsini to avoid m/s rather than km/s
+        vsini = inst.params['ROTBROAD'][1]
+        # Calculate the step in the wavelength grid
+        step = (twave/np.gradient(twave))
+        sample_sampling = np.nanmedian(step/constants.c.to(uu.km/uu.s).value)
+        # calculate the pixel value for the broadening (the delta function
+        #     position)
+        npix = np.ceil(vsini/sample_sampling).astype(int)
+        # get the wave grid of the template that we are going to use
+        twave_tmp = np.linspace(twave[len(twave)//2-npix],
+                                twave[len(twave)//2+npix],
+                                2*npix+1)
+        # set up the delta value and populate the delta function at the
+        # point of interest
+        delta_tmp = np.zeros_like(twave_tmp)
+        delta_tmp[npix] = 1
+        # run the rotation kernel
+        rot_kernel = mp.rot_broad(twave_tmp, delta_tmp, epsilon, vsini)
+        # display a message that we have rotationally broadened the spectrum
+        msg = 'Rotational broadening epsilon = {}, vsini = {} km/s'
+        log.general(msg.format(*inst.params['ROTBROAD']))
+        # push the rotational broadening onto the flux using the rotational
+        #  broadening kernel
+        tflux2 = np.zeros_like(tflux)
+        for ioff in range(len(delta_tmp)):
+            tflux2+=np.roll(tflux, ioff-npix)*rot_kernel[ioff]
+        # set this to the flux we would have had from before
+        tflux = tflux2
+    # -------------------------------------------------------------------------
+    # copy the flux
     tflux0 = np.array(tflux)
     # -------------------------------------------------------------------------
     # work out the velocity scale
@@ -865,10 +902,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # each projection model has a model, proj and sproj
             #  we fill them with empty arrays to start with
             proj_model[key] = dict()
-            wave_tmp = np.full(len(ref_table['WAVE_START']), np.nan)
+            wave_len = len(ref_table['WAVE_START'])
             proj_model[key]['model'] = np.zeros_like(sci_data)
-            proj_model[key]['proj'] = wave_tmp
-            proj_model[key]['sproj'] = wave_tmp
+            proj_model[key]['proj'] = np.full(wave_len, np.nan)
+            proj_model[key]['sproj'] = np.full(wave_len, np.nan)
 
     # correction of the model from the low-passed ratio of science to model
     ratio = np.zeros_like(sci_data)
