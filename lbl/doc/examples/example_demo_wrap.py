@@ -25,7 +25,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # This is the instrument name
     #   Currently supported instruments are SPIROU, HARPS, ESPRESSO, CARMENES
-    #                                       NIRPS_HE, NIRPS_HA
+    #                                       NIRPS_HE, NIRPS_HA, HARPSN
     rparams['INSTRUMENT'] = 'HARPS'
     #   Data source must be as follows:
     #       SPIROU: APERO or CADC  (Currently only APERO is supported)
@@ -34,6 +34,7 @@ if __name__ == "__main__":
     #       CARMENES: None
     #       ESPRESSO: None
     #       HARPS: None
+    #       HARPSN: None
     rparams['DATA_SOURCE'] = 'None'
     # The data directory where all data is stored under - this should be an
     #    absolute path
