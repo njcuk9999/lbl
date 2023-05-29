@@ -1,7 +1,14 @@
 # lbl
 Line by line code for precision radial velocity described in [Artigau et al. 2022](https://www.doi.org/10.3847/1538-3881/ac7ce6)
 
-version 0.52.0 (2023-05-08) compatible with SPIRou, NIRPS, HARPS, HARPS-N, ESPRESSO, and CARMENES-VIS spectrographs
+version 0.53.0 (2023-05-08) compatible with:
+- SPIRou
+- NIRPS
+- HARPS
+- HARPS-N
+- ESPRESSO
+- CARMENES-VIS
+- Maroon-X
 
 ---
 

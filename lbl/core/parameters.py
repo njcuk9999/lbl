@@ -650,15 +650,15 @@ params.set(key='COMMAND_LINE_ARGS', value=None, source=__NAME__,
 # =============================================================================
 # Wave coefficients header key
 params.set(key='KW_WAVECOEFFS', value=None, source=__NAME__,
-           desc='Wave coefficients header key', not_none=True)
+           desc='Wave coefficients header key')
 
 # define wave num orders key in header
 params.set(key='KW_WAVEORDN', value=None, source=__NAME__,
-           desc='wave num orders key in header', not_none=True)
+           desc='wave num orders key in header')
 
 # define wave degree key in header
 params.set(key='KW_WAVEDEGN', value=None, source=__NAME__,
-           desc='wave degree key in header', not_none=True)
+           desc='wave degree key in header')
 
 # define the key that gives the mid exposure time in MJD
 params.set(key='KW_MID_EXP_TIME', value=None, source=__NAME__,

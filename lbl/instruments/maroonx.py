@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SPIRou instrument class here: instrument specific settings
+HARPS instrument class here: instrument specific settings
 
 Created on 2021-05-27
 
@@ -12,10 +12,12 @@ import glob
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import pandas as pd
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
+from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
@@ -25,7 +27,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.espresso.py'
+__NAME__ = 'instruments.harps.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -38,18 +40,35 @@ log = base_classes.log
 
 
 # =============================================================================
-# Define Spirou class
+# Define MaroonX class
 # =============================================================================
-class Espresso(Instrument):
-    def __init__(self, params: base_classes.ParamDict):
+class MaroonX(Instrument):
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
         # call to super function
-        super().__init__('ESPRESSO')
+        super().__init__(name)
         # set parameters for instrument
         self.params = params
         # override params
         self.param_override()
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_ESPRESSO.fits'
+        self.orders = None              # set in blue/red
+        self.norders = None             # set in blue/red
+        self.npixel = None              # set in blue/red
+        self.sci_header = None          # set in blue/red
+        self.default_template_name = None       # set in blue/red
+        # Question: Do we want 6?
+        self.sci_extension = 6
+        # Question: Why 3?
+        self.blaze_extension = 3
+        # dict of keys to turn from jd --> mjd
+        self.jd2mjd = dict()
+        self.jd2mjd['MJD_UTC_FLUXWEIGHTED_FRD'] = 'JD_UTC_FLUXWEIGHTED_FRD'
+        self.jd2mjd['MJD_UTC_FLUXWEIGHTED_PC'] = 'JD_UTC_FLUXWEIGHTED_PC'
+        self.jd2mjd['MJD_UTC_MIDPOINT'] = 'JD_UTC_MIDPOINT'
+        self.jd2mjd['MJD_UTC_START'] = 'JD_UTC_START'
+        # midpoint key
+        self.midpoint_key = 'MJD_UTC_FLUXWEIGHTED_FRD'
+        self.date_key = 'DATE-OBS'
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
@@ -62,11 +81,11 @@ class Espresso(Instrument):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.Espresso.override()'
+        func_name = __NAME__ + '.MaroonX.override()'
         # set parameters to update
-        self.params.set('INSTRUMENT', 'ESPRESSO', source=func_name)
+        self.params.set('INSTRUMENT', 'MAROONX', source=func_name)
         # define the default science input files
-        self.params.set('INPUT_FILE', 'ES_*.fits', source=func_name)
+        self.params.set('INPUT_FILE', '*_x_*.hd5', source=func_name)
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
@@ -75,42 +94,42 @@ class Espresso(Instrument):
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename
         self.params.set('DEFAULT_MASK_FILE', source=func_name,
-                        value=None)
+                        value='mdwarf_harps.fits')
         # define the High pass width in km/s
-        self.params.set('HP_WIDTH', 256, source=func_name)
+        self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
-        # Question: Espresso value?
+        # Question: HARPS value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define the plot order for the compute rv model plot
         self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MIN', 450, source=func_name)
+        self.params.set('COMPIL_WAVE_MIN', 400, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', 750, source=func_name)
+        self.params.set('COMPIL_WAVE_MAX', 700, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define min likelihood of correlation with BERV
         self.params.set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # define the CCF e-width to use for FP files
-        # Question: Espresso value?
-        self.params.set('COMPIL_FP_EWID', 3.0, source=func_name)
+        # Question: HARPS value?
+        self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define whether to add the magic "binned wavelength" bands rv
         self.params.set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
         # define the number of bins used in the magic "binned wavelength" bands
         self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.params.set('COMPILE_BINNED_BAND1', 'g', source=func_name)
+        self.params.set('COMPILE_BINNED_BAND1', 'r', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND2', 'r', source=func_name)
+        self.params.set('COMPILE_BINNED_BAND2', 'g', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND3', 'i', source=func_name)
+        self.params.set('COMPILE_BINNED_BAND3', 'r', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
-        self.params.set('COMPIL_SLOPE_REF_WAVE', 650, source=func_name)
+        self.params.set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_espresso.fits', source=func_name)
+                        'sample_wave_grid_harps.fits', source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
@@ -134,7 +153,7 @@ class Espresso(Instrument):
                               'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
-        self.params.set('MASK_SNR_MIN', value=20, source=func_name)
+        self.params.set('MASK_SNR_MIN', value=5, source=func_name)
         # Define the stellar model file name (using wget, with appropriate
         #     format  cards)
         self.params.set('STELLAR_MODEL_FILE', source=func_name,
@@ -158,16 +177,16 @@ class Espresso(Instrument):
         # define the dv offset for tellu-cleaning in km/s
         self.params.set('TELLUCLEAN_DV0', value=0, source=func_name)
         # Define the lower wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=550,
+        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=500,
                         source=func_name)
         # Define the upper wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=670,
+        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=700,
                         source=func_name)
         # Define whether to force using airmass from header
-        self.params.set('TELLUCLEAN_FORCE_AIRMASS', value=True,
+        self.params.set('TELLUCLEAN_FORCE_AIRMASS', value=False,
                         source=func_name)
         # Define the CCF scan range in km/s
-        self.params.set('TELLUCLEAN_CCF_SCAN_RANGE', value=150,
+        self.params.set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
                         source=func_name)
         # Define the maximum number of iterations for the tellu-cleaning loop
         self.params.set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
@@ -191,13 +210,13 @@ class Espresso(Instrument):
         self.params.set('TELLUCLEAN_RECENTER_CCF', value=False,
                         source=func_name)
         # Define whether to recenter the CCF of others on the first iteration
-        self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=True,
+        self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
                         source=func_name)
         # Define the default water absorption to use
-        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=5.0,
+        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
                         source=func_name)
         # Define the lower limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.05,
+        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
                         source=func_name)
         # Define the upper limit on valid exponent of water absorbers
         self.params.set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
@@ -208,70 +227,65 @@ class Espresso(Instrument):
         # Define the upper limit on valid exponent of other absorbers
         self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
+
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
+        self.params.set('KW_MID_EXP_TIME', self.midpoint_key,
                         source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'HIERARCH ESO QC BJD', source=func_name)
-        # define snr keyword
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER100 SNR',
-                        source=func_name)
+        self.params.set('KW_MJDATE', 'MJD_UTC_START', source=func_name)
+        # define snr keyword (set per arm)
+        self.params.set('KW_SNR', None, source=func_name)
         # define berv keyword
-        self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
-        # # define the Blaze calibration file
-        # self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
-        #                 source=func_name)
+        self.params.set('KW_BERV', 'BERV_FLUXWEIGHTED_FRD', source=func_name)
+        # define the Blaze calibration file
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO DRS BLAZE FILE',
+                        source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
+        self.params.set('KW_EXPTIME', 'HIERARCH ESO DET WIN1 DIT1',
                         source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS',
-                        ['HIERARCH ESO TEL1 AIRM START',
-                         'HIERARCH ESO TEL2 AIRM START',
-                         'HIERARCH ESO TEL3 AIRM START',
-                         'HIERARCH ESO TEL4 AIRM START'],
+        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
-        # define the human date of the observation
-        self.params.set('KW_DATE', 'DATE', source=func_name)
+        # define the human date of the observation (set in load_header)
+        self.params.set('KW_DATE', self.date_key, source=func_name)
         # define the tau_h20 of the observation
         self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
         self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO DPR TYPE',
                         source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL15 NAME',
+        self.params.set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
                         source=func_name)
         # define the original object name
         self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
                         source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        # TODO -> no equivalent in ESPRESSO
-        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
+        self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER100 SNR',
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO DRS SPE EXT SN47',
                         source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH ESO DRS BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        # TODO: how do we get the temperature for ESPRESSO?
+        # TODO: how do we get the temperature for HARPS?
         self.params.set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+                    extnum: int = 1, extname: str = None):
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to
@@ -280,18 +294,11 @@ class Espresso(Instrument):
         :param filename:
         :return:
         """
-        # get header
-        hdr = io.load_header(filename, kind, extnum, extname)
-        # convert header into dictionary
-        header_dict = dict()
-        # loop around keys and add them to the header dictionary
-        for key in hdr:
-            header_dict[key] = copy.deepcopy(hdr[key])
-        # return a dictionary
-        return header_dict
+        _ = filename, kind, extnum, extname
+        raise self._not_implemented('load_header')
 
     def mask_file(self, model_directory: str, mask_directory: str,
-                  required: bool = True) -> str:
+                  required: bool = True):
         """
         Make the absolute path for the mask file
 
@@ -331,7 +338,7 @@ class Espresso(Instrument):
         # return absolute path
         return abspath
 
-    def template_file(self, directory: str, required: bool = True) -> str:
+    def template_file(self, directory: str, required: bool = True):
         """
         Make the absolute path for the template file
 
@@ -340,22 +347,8 @@ class Espresso(Instrument):
 
         :return: absolute path to template file
         """
-        # deal with no object template
-        self._set_object_template()
-        # set template name
-        objname = self.params['OBJECT_TEMPLATE']
-        # get template file
-        if self.params['TEMPLATE_FILE'] is None:
-            basename = self.default_template_name.format(objname)
-        else:
-            basename = self.params['TEMPLATE_FILE']
-        # get absolute path
-        abspath = os.path.join(directory, basename)
-        # check that this file exists
-        if required:
-            io.check_file_exists(abspath)
-        # return absolute path
-        return abspath
+        _ = directory, required
+        raise self._not_implemented('template_file')
 
     def blaze_file(self, directory: str) -> Union[str, None]:
         """
@@ -377,7 +370,7 @@ class Espresso(Instrument):
         return abspath
 
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
-                   normalize: bool = True) -> Union[np.ndarray, None]:
+                   normalize: bool = True):
         """
         Load a blaze file
 
@@ -389,21 +382,8 @@ class Espresso(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
-        if filename is not None:
-            blaze, _ = io.load_fits(filename, kind='blaze fits file')
-            # deal with normalizing by order
-            if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
-            # return blaze
-            return blaze
-        else:
-            return None
+        _ = self, filename, normalize
+        raise self._not_implemented('load_blaze')
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
@@ -482,8 +462,9 @@ class Espresso(Instrument):
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
                                 sci_hdr: fits.Header,
-                                calib_directory: str, normalize: bool = True
-                                ) -> Tuple[np.ndarray, bool]:
+                                calib_directory: str,
+                                normalize: bool = True
+                                ):
         """
         Load the blaze file using a science file header
 
@@ -497,65 +478,15 @@ class Espresso(Instrument):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
-        # no blaze required - set to ones
-        blaze = np.ones_like(sci_image)
-        # do not require header or calib directory
-        _ = sci_hdr, calib_directory, normalize
-        # return blaze
-        return blaze, True
-
-    def no_blaze_corr(self, sci_image: np.ndarray,
-                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        If we do not have a blaze we need to create an artificial one so that
-        the s1d has a proper weighting
-
-        :param sci_image: the science image (will be unblazed corrected)
-        :param sci_wave: the wavelength solution for the science image
-
-        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
-        """
-        # get the wave centers for each order
-        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
-        # find the 'diffraction' order for a given 'on-detector' order
-        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
-        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
-        # ---------------------------------------------------------------------
-        # use the fit to get the blaze assuming a sinc**2 profile.
-        # The minima of a given order corresponds to the position of the
-        # consecutive orders
-        # ---------------------------------------------------------------------
-        # storage for the calculated blaze
-        blaze = np.zeros(sci_wave.shape)
-        # loop around each order
-        for order_num in range(sci_wave.shape[0]):
-            # get the wave grid for this order
-            owave = sci_wave[order_num]
-            # get the center of this order (with a small offset to avoid
-            #  a division by zero in the sinc at phase = 0
-            owave_cen = owave[len(owave) // 2] + 1e-6
-            # calculate the period of this order
-            period = owave_cen / np.polyval(dfit, 1 / owave)
-            # calculate the phase of the sinc**2
-            phase = np.pi * (owave - owave_cen) / period
-            # assume the sinc profile. There is a factor 2 difference in the
-            #   phase as the sinc is squared. sin**2 has a period that is a
-            #   factor of 2 shorter than the sin
-            blaze[order_num] = (np.sin(phase) / phase) ** 2
-        # un-correct the science image
-        sci_image = sci_image * blaze
-        # return un-corrected science image and the calculated blaze
-        return sci_image, blaze
+        _ = science_file, sci_image, sci_hdr, calib_directory, normalize
+        raise self._not_implemented('load_blaze_from_science')
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
                           header: Union[fits.Header, None] = None
                           ) -> np.ndarray:
         """
-        Get a wave solution from a file (for Espresso this is from the header)
+        Get a wave solution from a file (for HARPS this is from the header)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
@@ -566,18 +497,49 @@ class Espresso(Instrument):
 
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
-        # load wave map
-        wavemap = fits.getdata(science_filename, ext=4)
+        # get header keys
+        kw_wavecoeffs = self.params['KW_WAVECOEFFS']
+        kw_waveordn = self.params['KW_WAVEORDN']
+        kw_wavedegn = self.params['KW_WAVEDEGN']
         # ---------------------------------------------------------------------
-        # Espresso wave solution is in Angstrom - convert to nm for consistency
+        # get header
+        if header is None or data is None:
+            sci_data, sci_hdr = io.load_fits(science_filename,
+                                             'wave fits file')
+        else:
+            sci_data, sci_hdr = data, header
+        # ---------------------------------------------------------------------
+        # get the data shape
+        nby, nbx = sci_data.shape
+        # get xpix
+        xpix = np.arange(nbx)
+        # ---------------------------------------------------------------------
+        # get wave order from header
+        waveordn = io.get_hkey(sci_hdr, kw_waveordn, science_filename)
+        wavedegn = io.get_hkey(sci_hdr, kw_wavedegn, science_filename)
+        # get the wave 2d list
+        wavecoeffs = io.get_hkey_2d(sci_hdr, key=kw_wavecoeffs,
+                                    dim1=waveordn, dim2=wavedegn + 1,
+                                    filename=science_filename)
+        # ---------------------------------------------------------------------
+        # convert to wave map
+        wavemap = np.zeros([waveordn, nbx])
+        for order_num in range(waveordn):
+            wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1], xpix)
+        # ---------------------------------------------------------------------
+        # HARPS wave solution is in Angstrom - convert to nm for consistency
         wavemap = wavemap / 10.0
+        # ---------------------------------------------------------------------
+        # HARPS wave solution is in air - convert to vacuum
+        n_index = mp.air_index(wavemap)
+        wavemap = wavemap * n_index
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
 
     def load_bad_hdr_keys(self) -> Tuple[list, Any]:
         """
-        Load the bad values and bad key for Espresso -- not used currently
+        Load the bad values and bad key for HARPS -- not used currently
 
         :return: tuple, 1. the list of bad values, 2. the bad key in
                  a file header to check against bad values
@@ -594,8 +556,13 @@ class Espresso(Instrument):
 
         :return:
         """
-        # ESPRESSO data is always BERV corrected from the starting point
-        berv = 0.0
+        # get BERV header key
+        hdr_key = self.params['KW_BERV']
+        # BERV depends on whether object is FP or not
+        if 'FP' not in self.params['OBJECT_SCIENCE']:
+            berv = io.get_hkey(sci_hdr, hdr_key)
+        else:
+            berv = 0.0
         # return the berv measurement (in m/s)
         return berv
 
@@ -624,7 +591,7 @@ class Espresso(Instrument):
                 key = self.params[drs_key]
             else:
                 key = str(drs_key)
-
+            # get value from header
             value = sci_hdr.get(key, 'NULL')
             # add to tdict
             tdict = self.add_dict_list_value(tdict, drs_key, value)
@@ -641,10 +608,10 @@ class Espresso(Instrument):
         :return: tuple, 1. np.array of strings (the keys), 2. list of bools
                  the flags whether these keys should be used with FP files
         """
-        # these are defined in params
+        # there are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
-                    'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
+                    'KW_TAU_H2O', 'KW_TAU_OTHERS', 'KW_NITERATIONS',
 		            'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
@@ -656,13 +623,7 @@ class Espresso(Instrument):
             fp_flag = False
             # if key is in params we can add the value to keys
             if drs_key in self.params:
-                # need to deal with keys that define multiple drs keys
-                #   in this case use the original drs_key name
-                key = self.params[drs_key]
-                if isinstance(key, str):
-                    keys.append(key)
-                else:
-                    keys.append(drs_key)
+                keys.append(self.params[drs_key])
                 # we can also look for fp flag - this is either True or False
                 #    if True we skip this key for FP files - default is False
                 #    (i.e. not to skip)
@@ -712,7 +673,7 @@ class Espresso(Instrument):
         """
         # get keys from params
         kw_mjdmid = self.params['KW_MID_EXP_TIME']
-        kw_bjd = self.params['KW_BJD']
+        kw_bjd = self.params['KW_MID_EXP_TIME']
         # get mjdmid and bjd
         mid_exp_time = io.get_hkey(header, kw_mjdmid)
         bjd = io.get_hkey(header, kw_bjd)
@@ -742,7 +703,7 @@ class Espresso(Instrument):
         # return float plot date
         return float(plot_date)
 
-    def get_binned_parameters(self) -> Dict[str, list]:
+    def get_binned_parameters(self):
         """
         Defines a "binning dictionary" splitting up the array by:
 
@@ -756,37 +717,7 @@ class Espresso(Instrument):
 
         :return: dict, the binned dictionary
         """
-        # ---------------------------------------------------------------------
-        # define the band names
-        bands = ['u', 'g', 'r', 'i']
-
-        mid = np.array([354, 475, 752, 866], dtype=float)
-        # define the blue end of each band [nm]
-        blue_end = mid - np.array([100, 121 / 2, 277 / 2, 114 / 2], dtype=float)
-        # define the red end of each band [nm]
-        red_end = mid + np.array([121 / 2, 277 / 2, 114 / 2, 96 / 2], dtype=float)
-        # define whether we should use regions for each band
-        use_regions = [True, True, True, True]
-        # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
-        # ---------------------------------------------------------------------
-        # return all this information (in a dictionary)
-        binned = dict()
-        binned['bands'] = list(bands)
-        binned['blue_end'] = list(blue_end)
-        binned['red_end'] = list(red_end)
-        binned['region_names'] = list(region_names)
-        binned['region_low'] = list(region_low)
-        binned['region_high'] = list(region_high)
-        binned['use_regions'] = list(use_regions)
-        # ---------------------------------------------------------------------
-        # return this binning dictionary
-        return binned
+        raise self._not_implemented('get_binned_parameters')
 
     def get_epoch_groups(self, rdb_table: Table
                          ) -> Tuple[np.ndarray, np.ndarray]:
@@ -810,6 +741,469 @@ class Espresso(Instrument):
         # return the epoch groupings and epoch values
         return epoch_groups, epoch_values
 
+
+# =============================================================================
+# Define MaroonX Blue class
+# =============================================================================
+# noinspection PyPep8Naming
+class MaroonXBlue(MaroonX):
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
+        # get the name
+        if name is None:
+            name = 'MaroonXBlue'
+        # call to super function
+        super().__init__(params, name)
+        # set parameters for instrument
+        self.params = params
+        # override params
+        self.param_override()
+        # extra parameters (specific to instrument)
+        self.orders = np.arange(91, 125, 1).astype(int)[::-1]
+        self.norders = len(self.orders)
+        self.npixel = 3954
+        self.sci_header = 'header_blue'
+        self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
+        # define wave limits in nm
+        self.wavemin = 490.53
+        self.wavemax = 668.29
+
+    def param_override(self):
+        # set function name
+        func_name = __NAME__ + '.MaroonXBlue.param_override()'
+        # first run the inherited method
+        super().param_override()
+        # ---------------------------------------------------------------------
+        # set parameters to update
+        # ---------------------------------------------------------------------
+        # define snr keyword
+        self.params.set('KW_SNR', 'SNR_100', source=func_name)
+
+    # -------------------------------------------------------------------------
+    # INSTRUMENT SPECIFIC METHODS
+    # -------------------------------------------------------------------------
+    def load_header(self, filename: str, kind: str = 'fits file',
+                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+        """
+        Load a header into a dictionary (may not be a fits file)
+        We must push this to a dictinoary as not all instrument confirm to
+        a fits header
+
+        :param filename:
+        :return:
+        """
+        _ = kind, extnum, extname
+        # get header
+        store = pd.HDFStore(filename)
+        # deal with key not in store
+        if self.sci_header not in store:
+            emsg = 'Cannot find header in file {0} using key {1}'
+            eargs = [filename, self.sci_header]
+            raise LblException(emsg.format(*eargs))
+        # get the header
+        hdr_df = store[self.sci_header]
+        # convert header into dictionary
+        header_dict = dict()
+        # loop around keys and add them to the header dictionary
+        for key in hdr_df.index.values:
+            header_dict[key] = copy.deepcopy(hdr_df[key])
+        # close store
+        store.close()
+        # deal with jd to mjd keys
+        for key in self.jd2mjd:
+            okey = self.jd2mjd[key]
+            if okey in header_dict:
+                # calcualte the mjd value
+                mjdvalue = Time(header_dict[key], format='jd').mjd
+                # push back into header dictionary
+                header_dict[self.jd2mjd[key]] = mjdvalue
+        # add date
+        midpoint = Time(header_dict[self.midpoint_key], format='mjd')
+        header_dict[self.date_key] = midpoint.iso
+        # return a dictionary
+        return header_dict
+
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
+                   normalize: bool = True) -> Union[np.ndarray, None]:
+        """
+        Load a blaze file
+
+        :param filename: str, absolute path to filename
+        :param science_File: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: data (np.ndarray) or None
+        """
+        _ = self
+        if filename is not None:
+            store = pd.HDFStore(filename)
+            # deal with not having blaze_blue in HDFstore
+            if 'blaze_blue' not in store:
+                emsg = 'blaze_blue is not in HDFStore for {0}'
+                eargs = [filename]
+                raise LblException(emsg.format(*eargs))
+            # get the blaze blue from store
+            blaze_blue = store['blaze_blue'][self.blaze_extension]
+            # make blaze numpy array
+            blaze = np.ones((self.norders, self.npixel))
+            # loop around orders and populate blaze
+            for it, order_num in enumerate(self.orders):
+                blaze[it] = blaze_blue[order_num]
+            # close store
+            store.close()
+            # deal with normalizing per order
+            if normalize:
+                # normalize blaze per order
+                for order_num in range(blaze.shape[0]):
+                    # normalize by the 90% percentile
+                    norm = np.nanpercentile(blaze[order_num], 90)
+                    # apply to blaze
+                    blaze[order_num] = blaze[order_num] / norm
+            # return blaze
+            return blaze
+        else:
+            return None
+
+    def template_file(self, directory: str, required: bool = True) -> str:
+        """
+        Make the absolute path for the template file
+
+        :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
+
+        :return: absolute path to template file
+        """
+        # deal with no object template
+        self._set_object_template()
+        # set template name
+        objname = self.params['OBJECT_TEMPLATE']
+        # get template file
+        if self.params['TEMPLATE_FILE'] is None:
+            basename = self.default_template_name.format(objname)
+        else:
+            basename = self.params['TEMPLATE_FILE']
+        # get absolute path
+        abspath = os.path.join(directory, basename)
+        # check that this file exists
+        if required:
+            io.check_file_exists(abspath)
+        # return absolute path
+        return abspath
+
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[fits.Header, None] = None
+                          ) -> np.ndarray:
+        """
+        Get a wave solution from a file (for MAROONX)
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
+        _ = data, header
+        # deal with no science file
+        if science_filename is None:
+            emsg = 'Must set science_filename for get_wave_solution()'
+            raise LblException(emsg)
+        # load store
+        store = pd.HDFStore(science_filename)
+        # deal with not having blaze_blue in HDFstore
+        if 'spec_blue' not in store:
+            emsg = 'spec_blue is not in HDFStore for {0}'
+            eargs = [science_filename]
+            raise LblException(emsg.format(*eargs))
+        # get the blaze blue from store
+        wavelengths_blue = store['spec_blue']['wavelengths'][self.sci_extension]
+        # make blaze numpy array
+        wavemap = np.ones((self.norders, self.npixel))
+        # loop around orders and populate blaze
+        for it, order_num in enumerate(self.orders):
+            wavemap[it] = wavelengths_blue[order_num]
+        # close store
+        store.close()
+        # ---------------------------------------------------------------------
+        # return wave solution map
+        return wavemap
+
+    def get_binned_parameters(self) -> Dict[str, list]:
+        """
+        Defines a "binning dictionary" splitting up the array by:
+
+        Each binning dimension has [str names, start value, end value]
+
+        - bands  (in wavelength)
+            [bands / blue_end / red_end]
+
+        - cross order regions (in pixels)
+            [region_names / region_low / region_high]
+
+        :return: dict, the binned dictionary
+        """
+        # ---------------------------------------------------------------------
+        # define the band names
+        bands = ['u', 'g', 'r']
+        # define the blue end of each band [nm]
+        blue_end = [360.804, 467.178, 614.112]
+        # define the red end of each band [nm]
+        red_end = [402.823, 554.926, 698.914]
+        # define whether we should use regions for each band
+        use_regions = [True, True, True]
+        # ---------------------------------------------------------------------
+        # define the region names (suffices)
+        region_names = ['', '_0-2044', '_2044-4088']
+        # lower x pixel bin point [pixels]
+        region_low = [0, 0, 2048]
+        # upper x pixel bin point [pixels]
+        region_high = [4096, 2048, 4096]
+        # ---------------------------------------------------------------------
+        # return all this information (in a dictionary)
+        binned = dict()
+        binned['bands'] = list(bands)
+        binned['blue_end'] = list(blue_end)
+        binned['red_end'] = list(red_end)
+        binned['region_names'] = list(region_names)
+        binned['region_low'] = list(region_low)
+        binned['region_high'] = list(region_high)
+        binned['use_regions'] = list(use_regions)
+        # ---------------------------------------------------------------------
+        # return this binning dictionary
+        return binned
+
+# =============================================================================
+# Define MaroonX Blue class
+# =============================================================================
+# noinspection PyPep8Naming
+class MaroonXRed(MaroonX):
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
+        # get the name
+        if name is None:
+            name = 'MaroonXRed'
+        # call to super function
+        super().__init__(params, name)
+        # set parameters for instrument
+        self.params = params
+        # override params
+        self.param_override()
+        # extra parameters (specific to instrument)
+        self.orders = np.arange(67, 95, 1).astype(int)[::-1]
+        self.norders = len(self.orders)
+        self.npixel = 4036
+        self.sci_header = 'header_blue'
+        self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
+        # define wave limits in nm
+        self.wavemin = 646.88
+        self.wavemax = 907.53
+
+    def param_override(self):
+        # set function name
+        func_name = __NAME__ + '.MaroonXBlue.param_override()'
+        # first run the inherited method
+        super().param_override()
+        # ---------------------------------------------------------------------
+        # set parameters to update
+        # ---------------------------------------------------------------------
+        # define snr keyword
+        self.params.set('KW_SNR', 'SNR_74', source=func_name)
+
+    # -------------------------------------------------------------------------
+    # INSTRUMENT SPECIFIC METHODS
+    # -------------------------------------------------------------------------
+    def load_header(self, filename: str, kind: str = 'fits file',
+                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+        """
+        Load a header into a dictionary (may not be a fits file)
+        We must push this to a dictinoary as not all instrument confirm to
+        a fits header
+
+        :param filename:
+        :return:
+        """
+        _ = kind, extnum, extname
+        # get header
+        store = pd.HDFStore(filename)
+        # deal with key not in store
+        if self.sci_header not in store:
+            emsg = 'Cannot find header in file {0} using key {1}'
+            eargs = [filename, self.sci_header]
+            raise LblException(emsg.format(*eargs))
+        # get the header
+        hdr_df = store[self.sci_header]
+        # convert header into dictionary
+        header_dict = dict()
+        # loop around keys and add them to the header dictionary
+        for key in hdr_df.index.values:
+            header_dict[key] = copy.deepcopy(hdr_df[key])
+        # close store
+        store.close()
+        # deal with jd to mjd keys
+        for key in self.jd2mjd:
+            okey = self.jd2mjd[key]
+            if okey in header_dict:
+                # calcualte the mjd value
+                mjdvalue = Time(header_dict[key], format='jd').mjd
+                # push back into header dictionary
+                header_dict[self.jd2mjd[key]] = mjdvalue
+        # add date
+        midpoint = Time(header_dict[self.midpoint_key], format='mjd')
+        header_dict[self.date_key] = midpoint.iso
+        # return a dictionary
+        return header_dict
+
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
+                   normalize: bool = True) -> Union[np.ndarray, None]:
+        """
+        Load a blaze file
+
+        :param filename: str, absolute path to filename
+        :param science_File: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: data (np.ndarray) or None
+        """
+        _ = self
+        if filename is not None:
+            store = pd.HDFStore(filename)
+            # deal with not having blaze_blue in HDFstore
+            if 'blaze_red' not in store:
+                emsg = 'blaze_red is not in HDFStore for {0}'
+                eargs = [filename]
+                raise LblException(emsg.format(*eargs))
+            # get the blaze blue from store
+            blaze_red = store['blaze_red'][self.blaze_extension]
+            # make blaze numpy array
+            blaze = np.ones((self.norders, self.npixel))
+            # loop around orders and populate blaze
+            for it, order_num in enumerate(self.orders):
+                blaze[it] = blaze_red[order_num]
+            # close store
+            store.close()
+            # deal with normalizing per order
+            if normalize:
+                # normalize blaze per order
+                for order_num in range(blaze.shape[0]):
+                    # normalize by the 90% percentile
+                    norm = np.nanpercentile(blaze[order_num], 90)
+                    # apply to blaze
+                    blaze[order_num] = blaze[order_num] / norm
+            # return blaze
+            return blaze
+        else:
+            return None
+
+    def template_file(self, directory: str, required: bool = True) -> str:
+        """
+        Make the absolute path for the template file
+
+        :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
+
+        :return: absolute path to template file
+        """
+        # deal with no object template
+        self._set_object_template()
+        # set template name
+        objname = self.params['OBJECT_TEMPLATE']
+        # get template file
+        if self.params['TEMPLATE_FILE'] is None:
+            basename = self.default_template_name.format(objname)
+        else:
+            basename = self.params['TEMPLATE_FILE']
+        # get absolute path
+        abspath = os.path.join(directory, basename)
+        # check that this file exists
+        if required:
+            io.check_file_exists(abspath)
+        # return absolute path
+        return abspath
+
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[fits.Header, None] = None
+                          ) -> np.ndarray:
+        """
+        Get a wave solution from a file (for MAROONX)
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
+        _ = data, header
+        # deal with no science file
+        if science_filename is None:
+            emsg = 'Must set science_filename for get_wave_solution()'
+            raise LblException(emsg)
+        # load store
+        store = pd.HDFStore(science_filename)
+        # deal with not having blaze_blue in HDFstore
+        if 'spec_red' not in store:
+            emsg = 'spec_red is not in HDFStore for {0}'
+            eargs = [science_filename]
+            raise LblException(emsg.format(*eargs))
+        # get the blaze blue from store
+        wavelengths_blue = store['spec_red']['wavelengths'][self.sci_extension]
+        # make blaze numpy array
+        wavemap = np.ones((self.norders, self.npixel))
+        # loop around orders and populate blaze
+        for it, order_num in enumerate(self.orders):
+            wavemap[it] = wavelengths_blue[order_num]
+        # close store
+        store.close()
+        # ---------------------------------------------------------------------
+        # return wave solution map
+        return wavemap
+
+    def get_binned_parameters(self) -> Dict[str, list]:
+        """
+        Defines a "binning dictionary" splitting up the array by:
+
+        Each binning dimension has [str names, start value, end value]
+
+        - bands  (in wavelength)
+            [bands / blue_end / red_end]
+
+        - cross order regions (in pixels)
+            [region_names / region_low / region_high]
+
+        :return: dict, the binned dictionary
+        """
+        # ---------------------------------------------------------------------
+        # define regions, and blue/red band ends
+        bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
+        bands, blue_end, red_end, use_regions = bout
+        # ---------------------------------------------------------------------
+        # define the region names (suffices)
+        region_names = ['', '_0-2018', '_2018-4036']
+        # lower x pixel bin point [pixels]
+        region_low = [0, 0, 2018]
+        # upper x pixel bin point [pixels]
+        region_high = [4036, 2018, 4096]
+        # ---------------------------------------------------------------------
+        # return all this information (in a dictionary)
+        binned = dict()
+        binned['bands'] = list(bands)
+        binned['blue_end'] = list(blue_end)
+        binned['red_end'] = list(red_end)
+        binned['region_names'] = list(region_names)
+        binned['region_low'] = list(region_low)
+        binned['region_high'] = list(region_high)
+        binned['use_regions'] = list(use_regions)
+        # ---------------------------------------------------------------------
+        # return this binning dictionary
+        return binned
 
 # =============================================================================
 # Start of code

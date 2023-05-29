@@ -7,6 +7,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+import copy
 import glob
 import os
 import shutil
@@ -59,6 +60,8 @@ class NIRPS(Instrument):
         self.params = params
         # override params
         self.param_override()
+        # extra parameters (specific to instrument)
+        self.default_template_name = None      # set in child classes
 
     # -------------------------------------------------------------------------
     # NIRPS_HA SPECIFIC PARAMETERS
@@ -1136,6 +1139,8 @@ class NIRPS_HA(NIRPS):
         self.params = params
         # override params
         self.param_override()
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_nirps_ha.fits'
 
     def param_override(self):
         """
@@ -1170,6 +1175,8 @@ class NIRPS_HE(NIRPS):
         self.params = params
         # override params
         self.param_override()
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_nirps_he.fits'
 
     def param_override(self):
         """
@@ -1209,6 +1216,8 @@ class NIRPS_HA_ESO(NIRPS_HA):
         self.params = params
         # override params
         self.param_override()
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_NIRPS_HA_ESO.fits'
 
     def param_override(self):
         """
@@ -1295,6 +1304,29 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # define the wave solution polynomial type (Chebyshev or numpy)
         self.params.set('WAVE_POLY_TYPE', value='numpy', source=func_name)
 
+    # -------------------------------------------------------------------------
+    # INSTRUMENT SPECIFIC METHODS
+    # -------------------------------------------------------------------------
+    def load_header(self, filename: str, kind: str = 'fits file',
+                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+        """
+        Load a header into a dictionary (may not be a fits file)
+        We must push this to a dictinoary as not all instrument confirm to
+        a fits header
+
+        :param filename:
+        :return:
+        """
+        # get header
+        hdr = io.load_header(filename, kind, extnum, extname)
+        # convert header into dictionary
+        header_dict = dict()
+        # loop around keys and add them to the header dictionary
+        for key in hdr:
+            header_dict[key] = copy.deepcopy(hdr[key])
+        # return a dictionary
+        return header_dict
+
     def template_file(self, directory: str, required: bool = True) -> str:
         """
         Make the absolute path for the template file
@@ -1310,7 +1342,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_{0}_NIRPS_HA_ESO.fits'.format(objname)
+            basename = self.default_template_name.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path
@@ -1555,6 +1587,8 @@ class NIRPS_HE_ESO(NIRPS_HE):
         self.params = params
         # override params
         self.param_override()
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_NIRPS_HE_ESO.fits'
 
     def param_override(self):
         """
@@ -1564,7 +1598,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.NIRPS_HE_ESO.override()'
+        func_name = __NAME__ + '.NIRPS_HE_ESO.param_override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------
@@ -1656,7 +1690,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_{0}_NIRPS_HE_ESO.fits'.format(objname)
+            basename = self.default_template_name.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path

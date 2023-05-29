@@ -7,6 +7,7 @@ Created on 2021-05-27
 
 @author: cook
 """
+import copy
 import glob
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -47,9 +48,11 @@ class Harps(Instrument):
         self.params = params
         # override params
         self.param_override()
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_HARPS.fits'
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC PARAMETERS
+    # INSTRUMENT SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
@@ -270,8 +273,28 @@ class Harps(Instrument):
         self.params.set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC METHODS
+    # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
+    def load_header(self, filename: str, kind: str = 'fits file',
+                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+        """
+        Load a header into a dictionary (may not be a fits file)
+        We must push this to a dictinoary as not all instrument confirm to
+        a fits header
+
+        :param filename:
+        :return:
+        """
+        # get header
+        hdr = io.load_header(filename, kind, extnum, extname)
+        # convert header into dictionary
+        header_dict = dict()
+        # loop around keys and add them to the header dictionary
+        for key in hdr:
+            header_dict[key] = copy.deepcopy(hdr[key])
+        # return a dictionary
+        return header_dict
+
     def mask_file(self, model_directory: str, mask_directory: str,
                   required: bool = True):
         """
@@ -328,7 +351,7 @@ class Harps(Instrument):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_{0}_HARPS.fits'.format(objname)
+            basename = self.default_template_name.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path

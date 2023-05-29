@@ -7,6 +7,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+import copy
 import glob
 import os
 import shutil
@@ -71,6 +72,26 @@ class Instrument:
     # -------------------------------------------------------------------------
     # Common instrument methods (should be overridden if instrument requires)
     # -------------------------------------------------------------------------
+    def load_header(self, filename: str, kind: str = 'fits file',
+                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+        """
+        Load a header into a dictionary (may not be a fits file)
+        We must push this to a dictinoary as not all instrument confirm to
+        a fits header
+
+        :param filename:
+        :return:
+        """
+        # get header
+        hdr = io.load_header(filename, kind, extnum, extname)
+        # convert header into dictionary
+        header_dict = dict()
+        # loop around keys and add them to the header dictionary
+        for key in hdr:
+            header_dict[key] = copy.deepcopy(hdr[key])
+        # return a dictionary
+        return header_dict
+
     def load_mask(self, filename: str) -> Table:
         """
         Load a mask

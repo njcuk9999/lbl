@@ -15,14 +15,14 @@ from astropy.time import Time, TimeDelta
 # Define variables
 # =============================================================================
 __NAME__: str = 'base.py'
-__version__: str = '0.52.0'
-__date__: str = '2023-05-08'
+__version__: str = '0.53.0'
+__date__: str = '2023-05-029'
 __authors__: str = 'Neil Cook, Etienne Artigau, Thomas Vandal, Charles Cadieux'
 __package__: str = 'lbl'
 
 # currently supported instruments
 INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
-               'HARPSN']
+               'NIRPS_HE', 'HARPSN', 'MAROONX']
 
 # log variables
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')
@@ -31,6 +31,7 @@ LOG_FORMAT = '%(asctime)s %(message)s'
 __now__ = Time.now()
 AstropyTime = Time
 AstropyTimeDelta = TimeDelta
+
 
 
 # must define the tqdm module as we need to turn it off in certain circumstances

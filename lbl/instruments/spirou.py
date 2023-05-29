@@ -7,11 +7,12 @@ Created on 2021-03-15
 
 @author: cook
 """
+import copy
 import glob
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import requests
@@ -55,7 +56,7 @@ class Spirou(Instrument):
         self.param_override()
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC PARAMETERS
+    # INSTRUMENT SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
@@ -252,8 +253,28 @@ class Spirou(Instrument):
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC METHODS
+    # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
+    def load_header(self, filename: str, kind: str = 'fits file',
+                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+        """
+        Load a header into a dictionary (may not be a fits file)
+        We must push this to a dictinoary as not all instrument confirm to
+        a fits header
+
+        :param filename:
+        :return:
+        """
+        # get header
+        hdr = io.load_header(filename, kind, extnum, extname)
+        # convert header into dictionary
+        header_dict = dict()
+        # loop around keys and add them to the header dictionary
+        for key in hdr:
+            header_dict[key] = copy.deepcopy(hdr[key])
+        # return a dictionary
+        return header_dict
+
     def get_extname(self, kind: str) -> Optional[str]:
         """
         Get the extension name based on the kind and params['FIBER'] key
