@@ -7,7 +7,6 @@ Created on 2021-03-15
 
 @author: cook
 """
-import copy
 import glob
 import os
 import shutil
@@ -62,7 +61,7 @@ class NIRPS(Instrument):
         # override params
         self.param_override()
         # extra parameters (specific to instrument)
-        self.default_template_name = None      # set in child classes
+        self.default_template_name = None  # set in child classes
 
     # -------------------------------------------------------------------------
     # NIRPS_HA SPECIFIC PARAMETERS
@@ -268,7 +267,8 @@ class NIRPS(Instrument):
         """
         Make the absolute path for the mask file
 
-        :param directory: str, the directory the file is located at
+        :param model_directory: str, the directory the model is located at
+        :param mask_directory: str, the directory the mask should be copied to
         :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to mask file
@@ -1166,7 +1166,7 @@ class NIRPS_HA(NIRPS):
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid_nirps_ha.fits', source=func_name)
-        
+
     def get_binned_parameters(self) -> Dict[str, list]:
         """
         Defines a "binning dictionary" splitting up the array by:
@@ -1206,6 +1206,7 @@ class NIRPS_HA(NIRPS):
         # return this binning dictionary
         return binned
 
+
 # noinspection PyPep8Naming
 class NIRPS_HE(NIRPS):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
@@ -1223,7 +1224,7 @@ class NIRPS_HE(NIRPS):
         # define wave limits in nm
         self.wavemin = 965.827
         self.wavemax = 1951.499
-        
+
     def param_override(self):
         """
         Parameter override for NIRPS_HA ESO parameters
@@ -1284,6 +1285,7 @@ class NIRPS_HE(NIRPS):
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned
+
 
 # =============================================================================
 # Define NIRPS ESO class - inherit from spirou
@@ -1695,6 +1697,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned
+
 
 # noinspection PyPep8Naming
 class NIRPS_HE_ESO(NIRPS_HE):
@@ -2126,6 +2129,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned
+
 
 # =============================================================================
 # Start of code

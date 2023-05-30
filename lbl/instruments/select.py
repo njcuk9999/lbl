@@ -87,6 +87,7 @@ InstDict['HARPSN']['None'] = harpsn.HarpsN
 InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
 
+
 # =============================================================================
 # Define functions
 # =============================================================================
@@ -267,7 +268,7 @@ def load_instrument(args: ParamDict,
                 'command line)')
         raise base_classes.LblException(emsg)
     if 'DATA_SOURCE' not in args:
-        emsg = ('Data source must be defined (yaml, input or command line)')
+        emsg = 'Data source must be defined (yaml, input or command line)'
         raise base_classes.LblException(emsg)
     # set instrument
     instrument = args['INSTRUMENT']
@@ -323,7 +324,9 @@ def make_all_directories(inst: Union[InstrumentsType],
     """
     Make all directories and return directory parameter dictionary
 
-    :param inst:
+    :param inst: Instrument instance
+    :param skip_obj: bool, if True skip making the OBJ directory
+
     :return:
     """
     # set fucntion name

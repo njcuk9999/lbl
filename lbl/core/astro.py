@@ -17,7 +17,6 @@ from typing import List, Tuple
 # =============================================================================
 
 
-
 # =============================================================================
 # Define class
 # =============================================================================
@@ -27,22 +26,23 @@ class Band:
     max: float = None
     mean: float = None
 
-    def __init__(self, label, min=None, max=None, mean=None, ref=None):
+    def __init__(self, label, minimum=None, maximum=None, mean=None, ref=None):
         self.name = label
-        self.min = min
-        self.max = max
+        self.minimum = minimum
+        self.maximum = maximum
         self.mean = mean
         self.ref = ref
+
 
 # =============================================================================
 # Define functions
 # =============================================================================
-def choose_bands(bands: List[Band], wavemin: float, wavemax: float
+def choose_bands(bandobjs: List[Band], wavemin: float, wavemax: float
                  ) -> Tuple[List[str], List[float], List[float], List[bool]]:
     """
     Choose bands to use for a given wavelength range
 
-    :param bands: list of bands
+    :param bandobjs: list of bands
     :param wavemin: float, the minimum wavelength in nm
     :param wavemax: float, the maximum wavelength in nm
     :return:
@@ -52,7 +52,7 @@ def choose_bands(bands: List[Band], wavemin: float, wavemax: float
     red_end = []
     use_regions = []
     # loop around bands
-    for band in bands:
+    for band in bandobjs:
         cond = band.min > wavemin
         cond &= band.max < wavemax
         # only add if within limits
@@ -69,28 +69,27 @@ def choose_bands(bands: List[Band], wavemin: float, wavemax: float
 # Define bands using
 #    http://svo2.cab.inta-csic.es/svo/theory/fps3/index.php?mode=browse
 # =============================================================================
-uband = Band('u', min=305.511, max=403.064, mean=3572.18,
+uband = Band('u', minimum=305.511, maximum=403.064, mean=3572.18,
              ref='SDSS')
-gband = Band('g', min=379.764, max=555.304, mean=4750.82,
+gband = Band('g', minimum=379.764, maximum=555.304, mean=4750.82,
              ref='SDSS')
-rband = Band('r', min=541.823, max=699.442, mean=6204.29,
-                ref='SDSS')
-iband = Band('i', min=669.241, max=840.032, mean=7519.27,
-                ref='SDSS')
-zband = Band('z', min=796.470, max=1087.333, mean=8992.26,
-                ref='SDSS')
-yband = Band('y', min=965.000, max=1195.000, mean=1080.00,
-                ref='MKO/NSFCam')
-jband = Band('J', min=1175.00, max=1335.00, mean=1255.00,
-                ref='MKO/NSFCam')
-hband = Band('H', min=1525.00, max=1665.00, mean=1595.00,
-                ref='MKO/NSFCam')
-kband = Band('K', min=2025.00, max=2265.00, mean=2145.00,
-                ref='MKO/NSFCam')
+rband = Band('r', minimum=541.823, maximum=699.442, mean=6204.29,
+             ref='SDSS')
+iband = Band('i', minimum=669.241, maximum=840.032, mean=7519.27,
+             ref='SDSS')
+zband = Band('z', minimum=796.470, maximum=1087.333, mean=8992.26,
+             ref='SDSS')
+yband = Band('y', minimum=965.000, maximum=1195.000, mean=1080.00,
+             ref='MKO/NSFCam')
+jband = Band('J', minimum=1175.00, maximum=1335.00, mean=1255.00,
+             ref='MKO/NSFCam')
+hband = Band('H', minimum=1525.00, maximum=1665.00, mean=1595.00,
+             ref='MKO/NSFCam')
+kband = Band('K', minimum=2025.00, maximum=2265.00, mean=2145.00,
+             ref='MKO/NSFCam')
 
 # add all bands
 bands = [uband, gband, rband, iband, zband, yband, jband, hband, kband]
-
 
 # =============================================================================
 # Start of code

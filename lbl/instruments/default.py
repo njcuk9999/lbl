@@ -7,7 +7,6 @@ Created on 2021-03-15
 
 @author: cook
 """
-import copy
 import glob
 import os
 import shutil
@@ -55,8 +54,8 @@ class Instrument:
         #   by at least one child class
         self.orders: Optional[List[int]] = None
         self.norders: Optional[int] = None
-        self.npixel =  Optional[int] = None
-        self.sci_header =  Optional[str] = None
+        self.npixel = Optional[int] = None
+        self.sci_header = Optional[str] = None
         self.default_template_name = Optional[str] = None
         # define wave limits in nm
         self.wavemin = Optional[float] = None
@@ -455,8 +454,8 @@ class Instrument:
 
         :param template_file: str, the file and path to write to
         :param props: dict, the template columns
-        :param sci_hdr: fits Header, an input file header to copy the header
-                        from to the new template file
+        :param sci_hdict: fits Header, an input file header to copy the header
+                          from to the new template file
         :param sci_table: dict, the science table in dictionary form
         :return:
         """
@@ -505,8 +504,8 @@ class Instrument:
 
         :param write_tellu_file: str, the file and path to write to
         :param props: dictionnary output from the TELLUCLEANed code
-        :param sci_hdr: fits Header, an input file header to copy the header
-                        from to the new template file
+        :param sci_hdict: fits Header, an input file header to copy the header
+                          from to the new template file
         :return:
         """
         # convert hdict to header
@@ -564,8 +563,8 @@ class Instrument:
         :param pos_mask: np.array, the positive weights mask
         :param neg_mask: np.array, the negative weights mask
         :param sys_vel: float, the systemic velocity for the object
-        :param template_hdr: io.LBLHeader, the template header (to be copied
-                             to the template)
+        :param template_hdict: io.LBLHeader, the template header (to be copied
+                               to the template)
 
         :return:
         """
@@ -657,7 +656,8 @@ class Instrument:
         """
         Make the absolute path for the mask file
 
-        :param directory: str, the directory the file is located at
+        :param model_directory: str, the directory the model is located at
+        :param mask_directory: str, the directory the mask should be copied to
         :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to mask file
@@ -694,7 +694,7 @@ class Instrument:
         Load a blaze file
 
         :param filename: str, absolute path to filename
-        :param science_File: str, a science file (to load the wave solution
+        :param science_file: str, a science file (to load the wave solution
                              from) we expect this science file wave solution
                              to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
@@ -712,7 +712,7 @@ class Instrument:
         Note data should be a 2D array (even if data is 1D)
         Treat 1D data as a single order?
 
-        :param filename: str, absolute path to filename
+        :param science_file: str, absolute path to filename
 
         :return: tuple, data (np.ndarray) and header (io.LBLHeader)
         """

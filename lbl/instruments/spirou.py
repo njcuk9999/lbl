@@ -7,16 +7,14 @@ Created on 2021-03-15
 
 @author: cook
 """
-import copy
 import glob
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import requests
-from astropy.io import fits
 from astropy.table import Table
 
 from lbl.core import base
@@ -289,7 +287,8 @@ class Spirou(Instrument):
         """
         Make the absolute path for the mask file
 
-        :param directory: str, the directory the file is located at
+        :param model_directory: str, the directory the model is located at
+        :param mask_directory: str, the directory the mask should be copied to
         :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to mask file
@@ -451,7 +450,7 @@ class Spirou(Instrument):
             # return numpy array of files
             return files
 
-    def load_science_header(self, science_file: str) -> Dict[str, Any]:
+    def load_science_header(self, science_file: str) -> io.LBLHeader:
         """
         Load science file header
 
@@ -562,8 +561,8 @@ class Spirou(Instrument):
         wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename)
         # get the wave 2d list
         wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
-                                    dim1=waveordn, dim2=wavedegn + 1,
-                                    filename=science_filename)
+                                         dim1=waveordn, dim2=wavedegn + 1,
+                                         filename=science_filename)
         # ---------------------------------------------------------------------
         # convert to wave map
         wavemap = np.zeros([waveordn, nbx])
@@ -1217,7 +1216,7 @@ class SpirouCADC(Spirou):
         return f'{kind}{fiber}'
 
     def load_science_file(self, science_file: str
-                          ) -> Tuple[np.ndarray, Dict[str, Any]]:
+                          ) -> Tuple[np.ndarray, io.LBLHeader]:
         """
         Load science data and header
 

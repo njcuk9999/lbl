@@ -7,7 +7,6 @@ Created on 2021-05-27
 
 @author: cook
 """
-import copy
 import glob
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -294,7 +293,8 @@ class Espresso(Instrument):
         """
         Make the absolute path for the mask file
 
-        :param directory: str, the directory the file is located at
+        :param model_directory: str, the directory the model is located at
+        :param mask_directory: str, the directory the mask should be copied to
         :param required: bool, if True checks that file exists on disk
 
         :return: absolute path to mask file
@@ -381,7 +381,7 @@ class Espresso(Instrument):
         Load a blaze file
 
         :param filename: str, absolute path to filename
-        :param science_File: str, a science file (to load the wave solution
+        :param science_file: str, a science file (to load the wave solution
                              from) we expect this science file wave solution
                              to be the wave solution required for the blaze
         :param normalize: bool, if True normalized the blaze per order
@@ -644,7 +644,7 @@ class Espresso(Instrument):
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
                     'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
-		            'KW_RESET_RV',
+                    'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)

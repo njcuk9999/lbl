@@ -33,7 +33,6 @@ AstropyTime = Time
 AstropyTimeDelta = TimeDelta
 
 
-
 # must define the tqdm module as we need to turn it off in certain circumstances
 def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
     """

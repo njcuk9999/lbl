@@ -15,7 +15,6 @@ import numpy as np
 import wget
 from astropy import constants
 from astropy import units as uu
-from astropy.io import fits
 from astropy.table import Table
 from scipy import stats
 from scipy.stats import pearsonr
@@ -266,15 +265,15 @@ def spline_template(inst: InstrumentsType, template_file: str,
         # TODO check that its 1-100 for vsini to avoid m/s rather than km/s
         vsini = inst.params['ROTBROAD'][1]
         # Calculate the step in the wavelength grid
-        step = (twave/np.gradient(twave))
-        sample_sampling = np.nanmedian(step/constants.c.to(uu.km/uu.s).value)
+        step = (twave / np.gradient(twave))
+        sample_sampling = np.nanmedian(step / constants.c.to(uu.km / uu.s).value)
         # calculate the pixel value for the broadening (the delta function
         #     position)
-        npix = np.ceil(vsini/sample_sampling).astype(int)
+        npix = np.ceil(vsini / sample_sampling).astype(int)
         # get the wave grid of the template that we are going to use
-        twave_tmp = np.linspace(twave[len(twave)//2-npix],
-                                twave[len(twave)//2+npix],
-                                2*npix+1)
+        twave_tmp = np.linspace(twave[len(twave) // 2 - npix],
+                                twave[len(twave) // 2 + npix],
+                                2 * npix + 1)
         # set up the delta value and populate the delta function at the
         # point of interest
         delta_tmp = np.zeros_like(twave_tmp)
@@ -288,7 +287,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
         #  broadening kernel
         tflux2 = np.zeros_like(tflux)
         for ioff in range(len(delta_tmp)):
-            tflux2+=np.roll(tflux, ioff-npix)*rot_kernel[ioff]
+            tflux2 += np.roll(tflux, ioff - npix) * rot_kernel[ioff]
         # set this to the flux we would have had from before
         tflux = tflux2
     # -------------------------------------------------------------------------

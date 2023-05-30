@@ -143,8 +143,8 @@ class LBLHeader(UserDict):
     def from_fits(cls, header: fits.Header) -> 'LBLHeader':
         """
         Construct a LBLHeader from a fits file
-        :param filename: str, the filename to read from
-        :param ext: int, the extension to read from
+
+        :param header: fits.Header, the loaded fits header (astro.io.FitsHeader)
         :return: LBLHeader, the header
         """
         new = cls()
@@ -224,7 +224,6 @@ class LBLHeader(UserDict):
         """
         Get a 2D list from the header
 
-        :param header: fits.Header - the header to load from
         :param key: str, the key with formatting to load i.e. XXX{number:04d}
                    where number = (row number * number of columns) + column number
                    where column number = dim2 and row number = range(0, dim1)
@@ -267,7 +266,6 @@ class LBLHeader(UserDict):
         """
         Filter by a header key (returns True if valid)
 
-        :param header: fits header, the header to check
         :param key: str, the key in the header to check
         :param values: a list of string values to check against the header value
         :return:
