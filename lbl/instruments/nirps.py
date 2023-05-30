@@ -19,6 +19,7 @@ import requests
 from astropy.io import fits
 from astropy.table import Table
 
+from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
@@ -363,7 +364,7 @@ class NIRPS(Instrument):
         """
         _ = self
         if filename is not None:
-            blaze, _ = io.load_fits(filename, kind='blaze fits file')
+            blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order
             if normalize:
                 # normalize blaze per order
@@ -388,9 +389,9 @@ class NIRPS(Instrument):
         # get systemic velocity key
         sysvelkey = self.params['KW_SYSTEMIC_VELO']
         # load the mask header
-        mask_hdr = io.load_header(mask_file, kind='mask fits file')
+        mask_hdr = self.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
-        systemic_vel = -io.get_hkey(mask_hdr, sysvelkey)
+        systemic_vel = -mask_hdr.get_hkey(sysvelkey)
         # return systemic velocity in m/s
         return systemic_vel
 
@@ -441,7 +442,7 @@ class NIRPS(Instrument):
         # loop around science files
         for science_file in science_files:
             # load header
-            sci_hdr = io.load_header(science_file)
+            sci_hdr = self.load_header(science_file)
             # get time
             times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
         # get sort mask
@@ -453,7 +454,7 @@ class NIRPS(Instrument):
 
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
-                                sci_hdr: fits.Header,
+                                sci_hdr: io.LBLHeader,
                                 calib_directory: str,
                                 normalize: bool = True
                                 ) -> Tuple[np.ndarray, bool]:
@@ -463,7 +464,7 @@ class NIRPS(Instrument):
         :param science_file: str the science filename (not used)
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
+        :param sci_hdr: io.LBLHeader - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
         :param normalize: bool, if True normalized the blaze per order
@@ -474,13 +475,13 @@ class NIRPS(Instrument):
         # unused
         _ = science_file
         # get blaze file from science header
-        blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
+        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
         io.check_file_exists(abspath)
         # read blaze file (data and header)
-        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        blaze = io.load_fits(abspath, kind='blaze fits file')
         # normalize by order
         if normalize:
             # normalize blaze per order
@@ -492,16 +493,16 @@ class NIRPS(Instrument):
         # return blaze
         return blaze, False
 
-    def get_wave_solution(self, science_filename: Union[str, None] = None,
-                          data: Union[np.ndarray, None] = None,
-                          header: Union[fits.Header, None] = None
+    def get_wave_solution(self, science_filename: Optional[str] = None,
+                          data: Optional[np.ndarray] = None,
+                          header: Optional[io.LBLHeader] = None
                           ) -> np.ndarray:
         """
         Get a wave solution from a file (for SPIROU this is from the header)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
-        :param header: fits.Header, this is the header to use (if not given
+        :param header: io.LBLHeader, this is the header to use (if not given
                        requires filename to be set to load header)
         :param data: np.ndarray, this must be set along with header (if not
                      give we require filename to be set to load data)
@@ -516,8 +517,8 @@ class NIRPS(Instrument):
         # ---------------------------------------------------------------------
         # get header
         if header is None or data is None:
-            sci_data, sci_hdr = io.load_fits(science_filename,
-                                             'wave fits file')
+            sci_data = io.load_fits(science_filename, 'wave fits file')
+            sci_hdr = self.load_header(science_filename, 'wave fits file')
         else:
             sci_data, sci_hdr = data, header
         # ---------------------------------------------------------------------
@@ -527,12 +528,12 @@ class NIRPS(Instrument):
         xpix = np.arange(nbx)
         # ---------------------------------------------------------------------
         # get wave order from header
-        waveordn = io.get_hkey(sci_hdr, kw_waveordn, science_filename)
-        wavedegn = io.get_hkey(sci_hdr, kw_wavedegn, science_filename)
+        waveordn = sci_hdr.get_hkey(kw_waveordn, science_filename)
+        wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename)
         # get the wave 2d list
-        wavecoeffs = io.get_hkey_2d(sci_hdr, key=kw_wavecoeffs,
-                                    dim1=waveordn, dim2=wavedegn + 1,
-                                    filename=science_filename)
+        wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
+                                         dim1=waveordn, dim2=wavedegn + 1,
+                                         filename=science_filename)
         # ---------------------------------------------------------------------
         # convert to wave map
         wavemap = np.zeros([waveordn, nbx])
@@ -600,11 +601,11 @@ class NIRPS(Instrument):
         # return the
         return bad_values, bad_key
 
-    def get_berv(self, sci_hdr: fits.Header) -> float:
+    def get_berv(self, sci_hdr: io.LBLHeader) -> float:
         """
         Get the Barycenteric correction for the RV in m/s
 
-        :param sci_hdr: fits.Header, the science header
+        :param sci_hdr: io.LBLHeader, the science header
 
         :return:
         """
@@ -612,14 +613,14 @@ class NIRPS(Instrument):
         hdr_key = self.params['KW_BERV']
         # get BERV (if not a calibration)
         if not self.params['DATA_TYPE'] != 'SCIENCE':
-            berv = io.get_hkey(sci_hdr, hdr_key) * 1000
+            berv = sci_hdr.get_hkey(hdr_key) * 1000
         else:
             berv = 0.0
         # return the berv measurement (in m/s)
         return berv
 
     def populate_sci_table(self, filename: str, tdict: dict,
-                           sci_hdr: fits.Header, berv: float = 0.0) -> dict:
+                           sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
         """
         Populate the science table
 
@@ -683,7 +684,7 @@ class NIRPS(Instrument):
         # loop around science files
         for science_file in tqdm(science_files):
             # load science file header
-            sci_hdr = io.load_header(science_file)
+            sci_hdr = self.load_header(science_file)
             # find out if we have a calibration
             if not mcond1:
                 # get dprtype in each fiber
@@ -747,14 +748,14 @@ class NIRPS(Instrument):
         # return only files with DPRTYPE same in both fibers
         return keep_files
 
-    def get_dpr_fibtype(self, hdr: fits.Header,
+    def get_dpr_fibtype(self, hdr: io.LBLHeader,
                         fiber: Optional[str] = None) -> str:
 
         # get dprtype
-        dprtype = io.get_hkey(hdr, self.params['KW_DPRTYPE'])
+        dprtype = hdr.get_hkey(self.params['KW_DPRTYPE'])
         # deal with getting fiber
         if fiber is None:
-            fiber = io.get_hkey(hdr, self.params['KW_FIBER'])
+            fiber = hdr.get_hkey(self.params['KW_FIBER'])
         # split fiber
         dprfibtypes = dprtype.split('_')
         # get fiber type
@@ -805,13 +806,13 @@ class NIRPS(Instrument):
         # return a numpy array
         return np.array(keys), fp_flags
 
-    def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
+    def fix_lblrv_header(self, header: io.LBLHeader) -> io.LBLHeader:
         """
         Fix the LBL RV header
 
-        :param header: fits.Header, the LBL RV fits file header
+        :param header: io.LBLHeader, the LBL RV fits file header
 
-        :return: fits.Header, the updated LBL RV fits file header
+        :return: io.LBLHeader, the updated LBL RV fits file header
         """
         # get keys from params
         kw_snrgoal = self.params['KW_SNRGOAL']
@@ -829,21 +830,21 @@ class NIRPS(Instrument):
         # return header
         return header
 
-    def get_rjd_value(self, header: fits.Header) -> float:
+    def get_rjd_value(self, header: io.LBLHeader) -> float:
 
         """
         Get the rjd either from KW_MID_EXP_TIME or KW_BJD
         time returned is in MJD (not JD)
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
         :return:
         """
         # get keys from params
         kw_mjdmid = self.params['KW_MID_EXP_TIME']
         kw_bjd = self.params['KW_BJD']
         # get mjdmid and bjd
-        mid_exp_time = io.get_hkey(header, kw_mjdmid)
-        bjd = io.get_hkey(header, kw_bjd)
+        mid_exp_time = header.get_hkey(kw_mjdmid)
+        bjd = header.get_hkey(kw_bjd)
         if isinstance(bjd, str):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
@@ -853,18 +854,18 @@ class NIRPS(Instrument):
             # return RJD = MJD + 0.5
             return float(bjd_mjd) + 0.5
 
-    def get_plot_date(self, header: fits.Header):
+    def get_plot_date(self, header: io.LBLHeader):
         """
         Get the matplotlib plotting date
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
 
         :return: float, the plot date
         """
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
         # get mjdate
-        mjdate = io.get_hkey(header, kw_mjdate)
+        mjdate = header.get_hkey(kw_mjdate)
         # convert to plot date and take off JD?
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date
@@ -1141,6 +1142,10 @@ class NIRPS_HA(NIRPS):
         self.param_override()
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_nirps_ha.fits'
+        self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
+        # define wave limits in nm
+        self.wavemin = 965.707
+        self.wavemax = 1949.050
 
     def param_override(self):
         """
@@ -1161,7 +1166,45 @@ class NIRPS_HA(NIRPS):
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid_nirps_ha.fits', source=func_name)
+        
+    def get_binned_parameters(self) -> Dict[str, list]:
+        """
+        Defines a "binning dictionary" splitting up the array by:
 
+        Each binning dimension has [str names, start value, end value]
+
+        - bands  (in wavelength)
+            [bands / blue_end / red_end]
+
+        - cross order regions (in pixels)
+            [region_names / region_low / region_high]
+
+        :return: dict, the binned dictionary
+        """
+        # ---------------------------------------------------------------------
+        # define regions, and blue/red band ends
+        bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
+        bands, blue_end, red_end, use_regions = bout
+        # ---------------------------------------------------------------------
+        # define the region names (suffices)
+        region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
+        # lower x pixel bin point [pixels]
+        region_low = [0, 0, 2044, 1532]
+        # upper x pixel bin point [pixels]
+        region_high = [4088, 2044, 4088, 2556]
+        # ---------------------------------------------------------------------
+        # return all this information (in a dictionary)
+        binned = dict()
+        binned['bands'] = list(bands)
+        binned['blue_end'] = list(blue_end)
+        binned['red_end'] = list(red_end)
+        binned['region_names'] = list(region_names)
+        binned['region_low'] = list(region_low)
+        binned['region_high'] = list(region_high)
+        binned['use_regions'] = list(use_regions)
+        # ---------------------------------------------------------------------
+        # return this binning dictionary
+        return binned
 
 # noinspection PyPep8Naming
 class NIRPS_HE(NIRPS):
@@ -1177,7 +1220,10 @@ class NIRPS_HE(NIRPS):
         self.param_override()
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_nirps_he.fits'
-
+        # define wave limits in nm
+        self.wavemin = 965.827
+        self.wavemax = 1951.499
+        
     def param_override(self):
         """
         Parameter override for NIRPS_HA ESO parameters
@@ -1200,6 +1246,44 @@ class NIRPS_HE(NIRPS):
         self.params.set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid_nirps_he.fits', source=func_name)
 
+    def get_binned_parameters(self) -> Dict[str, list]:
+        """
+        Defines a "binning dictionary" splitting up the array by:
+
+        Each binning dimension has [str names, start value, end value]
+
+        - bands  (in wavelength)
+            [bands / blue_end / red_end]
+
+        - cross order regions (in pixels)
+            [region_names / region_low / region_high]
+
+        :return: dict, the binned dictionary
+        """
+        # ---------------------------------------------------------------------
+        # define regions, and blue/red band ends
+        bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
+        bands, blue_end, red_end, use_regions = bout
+        # ---------------------------------------------------------------------
+        # define the region names (suffices)
+        region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
+        # lower x pixel bin point [pixels]
+        region_low = [0, 0, 2044, 1532]
+        # upper x pixel bin point [pixels]
+        region_high = [4088, 2044, 4088, 2556]
+        # ---------------------------------------------------------------------
+        # return all this information (in a dictionary)
+        binned = dict()
+        binned['bands'] = list(bands)
+        binned['blue_end'] = list(blue_end)
+        binned['red_end'] = list(red_end)
+        binned['region_names'] = list(region_names)
+        binned['region_low'] = list(region_low)
+        binned['region_high'] = list(region_high)
+        binned['use_regions'] = list(use_regions)
+        # ---------------------------------------------------------------------
+        # return this binning dictionary
+        return binned
 
 # =============================================================================
 # Define NIRPS ESO class - inherit from spirou
@@ -1218,6 +1302,9 @@ class NIRPS_HA_ESO(NIRPS_HA):
         self.param_override()
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_NIRPS_HA_ESO.fits'
+        # define wave limits in nm
+        self.wavemin = 966.051
+        self.wavemax = 1923.084
 
     def param_override(self):
         """
@@ -1308,7 +1395,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to
@@ -1319,13 +1406,8 @@ class NIRPS_HA_ESO(NIRPS_HA):
         """
         # get header
         hdr = io.load_header(filename, kind, extnum, extname)
-        # convert header into dictionary
-        header_dict = dict()
-        # loop around keys and add them to the header dictionary
-        for key in hdr:
-            header_dict[key] = copy.deepcopy(hdr[key])
-        # return a dictionary
-        return header_dict
+        # return the LBL Header class
+        return io.LBLHeader.from_fits(hdr)
 
     def template_file(self, directory: str, required: bool = True) -> str:
         """
@@ -1355,14 +1437,14 @@ class NIRPS_HA_ESO(NIRPS_HA):
 
     def get_wave_solution(self, science_filename: Union[str, None] = None,
                           data: Union[np.ndarray, None] = None,
-                          header: Union[fits.Header, None] = None
+                          header: Union[io.LBLHeader, None] = None
                           ) -> np.ndarray:
         """
         Get a wave solution from a file (for Espresso this is from the header)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
-        :param header: fits.Header, this is the header to use (if not given
+        :param header: io.LBLHeader, this is the header to use (if not given
                        requires filename to be set to load header)
         :param data: np.ndarray, this must be set along with header (if not
                      give we require filename to be set to load data)
@@ -1389,21 +1471,22 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # return an empty list and bad_hdr_key = None
         return [], None
 
-    def get_berv(self, sci_hdr: fits.Header) -> float:
+    def get_berv(self, sci_hdr: io.LBLHeader) -> float:
         """
         Get the Barycenteric correction for the RV in m/s
 
-        :param sci_hdr: fits.Header, the science header
+        :param sci_hdr: io.LBLHeader, the science header
 
         :return:
         """
+        _ = sci_hdr
         # ESPRESSO data is always BERV corrected from the starting point
         berv = 0.0
         # return the berv measurement (in m/s)
         return berv
 
     def populate_sci_table(self, filename: str, tdict: dict,
-                           sci_hdr: fits.Header, berv: float = 0.0) -> dict:
+                           sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
         """
         Populate the science table
 
@@ -1474,13 +1557,13 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # return a numpy array
         return np.array(keys), fp_flags
 
-    def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
+    def fix_lblrv_header(self, header: io.LBLHeader) -> io.LBLHeader:
         """
         Fix the LBL RV header
 
-        :param header: fits.Header, the LBL RV fits file header
+        :param header: io.LBLHeader, the LBL RV fits file header
 
-        :return: fits.Header, the updated LBL RV fits file header
+        :return: io.LBLHeader, the updated LBL RV fits file header
         """
         # get keys from params
         kw_snrgoal = self.params['KW_SNRGOAL']
@@ -1513,7 +1596,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         """
         _ = self
         if filename is not None:
-            blaze, _ = io.load_fits(filename, kind='blaze fits file')
+            blaze = io.load_fits(filename, kind='blaze fits file')
             # load wave (we have to modify the blaze)
             wavemap = self.get_wave_solution(science_file)
             # update blaze solution by gradient of wave
@@ -1533,7 +1616,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
 
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
-                                sci_hdr: fits.Header,
+                                sci_hdr: io.LBLHeader,
                                 calib_directory: str,
                                 normalize: bool = True
                                 ) -> Tuple[np.ndarray, bool]:
@@ -1543,7 +1626,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         :param science_file: str, the science file name
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
+        :param sci_hdr: io.LBLHeader - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
         :param normalize: bool, if True normalized the blaze per order
@@ -1552,13 +1635,13 @@ class NIRPS_HA_ESO(NIRPS_HA):
                  image already blaze corrected)
         """
         # get blaze file from science header
-        blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
+        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
         io.check_file_exists(abspath)
         # read blaze file (data and header)
-        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
         wavemap = self.get_wave_solution(science_file)
         # update blaze solution by gradient of wave
@@ -1574,6 +1657,44 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # return blaze
         return blaze, False
 
+    def get_binned_parameters(self) -> Dict[str, list]:
+        """
+        Defines a "binning dictionary" splitting up the array by:
+
+        Each binning dimension has [str names, start value, end value]
+
+        - bands  (in wavelength)
+            [bands / blue_end / red_end]
+
+        - cross order regions (in pixels)
+            [region_names / region_low / region_high]
+
+        :return: dict, the binned dictionary
+        """
+        # ---------------------------------------------------------------------
+        # define regions, and blue/red band ends
+        bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
+        bands, blue_end, red_end, use_regions = bout
+        # ---------------------------------------------------------------------
+        # define the region names (suffices)
+        region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
+        # lower x pixel bin point [pixels]
+        region_low = [0, 0, 2044, 1532]
+        # upper x pixel bin point [pixels]
+        region_high = [4088, 2044, 4088, 2556]
+        # ---------------------------------------------------------------------
+        # return all this information (in a dictionary)
+        binned = dict()
+        binned['bands'] = list(bands)
+        binned['blue_end'] = list(blue_end)
+        binned['red_end'] = list(red_end)
+        binned['region_names'] = list(region_names)
+        binned['region_low'] = list(region_low)
+        binned['region_high'] = list(region_high)
+        binned['use_regions'] = list(use_regions)
+        # ---------------------------------------------------------------------
+        # return this binning dictionary
+        return binned
 
 # noinspection PyPep8Naming
 class NIRPS_HE_ESO(NIRPS_HE):
@@ -1589,6 +1710,9 @@ class NIRPS_HE_ESO(NIRPS_HE):
         self.param_override()
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_NIRPS_HE_ESO.fits'
+        # define wave limits in nm
+        self.wavemin = 966.051
+        self.wavemax = 1923.084
 
     def param_override(self):
         """
@@ -1701,16 +1825,16 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # return absolute path
         return abspath
 
-    def get_wave_solution(self, science_filename: Union[str, None] = None,
-                          data: Union[np.ndarray, None] = None,
-                          header: Union[fits.Header, None] = None
+    def get_wave_solution(self, science_filename: Optional[str] = None,
+                          data: Optional[np.ndarray] = None,
+                          header: Optional[io.LBLHeader] = None
                           ) -> np.ndarray:
         """
         Get a wave solution from a file (for Espresso this is from the header)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
-        :param header: fits.Header, this is the header to use (if not given
+        :param header: io.LBLHeader, this is the header to use (if not given
                        requires filename to be set to load header)
         :param data: np.ndarray, this must be set along with header (if not
                      give we require filename to be set to load data)
@@ -1737,21 +1861,22 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # return an empty list and bad_hdr_key = None
         return [], None
 
-    def get_berv(self, sci_hdr: fits.Header) -> float:
+    def get_berv(self, sci_hdr: io.LBLHeader) -> float:
         """
         Get the Barycenteric correction for the RV in m/s
 
-        :param sci_hdr: fits.Header, the science header
+        :param sci_hdr: io.LBLHeader, the science header
 
         :return:
         """
+        _ = sci_hdr
         # ESPRESSO data is always BERV corrected from the starting point
         berv = 0.0
         # return the berv measurement (in m/s)
         return berv
 
     def populate_sci_table(self, filename: str, tdict: dict,
-                           sci_hdr: fits.Header, berv: float = 0.0) -> dict:
+                           sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
         """
         Populate the science table
 
@@ -1822,13 +1947,13 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # return a numpy array
         return np.array(keys), fp_flags
 
-    def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
+    def fix_lblrv_header(self, header: io.LBLHeader) -> io.LBLHeader:
         """
         Fix the LBL RV header
 
-        :param header: fits.Header, the LBL RV fits file header
+        :param header: io.LBLHeader, the LBL RV fits file header
 
-        :return: fits.Header, the updated LBL RV fits file header
+        :return: io.LBLHeader, the updated LBL RV fits file header
         """
         # get keys from params
         kw_snrgoal = self.params['KW_SNRGOAL']
@@ -1861,7 +1986,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         """
         _ = self
         if filename is not None:
-            blaze, _ = io.load_fits(filename, kind='blaze fits file')
+            blaze = io.load_fits(filename, kind='blaze fits file')
             # load wave (we have to modify the blaze)
             wavemap = self.get_wave_solution(science_file)
             # update blaze solution by gradient of wave
@@ -1881,7 +2006,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
 
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
-                                sci_hdr: fits.Header,
+                                sci_hdr: io.LBLHeader,
                                 calib_directory: str,
                                 normalize: bool = True
                                 ) -> Tuple[np.ndarray, bool]:
@@ -1891,7 +2016,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         :param science_file: str, the science file name
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
+        :param sci_hdr: io.LBLHeader - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
         :param normalize: bool, if True normalized the blaze per order
@@ -1900,13 +2025,13 @@ class NIRPS_HE_ESO(NIRPS_HE):
                  image already blaze corrected)
         """
         # get blaze file from science header
-        blaze_file = io.get_hkey(sci_hdr, self.params['KW_BLAZE_FILE'])
+        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
         io.check_file_exists(abspath)
         # read blaze file (data and header)
-        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
         wavemap = self.get_wave_solution(science_file)
         # update blaze solution by gradient of wave
@@ -1922,21 +2047,21 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # return blaze
         return blaze, False
 
-    def get_rjd_value(self, header: fits.Header) -> float:
+    def get_rjd_value(self, header: io.LBLHeader) -> float:
 
         """
         Get the rjd either from KW_MID_EXP_TIME or KW_BJD
         time returned is in MJD (not JD)
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
         :return:
         """
         # get keys from params
         kw_mjdmid = self.params['KW_MID_EXP_TIME']
         kw_bjd = self.params['KW_BJD']
         # get mjdmid and bjd
-        mid_exp_time = io.get_hkey(header, kw_mjdmid)
-        bjd = io.get_hkey(header, kw_bjd)
+        mid_exp_time = header.get_hkey(kw_mjdmid)
+        bjd = header.get_hkey(kw_bjd)
         if isinstance(bjd, str):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
@@ -1946,23 +2071,61 @@ class NIRPS_HE_ESO(NIRPS_HE):
             # return RJD = MJD + 0.5
             return float(bjd_mjd) + 0.5
 
-    def get_plot_date(self, header: fits.Header):
+    def get_plot_date(self, header: io.LBLHeader):
         """
         Get the matplotlib plotting date
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
 
         :return: float, the plot date
         """
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
         # get mjdate
-        mjdate = io.get_hkey(header, kw_mjdate)
+        mjdate = header.get_hkey(kw_mjdate)
         # convert to plot date and take off JD?
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date
         return float(plot_date)
 
+    def get_binned_parameters(self) -> Dict[str, list]:
+        """
+        Defines a "binning dictionary" splitting up the array by:
+
+        Each binning dimension has [str names, start value, end value]
+
+        - bands  (in wavelength)
+            [bands / blue_end / red_end]
+
+        - cross order regions (in pixels)
+            [region_names / region_low / region_high]
+
+        :return: dict, the binned dictionary
+        """
+        # ---------------------------------------------------------------------
+        # define regions, and blue/red band ends
+        bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
+        bands, blue_end, red_end, use_regions = bout
+        # ---------------------------------------------------------------------
+        # define the region names (suffices)
+        region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
+        # lower x pixel bin point [pixels]
+        region_low = [0, 0, 2044, 1532]
+        # upper x pixel bin point [pixels]
+        region_high = [4088, 2044, 4088, 2556]
+        # ---------------------------------------------------------------------
+        # return all this information (in a dictionary)
+        binned = dict()
+        binned['bands'] = list(bands)
+        binned['blue_end'] = list(blue_end)
+        binned['red_end'] = list(red_end)
+        binned['region_names'] = list(region_names)
+        binned['region_low'] = list(region_low)
+        binned['region_high'] = list(region_high)
+        binned['use_regions'] = list(use_regions)
+        # ---------------------------------------------------------------------
+        # return this binning dictionary
+        return binned
 
 # =============================================================================
 # Start of code

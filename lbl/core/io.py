@@ -12,10 +12,12 @@ Created on 2021-03-15
 import copy
 import os
 import warnings
+from collections import UserDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
+import pandas as pd
 import wget
 from astropy.io import fits
 from astropy.table import Table
@@ -39,6 +41,249 @@ FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
                   'CRVAL2', 'CRPIX2', 'CDELT2', 'BSCALE', 'BZERO',
                   'PHOT_IM', 'FRAC_OBJ', 'FRAC_SKY', 'FRAC_BB',
                   'NEXTEND', '', 'HISTORY', 'XTENSION']
+
+
+# =============================================================================
+# Define classes
+# =============================================================================
+class LBLHeader(UserDict):
+    def __init__(self, *arg, **kw):
+        """
+        Construct the case insensitive dictionary class
+        :param arg: arguments passed to dict
+        :param kw: keyword arguments passed to dict
+        """
+        # set function name
+        # _ = display_func('__init__', __NAME__, self.class_name)
+        # super from dict
+        super(LBLHeader, self).__init__(*arg, **kw)
+        # add storage for comments
+        self.comments = dict()
+
+    def __getitem__(self, key: str) -> object:
+        """
+        Method used to get the value of an item using "key"
+        used as x.__getitem__(y) <==> x[y]
+        where key is case insensitive
+
+        :param key: string, the key for the value returned (case insensitive)
+
+        :type key: str
+
+        :return value: object, the value stored at position "key"
+        """
+        # return from supers dictionary storage
+        return self.data[key]
+
+    def __setitem__(self, key: str, value: Any, comment: str = None):
+        """
+        Sets an item wrapper for self[key] = value
+        :param key: string, the key to set for the parameter
+        :param value: object, the object to set (as in dictionary) for the
+                      parameter
+
+        :type key: str
+        :type value: object
+
+        :return: None
+        """
+        # deal with tuple (value, comment)
+        if isinstance(value, tuple) and len(value) == 2:
+            value, comment = value
+        # deal with setting / updating comments
+        if comment is not None:
+            self.comments[key] = comment
+        elif key not in self.comments:
+            self.comments[key] = ''
+        # then do the normal dictionary setting
+        self.data[key] = value
+
+    def __delitem__(self, key: str):
+        """
+        Deletes the "key" from CaseInsensitiveDict instance, case insensitive
+
+        :param key: string, the key to delete from ParamDict instance,
+                    case insensitive
+        :type key: str
+
+        :return None:
+        """
+        # deal with comments
+        if key in self.comments:
+            del self.comments[key]
+        # delete key from keys
+        del self.data[key]
+
+    def __str__(self) -> str:
+        """
+        Return the string representation of the class
+        :return: str, the string representation
+        """
+        # storage for string
+        string = ''
+        # loop around keys
+        for key in self.keys():
+            # get value
+            value = self[key]
+            # get comment
+            comment = self.comments[key]
+            # add to string
+            string += '{0} = {1}\t\t\t\t/ {2}\n'.format(key, value, comment)
+        # return string
+        return string
+
+    def __repr__(self) -> str:
+        """
+        Return the string representation of the class
+        :return: str, the string representation
+        """
+        return self.__str__()
+
+    @classmethod
+    def from_fits(cls, header: fits.Header) -> 'LBLHeader':
+        """
+        Construct a LBLHeader from a fits file
+        :param filename: str, the filename to read from
+        :param ext: int, the extension to read from
+        :return: LBLHeader, the header
+        """
+        new = cls()
+        # loop around keys and add them to the header dictionary
+        for key in header:
+            new[key] = copy.deepcopy(header[key])
+        # add comments
+        new.comments = header.comments
+        # construct LBLHeader
+        return new
+
+    @classmethod
+    def from_store(cls, store: pd.HDFStore, storekey: str,
+                   filename: str) -> 'LBLHeader':
+        new = cls()
+        # deal with key not in store
+        if storekey not in store:
+            emsg = 'Cannot find header in file {0} using key {1}'
+            eargs = [filename, storekey]
+            raise LblException(emsg.format(*eargs))
+        # get the header
+        hdr_df = store[storekey]
+        # loop around keys and add them to the header dictionary
+        for key in hdr_df.index.values:
+            new[key] = copy.deepcopy(hdr_df[key])
+            new.comments[key] = ''
+        # construct LBLHeader
+        return new
+
+    def to_fits(self) -> fits.Header:
+        header = fits.Header()
+        # loop around keys and add them to the header dictionary
+        for key in self.keys():
+            header[key] = (self[key], self.comments[key])
+        # return header
+        return header
+
+    def get_hkey(self,  key: Union[str, List[str]],
+                 filename: Union[str, None] = None,
+                 required: bool = True) -> Any:
+        # deal with no filename
+        if filename is None:
+            filename = 'Unknown'
+        # -------------------------------------------------------------------------
+        # deal with a list of keys (test all one by one for the correct key)
+        if isinstance(key, list):
+            drskey = ''
+            for key_it in key:
+                if key_it in self.data:
+                    if self.data[key_it] != ['None', '', None]:
+                        drskey = key_it
+                        break
+            if len(drskey) == 0:
+                emsg = 'Cannot find keys: {0} in header'
+                raise LblException(emsg.format(' or '.join(key)))
+        else:
+            drskey = str(key)
+        # -------------------------------------------------------------------------
+        # test for key in header
+        if drskey in self.data:
+            try:
+                return self.data[drskey]
+            except Exception as e:
+                emsg = 'Cannot use key {0} from header: {1} \n\t{2}: {3}'
+                eargs = [drskey, filename, type(e), str(e)]
+                raise LblException(emsg.format(*eargs))
+        elif not required:
+            return None
+        else:
+            emsg = 'Key {0} not found in header: {1}'
+            eargs = [drskey, filename]
+            raise LblException(emsg.format(*eargs))
+
+    def get_hkey_2d(self, key: str,
+                    dim1: int, dim2: int, dtype: Type = float,
+                    filename: Union[str, None] = None) -> np.ndarray:
+        """
+        Get a 2D list from the header
+
+        :param header: fits.Header - the header to load from
+        :param key: str, the key with formatting to load i.e. XXX{number:04d}
+                   where number = (row number * number of columns) + column number
+                   where column number = dim2 and row number = range(0, dim1)
+        :param dim1: int, the number of elements in dimension 1
+                     (number of rows)
+        :param dim2: int, the number of columns in dimension 2
+                     (number of columns)
+        :param dtype: type, the type to force the data to be (i.e. float, int)
+        :param filename: str, the filename of the header (for error reporting)
+
+        :return: np.ndarray, the value array, shape=(dim1, dim2)
+        """
+        # deal with no filename
+        if filename is None:
+            filename = 'Unknown'
+        # test for key in header
+        if dtype is None:
+            dtype = str
+        # create 2d list
+        values = np.zeros((dim1, dim2), dtype=dtype)
+        # loop around the 2D array
+        dim1, dim2 = values.shape
+        for it in range(dim1):
+            for jt in range(dim2):
+                # construct the key name
+                keyname = _test_for_formatting(key, it * dim2 + jt)
+                # try to get the values
+                try:
+                    # set the value
+                    values[it][jt] = dtype(self.data[keyname])
+                except KeyError:
+                    emsg = 'Cannot find key {0} in header: {1}'
+                    eargs = [keyname, filename]
+                    raise LblException(emsg.format(*eargs))
+        # return values
+        return values
+
+    def filter_by_hkey(self, key: str,
+                       values: Union[List[str], str]) -> bool:
+        """
+        Filter by a header key (returns True if valid)
+
+        :param header: fits header, the header to check
+        :param key: str, the key in the header to check
+        :param values: a list of string values to check against the header value
+        :return:
+        """
+        # deal with key not in header
+        if key not in self.data:
+            return False
+        # deal with non list values
+        if not isinstance(values, (list, np.ndarray)):
+            values = [values]
+        # loop around values
+        for value in values:
+            if str(self.data[key]) == str(value):
+                return True
+        # if we get here return False
+        return False
 
 
 # =============================================================================
@@ -166,12 +411,13 @@ def find_files(path_list: List[Path],
                 continue
             # load header
             hdr = load_header(str(filename), 'fits file')
+            hdr = LBLHeader.from_fits(hdr)
 
             valid = True
             # loop around hkeys
             for hkey in hkeys:
                 # check value
-                valid &= filter_by_hkey(hdr, hkey, hkeys[hkey])
+                valid &= hdr.filter_by_hkey(hkey, hkeys[hkey])
         # add to valid files if we have got to here
         if valid:
             valid_files.append(filename)
@@ -231,7 +477,7 @@ def clean_directory(path: str, logmsg: bool = True,
 def load_fits(filename: str,
               kind: Union[str, None] = None,
               extnum: Optional[int] = None,
-              extname: Optional[str] = None) -> Tuple[np.ndarray, fits.Header]:
+              extname: Optional[str] = None) -> np.ndarray:
     """
     Standard way to load fits files
 
@@ -249,18 +495,15 @@ def load_fits(filename: str,
     try:
         if extnum is not None:
             data = fits.getdata(filename, ext=extnum)
-            header = fits.getheader(filename, ext=extnum)
         elif extname is not None:
             data = fits.getdata(filename, extname=extname)
-            header = fits.getheader(filename, extname=extname)
         else:
             data = fits.getdata(filename)
-            header = fits.getheader(filename)
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
-    return np.array(data), header.copy()
+    return np.array(data)
 
 
 def load_header(filename: str,
@@ -295,126 +538,6 @@ def load_header(filename: str,
     return header.copy()
 
 
-def get_hkey(header: fits.Header, key: Union[str, List[str]],
-             filename: Union[str, None] = None,
-             required: bool = True) -> Any:
-    """
-    Get a key from the header and deal with errors
-
-    :param header: fits.Header, a fits header
-    :param key: str, the key to get from header
-    :param filename: str, the filename associated with the header
-    :param required: bool, if True this parameter is required and will raise
-                     an exception when not found, if False will return None
-                     on False
-
-    :return: Any, the value of header[key]
-    """
-    # set function name
-    _ = __NAME__ + '.get_hkey()'
-    # deal with no filename
-    if filename is None:
-        filename = 'Unknown'
-    # -------------------------------------------------------------------------
-    # deal with a list of keys (test all one by one for the correct key)
-    if isinstance(key, list):
-        drskey = ''
-        for key_it in key:
-            if key_it in header:
-                if header[key_it] != ['None', '', None]:
-                    drskey = key_it
-                    break
-        if len(drskey) == 0:
-            emsg = 'Cannot find keys: {0} in header'
-            raise LblException(emsg.format(' or '.join(key)))
-    else:
-        drskey = str(key)
-    # -------------------------------------------------------------------------
-    # test for key in header
-    if drskey in header:
-        try:
-            return header[drskey]
-        except Exception as e:
-            emsg = 'Cannot use key {0} from header: {1} \n\t{2}: {3}'
-            eargs = [drskey, filename, type(e), str(e)]
-            raise LblException(emsg.format(*eargs))
-    elif not required:
-        return None
-    else:
-        emsg = 'Key {0} not found in header: {1}'
-        eargs = [drskey, filename]
-        raise LblException(emsg.format(*eargs))
-
-
-def get_hkey_2d(header: fits.Header, key: str,
-                dim1: int, dim2: int, dtype: Type = float,
-                filename: Union[str, None] = None) -> np.ndarray:
-    """
-    Get a 2D list from the header
-
-    :param header: fits.Header - the header to load from
-    :param key: str, the key with formatting to load i.e. XXX{number:04d}
-               where number = (row number * number of columns) + column number
-               where column number = dim2 and row number = range(0, dim1)
-    :param dim1: int, the number of elements in dimension 1
-                 (number of rows)
-    :param dim2: int, the number of columns in dimension 2
-                 (number of columns)
-    :param dtype: type, the type to force the data to be (i.e. float, int)
-    :param filename: str, the filename of the header (for error reporting)
-
-    :return: np.ndarray, the value array, shape=(dim1, dim2)
-    """
-    # deal with no filename
-    if filename is None:
-        filename = 'Unknown'
-    # test for key in header
-    if dtype is None:
-        dtype = str
-    # create 2d list
-    values = np.zeros((dim1, dim2), dtype=dtype)
-    # loop around the 2D array
-    dim1, dim2 = values.shape
-    for it in range(dim1):
-        for jt in range(dim2):
-            # construct the key name
-            keyname = _test_for_formatting(key, it * dim2 + jt)
-            # try to get the values
-            try:
-                # set the value
-                values[it][jt] = dtype(header[keyname])
-            except KeyError:
-                emsg = 'Cannot find key {0} in header: {1}'
-                eargs = [keyname, filename]
-                raise LblException(emsg.format(*eargs))
-    # return values
-    return values
-
-
-def filter_by_hkey(header: fits.Header, key: str,
-                   values: Union[List[str], str]) -> bool:
-    """
-    Filter by a header key (returns True if valid)
-
-    :param header: fits header, the header to check
-    :param key: str, the key in the header to check
-    :param values: a list of string values to check against the header value
-    :return:
-    """
-    # deal with key not in header
-    if key not in header:
-        return False
-    # deal with non list values
-    if not isinstance(values, (list, np.ndarray)):
-        values = [values]
-    # loop around values
-    for value in values:
-        if str(header[key]) == str(value):
-            return True
-    # if we get here return False
-    return False
-
-
 def copy_header(header1: fits.Header, header2: fits.Header) -> fits.Header:
     """
     Copy all non-forbidden header keys from header2 to header1
@@ -441,7 +564,8 @@ def copy_header(header1: fits.Header, header2: fits.Header) -> fits.Header:
 
 # complex write inputs
 FitsData = Union[List[Union[Table, np.ndarray, None]], Table, np.ndarray, None]
-FitsHeaders = Union[List[Union[fits.Header, None]], fits.Header, None]
+FitsHeaders = Optional[LBLHeader, List[Union[LBLHeader, None]],
+                       List[Union[fits.Header, None]], fits.Header]
 FitsDtype = Union[List[Union[str, None]], str, None]
 
 
@@ -474,6 +598,8 @@ def write_fits(filename: str, data: FitsData = None,
     # deal with non list header
     if header is None:
         header = [None] * len(data)
+    elif isinstance(header, LBLHeader):
+        header = [header.to_fits()]
     elif isinstance(header, fits.Header):
         header = [header]
     # deal with no names
@@ -540,6 +666,9 @@ def write_fits(filename: str, data: FitsData = None,
                 # deal with no header
                 if header[ext] is None:
                     header[ext] = fits.Header()
+                # convert to fits header if needed
+                elif isinstance(header[ext], LBLHeader):
+                    header[ext] = header[ext].to_fits()
                 # add extension name to header
                 header[ext]['EXTNAME'] = names[ext]
             # deal with type = image
@@ -605,7 +734,7 @@ def get_urlfile(url: str, name: str, savepath: str):
 def load_table(filename: str, kind: Union[str, None] = None,
                fmt: str = 'fits', get_hdr: bool = False,
                extname: Optional[str] = None,
-               ) -> Union[Table, Tuple[Table, fits.Header]]:
+               ) -> Union[Table, Tuple[Table, LBLHeader]]:
     """
     Standard way to load table
 
@@ -634,10 +763,11 @@ def load_table(filename: str, kind: Union[str, None] = None,
         raise LblException(emsg.format(*eargs))
     # deal with obtaining table header
     if get_hdr:
+        # get header
         hdr = fits.getheader(filename)
-        # deal with main header in extension 1 (not primary)
-        if len(hdr) < 10:
-            hdr = fits.getheader(filename, ext=1)
+        # convert hdr to LBLHeader
+        hdr = LBLHeader.from_fits(hdr)
+        # return table and header
         return table, hdr
     else:
         return table

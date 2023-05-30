@@ -50,6 +50,17 @@ class Instrument:
         :param name: str, the name of the Instrument
         """
         self.name = name
+        # extra parameters (specific to instrument) may not be required
+        #   for all instruments but all should be here to know they are used
+        #   by at least one child class
+        self.orders: Optional[List[int]] = None
+        self.norders: Optional[int] = None
+        self.npixel =  Optional[int] = None
+        self.sci_header =  Optional[str] = None
+        self.default_template_name = Optional[str] = None
+        # define wave limits in nm
+        self.wavemin = Optional[float] = None
+        self.wavemax = Optional[float] = None
 
     def __str__(self) -> str:
         return 'Instrument[{0}]'.format(self.name)
@@ -73,7 +84,7 @@ class Instrument:
     # Common instrument methods (should be overridden if instrument requires)
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to
@@ -84,13 +95,8 @@ class Instrument:
         """
         # get header
         hdr = io.load_header(filename, kind, extnum, extname)
-        # convert header into dictionary
-        header_dict = dict()
-        # loop around keys and add them to the header dictionary
-        for key in hdr:
-            header_dict[key] = copy.deepcopy(hdr[key])
-        # return a dictionary
-        return header_dict
+        # return the LBL Header class
+        return io.LBLHeader.from_fits(hdr)
 
     def load_mask(self, filename: str) -> Table:
         """
@@ -98,7 +104,7 @@ class Instrument:
 
         :param filename: str, absolute path to filename
 
-        :return: tuple, data (np.ndarray) and header (fits.Header)
+        :return: Table, the mask table
         """
         _ = self, filename
         # print progress
@@ -106,21 +112,23 @@ class Instrument:
         # return mask table
         return io.load_table(filename, kind='mask table')
 
-    def load_template(self, filename: str, get_hdr: bool = False) -> Table:
+    def load_template(self, filename: str, get_hdr: bool = False
+                      ) -> Union[Table, Tuple[Table, io.LBLHeader]]:
         """
         Load a template
 
         :param filename: str, absolute path to filename
         :param get_hdr: bool, whether to get the head or not
 
-        :return: tuple, data (np.ndarray) and header (fits.Header)
+        :return: tuple, data (np.ndarray) and header (io.LBLHeader)
         """
         _ = self, filename
         return io.load_table(filename, kind='template fits file',
                              get_hdr=get_hdr)
 
-    def set_hkey(self, header: fits.Header, key: str, value: Any,
-                 comment: Union[str, None] = None) -> fits.Header:
+    def set_hkey(self, header: Union[io.LBLHeader, fits.Header],
+                 key: str, value: Any,
+                 comment: Union[str, None] = None) -> io.LBLHeader:
         """
         Set a header key (looking for key in params) and set it and its comment
         as necessary
@@ -208,18 +216,20 @@ class Instrument:
             return abspath, True
 
     def write_lblrv_table(self, ref_table: Dict[str, Any],
-                          ref_filename: str, header: fits.Header,
+                          ref_filename: str, header_dict: io.LBLHeader,
                           outputs: Dict[str, Any]):
         """
         Write the reference table to file "filename"
 
         :param ref_table: dict, the reference table dictionary
         :param ref_filename: str, the reference table absolute path
-        :param header: fits.Header, the header to write to primary extension
+        :param header_dict: io.LBLHeader, the header to write to primary
+                            extension
         :param outputs: dict, a dictionary of outputs from compute_rv function
 
         :return: None - write file
         """
+        header = header_dict.to_fits()
         # ---------------------------------------------------------------------
         # add keys to header
         # ---------------------------------------------------------------------
@@ -298,7 +308,7 @@ class Instrument:
         # return files
         return files
 
-    def load_lblrv_file(self, filename: str) -> Tuple[Table, fits.Header]:
+    def load_lblrv_file(self, filename: str) -> Tuple[Table, io.LBLHeader]:
         """
         Load an LBL RV file
 
@@ -310,7 +320,7 @@ class Instrument:
         # get fits bin table as astropy table
         table = io.load_table(filename, kind='lbl rv fits table')
         # get fits header
-        header = io.load_header(filename, kind='lbl rv fits table')
+        header = self.load_header(filename, kind='lbl rv fits table')
         # retuurn table and header
         return table, header
 
@@ -439,7 +449,7 @@ class Instrument:
                       dtype=datatypelist, names=name_list)
 
     def write_template(self, template_file: str, props: dict,
-                       sci_hdr: fits.Header, sci_table: dict):
+                       sci_hdict: io.LBLHeader, sci_table: dict):
         """
         Write the template file to disk
 
@@ -450,6 +460,8 @@ class Instrument:
         :param sci_table: dict, the science table in dictionary form
         :return:
         """
+        # convert hdict to fits header
+        sci_hdr = sci_hdict.to_fits()
         # populate primary header
         header = fits.Header()
         # copy header from reference header
@@ -487,7 +499,7 @@ class Instrument:
                       dtype=[None, 'table', 'table'])
 
     def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
-                            sci_hdr: fits.Header):
+                            sci_hdict: io.LBLHeader):
         """
         Write the write_tellu_file to disk
 
@@ -497,6 +509,8 @@ class Instrument:
                         from to the new template file
         :return:
         """
+        # convert hdict to header
+        sci_hdr = sci_hdict.to_fits()
         # populate primary header
         header = fits.Header()
         # copy header from reference header
@@ -541,7 +555,7 @@ class Instrument:
 
     def write_mask(self, mask_file: str, line_table: Table,
                    pos_mask: np.ndarray, neg_mask: np.ndarray,
-                   sys_vel: float, template_hdr: fits.Header):
+                   sys_vel: float, template_hdict: io.LBLHeader):
         """
         Write the mask (in lbl_mask) to disk
 
@@ -550,7 +564,7 @@ class Instrument:
         :param pos_mask: np.array, the positive weights mask
         :param neg_mask: np.array, the negative weights mask
         :param sys_vel: float, the systemic velocity for the object
-        :param template_hdr: fits.Header, the template header (to be copied
+        :param template_hdr: io.LBLHeader, the template header (to be copied
                              to the template)
 
         :return:
@@ -562,6 +576,8 @@ class Instrument:
         # set up the three outputs
         masks = [pos_mask, neg_mask, np.ones_like(pos_mask, dtype=bool)]
         extensions = ['pos', 'neg', 'full']
+        # get the template header
+        template_hdr = template_hdict.to_fits()
         # ---------------------------------------------------------------------
         # loop around each file
         for it in range(len(masks)):
@@ -689,7 +705,7 @@ class Instrument:
         raise self._not_implemented('load_blaze')
 
     def load_science_file(self, science_file: str
-                          ) -> Tuple[np.ndarray, fits.Header]:
+                          ) -> Tuple[np.ndarray, io.LBLHeader]:
         """
         Load a science exposure
 
@@ -698,10 +714,11 @@ class Instrument:
 
         :param filename: str, absolute path to filename
 
-        :return: tuple, data (np.ndarray) and header (fits.Header)
+        :return: tuple, data (np.ndarray) and header (io.LBLHeader)
         """
         # load the first extension of each
-        sci_data, sci_hdr = io.load_fits(science_file, kind='science fits file')
+        sci_data = io.load_fits(science_file, kind='science fits file')
+        sci_hdr = self.load_header(science_file, kind='science fits file')
         # return data and header
         return sci_data, sci_hdr
 
@@ -739,14 +756,14 @@ class Instrument:
 
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
-                                sci_hdr: fits.Header, calib_directory: str,
+                                sci_hdr: io.LBLHeader, calib_directory: str,
                                 normalize: bool = True):
         """
         Load the blaze file using a science file header
 
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
+        :param sci_hdr: io.LBLHeader - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
         :param normalize: bool, if True normalized the blaze per order
@@ -770,16 +787,16 @@ class Instrument:
         _ = sci_image, sci_wave
         raise self._not_implemented('no_blaze_corr')
 
-    def get_wave_solution(self, science_filename: Union[str, None] = None,
-                          data: Union[np.ndarray, None] = None,
-                          header: Union[fits.Header, None] = None):
+    def get_wave_solution(self, science_filename: Optional[str] = None,
+                          data: Optional[np.ndarray] = None,
+                          header: Optional[io.LBLHeader] = None):
         """
         Get a wave solution from a file
 
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
-        :param header: fits.Header, this is the header to use (if not given
+        :param header: io.LBLHeader, this is the header to use (if not given
                        requires filename to be set to load header)
         :param data: np.ndarray, this must be set along with header (if not
                      give we require filename to be set to load data)
@@ -803,7 +820,7 @@ class Instrument:
             msg = 'Loading sample wavegrid: {0}'
             log.general(msg.format(save_wavegrid_path))
             # return the wave grid
-            wavegrid, _ = io.load_fits(save_wavegrid_path)
+            wavegrid = io.load_fits(save_wavegrid_path)
             return wavegrid
         # else get it from the wave solution
         else:
@@ -812,7 +829,7 @@ class Instrument:
             log.general(msg.format(science_file))
             # get wave grid from the supplied filename
             wavegrid = self.get_wave_solution(science_file)
-            header = io.load_header(science_file)
+            header = self.load_header(science_file)
             # write the file to the calibration directory
             io.write_fits(save_wavegrid_path, data=[None, wavegrid],
                           header=[header, None], dtype=[None, 'image'])
@@ -841,11 +858,11 @@ class Instrument:
         """
         raise self._not_implemented('load_bad_hdr_keys')
 
-    def get_berv(self, sci_hdr: fits.Header):
+    def get_berv(self, sci_hdr: io.LBLHeader):
         """
         Get the Barycenteric correction for the RV
 
-        :param sci_hdr: fits.Header, the science header
+        :param sci_hdr: io.LBLHeader, the science header
 
         :return:
         """
@@ -853,7 +870,7 @@ class Instrument:
         raise self._not_implemented('get_berv')
 
     def populate_sci_table(self, filename: str, tdict: dict,
-                           sci_hdr: fits.Header, berv: float = 0.0):
+                           sci_hdr: io.LBLHeader, berv: float = 0.0):
         """
         Populate the science table
 
@@ -895,7 +912,7 @@ class Instrument:
         # loop around science files
         for science_file in tqdm(science_files):
             # load science file header
-            sci_hdr = io.load_header(science_file)
+            sci_hdr = self.load_header(science_file)
             # -----------------------------------------------------------------
             # must check time frame (if present) for FP
             cond2, cond3 = True, True
@@ -946,34 +963,34 @@ class Instrument:
         _ = self
         raise self._not_implemented('rdb_columns')
 
-    def fix_lblrv_header(self, header: fits.Header):
+    def fix_lblrv_header(self, header: io.LBLHeader):
         """
         Fix the LBL RV header
 
-        :param header: fits.Header, the LBL RV fits file header
+        :param header: io.LBLHeader, the LBL RV fits file header
 
-        :return: fits.Header, the updated LBL RV fits file header
+        :return: io.LBLHeader, the updated LBL RV fits file header
         """
         _ = header
         raise self._not_implemented('fix_lblrv_header')
 
-    def get_rjd_value(self, header: fits.Header):
+    def get_rjd_value(self, header: io.LBLHeader):
 
         """
         Get the rjd either from KW_MID_EXP_TIME or KW_BJD
         time returned is in MJD (not JD)
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
         :return:
         """
         _ = header
         raise self._not_implemented('get_rjd_value')
 
-    def get_plot_date(self, header: fits.Header):
+    def get_plot_date(self, header: io.LBLHeader):
         """
         Get the matplotlib plotting date
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
 
         :return: float, the plot date
         """

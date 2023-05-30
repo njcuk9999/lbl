@@ -207,8 +207,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         lblrv_file, lblrv_exists = inst.get_lblrv_file(science_file, lblrv_dir)
         # If output file exists then get the model velocity from here
         if lblrv_exists and not np.isfinite(model_velocity):
-            lblrv_hdr = io.load_header(lblrv_file, kind='lblrv fits file')
-            model_velocity = io.get_hkey(lblrv_hdr, inst.params['KW_MODELVEL'])
+            lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
+            model_velocity = lblrv_hdr.get_hkey(inst.params['KW_MODELVEL'])
             largs = [model_velocity]
             log.general('We read model velo = {0:.2f} m/s'.format(*largs))
         # if file exists and we are skipping done files
@@ -238,7 +238,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # check we have a bad hdr key
         if bad_hdr_key is not None and bad_hdr_key in sci_hdr:
             # get bad header key
-            sci_bad_hdr_key = io.get_hkey(sci_hdr, bad_hdr_key)
+            sci_bad_hdr_key = sci_hdr.get_hkey(bad_hdr_key)
             # if sci_bad_hdr_key in bad_hdr_keys
             if str(sci_bad_hdr_key) in bad_hdr_keys:
                 # log message about bad header key
@@ -254,7 +254,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # check we have snr key in science header
         if snr_key in sci_hdr:
             # get snr value
-            snr_value = io.get_hkey(sci_hdr, snr_key)
+            snr_value = sci_hdr.get_hkey(snr_key)
             # check if value is less than limit
             if snr_value < snr_limit:
                 # log message

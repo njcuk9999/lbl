@@ -726,7 +726,7 @@ def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
 
 
 def compute_rv(inst: InstrumentsType, sci_iteration: int,
-               sci_data: np.ndarray, sci_hdr: fits.Header,
+               sci_data: np.ndarray, sci_hdr: io.LBLHeader,
                splines: Dict[str, Any], ref_table: Dict[str, Any],
                blaze: np.ndarray, systemic_all: np.ndarray,
                mjdate_all: np.ndarray, ccf_ewidth: Union[float, None] = None,
@@ -739,7 +739,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     :param inst: Instrument instance
     :param sci_iteration: int, the science files iteration number
     :param sci_data: np.ndarray, the science data
-    :param sci_hdr: fits.Header, the science header
+    :param sci_hdr: io.LBLHeader, the science header
     :param splines: Dict, the dictionary of template splines
     :param ref_table: Dict, the reference table
     :param blaze: np.ndarray, the blaze to correct the science data
@@ -801,7 +801,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # copy science data
     sci_data0 = np.array(sci_data)
     # get the mid exposure time in MJD
-    mjdate = io.get_hkey(sci_hdr, mid_exp_time_key)
+    mjdate = sci_hdr.get_hkey(mid_exp_time_key)
     # -------------------------------------------------------------------------
     # get the wave grid for this science data
     # -------------------------------------------------------------------------
@@ -1659,7 +1659,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 rdb_dict[key][row] = np.nan
             # if we have key add the value
             elif key in rvhdr:
-                rdb_dict[key][row] = io.get_hkey(rvhdr, key)
+                rdb_dict[key][row] = rvhdr.get_hkey(key)
             # else print a warning and add a NaN
             else:
                 # add to missing keys dict counter
@@ -2612,8 +2612,8 @@ def get_stellar_models(inst: InstrumentsType, model_dir: str
         log.general(msg.format(out_model))
     # -------------------------------------------------------------------------
     # load the model wave file and the model spectrum
-    m_wavemap, _ = io.load_fits(out_wavefile)
-    m_spectrum, _ = io.load_fits(out_model)
+    m_wavemap = io.load_fits(out_wavefile)
+    m_spectrum = io.load_fits(out_model)
     # -------------------------------------------------------------------------
     # model wavemap is in Angstrom -> convert to nm
     m_wavemap = m_wavemap / 10.0

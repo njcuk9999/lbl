@@ -173,7 +173,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         e2ds_dict = dict()
         e2ds_dict['flux'] = sci_image
         e2ds_dict['wavelength'] = sci_wave
-        e2ds_dict['AIRMASS'] = io.get_hkey(sci_hdr, inst.params['KW_AIRMASS'])
+        e2ds_dict['AIRMASS'] = sci_hdr.get_hkey(inst.params['KW_AIRMASS'])
         e2ds_dict['OBJECT'] = inst.params['OBJECT_SCIENCE']
         e2ds_dict['BERV'] = inst.get_berv(sci_hdr)
         e2ds_dict['FILENAME'] = filename

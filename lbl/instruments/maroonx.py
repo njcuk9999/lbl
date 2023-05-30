@@ -396,9 +396,9 @@ class MaroonX(Instrument):
         # get systemic velocity key
         sysvelkey = self.params['KW_SYSTEMIC_VELO']
         # load the mask header
-        mask_hdr = io.load_header(mask_file, kind='mask fits file')
+        mask_hdr = self.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
-        systemic_vel = -io.get_hkey(mask_hdr, sysvelkey)
+        systemic_vel = -mask_hdr.get_hkey(sysvelkey)
         # return systemic velocity in m/s
         return systemic_vel
 
@@ -449,7 +449,7 @@ class MaroonX(Instrument):
         # loop around science files
         for science_file in science_files:
             # load header
-            sci_hdr = io.load_header(science_file)
+            sci_hdr = self.load_header(science_file)
             # get time
             times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
         # get sort mask
@@ -461,7 +461,7 @@ class MaroonX(Instrument):
 
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
-                                sci_hdr: fits.Header,
+                                sci_hdr: io.LBLHeader,
                                 calib_directory: str,
                                 normalize: bool = True
                                 ):
@@ -470,7 +470,7 @@ class MaroonX(Instrument):
 
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
+        :param sci_hdr: io.LBLHeader - the science file header
         :param calib_directory: str, the directory containing calibration files
                                 (i.e. containing the blaze files)
         :param normalize: bool, if True normalized the blaze per order
@@ -481,16 +481,16 @@ class MaroonX(Instrument):
         _ = science_file, sci_image, sci_hdr, calib_directory, normalize
         raise self._not_implemented('load_blaze_from_science')
 
-    def get_wave_solution(self, science_filename: Union[str, None] = None,
-                          data: Union[np.ndarray, None] = None,
-                          header: Union[fits.Header, None] = None
+    def get_wave_solution(self, science_filename: Optional[str] = None,
+                          data: Optional[np.ndarray] = None,
+                          header: Optional[io.LBLHeader] = None
                           ) -> np.ndarray:
         """
         Get a wave solution from a file (for HARPS this is from the header)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
-        :param header: fits.Header, this is the header to use (if not given
+        :param header: io.LBLHeader, this is the header to use (if not given
                        requires filename to be set to load header)
         :param data: np.ndarray, this must be set along with header (if not
                      give we require filename to be set to load data)
@@ -504,8 +504,8 @@ class MaroonX(Instrument):
         # ---------------------------------------------------------------------
         # get header
         if header is None or data is None:
-            sci_data, sci_hdr = io.load_fits(science_filename,
-                                             'wave fits file')
+            sci_data = io.load_fits(science_filename, 'wave fits file')
+            sci_hdr = self.load_header(science_filename, 'wave fits file')
         else:
             sci_data, sci_hdr = data, header
         # ---------------------------------------------------------------------
@@ -515,12 +515,12 @@ class MaroonX(Instrument):
         xpix = np.arange(nbx)
         # ---------------------------------------------------------------------
         # get wave order from header
-        waveordn = io.get_hkey(sci_hdr, kw_waveordn, science_filename)
-        wavedegn = io.get_hkey(sci_hdr, kw_wavedegn, science_filename)
+        waveordn = sci_hdr.get_hkey(kw_waveordn, science_filename)
+        wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename)
         # get the wave 2d list
-        wavecoeffs = io.get_hkey_2d(sci_hdr, key=kw_wavecoeffs,
-                                    dim1=waveordn, dim2=wavedegn + 1,
-                                    filename=science_filename)
+        wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
+                                         dim1=waveordn, dim2=wavedegn + 1,
+                                         filename=science_filename)
         # ---------------------------------------------------------------------
         # convert to wave map
         wavemap = np.zeros([waveordn, nbx])
@@ -548,11 +548,11 @@ class MaroonX(Instrument):
         # return an empty list and bad_hdr_key = None
         return [], None
 
-    def get_berv(self, sci_hdr: fits.Header) -> float:
+    def get_berv(self, sci_hdr: io.LBLHeader) -> float:
         """
         Get the Barycenteric correction for the RV in m/s
 
-        :param sci_hdr: fits.Header, the science header
+        :param sci_hdr: io.LBLHeader, the science header
 
         :return:
         """
@@ -560,14 +560,14 @@ class MaroonX(Instrument):
         hdr_key = self.params['KW_BERV']
         # BERV depends on whether object is FP or not
         if 'FP' not in self.params['OBJECT_SCIENCE']:
-            berv = io.get_hkey(sci_hdr, hdr_key)
+            berv = sci_hdr.get_hkey(hdr_key)
         else:
             berv = 0.0
         # return the berv measurement (in m/s)
         return berv
 
     def populate_sci_table(self, filename: str, tdict: dict,
-                           sci_hdr: fits.Header, berv: float = 0.0) -> dict:
+                           sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
         """
         Populate the science table
 
@@ -638,13 +638,13 @@ class MaroonX(Instrument):
         # return a numpy array
         return np.array(keys), fp_flags
 
-    def fix_lblrv_header(self, header: fits.Header) -> fits.Header:
+    def fix_lblrv_header(self, header: io.LBLHeader) -> io.LBLHeader:
         """
         Fix the LBL RV header
 
-        :param header: fits.Header, the LBL RV fits file header
+        :param header: io.LBLHeader, the LBL RV fits file header
 
-        :return: fits.Header, the updated LBL RV fits file header
+        :return: io.LBLHeader, the updated LBL RV fits file header
         """
         # get keys from params
         kw_snrgoal = self.params['KW_SNRGOAL']
@@ -662,21 +662,21 @@ class MaroonX(Instrument):
         # return header
         return header
 
-    def get_rjd_value(self, header: fits.Header) -> float:
+    def get_rjd_value(self, header:io.LBLHeader) -> float:
 
         """
         Get the rjd either from KW_MID_EXP_TIME or KW_BJD
         time returned is in MJD (not JD)
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
         :return:
         """
         # get keys from params
         kw_mjdmid = self.params['KW_MID_EXP_TIME']
         kw_bjd = self.params['KW_MID_EXP_TIME']
         # get mjdmid and bjd
-        mid_exp_time = io.get_hkey(header, kw_mjdmid)
-        bjd = io.get_hkey(header, kw_bjd)
+        mid_exp_time = header.get_hkey(kw_mjdmid)
+        bjd = header.get_hkey(kw_bjd)
         if isinstance(bjd, str):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
@@ -686,18 +686,18 @@ class MaroonX(Instrument):
             # return RJD = MJD + 0.5
             return float(bjd_mjd) + 0.5
 
-    def get_plot_date(self, header: fits.Header):
+    def get_plot_date(self, header: io.LBLHeader):
         """
         Get the matplotlib plotting date
 
-        :param header: fits.Header - the LBL rv header
+        :param header: io.LBLHeader - the LBL rv header
 
         :return: float, the plot date
         """
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
         # get mjdate
-        mjdate = io.get_hkey(header, kw_mjdate)
+        mjdate = header.get_hkey(kw_mjdate)
         # convert to plot date and take off JD?
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date
@@ -782,7 +782,7 @@ class MaroonXBlue(MaroonX):
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to
@@ -794,31 +794,25 @@ class MaroonXBlue(MaroonX):
         _ = kind, extnum, extname
         # get header
         store = pd.HDFStore(filename)
-        # deal with key not in store
-        if self.sci_header not in store:
-            emsg = 'Cannot find header in file {0} using key {1}'
-            eargs = [filename, self.sci_header]
-            raise LblException(emsg.format(*eargs))
-        # get the header
-        hdr_df = store[self.sci_header]
-        # convert header into dictionary
-        header_dict = dict()
-        # loop around keys and add them to the header dictionary
-        for key in hdr_df.index.values:
-            header_dict[key] = copy.deepcopy(hdr_df[key])
+        # get lbl header
+        header_dict = io.LBLHeader.from_store(store, self.sci_header,
+                                              filename)
         # close store
         store.close()
+        # ---------------------------------------------------------------------
         # deal with jd to mjd keys
         for key in self.jd2mjd:
             okey = self.jd2mjd[key]
             if okey in header_dict:
                 # calcualte the mjd value
                 mjdvalue = Time(header_dict[key], format='jd').mjd
+                comment= 'MJD from {0}'.format(okey)
                 # push back into header dictionary
-                header_dict[self.jd2mjd[key]] = mjdvalue
+                header_dict[self.jd2mjd[key]] = (mjdvalue, comment)
         # add date
         midpoint = Time(header_dict[self.midpoint_key], format='mjd')
-        header_dict[self.date_key] = midpoint.iso
+        comment = 'Human time from {0}'.format(self.midpoint_key)
+        header_dict[self.date_key] = (midpoint.iso, comment)
         # return a dictionary
         return header_dict
 
@@ -891,16 +885,16 @@ class MaroonXBlue(MaroonX):
         # return absolute path
         return abspath
 
-    def get_wave_solution(self, science_filename: Union[str, None] = None,
-                          data: Union[np.ndarray, None] = None,
-                          header: Union[fits.Header, None] = None
+    def get_wave_solution(self, science_filename: Optional[str] = None,
+                          data: Optional[np.ndarray] = None,
+                          header: Optional[io.LBLHeader] = None
                           ) -> np.ndarray:
         """
         Get a wave solution from a file (for MAROONX)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
-        :param header: fits.Header, this is the header to use (if not given
+        :param header: io.LBLHeader, this is the header to use (if not given
                        requires filename to be set to load header)
         :param data: np.ndarray, this must be set along with header (if not
                      give we require filename to be set to load data)
@@ -1016,7 +1010,7 @@ class MaroonXRed(MaroonX):
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> Dict[str, Any]:
+                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to
@@ -1028,18 +1022,9 @@ class MaroonXRed(MaroonX):
         _ = kind, extnum, extname
         # get header
         store = pd.HDFStore(filename)
-        # deal with key not in store
-        if self.sci_header not in store:
-            emsg = 'Cannot find header in file {0} using key {1}'
-            eargs = [filename, self.sci_header]
-            raise LblException(emsg.format(*eargs))
-        # get the header
-        hdr_df = store[self.sci_header]
-        # convert header into dictionary
-        header_dict = dict()
-        # loop around keys and add them to the header dictionary
-        for key in hdr_df.index.values:
-            header_dict[key] = copy.deepcopy(hdr_df[key])
+        # get lbl header
+        header_dict = io.LBLHeader.from_store(store, self.sci_header,
+                                              filename)
         # close store
         store.close()
         # deal with jd to mjd keys
@@ -1048,11 +1033,13 @@ class MaroonXRed(MaroonX):
             if okey in header_dict:
                 # calcualte the mjd value
                 mjdvalue = Time(header_dict[key], format='jd').mjd
+                comment= 'MJD from {0}'.format(okey)
                 # push back into header dictionary
-                header_dict[self.jd2mjd[key]] = mjdvalue
+                header_dict[self.jd2mjd[key]] = (mjdvalue, comment)
         # add date
         midpoint = Time(header_dict[self.midpoint_key], format='mjd')
-        header_dict[self.date_key] = midpoint.iso
+        comment = 'Human time from {0}'.format(self.midpoint_key)
+        header_dict[self.date_key] = (midpoint.iso, comment)
         # return a dictionary
         return header_dict
 
@@ -1125,16 +1112,16 @@ class MaroonXRed(MaroonX):
         # return absolute path
         return abspath
 
-    def get_wave_solution(self, science_filename: Union[str, None] = None,
-                          data: Union[np.ndarray, None] = None,
-                          header: Union[fits.Header, None] = None
+    def get_wave_solution(self, science_filename: Optional[str] = None,
+                          data: Optional[np.ndarray] = None,
+                          header: Optional[io.LBLHeader] = None
                           ) -> np.ndarray:
         """
         Get a wave solution from a file (for MAROONX)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
-        :param header: fits.Header, this is the header to use (if not given
+        :param header: io.LBLHeader, this is the header to use (if not given
                        requires filename to be set to load header)
         :param data: np.ndarray, this must be set along with header (if not
                      give we require filename to be set to load data)
