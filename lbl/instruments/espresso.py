@@ -44,15 +44,15 @@ class Espresso(Instrument):
     def __init__(self, params: base_classes.ParamDict):
         # call to super function
         super().__init__('ESPRESSO')
-        # set parameters for instrument
-        self.params = params
-        # override params
-        self.param_override()
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_ESPRESSO.fits'
         # define wave limits in nm
         self.wavemin = 377.189
         self.wavemax = 790.788
+        # set parameters for instrument
+        self.params = params
+        # override params
+        self.param_override()
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
@@ -417,7 +417,7 @@ class Espresso(Instrument):
         # load the mask header
         mask_hdr = self.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
-        systemic_vel = -mask_hdr.get_hkey(sysvelkey)
+        systemic_vel = -mask_hdr.get_hkey(sysvelkey, dtype=float)
         # return systemic velocity in m/s
         return systemic_vel
 
@@ -713,8 +713,8 @@ class Espresso(Instrument):
         kw_mjdmid = self.params['KW_MID_EXP_TIME']
         kw_bjd = self.params['KW_BJD']
         # get mjdmid and bjd
-        mid_exp_time = header.get_hkey(kw_mjdmid)
-        bjd = header.get_hkey(kw_bjd)
+        mid_exp_time = header.get_hkey(kw_mjdmid, dtype=float)
+        bjd = header.get_hkey(kw_bjd, dtype=float)
         if isinstance(bjd, str):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
@@ -735,7 +735,7 @@ class Espresso(Instrument):
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
         # get mjdate
-        mjdate = header.get_hkey(kw_mjdate)
+        mjdate = header.get_hkey(kw_mjdate, dtype=float)
         # convert to plot date and take off JD?
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date

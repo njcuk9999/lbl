@@ -54,12 +54,27 @@ class Instrument:
         #   by at least one child class
         self.orders: Optional[List[int]] = None
         self.norders: Optional[int] = None
-        self.npixel = Optional[int] = None
-        self.sci_header = Optional[str] = None
-        self.default_template_name = Optional[str] = None
+        self.npixel: Optional[int] = None
+        self.default_template_name: Optional[str] = None
+        # hd5 file definitions
+        self.header_storekey: Optional[str] = None
+        self.blaze_storekey: Optional[str] = None
+        self.sci_storekey: Optional[str] = None
+        self.sci_extension: Optional[int] = None
+        self.blaze_extension: Optional[int] = None
+        # dict of keys to turn from jd --> mjd
+        self.jd2mjd: Dict[str, str] = dict()
+        # midpoint key
+        self.midpoint_key: Optional[str] = None
+        # set date key to add
+        self.date_key: Optional[str] = None
+        # set instrument drift key to get/readd
+        self.drift_key: Optional[str] = None
+        # set dprtype key
+        self.dprtype_key: Optional[str] = None
         # define wave limits in nm
-        self.wavemin = Optional[float] = None
-        self.wavemax = Optional[float] = None
+        self.wavemin: Optional[float] = None
+        self.wavemax: Optional[float] = None
 
     def __str__(self) -> str:
         return 'Instrument[{0}]'.format(self.name)

@@ -800,7 +800,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # copy science data
     sci_data0 = np.array(sci_data)
     # get the mid exposure time in MJD
-    mjdate = sci_hdr.get_hkey(mid_exp_time_key)
+    mjdate = sci_hdr.get_hkey(mid_exp_time_key, dtype=float)
     # -------------------------------------------------------------------------
     # get the wave grid for this science data
     # -------------------------------------------------------------------------
@@ -1658,7 +1658,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 rdb_dict[key][row] = np.nan
             # if we have key add the value
             elif key in rvhdr:
-                rdb_dict[key][row] = rvhdr.get_hkey(key)
+                rdb_dict[key][row] = rvhdr.get_hkey(key, dtype=float)
             # else print a warning and add a NaN
             else:
                 # add to missing keys dict counter

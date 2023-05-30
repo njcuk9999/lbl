@@ -9,6 +9,7 @@ Created on 2021-03-17
 
 @author: cook
 """
+import platform
 from typing import Any, Dict, List
 
 import matplotlib
@@ -53,6 +54,8 @@ def import_matplotlib():
         try:
             matplotlib.use(gui, force=True)
             import matplotlib.pyplot as plt
+            plt.show()
+            plt.close()
             PLT_MOD = plt
             return plt
         except Exception as _:

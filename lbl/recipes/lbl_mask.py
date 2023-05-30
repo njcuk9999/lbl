@@ -110,7 +110,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     dparams = select.make_all_directories(inst)
     mask_dir, template_dir = dparams['MASK_DIR'], dparams['TEMPLATE_DIR']
-    models_dir = dparams['MODELS_DIR']
+    models_dir = dparams['MODEL_DIR']
     lbl_reftable_dir = dparams['LBLRT_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames

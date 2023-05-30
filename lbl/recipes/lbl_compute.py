@@ -118,7 +118,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     calib_dir, science_dir = dparams['CALIB_DIR'], dparams['SCIENCE_DIR']
     lblrv_dir, lbl_reftable_dir = dparams['LBLRV_DIR'], dparams['LBLRT_DIR']
     lbl_rdb_dir, plot_dir = dparams['LBL_RDB_DIR'], dparams['PLOT_DIR']
-    models_dir = dparams['MODELS_DIR']
+    models_dir = dparams['MODEL_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
@@ -208,7 +208,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         # If output file exists then get the model velocity from here
         if lblrv_exists and not np.isfinite(model_velocity):
             lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
-            model_velocity = lblrv_hdr.get_hkey(inst.params['KW_MODELVEL'])
+            model_velocity = lblrv_hdr.get_hkey(inst.params['KW_MODELVEL'],
+                                                dtype=float)
             largs = [model_velocity]
             log.general('We read model velo = {0:.2f} m/s'.format(*largs))
         # if file exists and we are skipping done files
@@ -254,7 +255,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # check we have snr key in science header
         if snr_key in sci_hdr:
             # get snr value
-            snr_value = sci_hdr.get_hkey(snr_key)
+            snr_value = sci_hdr.get_hkey(snr_key, dtype=float)
             # check if value is less than limit
             if snr_value < snr_limit:
                 # log message

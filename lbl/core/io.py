@@ -157,34 +157,27 @@ class LBLHeader(UserDict):
         return new
 
     @classmethod
-    def from_store(cls, store: pd.HDFStore, storekey: str,
-                   filename: str) -> 'LBLHeader':
-        new = cls()
-        # deal with key not in store
-        if storekey not in store:
-            emsg = 'Cannot find header in file {0} using key {1}'
-            eargs = [filename, storekey]
-            raise LblException(emsg.format(*eargs))
-        # get the header
-        hdr_df = store[storekey]
-        # loop around keys and add them to the header dictionary
-        for key in hdr_df.index.values:
-            new[key] = copy.deepcopy(hdr_df[key])
-            new.comments[key] = ''
+    def from_store(cls, storekey: str, filename: str) -> 'LBLHeader':
         # construct LBLHeader
-        return new
+        return hdf_to_header(storekey, filename)
 
     def to_fits(self) -> fits.Header:
         header = fits.Header()
         # loop around keys and add them to the header dictionary
         for key in self.keys():
-            header[key] = (self[key], self.comments[key])
+            if len(key) > 8:
+                outkey = f'HIERARCH {key}'
+            else:
+                outkey = key
+            # Add key to dictionary
+            header[outkey] = (self[key], self.comments[key])
         # return header
         return header
 
     def get_hkey(self,  key: Union[str, List[str]],
                  filename: Union[str, None] = None,
-                 required: bool = True) -> Any:
+                 required: bool = True,
+                 dtype: Any = None) -> Any:
         # deal with no filename
         if filename is None:
             filename = 'Unknown'
@@ -206,7 +199,16 @@ class LBLHeader(UserDict):
         # test for key in header
         if drskey in self.data:
             try:
-                return self.data[drskey]
+                if dtype is None:
+                    return self.data[drskey]
+                else:
+                    try:
+                        return dtype(self.data[drskey])
+                    except Exception as e:
+                        emsg = ('Cannot convert key {0} to {1} from header: {2}'
+                                '\n\t{3}: {4}')
+                        eargs = [drskey, str(dtype), filename, type(e), str(e)]
+                        raise LblException(emsg.format(*eargs))
             except Exception as e:
                 emsg = 'Cannot use key {0} from header: {1} \n\t{2}: {3}'
                 eargs = [drskey, filename, type(e), str(e)]
@@ -562,8 +564,8 @@ def copy_header(header1: fits.Header, header2: fits.Header) -> fits.Header:
 
 # complex write inputs
 FitsData = Union[List[Union[Table, np.ndarray, None]], Table, np.ndarray, None]
-FitsHeaders = Optional[LBLHeader, List[Union[LBLHeader, None]],
-                       List[Union[fits.Header, None]], fits.Header]
+FitsHeaders = Union[LBLHeader, List[Union[LBLHeader, None]],
+                    List[Union[fits.Header, None]], fits.Header, None]
 FitsDtype = Union[List[Union[str, None]], str, None]
 
 
@@ -724,6 +726,62 @@ def get_urlfile(url: str, name: str, savepath: str):
     msg = 'Loading {0} file from: {1}'
     margs = [name, savepath]
     log.general(msg.format(*margs))
+
+
+# =============================================================================
+# Define hdf functions
+# =============================================================================
+def hdf_to_e2ds(store_key: str, filename: str, ext: int, norders: int,
+                orderlist: List[int], npixels: int,
+                subkey: Optional[str] = None) -> np.ndarray:
+    # load the store
+    store = pd.HDFStore(filename)
+    # deal with not having blaze_blue in HDFstore
+    if store_key not in store:
+        emsg = '{0} is not in HDFStore for {1}'
+        eargs = [store_key, filename]
+        raise LblException(emsg.format(*eargs))
+    # get the blaze blue from store
+    if subkey is None:
+        image_df = store[store_key][ext]
+    else:
+        image_df = store[store_key][subkey][ext]
+    # make blaze numpy array
+    image = np.ones((norders, npixels))
+    # loop around orders and populate blaze
+    for it, order_num in enumerate(orderlist):
+        image[it] = image_df[order_num]
+    # close store
+    store.close()
+    # return image
+    return image
+
+
+def hdf_to_header(storekey: str, filename: str):
+    # get header
+    store = pd.HDFStore(filename)
+    # create a new LBL header
+    new = LBLHeader()
+    # deal with key not in store
+    if storekey not in store:
+        emsg = 'Cannot find header in file {0} using key {1}'
+        eargs = [filename, storekey]
+        raise LblException(emsg.format(*eargs))
+    # get the header
+    hdr_df = store[storekey]
+    # loop around keys and add them to the header dictionary
+    for key in hdr_df.index.values:
+        outkey = str(key)
+        # remove HIERARCH from key
+        while outkey.startswith('HIERARCH '):
+            outkey = outkey[len('HIERARCH '):]
+        # copy key into new LBL Header
+        new[outkey] = copy.deepcopy(hdr_df[key])
+        new.comments[outkey] = ''
+    # close store
+    store.close()
+    # return the new LBL header
+    return new
 
 
 # =============================================================================

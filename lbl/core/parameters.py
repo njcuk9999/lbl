@@ -888,6 +888,11 @@ params.set(key='KW_TEMPLATE_BERVBINS', value='LBLTBRVB', source=__NAME__,
            not_none=True, desc='define the number of template berv bins',
            comment='Number of template BERV bins')
 
+# define the instrumental drift key
+params.set(key='KW_INST_DRIFT', value=None, source=__NAME__, not_none=False,
+           desc='define the instrumental drift key word in m/s',
+           comment='Instrumental drift in m/s')
+
 # =============================================================================
 # Start of code
 # =============================================================================

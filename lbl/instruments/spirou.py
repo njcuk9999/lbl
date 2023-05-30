@@ -411,7 +411,7 @@ class Spirou(Instrument):
         # load the mask header
         mask_hdr = self.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
-        systemic_vel = -mask_hdr.get_hkey(sysvelkey)
+        systemic_vel = -mask_hdr.get_hkey(sysvelkey, dtype=float)
         # return systemic velocity in m/s
         return systemic_vel
 
@@ -557,8 +557,8 @@ class Spirou(Instrument):
         xpix = np.arange(nbx)
         # ---------------------------------------------------------------------
         # get wave order from header
-        waveordn = sci_hdr.get_hkey(kw_waveordn, science_filename)
-        wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename)
+        waveordn = sci_hdr.get_hkey(kw_waveordn, science_filename, dtype=int)
+        wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename, dtype=int)
         # get the wave 2d list
         wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
                                          dim1=waveordn, dim2=wavedegn + 1,
@@ -643,7 +643,7 @@ class Spirou(Instrument):
         hdr_key = self.params['KW_BERV']
         # get BERV (if not a calibration)
         if not self.params['DATA_TYPE'] != 'SCIENCE':
-            berv = sci_hdr.get_hkey(hdr_key) * 1000
+            berv = sci_hdr.get_hkey(hdr_key, dtype=float) * 1000
         else:
             berv = 0.0
         # return the berv measurement (in m/s)
@@ -874,8 +874,8 @@ class Spirou(Instrument):
         kw_mjdmid = self.params['KW_MID_EXP_TIME']
         kw_bjd = self.params['KW_BJD']
         # get mjdmid and bjd
-        mid_exp_time = header.get_hkey(kw_mjdmid)
-        bjd = header.get_hkey(kw_bjd)
+        mid_exp_time = header.get_hkey(kw_mjdmid, dtype=float)
+        bjd = header.get_hkey(kw_bjd, dtype=float)
         if isinstance(bjd, str):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
@@ -896,7 +896,7 @@ class Spirou(Instrument):
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
         # get mjdate
-        mjdate = header.get_hkey(kw_mjdate)
+        mjdate = header.get_hkey(kw_mjdate, dtype=float)
         # convert to plot date and take off JD?
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date

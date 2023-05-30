@@ -84,6 +84,7 @@ InstDict['ESPRESSO'] = dict()
 InstDict['ESPRESSO']['None'] = espresso.Espresso
 InstDict['HARPSN'] = dict()
 InstDict['HARPSN']['None'] = harpsn.HarpsN
+InstDict['MAROONX'] = dict()
 InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
 
@@ -385,7 +386,7 @@ def make_all_directories(inst: Union[InstrumentsType],
     props.set('LBLRT_DIR', value=lbl_reftable_dir, source=func_name)
     props.set('LBL_RDB_DIR', value=lbl_rdb_dir, source=func_name)
     props.set('PLOT_DIR', value=plot_dir, source=func_name)
-    props.set('MODELS_DIR', value=model_dir, source=func_name)
+    props.set('MODEL_DIR', value=model_dir, source=func_name)
     # return output directories
     return props
 
