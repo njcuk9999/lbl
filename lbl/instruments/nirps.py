@@ -1147,7 +1147,6 @@ class NIRPS_HA(NIRPS):
         # override params
         self.param_override()
 
-
     def param_override(self):
         """
         Parameter override for NIRPS_HA ESO parameters
@@ -1225,7 +1224,6 @@ class NIRPS_HE(NIRPS):
         self.params = params
         # override params
         self.param_override()
-
 
     def param_override(self):
         """
@@ -1309,7 +1307,6 @@ class NIRPS_HA_ESO(NIRPS_HA):
         self.params = params
         # override params
         self.param_override()
-
 
     def param_override(self):
         """
@@ -1406,7 +1403,10 @@ class NIRPS_HA_ESO(NIRPS_HA):
         We must push this to a dictionary as not all instrument confirm to
         a fits header
 
-        :param filename:
+        :param filename: str, the filename to load
+        :param kind: str, the kind of file we are loading
+        :param extnum: int, the extension number to load
+        :param extname: str, the extension name to load
         :return:
         """
         # get header
@@ -1719,7 +1719,6 @@ class NIRPS_HE_ESO(NIRPS_HE):
         self.params = params
         # override params
         self.param_override()
-
 
     def param_override(self):
         """

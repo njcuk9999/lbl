@@ -100,7 +100,10 @@ class Instrument:
         We must push this to a dictinoary as not all instrument confirm to
         a fits header
 
-        :param filename:
+        :param filename: str, the filename to load
+        :param kind: str, the kind of file we are loading
+        :param extnum: int, the extension number to load
+        :param extname: str, the extension name to load
         :return:
         """
         # get header
@@ -622,8 +625,8 @@ class Instrument:
                           header=[header, None],
                           dtype=[None, 'table'])
 
-    def get_model_files(self, directory: str, url: str,
-                        model_dict: Dict[str, str]):
+    @staticmethod
+    def get_model_files(directory: str, url: str, model_dict: Dict[str, str]):
         """
         Chec/Get the model files from the model repository
 
@@ -648,7 +651,8 @@ class Instrument:
             # get file from url
             io.get_urlfile(fileurl, key, model_file)
 
-    def copy_default_mask(self, model_directory: str, mask_directory: str,
+    @staticmethod
+    def copy_default_mask(model_directory: str, mask_directory: str,
                           filename: str):
         """
         Copy the default mask for this instrument to the mask directory
@@ -780,6 +784,7 @@ class Instrument:
         """
         Load the blaze file using a science file header
 
+        :param science_file: str, the science file
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: io.LBLHeader - the science file header

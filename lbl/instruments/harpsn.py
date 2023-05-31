@@ -285,7 +285,10 @@ class HarpsN(Instrument):
         We must push this to a dictinoary as not all instrument confirm to
         a fits header
 
-        :param filename:
+        :param filename: str, the filename to load
+        :param kind: str, the kind of file we are loading
+        :param extnum: int, the extension number to load
+        :param extname: str, the extension name to load
         :return:
         """
         # get header
@@ -492,6 +495,7 @@ class HarpsN(Instrument):
         """
         Load the blaze file using a science file header
 
+        :param science_file: str, the science file
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: io.LBLHeader - the science file header

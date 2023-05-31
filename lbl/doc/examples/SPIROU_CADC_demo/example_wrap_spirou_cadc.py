@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Test of the LBL for HARPS (Proxima-tc)
+Test of the LBL using SPIROU (CADC mode)
 
-Created on 2021-10-18
+Created on 2022-09-26
+Last updated 2022-09-26
 
 @author: artigau, cook
 """
 from lbl import lbl_wrap
+
 
 # =============================================================================
 # Start of code
@@ -26,7 +28,7 @@ if __name__ == "__main__":
     # This is the instrument name
     #   Currently supported instruments are SPIROU, HARPS, ESPRESSO, CARMENES
     #                                       NIRPS_HE, NIRPS_HA, MAROONX
-    rparams['INSTRUMENT'] = 'HARPS'
+    rparams['INSTRUMENT'] = 'SPIROU'
     #   Data source must be as follows:
     #       SPIROU: APERO or CADC
     #       NIRPS_HA: APERO or ESO
@@ -35,33 +37,49 @@ if __name__ == "__main__":
     #       ESPRESSO: None
     #       HARPS: None
     #       MAROONX: RED or BLUE
-    rparams['DATA_SOURCE'] = 'None'
+    rparams['DATA_SOURCE'] = 'CADC'
     # The data directory where all data is stored under - this should be an
     #    absolute path
-    rparams['DATA_DIR'] = '{DATA_DIR}'
+    rparams['DATA_DIR'] = '/data/spirou/data/lbl/'
     # The input file string (including wildcards) - if not set will use all
     #   files in the science directory (for this object name)
     # rparams['INPUT_FILE'] = '2*e2dsff_AB.fits'
+
+    # -------------------------------------------------------------------------
+    # special parameters only for SPIROU CADC
+    # -------------------------------------------------------------------------
+    # Must set the fiber type (AB, A, B, C) as this is control by extname
+    rparams['FORCE_FIBER'] = 'AB'
+    # Must set the flux column (controlled by extname)
+    #   - Can be Flux (for e.fits and t.fits)
+    #   - Can be Pol or StokesI or Null1 or Null2 (for p.fits)
+    rparams['FLUX_EXTENSION_NAME'] = 'Flux'
+
     # -------------------------------------------------------------------------
     # science criteria
     # -------------------------------------------------------------------------
     # The data type (either SCIENCE or FP or LFC)
-    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['DATA_TYPES'] = ['FP', 'SCIENCE', 'SCIENCE', 'SCIENCE', 'SCIENCE',
+                             'SCIENCE', 'SCIENCE', 'SCIENCE', 'SCIENCE',
+                             'SCIENCE']
     # The object name (this is the directory name under the /science/
     #    sub-directory and thus does not have to be the name in the header
-    rparams['OBJECT_SCIENCE'] = ['PROXIMA']
+    rparams['OBJECT_SCIENCE'] = ['FP', 'GJ1002', 'GJ1286', 'GJ1289', 'GL15A',
+                                 'GL411', 'GL412A', 'GL687', 'GL699', 'GL905']
     # This is the template that will be used or created (depending on what is
     #   run)
-    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_TEMPLATE'] = ['FP', 'GJ1002', 'GJ1286', 'GJ1289', 'GL15A',
+                                  'GL411', 'GL412A', 'GL687', 'GL699', 'GL905']
     # This is the object temperature in K - used for getting a stellar model
     #   for the masks it only has to be good to a few 100 K
-    rparams['OBJECT_TEFF'] = [2980]
+    rparams['OBJECT_TEFF'] = [300, 2900, 2900, 3250, 3603, 3550, 3549, 3420,
+                              3224, 2930]
     # -------------------------------------------------------------------------
     # what to run and skip if already on disk
     # -------------------------------------------------------------------------
     # Whether to run the telluric cleaning process (NOT recommended for data
     #   that has better telluric cleaning i.e. SPIROU using APERO)
-    rparams['RUN_LBL_TELLUCLEAN'] = True
+    rparams['RUN_LBL_TELLUCLEAN'] = False
     # Whether to create templates from the data in the science directory
     #   If a template has been supplied from elsewhere this set is NOT required
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -108,6 +126,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # run main
     lbl_wrap(rparams)
+
 
 # =============================================================================
 # End of code

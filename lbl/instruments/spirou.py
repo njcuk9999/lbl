@@ -263,7 +263,10 @@ class Spirou(Instrument):
         We must push this to a dictinoary as not all instrument confirm to
         a fits header
 
-        :param filename:
+        :param filename: str, the filename to load
+        :param kind: str, the kind of file we are loading
+        :param extnum: int, the extension number to load
+        :param extname: str, the extension name to load
         :return:
         """
         # get header

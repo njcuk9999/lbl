@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Test of the LBL using SPIROU (APERO mode)
+Test of the LBL for HARPS (Proxima-tc)
 
 Created on 2021-10-18
-Last updated 2022-09-26
 
 @author: artigau, cook
 """
@@ -26,19 +25,20 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # This is the instrument name
     #   Currently supported instruments are SPIROU, HARPS, ESPRESSO, CARMENES
-    #                                       NIRPS_HE, NIRPS_HA
-    rparams['INSTRUMENT'] = 'SPIROU'
+    #                                       NIRPS_HE, NIRPS_HA, MAROONX
+    rparams['INSTRUMENT'] = 'MAROONX'
     #   Data source must be as follows:
-    #       SPIROU: APERO or CADC  (Currently only APERO is supported)
+    #       SPIROU: APERO or CADC
     #       NIRPS_HA: APERO or ESO
     #       NIRPS_HE: APERO or ESO
     #       CARMENES: None
     #       ESPRESSO: None
     #       HARPS: None
-    rparams['DATA_SOURCE'] = 'APERO'
+    #       MAROONX: RED or BLUE
+    rparams['DATA_SOURCE'] = 'RED'
     # The data directory where all data is stored under - this should be an
     #    absolute path
-    rparams['DATA_DIR'] = '/data/spirou/data/lbl/'
+    rparams['DATA_DIR'] = 'H:\windows\lbl-data\maroonx_b'
     # The input file string (including wildcards) - if not set will use all
     #   files in the science directory (for this object name)
     # rparams['INPUT_FILE'] = '2*e2dsff_AB.fits'
@@ -46,27 +46,22 @@ if __name__ == "__main__":
     # science criteria
     # -------------------------------------------------------------------------
     # The data type (either SCIENCE or FP or LFC)
-    rparams['DATA_TYPES'] = ['FP', 'SCIENCE', 'SCIENCE', 'SCIENCE', 'SCIENCE',
-                             'SCIENCE', 'SCIENCE', 'SCIENCE', 'SCIENCE',
-                             'SCIENCE']
+    rparams['DATA_TYPES'] = ['SCIENCE']
     # The object name (this is the directory name under the /science/
     #    sub-directory and thus does not have to be the name in the header
-    rparams['OBJECT_SCIENCE'] = ['FP', 'GJ1002', 'GJ1286', 'GJ1289', 'GL15A',
-                                 'GL411', 'GL412A', 'GL687', 'GL699', 'GL905']
+    rparams['OBJECT_SCIENCE'] = ['GJ486']
     # This is the template that will be used or created (depending on what is
     #   run)
-    rparams['OBJECT_TEMPLATE'] = ['FP', 'GJ1002', 'GJ1286', 'GJ1289', 'GL15A',
-                                  'GL411', 'GL412A', 'GL687', 'GL699', 'GL905']
+    rparams['OBJECT_TEMPLATE'] = ['GJ486']
     # This is the object temperature in K - used for getting a stellar model
     #   for the masks it only has to be good to a few 100 K
-    rparams['OBJECT_TEFF'] = [300, 2900, 2900, 3250, 3603, 3550, 3549, 3420,
-                              3224, 2930]
+    rparams['OBJECT_TEFF'] = [3400]
     # -------------------------------------------------------------------------
     # what to run and skip if already on disk
     # -------------------------------------------------------------------------
     # Whether to run the telluric cleaning process (NOT recommended for data
     #   that has better telluric cleaning i.e. SPIROU using APERO)
-    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TELLUCLEAN'] = True
     # Whether to create templates from the data in the science directory
     #   If a template has been supplied from elsewhere this set is NOT required
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -85,6 +80,29 @@ if __name__ == "__main__":
     rparams['SKIP_LBL_MASK'] = True
     rparams['SKIP_LBL_COMPUTE'] = True
     rparams['SKIP_LBL_COMPILE'] = True
+    # -------------------------------------------------------------------------
+    # LBL settings
+    # -------------------------------------------------------------------------
+    # You can change any setting in parameters (or override those changed
+    #   by specific instruments) here
+    # -------------------------------------------------------------------------
+    # Advanced settings
+    #   Do not use without contacting the LBL developers
+    # -------------------------------------------------------------------------
+    # Dictionary of table name for the file used in the projection against the
+    #     derivative. Key is to output column name that will propagate into the
+    #     final RDB table and the value is the filename of the table. The table
+    #     must follow a number of characteristics explained on the LBL website.
+    # rparams['RESPROJ_TABLES'] = []]
+
+    # Rotational velocity parameters, should be a list of two values, one being
+    #     the epsilon and the other one being the vsini in km/s as defined in the
+    #     PyAstronomy.pyasl.rotBroad function
+    # rparams['ROTBROAD'] = []]
+
+    # turn on plots
+    rparams['PLOTS'] = False
+
     # -------------------------------------------------------------------------
     # Run the wrapper code using the above settings
     # -------------------------------------------------------------------------

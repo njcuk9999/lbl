@@ -23,7 +23,6 @@ from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
-from lbl.resources import lbl_misc
 from lbl.science import general
 from lbl.science import plot
 
@@ -59,6 +58,7 @@ def get_tapas_lbl(inst: InstrumentsType, modeldir: str,
     Get the tapas lbl file (either from disk or from online)
 
     :param inst: Instrument Type instance - the instrument class
+    :param modeldir: str, the model directory
     :param extname: str, the extension name to load
 
     :return: astropy.table.Table - the Table for extname
@@ -93,7 +93,8 @@ def get_tapas_spl(inst: InstrumentsType, model_dir: str
     """
     Read table with TAPAS model for 6 molecules.
 
-    :param inst:
+    :param inst: Instrument Type instance - the instrument class
+    :param model_dir: str, the model directory
     :return:
     """
 
@@ -125,7 +126,8 @@ def load_tellu_masks(inst, model_dir: str) -> Tuple[Table, Table]:
     """
     Load telluric masks for others and water content
 
-    :param inst:
+    :param inst: Instrument Type instance - the instrument class
+    :param model_dir: str, the model directory
 
     :return: tuple, 1. the others mask, 2. the water mask
     """
@@ -180,7 +182,7 @@ def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
     :return: np.ndarray, the transmission absorption spectrum
     """
 
-    # if zero if given as both exponents return a flat vector
+    # if zero is given as both exponents return a flat vector
     if (expo_others == 0) and (expo_water == 0):
         return np.ones_like(wave_vector)
     # -------------------------------------------------------------------------
