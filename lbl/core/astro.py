@@ -22,8 +22,8 @@ from typing import List, Tuple
 # =============================================================================
 # Define photometric bands
 class Band:
-    min: float = None
-    max: float = None
+    minimum: float = None
+    maximum: float = None
     mean: float = None
 
     def __init__(self, label, minimum=None, maximum=None, mean=None, ref=None):
@@ -53,13 +53,13 @@ def choose_bands(bandobjs: List[Band], wavemin: float, wavemax: float
     use_regions = []
     # loop around bands
     for band in bandobjs:
-        cond = band.min > wavemin
-        cond &= band.max < wavemax
+        cond = band.minimum > wavemin
+        cond &= band.maximum < wavemax
         # only add if within limits
         if cond:
             bandnames.append(band.name)
-            blue_end.append(band.min)
-            red_end.append(band.max)
+            blue_end.append(band.minimum)
+            red_end.append(band.maximum)
             use_regions.append(True)
     # return lists
     return bandnames, blue_end, red_end, use_regions
