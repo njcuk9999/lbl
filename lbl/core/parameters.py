@@ -953,14 +953,14 @@ def set_dprtype(okey, nkey, value) -> Tuple[Any, str]:
 
 # Define keys to copy (currently for all instruments)
 htrans = base_classes.HeaderTranslate()
-htrans.add('INSDRIFT', 'Instrument_Drift', func=instr_drift)
+htrans.add('Instrument_Drift', 'INSDRIFT', func=instr_drift)
 htrans.add('JD_UTC_FLUXWEIGHTED_FRD', 'MJDFWFRD', func=jd_to_mjd)
 htrans.add('JD_UTC_FLUXWEIGHTED_PC', 'MJDFWPC', func=jd_to_mjd)
 htrans.add('JD_UTC_MIDPOINT', 'MJDMID', func=jd_to_mjd)
 htrans.add('JD_UTC_START', 'MJSTART', func=jd_to_mjd)
 htrans.add('BERV_FLUXWEIGHTED_FRD', 'BERV')
 htrans.add('JD_UTC_FLUXWEIGHTED_FRD', 'DATE-OBS', func=jd_to_human)
-htrans.add('INSDRIFT', 'DPRTYPE', func=set_dprtype)
+htrans.add('Instrument_Drift', 'DPRTYPE', func=set_dprtype)
 htrans.add('MAROONX TELESCOPE AIRMASS', 'AIRMASS')
 htrans.add('BERV_SIMBAD_TARGET', 'OBJNAME')
 
