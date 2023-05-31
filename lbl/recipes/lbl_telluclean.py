@@ -185,7 +185,8 @@ def __main__(inst: InstrumentsType, **kwargs):
                                               model_dir)
         # ---------------------------------------------------------------------
         # write the tellu-cleaned file to disk
-        inst.write_tellu_cleaned(tellu_clean_file, e2ds_dict, sci_hdr)
+        inst.write_tellu_cleaned(tellu_clean_file, e2ds_dict, sci_hdr,
+                                 science_filename=filename)
 
     # -------------------------------------------------------------------------
     # return local namespace

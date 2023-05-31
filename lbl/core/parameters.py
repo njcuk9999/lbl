@@ -7,6 +7,8 @@ Created on 2021-03-15
 
 @author: cook
 """
+from typing import Any, Tuple
+
 from lbl.core import base
 from lbl.core import base_classes
 
@@ -234,7 +236,7 @@ params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=1.0, source=__NAME__,
                 'compute rv to perform one more iteration')
 
 # define the maximum number of iterations deemed to lead to a good RV
-params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=8, source=__NAME__,
+params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=15, source=__NAME__,
            desc='The maximum number of iterations deemed to lead to a good RV')
 
 # define the number of sigma to clip based on the rms away from the model
@@ -892,6 +894,76 @@ params.set(key='KW_TEMPLATE_BERVBINS', value='LBLTBRVB', source=__NAME__,
 params.set(key='KW_INST_DRIFT', value=None, source=__NAME__, not_none=False,
            desc='define the instrumental drift key word in m/s',
            comment='Instrumental drift in m/s')
+
+
+# =============================================================================
+# Header conversion dictionary
+# =============================================================================
+# Note these are only to be used when we need to translate from something
+#   other than a fits.Header - i.e. a pandas.hd5 file where keys can be
+#   anything and not 8 character strings to be used in headers
+# Note sometimes we need to convert these, so we do this here by defining a
+#   custom function
+# -----------------------------------------------------------------------------
+# Define function to convert the Instrument_Drift key
+def instr_drift(okey, nkey, value) -> Tuple[Any, str]:
+    try:
+        value = value.split('m/s')[0].strip()
+        value = float(value)
+        return float(value), 'Instrumental drift in m/s'
+    except Exception as _:
+        emsg = 'Cannot translate value {0} to {1}. Value={2}'
+        eargs = [okey, nkey, value]
+        raise base_classes.LblException(emsg.format(*eargs))
+
+
+# Define function to convert JD to MJD
+def jd_to_mjd(okey, nkey, value) -> Tuple[Any, str]:
+    try:
+        # calcualte the mjd value
+        mjdvalue = base.AstropyTime(value, format='jd').mjd
+        comment = 'MJD from {0}'.format(okey)
+        # push back into header dictionary
+        return mjdvalue, comment
+    except Exception as _:
+        emsg = 'Cannot translate value {0} to {1}. Value={2}'
+        eargs = [okey, nkey, value]
+        raise base_classes.LblException(emsg.format(*eargs))
+
+
+# Define function to convert MJD to human readable
+def jd_to_human(okey, nkey, value) -> Tuple[Any, str]:
+    try:
+        # calcualte the mjd value
+        humanvalue = base.AstropyTime(value, format='jd').iso
+        comment = 'Human readable date from {0}'.format(okey)
+        # push back into header dictionary
+        return humanvalue, comment
+    except Exception as _:
+        emsg = 'Cannot translate value {0} to {1}. Value={2}'
+        eargs = [okey, nkey, value]
+        raise base_classes.LblException(emsg.format(*eargs))
+
+
+# Define function to sky DPRTYPE
+def set_dprtype(okey, nkey, value) -> Tuple[Any, str]:
+    _ = okey, nkey, value
+    return 'OBJ_SKY', 'DPRTYPE (set to OBJ_SKY manually)'
+
+
+# Define keys to copy (currently for all instruments)
+htrans = base_classes.HeaderTranslate()
+htrans.add('INSDRIFT', 'Instrument_Drift', func=instr_drift)
+htrans.add('JD_UTC_FLUXWEIGHTED_FRD', 'MJDFWFRD', func=jd_to_mjd)
+htrans.add('JD_UTC_FLUXWEIGHTED_PC', 'MJDFWPC', func=jd_to_mjd)
+htrans.add('JD_UTC_MIDPOINT', 'MJDMID', func=jd_to_mjd)
+htrans.add('JD_UTC_START', 'MJSTART', func=jd_to_mjd)
+htrans.add('BERV_FLUXWEIGHTED_FRD', 'BERV')
+htrans.add('JD_UTC_FLUXWEIGHTED_FRD', 'DATE-OBS', func=jd_to_human)
+htrans.add('INSDRIFT', 'DPRTYPE', func=set_dprtype)
+htrans.add('MAROONX TELESCOPE AIRMASS', 'AIRMASS')
+htrans.add('BERV_SIMBAD_TARGET', 'OBJNAME')
+
 
 # =============================================================================
 # Start of code

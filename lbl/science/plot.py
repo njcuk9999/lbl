@@ -48,7 +48,10 @@ def import_matplotlib():
     if PLT_MOD is not None:
         return PLT_MOD
     # fix for MacOSX plots freezing
-    gui_env = ['MacOSX', 'Qt5Agg', 'GTKAgg', 'TKAgg', 'WXAgg', 'Agg']
+    if platform.system() == 'darwin':
+        gui_env = ['MacOSX', 'Qt5Agg', 'GTKAgg', 'TKAgg', 'WXAgg', 'Agg']
+    else:
+        gui_env = ['Qt5Agg', 'GTKAgg', 'TKAgg', 'WXAgg', 'Agg']
     for gui in gui_env:
         # noinspection PyBroadException
         try:

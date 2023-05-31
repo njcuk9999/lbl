@@ -257,7 +257,7 @@ class Spirou(Instrument):
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
+                    extnum: int = 0, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to

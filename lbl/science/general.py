@@ -1658,7 +1658,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 rdb_dict[key][row] = np.nan
             # if we have key add the value
             elif key in rvhdr:
-                rdb_dict[key][row] = rvhdr.get_hkey(key, dtype=float)
+                rdb_dict[key][row] = rvhdr.get_hkey(key)
             # else print a warning and add a NaN
             else:
                 # add to missing keys dict counter

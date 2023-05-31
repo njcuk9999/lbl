@@ -73,7 +73,7 @@ class HarpsN(Instrument):
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
-        self.params.set('SCIENCE_MASK_TYPE', 'pos', source=func_name)
+        self.params.set('SCIENCE_MASK_TYPE', 'full', source=func_name)
         self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename
@@ -279,7 +279,7 @@ class HarpsN(Instrument):
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
+                    extnum: int = 0, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to

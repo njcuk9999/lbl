@@ -56,22 +56,18 @@ class Instrument:
         self.norders: Optional[int] = None
         self.npixel: Optional[int] = None
         self.default_template_name: Optional[str] = None
+        # extension of the science files
+        self.science_ext = '.fits'
         # hd5 file definitions
         self.header_storekey: Optional[str] = None
         self.blaze_storekey: Optional[str] = None
         self.sci_storekey: Optional[str] = None
+        self.sci_subkey: Optional[str] = None
+        self.wave_storekey: Optional[str] = None
         self.sci_extension: Optional[int] = None
         self.blaze_extension: Optional[int] = None
-        # dict of keys to turn from jd --> mjd
-        self.jd2mjd: Dict[str, str] = dict()
-        # midpoint key
-        self.midpoint_key: Optional[str] = None
-        # set date key to add
-        self.date_key: Optional[str] = None
-        # set instrument drift key to get/readd
-        self.drift_key: Optional[str] = None
-        # set dprtype key
-        self.dprtype_key: Optional[str] = None
+        self.tcorr_extension: Optional[str] = None
+        self.valid_suffices: Optional[List[str]] = None
         # define wave limits in nm
         self.wavemin: Optional[float] = None
         self.wavemax: Optional[float] = None
@@ -98,7 +94,7 @@ class Instrument:
     # Common instrument methods (should be overridden if instrument requires)
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
+                    extnum: int = 0, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to
@@ -141,8 +137,8 @@ class Instrument:
                              get_hdr=get_hdr)
 
     def set_hkey(self, header: Union[io.LBLHeader, fits.Header],
-                 key: str, value: Any,
-                 comment: Union[str, None] = None) -> io.LBLHeader:
+                 key: str, value: Any, comment: Union[str, None] = None
+                 ) -> Union[io.LBLHeader, fits.Header]:
         """
         Set a header key (looking for key in params) and set it and its comment
         as necessary
@@ -215,7 +211,8 @@ class Instrument:
         # set object template
         tobjname = self.params['OBJECT_TEMPLATE']
         # get science file basename
-        science_basename = os.path.basename(science_filename).split('.fits')[0]
+        science_basename = os.path.basename(science_filename)
+        science_basename = science_basename.split(self.science_ext)[0]
         # construct base name
         bargs = [science_basename, sobjname, tobjname]
         basename = '{0}_{1}_{2}_lbl.fits'.format(*bargs)
@@ -513,7 +510,8 @@ class Instrument:
                       dtype=[None, 'table', 'table'])
 
     def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
-                            sci_hdict: io.LBLHeader):
+                            sci_hdict: io.LBLHeader,
+                            science_filename: Optional[str] = None):
         """
         Write the write_tellu_file to disk
 
@@ -521,8 +519,11 @@ class Instrument:
         :param props: dictionnary output from the TELLUCLEANed code
         :param sci_hdict: fits Header, an input file header to copy the header
                           from to the new template file
+        :param science_filename: str, the science filename (not used for
+                                 default)
         :return:
         """
+        _ = science_filename
         # convert hdict to header
         sci_hdr = sci_hdict.to_fits()
         # populate primary header
@@ -559,6 +560,9 @@ class Instrument:
                     datatypelist.append('image')
                 else:
                     datatypelist.append('table')
+        # ---------------------------------------------------------------------
+        # change the file name
+        write_tellu_file = self.modify_tellu_filename(write_tellu_file)
         # ---------------------------------------------------------------------
         # Save template to disk
         log.general('Saving tellu-cleaned file: {0}'.format(write_tellu_file))
@@ -844,7 +848,9 @@ class Instrument:
             log.general(msg.format(science_file))
             # get wave grid from the supplied filename
             wavegrid = self.get_wave_solution(science_file)
-            header = self.load_header(science_file)
+            header_dict = self.load_header(science_file)
+            # convert header to fits
+            header = header_dict.to_fits()
             # write the file to the calibration directory
             io.write_fits(save_wavegrid_path, data=[None, wavegrid],
                           header=[header, None], dtype=[None, 'image'])
@@ -1023,6 +1029,16 @@ class Instrument:
         :return: dict, the binned dictionary
         """
         raise self._not_implemented('get_binned_parameters')
+
+    def modify_tellu_filename(self, filename: str) -> str:
+        """
+        Modifier for the telluric filename (default is to do nothing)
+
+        :param filename: str, the filename to modify
+
+        :return: str, the modified filename
+        """
+        return filename
 
     def get_uniform_binned_parameters(self, binned: Dict[str, list]
                                       ) -> Dict[str, list]:

@@ -10,6 +10,7 @@ Created on 2021-03-15
 @author: cook
 """
 import copy
+import itertools
 import os
 import warnings
 from collections import UserDict
@@ -152,7 +153,9 @@ class LBLHeader(UserDict):
         for key in header:
             new[key] = copy.deepcopy(header[key])
         # add comments
-        new.comments = header.comments
+        new.comments = dict()
+        for key in header:
+            new.comments[key] = copy.deepcopy(header.comments[key])
         # construct LBLHeader
         return new
 
@@ -164,9 +167,10 @@ class LBLHeader(UserDict):
     def to_fits(self) -> fits.Header:
         header = fits.Header()
         # loop around keys and add them to the header dictionary
-        for key in self.keys():
+        for key in list(self.keys()):
             if len(key) > 8:
-                outkey = f'HIERARCH {key}'
+                # TODO: Deal with these keys better
+                continue
             else:
                 outkey = key
             # Add key to dictionary
@@ -734,54 +738,71 @@ def get_urlfile(url: str, name: str, savepath: str):
 def hdf_to_e2ds(store_key: str, filename: str, ext: int, norders: int,
                 orderlist: List[int], npixels: int,
                 subkey: Optional[str] = None) -> np.ndarray:
-    # load the store
-    store = pd.HDFStore(filename)
-    # deal with not having blaze_blue in HDFstore
-    if store_key not in store:
-        emsg = '{0} is not in HDFStore for {1}'
-        eargs = [store_key, filename]
-        raise LblException(emsg.format(*eargs))
-    # get the blaze blue from store
-    if subkey is None:
-        image_df = store[store_key][ext]
-    else:
-        image_df = store[store_key][subkey][ext]
-    # make blaze numpy array
-    image = np.ones((norders, npixels))
-    # loop around orders and populate blaze
-    for it, order_num in enumerate(orderlist):
-        image[it] = image_df[order_num]
-    # close store
-    store.close()
+    # Open the HDFStore
+    with pd.HDFStore(filename) as store:
+        # deal with not having blaze_blue in HDFstore
+        if store_key not in store:
+            emsg = '{0} is not in HDFStore for {1}'
+            eargs = [store_key, filename]
+            raise LblException(emsg.format(*eargs))
+        # get the blaze blue from store
+        if subkey is None:
+            image_df = store[store_key][ext]
+        else:
+            image_df = store[store_key][subkey][ext]
+        # make blaze numpy array
+        image = np.ones((norders, npixels))
+        # loop around orders and populate blaze
+        for it, order_num in enumerate(orderlist):
+            image[it] = image_df[order_num]
     # return image
     return image
 
 
 def hdf_to_header(storekey: str, filename: str):
-    # get header
-    store = pd.HDFStore(filename)
-    # create a new LBL header
-    new = LBLHeader()
-    # deal with key not in store
-    if storekey not in store:
-        emsg = 'Cannot find header in file {0} using key {1}'
-        eargs = [filename, storekey]
-        raise LblException(emsg.format(*eargs))
-    # get the header
-    hdr_df = store[storekey]
-    # loop around keys and add them to the header dictionary
-    for key in hdr_df.index.values:
-        outkey = str(key)
-        # remove HIERARCH from key
-        while outkey.startswith('HIERARCH '):
-            outkey = outkey[len('HIERARCH '):]
-        # copy key into new LBL Header
-        new[outkey] = copy.deepcopy(hdr_df[key])
-        new.comments[outkey] = ''
-    # close store
-    store.close()
+    # Open the HDFStore
+    with pd.HDFStore(filename) as store:
+        # create a new LBL header
+        new = LBLHeader()
+        # deal with key not in store
+        if storekey not in store:
+            emsg = 'Cannot find header in file {0} using key {1}'
+            eargs = [filename, storekey]
+            raise LblException(emsg.format(*eargs))
+        # get the header
+        hdr_df = store[storekey]
+        # loop around keys and add them to the header dictionary
+        for key in hdr_df.index.values:
+            outkey = str(key)
+            # remove HIERARCH from key
+            while outkey.startswith('HIERARCH '):
+                outkey = outkey[len('HIERARCH '):]
+            # copy key into new LBL Header
+            new[outkey] = copy.deepcopy(hdr_df[key])
+            new.comments[outkey] = ''
     # return the new LBL header
     return new
+
+
+def save_data_to_hdfstore(filename: str, columns: Dict[str, List[np.ndarray]],
+                           indices: Dict[str, list], image_storekey: str,
+                           header: LBLHeader, header_storekey: str):
+    # -------------------------------------------------------------------------
+    # get pandas multi-index
+    all_indices = []
+    for key in indices:
+        all_indices.append(indices[key])
+    all_combinations = list(itertools.product(*all_indices))
+    index = pd.MultiIndex.from_tuples(all_combinations, names=indices.keys())
+    # -------------------------------------------------------------------------
+    # create the dataframe to hold the data and header
+    df_image = pd.DataFrame(columns, index=index)
+    df_header = pd.Series(header.data)
+    # -------------------------------------------------------------------------
+    # push into hdf
+    with warnings.catch_warnings(record=True) as _:
+        df_image.to_hdf(filename, key=image_storekey)
+        df_header.to_hdf(filename, key=header_storekey)
 
 
 # =============================================================================

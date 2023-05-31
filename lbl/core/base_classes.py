@@ -9,7 +9,7 @@ Created on 2021-03-15
 """
 from collections import UserDict
 from copy import deepcopy
-from typing import Any, Dict, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from astropy.table import Table
 
@@ -451,6 +451,40 @@ class LBLError(Exception):
         message = 'Error: {0}'.format(self.message)
         # return message
         return message
+
+
+class HeaderTranslate:
+    def __init__(self):
+        self.original_keys: List[str] = []
+        self.new_keys: List[str] = []
+        self.functions: List[Any] = []
+
+    def default_func(self, original_key: str, new_key: str,
+                     value: Any) -> Tuple[Any, str]:
+        _ = new_key
+        comment = 'Translated from {0}'.format(original_key)
+        return value, comment
+
+    def add(self, original_key:str,  new_key: str, func: Optional[Any] = None):
+        self.original_keys.append(original_key)
+        self.new_keys.append(new_key)
+        self.functions.append(func)
+
+    def translate(self, header: Any) -> Any:
+        # loop around original keys
+        for it, original_key in enumerate(self.original_keys):
+            # if key is in header update the key
+            if original_key in header:
+                new_key = self.new_keys[it]
+                func = self.functions[it]
+                if func is None:
+                    func = self.default_func
+                # get the value and the comment
+                value, comment = func(original_key, new_key,
+                                      header[original_key])
+                header[new_key] = (value, comment)
+        # return the header
+        return header
 
 
 # =============================================================================
