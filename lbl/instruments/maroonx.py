@@ -1118,7 +1118,7 @@ class MaroonXRed(MaroonX):
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 1, extname: str = None) -> io.LBLHeader:
+                    extnum: int = 0, extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictionary as not all instrument confirm to
@@ -1359,13 +1359,13 @@ class MaroonXRed(MaroonX):
         # set up columns (image and wavemap) to push into hdfstore
         wavelist = []
         imagelist = []
-        for order_num in self.orders:
+        for order_num in range(self.norders):
             wavelist.append(wavemap[order_num])
             imagelist.append(image[order_num])
         # push into the columns
         columns = dict()
         columns[self.wave_storekey] = wavelist
-        columns[self.sci_storekey] = imagelist
+        columns[self.sci_subkey] = imagelist
         # set up the indices
         indices = dict()
         indices['Fiber'] = [self.sci_extension]
