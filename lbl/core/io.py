@@ -569,7 +569,7 @@ def write_fits(filename: str, data: FitsData = None,
         raise LblException(emsg.format(*eargs))
 
 
-def get_urlfile(url: str, name: str, savepath: str):
+def get_urlfile(url: str, name: str, savepath: str, required: bool = True):
     """
     Get the file from url
 
@@ -590,13 +590,14 @@ def get_urlfile(url: str, name: str, savepath: str):
             wget.download(url, savepath)
             log.general('\nDownloaded tapas file.')
         except Exception as e:
+            if not required:
+                msg = 'Skipped {0} file. Missing from server.'
+                margs = [name]
+                log.general(msg.format(*margs))
+                return
             emsg = 'Cannot download {0} file: {1}\n\tError {2}: {3}'
             eargs = [name, url, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
-    # print loading tapas
-    msg = 'Loading {0} file from: {1}'
-    margs = [name, savepath]
-    log.general(msg.format(*margs))
 
 
 # =============================================================================
