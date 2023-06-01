@@ -591,7 +591,7 @@ class Instrument:
             # update url to include file
             fileurl = '{0}/{1}'.format(url, filename)
             # get file from url
-            io.get_urlfile(fileurl, key, model_file)
+            io.get_urlfile(fileurl, key, model_file, required=False)
 
     def copy_default_mask(self, model_directory: str, mask_directory: str,
                           filename: str):
