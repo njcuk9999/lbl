@@ -789,6 +789,9 @@ class NIRPS(Instrument):
         for drs_key in drs_keys:
             # initial set fp flag to False
             fp_flag = False
+            # ignore keys that are None
+            if drs_key is None:
+                continue
             # if key is in params we can add the value to keys
             if drs_key in self.params:
                 keys.append(self.params[drs_key])
@@ -1545,6 +1548,9 @@ class NIRPS_HA_ESO(NIRPS_HA):
         for drs_key in drs_keys:
             # initial set fp flag to False
             fp_flag = False
+            # ignore keys that are None
+            if drs_key is None:
+                continue
             # if key is in params we can add the value to keys
             if drs_key in self.params:
                 keys.append(self.params[drs_key])
@@ -1936,6 +1942,9 @@ class NIRPS_HE_ESO(NIRPS_HE):
         for drs_key in drs_keys:
             # initial set fp flag to False
             fp_flag = False
+            # ignore keys that are None
+            if drs_key is None:
+                continue
             # if key is in params we can add the value to keys
             if drs_key in self.params:
                 keys.append(self.params[drs_key])

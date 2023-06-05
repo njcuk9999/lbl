@@ -657,6 +657,9 @@ class Espresso(Instrument):
         for drs_key in drs_keys:
             # initial set fp flag to False
             fp_flag = False
+            # ignore keys that are None
+            if drs_key is None:
+                continue
             # if key is in params we can add the value to keys
             if drs_key in self.params:
                 # need to deal with keys that define multiple drs keys
