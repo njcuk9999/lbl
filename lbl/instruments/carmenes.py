@@ -79,7 +79,7 @@ class Carmenes(Instrument):
         # Question: HARPS value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
+        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [45], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
         self.params.set('COMPIL_WAVE_MIN', 500, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]

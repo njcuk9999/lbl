@@ -234,7 +234,7 @@ params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=1.0, source=__NAME__,
                 'compute rv to perform one more iteration')
 
 # define the maximum number of iterations deemed to lead to a good RV
-params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=8, source=__NAME__,
+params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=15, source=__NAME__,
            desc='The maximum number of iterations deemed to lead to a good RV')
 
 # define the number of sigma to clip based on the rms away from the model
