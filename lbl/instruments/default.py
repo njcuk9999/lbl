@@ -603,6 +603,10 @@ class Instrument:
         :param filename: str, the filename to copy
         :return:
         """
+        # set filename
+        if filename is None:
+            return
+        # define input and output path
         in_path = os.path.join(model_directory, filename)
         out_path = os.path.join(mask_directory, filename)
         # deal with file already existing

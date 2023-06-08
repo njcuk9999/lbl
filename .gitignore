@@ -132,4 +132,5 @@ dmypy.json
 .idea/
 
 # python swp files
+*.swp
 *.py.swp
