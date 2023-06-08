@@ -67,7 +67,7 @@ class Carmenes(Instrument):
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
-        self.params.set('SCIENCE_MASK_TYPE', 'pos', source=func_name)
+        self.params.set('SCIENCE_MASK_TYPE', 'full', source=func_name)
         self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename

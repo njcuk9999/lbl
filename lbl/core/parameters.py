@@ -138,7 +138,7 @@ params.set(key='DATA_TYPE', value=None, source=__NAME__,
            arg='--data_type', not_none=True)
 
 # define the mask type (pos, neg, full)
-params.set(key='SCIENCE_MASK_TYPE', value='pos',
+params.set(key='SCIENCE_MASK_TYPE', value='full',
            desc='the mask type (pos, neg, full)', dtype=str)
 
 # define the mask type (pos, neg, full)
