@@ -790,10 +790,19 @@ class Espresso(Instrument):
         """
         # get the date col from params
         kw_date = self.params['KW_DATE']
+        # ---------------------------------------------------------------------
+        # kw_date is YYYY-MM-DDTHH:MM:SS.SSS we need YYYY-MM-DD
+        dates = []
+        for row in range(len(rdb_table)):
+            # get the date
+            date = rdb_table[row][kw_date]
+            # append to dates
+            dates.append(date.split('T')[0])
+        # ---------------------------------------------------------------------
         # get unique dates (per epoch)
-        epoch_groups = np.unique(rdb_table[kw_date])
+        epoch_groups = np.unique(dates)
         # get the epoch values for each row of rdb_table
-        epoch_values = np.array(rdb_table[kw_date])
+        epoch_values = np.array(dates)
         # return the epoch groupings and epoch values
         return epoch_groups, epoch_values
 

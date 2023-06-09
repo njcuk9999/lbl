@@ -42,6 +42,7 @@ TimeDelta = base.AstropyTimeDelta
 Instrument = default.Instrument
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
+LblLowCCFSNR = base_classes.LblLowCCFSNR
 log = base_classes.log
 InstrumentsType = select.InstrumentsType
 # get speed of light
@@ -585,7 +586,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     if ccf_snr < inst.params['CCF_SNR_MIN']:
         emsg = 'CCF SNR must be > {0:.2f}, it is {1:.2f}'
         eargs = [inst.params['CCF_SNR_MIN'], ccf_snr]
-        raise LblException(emsg.format(*eargs))
+        raise LblLowCCFSNR(emsg.format(*eargs))
     # -------------------------------------------------------------------------
     # return the systemic velocity and the ewidth
     return systemic_velocity, ccf_ewidth
@@ -2195,19 +2196,15 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     for colname in rdb_table.colnames:
         rdb_dict2[colname] = []
     # -------------------------------------------------------------------------
-    # Determine columns that use weighted mean
-    vrad_colnames = []
-    svrad_colnames = []
-    # get vrad and svrad columns
+    # determine the weighted mean columns
+    wmean_pairs = dict()
+    # search for columns that are the same as another column but just with an
+    #   added 's' on front
     for colname in rdb_table.colnames:
-        if colname.startswith('vrad'):
-            vrad_colnames.append(colname)
-        if colname.startswith('svrad'):
-            svrad_colnames.append(colname)
-    # determine the weighted mean
-    wmean_pairs = dict(zip(vrad_colnames, svrad_colnames))
-    wmean_pairs['d2v'] = 'sd2v'
-    wmean_pairs['d3v'] = 'sd3v'
+        if colname.startswith('s') and colname[1:] in rdb_table.colnames:
+            if colname[1:] not in wmean_pairs:
+                wmean_pairs[colname[1:]] = colname
+    # add any column pairs that don't conform to this
     wmean_pairs['fwhm'] = 'sig_fwhm'
     # -------------------------------------------------------------------------
     # log progress
