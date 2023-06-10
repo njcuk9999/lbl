@@ -933,10 +933,19 @@ class NIRPS(Instrument):
         """
         # get the date col from params
         kw_date = self.params['KW_DATE']
+        # ---------------------------------------------------------------------
+        # kw_date is YYYY-MM-DDTHH:MM:SS.SSS we need YYYY-MM-DD
+        dates = []
+        for row in range(len(rdb_table)):
+            # get the date
+            date = rdb_table[row][kw_date]
+            # append to dates
+            dates.append(date.split('T')[0])
+        # ---------------------------------------------------------------------
         # get unique dates (per epoch)
-        epoch_groups = np.unique(rdb_table[kw_date])
+        epoch_groups = np.unique(dates)
         # get the epoch values for each row of rdb_table
-        epoch_values = np.array(rdb_table[kw_date])
+        epoch_values = np.array(dates)
         # return the epoch groupings and epoch values
         return epoch_groups, epoch_values
 
@@ -1336,6 +1345,10 @@ class NIRPS_HA_ESO(NIRPS_HA):
         #    was NOT a reference file - should be a list of strings
         # TODO: change this - probably wont be OBJ_FP
         self.params.set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
+        # define the compil minimum wavelength allowed for lines [nm]
+        self.params.set('COMPIL_WAVE_MIN', 900, source=func_name)
+        # define the compil maximum wavelength allowed for lines [nm]
+        self.params.set('COMPIL_WAVE_MAX', 1825, source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -1751,6 +1764,10 @@ class NIRPS_HE_ESO(NIRPS_HE):
         #    was NOT a reference file - should be a list of strings
         # TODO: change this - probably wont be OBJ_FP
         self.params.set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
+        # define the compil minimum wavelength allowed for lines [nm]
+        self.params.set('COMPIL_WAVE_MIN', 900, source=func_name)
+        # define the compil maximum wavelength allowed for lines [nm]
+        self.params.set('COMPIL_WAVE_MAX', 1825, source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------

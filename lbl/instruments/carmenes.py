@@ -69,7 +69,7 @@ class Carmenes(Instrument):
         # set parameters to update
         self.params.set('INSTRUMENT', 'CARMENES', source=func_name)
         # define the default science input files
-        self.params.set('INPUT_FILE', '*e2ds*A.fits', source=func_name)
+        self.params.set('INPUT_FILE', '*.fits', source=func_name)
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
@@ -85,7 +85,7 @@ class Carmenes(Instrument):
         # Question: HARPS value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
+        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [45], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
         self.params.set('COMPIL_WAVE_MIN', 500, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
@@ -817,10 +817,19 @@ class Carmenes(Instrument):
         """
         # get the date col from params
         kw_date = self.params['KW_DATE']
+        # ---------------------------------------------------------------------
+        # kw_date is YYYY-MM-DDTHH:MM:SS.SSS we need YYYY-MM-DD
+        dates = []
+        for row in range(len(rdb_table)):
+            # get the date
+            date = rdb_table[row][kw_date]
+            # append to dates
+            dates.append(date.split('T')[0])
+        # ---------------------------------------------------------------------
         # get unique dates (per epoch)
-        epoch_groups = np.unique(rdb_table[kw_date])
+        epoch_groups = np.unique(dates)
         # get the epoch values for each row of rdb_table
-        epoch_values = np.array(rdb_table[kw_date])
+        epoch_values = np.array(dates)
         # return the epoch groupings and epoch values
         return epoch_groups, epoch_values
 

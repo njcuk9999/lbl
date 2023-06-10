@@ -31,6 +31,7 @@ InstrumentsList = select.InstrumentsList
 InstrumentsType = select.InstrumentsType
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
+LblLowCCFSNR = base_classes.LblLowCCFSNR
 log = base_classes.log
 # add arguments (must be in parameters.py)
 ARGS_COMPUTE = [  # core
@@ -273,14 +274,21 @@ def __main__(inst: InstrumentsType, **kwargs):
         # ---------------------------------------------------------------------
         # 6.7 compute rv
         # ---------------------------------------------------------------------
-        cout = general.compute_rv(inst, it, sci_data, sci_hdr, splines=splines,
-                                  ref_table=ref_table, blaze=blaze,
-                                  systemic_all=systemic_all,
-                                  mjdate_all=mjdate_all, ccf_ewidth=ccf_ewidth,
-                                  reset_rv=reset_rv,
-                                  model_velocity=model_velocity,
-                                  science_file=science_file,
-                                  mask_file=mask_file)
+        try:
+            cout = general.compute_rv(inst, it, sci_data, sci_hdr,
+                                      splines=splines,
+                                      ref_table=ref_table, blaze=blaze,
+                                      systemic_all=systemic_all,
+                                      mjdate_all=mjdate_all,
+                                      ccf_ewidth=ccf_ewidth,
+                                      reset_rv=reset_rv,
+                                      model_velocity=model_velocity,
+                                      science_file=science_file,
+                                      mask_file=mask_file)
+        except LblLowCCFSNR as e:
+            emsg = e.message + '\n Skipping file.'
+            log.warning(emsg)
+            continue
         # get back ref_table and outputs
         ref_table, outputs = cout
         # ---------------------------------------------------------------------

@@ -51,6 +51,13 @@ class LblException(Exception):
         return self.message
 
 
+class LblLowCCFSNR(LblException):
+    def __init__(self, message):
+        """
+        Constructor for LBL Low CCF SNR Exception
+        """
+        super().__init__(message)
+
 class LblCurveFitException(Exception):
     def __init__(self, message: str, x=None, y=None, f=None,
                  p0=None, func=None, error=None):
