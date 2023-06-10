@@ -22,7 +22,7 @@ __package__: str = 'lbl'
 
 # currently supported instruments
 INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
-               'HARPSN']
+               'NIPRS_HE', 'HARPSN']
 
 # log variables
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')

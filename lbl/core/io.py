@@ -480,6 +480,17 @@ def write_fits(filename: str, data: FitsData = None,
     if names is None:
         names = [None] * len(data)
     # -------------------------------------------------------------------------
+    # fix header unicode
+    for it in range(len(header)):
+        # deal with no header
+        if header[it] is None:
+            continue
+        # loop around headers
+        for key in header[it]:
+            if isinstance(header[it][key], str):
+                value = header[it][key].encode('ascii', 'ignore').decode('ascii')
+                header[it][key] = value
+    # -------------------------------------------------------------------------
     # deal with non list dtype
     if dtype is None:
         dtype = [None] * len(data)
