@@ -73,6 +73,9 @@ class LBLHeader(UserDict):
 
         :return value: object, the value stored at position "key"
         """
+        # deal with hierarchal keys
+        if key not in self.data and key.startswith('HIERARCH '):
+            return self.data[key[len('HIERARCH '):]]
         # return from supers dictionary storage
         return self.data[key]
 
@@ -168,13 +171,18 @@ class LBLHeader(UserDict):
         header = fits.Header()
         # loop around keys and add them to the header dictionary
         for key in list(self.keys()):
-            if len(key) > 8:
-                # TODO: Deal with these keys better
-                continue
+            if len(key) > 8 and 'HIERARCH' not in key:
+                outkey = 'hierarch ' + key
             else:
                 outkey = key
+            # exceptionally long keys we have to ignore
+            if len(outkey) > 40:
+                continue
+            # cannot propagate these keys
+            if key in ['COMMENT', 'HISTORY']:
+                continue
             # Add key to dictionary
-            header[outkey] = (self[key], self.comments[key])
+            header[outkey] = (self.data[key], self.comments[key])
         # return header
         return header
 
@@ -194,14 +202,31 @@ class LBLHeader(UserDict):
                     if self.data[key_it] != ['None', '', None]:
                         drskey = key_it
                         break
+                if key_it[len('HIERARCH '):] in self.data:
+                    drskey = key_it[len('HIERARCH '):]
+                    break
             if len(drskey) == 0:
                 emsg = 'Cannot find keys: {0} in header'
                 raise LblException(emsg.format(' or '.join(key)))
         else:
             drskey = str(key)
         # -------------------------------------------------------------------------
+        # deal with hierarch keys being removed
+        found_key = False
+
+        if drskey not in self.data:
+            # if drs key starts with HIERARCH then try to remove it
+            #   as some keys have hierarch removed
+            if drskey.startswith('HIERARCH '):
+                sdrskey = drskey[len('HIERARCH '):]
+                if sdrskey in self.data:
+                    drskey = sdrskey
+                    found_key = True
+        else:
+            found_key = True
+        # -------------------------------------------------------------------------
         # test for key in header
-        if drskey in self.data:
+        if found_key:
             try:
                 if dtype is None:
                     return self.data[drskey]
@@ -248,6 +273,11 @@ class LBLHeader(UserDict):
         # test for key in header
         if dtype is None:
             dtype = str
+        # test for hierarch key (and remove it)
+        if 'HIERARCH' in key:
+            key2 = key[len('HIERARCH '):]
+        else:
+            key2 = None
         # create 2d list
         values = np.zeros((dim1, dim2), dtype=dtype)
         # loop around the 2D array
@@ -256,6 +286,9 @@ class LBLHeader(UserDict):
             for jt in range(dim2):
                 # construct the key name
                 keyname = _test_for_formatting(key, it * dim2 + jt)
+                # deal with HIERARCH keys
+                if keyname not in self.data and key2 is not None:
+                    keyname = _test_for_formatting(key2, it * dim2 + jt)
                 # try to get the values
                 try:
                     # set the value

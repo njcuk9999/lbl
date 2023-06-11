@@ -126,7 +126,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     dparams = select.make_all_directories(inst)
     template_dir, science_dir = dparams['TEMPLATE_DIR'], dparams['SCIENCE_DIR']
     calib_dir = dparams['CALIB_DIR']
-    model_dir = dparams['MODELS_DIR']
+    model_dir = dparams['MODEL_DIR']
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
