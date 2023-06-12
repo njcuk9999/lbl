@@ -23,7 +23,8 @@ TEST_PATH = '/scratch3/lbl/data/test/'
 # define which instruments to test (using functions in this module)
 INSTRUMENTS = ['carmenes_vis',
                'espresso',
-               'harps', 'harpsn',
+               'harps',
+               'harpsn_v2', 'harpsn_v3',
                'nirps_ha_apero', 'nirps_he_apero',
                'spirou_apero', 'spirou_cadc',
                'maroonx_b', 'maroonx_r']
@@ -162,6 +163,11 @@ def nirps_he_apero():
     return rparams
 
 
+# TODO: Add NIRPS-HA-ESO
+
+# TODO: Add NIRPS-HE-ESO
+
+
 def spirou_apero():
     # set up parameters
     rparams = dict()
@@ -190,7 +196,55 @@ def spirou_apero():
 
 # TODO: Add spirou_cadc
 
-# TODO: Add harps_n
+
+def harpsn_v2():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'HARPS'
+    rparams['DATA_SOURCE'] = 'v2'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_v2')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS2.3.5_TOI1266']
+    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS2.3.5_TOI1266']
+    rparams['OBJECT_TEFF'] = [5668]
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = True
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
+
+def harpsn_v3():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'HARPS'
+    rparams['DATA_SOURCE'] = 'v3'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_v3')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS3.7_TOI1266']
+    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS3.7_TOI1266']
+    rparams['OBJECT_TEFF'] = [5668]
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = True
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
 
 
 def maroonx_b():
