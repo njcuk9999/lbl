@@ -24,7 +24,7 @@ TEST_PATH = '/scratch3/lbl/data/test/'
 INSTRUMENTS = ['carmenes_vis',
                'espresso',
                'harps',
-               'harpsn_v2', 'harpsn_v3',
+               'harpsn_orig', 'harpsn_eso',
                'nirps_ha_apero', 'nirps_he_apero',
                'spirou_apero', 'spirou_cadc',
                'maroonx_b', 'maroonx_r']
@@ -85,6 +85,7 @@ def espresso():
     return rparams
 
 
+# TODO: Change harps to HARPS-ORIG and HARPS-ESO
 def harps():
     # set up parameters
     rparams = dict()
@@ -197,13 +198,13 @@ def spirou_apero():
 # TODO: Add spirou_cadc
 
 
-def harpsn_v2():
+def harpsn_orig():
     # set up parameters
     rparams = dict()
     # LBL parameters
     rparams['INSTRUMENT'] = 'HARPS'
-    rparams['DATA_SOURCE'] = 'v2'
-    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_v2')
+    rparams['DATA_SOURCE'] = 'ORIG'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_ORIG')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS2.3.5_TOI1266']
     rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS2.3.5_TOI1266']
@@ -222,13 +223,13 @@ def harpsn_v2():
     return rparams
 
 
-def harpsn_v3():
+def harpsn_eso():
     # set up parameters
     rparams = dict()
     # LBL parameters
     rparams['INSTRUMENT'] = 'HARPS'
-    rparams['DATA_SOURCE'] = 'v3'
-    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_v3')
+    rparams['DATA_SOURCE'] = 'ESO'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_ESO')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS3.7_TOI1266']
     rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS3.7_TOI1266']

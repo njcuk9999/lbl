@@ -712,259 +712,17 @@ class HarpsN(Instrument):
 
 
 # =============================================================================
-# Define HARPS-N v2 class
+# Define HARPS-N ORIG class
 # =============================================================================
-class HarpsNv2(HarpsN):
+class HarpsN_ORIG(HarpsN):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
-            name = 'HARPSN_v2'
+            name = 'HARPSN_ORIG'
         # call to super function
         super().__init__(params, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_HARPSN_v2.fits'
-        # define wave limits in nm
-        # TODO: check these values
-        self.wavemin = 378.060
-        self.wavemax = 691.476
-        # set parameters for instrument
-        self.params = params
-        # override params
-        self.param_override()
-
-    # -------------------------------------------------------------------------
-    # INSTRUMENT SPECIFIC PARAMETERS
-    # -------------------------------------------------------------------------
-    def param_override(self):
-        """
-        Parameter override for HARPS N parameters
-        (update default params)
-
-        :return: None - updates self.params
-        """
-        # set function name
-        func_name = __NAME__ + '.HarpsN_v2.override()'
-        # first run the inherited method
-        super().param_override()
-        # ---------------------------------------------------------------------
-        # set parameters to update
-        # ---------------------------------------------------------------------
-        # define the SNR cut off threshold
-        self.params.set('SNR_THRESHOLD', 10, source=func_name)
-        # Define the minimum allowed SNR in a pixel to add it to the mask
-        self.params.set('MASK_SNR_MIN', value=20, source=func_name)
-
-        # ---------------------------------------------------------------------
-        # Header keywords
-        # ---------------------------------------------------------------------
-        # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH TNG QC BJD',
-                        source=func_name)
-        # define the start time of the observation
-        self.params.set('KW_MJDATE', 'HIERARCH TNG QC BJD', source=func_name)
-        # define snr keyword
-        self.params.set('KW_SNR', 'HIERARCH TNG QC ORDER65 SNR',
-                        source=func_name)
-        # define berv keyword
-        self.params.set('KW_BERV', 'HIERARCH TNG QC BERV', source=func_name)
-        # # define the Blaze calibration file
-        # self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
-        #                 source=func_name)
-        # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'HIERARCH TNG QC BJD',
-                        source=func_name)
-        # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS',
-                        source=func_name)
-        # define the human date of the observation
-        self.params.set('KW_DATE', 'DATE', source=func_name)
-        # define the tau_h20 of the observation
-        self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
-        # define the tau_other of the observation
-        self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
-        # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH TNG DPR TYPE',
-                        source=func_name)
-        # define the filename of the wave solution  ## SUSPECT
-        self.params.set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL15 NAME',
-                        source=func_name)
-        # define the original object name
-        self.params.set('KW_OBJNAME', 'HIERARCH TNG OBS TARG NAME',
-                        source=func_name)
-        # define the SNR goal per pixel per frame (can not exist - will be
-        #   set to zero)
-        # TODO -> no equivalent in ESPRESSO
-        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
-        # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'HIERARCH TNG QC ORDER65 SNR',
-                        source=func_name)
-        # define the barycentric julian date
-        self.params.set('KW_BJD', 'HIERARCH TNG QC BJD', source=func_name)
-        # define the reference header key (must also be in rdb table) to
-        #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'HIERARCH TNG DPR TYPE', source=func_name)
-        # velocity of template from CCF
-        # self.params.set('KW_MODELVEL', 'HIERARCH TNG QC CCF RV',
-        #                source=func_name)
-        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
-        # the temperature of the object
-        # TODO: how do we get the temperature for ESPRESSO?
-        self.params.set('KW_TEMPERATURE', None, source=func_name)
-
-    # -------------------------------------------------------------------------
-    # INSTRUMENT SPECIFIC METHODS
-    # -------------------------------------------------------------------------
-    def template_file(self, directory: str, required: bool = True) -> str:
-        """
-        Make the absolute path for the template file
-
-        :param directory: str, the directory the file is located at
-        :param required: bool, if True checks that file exists on disk
-
-        :return: absolute path to template file
-        """
-        # deal with no object template
-        self._set_object_template()
-        # set template name
-        objname = self.params['OBJECT_TEMPLATE']
-        # get template file
-        if self.params['TEMPLATE_FILE'] is None:
-            basename = self.default_template_name.format(objname)
-        else:
-            basename = self.params['TEMPLATE_FILE']
-        # get absolute path
-        abspath = os.path.join(directory, basename)
-        # check that this file exists
-        if required:
-            io.check_file_exists(abspath)
-        # return absolute path
-        return abspath
-
-    def load_blaze_from_science(self, science_file: str,
-                                sci_image: np.ndarray,
-                                sci_hdr: io.LBLHeader,
-                                calib_directory: str, normalize: bool = True
-                                ) -> Tuple[np.ndarray, bool]:
-        """
-        Load the blaze file using a science file header
-
-        :param science_file: str, the science file name
-        :param sci_image: np.array - the science image (if we don't have a
-                          blaze, we need this for the shape of the blaze)
-        :param sci_hdr: fits.Header - the science file header
-        :param calib_directory: str, the directory containing calibration files
-                                (i.e. containing the blaze files)
-        :param normalize: bool, if True normalized the blaze per order
-
-        :return: the blaze and a flag whether blaze is set to ones (science
-                 image already blaze corrected)
-        """
-        # no blaze required - set to ones
-        blaze = np.ones_like(sci_image)
-        # do not require header or calib directory
-        _ = sci_hdr, calib_directory, normalize
-        # return blaze
-        return blaze, True
-
-    def no_blaze_corr(self, sci_image: np.ndarray,
-                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        If we do not have a blaze we need to create an artificial one so that
-        the s1d has a proper weighting
-
-        :param sci_image: the science image (will be unblazed corrected)
-        :param sci_wave: the wavelength solution for the science image
-
-        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
-        """
-        # get the wave centers for each order
-        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
-        # find the 'diffraction' order for a given 'on-detector' order
-        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
-        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
-        # ---------------------------------------------------------------------
-        # use the fit to get the blaze assuming a sinc**2 profile.
-        # The minima of a given order corresponds to the position of the
-        # consecutive orders
-        # ---------------------------------------------------------------------
-        # storage for the calculated blaze
-        blaze = np.zeros(sci_wave.shape)
-        # loop around each order
-        for order_num in range(sci_wave.shape[0]):
-            # get the wave grid for this order
-            owave = sci_wave[order_num]
-            # get the center of this order (with a small offset to avoid
-            #  a division by zero in the sinc at phase = 0
-            owave_cen = owave[len(owave) // 2] + 1e-6
-            # calculate the period of this order
-            period = owave_cen / np.polyval(dfit, 1 / owave)
-            # calculate the phase of the sinc**2
-            phase = np.pi * (owave - owave_cen) / period
-            # assume the sinc profile. There is a factor 2 difference in the
-            #   phase as the sinc is squared. sin**2 has a period that is a
-            #   factor of 2 shorter than the sin
-            blaze[order_num] = (np.sin(phase) / phase) ** 2
-        # un-correct the science image
-        sci_image = sci_image * blaze
-        # return un-corrected science image and the calculated blaze
-        return sci_image, blaze
-
-    def get_wave_solution(self, science_filename: Union[str, None] = None,
-                          data: Union[np.ndarray, None] = None,
-                          header: Union[io.LBLHeader, None] = None
-                          ) -> np.ndarray:
-        """
-        Get a wave solution from a file (for Espresso this is from the header)
-        :param science_filename: str, the absolute path to the file - for
-                                 spirou this is a file with the wave solution
-                                 in the header
-        :param header: fits.Header, this is the header to use (if not given
-                       requires filename to be set to load header)
-        :param data: np.ndarray, this must be set along with header (if not
-                     give we require filename to be set to load data)
-
-        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
-        """
-        # load wave map
-        wavemap = io.load_fits(science_filename, extnum=4)
-        # ---------------------------------------------------------------------
-        # Espresso wave solution is in Angstrom - convert to nm for consistency
-        wavemap = wavemap / 10.0
-        # ---------------------------------------------------------------------
-        # return wave solution map
-        return wavemap
-
-    def get_berv(self, sci_hdr: io.LBLHeader) -> float:
-        """
-        Get the Barycenteric correction for the RV in m/s
-
-        :param sci_hdr: io.LBLHeader, the science header
-
-        :return:
-        """
-        # NOTE RC: I checked this and this is the correct thing to do with
-        #    2.3.5 files ESPRESSO data is always BERV corrected from the
-        #    starting point
-        berv = 0.0
-        # return the berv measurement (in m/s)
-        return berv
-
-
-# =============================================================================
-# Define HARPS-N v2 class
-# =============================================================================
-class HarpsNv3(HarpsN):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
-        # get the name
-        if name is None:
-            name = 'HARPSN_v3'
-        # call to super function
-        super().__init__(params, name)
-        # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_HARPSN_v3.fits'
+        self.default_template_name = 'Template_{0}_HARPSN_ORIG.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -1198,6 +956,248 @@ class HarpsNv3(HarpsN):
             berv = sci_hdr.get_hkey(hdr_key, dtype=float) * 1000
         else:
             berv = 0.0
+        # return the berv measurement (in m/s)
+        return berv
+
+
+# =============================================================================
+# Define HARPS-N ESO class
+# =============================================================================
+class HarpsN_ESO(HarpsN):
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
+        # get the name
+        if name is None:
+            name = 'HARPSN_ESO'
+        # call to super function
+        super().__init__(params, name)
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_HARPSN_ESO.fits'
+        # define wave limits in nm
+        # TODO: check these values
+        self.wavemin = 378.060
+        self.wavemax = 691.476
+        # set parameters for instrument
+        self.params = params
+        # override params
+        self.param_override()
+
+    # -------------------------------------------------------------------------
+    # INSTRUMENT SPECIFIC PARAMETERS
+    # -------------------------------------------------------------------------
+    def param_override(self):
+        """
+        Parameter override for HARPS N parameters
+        (update default params)
+
+        :return: None - updates self.params
+        """
+        # set function name
+        func_name = __NAME__ + '.HarpsN_ESO.override()'
+        # first run the inherited method
+        super().param_override()
+        # ---------------------------------------------------------------------
+        # set parameters to update
+        # ---------------------------------------------------------------------
+        # define the SNR cut off threshold
+        self.params.set('SNR_THRESHOLD', 10, source=func_name)
+        # Define the minimum allowed SNR in a pixel to add it to the mask
+        self.params.set('MASK_SNR_MIN', value=20, source=func_name)
+
+        # ---------------------------------------------------------------------
+        # Header keywords
+        # ---------------------------------------------------------------------
+        # define the key that gives the mid exposure time in MJD
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH TNG QC BJD',
+                        source=func_name)
+        # define the start time of the observation
+        self.params.set('KW_MJDATE', 'HIERARCH TNG QC BJD', source=func_name)
+        # define snr keyword
+        self.params.set('KW_SNR', 'HIERARCH TNG QC ORDER65 SNR',
+                        source=func_name)
+        # define berv keyword
+        self.params.set('KW_BERV', 'HIERARCH TNG QC BERV', source=func_name)
+        # # define the Blaze calibration file
+        # self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
+        #                 source=func_name)
+        # define the exposure time of the observation
+        self.params.set('KW_EXPTIME', 'HIERARCH TNG QC BJD',
+                        source=func_name)
+        # define the airmass of the observation
+        self.params.set('KW_AIRMASS', 'AIRMASS',
+                        source=func_name)
+        # define the human date of the observation
+        self.params.set('KW_DATE', 'DATE', source=func_name)
+        # define the tau_h20 of the observation
+        self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
+        # define the tau_other of the observation
+        self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
+        # define the DPRTYPE of the observation
+        self.params.set('KW_DPRTYPE', 'HIERARCH TNG DPR TYPE',
+                        source=func_name)
+        # define the filename of the wave solution  ## SUSPECT
+        self.params.set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL15 NAME',
+                        source=func_name)
+        # define the original object name
+        self.params.set('KW_OBJNAME', 'HIERARCH TNG OBS TARG NAME',
+                        source=func_name)
+        # define the SNR goal per pixel per frame (can not exist - will be
+        #   set to zero)
+        # TODO -> no equivalent in ESPRESSO
+        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
+        # define the SNR in chosen order
+        self.params.set('KW_EXT_SNR', 'HIERARCH TNG QC ORDER65 SNR',
+                        source=func_name)
+        # define the barycentric julian date
+        self.params.set('KW_BJD', 'HIERARCH TNG QC BJD', source=func_name)
+        # define the reference header key (must also be in rdb table) to
+        #    distinguish FP calibration files from FP simultaneous files
+        self.params.set('KW_REF_KEY', 'HIERARCH TNG DPR TYPE', source=func_name)
+        # velocity of template from CCF
+        # self.params.set('KW_MODELVEL', 'HIERARCH TNG QC CCF RV',
+        #                source=func_name)
+        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
+        # the temperature of the object
+        # TODO: how do we get the temperature for ESPRESSO?
+        self.params.set('KW_TEMPERATURE', None, source=func_name)
+
+    # -------------------------------------------------------------------------
+    # INSTRUMENT SPECIFIC METHODS
+    # -------------------------------------------------------------------------
+    def template_file(self, directory: str, required: bool = True) -> str:
+        """
+        Make the absolute path for the template file
+
+        :param directory: str, the directory the file is located at
+        :param required: bool, if True checks that file exists on disk
+
+        :return: absolute path to template file
+        """
+        # deal with no object template
+        self._set_object_template()
+        # set template name
+        objname = self.params['OBJECT_TEMPLATE']
+        # get template file
+        if self.params['TEMPLATE_FILE'] is None:
+            basename = self.default_template_name.format(objname)
+        else:
+            basename = self.params['TEMPLATE_FILE']
+        # get absolute path
+        abspath = os.path.join(directory, basename)
+        # check that this file exists
+        if required:
+            io.check_file_exists(abspath)
+        # return absolute path
+        return abspath
+
+    def load_blaze_from_science(self, science_file: str,
+                                sci_image: np.ndarray,
+                                sci_hdr: io.LBLHeader,
+                                calib_directory: str, normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
+        """
+        Load the blaze file using a science file header
+
+        :param science_file: str, the science file name
+        :param sci_image: np.array - the science image (if we don't have a
+                          blaze, we need this for the shape of the blaze)
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+                                (i.e. containing the blaze files)
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
+        """
+        # no blaze required - set to ones
+        blaze = np.ones_like(sci_image)
+        # do not require header or calib directory
+        _ = sci_hdr, calib_directory, normalize
+        # return blaze
+        return blaze, True
+
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # espresso has 2 orders per 'true' order so have to take every other
+        #   wave element
+        wave_cen = wave_cen[::2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # ---------------------------------------------------------------------
+        # use the fit to get the blaze assuming a sinc**2 profile.
+        # The minima of a given order corresponds to the position of the
+        # consecutive orders
+        # ---------------------------------------------------------------------
+        # storage for the calculated blaze
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # get the center of this order (with a small offset to avoid
+            #  a division by zero in the sinc at phase = 0
+            owave_cen = owave[len(owave) // 2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1 / owave)
+            # calculate the phase of the sinc**2
+            phase = np.pi * (owave - owave_cen) / period
+            # assume the sinc profile. There is a factor 2 difference in the
+            #   phase as the sinc is squared. sin**2 has a period that is a
+            #   factor of 2 shorter than the sin
+            blaze[order_num] = (np.sin(phase) / phase) ** 2
+        # un-correct the science image
+        sci_image = sci_image * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
+
+    def get_wave_solution(self, science_filename: Union[str, None] = None,
+                          data: Union[np.ndarray, None] = None,
+                          header: Union[io.LBLHeader, None] = None
+                          ) -> np.ndarray:
+        """
+        Get a wave solution from a file (for Espresso this is from the header)
+        :param science_filename: str, the absolute path to the file - for
+                                 spirou this is a file with the wave solution
+                                 in the header
+        :param header: fits.Header, this is the header to use (if not given
+                       requires filename to be set to load header)
+        :param data: np.ndarray, this must be set along with header (if not
+                     give we require filename to be set to load data)
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
+        # load wave map
+        wavemap = io.load_fits(science_filename, extnum=4)
+        # ---------------------------------------------------------------------
+        # Espresso wave solution is in Angstrom - convert to nm for consistency
+        wavemap = wavemap / 10.0
+        # ---------------------------------------------------------------------
+        # return wave solution map
+        return wavemap
+
+    def get_berv(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        Get the Barycenteric correction for the RV in m/s
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return:
+        """
+        # NOTE RC: I checked this and this is the correct thing to do with
+        #    2.3.5 files ESPRESSO data is always BERV corrected from the
+        #    starting point
+        berv = 0.0
         # return the berv measurement (in m/s)
         return berv
 

@@ -51,7 +51,7 @@ InstrumentsType = Union[default.Instrument,
                         carmenes.Carmenes,
                         nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
                         nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
-                        harpsn.HarpsNv2, harpsn.HarpsNv3,
+                        harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                         maroonx.MaroonX]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
@@ -83,8 +83,8 @@ InstDict['CARMENES']['None'] = carmenes.Carmenes
 InstDict['ESPRESSO'] = dict()
 InstDict['ESPRESSO']['None'] = espresso.Espresso
 InstDict['HARPSN'] = dict()
-InstDict['HARPSN']['v2'] = harpsn.HarpsNv2
-InstDict['HARPSN']['v3'] = harpsn.HarpsNv3
+InstDict['HARPSN']['ORIG'] = harpsn.HarpsN_ORIG
+InstDict['HARPSN']['ESO'] = harpsn.HarpsN_ESO
 InstDict['MAROONX'] = dict()
 InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
