@@ -657,10 +657,8 @@ class MaroonX(Instrument):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
         else:
-            # convert bjd to mjd
-            bjd_mjd = Time(bjd, format='jd').mjd
             # return RJD = MJD + 0.5
-            return float(bjd_mjd) + 0.5
+            return float(bjd) + 0.5
 
     def get_plot_date(self, header: io.LBLHeader):
         """
