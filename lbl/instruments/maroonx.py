@@ -804,7 +804,7 @@ class MaroonXBlue(MaroonX):
             # get header
             hdr = io.load_header(filename, kind, extnum, extname)
             # return the LBL Header class
-            return io.LBLHeader.from_fits(hdr)
+            return io.LBLHeader.from_fits(hdr, filename)
         # get lbl header
         header_dict = io.LBLHeader.from_store(self.header_storekey, filename)
         # ---------------------------------------------------------------------
@@ -1138,7 +1138,7 @@ class MaroonXRed(MaroonX):
             # get header
             hdr = io.load_header(filename, kind, extnum, extname)
             # return the LBL Header class
-            return io.LBLHeader.from_fits(hdr)
+            return io.LBLHeader.from_fits(hdr, filename)
         # get lbl header
         header_dict = io.LBLHeader.from_store(self.header_storekey, filename)
         # ---------------------------------------------------------------------
