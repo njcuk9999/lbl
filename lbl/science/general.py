@@ -1394,8 +1394,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     ref_table['sdv'] = sdv
     # adding to the fits table the 0th derivative projection
     # this is a contrast of the line. This is 1+ the change in depth
-    ref_table['CONTRAST'] = 1 + d0v
-    ref_table['sCONTRAST'] = sd0v
+    ref_table['contrast'] = 1 + d0v
+    ref_table['sig_contrast'] = sd0v
     # adding to the fits table the 2nd derivative projection
     ref_table['d2v'] = d2v
     ref_table['sd2v'] = sd2v
@@ -2244,6 +2244,7 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
                 wmean_pairs[colname[1:]] = colname
     # add any column pairs that don't conform to this
     wmean_pairs['fwhm'] = 'sig_fwhm'
+    wmean_pairs['contrast'] = 'sig_contrast'
     # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB 2 table')
