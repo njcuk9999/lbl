@@ -1573,9 +1573,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # for DACE, derived from d2v
     rdb_dict['sig_fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
     # mean line contrast
-    rdb_dict['CONTRAST'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['contrast'] = np.zeros_like(lblrvfiles, dtype=float)
     # error on mean line contrast
-    rdb_dict['sCONTRAST'] = np.zeros_like(lblrvfiles, dtype=float)
+    rdb_dict['sig_contrast'] = np.zeros_like(lblrvfiles, dtype=float)
     # velocity at a reference wavelength fitting for the chromatic slope
     rdb_dict['vrad_achromatic'] = np.zeros_like(lblrvfiles, dtype=float)
     # error on achromatic velocity
@@ -1736,8 +1736,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 rdb_dict['s' + key][row] = val_bulk_error
         # get the d2v, sd2v, d3v and sd3v values from table
         wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
-        contrast = np.array(rvtable[good]['CONTRAST'], dtype=float)
-        scontrast = np.array(rvtable[good]['sCONTRAST'], dtype=float)
+        contrast = np.array(rvtable[good]['contrast'], dtype=float)
+        scontrast = np.array(rvtable[good]['sig_contrast'], dtype=float)
         d2v = np.array(rvtable[good]['d2v'], dtype=float)
         sd2v = np.array(rvtable[good]['sd2v'], dtype=float)
         d3v = np.array(rvtable[good]['d3v'], dtype=float)
@@ -1751,8 +1751,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         contrast_guess, contrast_bulk_error = mp.odd_ratio_mean(contrast,
                                                                 scontrast)
         # push into rdb_dict
-        rdb_dict['CONTRAST'][row] = contrast_guess
-        rdb_dict['sCONTRAST'][row] = contrast_bulk_error
+        rdb_dict['contrast'][row] = contrast_guess
+        rdb_dict['sig_contrast'][row] = contrast_bulk_error
 
         # use the odd mean ratio to calculate d2v and sd2v
         d2v_guess, d2v_bulk_error = mp.odd_ratio_mean(d2v, sd2v)
