@@ -60,6 +60,8 @@ class LBLHeader(UserDict):
         super(LBLHeader, self).__init__(*arg, **kw)
         # add storage for comments
         self.comments = dict()
+        # add a filename (could be None)
+        self.filename = None
 
     def __getitem__(self, key: str) -> object:
         """
@@ -144,7 +146,8 @@ class LBLHeader(UserDict):
         return self.__str__()
 
     @classmethod
-    def from_fits(cls, header: fits.Header) -> 'LBLHeader':
+    def from_fits(cls, header: fits.Header,
+                  filename: Optional[str] = None) -> 'LBLHeader':
         """
         Construct a LBLHeader from a fits file
 
@@ -159,6 +162,8 @@ class LBLHeader(UserDict):
         new.comments = dict()
         for key in header:
             new.comments[key] = copy.deepcopy(header.comments[key])
+        # set filename
+        new.filename = filename
         # construct LBLHeader
         return new
 
@@ -192,8 +197,10 @@ class LBLHeader(UserDict):
                  dtype: Any = None) -> Any:
         # deal with no filename
         if filename is None:
-            filename = 'Unknown'
-        # -------------------------------------------------------------------------
+            filename = self.filename
+            if filename is None:
+                filename = 'Unknown'
+        # ---------------------------------------------------------------------
         # deal with a list of keys (test all one by one for the correct key)
         if isinstance(key, list):
             drskey = ''
@@ -210,7 +217,7 @@ class LBLHeader(UserDict):
                 raise LblException(emsg.format(' or '.join(key)))
         else:
             drskey = str(key)
-        # -------------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # deal with hierarch keys being removed
         found_key = False
 
@@ -224,7 +231,7 @@ class LBLHeader(UserDict):
                     found_key = True
         else:
             found_key = True
-        # -------------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # test for key in header
         if found_key:
             try:
@@ -269,7 +276,9 @@ class LBLHeader(UserDict):
         """
         # deal with no filename
         if filename is None:
-            filename = 'Unknown'
+            filename = self.filename
+            if filename is None:
+                filename = 'Unknown'
         # test for key in header
         if dtype is None:
             dtype = str
@@ -825,6 +834,8 @@ def hdf_to_header(storekey: str, filename: str):
             # copy key into new LBL Header
             new[outkey] = copy.deepcopy(hdr_df[key])
             new.comments[outkey] = ''
+        # set filename
+        new.filename = filename
     # return the new LBL header
     return new
 

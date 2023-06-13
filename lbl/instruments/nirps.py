@@ -1428,7 +1428,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # get header
         hdr = io.load_header(filename, kind, extnum, extname)
         # return the LBL Header class
-        return io.LBLHeader.from_fits(hdr)
+        return io.LBLHeader.from_fits(hdr, filename)
 
     def template_file(self, directory: str, required: bool = True) -> str:
         """

@@ -272,7 +272,7 @@ class Spirou(Instrument):
         # get header
         hdr = io.load_header(filename, kind, extnum, extname)
         # return the LBL Header class
-        return io.LBLHeader.from_fits(hdr)
+        return io.LBLHeader.from_fits(hdr, filename)
 
     def get_extname(self, kind: str) -> Optional[str]:
         """
