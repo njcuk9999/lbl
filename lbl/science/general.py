@@ -927,9 +927,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # set up storage for the dv, d2v, d3v and corresponding rms values
     #    fill with NaNs
     dv = np.full(len(ref_table['WAVE_START']), np.nan)
+    d0v = np.full(len(ref_table['WAVE_START']), np.nan)
     d2v = np.full(len(ref_table['WAVE_START']), np.nan)
     d3v = np.full(len(ref_table['WAVE_START']), np.nan)
     sdv = np.full(len(ref_table['WAVE_START']), np.nan)
+    sd0v = np.full(len(ref_table['WAVE_START']), np.nan)
     sd2v = np.full(len(ref_table['WAVE_START']), np.nan)
     sd3v = np.full(len(ref_table['WAVE_START']), np.nan)
     # keep track of the fraction of each line that is valid
@@ -1285,6 +1287,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if flag_last_iter:
                 # to be consistent between the spectrum residuals and model
                 # -------------------------------------------------------------
+                # work out the 0th derivative
+                #    From bouchy 2001 equation, RV error for each pixel
+                # -------------------------------------------------------------
+                if np.sum(np.isfinite(model_seg)) >=2:
+                    v1 = np.nanmean(model_seg)
+                    bout = bouchy_equation_line(model_seg - v1, diff_seg,
+                                                mean_rms)
+                    d0v[line_it], sd0v[line_it] = bout
+                # -------------------------------------------------------------
                 # work out the 2nd derivative
                 #    From bouchy 2001 equation, RV error for each pixel
                 # -------------------------------------------------------------
@@ -1381,6 +1392,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # express to have sign fine relative to convention
     ref_table['dv'] = -rv_final
     ref_table['sdv'] = sdv
+    # adding to the fits table the 0th derivative projection
+    # this is a contrast of the line. This is 1+ the change in depth
+    ref_table['CONTRAST'] = 1 + d0v
+    ref_table['sCONTRAST'] = sd0v
     # adding to the fits table the 2nd derivative projection
     ref_table['d2v'] = d2v
     ref_table['sd2v'] = sd2v
@@ -1557,6 +1572,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
     # for DACE, derived from d2v
     rdb_dict['sig_fwhm'] = np.zeros_like(lblrvfiles, dtype=float)
+    # mean line contrast
+    rdb_dict['CONTRAST'] = np.zeros_like(lblrvfiles, dtype=float)
+    # error on mean line contrast
+    rdb_dict['sCONTRAST'] = np.zeros_like(lblrvfiles, dtype=float)
     # velocity at a reference wavelength fitting for the chromatic slope
     rdb_dict['vrad_achromatic'] = np.zeros_like(lblrvfiles, dtype=float)
     # error on achromatic velocity
@@ -1608,6 +1627,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     dv_arr, sdv_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
     d2v_arr, sd2v_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
     d3v_arr, sd3v_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
+    contrast_arr, scontrast_arr = np.zeros([nby, nbx]), np.zeros([nby, nbx])
+
     # projection model for the rdb_dict
     proj_model = dict()
     # deal with residual projection table
@@ -1715,6 +1736,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 rdb_dict['s' + key][row] = val_bulk_error
         # get the d2v, sd2v, d3v and sd3v values from table
         wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
+        contrast = np.array(rvtable[good]['CONTRAST'], dtype=float)
+        scontrast = np.array(rvtable[good]['sCONTRAST'], dtype=float)
         d2v = np.array(rvtable[good]['d2v'], dtype=float)
         sd2v = np.array(rvtable[good]['sd2v'], dtype=float)
         d3v = np.array(rvtable[good]['d3v'], dtype=float)
@@ -1723,6 +1746,14 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         wave_arr[row] = wave_vec
         d2v_arr[row], sd2v_arr[row] = d2v, sd2v
         d3v_arr[row], sd3v_arr[row] = d3v, sd3v
+        contrast_arr[row], scontrast_arr[row] = contrast, scontrast
+        # use the odd mean ratio to calculate d2v and sd2v
+        contrast_guess, contrast_bulk_error = mp.odd_ratio_mean(contrast,
+                                                                scontrast)
+        # push into rdb_dict
+        rdb_dict['CONTRAST'][row] = contrast_guess
+        rdb_dict['sCONTRAST'][row] = contrast_bulk_error
+
         # use the odd mean ratio to calculate d2v and sd2v
         d2v_guess, d2v_bulk_error = mp.odd_ratio_mean(d2v, sd2v)
         # push into rdb_dict
