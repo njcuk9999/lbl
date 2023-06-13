@@ -790,6 +790,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # flag that we have residual projection tables
     resproj_flag = isinstance(inst.params['RESPROJ_TABLES'], dict)
     # -------------------------------------------------------------------------
+    # deal with max number of iterations higher than computer_rv_n_iters
+    if max_good_num_iters > compute_rv_n_iters:
+        emsg = ('Max number of good iterations '
+                '(COMPUTE_RV_MAX_N_GOOD_ITERS={0}) is greater than the '
+                'total number of iterations (COMPUTER_RV_N_ITERATIONS={1})')
+        eargs = [max_good_num_iters, compute_rv_n_iters]
+        raise LblException(emsg.format(*eargs))
+    # -------------------------------------------------------------------------
     # deal with noise model
     if not use_noise_model:
         # TODO: get a noise model

@@ -214,7 +214,7 @@ params.set(key='ROUGH_CCF_EWIDTH_GUESS', value=2000, source=__NAME__,
            desc='The rough CCF ewidth guess for fit in m/s')
 
 # define the number of iterations to do to converge during compute rv
-params.set(key='COMPUTE_RV_N_ITERATIONS', value=10, source=__NAME__,
+params.set(key='COMPUTE_RV_N_ITERATIONS', value=20, source=__NAME__,
            desc='The number of iterations to do to converge during compute RV')
 
 # define the plot order for compute rv model plot
