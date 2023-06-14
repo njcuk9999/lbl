@@ -743,7 +743,7 @@ class HarpsN_ORIG(HarpsN):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.HarpsN_v2.override()'
+        func_name = __NAME__ + '.HARPSN_ORIG.override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------

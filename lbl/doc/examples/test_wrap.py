@@ -26,6 +26,7 @@ INSTRUMENTS = ['carmenes_vis',
                'harps',
                'harpsn_orig', 'harpsn_eso',
                'nirps_ha_apero', 'nirps_he_apero',
+               'nirps_ha_eso', 'nirps_he_eso',
                'spirou_apero', 'spirou_cadc',
                'maroonx_b', 'maroonx_r']
 
@@ -164,9 +165,56 @@ def nirps_he_apero():
     return rparams
 
 
-# TODO: Add NIRPS-HA-ESO
+def nirps_ha_eso():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'NIRPS_HA'
+    rparams['DATA_SOURCE'] = 'ESO'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'NIRPS-HA-eso')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['PROXIMA']
+    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_TEFF'] = [2810]
+    rparams['BLAZE_FILE'] = 'r.NIRPS.2023-03-05T103313.641_BLAZE_A.fits'
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
 
-# TODO: Add NIRPS-HE-ESO
+
+def nirps_he_eso():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'NIRPS_HE'
+    rparams['DATA_SOURCE'] = 'ESO'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'NIRPS-HE-eso')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['PROXIMA']
+    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_TEFF'] = [2810]
+    rparams['BLAZE_FILE'] = 'r.NIRPS.2023-01-22T144532.460_BLAZE_A.fits'
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
 
 
 def spirou_apero():
@@ -195,19 +243,41 @@ def spirou_apero():
     return rparams
 
 
-# TODO: Add spirou_cadc
+def spirou_cadc():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'SPIROU'
+    rparams['DATA_SOURCE'] = 'CADC'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'SPIROU-cadc')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['GL699']
+    rparams['OBJECT_TEMPLATE'] = ['GL699']
+    rparams['OBJECT_TEFF'] = [3224]
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
 
 
 def harpsn_orig():
     # set up parameters
     rparams = dict()
     # LBL parameters
-    rparams['INSTRUMENT'] = 'HARPS'
+    rparams['INSTRUMENT'] = 'HARPSN'
     rparams['DATA_SOURCE'] = 'ORIG'
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_ORIG')
     rparams['DATA_TYPES'] = ['SCIENCE']
-    rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS2.3.5_TOI1266']
-    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS2.3.5_TOI1266']
+    rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS3.7_TOI1266']
+    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS3.7_TOI1266']
     rparams['OBJECT_TEFF'] = [5668]
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
@@ -227,12 +297,12 @@ def harpsn_eso():
     # set up parameters
     rparams = dict()
     # LBL parameters
-    rparams['INSTRUMENT'] = 'HARPS'
+    rparams['INSTRUMENT'] = 'HARPSN'
     rparams['DATA_SOURCE'] = 'ESO'
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_ESO')
     rparams['DATA_TYPES'] = ['SCIENCE']
-    rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS3.7_TOI1266']
-    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS3.7_TOI1266']
+    rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS2.3.5_TOI1266']
+    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS2.3.5_TOI1266']
     rparams['OBJECT_TEFF'] = [5668]
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True

@@ -1916,7 +1916,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # correlation is due to a statistical fluctuation (it significance)
             # and can be used to flag lines that suspiciously correlate
             # with BERV.
-            pout = pearsonr(berv[good], per_line_diff[good])
+            with warnings.catch_warnings(record=True) as _:
+                pout = pearsonr(berv[good], per_line_diff[good])
             prob_pearsonr[line_it] = pout[1]
 
             if prob_pearsonr[line_it] < cut_pearsonr:
