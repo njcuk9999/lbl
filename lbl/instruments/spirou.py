@@ -257,7 +257,8 @@ class Spirou(Instrument):
     # INSTRUMENT SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 0, extname: str = None) -> io.LBLHeader:
+                    extnum: Optional[int] = None,
+                    extname: str = None) -> io.LBLHeader:
         """
         Load a header into a dictionary (may not be a fits file)
         We must push this to a dictinoary as not all instrument confirm to
@@ -1193,9 +1194,7 @@ class SpirouCADC(Spirou):
         super().param_override()
 
         # Fiber must be set for SPIROU CADC
-        if 'FORCE_FIBER' not in self.params:
-            emsg = 'Keyword FORCE_FIBER must be set for SPIROU CADC mode'
-            raise base_classes.LblException(emsg)
+        self.params.set('FORCE_FIBER', 'AB', source=func_name)
         # Set FLUX_EXTENSION_NAME
         #   - Can be Flux (for e.fits and t.fits)
         #   - Can be Pol or StokesI or Null1 or Null2 (for p.fits)

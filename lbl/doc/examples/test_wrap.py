@@ -26,9 +26,9 @@ INSTRUMENTS = [#'carmenes_vis',
                #'harps',
                #'harpsn_orig', 'harpsn_eso',
                #'nirps_ha_apero', 'nirps_he_apero',
-               'nirps_ha_eso',
-               'nirps_he_eso',
-               'spirou_apero', 'spirou_cadc',
+               #'nirps_ha_eso', 'nirps_he_eso',
+               #'spirou_apero',
+               'spirou_cadc',
                'maroonx_b', 'maroonx_r']
 
 
