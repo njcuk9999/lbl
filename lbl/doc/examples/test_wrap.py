@@ -21,12 +21,13 @@ from lbl import lbl_wrap
 TEST_PATH = '/scratch3/lbl/data/test/'
 
 # define which instruments to test (using functions in this module)
-INSTRUMENTS = ['carmenes_vis',
-               'espresso',
-               'harps',
-               'harpsn_orig', 'harpsn_eso',
-               'nirps_ha_apero', 'nirps_he_apero',
-               'nirps_ha_eso', 'nirps_he_eso',
+INSTRUMENTS = [#'carmenes_vis',
+               #'espresso',
+               #'harps',
+               #'harpsn_orig', 'harpsn_eso',
+               #'nirps_ha_apero', 'nirps_he_apero',
+               'nirps_ha_eso',
+               'nirps_he_eso',
                'spirou_apero', 'spirou_cadc',
                'maroonx_b', 'maroonx_r']
 
@@ -279,6 +280,7 @@ def harpsn_orig():
     rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS3.7_TOI1266']
     rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS3.7_TOI1266']
     rparams['OBJECT_TEFF'] = [5668]
+    rparams['BLAZE_FILE'] = 'HARPN.2022-05-12T05-15-56.213_blaze_A.fits'
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True

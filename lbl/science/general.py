@@ -1944,6 +1944,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # normalize the per-line mean to zero
         guess3, bulk_error3 = mp.odd_ratio_mean(per_line_mean, per_line_error)
         per_line_mean = per_line_mean - guess3
+        nsig = np.abs(per_line_mean/mp.estimate_sigma(per_line_mean))
+        per_line_mean[nsig > 100] = np.nan
 
         # ---------------------------------------------------------------------
         # Model per line
@@ -2014,6 +2016,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # find finite points
             good = np.isfinite(err) & np.isfinite(rvs_row)
             good &= np.isfinite(rv_per_line_model[0])
+            # find very large outliers in the per-line velocities
+            nsig = np.abs(rvs_row-np.nanmedian(rvs_row))/err
+            good &= (nsig<10)
+            good &= (err<100*np.nanmedian(err))
             # get valid wave and subtract reference wavelength
             valid_wave = rvtable0['WAVE_START'][good] - reference_wavelength
             # get valid rv an dv drms
