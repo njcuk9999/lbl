@@ -138,22 +138,28 @@ def main(runparams: dict):
         # ---------------------------------------------------------------------
         # make the template (if not present)
         if runparams['RUN_LBL_TEMPLATE']:
-            lbl_template.main(instrument=instrument, data_dir=data_dir,
-                              data_type=data_type,
-                              object_science=object_science,
-                              object_template=object_template,
-                              overwrite=not runparams['SKIP_LBL_TEMPLATE'],
-                              **keyword_args)
+            # Must produce the template for the science data and the template
+            #   we use a set to do this (only runs once if they are the same)
+            for _obj_template in {object_science, object_template}:
+                lbl_template.main(instrument=instrument, data_dir=data_dir,
+                                  data_type=data_type,
+                                  object_science=object_science,
+                                  object_template=_obj_template,
+                                  overwrite=not runparams['SKIP_LBL_TEMPLATE'],
+                                  **keyword_args)
         # ---------------------------------------------------------------------
         # make the mask (if not present)
         if runparams['RUN_LBL_MASK']:
-            lbl_mask.main(instrument=instrument, data_dir=data_dir,
-                          data_type=data_type,
-                          object_science=object_science,
-                          object_template=object_template,
-                          object_teff=object_teff,
-                          overwrite=not runparams['SKIP_LBL_MASK'],
-                          **keyword_args)
+            # Must produce the mask for the science data and the template
+            #   we use a set to do this (only runs once if they are the same)
+            for _obj_template in {object_science, object_template}:
+                lbl_mask.main(instrument=instrument, data_dir=data_dir,
+                              data_type=data_type,
+                              object_science=object_science,
+                              object_template=_obj_template,
+                              object_teff=object_teff,
+                              overwrite=not runparams['SKIP_LBL_MASK'],
+                              **keyword_args)
         # ---------------------------------------------------------------------
         # # make the noise model (if not present)
         # if runparams['RUN_LBL_NOISE']:
