@@ -375,18 +375,27 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
                            mask_file: str) -> Dict[str, Any]:
     # set the function name
     func_name = __NAME__ + '.get_systemic_vel_props()'
-    # get the object name
-    sci_objname = inst.params['OBJECT_SCIENCE']
-    template_objname = inst.params['OBJECT_TEMPLATE']
-
-    rv_min = inst.params['ROUGH_CCF_MIN_RV']
-    rv_max = inst.params['ROUGH_CCF_MAX_RV']
-    rv_step = inst.params['ROUGH_CCF_STEP_RV']
-    rv_filter_size = inst.params['ROUGH_CCF_FILTER_SIZE']
     # output return in a dictionary
     props = dict()
     # get the systemic velocity for mask
     props['MASK_SYS_VEL'] = inst.get_mask_systemic_vel(mask_file)
+    # deal with non science files
+    if inst.params['DATA_TYPE'] != 'SCIENCE':
+        # add values to props
+        props['VSYS'] = 0
+        props['FWHM'] = np.nan
+        props['CONTRAST'] = np.nan
+        props['SNR'] = np.nan
+        props['EARS'] = np.nan
+        props['EXPO'] = np.nan
+        return props
+    # get the object name
+    sci_objname = inst.params['OBJECT_SCIENCE']
+    template_objname = inst.params['OBJECT_TEMPLATE']
+    rv_min = inst.params['ROUGH_CCF_MIN_RV']
+    rv_max = inst.params['ROUGH_CCF_MAX_RV']
+    rv_step = inst.params['ROUGH_CCF_STEP_RV']
+    rv_filter_size = inst.params['ROUGH_CCF_FILTER_SIZE']
     # ---------------------------------------------------------------------
     # load the correct mask file
     mask_table = inst.load_mask(mask_file)
@@ -975,50 +984,49 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # Systemic velocity estimate
     # -------------------------------------------------------------------------
     # deal with first estimate of RV / CCF equivalent width
-
     if inst.params['DATA_TYPE'] == 'SCIENCE':
-        sys_rv,ccf_fwhm = berv-systemic_props['VSYS'],systemic_props['FWHM']
+        sys_rv, ccf_fwhm = berv-systemic_props['VSYS'], systemic_props['FWHM']
         ccf_ewidth = ccf_fwhm/mp.fwhm()
     else:
         # for FP files
         sys_rv, ccf_ewidth = 0, 0
-    """
-    if reset_rv:
-        # if we are not using calibration file
-        if inst.params['DATA_TYPE'] == 'SCIENCE':
-            # calculate the rough CCF RV estimate
-            mask_table = inst.load_mask(mask_file)
-            # get the mask parameters`
-            wave_mask = np.array(mask_table['ll_mask_s'], dtype=float)
-            ccf_weight = np.array(mask_table['w_mask'], dtype=float)
 
-            sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
-                                          wave_mask, ccf_weight,
-                                          kind='science')
-            # if ccf width is not set then set it and log message
-            if ccf_ewidth is None:
-                ccf_ewidth = float(ewidth)
-                # log ccf ewidth
-                msg = '\t\tCCF e-width = {0:.2f} m/s'
-                margs = [ccf_ewidth]
-                log.general(msg.format(*margs))
-        else:
-            sys_rv, ccf_ewidth = 0, 0
-    # for FP files
-    else:
-        # use the systemic velocity from closest date
-        closest = np.argmin(mjdate - mjdate_all)
-        # get the closest system rv to this observation
-        sys_rv = systemic_all[closest] + berv
-        # log the systemic velocity and the berv
-        msg = '\tUsing Systemic velocity: {0:.4f} m/s  BERV: {1:.4f} m/s'
-        margs = [-systemic_all[closest], -berv]
-        log.general(msg.format(*margs))
-        # log using the sys_Rv
-        msg = '\tSystemic rv + berv={0:.4f} m/s from MJD={1}'
-        margs = [-sys_rv, mjdate_all[closest]]
-        log.general(msg.format(*margs))
-    """
+    # if reset_rv:
+    #     # if we are not using calibration file
+    #     if inst.params['DATA_TYPE'] == 'SCIENCE':
+    #         # calculate the rough CCF RV estimate
+    #         mask_table = inst.load_mask(mask_file)
+    #         # get the mask parameters`
+    #         wave_mask = np.array(mask_table['ll_mask_s'], dtype=float)
+    #         ccf_weight = np.array(mask_table['w_mask'], dtype=float)
+    #
+    #         sys_rv, ewidth = rough_ccf_rv(inst, wavegrid, sci_data,
+    #                                       wave_mask, ccf_weight,
+    #                                       kind='science')
+    #         # if ccf width is not set then set it and log message
+    #         if ccf_ewidth is None:
+    #             ccf_ewidth = float(ewidth)
+    #             # log ccf ewidth
+    #             msg = '\t\tCCF e-width = {0:.2f} m/s'
+    #             margs = [ccf_ewidth]
+    #             log.general(msg.format(*margs))
+    #     else:
+    #         sys_rv, ccf_ewidth = 0, 0
+    # # for FP files
+    # else:
+    #     # use the systemic velocity from closest date
+    #     closest = np.argmin(mjdate - mjdate_all)
+    #     # get the closest system rv to this observation
+    #     sys_rv = systemic_all[closest] + berv
+    #     # log the systemic velocity and the berv
+    #     msg = '\tUsing Systemic velocity: {0:.4f} m/s  BERV: {1:.4f} m/s'
+    #     margs = [-systemic_all[closest], -berv]
+    #     log.general(msg.format(*margs))
+    #     # log using the sys_Rv
+    #     msg = '\tSystemic rv + berv={0:.4f} m/s from MJD={1}'
+    #     margs = [-sys_rv, mjdate_all[closest]]
+    #     log.general(msg.format(*margs))
+
 
     # -------------------------------------------------------------------------
     # iteration loop
@@ -1463,9 +1471,6 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 #   is the likelihood that the line is actually valid from chi2
                 #   point of view
                 ref_table['CHI2'][line_it] = mp.nansum((diff_seg / mean_rms) ** 2)
-        # ---------------------------------------------------------------------
-        # calculate the number of sigmas measured vs predicted
-
         # ---------------------------------------------------------------------
         # get the best etimate of the velocity and update sline
         rv_mean, bulk_error = mp.odd_ratio_mean(dv, sdv)

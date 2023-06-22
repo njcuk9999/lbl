@@ -16,7 +16,7 @@ from astropy.time import Time, TimeDelta
 # =============================================================================
 __NAME__: str = 'base.py'
 __version__: str = '0.58.0'
-__date__: str = '2023-06-19'
+__date__: str = '2023-06-22'
 __authors__: str = 'Neil Cook, Etienne Artigau, Thomas Vandal, Charles Cadieux'
 __package__: str = 'lbl'
 
