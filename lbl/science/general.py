@@ -1568,8 +1568,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # flag that we need to take a completely new rv measurement
         reset_rv = True
         # log that rv did not converge
-        wmsg = ('This RV is (probably) bad (iterations = {0}). '
-                'Next step we will measure it with a CCF')
+        wmsg = 'This RV is (probably) bad (iterations = {0}). '
         wargs = [num_to_converge]
         log.warning(wmsg.format(*wargs))
 
