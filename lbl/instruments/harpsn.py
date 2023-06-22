@@ -1003,7 +1003,8 @@ class HarpsN_ESO(HarpsN):
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.params.set('MASK_SNR_MIN', value=20, source=func_name)
-
+        # define which bands to use for the clean CCF (see astro.ccf_regions)
+        self.params.set('CCF_CLEAN_BANDS', ['r'],  source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
