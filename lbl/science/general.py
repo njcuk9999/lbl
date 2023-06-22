@@ -316,7 +316,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
     valid &= np.isfinite(d2flux) & np.isfinite(d3flux)
     # -------------------------------------------------------------------------
     # doppler shift wave grid with respect to systemic velocity
-    ntwave = mp.doppler_shift(twave[valid], -systemic_vel)
+    ntwave = mp.doppler_shift(twave[valid], systemic_vel)
     # -------------------------------------------------------------------------
     # storage for splines
     sps = dict()
@@ -364,7 +364,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # we create a mask to know if the splined point  is valid
     tmask = np.isfinite(tflux).astype(float)
-    ntwave1 = mp.doppler_shift(twave, -systemic_vel)
+    ntwave1 = mp.doppler_shift(twave, systemic_vel)
     sps['spline_mask'] = mp.iuv_spline(ntwave1, tmask, k=1, ext=1)
     # -------------------------------------------------------------------------
     # return splines

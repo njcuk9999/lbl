@@ -430,7 +430,7 @@ class Carmenes(Instrument):
         # load the mask header
         mask_hdr = self.load_header(mask_file, kind='mask fits file')
         # get info on template systvel for splining correctly
-        systemic_vel = -mask_hdr.get_hkey(sysvelkey, dtype=float)
+        systemic_vel = mask_hdr.get_hkey(sysvelkey, dtype=float)
         # return systemic velocity in m/s
         return systemic_vel
 
