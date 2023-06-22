@@ -440,7 +440,10 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         ccf_vector[it] = mp.nansum(mask_table['w_mask'] * sps(pos))
     # ---------------------------------------------------------------------
     # construct a guess at the ccf fit
-    coeffs = [dv[np.argmin(ccf_vector)], 5000, 1-np.nanmin(ccf_vector), 3, 2]
+    # default FWHM is 6 km/s as this is about the typical width of slowly
+    # rotating M dwarfs
+    coeffs = [dv[np.argmin(ccf_vector)], 6000,
+              1-np.nanmin(ccf_vector/np.nanmedian(ccf_vector)), 3, 2]
     lowf = None
     # do this twice for better fit
     for iteration in range(2):
