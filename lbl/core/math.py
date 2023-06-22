@@ -639,6 +639,29 @@ def gauss_fit_s(x: Union[float, np.ndarray], x0: float, sigma: float,
     return gauss + correction
 
 
+def gauss_fit_e(x: Union[float, np.ndarray], x0: float, fwhm: float,
+                amp: float, ears: float, expo: float) -> Union[float, np.ndarray]:
+    """
+    Gaussian fit with a shape factor and ears
+
+    :param x: numpy array (1D), the x values for the gauss fit
+    :param x0: float, the mean position
+    :param fwhm: float, the FWHM
+    :param amp: float, the amplitude
+    :param ears: float, the ears (wings of the gaussian)
+    :param expo: float, the shape factor
+
+    :return: np.ndarray - the gaussian value
+    """
+    # gaussian FWHM = 2*sqrt(2*ln(2))*sigma
+    ew = fwhm/(2*(2*np.log(2))**(1/expo))
+
+    g1 = amp * np.exp(-np.abs(x - x0) ** expo / ew ** expo)
+    g2 = (amp / ears ** 2) * np.exp(-np.abs(x - x0) ** expo / (ew * 2) ** expo)
+
+    return 1 - g1 + g2
+
+
 def fwhm(sigma: Union[float, np.ndarray] = 1.0) -> Union[float, np.ndarray]:
     """
     Get the Full-width-half-maximum value from the sigma value (~2.3548)

@@ -150,12 +150,18 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     ref_table = general.make_ref_dict(inst, reftable_file, reftable_exists,
                                       science_files, mask_file, calib_dir)
-    # get the systemic velocity for mask
-    systemic_vel = inst.get_mask_systemic_vel(mask_file)
+
+    # -------------------------------------------------------------------------
+    # Step 5: Get the systemic velocity properties for template
+    # -------------------------------------------------------------------------
+    systemic_vel_props = general.get_systemic_vel_props(inst, template_file,
+                                                        mask_file)
+
     # -------------------------------------------------------------------------
     # Step 5: spline the template
     # -------------------------------------------------------------------------
-    splines = general.spline_template(inst, template_file, systemic_vel,
+    splines = general.spline_template(inst, template_file,
+                                      systemic_vel_props['MASK_SYS_VEL'],
                                       models_dir)
     # -------------------------------------------------------------------------
     # Step 6: Loop around science files
@@ -278,6 +284,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             cout = general.compute_rv(inst, it, sci_data, sci_hdr,
                                       splines=splines,
                                       ref_table=ref_table, blaze=blaze,
+                                      systemic_props=systemic_vel_props,
                                       systemic_all=systemic_all,
                                       mjdate_all=mjdate_all,
                                       ccf_ewidth=ccf_ewidth,

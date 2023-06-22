@@ -94,6 +94,8 @@ class NIRPS(Instrument):
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
+        # define which bands to use for the clean CCF (see astro.ccf_regions)
+        self.params.set('CCF_CLEAN_BANDS', ['y', 'h'],  source=func_name)
         # define the plot order for the compute rv model plot
         self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]

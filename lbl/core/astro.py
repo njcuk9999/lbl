@@ -70,26 +70,46 @@ def choose_bands(bandobjs: List[Band], wavemin: float, wavemax: float
 #    http://svo2.cab.inta-csic.es/svo/theory/fps3/index.php?mode=browse
 # =============================================================================
 uband = Band('u', minimum=305.511, maximum=403.064, mean=3572.18,
-             ref='SDSS')
-gband = Band('g', minimum=379.764, maximum=555.304, mean=4750.82,
-             ref='SDSS')
-rband = Band('r', minimum=541.823, maximum=699.442, mean=6204.29,
-             ref='SDSS')
-iband = Band('i', minimum=669.241, maximum=840.032, mean=7519.27,
-             ref='SDSS')
-zband = Band('z', minimum=796.470, maximum=1087.333, mean=8992.26,
-             ref='SDSS')
-yband = Band('y', minimum=965.000, maximum=1195.000, mean=1080.00,
+             ref='SLOAN/SDSS')
+gband = Band('g', minimum=379.764, maximum=555.304, mean=475.082,
+             ref='SLOAN/SDSS')
+rband = Band('r', minimum=541.823, maximum=699.442, mean=620.429,
+             ref='SLOAN/SDSS')
+iband = Band('i', minimum=669.241, maximum=840.032, mean=751.927,
+             ref='SLOAN/SDSS')
+zband = Band('z', minimum=796.470, maximum=1087.333, mean=899.226,
+             ref='/SDSS')
+yband = Band('y', minimum=938.600, maximum=1113.400, mean=1025.880,
+             ref='CFHT/Wircam')
+jband = Band('j', minimum=1148.178, maximum=13494.41, mean=1248.414,
              ref='MKO/NSFCam')
-jband = Band('J', minimum=1175.00, maximum=1335.00, mean=1255.00,
+hband = Band('h', minimum=1450.980, maximum=1809.105, mean=1629.826,
              ref='MKO/NSFCam')
-hband = Band('H', minimum=1525.00, maximum=1665.00, mean=1595.00,
-             ref='MKO/NSFCam')
-kband = Band('K', minimum=2025.00, maximum=2265.00, mean=2145.00,
+kband = Band('k', minimum=1985.930, maximum=2401.514, mean=2200.537,
              ref='MKO/NSFCam')
 
 # add all bands
 bands = [uband, gband, rband, iband, zband, yband, jband, hband, kband]
+
+
+# =============================================================================
+# Define good CCF regions
+# =============================================================================
+# We do not want to use full band pass for the ccf - we really need the
+# cleanest regions (these are defined as dictionaries so the instrument can
+# choose which to use and which not to use)
+ccf_regions = dict()
+# clean r band
+ccf_regions['r'] = [500, 650]
+# clean i band
+ccf_regions['i'] = [750, 850]
+# clean y band
+ccf_regions['y'] = [985, 1113]
+# clean h band
+ccf_regions['h'] = [1500, 1700]
+# clean k band
+ccf_regions['k'] = [2100, 2200]
+
 
 # =============================================================================
 # Start of code

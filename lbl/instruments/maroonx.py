@@ -755,6 +755,8 @@ class MaroonXBlue(MaroonX):
         # ---------------------------------------------------------------------
         # define snr keyword
         self.params.set('KW_SNR', 'SNR_100', source=func_name)
+        # define which bands to use for the clean CCF (see astro.ccf_regions)
+        self.params.set('CCF_CLEAN_BANDS', ['r'],  source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
         self.params.set('COMPIL_WAVE_MIN', 491, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
@@ -1089,6 +1091,8 @@ class MaroonXRed(MaroonX):
         # ---------------------------------------------------------------------
         # define snr keyword
         self.params.set('KW_SNR', 'SNR_74', source=func_name)
+        # define which bands to use for the clean CCF (see astro.ccf_regions)
+        self.params.set('CCF_CLEAN_BANDS', ['i'],  source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
         self.params.set('COMPIL_WAVE_MIN', 647, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]

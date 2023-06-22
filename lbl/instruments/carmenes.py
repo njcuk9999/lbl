@@ -84,6 +84,8 @@ class Carmenes(Instrument):
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
+        # define which bands to use for the clean CCF (see astro.ccf_regions)
+        self.params.set('CCF_CLEAN_BANDS', ['r', 'i'],  source=func_name)
         # define the plot order for the compute rv model plot
         self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [45], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]

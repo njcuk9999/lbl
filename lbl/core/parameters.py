@@ -203,6 +203,19 @@ params.set(key='ROUGH_CCF_MIN_RV', value=-3e5, source=__NAME__,
 params.set(key='ROUGH_CCF_MAX_RV', value=3e5, source=__NAME__,
            desc='The rough CCF rv maximum limit in m/s')
 
+# define the rough CCF step size in m/s
+params.set(key='ROUGH_CCF_STEP_RV', value=500, source=__NAME__,
+           desc='The rough CCF step size in m/s')
+
+# define the rough CCF filter size in m/s
+params.set(key='ROUGH_CCF_FILTER_SIZE', value=100000, source=__NAME__,
+           desc='The rough CCF filter size in m/s')
+
+# define which bands to use for the clean CCF (see astro.ccf_regions)
+params.set(key='CCF_CLEAN_BANDS', value=None, source=__NAME__,
+           desc='which bands to use for the clean CCF (see astro.ccf_regions) ',
+           not_none=True)
+
 # define the minimum SNR for the rough CCF. Below that, the CCF is not
 # considered to be reliable
 params.set(key='CCF_SNR_MIN', value=7, source=__NAME__,
@@ -396,6 +409,11 @@ params.set(key='PLOT', value=False, source=__NAME__,
 params.set(key='PLOT_COMPUTE_CCF', value=True, source=__NAME__,
            desc='Whether to do the compute ccf plot',
            arg='--plotccf', dtype=bool)
+
+# Define whether to do the compute sysvel plot
+params.set(key='PLOT_COMPUTE_SYSVEL', value=True, source=__NAME__,
+           desc='Whether to do the compute sysvel plot',
+           arg='--plotsysvel', dtype=bool)
 
 # Define whether to do the compute line plot
 params.set(key='PLOT_COMPUTE_LINES', value=True, source=__NAME__,

@@ -17,8 +17,10 @@ from astropy import constants
 from astropy import units as uu
 from astropy.table import Table
 from scipy import stats
+from scipy.signal import medfilt
 from scipy.stats import pearsonr
 
+from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
@@ -239,7 +241,6 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # get properties from template table
     twave = np.array(template_table['wavelength'])
     tflux = np.array(template_table['flux'])
-
     # some masking to avoid errors later
     # if we have the n_valid flag in the table, then we must have at least
     # 1/2 of points valid
@@ -368,6 +369,124 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # return splines
     return sps
+
+
+def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
+                           mask_file: str) -> Dict[str, Any]:
+    # set the function name
+    func_name = __NAME__ + '.get_systemic_vel_props()'
+    # get the object name
+    sci_objname = inst.params['OBJECT_SCIENCE']
+    template_objname = inst.params['OBJECT_TEMPLATE']
+
+    rv_min = inst.params['ROUGH_CCF_MIN_RV']
+    rv_max = inst.params['ROUGH_CCF_MAX_RV']
+    rv_step = inst.params['ROUGH_CCF_STEP_RV']
+    rv_filter_size = inst.params['ROUGH_CCF_FILTER_SIZE']
+    # output return in a dictionary
+    props = dict()
+    # get the systemic velocity for mask
+    props['MASK_SYS_VEL'] = inst.get_mask_systemic_vel(mask_file)
+    # ---------------------------------------------------------------------
+    # load the correct mask file
+    mask_table = inst.load_mask(mask_file)
+    # ---------------------------------------------------------------------
+    # get ccf regions for instrument
+    ccf_regions = dict()
+    for ccf_region in inst.params['CCF_CLEAN_BANDS']:
+        ccf_regions[ccf_region] = astro.ccf_regions[ccf_region]
+    # ---------------------------------------------------------------------
+    # get the template file for the science object
+    sci_template_file = template_file.replace(template_objname, sci_objname)
+    # load the science template
+    msg = 'Loading science template file {}'
+    margs = [sci_template_file]
+    log.general(msg.format(*margs))
+    sci_template_table = inst.load_template(sci_template_file)
+    # ---------------------------------------------------------------------
+    # mask of best regions (expected to be clean)
+    keep = np.zeros(len(mask_table)).astype(bool)
+    # loop around regions and create a mask of the mask_table
+    for ccf_region in ccf_regions:
+        # get the min and max wavelengths for this region
+        wavemin, wavemax = ccf_regions[ccf_region]
+        # mask the mask_table
+        good = mask_table['ll_mask_s'] > wavemin
+        good &= mask_table['ll_mask_s'] < wavemax
+        # apply mask to keep
+        keep[good] = True
+    # mask the mask table
+    mask_table = mask_table[keep]
+    # ---------------------------------------------------------------------
+    # get the wavelength from the template
+    wavegrid = np.array(sci_template_table['wavelength'])
+    # get the flux from the template
+    fluxgrid = np.array(sci_template_table['flux'])
+    # fluxgrid = medfilt(fluxgrid, 3)
+    # ---------------------------------------------------------------------
+    # spline the science temmplate
+    good = np.isfinite(fluxgrid)
+    sps = mp.iuv_spline(wavegrid[good], fluxgrid[good], k=3, ext=1)
+    # ---------------------------------------------------------------------
+    # define the ccf dv grid
+    dv = np.arange(rv_min, rv_max + rv_step, rv_step)
+    # storage for the ccf
+    ccf_vector = np.zeros_like(dv)
+    # compute the ccf
+    for it in range(len(dv)):
+        # shift the mask by dv for this iteration
+        pos = mp.doppler_shift(mask_table['ll_mask_s'], -dv[it])
+        # calculate the ccf for this iteration
+        ccf_vector[it] = mp.nansum(mask_table['w_mask'] * sps(pos))
+    # ---------------------------------------------------------------------
+    # construct a guess at the ccf fit
+    coeffs = [dv[np.argmin(ccf_vector)], 5000, 1-np.nanmin(ccf_vector), 3, 2]
+    lowf = None
+    # do this twice for better fit
+    for iteration in range(2):
+        # get the estimate of the fit
+        estimate = mp.gauss_fit_e(dv, *coeffs)
+        # find the continuum by subtraing the estimate from the ccf
+        lowf = mp.lowpassfilter(ccf_vector - estimate,
+                                int(rv_filter_size/rv_step))
+        # try to compute curve fit
+        try:
+            coeffs, _ = mp.curve_fit(mp.gauss_fit_e, dv, ccf_vector/lowf,
+                                     p0=coeffs)
+        except base_classes.LblCurveFitException as e:
+            emsg = 'CurveFit exception in rough CCF'
+            emsg += '\n\tIteration = {0}'.format(iteration)
+            emsg += '\n\tP0 = {0}'.format(e.p0)
+            emsg += '\n\tFunction = {0}'.format(func_name)
+            emsg += '\n\tError: {0}'.format(e.error)
+            raise LblException(emsg)
+    # ---------------------------------------------------------------------
+    # work out rms
+    gfit = mp.gauss_fit_e(dv, *coeffs)
+    rms = mp.estimate_sigma(ccf_vector/lowf - gfit)
+    # ---------------------------------------------------------------------
+    # print out values
+    msg = 'Rough CCF fit:'
+    msg += '\n\tVsys = {0:.4f}'.format(coeffs[0])
+    msg += '\n\tFWHM = {0:.4f}'.format(coeffs[1])
+    msg += '\n\tCONTRAST = {0:.4f}'.format(coeffs[2])
+    msg += '\n\tSNR = {0:.4f}'.format(coeffs[2] / rms)
+    msg += '\n\tEARS = {0:.4f}'.format(coeffs[3])
+    msg += '\n\tEXPO = {0:.4f}'.format(coeffs[4])
+    # ---------------------------------------------------------------------
+    # add values to props
+    props['VSYS'] = coeffs[0]
+    props['FWHM'] = coeffs[1]
+    props['CONTRAST'] = coeffs[2]
+    props['SNR'] = coeffs[2] / rms
+    props['EARS'] = coeffs[3]
+    props['EXPO'] = coeffs[4]
+    # ---------------------------------------------------------------------
+    # plot
+    plot.compute_plot_sysvel(inst, dv, ccf_vector/lowf, coeffs, gfit, props)
+    # ---------------------------------------------------------------------
+    # return the props
+    return props
 
 
 def get_velocity_step(wave_vector: np.ndarray, rounding: bool = True) -> float:
@@ -728,7 +847,8 @@ def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
 def compute_rv(inst: InstrumentsType, sci_iteration: int,
                sci_data: np.ndarray, sci_hdr: io.LBLHeader,
                splines: Dict[str, Any], ref_table: Dict[str, Any],
-               blaze: np.ndarray, systemic_all: np.ndarray,
+               blaze: np.ndarray, systemic_props: Dict[str, Any],
+               systemic_all: np.ndarray,
                mjdate_all: np.ndarray, ccf_ewidth: Union[float, None] = None,
                reset_rv: bool = True, model_velocity: float = np.inf,
                science_file: str = '', mask_file: str = ''
@@ -743,8 +863,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     :param splines: Dict, the dictionary of template splines
     :param ref_table: Dict, the reference table
     :param blaze: np.ndarray, the blaze to correct the science data
-    :param systemic_all: np.ndarray, the systemic velocity storage for all
-                         science file (filled in function for this iteration)
+    :param systemic_props: dictionary containing the systemic velocity
+                           properties (calculated from the science template)
     :param mjdate_all: np.ndarray, the mid exposure time in mjd for all
                        science files (filled in function for this iteration)
     :param ccf_ewidth: None or float, the ccf_ewidth to use (if set)

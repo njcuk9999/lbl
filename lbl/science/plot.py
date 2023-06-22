@@ -140,6 +140,46 @@ def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     plt.close()
 
 
+
+def compute_plot_sysvel(inst: InstrumentsType, dvgrid, ccf_vector, gcoeffs,
+                        gfit, props):
+    """
+    This is a blank plot
+    :param inst:  Instrument, instrument this plot is used for
+    :param kwargs: replace with explicit keyword arguments
+
+    :return: None - plots
+    """
+    # import matplotlib
+    plt = import_matplotlib()
+    # this is a plot skip if this is True
+    if not inst.params['PLOT']:
+        return
+    # plot specific switch
+    if not inst.params['PLOT_COMPUTE_SYSVEL']:
+        return
+    # set up plot
+    fig, frames = plt.subplots(ncols=1, nrows=2, sharex='all')
+    # plot functions here
+    frames[0].plot(dvgrid / 1000, ccf_vector, label='CCF')
+    frames[0].plot(dvgrid / 1000, gfit, color='r', linestyle='--',  label='fit')
+    frames[0].legend(loc=0)
+    frames[0].set(ylabel='CCF')
+    frames[0].grid(color='grey', linestyle='--', linewidth=0.5)
+    frames[1].plot(dvgrid / 1000, ccf_vector - gfit)
+    frames[1].set(xlabel='dv [km/s]', ylabel='residuals')
+    frames[1].grid(color='grey', linestyle='--', linewidth=0.5)
+    # construct title
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE'],
+             props['VSYS'] / 1000, props['FWHM'] / 1000, props['SNR']]
+    title = ('CCF Plot\nOBJ_SCI={0} OBJ_TEMP={1}\nCCF: Vsys={2:.4f} km/s '
+             'fwhm={3:.4f} km/s\nCCF SNR={4:.4f}')
+    plt.suptitle(title.format(*targs))
+    # show and close plot
+    plt.show()
+    plt.close()
+
+
 def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
     """
     Compute RV line plot
