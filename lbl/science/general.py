@@ -975,6 +975,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # Systemic velocity estimate
     # -------------------------------------------------------------------------
     # deal with first estimate of RV / CCF equivalent width
+
+    if inst.params['DATA_TYPE'] == 'SCIENCE':
+        sys_rv,ccf_fwhm = berv-systemic_props['VSYS'],systemic_props['FWHM']
+        ccf_ewidth = ccf_fwhm/mp.fwhm()
+    else:
+        # for FP files
+        sys_rv, ccf_ewidth = 0, 0
+    """
     if reset_rv:
         # if we are not using calibration file
         if inst.params['DATA_TYPE'] == 'SCIENCE':
@@ -1010,6 +1018,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         msg = '\tSystemic rv + berv={0:.4f} m/s from MJD={1}'
         margs = [-sys_rv, mjdate_all[closest]]
         log.general(msg.format(*margs))
+    """
+
     # -------------------------------------------------------------------------
     # iteration loop
     # -------------------------------------------------------------------------
@@ -1232,7 +1242,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                                                       wave_mask, ccf_weight,
                                                       kind='model')
 
-            model_velocity = -sys_model_rv + sys_rv
+            model_velocity = sys_model_rv - sys_rv
             log.general('\tModel velocity {:.2f} m/s'.format(model_velocity))
             # we don't want to continue this run if we have model_velocity
             continue
