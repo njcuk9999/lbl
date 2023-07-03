@@ -4,7 +4,7 @@
 
 Create a new branch from the `working` branch using git.
 
-If you do not have lbl get it
+If you do not have lbl github repo locally download it using the following:
 
 ```bash
 git clone git@github.com:njcuk9999/lbl.git
@@ -50,7 +50,7 @@ where `{instrument name}` is the lower case version of the one added to
 Then add to the `InstrumentType` and `InstrumentList`
 
 Note that we expect it in the form `{module}.{class}` where `{module}` is the
-lower case instrument name and Instrument is the class name (camel case).
+lower case instrument name and Instrument is the class name (CamelCase).
 Note you will either be adding one class or a few classes (for different modes).
 
 Next you must add to the `InstDict` (directly below `InstrumentList`) 
@@ -73,11 +73,10 @@ Add your instrument python code to `lbl/instruments/` directory.
 
 Follow the format of the other instruments.
 
-
 Note you should not need to change any other code for basic instruments.
 
 Note you can override any parmaeter (from `lbl/core/parameters.py` or any 
-function in the `lbl/instruments/defauly.py`) any additional parameters or 
+function in the `lbl/instruments/default.py`) any additional parameters or 
 functions required should be requested via github and not manually added.
 
 
