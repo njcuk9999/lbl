@@ -81,4 +81,18 @@ function in the `lbl/instruments/defauly.py`) any additional parameters or
 functions required should be requested via github and not manually added.
 
 
+# Step 5: Push your changes
+
+Once complete and tested please do a Pull Request on github.
+It is good practise to make your branch up-to-date with the `working` branch 
+before doing this (with a merge or rebase).
+
+If you would like your instrument supported after this point we ask for a 
+minimum working data set so we can run tests before releasing new versions.
+
+This data set can remain private but we prefer public data sets to provide
+users with a working example of instruments.
+
+
+
 
