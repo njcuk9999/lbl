@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
+from astropy.coordinates import EarthLocation
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -1100,7 +1101,8 @@ class Instrument:
         # finally return the updated binned dictionary
         return binned
 
-    def get_epoch_groups(self, rdb_table: Table):
+    def get_epoch_groups(self, rdb_table: Table
+                         ) -> Tuple[np.ndarray, np.ndarray]:
         """
         For a given instrument this is how we define epochs
         returns the epoch groupings, and the value of the epoch for each
@@ -1112,9 +1114,32 @@ class Instrument:
         :return: tuple, 1. the epoch groupings, 2. the value of the epoch for
                  each row of the rdb_table
         """
-        _ = rdb_table
+        # get the date col from params
+        kw_mjd = self.params['KW_MJDATE']
+        # get the earth location parameter
+        earth_location = self.params['EARTH_LOCATION']
+        # deal with not having EARTH_LOCATION (backwards compatibility)
+        if earth_location is None:
+            emsg = ('EARTH_LOCATION is not defined in the instrument ')
+            raise base_classes.LblException(emsg)
+        # try to get location of site from astropy
+        try:
+            loc = EarthLocation.of_site(earth_location)
+        except Exception as e:
+            emsg = ('Problem with EARTH_LOCATION {0} in '
+                    'astropy.coordinates.EarthLocation\n\tError {1}: {2}')
+            eargs = [earth_location, type(e), str(e)]
+            raise base_classes.LblException(emsg.format(*eargs))
+        # calculate the approximate value of Noon for this site
+        approx_noon_in_mjd = ((loc.lon.value + 360) / 360 + 0.5) % 1
+        # get the MJD values
+        mjd = rdb_table[kw_mjd]
+        # get the epoch bin values for each row of rdb_table
+        epoch_values = np.floor(mjd - approx_noon_in_mjd).astype(int)
+        # get the unique epoch groups
+        epoch_groups = np.unique(epoch_values)
         # return the epoch groupings and epoch values
-        raise self._not_implemented('get_epoch_groups')
+        return epoch_groups, epoch_values
 
     def find_inputs(self):
         """

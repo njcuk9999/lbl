@@ -80,6 +80,12 @@ params.set(key='DATA_SOURCE', value='None', source=__NAME__,
            desc='The data source to use',
            arg='--data_source', dtype=str, not_none=True)
 
+# add instrument earth location (for use in astropy.coordinates.EarthLocation)
+params.set(key='EARTH_LOCATION', value=None, source=__NAME__,
+           desc='The instrument earth location (for use in '
+                'astropy.coordinates.EarthLocation)',
+           dtype=str, not_none=True)
+
 # Define whether to skip done files
 params.set(key='SKIP_DONE', value=False, source=__NAME__,
            desc='Whether to skip done files',
