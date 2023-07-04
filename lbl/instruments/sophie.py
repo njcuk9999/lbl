@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-HARPS instrument class here: instrument specific settings
+SOPHIE instrument class here: instrument specific settings
 
-Created on 2021-05-27
+Created on 2023-06-21
 
-@author: cook
+@author: p. larue
 """
 import glob
 import os
@@ -24,7 +24,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.harps.py'
+__NAME__ = 'instruments.sophie.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -37,36 +37,36 @@ log = base_classes.log
 
 
 # =============================================================================
-# Define HARPS class
+# Define SOPHIE class
 # =============================================================================
-class Harps(Instrument):
+class Sophie(Instrument):
     def __init__(self, params: base_classes.ParamDict):
         # call to super function
-        super().__init__('HARPS')
+        super().__init__('SOPHIE')
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_HARPS.fits'
+        self.default_template_name = 'Template_{0}_SOPHIE.fits'
         # define wave limits in nm
-        self.wavemin = 378.060
-        self.wavemax = 691.476
+        self.wavemin = 387.2
+        self.wavemax = 694.3
         # set parameters for instrument
         self.params = params
         # override params
         self.param_override()
 
     # -------------------------------------------------------------------------
-    # INSTRUMENT SPECIFIC PARAMETERS
+    # SPIROU SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SPIRou parameters
+        Parameter override for SOPHIE parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.Harps.override()'
+        func_name = __NAME__ + '.Sophie.override()'
         # set parameters to update
-        self.params.set('INSTRUMENT', 'HARPS', source=func_name)
+        self.params.set('INSTRUMENT', 'SOPHIE', source=func_name)
         # define the default science input files
         self.params.set('INPUT_FILE', '*.fits', source=func_name)
         # define the mask table format
@@ -86,11 +86,11 @@ class Harps(Instrument):
         # define which bands to use for the clean CCF (see astro.ccf_regions)
         self.params.set('CCF_CLEAN_BANDS', ['r'],  source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [60], source=func_name)
+        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [36], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MIN', 400, source=func_name)
+        self.params.set('COMPIL_WAVE_MIN', 387.2, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', 700, source=func_name)
+        self.params.set('COMPIL_WAVE_MAX', 694.3, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define min likelihood of correlation with BERV
@@ -114,14 +114,16 @@ class Harps(Instrument):
         self.params.set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_harps.fits', source=func_name)
+                        'sample_wave_grid_sophie.fits', source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
+        # TODO verify DPR TYPE in SOPHIE headers for FPs
         self.params.set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
+        # TODO verify DPR TYPE in SOPHIE headers for STAR+FPs
         self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define readout noise per instrument (assumes ~5e- and 10 pixels)
         self.params.set('READ_OUT_NOISE', 15, source=func_name)
@@ -217,32 +219,32 @@ class Harps(Instrument):
         # Header keywords
         # ---------------------------------------------------------------------
         # define wave coeff key in header
-        self.params.set('KW_WAVECOEFFS', 'HIERARCH ESO DRS CAL TH COEFF LL{0}',
+        self.params.set('KW_WAVECOEFFS', 'HIERARCH OHP DRS CAL TH COEFF LL{0}',
                         source=func_name)
         # define wave num orders key in header
-        self.params.set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
+        self.params.set('KW_WAVEORDN', 'HIERARCH OHP DRS CAL TH ORDER NBR',
                         source=func_name)
         # define wave degree key in header
-        self.params.set('KW_WAVEDEGN', 'HIERARCH ESO DRS CAL TH DEG LL',
+        self.params.set('KW_WAVEDEGN', 'HIERARCH OHP DRS CAL TH DEG LL',
                         source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO DRS BJD',
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH OHP DRS BJD',
                         source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'HIERARCH ESO DRS BJD', source=func_name)
+        self.params.set('KW_MJDATE', 'HIERARCH OHP DRS BJD', source=func_name)
         # define snr keyword
-        self.params.set('KW_SNR', 'HIERARCH ESO DRS SPE EXT SN47',
+        self.params.set('KW_SNR', 'HIERARCH OHP DRS SPE EXT SN36',
                         source=func_name)
         # define berv keyword
-        self.params.set('KW_BERV', 'HIERARCH ESO DRS BERV', source=func_name)
+        self.params.set('KW_BERV', 'HIERARCH OHP DRS BERV', source=func_name)
         # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO DRS BLAZE FILE',
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH OHP DRS BLAZE FILE',
                         source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'HIERARCH ESO DET WIN1 DIT1',
+        self.params.set('KW_EXPTIME', 'HIERARCH OHP CCD DIT',
                         source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
+        self.params.set('KW_AIRMASS', 'HIERARCH OHP TEL AIRM START',
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE', source=func_name)
@@ -251,33 +253,33 @@ class Harps(Instrument):
         # define the tau_other of the observation
         self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO DPR TYPE',
+        self.params.set('KW_DPRTYPE', 'HIERARCH OHP DPR TYPE',
                         source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
+        self.params.set('KW_WAVEFILE', 'HIERARCH OHP DRS CAL TH FILE',
                         source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
+        self.params.set('KW_OBJNAME', 'HIERARCH OHP TARG NAME',
                         source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
         self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO DRS SPE EXT SN47',
+        self.params.set('KW_EXT_SNR', 'HIERARCH OHP DRS CAL EXT SN36',
                         source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'HIERARCH ESO DRS BJD', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH OHP DRS BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
+        self.params.set('KW_REF_KEY', 'HIERARCH OHP DPR TYPE', source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        # TODO: how do we get the temperature for HARPS?
+        # TODO: how do we get the temperature for HARPS? / SOPHIE ?
         self.params.set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
-    # INSTRUMENT SPECIFIC METHODS
+    # SOPHIE SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
                     extnum: int = 0, extname: str = None) -> io.LBLHeader:
@@ -807,6 +809,8 @@ class Harps(Instrument):
         kw_date = self.params['KW_DATE']
         # ---------------------------------------------------------------------
         # kw_date is YYYY-MM-DDTHH:MM:SS.SSS we need YYYY-MM-DD
+        # TODO for instruments close to Greenwich, we have to be careful with
+        # TODO the change of date
         dates = []
         for row in range(len(rdb_table)):
             # get the date

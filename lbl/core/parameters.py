@@ -547,8 +547,10 @@ params.set(key='MODEL_REPO_URL',
 
 # define the model files
 MODEL_FILES = dict()
+# TODO put in per-instrument profiles
 MODEL_FILES['Mdwarf Temperature Gradient Table'] = 'Mdwarf_temp_gradient.fits'
 MODEL_FILES['Mdwarf Mask [HARPS]'] = 'mdwarf_harps.fits'
+MODEL_FILES['Mdwarf Mask [SOPHIE]'] = 'mdwarf_harps.fits'
 MODEL_FILES['Mdwarf Mask [NIRPS-HA]'] = 'mdwarf_nirps_ha.fits'
 MODEL_FILES['Mdwarf Mask [NIRPS-HE]'] = 'mdwarf_nirps_he.fits'
 MODEL_FILES['Mdwarf Mask [SPIROU]'] = 'mdwarf_spirou.fits'

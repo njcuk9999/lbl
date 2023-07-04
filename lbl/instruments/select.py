@@ -27,6 +27,7 @@ from lbl.instruments import default
 from lbl.instruments import espresso
 from lbl.instruments import harps
 from lbl.instruments import harpsn
+from lbl.instruments import sophie
 from lbl.instruments import nirps
 from lbl.instruments import spirou
 from lbl.instruments import maroonx
@@ -52,7 +53,8 @@ InstrumentsType = Union[default.Instrument,
                         nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
                         nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
                         harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
-                        maroonx.MaroonX]
+                        maroonx.MaroonX,
+                        sophie.Sophie]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps,
@@ -61,7 +63,8 @@ InstrumentsList = (default.Instrument,
                    nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
                    nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
                    harpsn.HarpsN,
-                   maroonx.MaroonXRed, maroonx.MaroonXBlue)
+                   maroonx.MaroonXRed, maroonx.MaroonXBlue,
+                   sophie.Sophie)
 
 # Add all the instrument + source combinations and link them to instrument
 #   classes
@@ -88,7 +91,8 @@ InstDict['HARPSN']['ESO'] = harpsn.HarpsN_ESO
 InstDict['MAROONX'] = dict()
 InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
-
+InstDict['SOPHIE'] = dict()
+InstDict['SOPHIE']['None'] = sophie.Sophie
 
 # =============================================================================
 # Define functions
