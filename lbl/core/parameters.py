@@ -80,6 +80,12 @@ params.set(key='DATA_SOURCE', value='None', source=__NAME__,
            desc='The data source to use',
            arg='--data_source', dtype=str, not_none=True)
 
+# add instrument earth location (for use in astropy.coordinates.EarthLocation)
+params.set(key='EARTH_LOCATION', value=None, source=__NAME__,
+           desc='The instrument earth location (for use in '
+                'astropy.coordinates.EarthLocation)',
+           dtype=str, not_none=True)
+
 # Define whether to skip done files
 params.set(key='SKIP_DONE', value=False, source=__NAME__,
            desc='Whether to skip done files',
@@ -547,8 +553,10 @@ params.set(key='MODEL_REPO_URL',
 
 # define the model files
 MODEL_FILES = dict()
+# TODO put in per-instrument profiles
 MODEL_FILES['Mdwarf Temperature Gradient Table'] = 'Mdwarf_temp_gradient.fits'
 MODEL_FILES['Mdwarf Mask [HARPS]'] = 'mdwarf_harps.fits'
+MODEL_FILES['Mdwarf Mask [SOPHIE]'] = 'mdwarf_harps.fits'
 MODEL_FILES['Mdwarf Mask [NIRPS-HA]'] = 'mdwarf_nirps_ha.fits'
 MODEL_FILES['Mdwarf Mask [NIRPS-HE]'] = 'mdwarf_nirps_he.fits'
 MODEL_FILES['Mdwarf Mask [SPIROU]'] = 'mdwarf_spirou.fits'

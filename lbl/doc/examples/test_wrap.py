@@ -28,7 +28,8 @@ INSTRUMENTS = ['carmenes_vis',
                'nirps_ha_apero', 'nirps_he_apero',
                'nirps_ha_eso', 'nirps_he_eso',
                'spirou_apero', 'spirou_cadc',
-               'maroonx_b', 'maroonx_r']
+               'maroonx_b', 'maroonx_r',
+               'sophie']
 
 
 # =============================================================================
@@ -369,6 +370,33 @@ def maroonx_r():
     rparams['SKIP_LBL_COMPILE'] = True
     # return parameters
     return rparams
+
+
+def sophie():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'SOPHIE'
+    rparams['DATA_SOURCE'] = 'None'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'SOPHIE')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['Gl873']
+    rparams['OBJECT_TEMPLATE'] = ['Gl873']
+    rparams['OBJECT_TEFF'] = [3228]
+    rparams['BLAZE_FILE'] = 'SOPHIE.2021-08-31T15-29-01.650_blaze_A.fits'
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = True
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
 
 
 def main():

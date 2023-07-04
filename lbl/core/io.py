@@ -120,6 +120,26 @@ class LBLHeader(UserDict):
         # delete key from keys
         del self.data[key]
 
+    def __contains__(self, key: str) -> object:
+        """
+        True if the dictionary has the specified key, else False.
+
+        :param key: string, the key for the value returned (case insensitive)
+
+        :type key: str
+
+        :return value: object, the value stored at position "key"
+        """
+        # deal with hierarchal keys
+        if key not in self.data and key.startswith('HIERARCH '):
+            key = key[len('HIERARCH '):]
+
+        # Return True if key is in data
+        if key in self.data:
+            return True
+        else:
+            return False
+
     def __str__(self) -> str:
         """
         Return the string representation of the class

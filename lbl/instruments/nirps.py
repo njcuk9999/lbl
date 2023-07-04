@@ -77,6 +77,9 @@ class NIRPS(Instrument):
         func_name = __NAME__ + '.NIRPS.param_override()'
         # set parameters to update
         self.params.set('INSTRUMENT', 'NIRPS_HA', source=func_name)
+        # add instrument earth location
+        #    (for use in astropy.coordinates.EarthLocation)
+        self.params.set('EARTH_LOCATION', 'La Silla Observatory')
         # define the default science input files
         self.params.set('INPUT_FILE', '*.fits', source=func_name)
         # define the mask table format
@@ -919,37 +922,6 @@ class NIRPS(Instrument):
         # ---------------------------------------------------------------------
         # return this binning dictionary
         return binned
-
-    def get_epoch_groups(self, rdb_table: Table
-                         ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        For a given instrument this is how we define epochs
-        returns the epoch groupings, and the value of the epoch for each
-        row in rdb_table
-
-        :param rdb_table: astropy.table.Table - the rdb table (source of epoch
-                          information)
-
-        :return: tuple, 1. the epoch groupings, 2. the value of the epoch for
-                 each row of the rdb_table
-        """
-        # get the date col from params
-        kw_date = self.params['KW_DATE']
-        # ---------------------------------------------------------------------
-        # kw_date is YYYY-MM-DDTHH:MM:SS.SSS we need YYYY-MM-DD
-        dates = []
-        for row in range(len(rdb_table)):
-            # get the date
-            date = rdb_table[row][kw_date]
-            # append to dates
-            dates.append(date.split('T')[0])
-        # ---------------------------------------------------------------------
-        # get unique dates (per epoch)
-        epoch_groups = np.unique(dates)
-        # get the epoch values for each row of rdb_table
-        epoch_values = np.array(dates)
-        # return the epoch groupings and epoch values
-        return epoch_groups, epoch_values
 
     def find_inputs(self):
         """
