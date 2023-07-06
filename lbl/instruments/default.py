@@ -1131,7 +1131,7 @@ class Instrument:
             eargs = [earth_location, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
         # calculate the approximate value of Noon for this site
-        approx_noon_in_mjd = ((loc.lon.value + 360) / 360 + 0.5) % 1
+        approx_noon_in_mjd = ((-loc.lon.value + 360) / 360 + 0.5) % 1
         # get the MJD values
         mjd = rdb_table[kw_mjd]
         # get the epoch bin values for each row of rdb_table
