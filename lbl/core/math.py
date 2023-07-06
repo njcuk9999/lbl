@@ -939,6 +939,32 @@ def rot_broad(wvl: np.ndarray, flux: np.ndarray, epsilon: float, vsini: float,
     return result
 
 
+def bin_by_time(longitude: float, time_value: Union[np.nd.array ,float],
+                day_frac: float = 0) -> Union[np.ndarray, float]:
+    """
+    Bin a time by the local time of the site to a specific point in the day
+    (by day_frac where 0 = midnight before observation, 0.5 = noon, and 1.0 =
+    midnight after observation)
+
+    :param params: ParamDict, the parameter dictionary of constants, containing
+                   at least OBS_LONG, the longitude of the observatory in
+                   degrees
+    :param time_value: astropy.Time, the time to bin (in UTC)
+    :param day_frac: float, the fraction of the day to bin to (0 = midnight
+                     before observation, 0.5 = noon, and 1.0 = midnight after
+    :return:
+    """
+    # calculate the bin_time for this site (as a fraction of a day)
+    local_bin_time = ((-longitude + 360) / 360 + day_frac) % 1
+    # get the binned time for time_value
+    binned_time_value = np.round(time_value - local_bin_time).astype(int)
+    # need local binned time
+    local_binned_time_value = binned_time_value + local_bin_time
+    # return the binned time
+    return local_binned_time_value
+
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

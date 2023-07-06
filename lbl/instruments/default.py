@@ -20,6 +20,7 @@ from astropy.coordinates import EarthLocation
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import math as mp
 
 # =============================================================================
 # Define variables
@@ -1130,12 +1131,9 @@ class Instrument:
                     'astropy.coordinates.EarthLocation\n\tError {1}: {2}')
             eargs = [earth_location, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
-        # calculate the approximate value of Noon for this site
-        approx_noon_in_mjd = ((-loc.lon.value + 360) / 360 + 0.5) % 1
-        # get the MJD values
-        mjd = rdb_table[kw_mjd]
-        # get the epoch bin values for each row of rdb_table
-        epoch_values = np.floor(mjd - approx_noon_in_mjd).astype(int)
+        # get local time at midnight
+        epoch_values = mp.bin_by_time(loc.long.value, rdb_table[kw_mjd],
+                                      day_frac=0)
         # get the unique epoch groups
         epoch_groups = np.unique(epoch_values)
         # return the epoch groupings and epoch values
