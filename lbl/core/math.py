@@ -939,7 +939,7 @@ def rot_broad(wvl: np.ndarray, flux: np.ndarray, epsilon: float, vsini: float,
     return result
 
 
-def bin_by_time(longitude: float, time_value: Union[np.nd.array ,float],
+def bin_by_time(longitude: float, time_value: Union[np.ndarray ,float],
                 day_frac: float = 0) -> Union[np.ndarray, float]:
     """
     Bin a time by the local time of the site to a specific point in the day
@@ -962,7 +962,6 @@ def bin_by_time(longitude: float, time_value: Union[np.nd.array ,float],
     local_binned_time_value = binned_time_value + local_bin_time
     # return the binned time
     return local_binned_time_value
-
 
 
 # =============================================================================
