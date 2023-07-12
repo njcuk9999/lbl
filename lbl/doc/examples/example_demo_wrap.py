@@ -102,7 +102,7 @@ if __name__ == "__main__":
     # rparams['ROTBROAD'] = []]
 
     # turn on plots
-    rparams['PLOTS'] = False
+    rparams['PLOT'] = False
 
     # -------------------------------------------------------------------------
     # Run the wrapper code using the above settings
