@@ -1132,7 +1132,7 @@ class Instrument:
             eargs = [earth_location, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
         # get local time at midnight
-        epoch_values = mp.bin_by_time(loc.long.value, rdb_table[kw_mjd],
+        epoch_values = mp.bin_by_time(loc.lon.value, rdb_table[kw_mjd],
                                       day_frac=0)
         # get the unique epoch groups
         epoch_groups = np.unique(epoch_values)
