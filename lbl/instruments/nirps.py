@@ -853,7 +853,7 @@ class NIRPS(Instrument):
         # get mjdmid and bjd
         mid_exp_time = header.get_hkey(kw_mjdmid, dtype=float)
         bjd = header.get_hkey(kw_bjd, dtype=float)
-        if isinstance(bjd, str):
+        if isinstance(bjd, str) or np.isnan(bjd):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
         else:
@@ -2052,30 +2052,6 @@ class NIRPS_HE_ESO(NIRPS_HE):
                 blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze, False
-
-    def get_rjd_value(self, header: io.LBLHeader) -> float:
-
-        """
-        Get the rjd either from KW_MID_EXP_TIME or KW_BJD
-        time returned is in MJD (not JD)
-
-        :param header: io.LBLHeader - the LBL rv header
-        :return:
-        """
-        # get keys from params
-        kw_mjdmid = self.params['KW_MID_EXP_TIME']
-        kw_bjd = self.params['KW_BJD']
-        # get mjdmid and bjd
-        mid_exp_time = header.get_hkey(kw_mjdmid, dtype=float)
-        bjd = header.get_hkey(kw_bjd, dtype=float)
-        if isinstance(bjd, str):
-            # return RJD = MJD + 0.5
-            return float(mid_exp_time) + 0.5
-        else:
-            # convert bjd to mjd
-            bjd_mjd = Time(bjd, format='jd').mjd
-            # return RJD = MJD + 0.5
-            return float(bjd_mjd) + 0.5
 
     def get_plot_date(self, header: io.LBLHeader):
         """

@@ -727,7 +727,7 @@ class Espresso(Instrument):
         # get mjdmid and bjd
         mid_exp_time = header.get_hkey(kw_mjdmid, dtype=float)
         bjd = header.get_hkey(kw_bjd, dtype=float)
-        if isinstance(bjd, str):
+        if isinstance(bjd, str) or np.isnan(bjd):
             # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
         else:
