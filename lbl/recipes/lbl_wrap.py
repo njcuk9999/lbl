@@ -30,7 +30,7 @@ DESCRIPTION_MASK = 'Use this code to wrap around lbl'
 
 # define keys to remove from run params
 REMOVE_KEYS = [  # core
-    'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES',
+    'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES', 'DATA_SOURCE',
     # science keys
     'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
     # run keys
@@ -72,6 +72,7 @@ def main(runparams: dict):
     # get key parameters
     instrument = lbl_misc.check_runparams(runparams, 'INSTRUMENT')
     data_dir = lbl_misc.check_runparams(runparams, 'DATA_DIR')
+    data_source = lbl_misc.check_runparams(runparams, 'DATA_SOURCE')
     data_types = lbl_misc.check_runparams(runparams, 'DATA_TYPES')
     object_sciences = lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE')
     object_templates = lbl_misc.check_runparams(runparams, 'OBJECT_TEMPLATE')
@@ -106,6 +107,7 @@ def main(runparams: dict):
         if runparams['RUN_LBL_TELLUCLEAN'] and data_type == 'SCIENCE':
             # run telluric cleaning (without template)
             lbl_telluclean.main(instrument=instrument, data_dir=data_dir,
+                                data_source=data_source,
                                 data_type=data_type,
                                 object_science=object_science,
                                 object_template=object_template,

@@ -89,7 +89,7 @@ params.set(key='EARTH_LOCATION', value=None, source=__NAME__,
 # Define whether to skip done files
 params.set(key='SKIP_DONE', value=False, source=__NAME__,
            desc='Whether to skip done files',
-           arg='--skip', dtype=bool)
+           arg='--skip_done', dtype=bool)
 
 # Define whether to skip done files
 params.set(key='OVERWRITE', value=False, source=__NAME__,
@@ -125,6 +125,20 @@ params.set(key='FORCE_FIBER', value=None, source=__NAME__, dtype=str,
 # Define the flux extension name (required for some modes)
 params.set(key='FLUX_EXTENSION_NAME', value=None, source=__NAME__, dtype=str,
            desc='the flux extension name (required for some modes)')
+
+# Define which iteration we are running (for multiprocessing)
+#    -1 means no multiprocessing
+params.set(key='ITERATION', value=-1, source=__NAME__, dtype=int,
+              desc='which iteration we are running (for multiprocessing) '
+                    '-1 means no multiprocessing',
+           arg='--iteration')
+
+# Define the total number of iterations (for multiprocessing)
+#     -1 means no multiprocessing
+params.set(key='TOTAL', value=-1, source=__NAME__, dtype=int,
+           desc='the total number of iterations (for multiprocessing) '
+                '-1 means no multiprocessing',
+           arg='--total')
 
 # =============================================================================
 # Define common parameters (between compute / compil)

@@ -10,6 +10,7 @@ Created on 2021-03-16
 import os
 import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
+import time
 
 import numpy as np
 import wget
@@ -54,6 +55,79 @@ speed_of_light_kms = constants.c.value / 1000.0
 # =============================================================================
 # Define compute functions
 # =============================================================================
+def multi_wait(inst: InstrumentsType, reftable_exists: bool,
+               reftable_file: str) -> bool:
+    """
+    Only used if iterations > 0 and total > 0 in inst.params
+
+    In this case we need the first iteration to continue as normal and all
+    other iterations to wait for the file to exist
+
+    :param inst: Instrument instance
+    :param reftable_exists: bool, whether the reftable currently exists
+    :param reftable_file: str, the reftable filename
+
+    :return: reftable_exists, bool, the updated flag whether reftable exists
+    """
+    # first case if reftable_exists is True then we have no problem in any
+    #   mode
+    if reftable_exists:
+        return True
+    # get the iteration and total parameters
+    iteration = inst.params['ITERATION']
+    total = inst.params['TOTAL']
+    # get the maximum time out in seconds
+    max_timeout = 300
+    # if either iteration or total is below zero we are not in multi-iteration
+    #   mode - so return the current value of reftable_exists
+    if iteration < 0 or total < 0:
+        return False
+    # if iteration == 0 then we are in the first iteration and we can continue
+    if iteration == 0:
+        return False
+    # start the count
+    count = 0
+    # else we have to wait for iteration zero to make the ref table
+    while not os.path.exists(reftable_file):
+        # sleep for 1 second
+        time.sleep(1)
+        # add one to count
+        count += 1
+        # if count is greater than max_timeout we have timed out
+        if count > max_timeout:
+            # raise an error
+            emsg = ('Timeout waiting for reftable to be created by iteration '
+                    '0')
+            raise LblException(emsg)
+    # return
+    return True
+
+
+def filter_science_files(inst: InstrumentsType,
+                         science_files: List[str]) -> List[str]:
+    """
+    If we are in multi-mode filter the files by the iteration number and
+    total number of iterations.
+
+    If inst.params['ITERATION'] or inst.params['TOTAL'] is less than zero
+    then we are not in multi-iteration mode and we return all the files.
+
+    :param inst: Instrument instance
+    :param science_files: list of strings, the science files to put into a
+                          sub group
+    :return:
+    """
+    # get the iteration and total parameters
+    iteration = inst.params['ITERATION']
+    total = inst.params['TOTAL']
+    # if either iteration or total is below zero we are not in multi-iteration
+    #   mode - so return all the files
+    if iteration < 0 or total < 0:
+        return science_files
+    # return the subset of files
+    return science_files[iteration::total]
+
+
 def make_ref_dict(inst: InstrumentsType, reftable_file: str,
                   reftable_exists: bool, science_files: List[str],
                   mask_file: str, calib_dir: str) -> Dict[str, np.ndarray]:
@@ -70,6 +144,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
 
     :return:
     """
+    # deal with waiting for reftable to exist when in multi-iteration mode
+    reftable_exists = multi_wait(inst, reftable_exists, reftable_file)
     # get parameter dictionary of constants
     params = inst.params
     # storage for ref dictionary

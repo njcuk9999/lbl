@@ -39,7 +39,7 @@ LblException = base_classes.LblException
 log = base_classes.log
 # add arguments (must be in parameters.py)
 ARGS_TEMPLATE = [  # core
-    'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
+    'INSTRUMENT', 'CONFIG_FILE', 'DATA_SOURCE', 'DATA_TYPE',
     # directory
     'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
     # science

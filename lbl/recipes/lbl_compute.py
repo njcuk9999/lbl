@@ -35,7 +35,7 @@ LblLowCCFSNR = base_classes.LblLowCCFSNR
 log = base_classes.log
 # add arguments (must be in parameters.py)
 ARGS_COMPUTE = [  # core
-    'INSTRUMENT', 'CONFIG_FILE', 'DATA_TYPE',
+    'INSTRUMENT', 'CONFIG_FILE', 'DATA_SOURCE', 'DATA_TYPE',
     # directory
     'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
     'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
@@ -46,6 +46,8 @@ ARGS_COMPUTE = [  # core
     'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
     # other
     'SKIP_DONE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
+    # multiprocessing arguments
+    'ITERATION', 'TOTAL',
 ]
 
 DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
@@ -166,6 +168,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 6: Loop around science files
     # -------------------------------------------------------------------------
+    # filter science files if in multi-mode
+    science_files = general.filter_science_files(inst, science_files)
+
     # load bad odometer codes
     bad_hdr_keys, bad_hdr_key = inst.load_bad_hdr_keys()
     # store all systemic velocities and mid exposure times in mjd
