@@ -125,10 +125,9 @@ def __main__(inst: InstrumentsType, **kwargs):
 
     # deal with no lblrv files (we cannot run compile)
     if len(lblrv_files) == 0:
-        wmsg = 'No lblrv files found in {0}. Please run lbl_compute first'
+        wmsg = 'No lblrv files found in {0}. Please run lbl_compute first.'
         wargs = [lblrv_dir]
-        log.warning(wmsg.format(*wargs))
-        return locals()
+        raise LblException(wmsg.format(*wargs))
 
     # get rdb files for this object_science and object_template
     rdbfiles = inst.get_lblrdb_files(lbl_rdb_dir)
