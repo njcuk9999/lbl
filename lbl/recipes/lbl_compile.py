@@ -80,7 +80,7 @@ def main(**kwargs):
     except Exception as e:
         emsg = 'Unexpected {0} error: {1}: {2}'
         eargs = [__NAME__, type(e), str(e)]
-        raise LblException(emsg.format(*eargs))
+        raise LblException(emsg.format(*eargs), verbose=False)
     # end code
     lbl_misc.end(__NAME__, plogger=log)
     # return local namespace
