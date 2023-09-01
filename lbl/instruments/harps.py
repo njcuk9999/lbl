@@ -804,11 +804,11 @@ class Harps_ORIG(Harps):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
-            name = 'HARPSN_ORIG'
+            name = 'HARPS_ORIG'
         # call to super function
         super().__init__(params, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_HARPSN_ORIG.fits'
+        self.default_template_name = 'Template_{0}_HARPS_ORIG.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -829,7 +829,7 @@ class Harps_ORIG(Harps):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.HARPSN_ORIG.override()'
+        func_name = __NAME__ + '.HARPS_ORIG.override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------
@@ -1054,11 +1054,11 @@ class Harps_ESO(Harps):
     def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
-            name = 'HARPSN_ESO'
+            name = 'HARPS_ESO'
         # call to super function
         super().__init__(params, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_HARPSN_ESO.fits'
+        self.default_template_name = 'Template_{0}_HARPS_ESO.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -1079,7 +1079,7 @@ class Harps_ESO(Harps):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.HarpsN_ESO.override()'
+        func_name = __NAME__ + '.Harps_ESO.override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------
@@ -1111,7 +1111,7 @@ class Harps_ESO(Harps):
         self.params.set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS',
+        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE', source=func_name)

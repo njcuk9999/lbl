@@ -119,6 +119,7 @@ def main(runparams: dict):
                 object_template = object_template + '_tc'
             # make the template (if not present)
             lbl_template.main(instrument=instrument, data_dir=data_dir,
+                              data_source=data_source,
                               data_type=data_type,
                               object_science=object_science + '_tc',
                               object_template=object_template,
@@ -127,6 +128,7 @@ def main(runparams: dict):
             # re-run tellu clean with uncorrected science data now using our
             #  template (made from cleaned science data)
             lbl_telluclean.main(instrument=instrument, data_dir=data_dir,
+                                data_source=data_source,
                                 data_type=data_type,
                                 object_science=object_science,
                                 object_template=object_template,
@@ -144,6 +146,7 @@ def main(runparams: dict):
             #   we use a set to do this (only runs once if they are the same)
             for _obj_template in {object_science, object_template}:
                 lbl_template.main(instrument=instrument, data_dir=data_dir,
+                                  data_source=data_source,
                                   data_type=data_type,
                                   object_science=object_science,
                                   object_template=_obj_template,
@@ -156,6 +159,7 @@ def main(runparams: dict):
             #   we use a set to do this (only runs once if they are the same)
             for _obj_template in {object_science, object_template}:
                 lbl_mask.main(instrument=instrument, data_dir=data_dir,
+                              data_source=data_source,
                               data_type=data_type,
                               object_science=object_science,
                               object_template=_obj_template,
@@ -173,6 +177,7 @@ def main(runparams: dict):
         # run the compute code
         if runparams['RUN_LBL_COMPUTE']:
             lbl_compute.main(instrument=instrument, data_dir=data_dir,
+                             data_source=data_source,
                              data_type=data_type,
                              object_science=object_science,
                              object_template=object_template,
@@ -182,6 +187,7 @@ def main(runparams: dict):
         # run the compile code
         if runparams['RUN_LBL_COMPILE']:
             lbl_compile.main(instrument=instrument, data_dir=data_dir,
+                             data_source=data_source,
                              data_type=data_type,
                              object_science=object_science,
                              object_template=object_template,

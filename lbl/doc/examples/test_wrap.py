@@ -98,7 +98,7 @@ def harps_orig():
     rparams['OBJECT_SCIENCE'] = ['PROXIMA']
     rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
-    rparams['BLAZE_FILE'] = ''
+    rparams['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -121,9 +121,9 @@ def harps_eso():
     rparams['DATA_SOURCE'] = 'ESO'
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPS_ESO')
     rparams['DATA_TYPES'] = ['SCIENCE']
-    rparams['OBJECT_SCIENCE'] = ['PROXIMA']
-    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
-    rparams['OBJECT_TEFF'] = [2810]
+    rparams['OBJECT_SCIENCE'] = ['GJ682']
+    rparams['OBJECT_TEMPLATE'] = ['GJ682']
+    rparams['OBJECT_TEFF'] = [3349]
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
