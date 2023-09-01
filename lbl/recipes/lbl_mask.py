@@ -79,7 +79,7 @@ def main(**kwargs):
     try:
         namespace = __main__(inst)
     except LblException as e:
-        raise LblException(e.message)
+        raise LblException(e.message, verbose=False)
     except Exception as e:
         emsg = 'Unexpected {0} error: {1}: {2}'
         eargs = [__NAME__, type(e), str(e)]

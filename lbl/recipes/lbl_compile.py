@@ -76,7 +76,7 @@ def main(**kwargs):
     try:
         namespace = __main__(inst)
     except LblException as e:
-        raise LblException(e.message)
+        raise LblException(e.message, verbose=False)
     except Exception as e:
         emsg = 'Unexpected {0} error: {1}: {2}'
         eargs = [__NAME__, type(e), str(e)]
@@ -122,6 +122,13 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # get all lblrv files for this object_science and object_template
     lblrv_files = inst.get_lblrv_files(lblrv_dir)
+
+    # deal with no lblrv files (we cannot run compile)
+    if len(lblrv_files) == 0:
+        wmsg = 'No lblrv files found in {0}. Please run lbl_compute first.'
+        wargs = [lblrv_dir]
+        raise LblException(wmsg.format(*wargs))
+
     # get rdb files for this object_science and object_template
     rdbfiles = inst.get_lblrdb_files(lbl_rdb_dir)
     rdbfile1, rdbfile2, rdbfile3, rdbfile4, drift_file = rdbfiles

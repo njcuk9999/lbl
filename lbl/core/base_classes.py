@@ -33,14 +33,15 @@ log = logger.Log(filename=base.LOG_FILE)
 # Define classes
 # =============================================================================
 class LblException(Exception):
-    def __init__(self, message):
+    def __init__(self, message: str, verbose: bool = True):
         """
         Constructor for LBL Exception
         :param message: str, the message to add to log + raise msg
         """
         self.message = message
         # log error
-        log.error(self.message)
+        if verbose:
+            log.error(self.message)
 
     def __str__(self) -> str:
         """
