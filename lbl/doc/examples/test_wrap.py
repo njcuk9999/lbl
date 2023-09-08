@@ -23,7 +23,7 @@ TEST_PATH = '/scratch3/lbl/data/test/'
 # define which instruments to test (using functions in this module)
 INSTRUMENTS = ['carmenes_vis',
                'espresso',
-               'harps',
+               'harps_orig', 'harps_eso',
                'harpsn_orig', 'harpsn_eso',
                'nirps_ha_apero', 'nirps_he_apero',
                'nirps_ha_eso', 'nirps_he_eso',
@@ -87,19 +87,43 @@ def espresso():
     return rparams
 
 
-# TODO: Change harps to HARPS-ORIG and HARPS-ESO
-def harps():
+def harps_orig():
     # set up parameters
     rparams = dict()
     # LBL parameters
     rparams['INSTRUMENT'] = 'HARPS'
-    rparams['DATA_SOURCE'] = 'None'
-    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPS')
+    rparams['DATA_SOURCE'] = 'ORIG'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPS_ORIG')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['PROXIMA']
     rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = True
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
+
+def harps_eso():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'HARPS'
+    rparams['DATA_SOURCE'] = 'ESO'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPS_ESO')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['GJ682']
+    rparams['OBJECT_TEMPLATE'] = ['GJ682']
+    rparams['OBJECT_TEFF'] = [3349]
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True

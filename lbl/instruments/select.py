@@ -47,7 +47,7 @@ LblException = base_classes.LblException
 # instruments list
 InstrumentsType = Union[default.Instrument,
                         spirou.Spirou, spirou.SpirouCADC,
-                        harps.Harps,
+                        harps.Harps_ORIG, harps.Harps_ESO,
                         espresso.Espresso,
                         carmenes.Carmenes,
                         nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
@@ -57,12 +57,12 @@ InstrumentsType = Union[default.Instrument,
                         sophie.Sophie]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
-                   harps.Harps,
+                   harps.Harps_ORIG, harps.Harps_ESO,
                    espresso.Espresso,
                    carmenes.Carmenes,
                    nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
                    nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
-                   harpsn.HarpsN,
+                   harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
                    sophie.Sophie)
 
@@ -80,7 +80,8 @@ InstDict['NIRPS_HE'] = dict()
 InstDict['NIRPS_HE']['APERO'] = nirps.NIRPS_HE
 InstDict['NIRPS_HE']['ESO'] = nirps.NIRPS_HE_ESO
 InstDict['HARPS'] = dict()
-InstDict['HARPS']['None'] = harps.Harps
+InstDict['HARPS']['ORIG'] = harps.Harps_ORIG
+InstDict['HARPS']['ESO'] = harps.Harps_ESO
 InstDict['CARMENES'] = dict()
 InstDict['CARMENES']['None'] = carmenes.Carmenes
 InstDict['ESPRESSO'] = dict()
