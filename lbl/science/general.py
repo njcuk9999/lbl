@@ -741,7 +741,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # high-pass of CCF expressed in pixels, not km/s
     ccf_hp_scale = inst.params['COMPUTE_CCF_HP_SCALE']
     ccf_hp_width_pix = int(ccf_hp_scale / (grid_step / 1000))
-    ccf_vector /= mp.lowpassfilter(ccf_vector, ccf_hp_width_pix)
+    ccf_vector -= mp.lowpassfilter(ccf_vector, ccf_hp_width_pix)
 
     # -------------------------------------------------------------------------
     # fit the CCF
@@ -1321,7 +1321,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             mask_table = inst.load_mask(mask_file)
             wave_mask = np.array(mask_table['ll_mask_s'], dtype=float)
             ccf_weight = np.array(mask_table['w_mask'], dtype=float)
-
+            mask_snr = np.array(mask_table['line_snr'], dtype=float)
+            # if SNR of line is less than 3 we don't use it
+            ccf_weight[mask_snr < 3] = 0
+            # calculate the rough CCF RV estimate
             sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
                                                       wave_mask, ccf_weight,
                                                       kind='model')
