@@ -870,7 +870,7 @@ class Harps_ORIG(Harps):
         self.params.set('KW_EXPTIME', 'HIERARCH ESO DET WIN1 DIT1',
                         source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS',
+        self.params.set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
