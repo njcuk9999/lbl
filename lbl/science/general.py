@@ -434,9 +434,17 @@ def spline_template(inst: InstrumentsType, template_file: str,
             sp_res = np.array(tbl_res['fractional_gradient'])
             # make sure we don't have nans for the spline
             valid_res = np.isfinite(sp_res)
-            # spline and add to spline dictionary
-            sps[key] = mp.iuv_spline(wave_res[valid_res], sp_res[valid_res],
-                                     k=k_order, ext=1)
+
+            tmp_spline = mp.iuv_spline(wave_res[valid_res], sp_res[valid_res],
+                          k=1, ext=1)
+            # create a smooth edge condition for points past edges, otherwise
+            # the k_order spline may diverge. This is done with k=1 to create
+            # a linear interpolation as an edge condition
+            sp_res[~valid_res] = tmp_spline(wave_res[~valid_res])
+
+            # spline and add to spline dictionary. No need for masking so we
+            # can use a k value larger than 1
+            sps[key] = mp.iuv_spline(wave_res, sp_res,k=k_order, ext=1)
     # -------------------------------------------------------------------------
     # we create a mask to know if the splined point  is valid
     tmask = np.isfinite(tflux).astype(float)
@@ -498,6 +506,10 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         # mask the mask_table
         good = mask_table['ll_mask_s'] > wavemin
         good &= mask_table['ll_mask_s'] < wavemax
+        # we are using the FULL mask therefore we keep only local
+        # maxima
+        good &= mask_table['w_mask'] >0
+
         # apply mask to keep
         keep[good] = True
     # mask the mask table
@@ -511,7 +523,8 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     # ---------------------------------------------------------------------
     # spline the science temmplate
     good = np.isfinite(fluxgrid)
-    sps = mp.iuv_spline(wavegrid[good], fluxgrid[good], k=3, ext=1)
+    # Use k=1 to avoid ringing at edges if 'good' has holes.
+    sps = mp.iuv_spline(wavegrid[good], fluxgrid[good], k=1, ext=1)
     # ---------------------------------------------------------------------
     # define the ccf dv grid
     dv = np.arange(rv_min, rv_max + rv_step, rv_step)
@@ -523,12 +536,16 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         pos = mp.doppler_shift(mask_table['ll_mask_s'], -dv[it])
         # calculate the ccf for this iteration
         ccf_vector[it] = mp.nansum(mask_table['w_mask'] * sps(pos))
+    # CCF can be normalized to its median as we have only used
+    # features in absorption rather than the 'full'
+    ccf_vector/=np.nanmedian(ccf_vector)
+
     # ---------------------------------------------------------------------
     # construct a guess at the ccf fit
     # default FWHM is 6 km/s as this is about the typical width of slowly
     # rotating M dwarfs
     coeffs = [dv[np.argmin(ccf_vector)], 6000,
-              1-np.nanmin(ccf_vector/np.nanmedian(ccf_vector)), 3, 2]
+              1-np.nanmin(ccf_vector), 3, 2]
     lowf = None
     # do this twice for better fit
     for iteration in range(2):
@@ -539,7 +556,9 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
                                 int(rv_filter_size/rv_step))
         # try to compute curve fit
         try:
-            coeffs, _ = mp.curve_fit(mp.gauss_fit_e, dv, ccf_vector/lowf,
+            # we were idiots, the lowf should be subtracted, not divided
+            # ... there are days like that.
+            coeffs, _ = mp.curve_fit(mp.gauss_fit_e, dv, ccf_vector-lowf,
                                      p0=coeffs)
         except base_classes.LblCurveFitException as e:
             emsg = 'CurveFit exception in rough CCF'
@@ -551,7 +570,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     # ---------------------------------------------------------------------
     # work out rms
     gfit = mp.gauss_fit_e(dv, *coeffs)
-    rms = mp.estimate_sigma(ccf_vector/lowf - gfit)
+    rms = mp.estimate_sigma(ccf_vector-lowf - gfit)
     # ---------------------------------------------------------------------
     # print out values
     msg = 'Rough CCF fit:'
@@ -571,7 +590,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     props['EXPO'] = coeffs[4]
     # ---------------------------------------------------------------------
     # plot
-    plot.compute_plot_sysvel(inst, dv, ccf_vector/lowf, coeffs, gfit, props)
+    plot.compute_plot_sysvel(inst, dv, ccf_vector-lowf, coeffs, gfit, props)
     # ---------------------------------------------------------------------
     # return the props
     return props
@@ -851,14 +870,16 @@ def get_scaling_ratio(spectrum1: np.ndarray,
 
 
 def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
-                         model: np.ndarray, hpwidth: float) -> np.ndarray:
+                         model: np.ndarray,
+                         noise_sampling_width: float) -> np.ndarray:
     """
     Estimate the noise on spectrum given the model
 
     :param spectrum: np.ndarray, the spectrum
     :param wavegrid: np.ndarray, the wave grid for the spectrum
     :param model: np.ndarray, the model
-    :param hpwidth: float, the hp width
+    :param noise_sampling_width: float, the width of the window used to sample
+                                   the noise.
 
     :return: np.ndarray, the rms vector for this spectrum give the model
     """
@@ -869,7 +890,7 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
         # get the wavelength for this order
         waveord = wavegrid[order_num]
         # calculate the number of points for the sliding error rms
-        npoints = get_velo_scale(waveord, hpwidth)
+        npoints = get_velo_scale(waveord, noise_sampling_width)
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
         # get the pixels along the model to spline at (box centers)
@@ -886,8 +907,14 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
                 istart = 0
             if iend > model.shape[1]:
                 iend = model.shape[1]
-            # work out the sigma of this box
-            sigma[it] = mp.estimate_sigma(residuals[istart: iend])
+            tmp = residuals[istart: iend]
+            # if more than 50% of the points are valid. If shorter at the
+            # start or end of domain, we compare to npoints rather than the
+            # length of tmp
+            frac_valid = np.sum(np.isfinite(tmp))/npoints
+            if frac_valid > 0.5:
+                # work out the sigma of this box
+                sigma[it] = mp.estimate_sigma(tmp)
             # set any zero values to NaN
             sigma[sigma == 0] = np.nan
         # mask all NaN values
@@ -895,13 +922,14 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
         # if we have enough points calculate the rms
         if np.sum(good) > 2:
             # get the spline across all indices
-            rms_spline = mp.iuv_spline(indices[good], sigma[good], k=1, ext=3)
+            rms_spline = mp.iuv_spline(indices[good], sigma[good], k=1, ext=1)
             # apply the spline to the model positions
             rms[order_num] = rms_spline(np.arange(model.shape[1]))
         # else we don't have a noise model
         else:
             # we fill the rms with NaNs for each pixel
             rms[order_num] = np.full(model.shape[1], fill_value=np.nan)
+    rms[rms == 0] = np.nan
     # return rms
     return rms
 
@@ -1241,9 +1269,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if iteration == 0:
                 # spline the original template and apply blaze
                 model0[order_num] = spline0(wave_ord) * blaze_ord
+                model0[order_num][model0[order_num] == 0] = np.nan
+                # get the good values for the median
+                g = np.isfinite(model0[order_num])
+                g &= np.isfinite(sci_data[order_num])
+
                 # get the median for the model and original spectrum
-                med_model0 = mp.nanmedian(model0[order_num])
-                med_sci_data_0 = mp.nanmedian(sci_data0[order_num])
+                med_model0 = mp.nanmedian(model0[order_num][g])
+                med_sci_data_0 = mp.nanmedian(sci_data0[order_num][g])
                 # normalize by the median
                 with warnings.catch_warnings(record=True):
                     model0[order_num] = model0[order_num] / med_model0
@@ -1265,8 +1298,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     for key in inst.params['RESPROJ_TABLES']:
                         # calculate spline
                         rp_spline = splines[key](wave_ord)
-                        # multiply by blaze and ratio
-                        rp_spline = rp_spline * blaze_ord * ratio[order_num]
+                        # The models are always expressed in terms of the
+                        # original spectrum
+                        rblaze = np.nanmedian(sci_data0[order_num]/blaze_ord)
+                        rp_spline *= (blaze_ord * rblaze)
                         # add to projection model
                         proj_model[key]['model'][order_num] = rp_spline
         # ---------------------------------------------------------------------
@@ -1274,7 +1309,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # if we are not using a noise model - estimate the noise
         if not use_noise_model:
-            rms = estimate_noise_model(sci_data, wavegrid, model, hp_width)
+            # TODO -> noise_sampling_width needs to be in the config file
+            noise_sampling_width = 200000 # 200 km/s
+            rms = estimate_noise_model(sci_data, wavegrid, model,
+                                       noise_sampling_width)
             # work out the number of sigma away from the model
             nsig = (sci_data - model) / rms
             # mask for nsigma
@@ -1537,8 +1575,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         pbout = bouchy_equation_line(pd_seg, diff_seg, mean_rms)
                         # push into the projection model
                         pd_key, psd_key = pbout
-                        proj_model[key]['proj'][line_it] = pd_key
-                        proj_model[key]['sproj'][line_it] = psd_key
+                        if np.isfinite(pd_key) and np.isfinite(psd_key):
+                            # only update if both finite
+                            proj_model[key]['proj'][line_it] = pd_key
+                            proj_model[key]['sproj'][line_it] = psd_key
+
             # only add stuff to the ref_table if on last iteration
             if flag_last_iter:
                 # -----------------------------------------------------------------
