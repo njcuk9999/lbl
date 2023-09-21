@@ -215,6 +215,15 @@ params.set(key='USE_NOISE_MODEL', value=False, source=__NAME__,
            desc='Switch whether to use noise model or not for the RMS '
                 'calculation', options=[True, False])
 
+# define the running size (in m/s) for the RMS calculation, default = 200km/s
+# hould be big enough to be representative of the noise but
+# small enough to be representative of variations through
+# the domain. For typical pRV instruments, can be kept as a gobal value, no need
+# to change it. If we ever go with a much coarser sampling, this value will need
+# to be adjusted.
+params.set(key='NOISE_SAMPLING_WIDTH', value=2e5, source=__NAME__,
+           desc='Size of the running window (in m/s) for the RMS calculation.')
+
 # define the rough CCF rv minimum limit in m/s
 params.set(key='ROUGH_CCF_MIN_RV', value=-3e5, source=__NAME__,
            desc='The rough CCF rv minimum limit in m/s')
