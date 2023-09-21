@@ -8,9 +8,9 @@ Created on 2021-03-16
 @author: cook
 """
 import os
+import time
 import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
-import time
 
 import numpy as np
 import wget
@@ -18,7 +18,6 @@ from astropy import constants
 from astropy import units as uu
 from astropy.table import Table
 from scipy import stats
-from scipy.signal import medfilt
 from scipy.stats import pearsonr
 
 from lbl.core import astro
@@ -436,7 +435,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
             valid_res = np.isfinite(sp_res)
 
             tmp_spline = mp.iuv_spline(wave_res[valid_res], sp_res[valid_res],
-                          k=1, ext=1)
+                                       k=1, ext=1)
             # create a smooth edge condition for points past edges, otherwise
             # the k_order spline may diverge. This is done with k=1 to create
             # a linear interpolation as an edge condition
@@ -444,7 +443,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
 
             # spline and add to spline dictionary. No need for masking so we
             # can use a k value larger than 1
-            sps[key] = mp.iuv_spline(wave_res, sp_res,k=k_order, ext=1)
+            sps[key] = mp.iuv_spline(wave_res, sp_res, k=k_order, ext=1)
     # -------------------------------------------------------------------------
     # we create a mask to know if the splined point  is valid
     tmask = np.isfinite(tflux).astype(float)
@@ -508,7 +507,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         good &= mask_table['ll_mask_s'] < wavemax
         # we are using the FULL mask therefore we keep only local
         # maxima
-        good &= mask_table['w_mask'] >0
+        good &= mask_table['w_mask'] > 0
 
         # apply mask to keep
         keep[good] = True
@@ -538,14 +537,14 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         ccf_vector[it] = mp.nansum(mask_table['w_mask'] * sps(pos))
     # CCF can be normalized to its median as we have only used
     # features in absorption rather than the 'full'
-    ccf_vector/=np.nanmedian(ccf_vector)
+    ccf_vector /= np.nanmedian(ccf_vector)
 
     # ---------------------------------------------------------------------
     # construct a guess at the ccf fit
     # default FWHM is 6 km/s as this is about the typical width of slowly
     # rotating M dwarfs
     coeffs = [dv[np.argmin(ccf_vector)], 6000,
-              1-np.nanmin(ccf_vector), 3, 2]
+              1 - np.nanmin(ccf_vector), 3, 2]
     lowf = None
     # do this twice for better fit
     for iteration in range(2):
@@ -553,12 +552,12 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         estimate = mp.gauss_fit_e(dv, *coeffs)
         # find the continuum by subtraing the estimate from the ccf
         lowf = mp.lowpassfilter(ccf_vector - estimate,
-                                int(rv_filter_size/rv_step))
+                                int(rv_filter_size / rv_step))
         # try to compute curve fit
         try:
             # we were idiots, the lowf should be subtracted, not divided
             # ... there are days like that.
-            coeffs, _ = mp.curve_fit(mp.gauss_fit_e, dv, ccf_vector-lowf,
+            coeffs, _ = mp.curve_fit(mp.gauss_fit_e, dv, ccf_vector - lowf,
                                      p0=coeffs)
         except base_classes.LblCurveFitException as e:
             emsg = 'CurveFit exception in rough CCF'
@@ -570,7 +569,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     # ---------------------------------------------------------------------
     # work out rms
     gfit = mp.gauss_fit_e(dv, *coeffs)
-    rms = mp.estimate_sigma(ccf_vector-lowf - gfit)
+    rms = mp.estimate_sigma(ccf_vector - lowf - gfit)
     # ---------------------------------------------------------------------
     # print out values
     msg = 'Rough CCF fit:'
@@ -590,7 +589,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     props['EXPO'] = coeffs[4]
     # ---------------------------------------------------------------------
     # plot
-    plot.compute_plot_sysvel(inst, dv, ccf_vector-lowf, coeffs, gfit, props)
+    plot.compute_plot_sysvel(inst, dv, ccf_vector - lowf, coeffs, gfit, props)
     # ---------------------------------------------------------------------
     # return the props
     return props
@@ -911,7 +910,7 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
             # if more than 50% of the points are valid. If shorter at the
             # start or end of domain, we compare to npoints rather than the
             # length of tmp
-            frac_valid = np.sum(np.isfinite(tmp))/npoints
+            frac_valid = np.sum(np.isfinite(tmp)) / npoints
             if frac_valid > 0.5:
                 # work out the sigma of this box
                 sigma[it] = mp.estimate_sigma(tmp)
@@ -1025,6 +1024,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     readout_noise = inst.params['READ_OUT_NOISE']
     # flag that we have residual projection tables
     resproj_flag = isinstance(inst.params['RESPROJ_TABLES'], dict)
+    # get the size of running window sample = noise
+    noise_sampling_width = inst.params['NOISE_SAMPLING_WIDTH']
     # -------------------------------------------------------------------------
     # deal with max number of iterations higher than computer_rv_n_iters
     if max_good_num_iters > compute_rv_n_iters:
@@ -1089,8 +1090,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # deal with first estimate of RV / CCF equivalent width
     if inst.params['DATA_TYPE'] == 'SCIENCE':
-        sys_rv, ccf_fwhm = berv-systemic_props['VSYS'], systemic_props['FWHM']
-        ccf_ewidth = ccf_fwhm/mp.fwhm()
+        sys_rv, ccf_fwhm = berv - systemic_props['VSYS'], systemic_props['FWHM']
+        ccf_ewidth = ccf_fwhm / mp.fwhm()
     else:
         # for FP files
         sys_rv, ccf_ewidth = 0, 0
@@ -1130,7 +1131,6 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     #     msg = '\tSystemic rv + berv={0:.4f} m/s from MJD={1}'
     #     margs = [-sys_rv, mjdate_all[closest]]
     #     log.general(msg.format(*margs))
-
 
     # -------------------------------------------------------------------------
     # iteration loop
@@ -1271,12 +1271,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 model0[order_num] = spline0(wave_ord) * blaze_ord
                 model0[order_num][model0[order_num] == 0] = np.nan
                 # get the good values for the median
-                g = np.isfinite(model0[order_num])
-                g &= np.isfinite(sci_data[order_num])
+                valid = np.isfinite(model0[order_num])
+                valid &= np.isfinite(sci_data[order_num])
 
                 # get the median for the model and original spectrum
-                med_model0 = mp.nanmedian(model0[order_num][g])
-                med_sci_data_0 = mp.nanmedian(sci_data0[order_num][g])
+                med_model0 = mp.nanmedian(model0[order_num][valid])
+                med_sci_data_0 = mp.nanmedian(sci_data0[order_num][valid])
                 # normalize by the median
                 with warnings.catch_warnings(record=True):
                     model0[order_num] = model0[order_num] / med_model0
@@ -1300,7 +1300,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         rp_spline = splines[key](wave_ord)
                         # The models are always expressed in terms of the
                         # original spectrum
-                        rblaze = np.nanmedian(sci_data0[order_num]/blaze_ord)
+                        rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
                         rp_spline *= (blaze_ord * rblaze)
                         # add to projection model
                         proj_model[key]['model'][order_num] = rp_spline
@@ -1309,8 +1309,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # if we are not using a noise model - estimate the noise
         if not use_noise_model:
-            # TODO -> noise_sampling_width needs to be in the config file
-            noise_sampling_width = 200000 # 200 km/s
+
             rms = estimate_noise_model(sci_data, wavegrid, model,
                                        noise_sampling_width)
             # work out the number of sigma away from the model
@@ -1548,7 +1547,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 # work out the 0th derivative
                 #    From bouchy 2001 equation, RV error for each pixel
                 # -------------------------------------------------------------
-                if np.sum(np.isfinite(model_seg)) >=2:
+                if np.sum(np.isfinite(model_seg)) >= 2:
                     v1 = np.nanmean(model_seg)
                     bout = bouchy_equation_line(model_seg - v1, diff_seg,
                                                 mean_rms)
@@ -2201,7 +2200,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # normalize the per-line mean to zero
         guess3, bulk_error3 = mp.odd_ratio_mean(per_line_mean, per_line_error)
         per_line_mean = per_line_mean - guess3
-        nsig = np.abs(per_line_mean/mp.estimate_sigma(per_line_mean))
+        nsig = np.abs(per_line_mean / mp.estimate_sigma(per_line_mean))
         per_line_mean[nsig > 100] = np.nan
 
         # ---------------------------------------------------------------------
@@ -2274,9 +2273,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             good = np.isfinite(err) & np.isfinite(rvs_row)
             good &= np.isfinite(rv_per_line_model[0])
             # find very large outliers in the per-line velocities
-            nsig = np.abs(rvs_row-np.nanmedian(rvs_row))/err
-            good &= (nsig<10)
-            good &= (err<100*np.nanmedian(err))
+            nsig = np.abs(rvs_row - np.nanmedian(rvs_row)) / err
+            good &= (nsig < 10)
+            good &= (err < 100 * np.nanmedian(err))
             # get valid wave and subtract reference wavelength
             valid_wave = rvtable0['WAVE_START'][good] - reference_wavelength
             # get valid rv an dv drms
