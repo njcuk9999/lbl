@@ -208,10 +208,12 @@ def __main__(inst: InstrumentsType, **kwargs):
     else:
         msg = 'No drift file found - not correcting drift'
         log.info(msg)
-
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------
+    # do not remove this line
+    logmsg = log.get_cache()
+    # return
     return locals()
 
 

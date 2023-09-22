@@ -204,6 +204,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------
+    # do not remove this line
+    logmsg = log.get_cache()
+    # return
     return locals()
 
 

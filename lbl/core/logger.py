@@ -10,7 +10,7 @@ Created on 2021-03-15
 @author: cook
 """
 import logging
-from typing import Union
+from typing import List, Union
 
 from astropy.time import Time
 
@@ -210,6 +210,20 @@ class Log:
         else:
             # set the default console level to GENERAL
             self._update_console(verbose, self.GENERAL, program)
+
+    @staticmethod
+    def get_cache() -> List[str]:
+        """
+        Get the cached log messages
+
+        :return: list of str, the cached log messages
+        """
+        # copy cache to local variable
+        cache = []
+        for record in CACHE:
+            cache.append(str(record))
+        # return cache
+        return cache
 
 
 # Cache logger
