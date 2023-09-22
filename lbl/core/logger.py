@@ -12,6 +12,8 @@ Created on 2021-03-15
 import logging
 from typing import Union
 
+from astropy.time import Time
+
 from lbl.core import base
 
 # =============================================================================
@@ -23,6 +25,10 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # no theme values
 NO_THEME = [False, 'False', 'OFF', 'off', 'Off', 'None']
+# General level
+GENERAL = 15
+# CACHE for all messages
+CACHE = []
 
 
 # =============================================================================
@@ -38,7 +44,7 @@ class Log:
         self.INFO = logging.INFO
         self.WARNING = logging.WARNING
         # add a new level (GENERAL)
-        self.GENERAL = 15
+        self.GENERAL = GENERAL
         logging.addLevelName(self.GENERAL, 'GENERAL')
         # set logger to this as the lowest level
         self.logger.setLevel(self.baselevel)
@@ -49,9 +55,10 @@ class Log:
         self.confmt = self.format_class(theme=self.theme)
         self.filefmt = self.format_class(theme='OFF')
         # set program to None
-        self.program = None
+        self.program = kwargs.get('program', None)
         # save path
         self.filepath = None
+        #
         # add console
         self.console_verbosity = 2
         self._add_console(self.console_verbosity, level=self.GENERAL)
@@ -152,19 +159,30 @@ class Log:
 
     def general(self, message: str, *args, **kwargs):
         self.update_console(self.console_verbosity, self.program)
+        # update cached log
+        cache_logger(message, self.GENERAL, program=self.program)
         # noinspection PyProtectedMember
         self.logger._log(self.GENERAL, message, args, **kwargs)
 
     def info(self, message: str, *args, **kwargs):
         self.update_console(self.console_verbosity, self.program)
+        # update cached log
+        cache_logger(message, logging.INFO, program=self.program)
+        # run logger
         self.logger.info(message, *args, **kwargs)
 
     def warning(self, message: str, *args, **kwargs):
         self.update_console(self.console_verbosity, self.program)
+        # update cached log
+        cache_logger(message, logging.WARNING, program=self.program)
+        # run logger
         self.logger.warning(message, *args, **kwargs)
 
     def error(self, message: str, *args, **kwargs):
         self.update_console(self.console_verbosity, self.program)
+        # update cached log
+        cache_logger(message, logging.ERROR, program=self.program)
+        # run logger
         self.logger.error(message, *args, **kwargs)
 
     def update_console(self, verbose: int = 2,
@@ -192,6 +210,46 @@ class Log:
         else:
             # set the default console level to GENERAL
             self._update_console(verbose, self.GENERAL, program)
+
+
+# Cache logger
+def cache_logger(message: str, levelnum: int, program: Union[str, None] = None):
+    """
+    Store message formated properly to cache (for return to lbl code)
+
+    :param message: str, the log message to store
+    :param levelnum: int, the level number of the message
+    :param program: str or None, if set the program id
+
+    :return: None, updates CACHE
+    """
+    # need to global edit cache
+    global CACHE
+    # get time now
+    timenow = Time.now().iso
+    # -------------------------------------------------------------------------
+    # deal with level num --> string
+    # Replace the original format with one customized by logging level
+    if levelnum == GENERAL:
+        level = 'G'
+    elif levelnum == logging.INFO:
+        level = 'I'
+    elif levelnum == logging.WARNING:
+        level = 'W'
+    elif levelnum >= logging.ERROR and levelnum != 999:
+        level = 'E'
+    elif levelnum == 999:
+        level = 'D'
+    else:
+        level = 'G'
+    # -------------------------------------------------------------------------
+    if program is not None:
+        record = f'{timenow}|{level}|{program}| {message}'
+    else:
+        record = f'{timenow}|{level}| {message}'
+    # -------------------------------------------------------------------------
+    # push to cache
+    CACHE.append(record)
 
 
 # Custom formatter
