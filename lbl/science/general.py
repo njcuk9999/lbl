@@ -88,6 +88,12 @@ def multi_wait(inst: InstrumentsType, reftable_exists: bool,
     count = 0
     # else we have to wait for iteration zero to make the ref table
     while not os.path.exists(reftable_file):
+        # every 10 iterations print a message
+        if count % 10 == 0:
+            msg = ('Iteration {0}/{1}: Waiting for reftable to be created by'
+                   'iteration 0: Count = {2}')
+            margs = [iteration, total, count]
+            log.general(msg.format(*margs))
         # sleep for 1 second
         time.sleep(1)
         # add one to count
@@ -98,6 +104,9 @@ def multi_wait(inst: InstrumentsType, reftable_exists: bool,
             emsg = ('Timeout waiting for reftable to be created by iteration '
                     '0')
             raise LblException(emsg)
+    # lets wait a little longer to make sure the file is written completely
+    if count > 0:
+        time.sleep(5)
     # return
     return True
 
@@ -154,6 +163,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
     # -------------------------------------------------------------------------
     # deal with loading from file
     if reftable_exists:
+        # log writing
+        log.general('Reading existing ref table {0}'.format(reftable_file))
         # load ref table from disk
         table = Table.read(reftable_file, format=params['REF_TABLE_FMT'])
         # copy columns
