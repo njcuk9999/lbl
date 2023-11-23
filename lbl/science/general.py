@@ -327,6 +327,13 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # get properties from template table
     twave = np.array(template_table['wavelength'])
     tflux = np.array(template_table['flux'])
+    if 'flux_odd' in template_table.colnames:
+        # this captures the odd/even asymetry in resolution along orders
+        # we have 3 templates, one averaing the odd, one the even and one
+        # having all the flux from the entire ordes
+        tflux_odd = np.array(template_table['flux_odd'])
+        tflux_even = np.array(template_table['flux_even'])
+
     # some masking to avoid errors later
     # if we have the n_valid flag in the table, then we must have at least
     # 1/2 of points valid
@@ -381,6 +388,11 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # copy the flux
     tflux0 = np.array(tflux)
+
+    if 'flux_odd' in template_table.colnames:
+        tflux0_odd = np.array(tflux_odd)
+        tflux0_even = np.array(tflux_even)
+
     # -------------------------------------------------------------------------
     # work out the velocity scale
     width = get_velo_scale(twave, hp_width)
@@ -396,6 +408,15 @@ def spline_template(inst: InstrumentsType, template_file: str,
     d2flux = np.gradient(dflux) / grad_log_wave / speed_of_light_ms
     # get the 3rd derivative of the flux
     d3flux = np.gradient(d2flux) / grad_log_wave / speed_of_light_ms
+
+    if 'flux_odd' in template_table.colnames:
+        dflux_odd = np.gradient(tflux_odd) / grad_log_wave / speed_of_light_ms
+        dflux_even = np.gradient(tflux_even) / grad_log_wave / speed_of_light_ms
+        d2flux_odd = np.gradient(dflux_odd) / grad_log_wave / speed_of_light_ms
+        d2flux_even = np.gradient(dflux_even) / grad_log_wave / speed_of_light_ms
+        d3flux_odd = np.gradient(d2flux_odd) / grad_log_wave / speed_of_light_ms
+        d3flux_even = np.gradient(d2flux_even) / grad_log_wave / speed_of_light_ms
+
     # -------------------------------------------------------------------------
     # we create the spline of the template to be used everywhere later
     valid = np.isfinite(tflux) & np.isfinite(dflux)
@@ -412,9 +433,26 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # flux, 1st and 2nd derivatives
     sps['spline0'] = mp.iuv_spline(ntwave, tflux0[valid], k=k_order, ext=1)
     sps['spline'] = mp.iuv_spline(ntwave, tflux[valid], k=k_order, ext=1)
-    sps['dspline'] = mp.iuv_spline(ntwave, dflux[valid], k=k_order, ext=1)
-    sps['d2spline'] = mp.iuv_spline(ntwave, d2flux[valid], k=k_order, ext=1)
-    sps['d3spline'] = mp.iuv_spline(ntwave, d3flux[valid], k=k_order, ext=1)
+
+    if 'flux_odd' in template_table.colnames:
+        # keeping track of odd/even derivatives
+        sps['spline_odd'] = mp.iuv_spline(ntwave, tflux_odd[valid], k=k_order, ext=1)
+        sps['spline_even'] = mp.iuv_spline(ntwave, tflux_even[valid], k=k_order, ext=1)
+        sps['spline0_odd'] = mp.iuv_spline(ntwave, tflux0_odd[valid], k=k_order, ext=1)
+        sps['spline0_even'] = mp.iuv_spline(ntwave, tflux0_even[valid], k=k_order, ext=1)
+        sps['dspline_odd'] = mp.iuv_spline(ntwave, dflux_odd[valid], k=k_order, ext=1)
+        sps['dspline_even'] = mp.iuv_spline(ntwave, dflux_even[valid], k=k_order, ext=1)
+        sps['d2spline_odd'] = mp.iuv_spline(ntwave, d2flux_odd[valid], k=k_order, ext=1)
+        sps['d2spline_even'] = mp.iuv_spline(ntwave, d2flux_even[valid], k=k_order, ext=1)
+        sps['d3spline_odd'] = mp.iuv_spline(ntwave, d3flux_odd[valid], k=k_order, ext=1)
+        sps['d3spline_even'] = mp.iuv_spline(ntwave, d3flux_even[valid], k=k_order, ext=1)
+    else:
+        sps['dspline'] = mp.iuv_spline(ntwave, dflux[valid], k=k_order, ext=1)
+        sps['d2spline'] = mp.iuv_spline(ntwave, d2flux[valid], k=k_order, ext=1)
+        sps['d3spline'] = mp.iuv_spline(ntwave, d3flux[valid], k=k_order, ext=1)
+
+
+
     # deal with residual projection tables
     if isinstance(inst.params['RESPROJ_TABLES'], dict):
         # loop around table
@@ -460,6 +498,11 @@ def spline_template(inst: InstrumentsType, template_file: str,
     tmask = np.isfinite(tflux).astype(float)
     ntwave1 = mp.doppler_shift(twave, systemic_vel)
     sps['spline_mask'] = mp.iuv_spline(ntwave1, tmask, k=1, ext=1)
+    if 'flux_odd' in template_table.colnames:
+        tmask_odd = np.isfinite(tflux_odd).astype(float)
+        tmask_even = np.isfinite(tflux_even).astype(float)
+        sps['spline_mask_odd'] = mp.iuv_spline(ntwave1, tmask_odd, k=1, ext=1)
+        sps['spline_mask_even'] = mp.iuv_spline(ntwave1, tmask_even, k=1, ext=1)
     # -------------------------------------------------------------------------
     # return splines
     return sps
@@ -522,6 +565,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
 
         # apply mask to keep
         keep[good] = True
+        print(np.mean(good))
     # mask the mask table
     mask_table = mask_table[keep]
     # ---------------------------------------------------------------------
@@ -599,7 +643,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     props['EARS'] = coeffs[3]
     props['EXPO'] = coeffs[4]
     # ---------------------------------------------------------------------
-    # plot
+    # plots
     plot.compute_plot_sysvel(inst, dv, ccf_vector - lowf, coeffs, gfit, props)
     # ---------------------------------------------------------------------
     # return the props
@@ -720,6 +764,10 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
         # apply mask to wavegrid and sci data
         wavegrid2 = wavegrid[mask]
         sci_data2 = sci_data[mask]
+
+    sci_data2[sci_data2 < 0] = np.nan
+    sci_data2[sci_data2>5*np.nanmedian(sci_data2)] = np.nan
+
     # -------------------------------------------------------------------------
     # Make a magic grid to use in the CCF
     # -------------------------------------------------------------------------
@@ -1174,12 +1222,24 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # correction of the model from the low-passed ratio of science to model
     ratio = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
-    spline0 = splines['spline0']
-    # spline = splines['spline']
-    dspline = splines['dspline']
-    d2spline = splines['d2spline']
-    d3spline = splines['d3spline']
-    spline_mask = splines['spline_mask']
+
+    print(splines.keys())
+
+    if 'spline0_odd' not in splines:
+        spline0 = splines['spline0'], splines['spline0']
+        dspline = splines['dspline'],splines['dspline']
+        d2spline = splines['d2spline'],splines['d2spline']
+        d3spline = splines['d3spline'],splines['d3spline']
+        spline_mask = splines['spline_mask'],splines['spline_mask']
+        log.general('\tThe template has no left/right asymetry')
+    else:
+        spline0 = splines['spline0_odd'], splines['spline0_even']
+        dspline = splines['dspline_odd'],splines['dspline_even']
+        d2spline = splines['d2spline_odd'],splines['d2spline_even']
+        d3spline = splines['d3spline_odd'],splines['d3spline_even']
+        spline_mask = splines['spline_mask_odd'],splines['spline_mask_even']
+        log.general('\tThe template has left/right asymetry handled with odd/even splines')
+
     # set up storage for the dv, d2v, d3v and corresponding rms values
     #    fill with NaNs
     dv = np.full(len(ref_table['WAVE_START']), np.nan)
@@ -1227,6 +1287,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             model_offset = 0
         # loop around each order and update model, dmodel, d2model, d3model
         for order_num in range(sci_data.shape[0]):
+            is_even = (order_num % 2) == 0
+
             # flags orders that have <3 lines
             # do not spend time on this order computing anything
             if width[order_num] == 0:
@@ -1239,13 +1301,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # get the low-frequency component out
             model_mask = np.ones_like(model[order_num])
             # add the spline mask values to model_mask (spline mask is 0 or 1)
-            smask = spline_mask(wave_ord) < 0.99
+            smask = spline_mask[is_even](wave_ord) < 0.99
             # set spline mask splined values to NaN
             model_mask[smask] = np.nan
             # RV shift the spline and correct for blaze and add model mask
             # TODO spline0 or spline depending on the type of filtering and
             #      normalization
-            model[order_num] = spline0(wave_ord) * blaze_ord * model_mask
+
+            model[order_num] = spline0[is_even](wave_ord) * blaze_ord * model_mask
             # we are so close in RV with RV_mean<10*sigma that there is no need
             # to do the low-pass filtering again
             if iteration == 0:
@@ -1279,7 +1342,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # if this is the first iteration update model0
             if iteration == 0:
                 # spline the original template and apply blaze
-                model0[order_num] = spline0(wave_ord) * blaze_ord
+                model0[order_num] = spline0[is_even](wave_ord) * blaze_ord
                 model0[order_num][model0[order_num] == 0] = np.nan
                 # get the good values for the median
                 valid = np.isfinite(model0[order_num])
@@ -1296,11 +1359,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     model0[order_num] = model0[order_num] * med_sci_data_0
             # update the other splines
             # track ratio if relevant
-            dmodel[order_num] = dspline(wave_ord) * blaze_ord * ratio[order_num]
+            dmodel[order_num] = dspline[is_even](wave_ord) * blaze_ord * ratio[order_num]
             # only do the d2 and d3 stuff if on last iteration
             if flag_last_iter:
-                d2model_ord = d2spline(wave_ord) * blaze_ord * ratio[order_num]
-                d3model_ord = d3spline(wave_ord) * blaze_ord * ratio[order_num]
+                d2model_ord = d2spline[is_even](wave_ord) * blaze_ord * ratio[order_num]
+                d3model_ord = d3spline[is_even](wave_ord) * blaze_ord * ratio[order_num]
                 d2model[order_num] = d2model_ord
                 d3model[order_num] = d3model_ord
                 # deal with residual projection tables if required

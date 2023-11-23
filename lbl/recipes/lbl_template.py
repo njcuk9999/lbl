@@ -163,8 +163,16 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # create a cube that contains one line for each file
     flux_cube = np.zeros([len(wavegrid), len(science_files)])
+    # we also keep track of odd/even order contributions
+    odd_cube = np.zeros([len(wavegrid), len(science_files)])
+    even_cube = np.zeros([len(wavegrid), len(science_files)])
+
     # weight cube to account for order overlap
     weight_cube = np.zeros([len(wavegrid), len(science_files)])
+    # same odd/even with the weights
+    odd_weight_cube = np.zeros([len(wavegrid), len(science_files)])
+    even_weight_cube = np.zeros([len(wavegrid), len(science_files)])
+
     # science table
     sci_table = dict()
     # all bervs
@@ -200,13 +208,29 @@ def __main__(inst: InstrumentsType, **kwargs):
             sci_wave = mp.doppler_shift(sci_wave, -berv[it])
         # set exactly zeros to NaNs
         sci_image[sci_image == 0] = np.nan
+
+
         # compute s1d from e2ds
         s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
                                                  sci_image, blazeimage,
                                                  wavegrid)
+        s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(inst.params, sci_wave[1::2],
+                                                 sci_image[1::2], blazeimage[1::2],
+                                                 wavegrid)
+        s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(inst.params, sci_wave[::2],
+                                                    sci_image[::2], blazeimage[::2],
+                                                    wavegrid)
         # push into arrays
         flux_cube[:, it] = s1d_flux
         weight_cube[:, it] = s1d_weight
+        # push into arrays (left)
+        odd_cube[:, it] = s1d_flux_odd
+        odd_weight_cube[:, it] = s1d_weight_odd
+        # push into arrays (right)
+        even_cube[:, it] = s1d_flux_even
+        even_weight_cube[:, it] = s1d_weight_even
+
+
     # -------------------------------------------------------------------------
     # Step 6. Creation of the template
     # -------------------------------------------------------------------------
@@ -216,14 +240,31 @@ def __main__(inst: InstrumentsType, **kwargs):
     flux_cube[bad_domain] = np.nan
     # set the weighting of bad pixels to 1
     weight_cube[bad_domain] = 1
+    # same for left
+    bad_domain = (odd_weight_cube == 0) | (odd_cube == 0)
+    odd_cube[bad_domain] = np.nan
+    odd_weight_cube[bad_domain] = 1
+    # same for right
+    bad_domain = (even_weight_cube == 0) | (even_cube == 0)
+    even_cube[bad_domain] = np.nan
+    even_weight_cube[bad_domain] = 1
+
     # -------------------------------------------------------------------------
     # print progress
     log.general('Calculating template')
     # divide by the weights (to correct for overlapping orders)
     flux_cube = flux_cube / weight_cube
+    # same for left
+    odd_cube = odd_cube / odd_weight_cube
+    # same for right
+    even_cube = even_cube / even_weight_cube
+
     # normalize each slice of the cube by its median
     for it in tqdm(range(len(science_files))):
-        flux_cube[:, it] = flux_cube[:, it] / np.nanmedian(flux_cube[:, it])
+        med = np.nanmedian(flux_cube[:, it])
+        flux_cube[:, it] = flux_cube[:, it] / med
+        odd_cube[:, it] = odd_cube[:, it] / med
+        even_cube[:, it] = even_cube[:, it] / med
 
     # copy
     flux_cube0 = np.array(flux_cube)
@@ -246,6 +287,10 @@ def __main__(inst: InstrumentsType, **kwargs):
                 # apply median filtered ratio (low frequency removal)
                 lowpass = mp.lowpassfilter(ratio, hp_width)
                 flux_cube[:, sci_it] /= lowpass
+                # deal with left and right. Same lowpass for both
+                odd_cube[:, sci_it] /= lowpass
+                even_cube[:, sci_it] /= lowpass
+
     else:
         with warnings.catch_warnings(record=True) as _:
             # calculate the median of the big cube
@@ -263,6 +308,9 @@ def __main__(inst: InstrumentsType, **kwargs):
                 # apply median filtered ratio (low frequency removal)
                 lowpass = mp.lowpassfilter(ratio, hp_width)
                 flux_cube[:, sci_it] /= lowpass
+                # deal with left and right. Same lowpass for both
+                odd_cube[:, sci_it] /= lowpass
+                even_cube[:, sci_it] /= lowpass
 
     # -------------------------------------------------------------------------
     # bin cube by BERV (to give equal weighting to epochs)
@@ -282,6 +330,10 @@ def __main__(inst: InstrumentsType, **kwargs):
         # get a flux cube for the binned by berv data
         fcube_shape = [flux_cube.shape[0], len(ubervbins)]
         flux_cube_bervbin = np.full(fcube_shape, np.nan)
+        # same for left and right
+        odd_cube_bervbin = np.full(fcube_shape, np.nan)
+        even_cube_bervbin = np.full(fcube_shape, np.nan)
+
         # loop around unique berv bings and merge entries via median
         for it, bervbin in enumerate(ubervbins):
             # get mask for those observations in berv bin
@@ -293,14 +345,25 @@ def __main__(inst: InstrumentsType, **kwargs):
             margs = [it + 1, len(ubervbins), n_obs]
             log.general(msg.format(*margs))
             # deal with minimum number of observations allowed
-            if n_obs < nmin_bervbin:
-                continue
+            #if n_obs < nmin_bervbin:
+            #    continue
             # add to the number of observations used
             nobs_bervbin[it] = n_obs
             # combine all observations in bin with median
             with warnings.catch_warnings(record=True) as _:
-                bervmed = np.nanmedian(flux_cube[:, good], axis=1)
+                if np.sum(good) >1:
+                    bervmed = np.nanmedian(flux_cube[:, good], axis=1)
+                    bervmed_odd = np.nanmedian(odd_cube[:, good], axis=1)
+                    bervmed_even = np.nanmedian(even_cube[:, good], axis=1)
+                else:
+                    bervmed = flux_cube[:, good].ravel()
+                    bervmed_odd = odd_cube[:, good].ravel()
+                    bervmed_even = even_cube[:, good].ravel()
                 flux_cube_bervbin[:, it] = bervmed
+                # same for left and right
+                odd_cube_bervbin[:, it] = bervmed_odd
+                even_cube_bervbin[:, it] = bervmed_even
+
         # calculate the number of observations used and berv bins used
         nfiles = np.sum(nobs_bervbin)
         total_nobs_berv = np.sum(nobs_bervbin != 0)
@@ -309,6 +372,10 @@ def __main__(inst: InstrumentsType, **kwargs):
     # else deal with non-science cases
     else:
         flux_cube_bervbin = flux_cube
+        # same for left and right
+        odd_cube_bervbin = odd_cube
+        even_cube_bervbin = even_cube
+
         # calculate the number of observations used
         total_nobs_berv = 0
         # calculate the number of observations and the berv coverage
@@ -329,21 +396,37 @@ def __main__(inst: InstrumentsType, **kwargs):
             log.general('computation done per-berv bin')
             p16, p50, p84 = np.nanpercentile(flux_cube_bervbin, [16, 50, 84],
                                              axis=1)
+            # same for left and right
+            p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube_bervbin, [16, 50, 84],
+                                                axis=1)
+            p16_even, p50_even, p84_even = np.nanpercentile(even_cube_bervbin, [16, 50, 84],
+                                                axis=1)
         else:
             # if too few berv bins, we take stats on whole cube rather than
             #    per-bervbin
             log.general('computation done per-file, not per-berv bin')
             p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
                                              axis=1)
+            # same for left and right
+            p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube, [16, 50, 84],
+                                                axis=1)
+            p16_even, p50_even, p84_even = np.nanpercentile(even_cube, [16, 50, 84],
+                                                axis=1)
         # calculate the rms of each wavelength element
         rms = (p84 - p16) / 2
+        # same for left and right
+        rms_odd = (p84_odd - p16_odd) / 2
+        rms_even = (p84_even - p16_even) / 2
 
     # -------------------------------------------------------------------------
     # Step 7. Write template
     # -------------------------------------------------------------------------
     # get props
+
     props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms,
-                 template_coverage=template_coverage,
+                 flux_odd=p50_odd, eflux_odd=rms_odd, flux_even=p50_even,
+                 eflux_even=rms_even, rms_odd = rms_odd,
+                 rms_even = rms_even, template_coverage=template_coverage,
                  total_nobs_berv=total_nobs_berv, template_nobs=nfiles)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)

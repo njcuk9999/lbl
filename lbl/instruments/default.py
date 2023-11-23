@@ -500,6 +500,12 @@ class Instrument:
         table1['flux'] = props['flux']
         table1['eflux'] = props['eflux']
         table1['rms'] = props['rms']
+        table1['flux_odd'] = props['flux_odd']
+        table1['eflux_odd'] = props['eflux_odd']
+        table1['rms_odd'] = props['rms_odd']
+        table1['flux_even'] = props['flux_even']
+        table1['eflux_even'] = props['eflux_even']
+        table1['rms_even'] = props['rms_even']
         # ---------------------------------------------------------------------
         # construct table 2 - the science list
         table2 = Table()
