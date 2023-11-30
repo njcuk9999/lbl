@@ -846,7 +846,15 @@ class HarpsN_ORIG(HarpsN):
         # check that this file exists
         io.check_file_exists(abspath)
         # read blaze file (data and header)
-        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        try:
+            blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        except ValueError as e:
+            # get only data if no header
+            if str(e) == "too many values to unpack (expected 2)":
+                blaze = io.load_fits(abspath, kind='blaze fits file')
+            else:
+                raise
+
         # normalize by order
         if normalize:
             # normalize blaze per order
