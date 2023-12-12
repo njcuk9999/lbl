@@ -514,6 +514,14 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     func_name = __NAME__ + '.get_systemic_vel_props()'
     # output return in a dictionary
     props = dict()
+    # check if there is an extension with the RV for all epochs
+    try:
+        from astropy.io import fits
+        from astropy.table import Table
+        props['SCI_TABLE'] = Table(fits.getdata(template_file,'SCI_TABLE'))
+    except:
+        print('No RV table found')
+
     # get the systemic velocity for mask
     props['MASK_SYS_VEL'] = inst.get_mask_systemic_vel(mask_file)
     # deal with non science files
@@ -1267,6 +1275,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # starting values for condition on the last_iteration = True/False
     rv_mean = np.inf
     bulk_error = 1.0
+
+    if 'SCI_TABLE' in systemic_props:
+        dt = systemic_props['SCI_TABLE']['KW_MJDATE'] - sci_hdr['MJDATE']
+        if np.min(np.abs(dt))<30:
+            imin = np.argmin(np.abs(dt))
+            model_velocity = -systemic_props['SCI_TABLE']['VSYS'][imin]
+            print('We know the model offset from the lookup table: {0:.4f} m/s'.format(model_velocity))
+
     # loop around iterations
     for iteration in range(compute_rv_n_iters):
         # log iteration
@@ -1687,7 +1703,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         log.general(msg.format(*margs))
         # ---------------------------------------------------------------------
         # get final rv value
-        rv_final = np.array(dv + sys_rv - berv)
+        rv_final = np.array(dv + sys_rv - berv + model_offset)
         # add mean rv to sys_rv
         sys_rv = sys_rv + rv_mean
         # get end time
@@ -1710,6 +1726,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             break
         # do a convergence check
         if np.abs(rv_mean) < (converge_thres * bulk_error):
+            msg = '\t\tConverged RV = {0:.2f} m/s, sigma = {1:.2f} m/s'
+            margs = [rv_mean, bulk_error]
+            log.general(msg.format(*margs))
+
             # One more iteration
             flag_last_iter = True
 
@@ -2098,7 +2118,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # if we don't have a calibration add plot values
         if not flag_calib:
             # plot specific math
-            xlim = [med_velo - 5000, med_velo + 5000]
+            xlim = [med_velo - 15000, med_velo + 15000]
             # get velocity range
             vrange = np.arange(xlim[0], xlim[1], 50.0)
             # storage for probability density function
@@ -2223,6 +2243,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # find valid velocity measurements
             good = np.isfinite(dv_arr[:, line_it])
             per_line_diff = (dv_arr[:, line_it] - rdb_dict['vrad'])
+
             # skip if less that 3 valid values for this line
             if np.sum(good) < 3:
                 per_line_mean[line_it] = np.nan
@@ -2240,7 +2261,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 sigma = (sig2 - sig1) / 2
                 sdv_arr[:, line_it] = sdv_arr[:, line_it] * sigma
 
-            # first output of pearsonr is the the correlation itself.
+            # first output of pearsonr is the correlation itself.
             # this is meaningless if we don't know the number of points
             # that came in. The second term is the likelihood that the
             # correlation is due to a statistical fluctuation (it significance)
@@ -2256,7 +2277,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 continue
             # get the difference and error for each line
             with warnings.catch_warnings(record=True) as _:
-                diff1 = dv_arr[:, line_it] - np.nanmedian(dv_arr[:, line_it])
+                diff1 = dv_arr[:, line_it] -  rdb_dict['vrad']
+                diff1 -= np.nanmedian(diff1)
             # here we avoid having a shallow copy
             err1 = np.array(sdv_arr[:, line_it])
             # try to guess the odd ratio mean

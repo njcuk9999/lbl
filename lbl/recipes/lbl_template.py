@@ -173,144 +173,185 @@ def __main__(inst: InstrumentsType, **kwargs):
     odd_weight_cube = np.zeros([len(wavegrid), len(science_files)])
     even_weight_cube = np.zeros([len(wavegrid), len(science_files)])
 
-    # science table
-    sci_table = dict()
-    # all bervs
-    berv = np.zeros_like(science_files, dtype=float)
-    # loop around files
-    for it, filename in enumerate(science_files):
+
+
+    rv0 = np.zeros_like(science_files, dtype=float)
+    for ite in range(3):
+        # science table
+        sci_table = dict()
+        # all bervs
+        berv = np.zeros_like(science_files, dtype=float)
+        # loop around files
+        for it, filename in enumerate(science_files):
+            # print progress
+            msg = 'Processing E2DS->S1D for file {0} of {1}'
+            margs = [it + 1, len(science_files)]
+            log.general(msg.format(*margs))
+            # select the first science file as a reference file
+            sci_image, sci_hdr = inst.load_science_file(filename)
+
+            # get wave solution for reference file
+            sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
+            # load blaze (just ones if not needed)
+            if blaze is None:
+                bargs = [filename, sci_image, sci_hdr, calib_dir]
+                bout = inst.load_blaze_from_science(*bargs, normalize=False)
+                blazeimage, blaze_flag = bout
+            else:
+                blaze_flag = False
+                blazeimage = np.array(blaze)
+            # deal with not having blaze (for s1d weighting)
+            if blaze_flag:
+                sci_image, blazeimage = inst.no_blaze_corr(sci_image, sci_wave)
+            # get the berv
+            berv[it] = inst.get_berv(sci_hdr)
+            # populate science table
+            sci_table = inst.populate_sci_table(filename, sci_table, sci_hdr,
+                                                berv=berv[it])
+
+            # apply berv if required
+            if berv[it] != 0.0:
+                sci_wave = mp.doppler_shift(sci_wave, -berv[it]+rv0[it])
+            # set exactly zeros to NaNs
+            sci_image[sci_image == 0] = np.nan
+
+
+            # compute s1d from e2ds
+            s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
+                                                     sci_image, blazeimage,
+                                                     wavegrid)
+            s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(inst.params, sci_wave[1::2],
+                                                     sci_image[1::2], blazeimage[1::2],
+                                                     wavegrid)
+            s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(inst.params, sci_wave[::2],
+                                                        sci_image[::2], blazeimage[::2],
+                                                        wavegrid)
+            # push into arrays
+            flux_cube[:, it] = s1d_flux
+            weight_cube[:, it] = s1d_weight
+            # push into arrays (left)
+            odd_cube[:, it] = s1d_flux_odd
+            odd_weight_cube[:, it] = s1d_weight_odd
+            # push into arrays (right)
+            even_cube[:, it] = s1d_flux_even
+            even_weight_cube[:, it] = s1d_weight_even
+
+
+        # -------------------------------------------------------------------------
+        # Step 6. Creation of the template
+        # -------------------------------------------------------------------------
+        # points are not valid where weight is zero or flux_cube is exactly zero
+        bad_domain = (weight_cube == 0) | (flux_cube == 0)
+        # set the bad fluxes to NaN
+        flux_cube[bad_domain] = np.nan
+        # set the weighting of bad pixels to 1
+        weight_cube[bad_domain] = 1
+        # same for left
+        bad_domain = (odd_weight_cube == 0) | (odd_cube == 0)
+        odd_cube[bad_domain] = np.nan
+        odd_weight_cube[bad_domain] = 1
+        # same for right
+        bad_domain = (even_weight_cube == 0) | (even_cube == 0)
+        even_cube[bad_domain] = np.nan
+        even_weight_cube[bad_domain] = 1
+
+        # -------------------------------------------------------------------------
         # print progress
-        msg = 'Processing E2DS->S1D for file {0} of {1}'
-        margs = [it + 1, len(science_files)]
-        log.general(msg.format(*margs))
-        # select the first science file as a reference file
-        sci_image, sci_hdr = inst.load_science_file(filename)
-        # get wave solution for reference file
-        sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
-        # load blaze (just ones if not needed)
-        if blaze is None:
-            bargs = [filename, sci_image, sci_hdr, calib_dir]
-            bout = inst.load_blaze_from_science(*bargs, normalize=False)
-            blazeimage, blaze_flag = bout
+        log.general('Calculating template')
+        # divide by the weights (to correct for overlapping orders)
+        flux_cube = flux_cube / weight_cube
+        # same for left
+        odd_cube = odd_cube / odd_weight_cube
+        # same for right
+        even_cube = even_cube / even_weight_cube
+
+        # normalize each slice of the cube by its median
+        for it in tqdm(range(len(science_files))):
+            med = np.nanmedian(flux_cube[:, it])
+            flux_cube[:, it] = flux_cube[:, it] / med
+            odd_cube[:, it] = odd_cube[:, it] / med
+            even_cube[:, it] = even_cube[:, it] / med
+
+        # copy
+        flux_cube0 = np.array(flux_cube)
+        # get the pixel hp_width [needs to be in m/s]
+        grid_step_original = general.get_velocity_step(refwave, rounding=False)
+
+        hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step_original))
+        # -------------------------------------------------------------------------
+        # applying low pass filter
+        log.general('\tApplying low pass filter to cube')
+        # deal with science
+        if inst.params['DATA_TYPE'] == 'SCIENCE':
+            with warnings.catch_warnings(record=True) as _:
+                # calculate the median of the big cube
+                median = mp.nanmedian(flux_cube, axis=1)
+                # iterate until low frequency gone
+                for sci_it in tqdm(range(flux_cube.shape[1])):
+                    # remove the stellar features
+                    ratio = flux_cube[:, sci_it] / median
+                    # apply median filtered ratio (low frequency removal)
+                    lowpass = mp.lowpassfilter(ratio, hp_width)
+                    flux_cube[:, sci_it] /= lowpass
+                    # deal with left and right. Same lowpass for both
+                    odd_cube[:, sci_it] /= lowpass
+                    even_cube[:, sci_it] /= lowpass
+
         else:
-            blaze_flag = False
-            blazeimage = np.array(blaze)
-        # deal with not having blaze (for s1d weighting)
-        if blaze_flag:
-            sci_image, blazeimage = inst.no_blaze_corr(sci_image, sci_wave)
-        # get the berv
-        berv[it] = inst.get_berv(sci_hdr)
-        # populate science table
-        sci_table = inst.populate_sci_table(filename, sci_table, sci_hdr,
-                                            berv=berv[it])
-        # apply berv if required
-        if berv[it] != 0.0:
-            sci_wave = mp.doppler_shift(sci_wave, -berv[it])
-        # set exactly zeros to NaNs
-        sci_image[sci_image == 0] = np.nan
+            with warnings.catch_warnings(record=True) as _:
+                # calculate the median of the big cube
+                median = mp.nanmedian(flux_cube, axis=1)
+                # mask to keep only FP peaks and avoid dividing
+                # two small values (minima between lines in median and
+                # individual spectrum) when computing the lowpass
+                peaks = median > mp.lowpassfilter(median, hp_width)
+                # iterate until low frequency gone
+                for sci_it in tqdm(range(flux_cube.shape[1])):
+                    # remove the stellar features
+                    ratio = flux_cube[:, sci_it] / median
+                    ratio[~peaks] = np.nan
 
+                    # apply median filtered ratio (low frequency removal)
+                    lowpass = mp.lowpassfilter(ratio, hp_width)
+                    flux_cube[:, sci_it] /= lowpass
+                    # deal with left and right. Same lowpass for both
+                    odd_cube[:, sci_it] /= lowpass
+                    even_cube[:, sci_it] /= lowpass
 
-        # compute s1d from e2ds
-        s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                 sci_image, blazeimage,
-                                                 wavegrid)
-        s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(inst.params, sci_wave[1::2],
-                                                 sci_image[1::2], blazeimage[1::2],
-                                                 wavegrid)
-        s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(inst.params, sci_wave[::2],
-                                                    sci_image[::2], blazeimage[::2],
-                                                    wavegrid)
-        # push into arrays
-        flux_cube[:, it] = s1d_flux
-        weight_cube[:, it] = s1d_weight
-        # push into arrays (left)
-        odd_cube[:, it] = s1d_flux_odd
-        odd_weight_cube[:, it] = s1d_weight_odd
-        # push into arrays (right)
-        even_cube[:, it] = s1d_flux_even
-        even_weight_cube[:, it] = s1d_weight_even
+        dv = np.arange(-50,50)
+        sig = np.zeros_like(dv,dtype = float)
 
+        from scipy.constants import c
+        import matplotlib.pyplot as plt
+        def sigma(tmp):
+            return np.nanmedian(np.abs(tmp - np.nanmedian(tmp)))
+        def gauss(x, a, x0, sigma, zp):
+            return zp + a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
-    # -------------------------------------------------------------------------
-    # Step 6. Creation of the template
-    # -------------------------------------------------------------------------
-    # points are not valid where weight is zero or flux_cube is exactly zero
-    bad_domain = (weight_cube == 0) | (flux_cube == 0)
-    # set the bad fluxes to NaN
-    flux_cube[bad_domain] = np.nan
-    # set the weighting of bad pixels to 1
-    weight_cube[bad_domain] = 1
-    # same for left
-    bad_domain = (odd_weight_cube == 0) | (odd_cube == 0)
-    odd_cube[bad_domain] = np.nan
-    odd_weight_cube[bad_domain] = 1
-    # same for right
-    bad_domain = (even_weight_cube == 0) | (even_cube == 0)
-    even_cube[bad_domain] = np.nan
-    even_weight_cube[bad_domain] = 1
+        from scipy.optimize import curve_fit
+        dv_step = c/np.nanmedian(wavegrid/np.gradient(wavegrid))
 
-    # -------------------------------------------------------------------------
-    # print progress
-    log.general('Calculating template')
-    # divide by the weights (to correct for overlapping orders)
-    flux_cube = flux_cube / weight_cube
-    # same for left
-    odd_cube = odd_cube / odd_weight_cube
-    # same for right
-    even_cube = even_cube / even_weight_cube
+        rms_domain = (wavegrid>1500)*(wavegrid<1750)
+        tmp_flux_cube = np.array(flux_cube[rms_domain,:])
+        med = np.nanmedian(tmp_flux_cube, axis=1)
+        stride = 2
 
-    # normalize each slice of the cube by its median
-    for it in tqdm(range(len(science_files))):
-        med = np.nanmedian(flux_cube[:, it])
-        flux_cube[:, it] = flux_cube[:, it] / med
-        odd_cube[:, it] = odd_cube[:, it] / med
-        even_cube[:, it] = even_cube[:, it] / med
+        delta_rv0 = np.zeros(flux_cube.shape[1])
+        for sci_it in tqdm(range(flux_cube.shape[1])):
+            for idv in range(len(dv)):
+                tmp = np.roll(tmp_flux_cube[:, sci_it], dv[idv]) - med
+                sig[idv] = sigma(tmp[::stride])
+            sig/=np.nanmedian(sig)
 
-    # copy
-    flux_cube0 = np.array(flux_cube)
-    # get the pixel hp_width [needs to be in m/s]
-    grid_step_original = general.get_velocity_step(refwave, rounding=False)
+            p0 = [1-np.min(sig), dv[np.argmin(sig)], 1, 1]
+            fit, _ = curve_fit(gauss, dv, sig, p0=p0)
+            delta_rv0[sci_it] = -fit[1]*dv_step
+            plt.plot(dv,sig,alpha = 0.5)
+        plt.show()
+        rv0 += delta_rv0
 
-    hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 / grid_step_original))
-    # -------------------------------------------------------------------------
-    # applying low pass filter
-    log.general('\tApplying low pass filter to cube')
-    # deal with science
-    if inst.params['DATA_TYPE'] == 'SCIENCE':
-        with warnings.catch_warnings(record=True) as _:
-            # calculate the median of the big cube
-            median = mp.nanmedian(flux_cube, axis=1)
-            # iterate until low frequency gone
-            for sci_it in tqdm(range(flux_cube.shape[1])):
-                # remove the stellar features
-                ratio = flux_cube[:, sci_it] / median
-                # apply median filtered ratio (low frequency removal)
-                lowpass = mp.lowpassfilter(ratio, hp_width)
-                flux_cube[:, sci_it] /= lowpass
-                # deal with left and right. Same lowpass for both
-                odd_cube[:, sci_it] /= lowpass
-                even_cube[:, sci_it] /= lowpass
+    sci_table['VSYS'] = rv0
 
-    else:
-        with warnings.catch_warnings(record=True) as _:
-            # calculate the median of the big cube
-            median = mp.nanmedian(flux_cube, axis=1)
-            # mask to keep only FP peaks and avoid dividing
-            # two small values (minima between lines in median and
-            # individual spectrum) when computing the lowpass
-            peaks = median > mp.lowpassfilter(median, hp_width)
-            # iterate until low frequency gone
-            for sci_it in tqdm(range(flux_cube.shape[1])):
-                # remove the stellar features
-                ratio = flux_cube[:, sci_it] / median
-                ratio[~peaks] = np.nan
-
-                # apply median filtered ratio (low frequency removal)
-                lowpass = mp.lowpassfilter(ratio, hp_width)
-                flux_cube[:, sci_it] /= lowpass
-                # deal with left and right. Same lowpass for both
-                odd_cube[:, sci_it] /= lowpass
-                even_cube[:, sci_it] /= lowpass
 
     # -------------------------------------------------------------------------
     # bin cube by BERV (to give equal weighting to epochs)

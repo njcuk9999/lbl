@@ -256,7 +256,7 @@ params.set(key='ROUGH_CCF_EWIDTH_GUESS', value=2000, source=__NAME__,
            desc='The rough CCF ewidth guess for fit in m/s')
 
 # define the number of iterations to do to converge during compute rv
-params.set(key='COMPUTE_RV_N_ITERATIONS', value=20, source=__NAME__,
+params.set(key='COMPUTE_RV_N_ITERATIONS', value=40, source=__NAME__,
            desc='The number of iterations to do to converge during compute RV')
 
 # define the plot order for compute rv model plot
@@ -273,12 +273,12 @@ params.set(key='COMPUTE_LINE_NSIG_THRES', value=8, source=__NAME__,
 
 # define the fraction of the bulk error the rv mean must be above for compute
 #   rv to have converged
-params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=1.0, source=__NAME__,
+params.set(key='COMPUTE_RV_BULK_ERROR_CONVERGENCE', value=0.1, source=__NAME__,
            desc='fraction of the bulk error the rv mean must be above for '
                 'compute rv to perform one more iteration')
 
 # define the maximum number of iterations deemed to lead to a good RV
-params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=15, source=__NAME__,
+params.set(key='COMPUTE_RV_MAX_N_GOOD_ITERS', value=35, source=__NAME__,
            desc='The maximum number of iterations deemed to lead to a good RV')
 
 # define the number of sigma to clip based on the rms away from the model

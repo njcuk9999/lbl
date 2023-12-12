@@ -465,7 +465,7 @@ class Instrument:
                       dtype=datatypelist, names=name_list)
 
     def write_template(self, template_file: str, props: dict,
-                       sci_hdict: io.LBLHeader, sci_table: dict):
+                       sci_hdict: io.LBLHeader, sci_table):
         """
         Write the template file to disk
 
@@ -474,6 +474,7 @@ class Instrument:
         :param sci_hdict: fits Header, an input file header to copy the header
                           from to the new template file
         :param sci_table: dict, the science table in dictionary form
+        :param tbl_quality: Table, the quality table for input
         :return:
         """
         # convert hdict to fits header
@@ -516,9 +517,10 @@ class Instrument:
         log.general('Saving template to file: {0}'.format(template_file))
         # ---------------------------------------------------------------------
         # write to file
-        io.write_fits(template_file, data=[None, table1, table2],
+        io.write_fits(template_file, data=[None, table1, table2, ],
                       header=[header, None, None],
-                      dtype=[None, 'table', 'table'])
+                      dtype=[None, 'table', 'table'], names = [None, 'TEMPLATE',
+                                                              'SCI_TABLE'])
 
     def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
                             sci_hdict: io.LBLHeader,
