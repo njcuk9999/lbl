@@ -573,6 +573,7 @@ def load_hdu(filename: str,
     hdu.verify('silentfix')
     return hdu
 
+
 def load_fits(filename: str,
               kind: Union[str, None] = None,
               extnum: Optional[int] = None,
