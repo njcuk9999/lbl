@@ -569,6 +569,7 @@ def load_hdu(filename: str,
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
+    # attempt to verify hdu https://github.com/njcuk9999/lbl/pull/44
     hdu.verify('silentfix')
     return hdu
 
