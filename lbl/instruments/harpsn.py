@@ -845,15 +845,8 @@ class HarpsN_ORIG(HarpsN):
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
         io.check_file_exists(abspath)
-        # read blaze file (data and header)
-        try:
-            blaze, _ = io.load_fits(abspath, kind='blaze fits file')
-        except ValueError as e:
-            # get only data if no header
-            if str(e) == "too many values to unpack (expected 2)":
-                blaze = io.load_fits(abspath, kind='blaze fits file')
-            else:
-                raise
+        # read blaze file
+        blaze = io.load_fits(abspath, kind='blaze fits file')
 
         # normalize by order
         if normalize:
