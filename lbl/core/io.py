@@ -541,9 +541,9 @@ def clean_directory(path: str, logmsg: bool = True,
 # Define fits functions
 # =============================================================================
 def load_hdu(filename: str,
-                kind: Union[str, None] = None,
-                extnum: Optional[int] = None,
-                extname: Optional[str] = None) -> fits.HDUList:
+              kind: Union[str, None] = None,
+              extnum: Optional[int] = None,
+              extname: Optional[str] = None) -> fits.HDUList:
     """
     Standard way to load fits header-data unit
 
