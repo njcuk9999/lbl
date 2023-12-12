@@ -540,6 +540,38 @@ def clean_directory(path: str, logmsg: bool = True,
 # =============================================================================
 # Define fits functions
 # =============================================================================
+def load_hdu(filename: str,
+                kind: Union[str, None] = None,
+                extnum: Optional[int] = None,
+                extname: Optional[str] = None) -> fits.HDUList:
+    """
+    Standard way to load fits header-data unit
+
+    :param filename: str, the filename
+    :param kind: the kind (for error message)
+    :param extnum: int, the extension number (if not given uses first)
+    :param extname: the extension name (if not given uses extnum)
+
+    :return: FITS header, the header
+    """
+    # deal with no kind
+    if kind is None:
+        kind = 'fits file'
+    # try to load fits file
+    try:
+        if extnum is not None:
+            hdu = fits.open(filename, ext=extnum)
+        elif extname is not None:
+            hdu = fits.open(filename, extname=extname)
+        else:
+            hdu = fits.open(filename, extname=extname)
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    hdu.verify('silentfix')
+    return hdu
+
 def load_fits(filename: str,
               kind: Union[str, None] = None,
               extnum: Optional[int] = None,
