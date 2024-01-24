@@ -573,7 +573,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
 
         # apply mask to keep
         keep[good] = True
-        print(np.mean(good))
+
     # mask the mask table
     mask_table = mask_table[keep]
     # ---------------------------------------------------------------------
@@ -597,7 +597,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         # shift the mask by dv for this iteration
         pos = mp.doppler_shift(mask_table['ll_mask_s'], -dv[it])
         # calculate the ccf for this iteration
-        ccf_vector[it] = mp.nansum(mask_table['w_mask'] * sps(pos))
+        ccf_vector[it] = mp.nansum(mask_table['depth'] * sps(pos))
     # CCF can be normalized to its median as we have only used
     # features in absorption rather than the 'full'
     ccf_vector /= np.nanmedian(ccf_vector)
@@ -1229,10 +1229,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
     # correction of the model from the low-passed ratio of science to model
     ratio = np.zeros_like(sci_data)
+
     # get the splines out of the spline dictionary
-
-    print(splines.keys())
-
     if 'spline0_odd' not in splines:
         spline0 = splines['spline0'], splines['spline0']
         dspline = splines['dspline'],splines['dspline']
@@ -1275,13 +1273,6 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # starting values for condition on the last_iteration = True/False
     rv_mean = np.inf
     bulk_error = 1.0
-
-    if 'SCI_TABLE' in systemic_props:
-        dt = systemic_props['SCI_TABLE']['KW_MJDATE'] - sci_hdr['MJDATE']
-        if np.min(np.abs(dt))<30:
-            imin = np.argmin(np.abs(dt))
-            model_velocity = -systemic_props['SCI_TABLE']['VSYS'][imin]
-            print('We know the model offset from the lookup table: {0:.4f} m/s'.format(model_velocity))
 
     # loop around iterations
     for iteration in range(compute_rv_n_iters):

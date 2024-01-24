@@ -331,7 +331,10 @@ def __main__(inst: InstrumentsType, **kwargs):
         from scipy.optimize import curve_fit
         dv_step = c/np.nanmedian(wavegrid/np.gradient(wavegrid))
 
-        rms_domain = (wavegrid>1500)*(wavegrid<1750)
+
+        cut_low = inst.params['COMPIL_SLOPE_REF_WAVE']*0.95
+        cut_high = inst.params['COMPIL_SLOPE_REF_WAVE']*1.05
+        rms_domain = (wavegrid>cut_low)*(wavegrid<cut_high)
         tmp_flux_cube = np.array(flux_cube[rms_domain,:])
         med = np.nanmedian(tmp_flux_cube, axis=1)
         stride = 2
@@ -346,8 +349,8 @@ def __main__(inst: InstrumentsType, **kwargs):
             p0 = [1-np.min(sig), dv[np.argmin(sig)], 1, 1]
             fit, _ = curve_fit(gauss, dv, sig, p0=p0)
             delta_rv0[sci_it] = -fit[1]*dv_step
-            plt.plot(dv,sig,alpha = 0.5)
-        plt.show()
+            #plt.plot(dv,sig,alpha = 0.5)
+        #plt.show()
         rv0 += delta_rv0
 
     sci_table['VSYS'] = rv0
