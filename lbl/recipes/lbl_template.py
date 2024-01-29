@@ -161,22 +161,44 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 5: Loop around each file and load into cube
     # -------------------------------------------------------------------------
+
+    # We do not want to put to overwhelm the memory, so we construct the
+    # flux cube with a hierarchcal binning. We first determine the number of
+    # files and and we have too many, we stack every Nth file into a smaller
+    # cube .
+
+    # We first determine the number of files and and we have too many, we stack
+    # every Nth file into a smaller cube
+    #
+    # TODO -> have the number of bins as a global parameter
+    Nmaxbins = 19
+    nbin = np.min([Nmaxbins,len(science_files)])
+
     # create a cube that contains one line for each file
-    flux_cube = np.zeros([len(wavegrid), len(science_files)])
+    flux_cube = np.zeros([len(wavegrid), nbin])
     # we also keep track of odd/even order contributions
-    odd_cube = np.zeros([len(wavegrid), len(science_files)])
-    even_cube = np.zeros([len(wavegrid), len(science_files)])
+    odd_cube = np.zeros([len(wavegrid), nbin])
+    even_cube = np.zeros([len(wavegrid), nbin])
 
     # weight cube to account for order overlap
-    weight_cube = np.zeros([len(wavegrid), len(science_files)])
+    weight_cube = np.zeros([len(wavegrid), nbin])
     # same odd/even with the weights
-    odd_weight_cube = np.zeros([len(wavegrid), len(science_files)])
-    even_weight_cube = np.zeros([len(wavegrid), len(science_files)])
-
-
+    odd_weight_cube = np.zeros([len(wavegrid), nbin])
+    even_weight_cube = np.zeros([len(wavegrid), nbin])
 
     rv0 = np.zeros_like(science_files, dtype=float)
-    for ite in range(3):
+    drv0 = np.zeros_like(science_files, dtype=float)
+
+    berv = np.zeros_like(science_files, dtype=float)
+    for i in range(len(science_files)):
+        sci_image, sci_hdr = inst.load_science_file(science_files[i])
+        berv[i] = inst.get_berv(sci_hdr)
+
+    # we distribute the files in bins of equal size ordered by berv
+    # Files with nearly the same berv will be in the same bin
+    ibin = np.array(nbin*(np.argsort(berv)/len(berv)),dtype = int)
+
+    for ite in range(5):
         # science table
         sci_table = dict()
         # all bervs
@@ -192,6 +214,7 @@ def __main__(inst: InstrumentsType, **kwargs):
 
             # get wave solution for reference file
             sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
+
             # load blaze (just ones if not needed)
             if blaze is None:
                 bargs = [filename, sci_image, sci_hdr, calib_dir]
@@ -215,26 +238,82 @@ def __main__(inst: InstrumentsType, **kwargs):
             # set exactly zeros to NaNs
             sci_image[sci_image == 0] = np.nan
 
+            if ite !=0:
+                s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
+                                                         sci_image, blazeimage,
+                                                         wavegrid)
 
-            # compute s1d from e2ds
-            s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                     sci_image, blazeimage,
-                                                     wavegrid)
+                # if we are not at ite ==0, we scan to find an RV offset to register all spectra
+                dv = np.arange(-50, 50)
+                sig = np.zeros_like(dv, dtype=float)
+
+                cut_low = inst.params['COMPIL_SLOPE_REF_WAVE'] * 0.95
+                cut_high = inst.params['COMPIL_SLOPE_REF_WAVE'] * 1.05
+                rms_domain = (wavegrid > cut_low) * (wavegrid < cut_high)
+
+                tmp_flux_cube = np.array(flux_cube[rms_domain, :])
+                med = np.nanmedian(tmp_flux_cube, axis=1)
+
+                s1d_flux_tmp = s1d_flux[rms_domain]
+
+                med/= mp.lowpassfilter(med, hp_width)
+                s1d_flux_tmp/= mp.lowpassfilter(s1d_flux_tmp, hp_width)
+
+
+                for idv in range(len(dv)):
+                    tmp = np.roll(s1d_flux_tmp, dv[idv]) / med
+                    n1, p1 = np.nanpercentile(tmp, [16, 84])
+                    sig[idv] = (p1 - n1)/2.0
+                sig /= np.nanmedian(sig)
+                imin = np.argmin(sig)
+                # just to avoid dummy edge effects
+                if imin == 0:
+                    imin = 1
+                if imin == len(sig)-1:
+                    imin = len(sig)-2
+
+                fit = np.polyfit(dv[imin-1:imin+2], sig[imin-1:imin+2], 2)
+                drv0[it] = -fit[1] / (2 * fit[0]) * grid_step_magic
+
+                msg = 'Approx RV shift for file {0} of {1} : {2:.1f}m/s'
+                margs = [it + 1, len(science_files), drv0[it]]
+                log.general(msg.format(*margs))
+
+                rv0[it]-= drv0[it]
+
+                # get wave solution for reference file.
+                sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
+                sci_wave = mp.doppler_shift(sci_wave, -berv[it]+rv0[it])
+
+                # compute s1d from e2ds
+                # with an updated wavelength grid
+                s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
+                                                         sci_image, blazeimage,
+                                                         wavegrid)
+            else:
+                # compute s1d from e2ds
+                s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
+                                                         sci_image, blazeimage,
+                                                         wavegrid)
+
+            # these two see the updated wavelength grid if we are not at ite ==0
             s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(inst.params, sci_wave[1::2],
                                                      sci_image[1::2], blazeimage[1::2],
                                                      wavegrid)
             s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(inst.params, sci_wave[::2],
                                                         sci_image[::2], blazeimage[::2],
                                                         wavegrid)
+
             # push into arrays
-            flux_cube[:, it] = s1d_flux
-            weight_cube[:, it] = s1d_weight
+            flux_cube[:, ibin[it]] += s1d_flux
+            weight_cube[:, it % nbin] += s1d_weight
             # push into arrays (left)
-            odd_cube[:, it] = s1d_flux_odd
-            odd_weight_cube[:, it] = s1d_weight_odd
+            odd_cube[:, ibin[it]] += s1d_flux_odd
+            odd_weight_cube[:, ibin[it]] += s1d_weight_odd
             # push into arrays (right)
-            even_cube[:, it] = s1d_flux_even
-            even_weight_cube[:, it] = s1d_weight_even
+            even_cube[:, ibin[it]] += s1d_flux_even
+            even_weight_cube[:, ibin[it]] += s1d_weight_even
+
 
 
         # -------------------------------------------------------------------------
@@ -266,7 +345,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         even_cube = even_cube / even_weight_cube
 
         # normalize each slice of the cube by its median
-        for it in tqdm(range(len(science_files))):
+        for it in tqdm(range(flux_cube.shape[1])):
             med = np.nanmedian(flux_cube[:, it])
             flux_cube[:, it] = flux_cube[:, it] / med
             odd_cube[:, it] = odd_cube[:, it] / med
@@ -318,43 +397,16 @@ def __main__(inst: InstrumentsType, **kwargs):
                     odd_cube[:, sci_it] /= lowpass
                     even_cube[:, sci_it] /= lowpass
 
-        dv = np.arange(-50,50)
-        sig = np.zeros_like(dv,dtype = float)
+        if ite !=0:
+            msg = 'Looping on files; relative RV shift RMS {:.1f}m/s'.format(np.nanstd(drv0))
+            log.general(msg)
+            # TODO --> have the threshold as a variable
+            # if an RMS < 100m/s, we are happy, we exit the loop on relative RV shifts
+            if np.nanstd(drv0)<100:
+                break
 
-        from scipy.constants import c
-        import matplotlib.pyplot as plt
-        def sigma(tmp):
-            return np.nanmedian(np.abs(tmp - np.nanmedian(tmp)))
-        def gauss(x, a, x0, sigma, zp):
-            return zp + a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
-
-        from scipy.optimize import curve_fit
-        dv_step = c/np.nanmedian(wavegrid/np.gradient(wavegrid))
-
-
-        cut_low = inst.params['COMPIL_SLOPE_REF_WAVE']*0.95
-        cut_high = inst.params['COMPIL_SLOPE_REF_WAVE']*1.05
-        rms_domain = (wavegrid>cut_low)*(wavegrid<cut_high)
-        tmp_flux_cube = np.array(flux_cube[rms_domain,:])
-        med = np.nanmedian(tmp_flux_cube, axis=1)
-        stride = 2
-
-        delta_rv0 = np.zeros(flux_cube.shape[1])
-        for sci_it in tqdm(range(flux_cube.shape[1])):
-            for idv in range(len(dv)):
-                tmp = np.roll(tmp_flux_cube[:, sci_it], dv[idv]) - med
-                sig[idv] = sigma(tmp[::stride])
-            sig/=np.nanmedian(sig)
-
-            p0 = [1-np.min(sig), dv[np.argmin(sig)], 1, 1]
-            fit, _ = curve_fit(gauss, dv, sig, p0=p0)
-            delta_rv0[sci_it] = -fit[1]*dv_step
-            #plt.plot(dv,sig,alpha = 0.5)
-        #plt.show()
-        rv0 += delta_rv0
 
     sci_table['VSYS'] = rv0
-
 
     # -------------------------------------------------------------------------
     # bin cube by BERV (to give equal weighting to epochs)
@@ -363,104 +415,33 @@ def __main__(inst: InstrumentsType, **kwargs):
     nmin_bervbin = inst.params['BERVBIN_MIN_ENTRIES']
     # get the size of the berv bins
     bervbin_size = inst.params['BERVBIN_SIZE']
-    # only for science data
-    if inst.params['DATA_TYPE'] == 'SCIENCE':
-        # get the berv bin centers
-        bervbins = berv // bervbin_size
-        # find unique berv bins
-        ubervbins = np.unique(bervbins)
-        # storage the number of observations per berv bin
-        nobs_bervbin = np.zeros_like(ubervbins, dtype=int)
-        # get a flux cube for the binned by berv data
-        fcube_shape = [flux_cube.shape[0], len(ubervbins)]
-        flux_cube_bervbin = np.full(fcube_shape, np.nan)
-        # same for left and right
-        odd_cube_bervbin = np.full(fcube_shape, np.nan)
-        even_cube_bervbin = np.full(fcube_shape, np.nan)
 
-        # loop around unique berv bings and merge entries via median
-        for it, bervbin in enumerate(ubervbins):
-            # get mask for those observations in berv bin
-            good = bervbins == bervbin
-            # count the number of observation in this berv bin
-            n_obs = np.sum(good)
-            # log progress message
-            msg = 'Computing BERV bin {0} of {1}, n files = {2}'
-            margs = [it + 1, len(ubervbins), n_obs]
-            log.general(msg.format(*margs))
-            # deal with minimum number of observations allowed
-            #if n_obs < nmin_bervbin:
-            #    continue
-            # add to the number of observations used
-            nobs_bervbin[it] = n_obs
-            # combine all observations in bin with median
-            with warnings.catch_warnings(record=True) as _:
-                if np.sum(good) >1:
-                    bervmed = np.nanmedian(flux_cube[:, good], axis=1)
-                    bervmed_odd = np.nanmedian(odd_cube[:, good], axis=1)
-                    bervmed_even = np.nanmedian(even_cube[:, good], axis=1)
-                else:
-                    bervmed = flux_cube[:, good].ravel()
-                    bervmed_odd = odd_cube[:, good].ravel()
-                    bervmed_even = even_cube[:, good].ravel()
-                flux_cube_bervbin[:, it] = bervmed
-                # same for left and right
-                odd_cube_bervbin[:, it] = bervmed_odd
-                even_cube_bervbin[:, it] = bervmed_even
-
-        # calculate the number of observations used and berv bins used
-        nfiles = np.sum(nobs_bervbin)
-        total_nobs_berv = np.sum(nobs_bervbin != 0)
-        # calculate the number of observations and the berv coverage
-        template_coverage = total_nobs_berv * grid_step_original / 1000
-    # else deal with non-science cases
-    else:
-        flux_cube_bervbin = flux_cube
-        # same for left and right
-        odd_cube_bervbin = odd_cube
-        even_cube_bervbin = even_cube
-
-        # calculate the number of observations used
-        total_nobs_berv = 0
-        # calculate the number of observations and the berv coverage
-        template_coverage = 0
-        # we use all files
-        nfiles = len(science_files)
-        # Set uberv bins
-        ubervbins = []
 
     # -------------------------------------------------------------------------
     # get the median and +/- 1 sigma values for the cube
     # -------------------------------------------------------------------------
     log.general('Calculate 16th, 50th and 84th percentiles')
     with warnings.catch_warnings(record=True) as _:
-        if len(ubervbins) > 3:
-            # to get statistics on the ber-bin rms, we need more than 3
-            # bervbins
-            log.general('computation done per-berv bin')
-            p16, p50, p84 = np.nanpercentile(flux_cube_bervbin, [16, 50, 84],
-                                             axis=1)
-            # same for left and right
-            p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube_bervbin, [16, 50, 84],
-                                                axis=1)
-            p16_even, p50_even, p84_even = np.nanpercentile(even_cube_bervbin, [16, 50, 84],
-                                                axis=1)
-        else:
-            # if too few berv bins, we take stats on whole cube rather than
-            #    per-bervbin
-            log.general('computation done per-file, not per-berv bin')
-            p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
-                                             axis=1)
-            # same for left and right
-            p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube, [16, 50, 84],
-                                                axis=1)
-            p16_even, p50_even, p84_even = np.nanpercentile(even_cube, [16, 50, 84],
-                                                axis=1)
+        # to get statistics on the ber-bin rms, we need more than 3
+        # bervbins
+        log.general('computation done per-berv bin')
+        p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
+                                         axis=1)
+        # same for left and right
+        p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube, [16, 50, 84],
+                                            axis=1)
+        p16_even, p50_even, p84_even = np.nanpercentile(even_cube, [16, 50, 84],
+                                            axis=1)
         # calculate the rms of each wavelength element
         rms = (p84 - p16) / 2
         # same for left and right
         rms_odd = (p84_odd - p16_odd) / 2
         rms_even = (p84_even - p16_even) / 2
+
+    nfiles = len(science_files)
+    # TODO -- use the same as in APERO with the smart weight in BERV
+    template_coverage = len(np.unique(berv//1000)) # in km/s
+    total_nobs_berv = len(np.unique(berv//1000)) # in m/s
 
     # -------------------------------------------------------------------------
     # Step 7. Write template

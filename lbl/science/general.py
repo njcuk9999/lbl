@@ -512,6 +512,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
                            mask_file: str) -> Dict[str, Any]:
     # set the function name
     func_name = __NAME__ + '.get_systemic_vel_props()'
+
     # output return in a dictionary
     props = dict()
     # check if there is an extension with the RV for all epochs
@@ -520,7 +521,9 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         from astropy.table import Table
         props['SCI_TABLE'] = Table(fits.getdata(template_file,'SCI_TABLE'))
     except:
-        print('No RV table found')
+        msg = 'No RV table found'
+        log.general(msg)
+
 
     # get the systemic velocity for mask
     props['MASK_SYS_VEL'] = inst.get_mask_systemic_vel(mask_file)
@@ -534,6 +537,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         props['EARS'] = np.nan
         props['EXPO'] = np.nan
         return props
+
     # get the object name
     sci_objname = inst.params['OBJECT_SCIENCE']
     template_objname = inst.params['OBJECT_TEMPLATE']
@@ -1332,7 +1336,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 part1 = sci_data[order_num]
                 part2 = model[order_num]
                 part2[part2 == 0] = np.nan
-                ratio[order_num] = mp.lowpassfilter(part1 / part2, int(width[order_num]), k=3)
+                with warnings.catch_warnings(record=True):
+                    ratio[order_num] = mp.lowpassfilter(part1 / part2, int(width[order_num]), k=3)
                 if order_num == 0:
                     log.general('\t\tLow-pass match of model to science ratio')
 
