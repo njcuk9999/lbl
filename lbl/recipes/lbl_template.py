@@ -167,11 +167,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # files and and we have too many, we stack every Nth file into a smaller
     # cube .
 
-    # We first determine the number of files and and we have too many, we stack
+    # We first determine the number of files and we have too many, we stack
     # every Nth file into a smaller cube
-    #
-    # TODO -> have the number of bins as a global parameter
-    Nmaxbins = 19
+    Nmaxbins = inst.params['TEMPLATE_MEDBINMAX']
     nbin = np.min([Nmaxbins,len(science_files)])
 
     # create a cube that contains one line for each file
@@ -246,7 +244,9 @@ def __main__(inst: InstrumentsType, **kwargs):
                 # if we are not at ite ==0, we scan to find an RV offset to register all spectra
                 dv = np.arange(-50, 50)
                 sig = np.zeros_like(dv, dtype=float)
-
+                # We use the central point of the slope, which is always selected as to be the
+                # cleanest, with most RV content, and with the highest S/N. We use a narrow
+                # domain around the point for the optimisation of template RV shift.
                 cut_low = inst.params['COMPIL_SLOPE_REF_WAVE'] * 0.95
                 cut_high = inst.params['COMPIL_SLOPE_REF_WAVE'] * 1.05
                 rms_domain = (wavegrid > cut_low) * (wavegrid < cut_high)
@@ -258,7 +258,6 @@ def __main__(inst: InstrumentsType, **kwargs):
 
                 med/= mp.lowpassfilter(med, hp_width)
                 s1d_flux_tmp/= mp.lowpassfilter(s1d_flux_tmp, hp_width)
-
 
                 for idv in range(len(dv)):
                     tmp = np.roll(s1d_flux_tmp, dv[idv]) / med
@@ -313,8 +312,6 @@ def __main__(inst: InstrumentsType, **kwargs):
             # push into arrays (right)
             even_cube[:, ibin[it]] += s1d_flux_even
             even_weight_cube[:, ibin[it]] += s1d_weight_even
-
-
 
         # -------------------------------------------------------------------------
         # Step 6. Creation of the template
@@ -398,13 +395,15 @@ def __main__(inst: InstrumentsType, **kwargs):
                     even_cube[:, sci_it] /= lowpass
 
         if ite !=0:
-            msg = 'Looping on files; relative RV shift RMS {:.1f}m/s'.format(np.nanstd(drv0))
+            # determine the sigma of RV shifts between templates
+            n1,p1 = np.nanpercentile(drv0, [16, 84])
+            sig = (p1-n1)/2.0
+            msg = 'Looping on files; relative RV shift RMS {:.1f}m/s'.format(sig)
             log.general(msg)
-            # TODO --> have the threshold as a variable
-            # if an RMS < 100m/s, we are happy, we exit the loop on relative RV shifts
-            if np.nanstd(drv0)<100:
+            # if an RMS < 100m/s (or whatever we set as a value)
+            # , we are happy, we exit the loop on relative RV shifts
+            if sig<inst.params['MAX_CONVERGENCE_TEMPLATE_RV']:
                 break
-
 
     sci_table['VSYS'] = rv0
 
@@ -415,7 +414,6 @@ def __main__(inst: InstrumentsType, **kwargs):
     nmin_bervbin = inst.params['BERVBIN_MIN_ENTRIES']
     # get the size of the berv bins
     bervbin_size = inst.params['BERVBIN_SIZE']
-
 
     # -------------------------------------------------------------------------
     # get the median and +/- 1 sigma values for the cube
