@@ -517,7 +517,7 @@ class Instrument:
         log.general('Saving template to file: {0}'.format(template_file))
         # ---------------------------------------------------------------------
         # write to file
-        io.write_fits(template_file, data=[None, table1, table2, ],
+        io.write_fits(template_file, data=[None, table1, table2],
                       header=[header, None, None],
                       dtype=[None, 'table', 'table'], names = [None, 'TEMPLATE',
                                                               'SCI_TABLE'])

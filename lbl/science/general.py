@@ -655,7 +655,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     props['EARS'] = coeffs[3]
     props['EXPO'] = coeffs[4]
     # ---------------------------------------------------------------------
-    # plots
+    # plot of the CCF and its residual
     plot.compute_plot_sysvel(inst, dv, ccf_vector - lowf, coeffs, gfit, props)
     # ---------------------------------------------------------------------
     # return the props
@@ -2113,7 +2113,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration add plot values
         if not flag_calib:
-            # plot specific math
+            # plot specific domain. We use the median velocity of the file
+            # for the plot domain. +-15 km/s to get an idea of residuals.
             xlim = [med_velo - 15000, med_velo + 15000]
             # get velocity range
             vrange = np.arange(xlim[0], xlim[1], 50.0)
