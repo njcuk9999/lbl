@@ -15,8 +15,8 @@ from astropy.time import Time, TimeDelta
 # Define variables
 # =============================================================================
 __NAME__: str = 'base.py'
-__version__: str = '0.63.002'
-__date__: str = '2023-09-22'
+__version__: str = '0.63.003'
+__date__: str = '2024-02-02'
 __authors__: str = ('Neil Cook, Etienne Artigau, Charles Cadieux, Thomas Vandal,'
                     'Ryan Cloutier, Pierre Larue')
 __package__: str = 'lbl'
