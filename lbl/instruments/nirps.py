@@ -176,6 +176,17 @@ class NIRPS(Instrument):
         # define the wave solution polynomial type (Chebyshev or numpy)
         self.params.set('WAVE_POLY_TYPE', value='Chebyshev', source=func_name)
         # ---------------------------------------------------------------------
+        # Parameters for the template construction
+        # ---------------------------------------------------------------------
+        # max number of bins for the median of the template. Avoids handling
+        # too many spectra at once.
+        self.params.set('TEMPLATE_MEDBINMAX', 19, source=func_name)
+        # maximum RMS between the template and the median of the template
+        # to accept the median of the template as a good template. If above
+        # we iterate once more. Expressed in m/s
+        self.params.set('MAX_CONVERGENCE_TEMPLATE_RV',100, source=func_name)
+
+        # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define wave coeff key in header

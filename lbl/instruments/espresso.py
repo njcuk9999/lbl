@@ -217,6 +217,17 @@ class Espresso(Instrument):
         self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
         # ---------------------------------------------------------------------
+        # Parameters for the template construction
+        # ---------------------------------------------------------------------
+        # max number of bins for the median of the template. Avoids handling
+        # too many spectra at once.
+        self.params.set('TEMPLATE_MEDBINMAX', 19, source=func_name)
+        # maximum RMS between the template and the median of the template
+        # to accept the median of the template as a good template. If above
+        # we iterate once more. Expressed in m/s
+        self.params.set('MAX_CONVERGENCE_TEMPLATE_RV',100, source=func_name)
+
+        # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
