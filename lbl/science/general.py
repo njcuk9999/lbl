@@ -469,6 +469,8 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
                            mask_file: str) -> Dict[str, Any]:
     # set the function name
     func_name = __NAME__ + '.get_systemic_vel_props()'
+    # print progress
+    log.general('Calculating systemic velocity properties')
     # output return in a dictionary
     props = dict()
     # get the systemic velocity for mask
