@@ -101,7 +101,7 @@ class Log:
         self.filefmt = self.format_class(theme='OFF', program=program)
         # loop around handlers and change level
         for it in range(len(self.logger.handlers)):
-            if type(self.logger.handlers[it]) == logging.StreamHandler:
+            if isinstance(self.logger.handlers[it], logging.StreamHandler):
                 self.logger.handlers[it].setLevel(level)
             # set the format from console format
             self.logger.handlers[it].setFormatter(self.confmt)

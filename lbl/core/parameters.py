@@ -129,8 +129,8 @@ params.set(key='FLUX_EXTENSION_NAME', value=None, source=__NAME__, dtype=str,
 # Define which iteration we are running (for multiprocessing)
 #    -1 means no multiprocessing
 params.set(key='ITERATION', value=-1, source=__NAME__, dtype=int,
-              desc='which iteration we are running (for multiprocessing) '
-                    '-1 means no multiprocessing',
+           desc='which iteration we are running (for multiprocessing) '
+                '-1 means no multiprocessing',
            arg='--iteration')
 
 # Define the total number of iterations (for multiprocessing)
@@ -1018,6 +1018,7 @@ def set_dprtype(okey, nkey, value) -> Tuple[Any, str]:
 
 
 # lock parameters
+# noinspection PyProtectedMember
 params._lock()
 # Define keys to copy (currently for all instruments)
 htrans = base_classes.HeaderTranslate()
@@ -1031,7 +1032,6 @@ htrans.add('JD_UTC_FLUXWEIGHTED_FRD', 'DATE-OBS', func=jd_to_human)
 htrans.add('Instrument_Drift', 'DPRTYPE', func=set_dprtype)
 htrans.add('MAROONX TELESCOPE AIRMASS', 'AIRMASS')
 htrans.add('BERV_SIMBAD_TARGET', 'OBJNAME')
-
 
 # =============================================================================
 # Start of code

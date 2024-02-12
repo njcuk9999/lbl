@@ -188,7 +188,7 @@ def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
     # -------------------------------------------------------------------------
     # define the convolution kernel for the model. This shape factor can be
     #   modified if required.
-    wkernel = kwidth / mp.fwhm()
+    wkernel = kwidth / mp.fwhm_value()
     # definition of the convoolution kernel x grid, defined over 4 FWHM
     kernal_width = int(kwidth * 4)
     # get the kernel vector

@@ -59,6 +59,7 @@ class LblLowCCFSNR(LblException):
         """
         super().__init__(message)
 
+
 class LblCurveFitException(Exception):
     def __init__(self, message: str, x=None, y=None, f=None,
                  p0=None, func=None, error=None):
@@ -464,7 +465,6 @@ class ParamDict(UserDict):
         self._locked = False
 
 
-
 class LBLError(Exception):
     def __init__(self, message):
         """
@@ -493,11 +493,11 @@ class HeaderTranslate:
 
     def default_func(self, original_key: str, new_key: str,
                      value: Any) -> Tuple[Any, str]:
-        _ = new_key
+        _ = self, new_key
         comment = 'Translated from {0}'.format(original_key)
         return value, comment
 
-    def add(self, original_key:str,  new_key: str, func: Optional[Any] = None):
+    def add(self, original_key: str, new_key: str, func: Optional[Any] = None):
         self.original_keys.append(original_key)
         self.new_keys.append(new_key)
         self.functions.append(func)

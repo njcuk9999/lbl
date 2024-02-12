@@ -171,8 +171,8 @@ def __main__(inst: InstrumentsType, **kwargs):
 
     # We first determine the number of files and we have too many, we stack
     # every Nth file into a smaller cube
-    Nmaxbins = inst.params['TEMPLATE_MEDBINMAX']
-    nbin = np.min([Nmaxbins, len(science_files)])
+    nmaxbins = inst.params['TEMPLATE_MEDBINMAX']
+    nbin = np.min([nmaxbins, len(science_files)])
 
     # create a cube that contains one line for each file
     flux_cube = np.zeros([len(wavegrid), nbin])

@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
 
 from lbl.core import astro
 from lbl.core import base
@@ -718,7 +717,7 @@ class Espresso(Instrument):
         # deal with not having CCF_EW
         # TODO: this is template specific
         if kw_ccf_ew not in header:
-            header[kw_ccf_ew] = 5.5 / mp.fwhm() * 1000
+            header[kw_ccf_ew] = 5.5 / mp.fwhm_value() * 1000
         # ---------------------------------------------------------------------
         # return header
         return header

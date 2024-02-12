@@ -519,7 +519,7 @@ class Instrument:
         io.write_fits(template_file, data=[None, table1, table2],
                       header=[header, None, None],
                       dtype=[None, 'table', 'table'],
-                      names = [None, 'TEMPLATE', 'SCI_TABLE'])
+                      names=[None, 'TEMPLATE', 'SCI_TABLE'])
 
     def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
                             sci_hdict: io.LBLHeader,
@@ -1128,7 +1128,7 @@ class Instrument:
         earth_location = self.params['EARTH_LOCATION']
         # deal with not having EARTH_LOCATION (backwards compatibility)
         if earth_location is None:
-            emsg = ('EARTH_LOCATION is not defined in the instrument ')
+            emsg = 'EARTH_LOCATION is not defined in the instrument '
             raise base_classes.LblException(emsg)
         # try to get location of site from astropy
         try:
