@@ -173,7 +173,6 @@ def __main__(inst: InstrumentsType, **kwargs):
     # every Nth file into a smaller cube
     nmaxbins = inst.params['TEMPLATE_MEDBINMAX']
     nbin = np.min([nmaxbins, len(science_files)])
-
     # create a cube that contains one line for each file
     flux_cube = np.zeros([len(wavegrid), nbin])
     # we also keep track of odd/even order contributions
@@ -185,7 +184,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # same odd/even with the weights
     odd_weight_cube = np.zeros([len(wavegrid), nbin])
     even_weight_cube = np.zeros([len(wavegrid), nbin])
-
+    # storage for the rv and drv0
     rv0 = np.zeros_like(science_files, dtype=float)
     drv0 = np.zeros_like(science_files, dtype=float)
 
@@ -193,7 +192,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     for sci_it in range(len(science_files)):
         sci_image, sci_hdr = inst.load_science_file(science_files[sci_it])
         berv[sci_it] = inst.get_berv(sci_hdr)
-
+    # storage of the science table
+    med_spec_hp = 1
     # we distribute the files in bins of equal size ordered by berv
     # Files with nearly the same berv will be in the same bin
     ibin = np.array(nbin * (np.argsort(berv) / len(berv)), dtype=int)
@@ -201,6 +201,18 @@ def __main__(inst: InstrumentsType, **kwargs):
     sci_table = dict()
     # iterate 5 times
     for ite in range(5):
+        # create a cube that contains one line for each file
+        flux_cube = np.zeros([len(wavegrid), nbin])
+        # we also keep track of odd/even order contributions
+        odd_cube = np.zeros([len(wavegrid), nbin])
+        even_cube = np.zeros([len(wavegrid), nbin])
+
+        # weight cube to account for order overlap
+        weight_cube = np.zeros([len(wavegrid), nbin])
+        # same odd/even with the weights
+        odd_weight_cube = np.zeros([len(wavegrid), nbin])
+        even_weight_cube = np.zeros([len(wavegrid), nbin])
+
         # print iteration loop
         msg = 'Iteration {0} of 5'
         log.info(msg.format(ite + 1))
@@ -260,22 +272,17 @@ def __main__(inst: InstrumentsType, **kwargs):
                 cut_low = inst.params['COMPIL_SLOPE_REF_WAVE'] * 0.95
                 cut_high = inst.params['COMPIL_SLOPE_REF_WAVE'] * 1.05
                 rms_domain = (wavegrid > cut_low) * (wavegrid < cut_high)
-
-                # make a temporary cube for the median low pass
-                tmp_flux_cube = np.array(flux_cube[rms_domain, :])
-                # tmp_flux_cube can be all NaNs
-                with warnings.catch_warnings(record=True) as _:
-                    med_spec = np.nanmedian(tmp_flux_cube, axis=1)
-
+                # domain that is at the center of the detector
                 s1d_flux_tmp = s1d_flux[rms_domain]
-                med_spec /= mp.lowpassfilter(med_spec, hp_width)
+                # we remove the low frequency content
                 s1d_flux_tmp /= mp.lowpassfilter(s1d_flux_tmp, hp_width)
-
+                # get the med spec for this domain
+                med_spec_hp_domain = med_spec_hp[rms_domain]
                 # -------------------------------------------------------------
                 # perform a sigma clip of the edges (to avoid dummy edge
                 #    effects)
                 for idv in range(len(dv)):
-                    tmp = np.roll(s1d_flux_tmp, dv[idv]) / med_spec
+                    tmp = np.roll(s1d_flux_tmp, dv[idv]) / med_spec_hp_domain
                     n1, p1 = np.nanpercentile(tmp, [16, 84])
                     sig[idv] = (p1 - n1) / 2.0
                 sig /= np.nanmedian(sig)
@@ -317,7 +324,7 @@ def __main__(inst: InstrumentsType, **kwargs):
 
             # push into arrays
             flux_cube[:, ibin[it]] += s1d_flux
-            weight_cube[:, it % nbin] += s1d_weight
+            weight_cube[:, ibin[it]] += s1d_weight
             # push into arrays (left)
             odd_cube[:, ibin[it]] += s1d_flux_odd
             odd_weight_cube[:, ibin[it]] += s1d_weight_odd
@@ -355,9 +362,11 @@ def __main__(inst: InstrumentsType, **kwargs):
         # divide by the weights (to correct for overlapping orders)
         flux_cube = flux_cube / weight_cube
         # same for left
-        odd_cube = odd_cube / odd_weight_cube
+        with warnings.catch_warnings(record=True) as _:
+            odd_cube = odd_cube / odd_weight_cube
         # same for right
-        even_cube = even_cube / even_weight_cube
+        with warnings.catch_warnings(record=True) as _:
+            even_cube = even_cube / even_weight_cube
 
         # normalize each slice of the cube by its median
         for it in tqdm(range(flux_cube.shape[1])):
@@ -382,6 +391,8 @@ def __main__(inst: InstrumentsType, **kwargs):
             with warnings.catch_warnings(record=True) as _:
                 # calculate the median of the big cube
                 med_spec = mp.nanmedian(flux_cube, axis=1)
+                med_spec_hp = med_spec / mp.lowpassfilter(med_spec, hp_width)
+
                 # iterate until low frequency gone
                 for sci_it in tqdm(range(flux_cube.shape[1])):
                     # remove the stellar features

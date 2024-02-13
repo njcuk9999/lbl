@@ -414,21 +414,56 @@ class Carmenes(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
-        if filename is not None:
-            blaze = io.load_fits(filename, kind='blaze fits file')
-            # deal with normalizing per order
-            if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
-            # return blaze
-            return blaze
-        else:
-            return None
+        _ = self, normalize
+        # load the sigma data
+        sig_data = io.load_fits(science_file, kind='sigmas fits file')
+        # blaze is 1 / sigma^2
+        blaze = 1 / (sig_data ** 2)
+        # ust to keep the blaze normalized
+        for order_num in range(sig_data.shape[0]):
+            blaze[order_num] /= np.nanpercentile(blaze[order_num], 90)
+            blaze[order_num] = mp.lowpassfilter(blaze[order_num], 301)
+        # return blaze
+        return blaze
+
+
+    def load_science_file(self, science_file: str
+                          ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        Load a science exposure
+
+        Note data should be a 2D array (even if data is 1D)
+        Treat 1D data as a single order?
+
+        :param science_file: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (io.LBLHeader)
+        """
+        # load the first extension of each
+        sci_data = io.load_fits(science_file, kind='science fits file')
+        cont_data = io.load_fits(science_file, kind='continuum fits file')
+        sig_data = io.load_fits(science_file, kind='sigmas fits file')
+        # get a per pixel snr estimate
+        snr_data = sci_data / sig_data
+        # get the blaze
+        blaze = self.load_blaze(science_file, normalize=True)
+        # correct sci for continuum
+        sci_data = sci_data / cont_data
+        # uncorrect for blaze (we correct later with the blaze again)
+        sci_data = sci_data * blaze
+        # remove any very low SNR pixels
+        for order_num in range(sci_data.shape[0]):
+            # get the SNR
+            med_snr = np.nanmedian(snr_data[order_num])
+            if med_snr < 1:
+                sci_data[order_num] = np.repeat(np.nan, sci_data.shape[1])
+            # mask low SNR pixels
+            mask = sci_data[order_num] / np.sqrt(sci_data[order_num]) < 5
+            sci_data[order_num][mask] = np.nan
+        # load the header
+        sci_hdr = self.load_header(science_file, kind='science fits file')
+        # return data and header
+        return sci_data, sci_hdr
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """

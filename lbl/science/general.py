@@ -409,7 +409,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # get the gradient of the log of the wave
     grad_log_wave = np.gradient(np.log(twave))
     # work out the glw_c (grad_log_wave / speed_of_light_ms)
-    glw_c = grad_log_wave / speed_of_light_ms
+    glw_c = grad_log_wave * speed_of_light_ms
     # get the derivative of the flux
     dflux = np.gradient(tflux) / glw_c
     # fractional change in flux for an offset in velocity
@@ -1475,6 +1475,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             mask_snr = np.array(mask_table['line_snr'], dtype=float)
             # if SNR of line is less than 3 we don't use it
             ccf_weight[mask_snr < 3] = 0
+            # absolute depths cannot be greater than 1
+            ccf_weight[abs(ccf_weight) > 1] = 0
             # calculate the rough CCF RV estimate
             sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
                                                       wave_mask, ccf_weight,
