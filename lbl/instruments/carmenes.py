@@ -414,7 +414,7 @@ class Carmenes(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self, normalize
+        _ = self, filename, normalize
         # load the sigma data
         sig_data = io.load_fits(science_file, kind='sigmas fits file')
         # blaze is 1 / sigma^2
