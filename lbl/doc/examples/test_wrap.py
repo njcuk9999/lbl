@@ -52,7 +52,7 @@ def carmenes_vis():
     rparams['OBJECT_TEFF'] = [3500]
     rparams['BLAZE_FILE'] = 'carmenes_dummy_blaze.fits'
     # what to run and skip if already on disk
-    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
     rparams['RUN_LBL_MASK'] = True
     rparams['RUN_LBL_COMPUTE'] = True
