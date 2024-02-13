@@ -445,8 +445,9 @@ class Carmenes(Instrument):
         sig_data = io.load_fits(science_file, kind='sigmas fits file')
         # get a per pixel snr estimate
         snr_data = sci_data / sig_data
-        # get the blaze
-        blaze = self.load_blaze(science_file, normalize=True)
+        # get the blaze (for carmenes we use the science file to get the blaze)
+        #   hence filename = ''
+        blaze = self.load_blaze('', science_file, normalize=True)
         # correct sci for continuum
         sci_data = sci_data / cont_data
         # uncorrect for blaze (we correct later with the blaze again)
