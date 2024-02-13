@@ -33,7 +33,7 @@ INSTRUMENTS = ['carmenes_vis',
 
 # define global params to override
 GLOBAL = dict()
-GLOBAL['PLOT'] = True
+GLOBAL['PLOT'] = False
 
 
 # =============================================================================

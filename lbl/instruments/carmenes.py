@@ -457,10 +457,7 @@ class Carmenes(Instrument):
             # get the SNR
             med_snr = np.nanmedian(snr_data[order_num])
             if med_snr < 1:
-                sci_data[order_num] = np.repeat(np.nan, sci_data.shape[1])
-            # mask low SNR pixels
-            mask = sci_data[order_num] / np.sqrt(sci_data[order_num]) < 5
-            sci_data[order_num][mask] = np.nan
+                sci_data[order_num] = np.nan
         # load the header
         sci_hdr = self.load_header(science_file, kind='science fits file')
         # return data and header
