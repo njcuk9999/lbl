@@ -50,7 +50,7 @@ def carmenes_vis():
     rparams['OBJECT_SCIENCE'] = ['K2-18']
     rparams['OBJECT_TEMPLATE'] = ['K2-18']
     rparams['OBJECT_TEFF'] = [3500]
-    rparams['BLAZE_FILE'] = 'carmenes_dummy_blaze.fits'
+    rparams['BLAZE_FILE'] = None
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
