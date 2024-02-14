@@ -190,7 +190,7 @@ def __main__(inst: InstrumentsType, **kwargs):
 
     berv = np.zeros_like(science_files, dtype=float)
     for sci_it in range(len(science_files)):
-        sci_image, sci_hdr = inst.load_science_file(science_files[sci_it])
+        sci_hdr = inst.load_header(science_files[sci_it])
         berv[sci_it] = inst.get_berv(sci_hdr)
     # storage of the science table
     med_spec_hp = 1
@@ -353,9 +353,9 @@ def __main__(inst: InstrumentsType, **kwargs):
         # get bad weight threshold from params
         min_weight = inst.params['TEMPLATE_WEIGHT_MIN']
         # bad weights (below 0.1) are set to 1
-        weight_cube[weight_cube < min_weight] = 0
-        odd_weight_cube[odd_weight_cube < min_weight] = 0
-        even_weight_cube[even_weight_cube < min_weight] = 0
+        weight_cube[weight_cube < min_weight] = np.nan
+        odd_weight_cube[odd_weight_cube < min_weight] = np.nan
+        even_weight_cube[even_weight_cube < min_weight] = np.nan
         # ---------------------------------------------------------------------
         # print progress
         log.general('Calculating template')

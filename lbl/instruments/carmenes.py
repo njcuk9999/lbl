@@ -416,13 +416,35 @@ class Carmenes(Instrument):
         """
         _ = self, filename, normalize
         # load the sigma data
-        sig_data = io.load_fits(science_file, kind='sigmas fits file')
-        # blaze is 1 / sigma^2
-        blaze = 1 / (sig_data ** 2)
-        # ust to keep the blaze normalized
-        for order_num in range(sig_data.shape[0]):
-            blaze[order_num] /= np.nanpercentile(blaze[order_num], 90)
-            blaze[order_num] = mp.lowpassfilter(blaze[order_num], 301)
+        wave_data = io.load_fits(science_file, kind='sigmas fits file',
+                                extname='WAVE')
+        # express in wave numbers rather than wavelength
+        wave_number = 1 / wave_data
+        # central wave number for each order
+        center_wavenumber = wave_number[:, wave_number.shape[1] // 2]
+        # should be growing linearly with the order number with an intercept
+        # corresponding to the grating spacing in wave number space
+        index = np.arange(wave_number.shape[0])[::-1]
+        # fit a line to the central wave number
+        fit = np.polyfit(center_wavenumber, index, 1)
+        # find the index of the 0th order
+        index0 = np.round(np.polyval(fit, 0)).astype(int)
+        # update the index number to find the stepping of the orders in
+        # wave number space
+        index -= index0
+        # find the period of the orders in wave number space
+        wave_number_period = np.nanmedian(center_wavenumber/index)
+        # find the blaze as the sinc^2 of the phase of the wave number space
+        blaze = np.zeros_like(wave_number)
+        # loop around orders
+        for order_num in range(wave_number.shape[0]):
+            # get the phase of the wave number space
+            phase = np.pi * wave_number[order_num] / wave_number_period
+            phase -= np.round(phase[len(phase)//2]/np.pi)*np.pi
+            # deal with numerically small numbers
+            phase[abs(phase) < 1e-6] = 1e-6
+            # push into the blaze
+            blaze[order_num] = (np.sin(phase)/phase)**2
         # return blaze
         return blaze
 
@@ -440,9 +462,12 @@ class Carmenes(Instrument):
         :return: tuple, data (np.ndarray) and header (io.LBLHeader)
         """
         # load the first extension of each
-        sci_data = io.load_fits(science_file, kind='science fits file')
-        cont_data = io.load_fits(science_file, kind='continuum fits file')
-        sig_data = io.load_fits(science_file, kind='sigmas fits file')
+        sci_data = io.load_fits(science_file, kind='science fits file',
+                                extname='SPEC')
+        cont_data = io.load_fits(science_file, kind='continuum fits file',
+                                 extname='CONT')
+        sig_data = io.load_fits(science_file, kind='sigmas fits file',
+                                extname='SIG')
         # get a per pixel snr estimate
         snr_data = sci_data / sig_data
         # get the blaze (for carmenes we use the science file to get the blaze)
