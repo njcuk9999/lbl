@@ -237,6 +237,10 @@ def __main__(inst: InstrumentsType, **kwargs):
                 bargs = [filename, sci_image, sci_hdr, calib_dir]
                 bout = inst.load_blaze_from_science(*bargs, normalize=False)
                 blazeimage, blaze_flag = bout
+            # test for all ones (no blaze)
+            elif np.sum(blaze.ravel()) == len(blaze.ravel()):
+                blaze_flag = True
+                blazeimage = np.array(blaze)
             else:
                 blaze_flag = False
                 blazeimage = np.array(blaze)

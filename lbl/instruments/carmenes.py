@@ -414,40 +414,21 @@ class Carmenes(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self, filename, normalize
-        # load the sigma data
-        wave_data = io.load_fits(science_file, kind='sigmas fits file',
-                                extname='WAVE')
-        # express in wave numbers rather than wavelength
-        wave_number = 1 / wave_data
-        # central wave number for each order
-        center_wavenumber = wave_number[:, wave_number.shape[1] // 2]
-        # should be growing linearly with the order number with an intercept
-        # corresponding to the grating spacing in wave number space
-        index = np.arange(wave_number.shape[0])[::-1]
-        # fit a line to the central wave number
-        fit = np.polyfit(center_wavenumber, index, 1)
-        # find the index of the 0th order
-        index0 = np.round(np.polyval(fit, 0)).astype(int)
-        # update the index number to find the stepping of the orders in
-        # wave number space
-        index -= index0
-        # find the period of the orders in wave number space
-        wave_number_period = np.nanmedian(center_wavenumber/index)
-        # find the blaze as the sinc^2 of the phase of the wave number space
-        blaze = np.zeros_like(wave_number)
-        # loop around orders
-        for order_num in range(wave_number.shape[0]):
-            # get the phase of the wave number space
-            phase = np.pi * wave_number[order_num] / wave_number_period
-            phase -= np.round(phase[len(phase)//2]/np.pi)*np.pi
-            # deal with numerically small numbers
-            phase[abs(phase) < 1e-6] = 1e-6
-            # push into the blaze
-            blaze[order_num] = (np.sin(phase)/phase)**2
-        # return blaze
-        return blaze
-
+        _ = self
+        if filename is not None:
+            blaze = io.load_fits(filename, kind='blaze fits file')
+            # deal with normalizing per order
+            if normalize:
+                # normalize blaze per order
+                for order_num in range(blaze.shape[0]):
+                    # normalize by the 90% percentile
+                    norm = np.nanpercentile(blaze[order_num], 90)
+                    # apply to blaze
+                    blaze[order_num] = blaze[order_num] / norm
+            # return blaze
+            return blaze
+        else:
+            return None
 
     def load_science_file(self, science_file: str
                           ) -> Tuple[np.ndarray, io.LBLHeader]:
@@ -470,13 +451,8 @@ class Carmenes(Instrument):
                                 extname='SIG')
         # get a per pixel snr estimate
         snr_data = sci_data / sig_data
-        # get the blaze (for carmenes we use the science file to get the blaze)
-        #   hence filename = ''
-        blaze = self.load_blaze('', science_file, normalize=True)
         # correct sci for continuum
         sci_data = sci_data / cont_data
-        # uncorrect for blaze (we correct later with the blaze again)
-        sci_data = sci_data * blaze
         # remove any very low SNR pixels
         for order_num in range(sci_data.shape[0]):
             # get the SNR
