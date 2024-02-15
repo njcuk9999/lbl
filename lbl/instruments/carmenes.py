@@ -458,6 +458,8 @@ class Carmenes(Instrument):
         sci_data = sci_data / cont_data
         # remove any very low SNR pixels
         for order_num in range(sci_data.shape[0]):
+            if np.sum(np.isfinite(snr_data[order_num])) == 0:
+                continue
             # get the SNR
             med_snr = np.nanmedian(snr_data[order_num])
             if med_snr < 1:

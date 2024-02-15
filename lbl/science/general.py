@@ -244,7 +244,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['WAVE_END'] = np.array(wave_end)
         ref_dict['WEIGHT_LINE'] = np.array(weight_line)
         ref_dict['XPIX'] = xpix
-        ref_dict['LINE_SNR'] = np.array(line_snr)
+        with warnings.catch_warnings(record=True) as _:
+            ref_dict['LINE_SNR'] = np.array(line_snr)
         ref_dict['LINE_DEPTH'] = np.array(line_depth)
         ref_dict['LOCAL_FLUX'] = np.array(local_flux)
         # ratio of expected VS actual RMS in difference of model vs line
@@ -1648,6 +1649,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # -----------------------------------------------------------------
             # if we have any NaNs in our segment - reject this segment
             if np.any(np.isnan(model_seg)):
+                continue
+            # remove any pixels are zero or negative remove segment
+            if np.any(model_seg <= 0):
                 continue
 
             diff_seg = ((sci_seg / model_seg) - 1) * weight_mask
