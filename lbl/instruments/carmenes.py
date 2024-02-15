@@ -47,7 +47,8 @@ class Carmenes(Instrument):
         self.default_template_name = 'Template_{0}_CARMENES.fits'
         # define wave limits in nm
         self.wavemin = 513.651
-        self.wavemax = 1063.125
+        # self.wavemax = 1063.125
+        self.wavemax = 970
         # set parameters for instrument
         self.params = params
         # override params
@@ -449,6 +450,8 @@ class Carmenes(Instrument):
                                  extname='CONT')
         sig_data = io.load_fits(science_file, kind='sigmas fits file',
                                 extname='SIG')
+        wave_data = io.load_fits(science_file, kind='wave fits file',
+                                 extname='WAVE')
         # get a per pixel snr estimate
         snr_data = sci_data / sig_data
         # correct sci for continuum
@@ -459,6 +462,14 @@ class Carmenes(Instrument):
             med_snr = np.nanmedian(snr_data[order_num])
             if med_snr < 1:
                 sci_data[order_num] = np.nan
+        # ---------------------------------------------------------------------
+        # cut out bad wavelengths
+        # ---------------------------------------------------------------------
+        # Carmenes wave solution is in Angstrom - convert to nm for consistency
+        wave_data = wave_data / 10.0
+        sci_data[wave_data < self.wavemin] = np.nan
+        sci_data[wave_data > self.wavemax] = np.nan
+        # ---------------------------------------------------------------------
         # load the header
         sci_hdr = self.load_header(science_file, kind='science fits file')
         # return data and header
