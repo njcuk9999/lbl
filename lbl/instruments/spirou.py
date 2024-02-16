@@ -1286,6 +1286,27 @@ class SpirouCADC(Spirou):
         # return blaze
         return blaze
 
+    def load_header(self, filename: str, kind: str = 'fits file',
+                    extnum: Optional[int] = None,
+                    extname: str = None) -> io.LBLHeader:
+        """
+        Load a header into a dictionary (may not be a fits file)
+        We must push this to a dictinoary as not all instrument confirm to
+        a fits header
+
+        :param filename: str, the filename to load
+        :param kind: str, the kind of file we are loading
+        :param extnum: int, the extension number to load
+        :param extname: str, the extension name to load
+        :return:
+        """
+        if extnum is None and extname is None:
+            extname = self.get_extname('Flux')
+        # get header
+        hdr = io.load_header(filename, kind, extnum, extname)
+        # return the LBL Header class
+        return io.LBLHeader.from_fits(hdr, filename)
+
     def load_science_header(self, science_file: str) -> io.LBLHeader:
         """
         Load science file header
