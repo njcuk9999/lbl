@@ -591,12 +591,17 @@ def load_header(filename: str,
         kind = 'fits file'
     # try to load fits file
     try:
-        if extnum is not None:
-            header = fits.getheader(filename, ext=extnum)
-        elif extname is not None:
-            header = fits.getheader(filename, extname=extname)
-        else:
-            header = fits.getheader(filename)
+        with fits.open(filename) as hdu:
+            hdu.verify('silentfix')
+            if extnum is not None:
+                raw_hdr = hdu[extnum].header
+                header = raw_hdr.copy()
+            elif extname is not None:
+                raw_hdr = hdu[extname].header
+                header = raw_hdr.copy()
+            else:
+                raw_hdr = hdu[0].header
+                header = raw_hdr.copy()
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
