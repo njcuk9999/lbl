@@ -540,40 +540,6 @@ def clean_directory(path: str, logmsg: bool = True,
 # =============================================================================
 # Define fits functions
 # =============================================================================
-def load_hdu(filename: str,
-              kind: Union[str, None] = None,
-              extnum: Optional[int] = None,
-              extname: Optional[str] = None) -> fits.HDUList:
-    """
-    Standard way to load fits header-data unit
-
-    :param filename: str, the filename
-    :param kind: the kind (for error message)
-    :param extnum: int, the extension number (if not given uses first)
-    :param extname: the extension name (if not given uses extnum)
-
-    :return: FITS header, the header
-    """
-    # deal with no kind
-    if kind is None:
-        kind = 'fits file'
-    # try to load fits file
-    try:
-        if extnum is not None:
-            hdu = fits.open(filename, ext=extnum)
-        elif extname is not None:
-            hdu = fits.open(filename, extname=extname)
-        else:
-            hdu = fits.open(filename, extname=extname)
-    except Exception as e:
-        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
-        eargs = [kind, filename, type(e), str(e)]
-        raise LblException(emsg.format(*eargs))
-    # attempt to verify hdu https://github.com/njcuk9999/lbl/pull/45
-    hdu.verify('silentfix')
-    return hdu
-
-
 def load_fits(filename: str,
               kind: Union[str, None] = None,
               extnum: Optional[int] = None,
@@ -588,8 +554,22 @@ def load_fits(filename: str,
 
     :return: tuple, the data and the header
     """
-    hdu = load_hdu(filename, kind, extnum, extname)
-    return hdu[0].data
+    # deal with no kind
+    if kind is None:
+        kind = 'fits file'
+    # try to load fits file
+    try:
+        if extnum is not None:
+            data = fits.getdata(filename, ext=extnum)
+        elif extname is not None:
+            data = fits.getdata(filename, extname=extname)
+        else:
+            data = fits.getdata(filename)
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return np.array(data)
 
 
 def load_header(filename: str,
@@ -606,8 +586,22 @@ def load_header(filename: str,
 
     :return: FITS header, the header
     """
-    hdu = load_hdu(filename, kind, extnum, extname)
-    return hdu[0].header
+    # deal with no kind
+    if kind is None:
+        kind = 'fits file'
+    # try to load fits file
+    try:
+        if extnum is not None:
+            header = fits.getheader(filename, ext=extnum)
+        elif extname is not None:
+            header = fits.getheader(filename, extname=extname)
+        else:
+            header = fits.getheader(filename)
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return header.copy()
 
 
 def copy_header(header1: fits.Header, header2: fits.Header) -> fits.Header:
