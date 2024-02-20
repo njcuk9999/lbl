@@ -253,10 +253,10 @@ def spirou_apero():
     rparams['INSTRUMENT'] = 'SPIROU'
     rparams['DATA_SOURCE'] = 'APERO'
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'SPIROU-apero')
-    rparams['DATA_TYPES'] = ['SCIENCE']
-    rparams['OBJECT_SCIENCE'] = ['GL699']
-    rparams['OBJECT_TEMPLATE'] = ['GL699']
-    rparams['OBJECT_TEFF'] = [3224]
+    rparams['DATA_TYPES'] = ['FP', 'SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['FP', 'GL699']
+    rparams['OBJECT_TEMPLATE'] = ['FP', 'GL699']
+    rparams['OBJECT_TEFF'] = [300, 3224]
     rparams['BLAZE_FILE'] = 'F8018F48F0_pp_blaze_AB.fits'
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False

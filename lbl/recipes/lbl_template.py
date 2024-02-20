@@ -412,6 +412,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             with warnings.catch_warnings(record=True) as _:
                 # calculate the median of the big cube
                 med_spec = mp.nanmedian(flux_cube, axis=1)
+                med_spec_hp = med_spec / mp.lowpassfilter(med_spec, hp_width)
                 # mask to keep only FP peaks and avoid dividing
                 # two small values (minima between lines in median and
                 # individual spectrum) when computing the lowpass
