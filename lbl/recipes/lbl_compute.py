@@ -235,6 +235,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.3 load science file
         # ---------------------------------------------------------------------
         sci_data, sci_hdr = inst.load_science_file(science_file)
+        # get wave solution for reference file
+        sci_wave = inst.get_wave_solution(science_file, sci_data, sci_hdr)
         # flag calibration file
         if inst.params['DATA_TYPE'] != 'SCIENCE':
             model_velocity = 0
@@ -243,8 +245,20 @@ def __main__(inst: InstrumentsType, **kwargs):
         # 6.4 load blaze if not set above
         # ---------------------------------------------------------------------
         if blaze is None:
-            blaze, _ = inst.load_blaze_from_science(science_file, sci_data,
+            bout = inst.load_blaze_from_science(science_file, sci_data,
                                                     sci_hdr, calib_dir)
+            blazeimage, blaze_flag = bout
+        # test for all ones (no blaze)
+        elif np.sum(blaze.ravel()) == len(blaze.ravel()):
+            blaze_flag = True
+            blazeimage = np.array(blaze)
+        else:
+            blaze_flag = False
+            blazeimage = np.array(blaze)
+        # deal with not having blaze (for s1d weighting)
+        if blaze_flag:
+            sci_data, blazeimage = inst.no_blaze_corr(sci_data, sci_wave)
+
         # ---------------------------------------------------------------------
         # 6.5 check for bad files (via a header key)
         # ---------------------------------------------------------------------
@@ -288,12 +302,10 @@ def __main__(inst: InstrumentsType, **kwargs):
         try:
             cout = general.compute_rv(inst, it, sci_data, sci_hdr,
                                       splines=splines,
-                                      ref_table=ref_table, blaze=blaze,
+                                      ref_table=ref_table, blaze=blazeimage,
                                       systemic_props=systemic_vel_props,
                                       systemic_all=systemic_all,
                                       mjdate_all=mjdate_all,
-                                      ccf_ewidth=ccf_ewidth,
-                                      reset_rv=reset_rv,
                                       model_velocity=model_velocity,
                                       science_file=science_file,
                                       mask_file=mask_file)

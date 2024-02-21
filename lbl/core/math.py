@@ -654,7 +654,7 @@ def gauss_fit_e(x: Union[float, np.ndarray], x0: float, fwhm: float,
     :return: np.ndarray - the gaussian value
     """
     # gaussian FWHM = 2*sqrt(2*ln(2))*sigma
-    ew = fwhm/(2*(2*np.log(2))**(1/expo))
+    ew = fwhm / (2 * (2 * np.log(2)) ** (1 / expo))
 
     g1 = amp * np.exp(-np.abs(x - x0) ** expo / ew ** expo)
     g2 = (amp / ears ** 2) * np.exp(-np.abs(x - x0) ** expo / (ew * 2) ** expo)
@@ -662,7 +662,7 @@ def gauss_fit_e(x: Union[float, np.ndarray], x0: float, fwhm: float,
     return 1 - g1 + g2
 
 
-def fwhm(sigma: Union[float, np.ndarray] = 1.0) -> Union[float, np.ndarray]:
+def fwhm_value(sigma: Union[float, np.ndarray] = 1.0) -> Union[float, np.ndarray]:
     """
     Get the Full-width-half-maximum value from the sigma value (~2.3548)
 
@@ -902,7 +902,7 @@ def rot_broad(wvl: np.ndarray, flux: np.ndarray, epsilon: float, vsini: float,
         eff_wvl = np.mean(wvl)
     # The number of bins needed to create the broadening kernel
     binn_half = int(np.floor(((vsini / speed_of_light) * eff_wvl / dwl))) + 1
-    gwvl = (np.arange(4*binn_half) - 2*binn_half) * dwl + eff_wvl
+    gwvl = (np.arange(4 * binn_half) - 2 * binn_half) * dwl + eff_wvl
     # Create the broadening kernel
     dl = gwvl - eff_wvl
     # -------------------------------------------------------------------------
@@ -916,14 +916,14 @@ def rot_broad(wvl: np.ndarray, flux: np.ndarray, epsilon: float, vsini: float,
     # calculate the max vc
     dlmax = vc * eff_wvl
     # generate the c1 and c2 parameters
-    c1 = 2 * (1 - eps) / (np.pi * dlmax * (1-eps/3))
-    c2 = eps / (2 * dlmax * (1 - eps/3))
+    c1 = 2 * (1 - eps) / (np.pi * dlmax * (1 - eps / 3))
+    c2 = eps / (2 * dlmax * (1 - eps / 3))
     # storage for the output
     bprof = np.zeros(len(dl))
     # Calculate the broadening profile
     xvec = dl / dlmax
     indi0 = np.where(np.abs(xvec) < 1.0)[0]
-    bprof[indi0] = c1 * np.sqrt(1 - xvec[indi0]**2) + c2 * (1 - xvec[indi0]**2)
+    bprof[indi0] = c1 * np.sqrt(1 - xvec[indi0] ** 2) + c2 * (1 - xvec[indi0] ** 2)
     # Correct the normalization for numeric accuracy
     # The integral of the function is normalized, however, especially in the
     # case of mild broadening (compared to the wavelength resolution), the
@@ -939,16 +939,14 @@ def rot_broad(wvl: np.ndarray, flux: np.ndarray, epsilon: float, vsini: float,
     return result
 
 
-def bin_by_time(longitude: float, time_value: Union[np.ndarray ,float],
+def bin_by_time(longitude: float, time_value: Union[np.ndarray, float],
                 day_frac: float = 0) -> Union[np.ndarray, float]:
     """
     Bin a time by the local time of the site to a specific point in the day
     (by day_frac where 0 = midnight before observation, 0.5 = noon, and 1.0 =
     midnight after observation)
 
-    :param params: ParamDict, the parameter dictionary of constants, containing
-                   at least OBS_LONG, the longitude of the observatory in
-                   degrees
+    :param longitude: float, the longitude of the site
     :param time_value: astropy.Time, the time to bin (in UTC)
     :param day_frac: float, the fraction of the day to bin to (0 = midnight
                      before observation, 0.5 = noon, and 1.0 = midnight after

@@ -129,8 +129,8 @@ params.set(key='FLUX_EXTENSION_NAME', value=None, source=__NAME__, dtype=str,
 # Define which iteration we are running (for multiprocessing)
 #    -1 means no multiprocessing
 params.set(key='ITERATION', value=-1, source=__NAME__, dtype=int,
-              desc='which iteration we are running (for multiprocessing) '
-                    '-1 means no multiprocessing',
+           desc='which iteration we are running (for multiprocessing) '
+                '-1 means no multiprocessing',
            arg='--iteration')
 
 # Define the total number of iterations (for multiprocessing)
@@ -170,6 +170,10 @@ params.set(key='FP_MASK_TYPE', value='neg',
 # define the mask type (pos, neg, full)
 params.set(key='LFC_MASK_TYPE', value='neg',
            desc='the mask type (pos, neg, full)', dtype=str)
+
+# define the BERV of the object in m/s
+params.set(key='BERV', value=None, source=__NAME__, dtype=float,
+           desc='the BERV of the object in m/s')
 
 # =============================================================================
 # Define compute parameters
@@ -533,16 +537,6 @@ params.set(key='BLAZE_SMOOTH_SIZE', value=None, source=__NAME__,
 params.set(key='BLAZE_THRESHOLD', value=None, source=__NAME__,
            desc='blaze threshold (s1d template)', dtype=float, not_none=True)
 
-# define the earliest allowed file used for template construction
-params.set(key='TEMPLATE_MJDSTART', value=None, source=__NAME__,
-           desc='the earliest allowed FP calibration used for template '
-                'construction (None for unset)', dtype=float)
-
-# define the latest allowed file used for template construction
-params.set(key='TEMPLATE_MJDEND', value=None, source=__NAME__,
-           desc='the latest allowed FP calibration used for template '
-                'construction (None for unset)', dtype=float)
-
 # define the minimum number of observations required for a template berv bin
 params.set('BERVBIN_MIN_ENTRIES', value=3, source=__NAME__,
            desc='the minimum number of observations required for a '
@@ -688,6 +682,29 @@ params.set(key='TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=None, source=__NAME__,
 # Define the default convergence limit for the telluric pre-clean
 params.set(key='TELLUCLEAN_CONVERGENCE_LIMIT', value=1.0e-3, source=__NAME__,
            desc='the default convergence limit for the telluric pre-clean')
+
+# ---------------------------------------------------------------------
+# Parameters for the template construction
+# ---------------------------------------------------------------------
+# define the earliest allowed file used for template construction
+params.set(key='TEMPLATE_MJDSTART', value=None, source=__NAME__,
+           desc='the earliest allowed FP calibration used for template '
+                'construction (None for unset)', dtype=float)
+
+# define the latest allowed file used for template construction
+params.set(key='TEMPLATE_MJDEND', value=None, source=__NAME__,
+           desc='the latest allowed FP calibration used for template '
+                'construction (None for unset)', dtype=float)
+
+# max number of bins for the median of the template. Avoids handling
+# too many spectra at once.
+params.set('TEMPLATE_MEDBINMAX', 19, source=__NAME__)
+# maximum RMS between the template and the median of the template
+# to accept the median of the template as a good template. If above
+# we iterate once more. Expressed in m/s
+params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=__NAME__)
+# ignore weights below this value for the template construction
+params.set('TEMPLATE_WEIGHT_MIN', 0.1, source=__NAME__)
 
 # =============================================================================
 # Define other parameters
@@ -1000,6 +1017,9 @@ def set_dprtype(okey, nkey, value) -> Tuple[Any, str]:
     return 'OBJ_SKY', 'DPRTYPE (set to OBJ_SKY manually)'
 
 
+# lock parameters
+# noinspection PyProtectedMember
+params._lock()
 # Define keys to copy (currently for all instruments)
 htrans = base_classes.HeaderTranslate()
 htrans.add('Instrument_Drift', 'INSDRIFT', func=instr_drift)
@@ -1012,7 +1032,6 @@ htrans.add('JD_UTC_FLUXWEIGHTED_FRD', 'DATE-OBS', func=jd_to_human)
 htrans.add('Instrument_Drift', 'DPRTYPE', func=set_dprtype)
 htrans.add('MAROONX TELESCOPE AIRMASS', 'AIRMASS')
 htrans.add('BERV_SIMBAD_TARGET', 'OBJNAME')
-
 
 # =============================================================================
 # Start of code

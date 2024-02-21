@@ -12,7 +12,6 @@ import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from astropy.table import Table
 
 from lbl.core import astro
 from lbl.core import base
@@ -87,7 +86,7 @@ class Sophie(Instrument):
         # Question: HARPS value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
-        self.params.set('CCF_CLEAN_BANDS', ['r'],  source=func_name)
+        self.params.set('CCF_CLEAN_BANDS', ['r'], source=func_name)
         # define the plot order for the compute rv model plot
         self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [36], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
@@ -217,6 +216,16 @@ class Sophie(Instrument):
         # Define the upper limit on valid exponent of other absorbers
         self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
+        # ---------------------------------------------------------------------
+        # Parameters for the template construction
+        # ---------------------------------------------------------------------
+        # max number of bins for the median of the template. Avoids handling
+        # too many spectra at once.
+        self.params.set('TEMPLATE_MEDBINMAX', 19, source=func_name)
+        # maximum RMS between the template and the median of the template
+        # to accept the median of the template as a good template. If above
+        # we iterate once more. Expressed in m/s
+        self.params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=func_name)
 
         # ---------------------------------------------------------------------
         # Header keywords
@@ -483,8 +492,11 @@ class Sophie(Instrument):
         for science_file in science_files:
             # load header
             sci_hdr = self.load_header(science_file)
+            # get mid exposure time
+            # noinspection PyTypeChecker
+            mid_exp_time = float(sci_hdr[self.params['KW_MID_EXP_TIME']])
             # get time
-            times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
+            times.append(mid_exp_time)
         # get sort mask
         sortmask = np.argsort(times)
         # apply sort mask
@@ -710,7 +722,7 @@ class Sophie(Instrument):
         # deal with not having CCF_EW
         # TODO: this is template specific
         if kw_ccf_ew not in header:
-            header[kw_ccf_ew] = 5.5 / mp.fwhm() * 1000
+            header[kw_ccf_ew] = 5.5 / mp.fwhm_value() * 1000
         # ---------------------------------------------------------------------
         # return header
         return header

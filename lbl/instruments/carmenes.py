@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
 
 from lbl.core import astro
 from lbl.core import base
@@ -48,7 +47,8 @@ class Carmenes(Instrument):
         self.default_template_name = 'Template_{0}_CARMENES.fits'
         # define wave limits in nm
         self.wavemin = 513.651
-        self.wavemax = 1063.125
+        # self.wavemax = 1063.125
+        self.wavemax = 970
         # set parameters for instrument
         self.params = params
         # override params
@@ -216,6 +216,17 @@ class Carmenes(Instrument):
         # Define the upper limit on valid exponent of other absorbers
         self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
+        # ---------------------------------------------------------------------
+        # Parameters for the template construction
+        # ---------------------------------------------------------------------
+        # max number of bins for the median of the template. Avoids handling
+        # too many spectra at once.
+        self.params.set('TEMPLATE_MEDBINMAX', 19, source=func_name)
+        # maximum RMS between the template and the median of the template
+        # to accept the median of the template as a good template. If above
+        # we iterate once more. Expressed in m/s
+        self.params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=func_name)
+
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -420,6 +431,52 @@ class Carmenes(Instrument):
         else:
             return None
 
+    def load_science_file(self, science_file: str
+                          ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        Load a science exposure
+
+        Note data should be a 2D array (even if data is 1D)
+        Treat 1D data as a single order?
+
+        :param science_file: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (io.LBLHeader)
+        """
+        # load the first extension of each
+        sci_data = io.load_fits(science_file, kind='science fits file',
+                                extname='SPEC')
+        cont_data = io.load_fits(science_file, kind='continuum fits file',
+                                 extname='CONT')
+        sig_data = io.load_fits(science_file, kind='sigmas fits file',
+                                extname='SIG')
+        wave_data = io.load_fits(science_file, kind='wave fits file',
+                                 extname='WAVE')
+        # get a per pixel snr estimate
+        snr_data = sci_data / sig_data
+        # correct sci for continuum
+        sci_data = sci_data / cont_data
+        # remove any very low SNR pixels
+        for order_num in range(sci_data.shape[0]):
+            if np.sum(np.isfinite(snr_data[order_num])) == 0:
+                continue
+            # get the SNR
+            med_snr = np.nanmedian(snr_data[order_num])
+            if med_snr < 1:
+                sci_data[order_num] = np.nan
+        # ---------------------------------------------------------------------
+        # cut out bad wavelengths
+        # ---------------------------------------------------------------------
+        # Carmenes wave solution is in Angstrom - convert to nm for consistency
+        wave_data = wave_data / 10.0
+        sci_data[wave_data < self.wavemin] = np.nan
+        sci_data[wave_data > self.wavemax] = np.nan
+        # ---------------------------------------------------------------------
+        # load the header
+        sci_hdr = self.load_header(science_file, kind='science fits file')
+        # return data and header
+        return sci_data, sci_hdr
+
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
         Get the systemic velocity in m/s of the mask
@@ -485,8 +542,11 @@ class Carmenes(Instrument):
         for science_file in science_files:
             # load header
             sci_hdr = self.load_header(science_file)
+            # get mid exposure time
+            # noinspection PyTypeChecker
+            mid_exp_time = float(sci_hdr[self.params['KW_MID_EXP_TIME']])
             # get time
-            times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
+            times.append(mid_exp_time)
         # get sort mask
         sortmask = np.argsort(times)
         # apply sort mask
@@ -724,7 +784,7 @@ class Carmenes(Instrument):
         # deal with not having CCF_EW
         # TODO: this is template specific
         if kw_ccf_ew not in header:
-            header[kw_ccf_ew] = 5.5 / mp.fwhm() * 1000
+            header[kw_ccf_ew] = 5.5 / mp.fwhm_value() * 1000
         # ---------------------------------------------------------------------
         # return header
         return header

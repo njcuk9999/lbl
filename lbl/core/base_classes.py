@@ -59,6 +59,7 @@ class LblLowCCFSNR(LblException):
         """
         super().__init__(message)
 
+
 class LblCurveFitException(Exception):
     def __init__(self, message: str, x=None, y=None, f=None,
                  p0=None, func=None, error=None):
@@ -210,6 +211,8 @@ class ParamDict(UserDict):
         self.instances = dict()
         # must be set (by instrument)
         self.not_none = []
+        # set locked flag
+        self._locked = False
 
     def set(self, key: str, value: Any, source: Union[str, None] = None,
             desc: Union[str, None] = None, arg: Union[str, None] = None,
@@ -240,6 +243,11 @@ class ParamDict(UserDict):
         """
         # capitalize
         key = self._capitalize(key)
+        # deal with lock
+        if self._locked and key not in self.data:
+            emsg = ('Cannot set parameter {0} - parameter must be set in'
+                    ' lbl.core.parameters first.')
+            raise LblException(emsg.format(key))
         # deal with storing not None
         if not_none:
             self.not_none.append(key)
@@ -269,6 +277,11 @@ class ParamDict(UserDict):
         """
         # capitalize
         key = self._capitalize(key)
+        # deal with lock
+        if self._locked and key not in self.data:
+            emsg = ('Cannot set parameter {0} - parameter must be set in'
+                    ' lbl.core.parameters first.')
+            raise LblException(emsg.format(key))
         # then do the normal dictionary setting
         self.data[key] = value
 
@@ -335,6 +348,9 @@ class ParamDict(UserDict):
         :return: new instance of ParamDict
         """
         new = ParamDict()
+        # make sure new is unlocked
+        new._unlock()
+        # get keys and values
         keys, values = self.data.keys(), self.data.values()
         for key, value in zip(keys, values):
             # copy value
@@ -344,6 +360,8 @@ class ParamDict(UserDict):
                 new.instances[key] = None
             else:
                 new.instances[key] = self.instances[key].copy()
+        # lock new
+        new._lock()
         # return parameter dictionary
         return new
 
@@ -440,6 +458,12 @@ class ParamDict(UserDict):
         # return ptable
         return ptable
 
+    def _lock(self):
+        self._locked = True
+
+    def _unlock(self):
+        self._locked = False
+
 
 class LBLError(Exception):
     def __init__(self, message):
@@ -469,11 +493,11 @@ class HeaderTranslate:
 
     def default_func(self, original_key: str, new_key: str,
                      value: Any) -> Tuple[Any, str]:
-        _ = new_key
+        _ = self, new_key
         comment = 'Translated from {0}'.format(original_key)
         return value, comment
 
-    def add(self, original_key:str,  new_key: str, func: Optional[Any] = None):
+    def add(self, original_key: str, new_key: str, func: Optional[Any] = None):
         self.original_keys.append(original_key)
         self.new_keys.append(new_key)
         self.functions.append(func)

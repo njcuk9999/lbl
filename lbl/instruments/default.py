@@ -464,8 +464,8 @@ class Instrument:
         io.write_fits(filename, data=datalist, header=headerlist,
                       dtype=datatypelist, names=name_list)
 
-    def write_template(self, template_file: str, props: dict,
-                       sci_hdict: io.LBLHeader, sci_table: dict):
+    def write_template(self, template_file: str, props: Dict[str, Any],
+                       sci_hdict: io.LBLHeader, sci_table):
         """
         Write the template file to disk
 
@@ -500,6 +500,12 @@ class Instrument:
         table1['flux'] = props['flux']
         table1['eflux'] = props['eflux']
         table1['rms'] = props['rms']
+        table1['flux_odd'] = props['flux_odd']
+        table1['eflux_odd'] = props['eflux_odd']
+        table1['rms_odd'] = props['rms_odd']
+        table1['flux_even'] = props['flux_even']
+        table1['eflux_even'] = props['eflux_even']
+        table1['rms_even'] = props['rms_even']
         # ---------------------------------------------------------------------
         # construct table 2 - the science list
         table2 = Table()
@@ -512,7 +518,8 @@ class Instrument:
         # write to file
         io.write_fits(template_file, data=[None, table1, table2],
                       header=[header, None, None],
-                      dtype=[None, 'table', 'table'])
+                      dtype=[None, 'table', 'table'],
+                      names=[None, 'TEMPLATE', 'SCI_TABLE'])
 
     def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
                             sci_hdict: io.LBLHeader,
@@ -1121,7 +1128,7 @@ class Instrument:
         earth_location = self.params['EARTH_LOCATION']
         # deal with not having EARTH_LOCATION (backwards compatibility)
         if earth_location is None:
-            emsg = ('EARTH_LOCATION is not defined in the instrument ')
+            emsg = 'EARTH_LOCATION is not defined in the instrument '
             raise base_classes.LblException(emsg)
         # try to get location of site from astropy
         try:

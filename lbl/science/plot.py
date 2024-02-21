@@ -140,13 +140,17 @@ def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     plt.close()
 
 
-
-def compute_plot_sysvel(inst: InstrumentsType, dvgrid, ccf_vector, gcoeffs,
-                        gfit, props):
+def compute_plot_sysvel(inst: InstrumentsType, dvgrid: np.ndarray,
+                        ccf_vector: np.ndarray,
+                        gfit: np.ndarray, props: Dict[str, Any]):
     """
     This is a blank plot
     :param inst:  Instrument, instrument this plot is used for
-    :param kwargs: replace with explicit keyword arguments
+    :param dvgrid: np.ndarray, the rv velocity grid
+    :param ccf_vector: np.ndarray, the ccf vector
+    :param gfit: np.ndarray, the ccf fit vector
+    :param props: dict, the properties of the ccf fit (VSYS, FWHM, CONTRAST,
+                  SNR, EARS, EXPO)
 
     :return: None - plots
     """
@@ -162,7 +166,7 @@ def compute_plot_sysvel(inst: InstrumentsType, dvgrid, ccf_vector, gcoeffs,
     fig, frames = plt.subplots(ncols=1, nrows=2, sharex='all')
     # plot functions here
     frames[0].plot(dvgrid / 1000, ccf_vector, label='CCF')
-    frames[0].plot(dvgrid / 1000, gfit, color='r', linestyle='--',  label='fit')
+    frames[0].plot(dvgrid / 1000, gfit, color='r', linestyle='--', label='fit')
     frames[0].legend(loc=0)
     frames[0].set(ylabel='CCF')
     frames[0].grid(color='grey', linestyle='--', linewidth=0.5)

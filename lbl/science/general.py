@@ -10,13 +10,14 @@ Created on 2021-03-16
 import os
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import wget
 from astropy import constants
 from astropy import units as uu
 from astropy.table import Table
+from astropy.io import fits
 from scipy import stats
 from scipy.stats import pearsonr
 
@@ -243,7 +244,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         ref_dict['WAVE_END'] = np.array(wave_end)
         ref_dict['WEIGHT_LINE'] = np.array(weight_line)
         ref_dict['XPIX'] = xpix
-        ref_dict['LINE_SNR'] = np.array(line_snr)
+        with warnings.catch_warnings(record=True) as _:
+            ref_dict['LINE_SNR'] = np.array(line_snr)
         ref_dict['LINE_DEPTH'] = np.array(line_depth)
         ref_dict['LOCAL_FLUX'] = np.array(local_flux)
         # ratio of expected VS actual RMS in difference of model vs line
@@ -327,6 +329,16 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # get properties from template table
     twave = np.array(template_table['wavelength'])
     tflux = np.array(template_table['flux'])
+    # deal with the odd/even templates
+    if 'flux_odd' in template_table.colnames:
+        # this captures the odd/even asymetry in resolution along orders
+        # we have 3 templates, one averaing the odd, one the even and one
+        # having all the flux from the entire ordes
+        tflux_odd = np.array(template_table['flux_odd'])
+        tflux_even = np.array(template_table['flux_even'])
+    else:
+        tflux_odd, tflux_even = np.array([]), np.array([])
+
     # some masking to avoid errors later
     # if we have the n_valid flag in the table, then we must have at least
     # 1/2 of points valid
@@ -381,6 +393,13 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # copy the flux
     tflux0 = np.array(tflux)
+    # deal with the odd/even templates
+    if 'flux_odd' in template_table.colnames:
+        tflux0_odd = np.array(tflux_odd)
+        tflux0_even = np.array(tflux_even)
+    else:
+        tflux0_odd = np.array([])
+        tflux0_even = np.array([])
     # -------------------------------------------------------------------------
     # work out the velocity scale
     width = get_velo_scale(twave, hp_width)
@@ -390,12 +409,32 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # get the gradient of the log of the wave
     grad_log_wave = np.gradient(np.log(twave))
+    # work out the glw_c (grad_log_wave / speed_of_light_ms)
+    glw_c = grad_log_wave * speed_of_light_ms
     # get the derivative of the flux
-    dflux = np.gradient(tflux) / grad_log_wave / speed_of_light_ms
+    dflux = np.gradient(tflux) / glw_c
+    # fractional change in flux for an offset in velocity
+    dflux /= tflux0
     # get the 2nd derivative of the flux
-    d2flux = np.gradient(dflux) / grad_log_wave / speed_of_light_ms
+    d2flux = np.gradient(dflux) / glw_c
     # get the 3rd derivative of the flux
-    d3flux = np.gradient(d2flux) / grad_log_wave / speed_of_light_ms
+    d3flux = np.gradient(d2flux) / glw_c
+    # deal with the odd/even templates
+    if 'flux_odd' in template_table.colnames:
+        # get the derivative of the flux
+        dflux_odd = np.gradient(tflux_odd) / glw_c
+        dflux_even = np.gradient(tflux_even) / glw_c
+        # get the 2nd derivative of the flux
+        d2flux_odd = np.gradient(dflux_odd) / glw_c
+        d2flux_even = np.gradient(dflux_even) / glw_c
+        # get the 3rd derivative of the flux
+        d3flux_odd = np.gradient(d2flux_odd) / glw_c
+        d3flux_even = np.gradient(d2flux_even) / glw_c
+    else:
+        dflux_odd, dflux_even = np.array([]), np.array([])
+        d2flux_odd, d2flux_even = np.array([]), np.array([])
+        d3flux_odd, d3flux_even = np.array([]), np.array([])
+
     # -------------------------------------------------------------------------
     # we create the spline of the template to be used everywhere later
     valid = np.isfinite(tflux) & np.isfinite(dflux)
@@ -408,13 +447,41 @@ def spline_template(inst: InstrumentsType, template_file: str,
     sps = dict()
     # template removed from its systemic velocity, the spline is redefined
     #   for good
-    k_order = 5
+    k_order = 2
     # flux, 1st and 2nd derivatives
     sps['spline0'] = mp.iuv_spline(ntwave, tflux0[valid], k=k_order, ext=1)
     sps['spline'] = mp.iuv_spline(ntwave, tflux[valid], k=k_order, ext=1)
-    sps['dspline'] = mp.iuv_spline(ntwave, dflux[valid], k=k_order, ext=1)
-    sps['d2spline'] = mp.iuv_spline(ntwave, d2flux[valid], k=k_order, ext=1)
-    sps['d3spline'] = mp.iuv_spline(ntwave, d3flux[valid], k=k_order, ext=1)
+    # deal with the odd/even templates
+    if 'flux_odd' in template_table.colnames:
+        # keeping track of odd/even derivatives
+        sps['spline_odd'] = mp.iuv_spline(ntwave, tflux_odd[valid],
+                                          k=k_order, ext=1)
+        sps['spline_even'] = mp.iuv_spline(ntwave, tflux_even[valid],
+                                           k=k_order, ext=1)
+        sps['spline0_odd'] = mp.iuv_spline(ntwave, tflux0_odd[valid],
+                                           k=k_order, ext=1)
+        sps['spline0_even'] = mp.iuv_spline(ntwave, tflux0_even[valid],
+                                            k=k_order, ext=1)
+        sps['dspline_odd'] = mp.iuv_spline(ntwave, dflux_odd[valid],
+                                           k=k_order, ext=1)
+        sps['dspline_even'] = mp.iuv_spline(ntwave, dflux_even[valid],
+                                            k=k_order, ext=1)
+        sps['d2spline_odd'] = mp.iuv_spline(ntwave, d2flux_odd[valid],
+                                            k=k_order, ext=1)
+        sps['d2spline_even'] = mp.iuv_spline(ntwave, d2flux_even[valid],
+                                             k=k_order, ext=1)
+        sps['d3spline_odd'] = mp.iuv_spline(ntwave, d3flux_odd[valid],
+                                            k=k_order, ext=1)
+        sps['d3spline_even'] = mp.iuv_spline(ntwave, d3flux_even[valid],
+                                             k=k_order, ext=1)
+    else:
+        sps['dspline'] = mp.iuv_spline(ntwave, dflux[valid],
+                                       k=k_order, ext=1)
+        sps['d2spline'] = mp.iuv_spline(ntwave, d2flux[valid],
+                                        k=k_order, ext=1)
+        sps['d3spline'] = mp.iuv_spline(ntwave, d3flux[valid],
+                                        k=k_order, ext=1)
+
     # deal with residual projection tables
     if isinstance(inst.params['RESPROJ_TABLES'], dict):
         # loop around table
@@ -431,7 +498,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
                 raise LblException(emsg.format(key))
             # load the table
             tbl_res = Table.read(spline_path)
-            # give a error if the table does not have the correct columns
+            # give an error if the table does not have the correct columns
             if 'wavelength' not in tbl_res.colnames:
                 emsg = 'RESPROJ Table {0} must have a "wavelength" column'
                 raise LblException(emsg.format(key))
@@ -460,6 +527,14 @@ def spline_template(inst: InstrumentsType, template_file: str,
     tmask = np.isfinite(tflux).astype(float)
     ntwave1 = mp.doppler_shift(twave, systemic_vel)
     sps['spline_mask'] = mp.iuv_spline(ntwave1, tmask, k=1, ext=1)
+    # deal with odd/even templates
+    if 'flux_odd' in template_table.colnames:
+        tmask_odd = np.isfinite(tflux_odd).astype(float)
+        tmask_even = np.isfinite(tflux_even).astype(float)
+        sps['spline_mask_odd'] = mp.iuv_spline(ntwave1, tmask_odd,
+                                               k=1, ext=1)
+        sps['spline_mask_even'] = mp.iuv_spline(ntwave1, tmask_even,
+                                                k=1, ext=1)
     # -------------------------------------------------------------------------
     # return splines
     return sps
@@ -473,6 +548,14 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     log.general('Calculating systemic velocity properties')
     # output return in a dictionary
     props = dict()
+    # check if there is an extension with the RV for all epochs
+    # noinspection PyBroadException
+    try:
+        props['SCI_TABLE'] = Table(fits.getdata(template_file, 'SCI_TABLE'))
+    except:
+        msg = 'No RV table found'
+        log.general(msg)
+
     # get the systemic velocity for mask
     props['MASK_SYS_VEL'] = inst.get_mask_systemic_vel(mask_file)
     # deal with non science files
@@ -547,7 +630,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         # shift the mask by dv for this iteration
         pos = mp.doppler_shift(mask_table['ll_mask_s'], -dv[it])
         # calculate the ccf for this iteration
-        ccf_vector[it] = mp.nansum(mask_table['w_mask'] * sps(pos))
+        ccf_vector[it] = mp.nansum(mask_table['depth'] * sps(pos))
     # CCF can be normalized to its median as we have only used
     # features in absorption rather than the 'full'
     ccf_vector /= np.nanmedian(ccf_vector)
@@ -601,8 +684,8 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     props['EARS'] = coeffs[3]
     props['EXPO'] = coeffs[4]
     # ---------------------------------------------------------------------
-    # plot
-    plot.compute_plot_sysvel(inst, dv, ccf_vector - lowf, coeffs, gfit, props)
+    # plot of the CCF and its residual
+    plot.compute_plot_sysvel(inst, dv, ccf_vector - lowf, gfit, props)
     # ---------------------------------------------------------------------
     # return the props
     return props
@@ -722,6 +805,11 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
         # apply mask to wavegrid and sci data
         wavegrid2 = wavegrid[mask]
         sci_data2 = sci_data[mask]
+    # set the data below zero to NaNs
+    sci_data2[sci_data2 < 0] = np.nan
+    # set the data above 5 sigma to NaNs
+    sci_data2[sci_data2 > 5 * np.nanmedian(sci_data2)] = np.nan
+
     # -------------------------------------------------------------------------
     # Make a magic grid to use in the CCF
     # -------------------------------------------------------------------------
@@ -804,7 +892,7 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     margs = [kind, -systemic_velocity]
     log.general(msg.format(*margs))
     msg = '\t\tCCF FWHM ({0}) = {1:.1f} m/s'
-    margs = [kind, mp.fwhm() * ccf_ewidth]
+    margs = [kind, mp.fwhm_value() * ccf_ewidth]
     log.general(msg.format(*margs))
     msg = '\t\tCCF contrast = {0:.2f}'
     margs = [gcoeffs[2]]
@@ -977,8 +1065,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                splines: Dict[str, Any], ref_table: Dict[str, Any],
                blaze: np.ndarray, systemic_props: Dict[str, Any],
                systemic_all: np.ndarray,
-               mjdate_all: np.ndarray, ccf_ewidth: Union[float, None] = None,
-               reset_rv: bool = True, model_velocity: float = np.inf,
+               mjdate_all: np.ndarray, model_velocity: float = np.inf,
                science_file: str = '', mask_file: str = ''
                ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
@@ -993,11 +1080,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     :param blaze: np.ndarray, the blaze to correct the science data
     :param systemic_props: dictionary containing the systemic velocity
                            properties (calculated from the science template)
+    :param systemic_all: np.ndarray, the systemic velocity for all science files
     :param mjdate_all: np.ndarray, the mid exposure time in mjd for all
                        science files (filled in function for this iteration)
-    :param ccf_ewidth: None or float, the ccf_ewidth to use (if set)
-    :param reset_rv: bool, whether convergence failed in previous
-                               iteration (first iteration always False)
     :param model_velocity: float, inf if not set but if set doesn't recalculate
                            model velocity
     :param science_file: str, the science file name (required for some
@@ -1104,7 +1189,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # deal with first estimate of RV / CCF equivalent width
     if inst.params['DATA_TYPE'] == 'SCIENCE':
         sys_rv, ccf_fwhm = berv - systemic_props['VSYS'], systemic_props['FWHM']
-        ccf_ewidth = ccf_fwhm / mp.fwhm()
+        ccf_ewidth = ccf_fwhm / mp.fwhm_value()
     else:
         # for FP files
         sys_rv, ccf_ewidth = 0, 0
@@ -1176,12 +1261,22 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # correction of the model from the low-passed ratio of science to model
     ratio = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
-    spline0 = splines['spline0']
-    # spline = splines['spline']
-    dspline = splines['dspline']
-    d2spline = splines['d2spline']
-    d3spline = splines['d3spline']
-    spline_mask = splines['spline_mask']
+    if 'spline0_odd' not in splines:
+        spline0 = splines['spline0'], splines['spline0']
+        dspline = splines['dspline'], splines['dspline']
+        d2spline = splines['d2spline'], splines['d2spline']
+        d3spline = splines['d3spline'], splines['d3spline']
+        spline_mask = [splines['spline_mask'], splines['spline_mask']]
+        log.general('\tThe template has no left/right asymetry')
+    else:
+        spline0 = splines['spline0_odd'], splines['spline0_even']
+        dspline = splines['dspline_odd'], splines['dspline_even']
+        d2spline = splines['d2spline_odd'], splines['d2spline_even']
+        d3spline = splines['d3spline_odd'], splines['d3spline_even']
+        spline_mask = [splines['spline_mask_odd'], splines['spline_mask_even']]
+        log.general('\tThe template has left/right asymetry handled '
+                    'with odd/even splines')
+
     # set up storage for the dv, d2v, d3v and corresponding rms values
     #    fill with NaNs
     dv = np.full(len(ref_table['WAVE_START']), np.nan)
@@ -1229,6 +1324,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             model_offset = 0
         # loop around each order and update model, dmodel, d2model, d3model
         for order_num in range(sci_data.shape[0]):
+            # flag whether an order is even or odd
+            is_even = (order_num % 2) == 0
             # flags orders that have <3 lines
             # do not spend time on this order computing anything
             if width[order_num] == 0:
@@ -1241,13 +1338,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # get the low-frequency component out
             model_mask = np.ones_like(model[order_num])
             # add the spline mask values to model_mask (spline mask is 0 or 1)
-            smask = spline_mask(wave_ord) < 0.99
+            smask = spline_mask[is_even](wave_ord) < 0.99
             # set spline mask splined values to NaN
             model_mask[smask] = np.nan
             # RV shift the spline and correct for blaze and add model mask
             # TODO spline0 or spline depending on the type of filtering and
             #      normalization
-            model[order_num] = spline0(wave_ord) * blaze_ord * model_mask
+            ord_model = spline0[is_even](wave_ord) * blaze_ord * model_mask
+            # push into mask
+            model[order_num] = ord_model
             # we are so close in RV with RV_mean<10*sigma that there is no need
             # to do the low-pass filtering again
             if iteration == 0:
@@ -1264,7 +1363,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 part1 = sci_data[order_num]
                 part2 = model[order_num]
                 part2[part2 == 0] = np.nan
-                ratio[order_num] = mp.lowpassfilter(part1 / part2, int(width[order_num]), k=3)
+                # low pass filter
+                with warnings.catch_warnings(record=True):
+                    ratio_full = part1 / part2
+                    lp_wid = int(width[order_num])
+                    ratio[order_num] = mp.lowpassfilter(ratio_full, lp_wid, k=3)
                 if order_num == 0:
                     log.general('\t\tLow-pass match of model to science ratio')
 
@@ -1281,7 +1384,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # if this is the first iteration update model0
             if iteration == 0:
                 # spline the original template and apply blaze
-                model0[order_num] = spline0(wave_ord) * blaze_ord
+                model0[order_num] = spline0[is_even](wave_ord) * blaze_ord
                 model0[order_num][model0[order_num] == 0] = np.nan
                 # get the good values for the median
                 valid = np.isfinite(model0[order_num])
@@ -1296,13 +1399,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 # multiply by the median of the original spectrum
                 with warnings.catch_warnings(record=True):
                     model0[order_num] = model0[order_num] * med_sci_data_0
+            # -----------------------------------------------------------------
             # update the other splines
             # track ratio if relevant
-            dmodel[order_num] = dspline(wave_ord) * blaze_ord * ratio[order_num]
+            dmodel[order_num] = dspline[is_even](wave_ord)
             # only do the d2 and d3 stuff if on last iteration
             if flag_last_iter:
-                d2model_ord = d2spline(wave_ord) * blaze_ord * ratio[order_num]
-                d3model_ord = d3spline(wave_ord) * blaze_ord * ratio[order_num]
+                d2model_ord = d2spline[is_even](wave_ord)
+                d3model_ord = d3spline[is_even](wave_ord)
                 d2model[order_num] = d2model_ord
                 d3model[order_num] = d3model_ord
                 # deal with residual projection tables if required
@@ -1313,8 +1417,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         rp_spline = splines[key](wave_ord)
                         # The models are always expressed in terms of the
                         # original spectrum
-                        rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
-                        rp_spline *= (blaze_ord * rblaze)
+                        # rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
+                        # rp_spline *= (blaze_ord * rblaze)
                         # add to projection model
                         proj_model[key]['model'][order_num] = rp_spline
         # ---------------------------------------------------------------------
@@ -1370,10 +1474,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         if not np.isfinite(model_velocity):
             mask_table = inst.load_mask(mask_file)
             wave_mask = np.array(mask_table['ll_mask_s'], dtype=float)
-            ccf_weight = np.array(mask_table['w_mask'], dtype=float)
+            ccf_weight = np.array(mask_table['depth'], dtype=float)
             mask_snr = np.array(mask_table['line_snr'], dtype=float)
             # if SNR of line is less than 3 we don't use it
             ccf_weight[mask_snr < 3] = 0
+            # absolute depths cannot be greater than 1
+            ccf_weight[abs(ccf_weight) > 1] = 0
             # calculate the rough CCF RV estimate
             sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
                                                       wave_mask, ccf_weight,
@@ -1542,11 +1648,28 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             #                 proj_model[key]['d_sum'] = d_sum
             # -----------------------------------------------------------------
             # calculate the difference of this segment (weighted by the mask)
-            diff_seg = (sci_seg - model_seg) * weight_mask
+            # -----------------------------------------------------------------
+            # if we have any NaNs in our segment - reject this segment
+            if np.any(np.isnan(model_seg)):
+                continue
+            # remove any pixels are zero or negative remove segment
+            if np.any(model_seg <= 0):
+                continue
+
+            diff_seg = ((sci_seg / model_seg) - 1) * weight_mask
             # work out the sum of the rms
             sum_rms = np.sum(rms_ord[x_start: x_end + 1] * weight_mask)
+
+            # We remove any segment that has a NaN in its template (any
+            # pixel) or has no valid pixel in the spectrum considered.
+            if not np.isfinite(sum_rms):
+                continue
+
             # work out the mean rms
             mean_rms = sum_rms / sum_weight_mask
+            # express as a fractional RMS
+            mean_rms /= np.nanmean(model_seg)
+
             # -----------------------------------------------------------------
             # work out the 1st derivative
             #    From bouchy 2001 equation, RV error for each pixel
@@ -1584,7 +1707,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         # get d_seg
                         pd_seg = proj_model[key]['d_seg']
                         # calculate the bouchy equation
-                        pbout = bouchy_equation_line(pd_seg, diff_seg, mean_rms)
+                        # Express as a fraction of the model rather than a 'raw'
+                        # value.
+                        # Same for error
+                        frac_diff_seg = diff_seg
+                        frac_mean_rms = mean_rms
+                        pbout = bouchy_equation_line(pd_seg, frac_diff_seg,
+                                                     frac_mean_rms)
                         # push into the projection model
                         pd_key, psd_key = pbout
                         if np.isfinite(pd_key) and np.isfinite(psd_key):
@@ -1626,7 +1755,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         log.general(msg.format(*margs))
         # ---------------------------------------------------------------------
         # get final rv value
-        rv_final = np.array(dv + sys_rv - berv)
+        rv_final = np.array(dv + sys_rv - berv + model_offset)
         # add mean rv to sys_rv
         sys_rv = sys_rv + rv_mean
         # get end time
@@ -1649,6 +1778,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             break
         # do a convergence check
         if np.abs(rv_mean) < (converge_thres * bulk_error):
+            msg = '\t\tConverged RV = {0:.2f} m/s, sigma = {1:.2f} m/s'
+            margs = [rv_mean, bulk_error]
+            log.general(msg.format(*margs))
+
             # One more iteration
             flag_last_iter = True
 
@@ -1815,7 +1948,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # output rdb column set up
     # -------------------------------------------------------------------------
     # storage for rdb table dictionary
-    rdb_dict = dict()
+    rdb_dict: Dict[str, Any] = dict()
     # add columns (dv, sdv, d2v, sd2v, d3v, sd3v, rjd, vrad, svrad)
     rdb_dict['rjd'] = np.zeros_like(lblrvfiles, dtype=float)
     rdb_dict['vrad'] = np.zeros_like(lblrvfiles, dtype=float)
@@ -1871,7 +2004,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # open first file to set up good mask
     # -------------------------------------------------------------------------
     # load table and header
-    rvtable0, rvhdr0 = inst.load_lblrv_file(lblrvfiles[0])
+    rvtable0, rvhdr0 = inst.load_lblrv_file(str(lblrvfiles[0]))
     # get columns of rvtable0
     wavestart0 = np.array(rvtable0['WAVE_START'])
     npixline0 = np.array(rvtable0['NPIXLINE'])
@@ -1952,6 +2085,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # loop around header keys
         for ikey, key in enumerate(header_keys):
+            # make sure key is a string
+            key = str(key)
             # deal with FP flags
             if flag_calib and fp_flags[ikey]:
                 rdb_dict[key][row] = np.nan
@@ -2036,8 +2171,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration add plot values
         if not flag_calib:
-            # plot specific math
-            xlim = [med_velo - 5000, med_velo + 5000]
+            # plot specific domain. We use the median velocity of the file
+            # for the plot domain. +-15 km/s to get an idea of residuals.
+            xlim = [med_velo - 15000, med_velo + 15000]
             # get velocity range
             vrange = np.arange(xlim[0], xlim[1], 50.0)
             # storage for probability density function
@@ -2179,7 +2315,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 sigma = (sig2 - sig1) / 2
                 sdv_arr[:, line_it] = sdv_arr[:, line_it] * sigma
 
-            # first output of pearsonr is the the correlation itself.
+            # first output of pearsonr is the correlation itself.
             # this is meaningless if we don't know the number of points
             # that came in. The second term is the likelihood that the
             # correlation is due to a statistical fluctuation (it significance)
@@ -2195,7 +2331,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 continue
             # get the difference and error for each line
             with warnings.catch_warnings(record=True) as _:
-                diff1 = dv_arr[:, line_it] - np.nanmedian(dv_arr[:, line_it])
+                diff1 = dv_arr[:, line_it] - rdb_dict['vrad']
+                diff1 -= np.nanmedian(diff1)
             # here we avoid having a shallow copy
             err1 = np.array(sdv_arr[:, line_it])
             # try to guess the odd ratio mean
@@ -2360,7 +2497,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['sdW'][row] = sdw
         # ---------------------------------------------------------------------
         # calculate the mean full width half max
-        mean_fwhm = mp.fwhm() * ccf_ew_row
+        mean_fwhm = mp.fwhm_value() * ccf_ew_row
         # fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_d2v / ccf_ew_row)
         fwhm_row = mean_fwhm + dw / mean_fwhm
         sig_fwhm_row = sdw / mean_fwhm
@@ -2744,6 +2881,10 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # -------------------------------------------------------------------------
     # get the time for cross-matching between the drift file and science
     timestamp = rdb_table['rjd']
+    # round time stamp to 8 decimal places (to avoid rounding errors)
+    timestamp = np.round(timestamp, 8)
+    # round the drift_table rjd to 8 decimal places (to avoid rounding errors)
+    drift_times = np.round(drift_table['rjd'], 8)
     # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB drift corrected table')
@@ -2753,7 +2894,7 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # loop around the wave files of this type
     for row in tqdm(range(len(timestamp))):
         # create a mask of all files that match in drift file
-        file_mask = timestamp[row] == drift_table['rjd']
+        file_mask = timestamp[row] == drift_times
         # ---------------------------------------------------------------------
         # deal with no files present - cannot correct drift
         if np.sum(file_mask) == 0:

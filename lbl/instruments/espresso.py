@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
 
 from lbl.core import astro
 from lbl.core import base
@@ -216,6 +215,17 @@ class Espresso(Instrument):
         # Define the upper limit on valid exponent of other absorbers
         self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
+        # ---------------------------------------------------------------------
+        # Parameters for the template construction
+        # ---------------------------------------------------------------------
+        # max number of bins for the median of the template. Avoids handling
+        # too many spectra at once.
+        self.params.set('TEMPLATE_MEDBINMAX', 19, source=func_name)
+        # maximum RMS between the template and the median of the template
+        # to accept the median of the template as a good template. If above
+        # we iterate once more. Expressed in m/s
+        self.params.set('MAX_CONVERGENCE_TEMPLATE_RV',100, source=func_name)
+
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -707,7 +717,7 @@ class Espresso(Instrument):
         # deal with not having CCF_EW
         # TODO: this is template specific
         if kw_ccf_ew not in header:
-            header[kw_ccf_ew] = 5.5 / mp.fwhm() * 1000
+            header[kw_ccf_ew] = 5.5 / mp.fwhm_value() * 1000
         # ---------------------------------------------------------------------
         # return header
         return header

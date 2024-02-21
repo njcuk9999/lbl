@@ -188,7 +188,7 @@ def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
     # -------------------------------------------------------------------------
     # define the convolution kernel for the model. This shape factor can be
     #   modified if required.
-    wkernel = kwidth / mp.fwhm()
+    wkernel = kwidth / mp.fwhm_value()
     # definition of the convoolution kernel x grid, defined over 4 FWHM
     kernal_width = int(kwidth * 4)
     # get the kernel vector
@@ -420,7 +420,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
         # ---------------------------------------------------------------------
         # apply some cuts to very discrepant points. These will be set to zero
         #   not to bias the CCF too mch
-        sigma_cut = np.nanmedian(np.abs(sp_tmp)) * sigma_threshold
+        sigma_cut = np.nanmedian(np.abs(sp_tmp[sp_tmp != 0])) * sigma_threshold
         # remove non finite pixels
         sp_tmp[~np.isfinite(sp_tmp)] = 0.0
         # remove outliers

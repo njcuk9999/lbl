@@ -172,6 +172,8 @@ class LBLHeader(UserDict):
         Construct a LBLHeader from a fits file
 
         :param header: fits.Header, the loaded fits header (astro.io.FitsHeader)
+        :param filename: str, the filename of the header (for error reporting)
+
         :return: LBLHeader, the header
         """
         new = cls()
@@ -211,7 +213,7 @@ class LBLHeader(UserDict):
         # return header
         return header
 
-    def get_hkey(self,  key: Union[str, List[str]],
+    def get_hkey(self, key: Union[str, List[str]],
                  filename: Union[str, None] = None,
                  required: bool = True,
                  dtype: Any = None) -> Any:
@@ -782,6 +784,7 @@ def get_urlfile(url: str, name: str, savepath: str, required: bool = True):
     :param url: str, the url to get the file from
     :param name: str, the name of the file (for logging)
     :param savepath:, str, the absolute path to the file save location
+    :param required: bool, if True raise an error if the file is not found
 
     :return: None
     """
@@ -861,8 +864,8 @@ def hdf_to_header(storekey: str, filename: str):
 
 
 def save_data_to_hdfstore(filename: str, columns: Dict[str, List[np.ndarray]],
-                           indices: Dict[str, list], image_storekey: str,
-                           header: LBLHeader, header_storekey: str):
+                          indices: Dict[str, list], image_storekey: str,
+                          header: LBLHeader, header_storekey: str):
     # -------------------------------------------------------------------------
     # get pandas multi-index
     all_indices = []

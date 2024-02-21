@@ -31,6 +31,10 @@ INSTRUMENTS = ['carmenes_vis',
                'maroonx_b', 'maroonx_r',
                'sophie']
 
+# define global params to override
+GLOBAL = dict()
+GLOBAL['PLOT'] = False
+
 
 # =============================================================================
 # Define functions
@@ -46,7 +50,7 @@ def carmenes_vis():
     rparams['OBJECT_SCIENCE'] = ['K2-18']
     rparams['OBJECT_TEMPLATE'] = ['K2-18']
     rparams['OBJECT_TEFF'] = [3500]
-    rparams['BLAZE_FILE'] = 'carmenes_dummy_blaze.fits'
+    rparams['BLAZE_FILE'] = None
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -249,10 +253,10 @@ def spirou_apero():
     rparams['INSTRUMENT'] = 'SPIROU'
     rparams['DATA_SOURCE'] = 'APERO'
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'SPIROU-apero')
-    rparams['DATA_TYPES'] = ['SCIENCE']
-    rparams['OBJECT_SCIENCE'] = ['GL699']
-    rparams['OBJECT_TEMPLATE'] = ['GL699']
-    rparams['OBJECT_TEFF'] = [3224]
+    rparams['DATA_TYPES'] = ['FP', 'SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['FP', 'GL699']
+    rparams['OBJECT_TEMPLATE'] = ['FP', 'GL699']
+    rparams['OBJECT_TEFF'] = [300, 3224]
     rparams['BLAZE_FILE'] = 'F8018F48F0_pp_blaze_AB.fits'
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False
@@ -446,6 +450,9 @@ def main():
         # ---------------------------------------------------------------------
         # Run the wrapper code using the above settings
         # ---------------------------------------------------------------------
+        # override global params
+        for key in GLOBAL:
+            rparams[key] = GLOBAL[key]
         # run main
         lbl_wrap(rparams)
 

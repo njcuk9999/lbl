@@ -146,7 +146,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     for it, filename in enumerate(science_files):
         # construct the output directory
         outdir = inst.params['OBJECT_SCIENCE'] + '_tc'
-        outpath = os.path.join(science_dir, outdir)
+        outpath = str(os.path.join(science_dir, outdir))
         # create this path if it doesn't exist
         if not os.path.exists(outpath):
             os.makedirs(outpath)
