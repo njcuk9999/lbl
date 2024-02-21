@@ -2879,6 +2879,10 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # -------------------------------------------------------------------------
     # get the time for cross-matching between the drift file and science
     timestamp = rdb_table['rjd']
+    # round time stamp to 8 decimal places (to avoid rounding errors)
+    timestamp = np.round(timestamp, 8)
+    # round the drift_table rjd to 8 decimal places (to avoid rounding errors)
+    drift_times = np.round(drift_table['rjd'], 8)
     # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB drift corrected table')
@@ -2888,7 +2892,7 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # loop around the wave files of this type
     for row in tqdm(range(len(timestamp))):
         # create a mask of all files that match in drift file
-        file_mask = timestamp[row] == drift_table['rjd']
+        file_mask = timestamp[row] == drift_times
         # ---------------------------------------------------------------------
         # deal with no files present - cannot correct drift
         if np.sum(file_mask) == 0:
