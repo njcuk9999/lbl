@@ -2300,8 +2300,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             per_line_diff = (dv_arr[:, line_it] - rdb_dict['vrad'])
             # skip if less that 3 valid values for this line
             if np.sum(good) < 3:
-                per_line_mean[line_it] = np.nan
-                per_line_error[line_it] = np.nan
+                if dv_arr.shape[0] < 5:
+                    per_line_mean[line_it] = np.nanmean(dv_arr[:, line_it])
+                    per_line_error[line_it] = np.nanstd(dv_arr[:, line_it])/np.sqrt(np.sum(good))
+                else:
+                    per_line_mean[line_it] = np.nan
+                    per_line_error[line_it] = np.nan
                 continue
 
             if force_sigma_per_line:
