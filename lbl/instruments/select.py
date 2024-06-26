@@ -50,8 +50,8 @@ InstrumentsType = Union[default.Instrument,
                         harps.Harps_ORIG, harps.Harps_ESO,
                         espresso.Espresso,
                         carmenes.Carmenes,
-                        nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
-                        nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
+                        nirps.NIRPS_HA, nirps.NIRPS_HA_CADC, nirps.NIRPS_HA_ESO,
+                        nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
                         harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                         maroonx.MaroonX,
                         sophie.Sophie]
@@ -60,8 +60,8 @@ InstrumentsList = (default.Instrument,
                    harps.Harps_ORIG, harps.Harps_ESO,
                    espresso.Espresso,
                    carmenes.Carmenes,
-                   nirps.NIRPS_HA, nirps.NIRPS_HA_ESO,
-                   nirps.NIRPS_HE, nirps.NIRPS_HE_ESO,
+                   nirps.NIRPS_HA, nirps.NIRPS_HA_CADC, nirps.NIRPS_HA_ESO,
+                   nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
                    harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
                    sophie.Sophie)
@@ -75,9 +75,11 @@ InstDict['SPIROU']['APERO'] = spirou.Spirou
 InstDict['SPIROU']['CADC'] = spirou.SpirouCADC
 InstDict['NIRPS_HA'] = dict()
 InstDict['NIRPS_HA']['APERO'] = nirps.NIRPS_HA
+InstDict['NIRPS_HA']['CADC'] = nirps.NIRPS_HA_CADC
 InstDict['NIRPS_HA']['ESO'] = nirps.NIRPS_HA_ESO
 InstDict['NIRPS_HE'] = dict()
 InstDict['NIRPS_HE']['APERO'] = nirps.NIRPS_HE
+InstDict['NIRPS_HE']['CADC'] = nirps.NIRPS_HA_CADC
 InstDict['NIRPS_HE']['ESO'] = nirps.NIRPS_HE_ESO
 InstDict['HARPS'] = dict()
 InstDict['HARPS']['ORIG'] = harps.Harps_ORIG
@@ -94,6 +96,7 @@ InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
 InstDict['SOPHIE'] = dict()
 InstDict['SOPHIE']['None'] = sophie.Sophie
+
 
 # =============================================================================
 # Define functions

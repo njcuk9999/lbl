@@ -591,6 +591,11 @@ def load_header(filename: str,
     # deal with no kind
     if kind is None:
         kind = 'fits file'
+    # if dealing with a mask we don't use extnum or extname
+    #    (mask comes from lbl
+    if 'mask' in kind.lower():
+        extnum = None
+        extname = None
     # try to load fits file
     try:
         if extnum is not None:
