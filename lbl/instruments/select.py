@@ -401,6 +401,20 @@ def make_all_directories(inst: Union[InstrumentsType],
 
 
 # =============================================================================
+# This should be inside a test function
+# =============================================================================
+# Sanity check all instruments should be in base.INSTRUMENTS
+for key in InstDict:
+    if key not in base.INSTRUMENTS:
+        emsg = 'Instrument "{0}" not in base.INSTRUMENTS'
+        raise LblException(emsg.format(key))
+for key in base.INSTRUMENTS:
+    if key not in InstDict:
+        emsg = 'Instrument "{0}" not in InstDict'
+        raise LblException(emsg.format(key))
+
+
+# =============================================================================
 # Start of code
 # =============================================================================
 if __name__ == "__main__":

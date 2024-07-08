@@ -1,0 +1,113 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Wrap file for LBL recipes
+
+Created on {TIME_NOW}
+
+@author: {AUTHORS}
+
+user: {USER}
+lbl version: {LBL_VERSION}
+lbl date: {LBL_DATE}
+"""
+from lbl import lbl_wrap
+
+# =============================================================================
+# Start of code
+# =============================================================================
+if __name__ == "__main__":
+    # set up parameters
+    rparams = dict()
+    # -------------------------------------------------------------------------
+    # LBL parameters
+    # -------------------------------------------------------------------------
+    # You may also add any constant here to override the default value
+    #     (see README for details) - this is NOT recommended for non developers
+    #   Note this may have undesired affects as these parameters apply globally
+    #     for all LBL recipes
+    # -------------------------------------------------------------------------
+    # This is the instrument name
+    #   Currently supported instruments are {INSTRUMENTS}
+    rparams['INSTRUMENT'] = '{INSTRUMENT}'
+    #   Data source must be as follows: {DATA_SOURCES}
+    rparams['DATA_SOURCE'] = '{DATA_SOURCE}'
+    # The data directory where all data is stored under - this should be an
+    #    absolute path
+    rparams['DATA_DIR'] = '{DATA_DIR}'
+    # The input file string (including wildcards) - if not set will use all
+    #   files in the science directory (for this object name)
+    # rparams['INPUT_FILE'] = '{INPUT_FILE}'
+    # Override the blaze filename
+    #      (if not set will use the default for instrument)
+    # rparams['BLAZE_FILE'] = '{BLAZE_FILE}'
+    # -------------------------------------------------------------------------
+    # science criteria
+    # -------------------------------------------------------------------------
+    # The data type (either SCIENCE or FP or LFC)
+    rparams['DATA_TYPES'] = {DATA_TYPES}
+    # The object name (this is the directory name under the /science/
+    #    sub-directory and thus does not have to be the name in the header
+    rparams['OBJECT_SCIENCE'] = {OBJECT_SCIENCE}
+    # This is the template that will be used or created (depending on what is
+    #   run)
+    rparams['OBJECT_TEMPLATE'] = {OBJECT_TEMPLATE}
+    # This is the object temperature in K - used for getting a stellar model
+    #   for the masks it only has to be good to a few 100 K
+    rparams['OBJECT_TEFF'] = {OBJECT_TEFF}
+    # -------------------------------------------------------------------------
+    # what to run and skip if already on disk
+    # -------------------------------------------------------------------------
+    # Whether to run the telluric cleaning process (NOT recommended for data
+    #   that has better telluric cleaning i.e. SPIROU using APERO)
+    rparams['RUN_LBL_TELLUCLEAN'] = {RUN_LBL_TELLUCLEAN}
+    # Whether to create templates from the data in the science directory
+    #   If a template has been supplied from elsewhere this set is NOT required
+    rparams['RUN_LBL_TEMPLATE'] = {RUN_LBL_TEMPLATE}
+    # Whether to create a mask using the template created or supplied
+    rparams['RUN_LBL_MASK'] = {RUN_LBL_MASK}
+    # Whether to run the LBL compute step - which computes the line by line
+    #   for each observation
+    rparams['RUN_LBL_COMPUTE'] = {RUN_LBL_COMPUTE}
+    # Whether to run the LBL compile step - which compiles the rdb file and
+    #   deals with outlier rejection
+    rparams['RUN_LBL_COMPILE'] = {RUN_LBL_COMPILE}
+    # whether to skip observations if a file is already on disk (useful when
+    #   adding a few new files) there is one for each RUN_XXX step
+    #   - Note cannot skip tellu clean
+    rparams['SKIP_LBL_TEMPLATE'] = {SKIP_LBL_TEMPLATE}
+    rparams['SKIP_LBL_MASK'] = {SKIP_LBL_MASK}
+    rparams['SKIP_LBL_COMPUTE'] = {SKIP_LBL_COMPUTE}
+    rparams['SKIP_LBL_COMPILE'] = {SKIP_LBL_COMPILE}
+    # -------------------------------------------------------------------------
+    # LBL settings
+    # -------------------------------------------------------------------------
+    # You can change any setting in parameters (or override those changed
+    #   by specific instruments) here
+    # -------------------------------------------------------------------------
+    # Advanced settings
+    #   Do not use without contacting the LBL developers
+    # -------------------------------------------------------------------------
+    # Dictionary of table name for the file used in the projection against the
+    #     derivative. Key is to output column name that will propagate into the
+    #     final RDB table and the value is the filename of the table. The table
+    #     must follow a number of characteristics explained on the LBL website.
+    # rparams['RESPROJ_TABLES'] = {RESPROJ_TABLES}
+
+    # Rotational velocity parameters, should be a list of two values, one being
+    #     the epsilon and the other one being the vsini in km/s as defined in the
+    #     PyAstronomy.pyasl.rotBroad function
+    # rparams['ROTBROAD'] = {ROTBROAD}
+
+    # turn on plots
+    rparams['PLOT'] = {DO_PLOT}
+
+    # -------------------------------------------------------------------------
+    # Run the wrapper code using the above settings
+    # -------------------------------------------------------------------------
+    # run main
+    lbl_wrap(rparams)
+
+# =============================================================================
+# End of code
+# =============================================================================

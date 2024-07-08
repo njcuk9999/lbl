@@ -41,6 +41,7 @@ log = base_classes.log
 # Define classes
 # =============================================================================
 class Instrument:
+    name: str = 'None'
     params: ParamDict = ParamDict()
 
     def __init__(self, name: str):
