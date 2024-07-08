@@ -35,7 +35,7 @@ log = base_classes.log
 # description for setup recipe
 DESCRIPTION_COMPIL = 'Use this code to setup LBL wrapper script'
 # sub-directories to create
-SUB_DIRECTORIES = ['calib', 'science', 'template']
+SUB_DIRECTORIES = ['calib', 'science', 'templates']
 
 
 # =============================================================================
@@ -128,19 +128,28 @@ def main(**kwargs):
     cond1 = params['wrap_file'] in [None, 'None', 'Null']
     cond2 = os.path.exists(params['wrap_file'])
     # warn user that wrap file exists
-    if not cond1 and cond2:
+    if (not cond1) and cond2:
         wmsg = 'Wrap file {0} already exists. Please delete or rename it first.'
         log.warning(wmsg.format(params['wrap_file']))
     # conditions to ask user for wrap file name
     if cond1 or cond2:
         # ask for wrap file name
         params['wrap_file'] = wrap_setup.ask('wrap_file', required=True)
-    # must be a python file
+    # must be a python file (.py)
     if not params['wrap_file'].endswith('.py'):
-        # log warning
-        wmsg = 'Wrap file must end with ".py" - please rename'
-        # ask for wrap file name
-        params['wrap_file'] = wrap_setup.ask('wrap_file', required=True)
+        params['wrap_file'] += '.py'
+    # -------------------------------------------------------------------------
+    # create a wrap directory
+    base_wrap_file = os.path.basename(params['wrap_file'])
+    wrap_dir = os.path.join(params['data_dir'], 'wrap')
+    # update wrap_file name
+    params['wrap_file'] = os.path.join(wrap_dir, base_wrap_file)
+    # check if wrap directory exists
+    if not os.path.exists(wrap_dir):
+        # print progress
+        log.general('\nCreating wrap directory: {0}'.format(wrap_dir))
+        # make the directory
+        os.makedirs(wrap_dir)
     # -------------------------------------------------------------------------
     # construct the calib and science directory paths
     for dirtype in SUB_DIRECTORIES:
@@ -194,16 +203,13 @@ def main(**kwargs):
     # -------------------------------------------------------------------------
     # default run conditions
     # -------------------------------------------------------------------------
-    if params['instrument'] in ['SPIROU', 'NIRPS']:
-        wrap_dict['RUN_LBL_TELLUCLEAN'] = False
-    else:
-        wrap_dict['RUN_LBL_TELLUCLEAN'] = True
-
-    if params['instrument'] in ['SPIROU', 'NIRPS']:
-        wrap_dict['RUN_LBL_TEMPLATE'] = False
-    else:
-        wrap_dict['RUN_LBL_TEMPLATE'] = True
+    # No tellu clean for spirou/nirps in apero/cadc
+    wrap_dict['RUN_LBL_TELLUCLEAN'] = False
+    if params['instrument'] in ['SPIROU', 'NIRPS_HE', 'NIRPS_HA']:
+        if params['data_source'] in ['APERO', 'CADC']:
+            wrap_dict['RUN_LBL_TELLUCLEAN'] = False
     # All others are True by default
+    wrap_dict['RUN_LBL_TEMPLATE'] = True
     wrap_dict['RUN_LBL_MASK'] = True
     wrap_dict['RUN_LBL_COMPUTE'] = True
     wrap_dict['RUN_LBL_COMPILE'] = True
