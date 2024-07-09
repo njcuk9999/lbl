@@ -2060,7 +2060,15 @@ class NIRPS_HA_ESO(NIRPS_HA):
                  image already blaze corrected)
         """
         # get blaze file from science header
-        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
+        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
+                                      required=False)
+        # it may be that the blaze file is in a difference header key
+        #    in this case we need to find it
+        if blaze_file is None:
+            blaze_file = sci_hdr.find_hkey(self.params['KW_BLAZE_FILE_WILDF'],
+                                           self.params['KW_BLAZE_FILE_WILDM'],
+                                           self.params['KW_BLAZE_FILE_WILDV'])
+
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
@@ -2189,6 +2197,20 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # TODO: This gives the blaze file name for fiber A
         self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL24 NAME',
                         source=func_name)
+
+        # blaze file may be difference we need to define three keys to search
+        #   for it in the header
+        # 1. The header key that gives the blaze file name (with wildcards)
+        self.params.set('KW_BLAZE_FILE_WILDF',
+                        'HIERARCH ESO PRO REC1 CAL* NAME',
+                        source=func_name)
+        # 2. The header key that tells us key 1 is a blaze file
+        self.params.set('KW_BLAZE_FILE_WILDM',
+                        'HIERARCH ESO PRO REC1 CAL* CATG',
+                        source=func_name)
+        # 3. The value of the header key that tells us key 1 is a blaze file
+        self.params.set('KW_BLAZE_FILE_WILDV', 'BLAZE_A', source=func_name)
+
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'EXPTIME',
                         source=func_name)
@@ -2458,7 +2480,14 @@ class NIRPS_HE_ESO(NIRPS_HE):
                  image already blaze corrected)
         """
         # get blaze file from science header
-        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
+        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
+                                      required=False)
+        # it may be that the blaze file is in a difference header key
+        #    in this case we need to find it
+        if blaze_file is None:
+            blaze_file = sci_hdr.find_hkey(self.params['KW_BLAZE_FILE_WILDF'],
+                                           self.params['KW_BLAZE_FILE_WILDM'],
+                                           self.params['KW_BLAZE_FILE_WILDV'])
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
