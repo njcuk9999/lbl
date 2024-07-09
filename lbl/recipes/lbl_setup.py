@@ -171,7 +171,7 @@ def main(**kwargs):
     # get the instrument instance
     # -------------------------------------------------------------------------
     # get instrument class
-    instrument = InstrumentsList[params['instrument']][params['data_source']]
+    instrument = select.InstDict[params['instrument']][params['data_source']]
     # construct the instrumnet instance
     inst = instrument(parameters.params.copy())
 
