@@ -81,6 +81,8 @@ class MaroonX(Instrument):
         self.params.set('EARTH_LOCATION', 'gemini_north')
         # define the default science input files
         self.params.set('INPUT_FILE', '*.hd5', source=func_name)
+        # The input science data are blaze corrected
+        self.params.set('BLAZE_CORRECTED', False, source=func_name)
         # set blaze file
         self.params.set('BLAZE_FILE',
                         '20200603T13_masterflat_backgroundsubtracted_FFFFF'

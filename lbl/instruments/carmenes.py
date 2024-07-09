@@ -73,6 +73,8 @@ class Carmenes(Instrument):
         self.params.set('EARTH_LOCATION', 'CAHA')
         # define the default science input files
         self.params.set('INPUT_FILE', '*.fits', source=func_name)
+        # The input science data are blaze corrected
+        self.params.set('BLAZE_CORRECTED', True, source=func_name)
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
@@ -573,12 +575,16 @@ class Carmenes(Instrument):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
-        # no blaze required - set to ones
-        blaze = np.ones_like(sci_image)
-        # do not require header or calib directory
-        _ = sci_hdr, calib_directory, normalize
-        # return blaze
-        return blaze, True
+        # deal with blaze already corrected
+        if self.params['BLAZE_CORRECTED']:
+            # blaze corrected
+            return np.ones_like(sci_image), True
+        # Current we have no way to load blaze from science file for Carmenes
+        #   so we generate error
+        emsg = ('Cannot load blaze from science file for {0}. '
+                'Please use blaze corrected spectra and update the '
+                'BLAZE_CORRECTED keyword.')
+        raise LblException(emsg.format(self.name))
 
     def no_blaze_corr(self, sci_image: np.ndarray,
                       sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

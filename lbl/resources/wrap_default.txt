@@ -38,6 +38,8 @@ if __name__ == "__main__":
     # The input file string (including wildcards) - if not set will use all
     #   files in the science directory (for this object name)
     # rparams['INPUT_FILE'] = '{INPUT_FILE}'
+    # The input science data are blaze corrected
+    rparams['BLAZE_CORRECTED'] = {BLAZE_CORRECTED}
     # Override the blaze filename
     #      (if not set will use the default for instrument)
     # rparams['BLAZE_FILE'] = '{BLAZE_FILE}'

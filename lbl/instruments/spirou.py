@@ -75,6 +75,8 @@ class Spirou(Instrument):
         self.params.set('EARTH_LOCATION', 'Canada-France-Hawaii Telescope')
         # define the default science input files
         self.params.set('INPUT_FILE', '*.fits', source=func_name)
+        # The input science data are blaze corrected
+        self.params.set('BLAZE_CORRECTED', False, source=func_name)
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
@@ -524,7 +526,10 @@ class Spirou(Instrument):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
-        _ = science_file
+        # deal with blaze already corrected
+        if self.params['BLAZE_CORRECTED']:
+            # blaze corrected
+            return np.ones_like(sci_image), True
         # get blaze file from science header
         blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
         # construct absolute path
@@ -1337,6 +1342,12 @@ class SpirouCADC(Spirou):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
+        # deal with blaze already corrected
+        if self.params['BLAZE_CORRECTED']:
+            emsg = ('BLAZE_CORRECTED=True, this is not possible for {0} '
+                    ' science file packaged is not blaze corrected.')
+            raise base_classes.LblException(emsg.format(self.name))
+        # we always load CADC blaze from extension
         # we always load CADC blaze from extension
         # sci_image, sci_hdr and calib_directory are not used
         _ = sci_image, sci_hdr, calib_directory

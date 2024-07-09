@@ -74,6 +74,8 @@ class Harps(Instrument):
         self.params.set('EARTH_LOCATION', 'La Silla Observatory')
         # define the default science input files
         self.params.set('INPUT_FILE', '*.fits', source=func_name)
+        # The input science data are blaze corrected
+        self.params.set('BLAZE_CORRECTED', False, source=func_name)
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
@@ -525,6 +527,10 @@ class Harps(Instrument):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
+        # deal with blaze already corrected
+        if self.params['BLAZE_CORRECTED']:
+            # blaze corrected
+            return np.ones_like(sci_image), True
         # get blaze file from science header
         blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
         # construct absolute path
@@ -966,6 +972,10 @@ class Harps_ORIG(Harps):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
+        # deal with blaze already corrected
+        if self.params['BLAZE_CORRECTED']:
+            # blaze corrected
+            return np.ones_like(sci_image), True
         # get blaze file from science header
         blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
         # construct absolute path
@@ -1099,6 +1109,8 @@ class Harps_ESO(Harps):
         # ---------------------------------------------------------------------
         # set parameters to update
         # ---------------------------------------------------------------------
+        # The input science data are blaze corrected
+        self.params.set('BLAZE_CORRECTED', True, source=func_name)
         # define the SNR cut off threshold
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # Define the minimum allowed SNR in a pixel to add it to the mask
@@ -1118,9 +1130,9 @@ class Harps_ESO(Harps):
                         source=func_name)
         # define berv keyword
         self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
-        # # define the Blaze calibration file
-        # self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
-        #                 source=func_name)
+        # define the Blaze calibration file
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
+                        source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
@@ -1210,12 +1222,40 @@ class Harps_ESO(Harps):
         :return: the blaze and a flag whether blaze is set to ones (science
                  image already blaze corrected)
         """
-        # no blaze required - set to ones
-        blaze = np.ones_like(sci_image)
-        # do not require header or calib directory
-        _ = sci_hdr, calib_directory, normalize
+        # deal with blaze already corrected
+        if self.params['BLAZE_CORRECTED']:
+            # blaze corrected
+            return np.ones_like(sci_image), True
+
+        # get blaze file from science header
+        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
+                                      required=False)
+        # it may be that the blaze file is in a difference header key
+        #    in this case we need to find it
+        if blaze_file is None:
+            blaze_file = sci_hdr.find_hkey(self.params['KW_BLAZE_FILE_WILDF'],
+                                           self.params['KW_BLAZE_FILE_WILDM'],
+                                           self.params['KW_BLAZE_FILE_WILDV'])
+        # construct absolute path
+        abspath = os.path.join(calib_directory, blaze_file)
+        # check that this file exists
+        io.check_file_exists(abspath)
+        # read blaze file (data and header)
+        blaze = io.load_fits(abspath, kind='blaze fits file')
+        # load wave (we have to modify the blaze)
+        wavemap = self.get_wave_solution(science_file)
+        # update blaze solution by gradient of wave
+        blaze = blaze * np.gradient(wavemap, axis=1)
+        # normalize by order
+        if normalize:
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
         # return blaze
-        return blaze, True
+        return blaze, False
 
     def no_blaze_corr(self, sci_image: np.ndarray,
                       sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

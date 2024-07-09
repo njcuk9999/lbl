@@ -15,8 +15,9 @@ from astropy.time import Time
 
 from lbl.core import base
 from lbl.core import base_classes
-from lbl.instruments import select
+from lbl.core import parameters
 from lbl.core import wrap_setup
+from lbl.instruments import select
 
 # =============================================================================
 # Define variables
@@ -160,9 +161,20 @@ def main(**kwargs):
         # check if directory exists
         if not os.path.exists(dirpath):
             # print progress
-            log.general('\nCreating {0} sub-directory: {1}'.format(dirtype, dirpath))
+            msg = 'Creating {0} sub-directory: {1}'
+            margs = [dirtype, dirpath]
+            log.general(msg.format(*margs))
             # make the directory
             os.makedirs(dirpath)
+
+    # -------------------------------------------------------------------------
+    # get the instrument instance
+    # -------------------------------------------------------------------------
+    # get instrument class
+    instrument = InstrumentsList[params['instrument']][params['data_source']]
+    # construct the instrumnet instance
+    inst = instrument(parameters.params.copy())
+
     # -------------------------------------------------------------------------
     # Save the wrap file
     # -------------------------------------------------------------------------
@@ -187,6 +199,8 @@ def main(**kwargs):
     wrap_dict['DATA_DIR'] = params['data_dir']
     # set the INPUT_FILE - defaults to all files in science/object directory
     wrap_dict['INPUT_FILE'] = '*'
+    # The input science data are blaze corrected
+    wrap_dict['BLAZE_CORRECTED'] = inst.params['BLAZE_CORRECTED']
     # Override the blaze filename
     wrap_dict['BLAZE_FILE'] = 'blaze.fits'
     # -------------------------------------------------------------------------

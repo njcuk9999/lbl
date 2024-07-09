@@ -741,6 +741,10 @@ params.set(key='KW_BERV', value=None, source=__NAME__,
            desc='the barycentric correction keyword', not_none=True,
            fp_flag=True)
 
+# The input science data are blaze corrected
+params.set(key='BLAZE_CORRECTED', value=None, source=__NAME__,
+           desc='The input science data are blaze corrected', not_none=True)
+
 # define the Blaze calibration file
 params.set(key='KW_BLAZE_FILE', value=None, source=__NAME__,
            desc='The Blaze calibration file', not_none=True)
