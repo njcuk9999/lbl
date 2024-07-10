@@ -107,10 +107,15 @@ def main(**kwargs):
         if not cond1 and cond2:
             # noinspection PyBroadException
             try:
-                wmsg = 'Data directory {0} does not exist, creating'
-                log.warning(wmsg.format(params['data_dir']))
-                # make the directory
-                os.makedirs(params['data_dir'])
+                question = ('Data directory {0} does not exist, create it? '
+                            '[Y]es/[N]o:\t')
+                uinput = input(question)
+                if 'Y' in uinput.upper():
+                    # print that we are creating directory
+                    msg = 'Creating data directory: {0}'
+                    log.general(msg.format(params['data_dir']))
+                    # make the directory
+                    os.makedirs(params['data_dir'])
             except Exception as e:
                 emsg = 'Data directory {0} does not exist and cannot be created'
                 log.error(emsg.format(params['data_dir']))
