@@ -116,6 +116,8 @@ def main(**kwargs):
                     log.general(msg.format(params['data_dir']))
                     # make the directory
                     os.makedirs(params['data_dir'])
+                    # break from while loop
+                    break
             except Exception as e:
                 emsg = 'Data directory {0} does not exist and cannot be created'
                 log.error(emsg.format(params['data_dir']))
@@ -248,7 +250,10 @@ def main(**kwargs):
     # -------------------------------------------------------------------------
     # print progress
     log.info('Saving wrap file: {0}. '.format(params['wrap_file']))
-    log.general('\t\tPlease edit the science criteria and run/skip info manually')
+    log.info('\t\tPlease edit the science criteria and run/skip info manually')
+    log.info('\t\t\te.g. {OBJECT_NAME} and {TEMPLATE_NAME}')
+    log.info('\t\t\tPlease get to know all options in this wrap file before '
+             'running!')
 
     # push into file
     wrap_default = wrap_setup.create_wrap_file(params, wrap_dict)
