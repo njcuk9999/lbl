@@ -31,6 +31,7 @@ from lbl.instruments import sophie
 from lbl.instruments import nirps
 from lbl.instruments import spirou
 from lbl.instruments import maroonx
+from lbl.instruments import coralie
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -54,7 +55,8 @@ InstrumentsType = Union[default.Instrument,
                         nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
                         harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                         maroonx.MaroonX,
-                        sophie.Sophie]
+                        sophie.Sophie,
+                        coralie.Coralie]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps_ORIG, harps.Harps_ESO,
@@ -64,7 +66,8 @@ InstrumentsList = (default.Instrument,
                    nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
                    harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
-                   sophie.Sophie)
+                   sophie.Sophie,
+                   coralie.Coralie)
 
 # Add all the instrument + source combinations and link them to instrument
 #   classes
@@ -96,6 +99,8 @@ InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
 InstDict['SOPHIE'] = dict()
 InstDict['SOPHIE']['None'] = sophie.Sophie
+InstDict['CORALIE'] = dict()
+InstDict['CORALIE']['None'] = coralie.Coralie
 
 
 # =============================================================================
