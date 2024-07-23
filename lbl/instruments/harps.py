@@ -973,7 +973,7 @@ class Harps_ORIG(Harps):
         # check that this file exists
         io.check_file_exists(abspath)
         # read blaze file (data and header)
-        blaze, _ = io.load_fits(abspath, kind='blaze fits file')
+        blaze = io.load_fits(abspath, kind='blaze fits file')
         # normalize by order
         if normalize:
             # normalize blaze per order
