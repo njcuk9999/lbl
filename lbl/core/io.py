@@ -213,6 +213,70 @@ class LBLHeader(UserDict):
         # return header
         return header
 
+    def find_hkey(self, key_to_find: str, key_to_match: str,
+                  value_to_match: Any) -> Any:
+        """
+        Find a key in the header that matches a key
+
+        :param key_to_find: str, the key to find
+        :param key_to_match: str, the key to match
+        :param value_to_match: Any, the value to match
+
+        :return: Any, the value of the key
+        """
+        func_name = __NAME__ + '.find_hkey()'
+        # deal with key_to_find being None
+        if key_to_find is None:
+            emsg = 'Key to find must not be None. \n\t{0}'
+            raise LblException(emsg.format(func_name))
+        # deal with key_to_match being None
+        if key_to_match is None:
+            emsg = 'Key to match must not be None. \n\t{0}'
+            raise LblException(emsg.format(func_name))
+        # deal with HIERARCH in key_to_find (replace with *)
+        if 'HIERARCH ' in key_to_find:
+            key_to_find = key_to_find.replace('HIERARCH ', '*')
+        # deal with HIERARCH in key_to_match (replace with *)
+        if 'HIERARCH ' in key_to_match:
+            key_to_match = key_to_match.replace('HIERARCH ', '*')
+        # deal with no wildcard in key_to_find
+        if '*' not in key_to_find:
+            emsg = 'Key to find must contain a wildcard. \n\t{0}'
+            raise LblException(emsg.format(func_name))
+        # deal with no wildcard in key_to_match
+        if '*' not in key_to_match:
+            emsg = 'Key to match must contain a wildcard. \n\t{0}'
+            raise LblException(emsg.format(func_name))
+        # get all keys that match the wildcards in key_to_find
+        all_hkeys_find = self.data[key_to_find]
+        # get all keys that match the wildcards in key_to_match
+        all_hkeys_type = self.data[key_to_match]
+        # deal with no matching keys
+        if len(all_hkeys_find) == 0 or len(all_hkeys_type) == 0:
+            emsg = 'Cannot find keys: {0} in header matching {1}={2}. \n\t{3}'
+            eargs = [key_to_find, key_to_match, value_to_match, func_name]
+            raise LblException(emsg.format(*eargs))
+        # these must agree in length
+        if len(all_hkeys_find) != len(all_hkeys_type):
+            emsg = ('Keys {0} and {1} must have the same length in header. '
+                    '\n\t{2}')
+            eargs = [key_to_find, key_to_match, func_name]
+            raise LblException(emsg.format(*eargs))
+        # loop around key until we find a match - we return the value of that
+        #     match
+        for hkey_find, hkey_type in zip(all_hkeys_find, all_hkeys_type):
+            # get the values and remove any leading/trailling whitespace
+            find_value = self.data[hkey_find].strip()
+            match_value = self.data[hkey_type].strip()
+            # if we have a match return the value
+            if match_value == value_to_match:
+                return find_value
+        # if we get to this point we have not found the key
+        emsg = ('Cannot find keys: {0} in header matching {1}={2}. '
+                '\n\t{3}')
+        eargs = [key_to_find, key_to_match, value_to_match, func_name]
+        raise LblException(emsg.format(*eargs))
+
     def get_hkey(self, key: Union[str, List[str]],
                  filename: Union[str, None] = None,
                  required: bool = True,

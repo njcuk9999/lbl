@@ -15,15 +15,15 @@ from astropy.time import Time, TimeDelta
 # Define variables
 # =============================================================================
 __NAME__: str = 'base.py'
-__version__: str = '0.63.008'
-__date__: str = '2024-06-26'
-__authors__: str = ('Neil Cook, Etienne Artigau, Charles Cadieux, Thomas Vandal,'
-                    'Ryan Cloutier, Pierre Larue')
+__version__: str = '0.63.11'
+__date__: str = '2024-07-17'
+__authors__: str = ('Neil Cook, Etienne Artigau, Charles Cadieux, '
+                    'Thomas Vandal, Ryan Cloutier, Pierre Larue')
 __package__: str = 'lbl'
 
 # currently supported instruments
 INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
-               'HARPSN', 'MAROONX', 'SOPHIE']
+               'NIRPS_HE', 'HARPSN', 'MAROONX', 'SOPHIE', 'CORALIE']
 
 # log variables
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')

@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SPIRou instrument class here: instrument specific settings
+SOPHIE instrument class here: instrument specific settings
 
-Created on 2021-05-27
+Created on 2023-06-21
 
-@author: cook
+@author: p. larue
 """
 import glob
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from astropy.io import fits
 
 from lbl.core import astro
 from lbl.core import base
@@ -24,7 +23,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.carmenes.py'
+__NAME__ = 'instruments.sophie.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -37,44 +36,43 @@ log = base_classes.log
 
 
 # =============================================================================
-# Define Spirou class
+# Define SOPHIE class
 # =============================================================================
-class Carmenes(Instrument):
+class Coralie(Instrument):
     def __init__(self, params: base_classes.ParamDict):
         # call to super function
-        super().__init__('CARMENES')
+        super().__init__('CORALIE')
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_CARMENES.fits'
+        self.default_template_name = 'Template_{0}_CORALIE.fits'
         # define wave limits in nm
-        self.wavemin = 513.651
-        # self.wavemax = 1063.125
-        self.wavemax = 970
+        self.wavemin = 386.8
+        self.wavemax = 689.8
         # set parameters for instrument
         self.params = params
         # override params
         self.param_override()
 
     # -------------------------------------------------------------------------
-    # INSTRUMENT SPECIFIC PARAMETERS
+    # SPIROU SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SPIRou parameters
+        Parameter override for SOPHIE parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.Carmenes.override()'
+        func_name = __NAME__ + '.Coralie.override()'
         # set parameters to update
-        self.params.set('INSTRUMENT', 'CARMENES', source=func_name)
+        self.params.set('INSTRUMENT', 'CORALIE', source=func_name)
         # add instrument earth location
         #    (for use in astropy.coordinates.EarthLocation)
-        self.params.set('EARTH_LOCATION', 'CAHA')
+        self.params.set('EARTH_LOCATION', 'OHP')
         # define the default science input files
         self.params.set('INPUT_FILE', '*.fits', source=func_name)
         # The input science data are blaze corrected
-        self.params.set('BLAZE_CORRECTED', True, source=func_name)
+        self.params.set('BLAZE_CORRECTED', False, source=func_name)
         # define the mask table format
         self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
@@ -83,25 +81,25 @@ class Carmenes(Instrument):
         self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename
         self.params.set('DEFAULT_MASK_FILE', source=func_name,
-                        value=None)
+                        value='mdwarf_harps.fits')
         # define the High pass width in km/s
         self.params.set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.params.set('SNR_THRESHOLD', 10, source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
-        self.params.set('CCF_CLEAN_BANDS', ['r', 'i'],  source=func_name)
+        self.params.set('CCF_CLEAN_BANDS', ['r'], source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [45], source=func_name)
+        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [50], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MIN', 500, source=func_name)
+        self.params.set('COMPIL_WAVE_MIN', self.wavemin, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', 1000, source=func_name)
+        self.params.set('COMPIL_WAVE_MAX', self.wavemax, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
         self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
-        # define the CCF e-width to use for FP files
         # define min likelihood of correlation with BERV
         self.params.set('COMPIL_CUT_PEARSONR', -1, source=func_name)
+        # define the CCF e-width to use for FP files
         # Question: HARPS value?
         self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define whether to add the magic "binned wavelength" bands rv
@@ -109,25 +107,27 @@ class Carmenes(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.params.set('COMPILE_BINNED_BAND1', 'g', source=func_name)
+        self.params.set('COMPILE_BINNED_BAND1', 'r', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND2', 'r', source=func_name)
+        self.params.set('COMPILE_BINNED_BAND2', 'g', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND3', 'i', source=func_name)
+        self.params.set('COMPILE_BINNED_BAND3', 'r', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
-        self.params.set('COMPIL_SLOPE_REF_WAVE', 750, source=func_name)
+        self.params.set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_carmenes.fits', source=func_name)
+                        'sample_wave_grid_sophie.fits', source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
+        # TODO verify DPR TYPE in SOPHIE headers for FPs
         self.params.set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
+        # TODO verify DPR TYPE in SOPHIE headers for STAR+FPs
         self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define readout noise per instrument (assumes ~5e- and 10 pixels)
         self.params.set('READ_OUT_NOISE', 15, source=func_name)
@@ -168,16 +168,16 @@ class Carmenes(Instrument):
         # define the dv offset for tellu-cleaning in km/s
         self.params.set('TELLUCLEAN_DV0', value=0, source=func_name)
         # Define the lower wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=600,
+        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=500,
                         source=func_name)
         # Define the upper wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=900,
+        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=700,
                         source=func_name)
         # Define whether to force using airmass from header
         self.params.set('TELLUCLEAN_FORCE_AIRMASS', value=False,
                         source=func_name)
         # Define the CCF scan range in km/s
-        self.params.set('TELLUCLEAN_CCF_SCAN_RANGE', value=25,
+        self.params.set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
                         source=func_name)
         # Define the maximum number of iterations for the tellu-cleaning loop
         self.params.set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
@@ -187,9 +187,9 @@ class Carmenes(Instrument):
         self.params.set('TELLUCLEAN_GAUSSIAN_SHAPE', value=2.2,
                         source=func_name)
         # Define the wave grid lower wavelength limit in nm
-        self.params.set('TELLUCLEAN_WAVE_LOWER', value=520, source=func_name)
+        self.params.set('TELLUCLEAN_WAVE_LOWER', value=350, source=func_name)
         # Define the wave griv upper wavelength limit
-        self.params.set('TELLUCLEAN_WAVE_UPPER', value=1000, source=func_name)
+        self.params.set('TELLUCLEAN_WAVE_UPPER', value=750, source=func_name)
         # Define the transmission threshold exp(-1) at which tellurics are
         #     uncorrectable
         self.params.set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
@@ -201,13 +201,13 @@ class Carmenes(Instrument):
         self.params.set('TELLUCLEAN_RECENTER_CCF', value=False,
                         source=func_name)
         # Define whether to recenter the CCF of others on the first iteration
-        self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=True,
+        self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
                         source=func_name)
         # Define the default water absorption to use
-        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=5.0,
+        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
                         source=func_name)
         # Define the lower limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.05,
+        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
                         source=func_name)
         # Define the upper limit on valid exponent of water absorbers
         self.params.set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
@@ -233,71 +233,67 @@ class Carmenes(Instrument):
         # Header keywords
         # ---------------------------------------------------------------------
         # define wave coeff key in header
-        # TODO -> not relevant for CARMENES
-        self.params.set('KW_WAVECOEFFS', 'NONE',
+        self.params.set('KW_WAVECOEFFS', 'HIERARCH ESO DRS CAL TH COEFF LL{0}',
                         source=func_name)
-        # TODO -> not relevant for CARMENES
         # define wave num orders key in header
-        self.params.set('KW_WAVEORDN', 'NONE',
+        self.params.set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
                         source=func_name)
-        # TODO -> not relevant for CARMENES
         # define wave degree key in header
-        self.params.set('KW_WAVEDEGN', 'NONE',
+        self.params.set('KW_WAVEDEGN', 'HIERARCH ESO DRS CAL TH DEG LL',
                         source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH CARACAL MJD-OBS',
+        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO DRS BJD',
                         source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'HIERARCH CARACAL MJD-OBS',
-                        source=func_name)
+        self.params.set('KW_MJDATE', 'HIERARCH ESO DRS BJD', source=func_name)
         # define snr keyword
-        self.params.set('KW_SNR', 'HIERARCH CARACAL FOX SNR 50',
+        self.params.set('KW_SNR', 'HIERARCH OHP DRS SPE EXT SN50',
                         source=func_name)
         # define berv keyword
-        self.params.set('KW_BERV', 'HIERARCH CARACAL BERV', source=func_name)
-        # TODO -> not relevant for CARMENES
+        self.params.set('KW_BERV', 'HIERARCH ESO DRS BERV', source=func_name)
         # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'NONE', source=func_name)
+        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO DRS BLAZE FILE',
+                        source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
+        self.params.set('KW_EXPTIME', 'EXPTIME',
+                        source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
+        self.params.set('KW_AIRMASS', 'HIERARCH ESO OBS AMBI DIMM AIRMASS',
+                        source=func_name)
         # define the human date of the observation
-        self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
-        # TODO -> not relevant for CARMENES
+        self.params.set('KW_DATE', 'HIERARCH ESO OBS FDATE', source=func_name)
         # define the tau_h20 of the observation
         self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
         self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'NONE', source=func_name)
-        # TODO -> not relevant for CARMENES
+        self.params.set('KW_DPRTYPE', 'HIERARCH ESO TPL TYPE',
+                        source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'NONE', source=func_name)
-        # define the original object name
-        self.params.set('KW_OBJNAME', 'OBJECT', source=func_name)
+        self.params.set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
+                        source=func_name)
+        # define the original object name (no name given just target code)
+        self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
+                        source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        # TODO -> not relevant for CARMENES
-        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
-        # TODO -> not relevant for CARMENES
+        self.params.set('KW_SNRGOAL', 'HIERARCH ESO OBS SN ', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'NONE', source=func_name)
+        self.params.set('KW_EXT_SNR', 'HIERARCH ESO DRS CAL EXT SN50',
+                        source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'HIERARCH CARACAL JD', source=func_name)
+        self.params.set('KW_BJD', 'HIERARCH ESO DRS BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        # TODO -> not relevant for CARMENES
-        self.params.set('KW_REF_KEY', 'NONE', source=func_name)
-        # TODO -> not relevant for CARMENES
+        self.params.set('KW_REF_KEY', 'HIERARCH ESO TPL TYPE', source=func_name)
         # velocity of template from CCF
-        self.params.set('KW_MODELVEL', 'NONE', source=func_name)
+        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        # TODO: how do we get the temperature for CARMENES?
+        # TODO: how do we get the temperature for HARPS? / SOPHIE ?
         self.params.set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
-    # INSTRUMENT SPECIFIC METHODS
+    # SOPHIE SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
                     extnum: int = 0, extname: str = None) -> io.LBLHeader:
@@ -433,52 +429,6 @@ class Carmenes(Instrument):
         else:
             return None
 
-    def load_science_file(self, science_file: str
-                          ) -> Tuple[np.ndarray, io.LBLHeader]:
-        """
-        Load a science exposure
-
-        Note data should be a 2D array (even if data is 1D)
-        Treat 1D data as a single order?
-
-        :param science_file: str, absolute path to filename
-
-        :return: tuple, data (np.ndarray) and header (io.LBLHeader)
-        """
-        # load the first extension of each
-        sci_data = io.load_fits(science_file, kind='science fits file',
-                                extname='SPEC')
-        cont_data = io.load_fits(science_file, kind='continuum fits file',
-                                 extname='CONT')
-        sig_data = io.load_fits(science_file, kind='sigmas fits file',
-                                extname='SIG')
-        wave_data = io.load_fits(science_file, kind='wave fits file',
-                                 extname='WAVE')
-        # get a per pixel snr estimate
-        snr_data = sci_data / sig_data
-        # correct sci for continuum
-        sci_data = sci_data / cont_data
-        # remove any very low SNR pixels
-        for order_num in range(sci_data.shape[0]):
-            if np.sum(np.isfinite(snr_data[order_num])) == 0:
-                continue
-            # get the SNR
-            med_snr = np.nanmedian(snr_data[order_num])
-            if med_snr < 1:
-                sci_data[order_num] = np.nan
-        # ---------------------------------------------------------------------
-        # cut out bad wavelengths
-        # ---------------------------------------------------------------------
-        # Carmenes wave solution is in Angstrom - convert to nm for consistency
-        wave_data = wave_data / 10.0
-        sci_data[wave_data < self.wavemin] = np.nan
-        sci_data[wave_data > self.wavemax] = np.nan
-        # ---------------------------------------------------------------------
-        # load the header
-        sci_hdr = self.load_header(science_file, kind='science fits file')
-        # return data and header
-        return sci_data, sci_hdr
-
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
         Get the systemic velocity in m/s of the mask
@@ -559,12 +509,13 @@ class Carmenes(Instrument):
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
                                 sci_hdr: io.LBLHeader,
-                                calib_directory: str, normalize: bool = True
+                                calib_directory: str,
+                                normalize: bool = True
                                 ) -> Tuple[np.ndarray, bool]:
         """
         Load the blaze file using a science file header
 
-        :param science_file: str, the absolute path to the science file
+        :param science_file: str, the science file
         :param sci_image: np.array - the science image (if we don't have a
                           blaze, we need this for the shape of the blaze)
         :param sci_hdr: io.LBLHeader - the science file header
@@ -579,62 +530,31 @@ class Carmenes(Instrument):
         if self.params['BLAZE_CORRECTED']:
             # blaze corrected
             return np.ones_like(sci_image), True
-        # Current we have no way to load blaze from science file for Carmenes
-        #   so we generate error
-        emsg = ('Cannot load blaze from science file for {0}. '
-                'Please use blaze corrected spectra and update the '
-                'BLAZE_CORRECTED keyword.')
-        raise LblException(emsg.format(self.name))
-
-    def no_blaze_corr(self, sci_image: np.ndarray,
-                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        If we do not have a blaze we need to create an artificial one so that
-        the s1d has a proper weighting
-
-        :param sci_image: the science image (will be unblazed corrected)
-        :param sci_wave: the wavelength solution for the science image
-
-        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
-        """
-        # get the wave centers for each order
-        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # find the 'diffraction' order for a given 'on-detector' order
-        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
-        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
-        # ---------------------------------------------------------------------
-        # use the fit to get the blaze assuming a sinc**2 profile.
-        # The minima of a given order corresponds to the position of the
-        # consecutive orders
-        # ---------------------------------------------------------------------
-        # storage for the calculated blaze
-        blaze = np.zeros(sci_wave.shape)
-        # loop around each order
-        for order_num in range(sci_wave.shape[0]):
-            # get the wave grid for this order
-            owave = sci_wave[order_num]
-            # get the center of this order (with a small offset to avoid
-            #  a division by zero in the sinc at phase = 0
-            owave_cen = owave[len(owave) // 2] + 1e-6
-            # calculate the period of this order
-            period = owave_cen / np.polyval(dfit, 1 / owave)
-            # calculate the phase of the sinc**2
-            phase = np.pi * (owave - owave_cen) / period
-            # assume the sinc profile. There is a factor 2 difference in the
-            #   phase as the sinc is squared. sin**2 has a period that is a
-            #   factor of 2 shorter than the sin
-            blaze[order_num] = (np.sin(phase) / phase) ** 2
-        # un-correct the science image
-        sci_image = sci_image * blaze
-        # return un-corrected science image and the calculated blaze
-        return sci_image, blaze
+        # get blaze file from science header
+        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
+        # construct absolute path
+        abspath = os.path.join(calib_directory, blaze_file)
+        # check that this file exists
+        io.check_file_exists(abspath)
+        # read blaze file (data and header)
+        blaze = io.load_fits(abspath, kind='blaze fits file')
+        # normalize by order
+        if normalize:
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
+        # return blaze
+        return blaze, False
 
     def get_wave_solution(self, science_filename: Optional[str] = None,
                           data: Optional[np.ndarray] = None,
                           header: Optional[io.LBLHeader] = None
                           ) -> np.ndarray:
         """
-        Get a wave solution from a file (for Carmenes this is from the header)
+        Get a wave solution from a file (for HARPS this is from the header)
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
@@ -645,18 +565,49 @@ class Carmenes(Instrument):
 
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
-        # get the wave map from the science filename
-        wavemap = fits.getdata(science_filename, ext=4)
+        # get header keys
+        kw_wavecoeffs = self.params['KW_WAVECOEFFS']
+        kw_waveordn = self.params['KW_WAVEORDN']
+        kw_wavedegn = self.params['KW_WAVEDEGN']
         # ---------------------------------------------------------------------
-        # Carmenes wave solution is in Angstrom - convert to nm for consistency
+        # get header
+        if header is None or data is None:
+            sci_data = io.load_fits(science_filename, 'wave fits file')
+            sci_hdr = self.load_header(science_filename, 'wave fits file')
+        else:
+            sci_data, sci_hdr = data, header
+        # ---------------------------------------------------------------------
+        # get the data shape
+        nby, nbx = sci_data.shape
+        # get xpix
+        xpix = np.arange(nbx)
+        # ---------------------------------------------------------------------
+        # get wave order from header
+        waveordn = sci_hdr.get_hkey(kw_waveordn, science_filename, dtype=int)
+        wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename, dtype=int)
+        # get the wave 2d list
+        wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
+                                         dim1=waveordn, dim2=wavedegn + 1,
+                                         filename=science_filename)
+        # ---------------------------------------------------------------------
+        # convert to wave map
+        wavemap = np.zeros([waveordn, nbx])
+        for order_num in range(waveordn):
+            wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1], xpix)
+        # ---------------------------------------------------------------------
+        # HARPS wave solution is in Angstrom - convert to nm for consistency
         wavemap = wavemap / 10.0
+        # ---------------------------------------------------------------------
+        # HARPS wave solution is in air - convert to vacuum
+        n_index = mp.air_index(wavemap)
+        wavemap = wavemap * n_index
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
 
     def load_bad_hdr_keys(self) -> Tuple[list, Any]:
         """
-        Load the bad values and bad key for Carmenes -- not used currently
+        Load the bad values and bad key for HARPS -- not used currently
 
         :return: tuple, 1. the list of bad values, 2. the bad key in
                  a file header to check against bad values
@@ -675,8 +626,8 @@ class Carmenes(Instrument):
         """
         # get BERV header key
         hdr_key = self.params['KW_BERV']
-        # get BERV (if not a calibration)
-        if self.params['DATA_TYPE'] == 'SCIENCE':
+        # BERV depends on whether object is FP or not
+        if 'FP' not in self.params['OBJECT_SCIENCE']:
             berv = sci_hdr.get_hkey(hdr_key, dtype=float) * 1000
         else:
             berv = 0.0
@@ -717,19 +668,6 @@ class Carmenes(Instrument):
         # return updated storage dictionary
         return tdict
 
-    def get_dpr_fibtype(self, hdr: io.LBLHeader) -> str:
-
-        # get dprtype
-        dprtype = hdr.get_hkey(self.params['KW_DPRTYPE'])
-        fiber = hdr.get_hkey(self.params['KW_FIBER'])
-        # split fiber
-        dprfibtypes = dprtype.split('_')
-        # get fiber type
-        if fiber in ['AB', 'A', 'B']:
-            return dprfibtypes[0]
-        else:
-            return dprfibtypes[1]
-
     def rdb_columns(self) -> Tuple[np.ndarray, List[bool]]:
         """
         Define the fits header columns names to add to the RDB file
@@ -738,10 +676,10 @@ class Carmenes(Instrument):
         :return: tuple, 1. np.array of strings (the keys), 2. list of bools
                  the flags whether these keys should be used with FP files
         """
-        # these are defined in params
+        # there are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
-                    'KW_TAU_OTHERS', 'KW_DPRTYPE', 'KW_NITERATIONS',
+                    'KW_TAU_H2O', 'KW_TAU_OTHERS', 'KW_NITERATIONS',
                     'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
@@ -811,11 +749,13 @@ class Carmenes(Instrument):
         mid_exp_time = header.get_hkey(kw_mjdmid, dtype=float)
         bjd = header.get_hkey(kw_bjd, dtype=float)
         if isinstance(bjd, str) or np.isnan(bjd):
-            # return mjd + 0.5 (for rjd)
+            # return RJD = MJD + 0.5
             return float(mid_exp_time) + 0.5
         else:
-            # bjd is already a rjd for CARMENES
-            return float(bjd)
+            # convert bjd to mjd
+            bjd_mjd = Time(bjd, format='jd').mjd
+            # return RJD = MJD + 0.5
+            return float(bjd_mjd) + 0.5
 
     def get_plot_date(self, header: io.LBLHeader):
         """

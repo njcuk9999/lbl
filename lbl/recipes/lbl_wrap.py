@@ -78,6 +78,9 @@ def main(runparams: dict):
     object_templates = lbl_misc.check_runparams(runparams, 'OBJECT_TEMPLATE')
     object_teffs = lbl_misc.check_runparams(runparams, 'OBJECT_TEFF')
     # -------------------------------------------------------------------------
+    # make sure these keys are also set
+    _ = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED')
+    # -------------------------------------------------------------------------
     # push other keyword arguments into keyword arguments dictionary
     keyword_args = dict()
     for key in runparams:

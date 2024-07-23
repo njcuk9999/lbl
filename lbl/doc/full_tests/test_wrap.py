@@ -8,6 +8,7 @@ Last updated 2023-06-08
 
 @author: cook
 """
+import argparse
 import os
 
 from lbl import base
@@ -29,7 +30,8 @@ INSTRUMENTS = ['carmenes_vis',
                'nirps_ha_eso', 'nirps_he_eso',
                'spirou_apero', 'spirou_cadc',
                'maroonx_b', 'maroonx_r',
-               'sophie']
+               'sophie',
+               'coralie']
 
 # define global params to override
 GLOBAL = dict()
@@ -51,6 +53,7 @@ def carmenes_vis():
     rparams['OBJECT_TEMPLATE'] = ['K2-18']
     rparams['OBJECT_TEFF'] = [3500]
     rparams['BLAZE_FILE'] = None
+    rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -77,6 +80,7 @@ def espresso():
     rparams['OBJECT_TEMPLATE'] = ['LHS1140']
     rparams['OBJECT_TEFF'] = [3216]
     rparams['BLAZE_FILE'] = 'M.ESPRESSO.2020-09-03T23_38_07.710.fits'
+    rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -103,6 +107,7 @@ def harps_orig():
     rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -128,6 +133,7 @@ def harps_eso():
     rparams['OBJECT_SCIENCE'] = ['GJ682']
     rparams['OBJECT_TEMPLATE'] = ['GJ682']
     rparams['OBJECT_TEFF'] = [3349]
+    rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -154,6 +160,7 @@ def nirps_ha_apero():
     rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'E967E354D8_pp_blaze_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -180,6 +187,7 @@ def nirps_he_apero():
     rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = '5F59EED6FE_pp_blaze_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -206,6 +214,7 @@ def nirps_ha_eso():
     rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'r.NIRPS.2023-03-05T103313.641_BLAZE_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -232,6 +241,7 @@ def nirps_he_eso():
     rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'r.NIRPS.2023-01-22T144532.460_BLAZE_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -258,6 +268,7 @@ def spirou_apero():
     rparams['OBJECT_TEMPLATE'] = ['FP', 'GL699']
     rparams['OBJECT_TEFF'] = [300, 3224]
     rparams['BLAZE_FILE'] = 'F8018F48F0_pp_blaze_AB.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -283,6 +294,7 @@ def spirou_cadc():
     rparams['OBJECT_SCIENCE'] = ['GL699']
     rparams['OBJECT_TEMPLATE'] = ['GL699']
     rparams['OBJECT_TEFF'] = [3224]
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = False
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -309,6 +321,7 @@ def harpsn_orig():
     rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS3.7_TOI1266']
     rparams['OBJECT_TEFF'] = [5668]
     rparams['BLAZE_FILE'] = 'HARPN.2022-05-12T05-15-56.213_blaze_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -334,6 +347,7 @@ def harpsn_eso():
     rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS2.3.5_TOI1266']
     rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS2.3.5_TOI1266']
     rparams['OBJECT_TEFF'] = [5668]
+    rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -360,6 +374,7 @@ def maroonx_b():
     rparams['OBJECT_TEMPLATE'] = ['GJ486']
     rparams['OBJECT_TEFF'] = [3400]
     rparams['BLAZE_FILE'] = '20200603T13_masterflat_backgroundsubtracted_FFFFF_x_0000.hd5'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -386,6 +401,7 @@ def maroonx_r():
     rparams['OBJECT_TEMPLATE'] = ['GJ486']
     rparams['OBJECT_TEFF'] = [3400]
     rparams['BLAZE_FILE'] = '20200603T13_masterflat_backgroundsubtracted_FFFFF_x_0000.hd5'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -412,6 +428,7 @@ def sophie():
     rparams['OBJECT_TEMPLATE'] = ['Gl873']
     rparams['OBJECT_TEFF'] = [3228]
     rparams['BLAZE_FILE'] = 'SOPHIE.2021-08-31T15-29-01.650_blaze_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
@@ -426,10 +443,67 @@ def sophie():
     return rparams
 
 
+def coralie():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'CORALIE'
+    rparams['DATA_SOURCE'] = 'None'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'CORALIE')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['HD114082']
+    rparams['OBJECT_TEMPLATE'] = ['HD114082']
+    rparams['OBJECT_TEFF'] = [6600]
+    rparams['BLAZE_FILE'] = 'CORALIE.2022-02-04T22:01:57.000_blaze_A.fits'
+    rparams['BLAZE_CORRECTED'] = False
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = True
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
+
+# =============================================================================
+# Define main script to loop through instruments
+# =============================================================================
+def get_args():
+    """
+    Define allowed command line arguments
+    :return:
+    """
+    parser = argparse.ArgumentParser(description='Run LBL tests')
+    parser.add_argument('--instruments', type=str, default=None,
+                        help='Instrument(s) to run (comma separated list)',
+                        choices=INSTRUMENTS)
+    # add test path
+    parser.add_argument('--testpath', type=str, default=TEST_PATH,
+                        help='Path to test data')
+    # parse arguments
+    args = parser.parse_args()
+    # return arguments
+    return args
+
 
 def main():
+    # get command line arguments
+    args = get_args()
+    if args.instruments is None:
+        instruments = INSTRUMENTS
+    else:
+        instruments = args.instruments.split(',')
+    # deal with overriding test path
+    if os.path.exists(args.testpath):
+        global TEST_PATH
+        TEST_PATH = args.testpath
     # loop around instruments
-    for instrument in INSTRUMENTS:
+    for instrument in instruments:
         # get rparams
         try:
             rparams = eval(instrument)()

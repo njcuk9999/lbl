@@ -741,9 +741,29 @@ params.set(key='KW_BERV', value=None, source=__NAME__,
            desc='the barycentric correction keyword', not_none=True,
            fp_flag=True)
 
+# The input science data are blaze corrected
+params.set(key='BLAZE_CORRECTED', value=None, source=__NAME__,
+           desc='The input science data are blaze corrected', not_none=True)
+
 # define the Blaze calibration file
 params.set(key='KW_BLAZE_FILE', value=None, source=__NAME__,
            desc='The Blaze calibration file', not_none=True)
+
+# blaze file may be difference we need to define three keys to search
+#   for it in the header
+# 1. The header key that gives the blaze file name (with wildcards)
+params.set('KW_BLAZE_FILE_WILDF', value=None, source=__NAME__,
+           desc='The header key that gives the blaze file name '
+                '(with wildcards)')
+
+# 2. The header key that tells us key 1 is a blaze file
+params.set('KW_BLAZE_FILE_WILDM', value=None, source=__NAME__,
+            desc='The header key that tells us key 1 is a blaze file')
+
+# 3. The value of the header key that tells us key 1 is a blaze file
+params.set('KW_BLAZE_FILE_WILDV', value=None, source=__NAME__,
+            desc='The value of the header key that tells us key 1 is a '
+                 'blaze file')
 
 # define the number of iterations
 params.set(key='KW_NITERATIONS', value='ITE_RV', source=__NAME__,

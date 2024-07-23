@@ -31,6 +31,7 @@ from lbl.instruments import sophie
 from lbl.instruments import nirps
 from lbl.instruments import spirou
 from lbl.instruments import maroonx
+from lbl.instruments import coralie
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -54,7 +55,8 @@ InstrumentsType = Union[default.Instrument,
                         nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
                         harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                         maroonx.MaroonX,
-                        sophie.Sophie]
+                        sophie.Sophie,
+                        coralie.Coralie]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps_ORIG, harps.Harps_ESO,
@@ -64,7 +66,8 @@ InstrumentsList = (default.Instrument,
                    nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
                    harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
-                   sophie.Sophie)
+                   sophie.Sophie,
+                   coralie.Coralie)
 
 # Add all the instrument + source combinations and link them to instrument
 #   classes
@@ -96,6 +99,8 @@ InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
 InstDict['SOPHIE'] = dict()
 InstDict['SOPHIE']['None'] = sophie.Sophie
+InstDict['CORALIE'] = dict()
+InstDict['CORALIE']['None'] = coralie.Coralie
 
 
 # =============================================================================
@@ -398,6 +403,20 @@ def make_all_directories(inst: Union[InstrumentsType],
     props.set('MODEL_DIR', value=model_dir, source=func_name)
     # return output directories
     return props
+
+
+# =============================================================================
+# This should be inside a test function
+# =============================================================================
+# Sanity check all instruments should be in base.INSTRUMENTS
+for key in InstDict:
+    if key not in base.INSTRUMENTS:
+        emsg = 'Instrument "{0}" not in base.INSTRUMENTS'
+        raise LblException(emsg.format(key))
+for key in base.INSTRUMENTS:
+    if key not in InstDict:
+        emsg = 'Instrument "{0}" not in InstDict'
+        raise LblException(emsg.format(key))
 
 
 # =============================================================================
