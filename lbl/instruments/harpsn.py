@@ -834,6 +834,44 @@ class HarpsN_ORIG(HarpsN):
         # return absolute path
         return abspath
 
+    def load_blaze(self, filename: str, science_file: Optional[str] = None,
+                   normalize: bool = True) -> Union[np.ndarray, None]:
+        """
+        Load a blaze file
+
+        :param filename: str, absolute path to filename
+        :param science_file: str, a science file (to load the wave solution
+                             from) we expect this science file wave solution
+                             to be the wave solution required for the blaze
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: data (np.ndarray) or None
+        """
+        if filename is not None:
+            blaze = io.load_fits(filename, kind='blaze fits file')
+            # we need to load the science file (so we can get the wave solution)
+            sci_image, sci_hdr = self.load_science_file(science_file)
+            # get wave solution for reference file
+            sci_wave = self.get_wave_solution(science_file, sci_image, sci_hdr)
+            # the blaze is not expressed as a flux density but the science spectrum
+            # is. We match the two
+            gradwave = np.gradient(sci_wave, axis=1)
+            for order_num in range(blaze.shape[0]):
+                gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+            blaze = blaze * gradwave
+            # deal with normalizing per order
+            if normalize:
+                # normalize blaze per order
+                for order_num in range(blaze.shape[0]):
+                    # normalize by the 90% percentile
+                    norm = np.nanpercentile(blaze[order_num], 90)
+                    # apply to blaze
+                    blaze[order_num] = blaze[order_num] / norm
+            # return blaze
+            return blaze
+        else:
+            return None
+
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
                                 sci_hdr: io.LBLHeader,
@@ -866,6 +904,15 @@ class HarpsN_ORIG(HarpsN):
         io.check_file_exists(abspath)
         # read blaze file
         blaze = io.load_fits(abspath, kind='blaze fits file')
+
+        # get wave solution for reference file
+        sci_wave = self.get_wave_solution(science_file, sci_image, sci_hdr)
+        # the blaze is not expressed as a flux density but the science spectrum
+        # is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+        blaze = blaze * gradwave
         # normalize by order
         if normalize:
             # normalize blaze per order
