@@ -39,9 +39,9 @@ ARGS_TEMPLATE = [  # core
     # directory
     'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
     # science
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE'
+    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'BLAZE_FILE', 'BLAZE_CORRECTED',
     # other
-                      'VERBOSE', 'PROGRAM',
+    'VERBOSE', 'PROGRAM',
 ]
 
 DESCRIPTION_TEMPLATE = 'Use this code to create the LBL template'

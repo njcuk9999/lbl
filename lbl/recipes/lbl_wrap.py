@@ -77,6 +77,10 @@ def main(runparams: dict):
     object_sciences = lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE')
     object_templates = lbl_misc.check_runparams(runparams, 'OBJECT_TEMPLATE')
     object_teffs = lbl_misc.check_runparams(runparams, 'OBJECT_TEFF')
+    blaze_corrs = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED',
+                                           required=False)
+    blaze_files = lbl_misc.check_runparams(runparams, 'BLAZE_FILE',
+                                           required=False)
     # -------------------------------------------------------------------------
     # make sure these keys are also set
     _ = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED')
@@ -105,6 +109,8 @@ def main(runparams: dict):
         object_science = object_sciences[num]
         object_template = object_templates[num]
         object_teff = object_teffs[num]
+        blaze_corr = blaze_corrs[num]
+        blaze_file = blaze_files[num]
         # ---------------------------------------------------------------------
         # run all pre-cleaning steps
         if runparams['RUN_LBL_TELLUCLEAN'] and data_type == 'SCIENCE':
@@ -116,6 +122,8 @@ def main(runparams: dict):
                                 object_template=object_template,
                                 skip_done=False,
                                 telluclean_use_template=False,
+                                blaze_corrected=blaze_corr,
+                                blaze_file=blaze_file,
                                 **keyword_args)
             # update template name
             if not object_template.endswith('_tc'):
@@ -126,6 +134,8 @@ def main(runparams: dict):
                               data_type=data_type,
                               object_science=object_science + '_tc',
                               object_template=object_template,
+                              blaze_corrected=blaze_corr,
+                              blaze_file=blaze_file,
                               overwrite=True,
                               **keyword_args)
             # re-run tellu clean with uncorrected science data now using our
@@ -137,6 +147,8 @@ def main(runparams: dict):
                                 object_template=object_template,
                                 skip_done=False,
                                 telluclean_use_template=True,
+                                blaze_corrected=blaze_corr,
+                                blaze_file=blaze_file,
                                 **keyword_args)
             # update object name
             if not object_science.endswith('_tc'):
@@ -153,6 +165,8 @@ def main(runparams: dict):
                                   data_type=data_type,
                                   object_science=object_science,
                                   object_template=_obj_template,
+                                  blaze_corrected=blaze_corr,
+                                  blaze_file=blaze_file,
                                   overwrite=not runparams['SKIP_LBL_TEMPLATE'],
                                   **keyword_args)
         # ---------------------------------------------------------------------
@@ -184,6 +198,8 @@ def main(runparams: dict):
                              data_type=data_type,
                              object_science=object_science,
                              object_template=object_template,
+                             blaze_corrected=blaze_corr,
+                             blaze_file=blaze_file,
                              skip_done=runparams['SKIP_LBL_COMPUTE'],
                              **keyword_args)
         # ---------------------------------------------------------------------
