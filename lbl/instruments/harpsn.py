@@ -1062,6 +1062,18 @@ class HarpsN_ESO(HarpsN):
         # define the Blaze calibration file
         self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
                         source=func_name)
+        # blaze file may be difference we need to define three keys to search
+        #   for it in the header
+        # 1. The header key that gives the blaze file name (with wildcards)
+        self.params.set('KW_BLAZE_FILE_WILDF',
+                        'HIERARCH ESO PRO REC1 CAL* NAME',
+                        source=func_name)
+        # 2. The header key that tells us key 1 is a blaze file
+        self.params.set('KW_BLAZE_FILE_WILDM',
+                        'HIERARCH ESO PRO REC1 CAL* CATG',
+                        source=func_name)
+        # 3. The value of the header key that tells us key 1 is a blaze file
+        self.params.set('KW_BLAZE_FILE_WILDV', 'BLAZE_A', source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'HIERARCH TNG QC BJD',
                         source=func_name)
@@ -1155,12 +1167,39 @@ class HarpsN_ESO(HarpsN):
         if self.params['BLAZE_CORRECTED']:
             # blaze corrected
             return np.ones_like(sci_image), True
-        # Current we have no way to load blaze from science file for Carmenes
-        #   so we generate error
-        emsg = ('Cannot load blaze from science file for {0}. '
-                'Please use blaze corrected spectra and update the '
-                'BLAZE_CORRECTED keyword.')
-        raise LblException(emsg.format(self.name))
+        # get blaze file from science header (if we don't need to do a
+        # wildcard search)
+        if self.params['KW_BLAZE_FILE_WILDF'] is None:
+            blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
+                                          required=False)
+        else:
+            blaze_file = None
+        # it may be that the blaze file is in a difference header key
+        #    in this case we need to find it
+        if blaze_file is None:
+            blaze_file = sci_hdr.find_hkey(self.params['KW_BLAZE_FILE_WILDF'],
+                                           self.params['KW_BLAZE_FILE_WILDM'],
+                                           self.params['KW_BLAZE_FILE_WILDV'])
+        # construct absolute path
+        abspath = os.path.join(calib_directory, blaze_file)
+        # check that this file exists
+        io.check_file_exists(abspath)
+        # read blaze file (data and header)
+        blaze = io.load_fits(abspath, kind='blaze fits file')
+        # load wave (we have to modify the blaze)
+        wavemap = self.get_wave_solution(science_file)
+        # update blaze solution by gradient of wave
+        blaze = blaze * np.gradient(wavemap, axis=1)
+        # normalize by order
+        if normalize:
+            # normalize blaze per order
+            for order_num in range(blaze.shape[0]):
+                # normalize by the 90% percentile
+                norm = np.nanpercentile(blaze[order_num], 90)
+                # apply to blaze
+                blaze[order_num] = blaze[order_num] / norm
+        # return blaze
+        return blaze, False
 
     def no_blaze_corr(self, sci_image: np.ndarray,
                       sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

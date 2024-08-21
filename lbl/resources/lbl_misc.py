@@ -86,7 +86,8 @@ def move_log(data_dir: str, recipe: str):
     base_classes.log = log
 
 
-def splash(name: str, instrument: str, params: base_classes.ParamDict,
+def splash(name: str, instrument: str,
+           params: Union[base_classes.ParamDict, None] = None,
            plogger: Union[logger.Log, None] = None):
     # deal with no logger
     if plogger is None:
@@ -219,6 +220,44 @@ def check_runparams(rparams: Dict[str, Any], key: str,
         raise base_classes.LblException(emsg.format(*eargs))
     else:
         return rparams[key]
+
+
+def wraplistcheck(parameter: Any, name: str, iteration: int,
+                  length: int) -> Any:
+    """
+    Wrap around a list check (if parameter is a list)
+    get this iterations values (and check if they are a list of matching
+    length to object_sciences) or just a single value
+
+    :param parameter: Any, a parameter that could be a list or Any other value
+    :param name: str, the name of the parameter
+    :param iteration: int, the iteration number of the list
+    :param length: int, the length of the list
+
+    :return: Any, the parameter value in the list or the parameter itself
+    """
+    # deal with cases where parameter is a list and is not the right length
+    if isinstance(parameter, list) and len(parameter) != length:
+        # if we have a list of the wrong length return None
+        emsg = ('LBL_WRAP ERROR: If list provided for {0} must be length={1} '
+                '(got length={2})')
+        eargs = [name, length, len(parameter)]
+        raise base_classes.LblException(emsg.format(*eargs))
+    # if we have a list of the right length return the iteration value
+    if isinstance(parameter, list):
+        # log that we are using
+        msg = '\tUsing {0}[{1}]={2}'
+        margs = [name, iteration, parameter[iteration]]
+        log.info(msg.format(*margs))
+        # return this parameter
+        return parameter[iteration]
+    else:
+        # log that we are using
+        msg = '\tUsing {0}={1}'
+        margs = [name, parameter]
+        log.info(msg.format(*margs))
+        # log that we are using
+        return parameter
 
 
 # =============================================================================

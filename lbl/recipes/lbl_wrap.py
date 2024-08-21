@@ -20,19 +20,24 @@ from lbl.recipes import lbl_telluclean
 from lbl.recipes import lbl_template
 from lbl.resources import lbl_misc
 
-__NAME__ = 'lbl_mask.py'
-__STRNAME__ = 'LBL Mask'
+# =============================================================================
+# Define variables
+# =============================================================================
+__NAME__ = 'lbl_wrap.py'
+__STRNAME__ = 'LBL Warp'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
-
+# Description of recipe
 DESCRIPTION_MASK = 'Use this code to wrap around lbl'
-
+# get the logger
+log = base_classes.log
 # define keys to remove from run params
 REMOVE_KEYS = [  # core
     'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES', 'DATA_SOURCE',
     # science keys
     'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
+    'BLAZE_CORRECTED', 'BLAZE_FILE',
     # run keys
     'RUN_LBL_TELLUCLEAN', 'RUN_LBL_TEMPLATE', 'RUN_LBL_MASK',
     'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
@@ -82,9 +87,6 @@ def main(runparams: dict):
     blaze_files = lbl_misc.check_runparams(runparams, 'BLAZE_FILE',
                                            required=False)
     # -------------------------------------------------------------------------
-    # make sure these keys are also set
-    _ = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED')
-    # -------------------------------------------------------------------------
     # push other keyword arguments into keyword arguments dictionary
     keyword_args = dict()
     for key in runparams:
@@ -102,15 +104,33 @@ def main(runparams: dict):
                     'MASK_FILE={0} (Must be unset)')
             raise base_classes.LblException(emsg.format(runparams['MASK_FILE']))
     # -------------------------------------------------------------------------
+    # mark the expected length if a list
+    olen = len(object_sciences)
     # loop around all files
-    for num in range(len(object_sciences)):
-        # get this iterations values
-        data_type = data_types[num]
+    for num in range(olen):
+        # get the science target
         object_science = object_sciences[num]
-        object_template = object_templates[num]
-        object_teff = object_teffs[num]
-        blaze_corr = blaze_corrs[num]
-        blaze_file = blaze_files[num]
+        # print wrapper splash
+        lbl_misc.splash(name=__STRNAME__, instrument=instrument,
+                        plogger=log)
+        # print iteration we are running
+        msg = 'Running [{0}] iteration {1}/{2}'
+        margs = [object_science, num + 1, olen]
+        log.info(msg.format(*margs))
+        # wrap check args
+        wkargs = dict(iteration=num, length=olen)
+        # get this iterations values (and check if they are a list of matching
+        #    length to object_sciences) or just a single value
+        data_type = lbl_misc.wraplistcheck(data_types,
+                                           'DATA_TYPES', **wkargs)
+        object_template = lbl_misc.wraplistcheck(object_templates,
+                                                 'OBJECT_TEMPLATE', **wkargs)
+        object_teff = lbl_misc.wraplistcheck(object_teffs,
+                                             'OBJECT_TEFF', **wkargs)
+        blaze_corr = lbl_misc.wraplistcheck(blaze_corrs,
+                                            'BLAZE_CORRECTED', **wkargs)
+        blaze_file = lbl_misc.wraplistcheck(blaze_files,
+                                            'BLAZE_FILE', **wkargs)
         # ---------------------------------------------------------------------
         # run all pre-cleaning steps
         if runparams['RUN_LBL_TELLUCLEAN'] and data_type == 'SCIENCE':

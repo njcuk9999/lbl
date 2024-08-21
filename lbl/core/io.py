@@ -10,6 +10,7 @@ Created on 2021-03-15
 @author: cook
 """
 import copy
+import fnmatch
 import itertools
 import os
 import warnings
@@ -213,6 +214,27 @@ class LBLHeader(UserDict):
         # return header
         return header
 
+    def match_key(self, pattern: str) -> List[str]:
+        """
+        Use fnmatch to match a pattern to keys in the header
+
+        :param pattern: str, the pattern to match (containing wildcards)
+
+        :return:
+        """
+        # deal with no wildcards
+        if '*' not in pattern:
+            if pattern in self.data:
+                return [pattern]
+            else:
+                return []
+        # deal with wildcards
+        keys = []
+        for hkey in self.data:
+            if fnmatch.fnmatch(hkey, pattern):
+                keys.append(hkey)
+        return keys
+
     def find_hkey(self, key_to_find: str, key_to_match: str,
                   value_to_match: Any) -> Any:
         """
@@ -248,9 +270,9 @@ class LBLHeader(UserDict):
             emsg = 'Key to match must contain a wildcard. \n\t{0}'
             raise LblException(emsg.format(func_name))
         # get all keys that match the wildcards in key_to_find
-        all_hkeys_find = self.data[key_to_find]
+        all_hkeys_find = self.match_key(key_to_find)
         # get all keys that match the wildcards in key_to_match
-        all_hkeys_type = self.data[key_to_match]
+        all_hkeys_type = self.match_key(key_to_match)
         # deal with no matching keys
         if len(all_hkeys_find) == 0 or len(all_hkeys_type) == 0:
             emsg = 'Cannot find keys: {0} in header matching {1}={2}. \n\t{3}'

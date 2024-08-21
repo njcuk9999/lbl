@@ -2503,10 +2503,13 @@ class NIRPS_HE_ESO(NIRPS_HE):
         if self.params['BLAZE_CORRECTED']:
             # blaze corrected
             return np.ones_like(sci_image), True
-
-        # get blaze file from science header
-        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
-                                      required=False)
+        # get blaze file from science header (if we don't need to do a
+        # wildcard search)
+        if self.params['KW_BLAZE_FILE_WILDF'] is None:
+            blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
+                                          required=False)
+        else:
+            blaze_file = None
         # it may be that the blaze file is in a difference header key
         #    in this case we need to find it
         if blaze_file is None:

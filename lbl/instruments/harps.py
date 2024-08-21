@@ -1182,6 +1182,18 @@ class Harps_ESO(Harps):
         # define the Blaze calibration file
         self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
                         source=func_name)
+        # blaze file may be difference we need to define three keys to search
+        #   for it in the header
+        # 1. The header key that gives the blaze file name (with wildcards)
+        self.params.set('KW_BLAZE_FILE_WILDF',
+                        'HIERARCH ESO PRO REC1 CAL* NAME',
+                        source=func_name)
+        # 2. The header key that tells us key 1 is a blaze file
+        self.params.set('KW_BLAZE_FILE_WILDM',
+                        'HIERARCH ESO PRO REC1 CAL* CATG',
+                        source=func_name)
+        # 3. The value of the header key that tells us key 1 is a blaze file
+        self.params.set('KW_BLAZE_FILE_WILDV', 'BLAZE_A', source=func_name)
         # define the exposure time of the observation
         self.params.set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
@@ -1276,9 +1288,13 @@ class Harps_ESO(Harps):
             # blaze corrected
             return np.ones_like(sci_image), True
 
-        # get blaze file from science header
-        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
-                                      required=False)
+        # get blaze file from science header (if we don't need to do a
+        # wildcard search)
+        if self.params['KW_BLAZE_FILE_WILDF'] is None:
+            blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'],
+                                          required=False)
+        else:
+            blaze_file = None
         # it may be that the blaze file is in a difference header key
         #    in this case we need to find it
         if blaze_file is None:
