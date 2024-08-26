@@ -61,7 +61,7 @@ def get_data_source_list(instrument: str) -> List[str]:
         emsg = 'Instrument {0} not in select.InstDict'.format(instrument)
         log.error(emsg)
     # get data sources
-    return select.InstDict[instrument].keys()
+    return list(select.InstDict[instrument].keys())
 
 
 def get_args(description: str):
