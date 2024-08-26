@@ -417,7 +417,10 @@ class Carmenes(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order

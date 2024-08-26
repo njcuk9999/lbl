@@ -380,7 +380,10 @@ class NIRPS(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order
@@ -1402,6 +1405,9 @@ class NIRPS_HA_CADC(NIRPS_HA):
         """
         # loaded from science file --> filename not required
         _ = filename
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
         # load blaze
         blaze = io.load_fits(science_file, kind='blaze fits extension',
                              extname=self.get_extname('Blaze'))
@@ -1612,6 +1618,10 @@ class NIRPS_HE_CADC(NIRPS_HE):
         """
         # loaded from science file --> filename not required
         _ = filename
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         # load blaze
         blaze = io.load_fits(science_file, kind='blaze fits extension',
                              extname=self.get_extname('Blaze'))
@@ -2034,13 +2044,20 @@ class NIRPS_HA_ESO(NIRPS_HA):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             blaze = io.load_fits(filename, kind='blaze fits file')
             # load wave (we have to modify the blaze)
-            wavemap = self.get_wave_solution(science_file)
-            # update blaze solution by gradient of wave
-            blaze = blaze * np.gradient(wavemap, axis=1)
+            sci_wave = self.get_wave_solution(science_file)
+            # the blaze is not expressed as a flux density but the science
+            # spectrum is. We match the two
+            gradwave = np.gradient(sci_wave, axis=1)
+            for order_num in range(blaze.shape[0]):
+                gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+            blaze = blaze * gradwave
             # deal with normalizing per order
             if normalize:
                 # normalize blaze per order
@@ -2096,9 +2113,13 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
-        wavemap = self.get_wave_solution(science_file)
-        # update blaze solution by gradient of wave
-        blaze = blaze * np.gradient(wavemap, axis=1)
+        sci_wave = self.get_wave_solution(science_file)
+        # the blaze is not expressed as a flux density but the science
+        # spectrum is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+        blaze = blaze * gradwave
         # normalize by order
         if normalize:
             # normalize blaze per order
@@ -2109,6 +2130,57 @@ class NIRPS_HA_ESO(NIRPS_HA):
                 blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze, False
+
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # espresso has 2 orders per 'true' order so have to take every other
+        #   wave element
+        wave_cen = wave_cen[::2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # ---------------------------------------------------------------------
+        # use the fit to get the blaze assuming a sinc**2 profile.
+        # The minima of a given order corresponds to the position of the
+        # consecutive orders
+        # ---------------------------------------------------------------------
+        # storage for the calculated blaze
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # get the center of this order (with a small offset to avoid
+            #  a division by zero in the sinc at phase = 0
+            owave_cen = owave[len(owave) // 2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1 / owave)
+            # calculate the phase of the sinc**2
+            phase = np.pi * (owave - owave_cen) / period
+            # assume the sinc profile. There is a factor 2 difference in the
+            #   phase as the sinc is squared. sin**2 has a period that is a
+            #   factor of 2 shorter than the sin
+            blaze[order_num] = (np.sin(phase) / phase) ** 2
+        # the blaze is not expressed as a flux density but the science
+        # spectrum is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+        # un-correct the science image
+        sci_image = (sci_image / gradwave) * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
 
     def get_binned_parameters(self) -> Dict[str, list]:
         """
@@ -2459,13 +2531,20 @@ class NIRPS_HE_ESO(NIRPS_HE):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             blaze = io.load_fits(filename, kind='blaze fits file')
             # load wave (we have to modify the blaze)
-            wavemap = self.get_wave_solution(science_file)
-            # update blaze solution by gradient of wave
-            blaze = blaze * np.gradient(wavemap, axis=1)
+            sci_wave = self.get_wave_solution(science_file)
+            # the blaze is not expressed as a flux density but the science
+            # spectrum is. We match the two
+            gradwave = np.gradient(sci_wave, axis=1)
+            for order_num in range(blaze.shape[0]):
+                gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+            blaze = blaze * gradwave
             # deal with normalizing per order
             if normalize:
                 # normalize blaze per order
@@ -2523,9 +2602,13 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
-        wavemap = self.get_wave_solution(science_file)
-        # update blaze solution by gradient of wave
-        blaze = blaze * np.gradient(wavemap, axis=1)
+        sci_wave = self.get_wave_solution(science_file)
+        # the blaze is not expressed as a flux density but the science
+        # spectrum is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+        blaze = blaze * gradwave
         # normalize by order
         if normalize:
             # normalize blaze per order
@@ -2536,6 +2619,57 @@ class NIRPS_HE_ESO(NIRPS_HE):
                 blaze[order_num] = blaze[order_num] / norm
         # return blaze
         return blaze, False
+
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # espresso has 2 orders per 'true' order so have to take every other
+        #   wave element
+        wave_cen = wave_cen[::2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # ---------------------------------------------------------------------
+        # use the fit to get the blaze assuming a sinc**2 profile.
+        # The minima of a given order corresponds to the position of the
+        # consecutive orders
+        # ---------------------------------------------------------------------
+        # storage for the calculated blaze
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # get the center of this order (with a small offset to avoid
+            #  a division by zero in the sinc at phase = 0
+            owave_cen = owave[len(owave) // 2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1 / owave)
+            # calculate the phase of the sinc**2
+            phase = np.pi * (owave - owave_cen) / period
+            # assume the sinc profile. There is a factor 2 difference in the
+            #   phase as the sinc is squared. sin**2 has a period that is a
+            #   factor of 2 shorter than the sin
+            blaze[order_num] = (np.sin(phase) / phase) ** 2
+        # the blaze is not expressed as a flux density but the science
+        # spectrum is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+        # un-correct the science image
+        sci_image = (sci_image / gradwave) * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
 
     def get_plot_date(self, header: io.LBLHeader):
         """

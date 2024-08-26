@@ -403,7 +403,10 @@ class Spirou(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order
@@ -1277,6 +1280,9 @@ class SpirouCADC(Spirou):
         """
         # loaded from science file --> filename not required
         _ = filename
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
         # load blaze
         blaze = io.load_fits(science_file, kind='blaze fits extension',
                              extname=self.get_extname('Blaze'))

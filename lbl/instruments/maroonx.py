@@ -846,7 +846,10 @@ class MaroonXBlue(MaroonX):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             # get the blaze and push into e2ds format
             blaze = io.hdf_to_e2ds(self.blaze_storekey, filename,
@@ -1182,7 +1185,10 @@ class MaroonXRed(MaroonX):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             # get the blaze and push into e2ds format
             blaze = io.hdf_to_e2ds(self.blaze_storekey, filename,

@@ -413,7 +413,10 @@ class HarpsN(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order
@@ -847,6 +850,10 @@ class HarpsN_ORIG(HarpsN):
 
         :return: data (np.ndarray) or None
         """
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
+            return None
+        # if we have a file defined use it
         if filename is not None:
             blaze = io.load_fits(filename, kind='blaze fits file')
             # we need to load the science file (so we can get the wave solution)
@@ -904,7 +911,6 @@ class HarpsN_ORIG(HarpsN):
         io.check_file_exists(abspath)
         # read blaze file
         blaze = io.load_fits(abspath, kind='blaze fits file')
-
         # get wave solution for reference file
         sci_wave = self.get_wave_solution(science_file, sci_image, sci_hdr)
         # the blaze is not expressed as a flux density but the science spectrum
@@ -1187,9 +1193,13 @@ class HarpsN_ESO(HarpsN):
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
-        wavemap = self.get_wave_solution(science_file)
-        # update blaze solution by gradient of wave
-        blaze = blaze * np.gradient(wavemap, axis=1)
+        sci_wave = self.get_wave_solution(science_file)
+        # the blaze is not expressed as a flux density but the science
+        # spectrum is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+        blaze = blaze * gradwave
         # normalize by order
         if normalize:
             # normalize blaze per order
@@ -1242,8 +1252,13 @@ class HarpsN_ESO(HarpsN):
             #   phase as the sinc is squared. sin**2 has a period that is a
             #   factor of 2 shorter than the sin
             blaze[order_num] = (np.sin(phase) / phase) ** 2
+        # the blaze is not expressed as a flux density but the science
+        # spectrum is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
         # un-correct the science image
-        sci_image = sci_image * blaze
+        sci_image = (sci_image / gradwave) * blaze
         # return un-corrected science image and the calculated blaze
         return sci_image, blaze
 

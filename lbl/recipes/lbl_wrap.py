@@ -24,7 +24,7 @@ from lbl.resources import lbl_misc
 # Define variables
 # =============================================================================
 __NAME__ = 'lbl_wrap.py'
-__STRNAME__ = 'LBL Warp'
+__STRNAME__ = 'LBL Wrapper'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
