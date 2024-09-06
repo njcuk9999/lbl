@@ -241,8 +241,11 @@ def main(**kwargs):
     # -------------------------------------------------------------------------
     # other settings
     # -------------------------------------------------------------------------
+    # default resproj tables
+    resproj_tables = dict()
+    resproj_tables['DTEMP3500'] = 'temperature_gradient_3500.fits'
     # set resproj tables
-    wrap_dict['RESPROJ_TABLES'] = '[{0}]'.format(','.join(['']))
+    wrap_dict['RESPROJ_TABLES'] = resproj_tables
     # set rotational broadening
     wrap_dict['ROTBROAD'] = '[{0}]'.format(','.join(['']))
     # set plotting

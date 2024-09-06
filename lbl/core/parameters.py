@@ -313,7 +313,16 @@ params.set(key='RESPROJ_TABLES', value=None, source=__NAME__,
                  'column name that will propagate into the finale RDB '
                  'table and the value is the filename of the table. The '
                  'table must follow a number of characteristics explained '
-                 'on the LBL  website.'), not_none=True)
+                 'on the LBL  website. Files should be in the lbl/models '
+                 'directory (custom ones can be used). e.g.: '
+                 '\nDTEMP3000 = tempearture_gradient_3000.fits'
+                 '\nDTEMP3500 = tempearture_gradient_3500.fits'
+                 '\nDTEMP4000 = tempearture_gradient_4000.fits'
+                 '\nDTEMP4500 = tempearture_gradient_4500.fits'
+                 '\nDTEMP5000 = tempearture_gradient_5000.fits'
+                 '\nDTEMP5500 = tempearture_gradient_5500.fits'
+                 '\nDTEMP6000 = tempearture_gradient_6000.fits'),
+           not_none=True)
 
 # Rotational velocity parameters, should be a list of two values, one being
 #     the epsilon and the other one being the vsini in km/s as defined in the
@@ -570,14 +579,15 @@ params.set(key='MODEL_REPO_URL',
 
 # define the model files
 MODEL_FILES = dict()
-# TODO put in per-instrument profiles
-MODEL_FILES['Mdwarf Temperature Gradient Table'] = 'Mdwarf_temp_gradient.fits'
-MODEL_FILES['Mdwarf Mask [HARPS]'] = 'mdwarf_harps.fits'
-MODEL_FILES['Mdwarf Mask [SOPHIE]'] = 'mdwarf_harps.fits'
-MODEL_FILES['Mdwarf Mask [NIRPS-HA]'] = 'mdwarf_nirps_ha.fits'
-MODEL_FILES['Mdwarf Mask [NIRPS-HE]'] = 'mdwarf_nirps_he.fits'
-MODEL_FILES['Mdwarf Mask [SPIROU]'] = 'mdwarf_spirou.fits'
 MODEL_FILES['Tapas file'] = 'tapas_lbl.fits'
+MODEL_FILES['DTemp 3000 gradient file'] = 'tempearture_gradient_3000.fits'
+MODEL_FILES['DTemp 3500 gradient file'] = 'tempearture_gradient_3500.fits'
+MODEL_FILES['DTemp 4000 gradient file'] = 'tempearture_gradient_4000.fits'
+MODEL_FILES['DTemp 4500 gradient file'] = 'tempearture_gradient_4500.fits'
+MODEL_FILES['DTemp 5000 gradient file'] = 'tempearture_gradient_5000.fits'
+MODEL_FILES['DTemp 5500 gradient file'] = 'tempearture_gradient_5500.fits'
+MODEL_FILES['DTemp 6000 gradient file'] = 'tempearture_gradient_6000.fits'
+
 
 # define a dictionary of model files to be downloaded from the MODEL_REPO_URL
 params.set(key='MODEL_FILES', value=MODEL_FILES, source=__NAME__,
