@@ -210,7 +210,7 @@ def check_runparams(rparams: Dict[str, Any], key: str,
         if isinstance(rparams[key], list):
             return rparams[key]
         else:
-            return [rparams[key]]
+            return rparams[key]
     elif not required:
         return None
 

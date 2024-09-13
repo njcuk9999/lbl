@@ -635,7 +635,7 @@ class Espresso(Instrument):
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
         # load wave map
-        wavemap = fits.getdata(science_filename, ext=4)
+        wavemap = io.load_fits(science_filename, kind='wavemap', extnum=4)
         # ---------------------------------------------------------------------
         # Espresso wave solution is in Angstrom - convert to nm for consistency
         wavemap = wavemap / 10.0

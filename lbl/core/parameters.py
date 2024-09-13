@@ -315,13 +315,13 @@ params.set(key='RESPROJ_TABLES', value=None, source=__NAME__,
                  'table must follow a number of characteristics explained '
                  'on the LBL  website. Files should be in the lbl/models '
                  'directory (custom ones can be used). e.g.: '
-                 '\nDTEMP3000 = tempearture_gradient_3000.fits'
-                 '\nDTEMP3500 = tempearture_gradient_3500.fits'
-                 '\nDTEMP4000 = tempearture_gradient_4000.fits'
-                 '\nDTEMP4500 = tempearture_gradient_4500.fits'
-                 '\nDTEMP5000 = tempearture_gradient_5000.fits'
-                 '\nDTEMP5500 = tempearture_gradient_5500.fits'
-                 '\nDTEMP6000 = tempearture_gradient_6000.fits'),
+                 '\nDTEMP3000 = temperature_gradient_3000.fits'
+                 '\nDTEMP3500 = temperature_gradient_3500.fits'
+                 '\nDTEMP4000 = temperature_gradient_4000.fits'
+                 '\nDTEMP4500 = temperature_gradient_4500.fits'
+                 '\nDTEMP5000 = temperature_gradient_5000.fits'
+                 '\nDTEMP5500 = temperature_gradient_5500.fits'
+                 '\nDTEMP6000 = temperature_gradient_6000.fits'),
            not_none=True)
 
 # Rotational velocity parameters, should be a list of two values, one being
@@ -580,13 +580,13 @@ params.set(key='MODEL_REPO_URL',
 # define the model files
 MODEL_FILES = dict()
 MODEL_FILES['Tapas file'] = 'tapas_lbl.fits'
-MODEL_FILES['DTemp 3000 gradient file'] = 'tempearture_gradient_3000.fits'
-MODEL_FILES['DTemp 3500 gradient file'] = 'tempearture_gradient_3500.fits'
-MODEL_FILES['DTemp 4000 gradient file'] = 'tempearture_gradient_4000.fits'
-MODEL_FILES['DTemp 4500 gradient file'] = 'tempearture_gradient_4500.fits'
-MODEL_FILES['DTemp 5000 gradient file'] = 'tempearture_gradient_5000.fits'
-MODEL_FILES['DTemp 5500 gradient file'] = 'tempearture_gradient_5500.fits'
-MODEL_FILES['DTemp 6000 gradient file'] = 'tempearture_gradient_6000.fits'
+MODEL_FILES['DTemp 3000 gradient file'] = 'temperature_gradient_3000.fits'
+MODEL_FILES['DTemp 3500 gradient file'] = 'temperature_gradient_3500.fits'
+MODEL_FILES['DTemp 4000 gradient file'] = 'temperature_gradient_4000.fits'
+MODEL_FILES['DTemp 4500 gradient file'] = 'temperature_gradient_4500.fits'
+MODEL_FILES['DTemp 5000 gradient file'] = 'temperature_gradient_5000.fits'
+MODEL_FILES['DTemp 5500 gradient file'] = 'temperature_gradient_5500.fits'
+MODEL_FILES['DTemp 6000 gradient file'] = 'temperature_gradient_6000.fits'
 
 
 # define a dictionary of model files to be downloaded from the MODEL_REPO_URL

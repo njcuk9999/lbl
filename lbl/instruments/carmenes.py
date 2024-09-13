@@ -649,7 +649,7 @@ class Carmenes(Instrument):
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
         # get the wave map from the science filename
-        wavemap = fits.getdata(science_filename, ext=4)
+        wavemap = io.load_fits(science_filename, kind='wavemap', extnum=4)
         # ---------------------------------------------------------------------
         # Carmenes wave solution is in Angstrom - convert to nm for consistency
         wavemap = wavemap / 10.0
