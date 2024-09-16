@@ -17,7 +17,6 @@ import wget
 from astropy import constants
 from astropy import units as uu
 from astropy.table import Table
-from astropy.io import fits
 from scipy import stats
 from scipy.stats import pearsonr
 
