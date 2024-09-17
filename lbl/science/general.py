@@ -19,6 +19,7 @@ from astropy import units as uu
 from astropy.table import Table
 from scipy import stats
 from scipy.stats import pearsonr
+from scipy.ndimage import binary_erosion
 
 from lbl.core import astro
 from lbl.core import base
@@ -3229,6 +3230,64 @@ def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
     # return the systemic velocity
     return sys_vel
 
+def dilate_low_snr_mask(spectrum: np.ndarray, err_spectrum: np.ndarray,
+                        grid_step_magic: float, max_mask:float = 3000,
+                        snr_cut:float = 5) -> Tuple[np.ndarray, np.ndarray]:
+    """
+
+    Parameters
+    ----------
+    spectrum -> science spectrum
+    err_spectrum -> error on the science spectrum
+    grid_step_magic -> step of the wavelength grid in m/s
+    max_mask -> width of the masking window. Should be about 1 FWHM expressed
+                in m/s, Default is 3000 m/s or a resolution of ~100 000
+    snr_cut -> lowest acceptable SNR in template
+
+    Returns -> Tuple[np.ndarray, np.ndarray] science spectrum + error spectrum
+               masked with NaNs where the SNR is too low.
+    -------
+
+    """
+
+    # TODO -> add a per-instrument max mask size for the template creation.
+
+    # Calculate the signal-to-noise ratio (SNR)
+    snr = spectrum / err_spectrum
+
+    # Create a boolean mask where SNR is greater than the cutoff value
+    valid = (snr > snr_cut)
+
+    # Check if there are no valid pixels
+    if np.sum(valid) == 0:
+        # Log an error message if no valid pixels are found
+        log.error(f'SNR is <{snr_cut} for all pixels in the spectrum')
+        # Return the original spectrum and error spectrum
+        return spectrum, err_spectrum
+
+    # Calculate the number of iterations for binary erosion
+    n_iterations = int(max_mask / grid_step_magic)
+    # Log the number of iterations being performed
+    log.general(f'Performing {n_iterations} iterations of binary erosion')
+
+    # Perform binary erosion on the valid mask
+    valid = binary_erosion(valid, iterations=n_iterations)
+
+    # Check if there are no valid pixels
+    if np.sum(valid) == 0:
+        # Log an error message if no valid pixels are found
+        log.error(f'SNR is <{snr_cut} for all pixels in the spectrum '
+                  f'after erosion with a mask of {max_mask} m/s')
+        # Return the original spectrum and error spectrum
+        return spectrum, err_spectrum
+
+    # Mask the invalid pixels in the spectrum with NaNs
+    spectrum[~valid] = np.nan
+    # Mask the invalid pixels in the error spectrum with NaNs
+    err_spectrum[~valid] = np.nan
+
+    # Return the masked spectrum and error spectrum
+    return spectrum, err_spectrum
 
 # =============================================================================
 # Start of code

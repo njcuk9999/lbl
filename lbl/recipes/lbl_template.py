@@ -14,6 +14,7 @@ import warnings
 
 import numpy as np
 
+
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
@@ -476,6 +477,16 @@ def __main__(inst: InstrumentsType, **kwargs):
     # TODO -- use the same as in APERO with the smart weight in BERV
     template_coverage = len(np.unique(berv // 1000))  # in km/s
     total_nobs_berv = len(np.unique(berv // 1000))  # in m/s
+
+    # We set to NaN pixels that are in a domain where the RMS is below a
+    # threshold. This is to avoid using pixels that are not well defined
+    # in the template.
+
+    p50, rms = general.dilate_low_snr_mask(p50, rms, grid_step_magic)
+    p50_odd, rms_odd = general.dilate_low_snr_mask(p50_odd, rms_odd,
+                                                   grid_step_magic)
+    p50_even, rms_even = general.dilate_low_snr_mask(p50_even, rms_even,
+                                                     grid_step_magic)
 
     # -------------------------------------------------------------------------
     # Step 7. Write template
