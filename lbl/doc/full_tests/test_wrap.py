@@ -36,6 +36,18 @@ INSTRUMENTS = ['carmenes_vis',
 # define global params to override
 GLOBAL = dict()
 GLOBAL['PLOT'] = False
+# Dictionary of table name for the file used in the projection against the
+#     derivative. Key is to output column name that will propagate into the
+#     final RDB table and the value is the filename of the table. The table
+#     must follow a number of characteristics explained on the LBL website.
+GLOBAL['RESPROJ_TABLES'] = dict()
+GLOBAL['RESPROJ_TABLES']['DTEMP3000'] = 'temperature_gradient_3000.fits'
+GLOBAL['RESPROJ_TABLES']['DTEMP3500'] = 'temperature_gradient_3500.fits'
+GLOBAL['RESPROJ_TABLES']['DTEMP4000'] = 'temperature_gradient_4000.fits'
+GLOBAL['RESPROJ_TABLES']['DTEMP4500'] = 'temperature_gradient_4500.fits'
+GLOBAL['RESPROJ_TABLES']['DTEMP5000'] = 'temperature_gradient_5000.fits'
+GLOBAL['RESPROJ_TABLES']['DTEMP5500'] = 'temperature_gradient_5500.fits'
+GLOBAL['RESPROJ_TABLES']['DTEMP6000'] = 'temperature_gradient_6000.fits'
 
 
 # =============================================================================
