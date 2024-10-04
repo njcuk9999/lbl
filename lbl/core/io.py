@@ -978,10 +978,13 @@ def save_data_to_hdfstore(filename: str, columns: Dict[str, List[np.ndarray]],
 # =============================================================================
 # Define table functions
 # =============================================================================
+TableReturn = Union[Table, Tuple[Table, LBLHeader], None, Tuple[None, None]]
+
+
 def load_table(filename: str, kind: Union[str, None] = None,
                fmt: str = 'fits', get_hdr: bool = False,
-               extname: Optional[str] = None,
-               ) -> Union[Table, Tuple[Table, LBLHeader]]:
+               extname: Optional[str] = None, required: bool = True
+               ) -> TableReturn:
     """
     Standard way to load table
 
@@ -1005,6 +1008,13 @@ def load_table(filename: str, kind: Union[str, None] = None,
             else:
                 table = Table.read(filename, format=fmt)
     except Exception as e:
+        if not required:
+            # deal with an expected table + header return
+            if get_hdr:
+                return None, None
+            # otherwise just return None
+            else:
+                return None
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))

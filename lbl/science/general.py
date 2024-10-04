@@ -549,9 +549,9 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     props = dict()
     # check if there is an extension with the RV for all epochs
     # noinspection PyBroadException
-    try:
-        props['SCI_TABLE'] = io.load_table(template_file, extname='SCI_TABLE')
-    except:
+    props['SCI_TABLE'] = io.load_table(template_file, extname='SCI_TABLE',
+                                       required=False)
+    if props['SCI_TABLE'] is None:
         msg = 'No RV table found'
         log.general(msg)
 
