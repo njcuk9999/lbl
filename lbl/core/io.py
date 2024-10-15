@@ -206,6 +206,9 @@ class LBLHeader(UserDict):
             # exceptionally long keys we have to ignore
             if len(outkey) > 40:
                 continue
+            # blank keys we have to ignore as well
+            if key.upper() in ['', 'NULL', 'NONE']:
+                continue
             # cannot propagate these keys
             if key in ['COMMENT', 'HISTORY']:
                 continue
