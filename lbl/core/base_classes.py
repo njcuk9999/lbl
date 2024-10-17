@@ -25,8 +25,7 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 #
 NO_THEME = [False, 'False', 'OFF', 'off', 'Off', 'None']
-# get log
-log = logger.Log(filename=base.LOG_FILE)
+
 
 
 # =============================================================================
@@ -41,6 +40,9 @@ class LblException(Exception):
         self.message = message
         # log error
         if verbose:
+            # get log
+            log = logger.Log(filename=base.LOG_FILE)
+            # log error
             log.error(self.message)
 
     def __str__(self) -> str:
@@ -82,6 +84,8 @@ class LblCurveFitException(Exception):
         self.p0 = p0
         self.func = func
         self.error = error
+        # get log
+        log = logger.Log(filename=base.LOG_FILE)
         # log error
         log.error(self.message)
 
