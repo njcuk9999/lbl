@@ -8,15 +8,20 @@ Created on 2021-03-15
 @author: cook
 """
 import os
+from pathlib import Path
 
 from astropy.time import Time, TimeDelta
 
 # =============================================================================
 # Define variables
 # =============================================================================
+__package_name__: str = 'lbl'
+__PATH__ = Path(__file__).parent.parent
+with open(__PATH__.parent.parent.joinpath('version.txt'), 'r') as vfile:
+    vtext = vfile.readlines()
 __NAME__: str = 'base.py'
-__version__: str = '0.64.003'
-__date__: str = '2024-10-17'
+__version__ = vtext[0].strip()
+__date__ = vtext[1].strip()
 __authors__: str = ('Neil Cook, Etienne Artigau, Charles Cadieux, '
                     'Thomas Vandal, Ryan Cloutier, Pierre Larue')
 __package__: str = 'lbl'
