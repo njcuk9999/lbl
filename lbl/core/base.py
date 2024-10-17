@@ -17,7 +17,7 @@ from astropy.time import Time, TimeDelta
 # =============================================================================
 __package_name__: str = 'lbl'
 __PATH__ = Path(__file__).parent.parent
-with open(__PATH__.parent.parent.joinpath('version.txt'), 'r') as vfile:
+with open(__PATH__.parent.joinpath('version.txt'), 'r') as vfile:
     vtext = vfile.readlines()
 __NAME__: str = 'base.py'
 __version__ = vtext[0].strip()
