@@ -27,7 +27,7 @@ __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
 # get classes
-log = base_classes.log
+log = io.log
 
 
 # =============================================================================

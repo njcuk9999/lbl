@@ -7,7 +7,7 @@ import shutil
 
 from lbl.core import base
 from lbl.core import base_classes
-
+from lbl.core import io
 
 # =============================================================================
 # Define variables
@@ -17,7 +17,7 @@ __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
 # get classes
-log = base_classes.log
+log = io.log
 
 # =============================================================================
 # Define functions

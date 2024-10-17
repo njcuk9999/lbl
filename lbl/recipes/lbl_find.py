@@ -26,7 +26,7 @@ InstrumentsList = select.InstrumentsList
 InstrumentsType = select.InstrumentsType
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
-log = base_classes.log
+log = io.log
 # add arguments (must be in parameters.py)
 ARGS_FIND = [  # core
     'INSTRUMENT', 'CONFIG_FILE']

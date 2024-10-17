@@ -43,7 +43,7 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # load classes
 ParamDict = base_classes.ParamDict
-log = base_classes.log
+log = io.log
 LblException = base_classes.LblException
 # instruments list
 InstrumentsType = Union[default.Instrument,

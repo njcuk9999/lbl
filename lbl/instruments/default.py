@@ -34,7 +34,7 @@ Time = base.AstropyTime
 # load classes
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
-log = base_classes.log
+log = io.log
 
 
 # =============================================================================

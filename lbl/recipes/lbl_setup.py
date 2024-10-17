@@ -32,7 +32,7 @@ InstrumentsList = select.InstrumentsList
 InstrumentsType = select.InstrumentsType
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
-log = base_classes.log
+log = io.log
 # description for setup recipe
 DESCRIPTION_COMPIL = 'Use this code to setup LBL wrapper script'
 # sub-directories to create

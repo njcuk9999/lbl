@@ -58,7 +58,6 @@ class Log:
         self.program = kwargs.get('program', None)
         # save path
         self.filepath = None
-        #
         # add console
         self.console_verbosity = 2
         self._add_console(self.console_verbosity, level=self.GENERAL)

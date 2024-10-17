@@ -13,6 +13,7 @@ import sys
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import io
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_mask
@@ -31,7 +32,7 @@ __authors__ = base.__authors__
 # Description of recipe
 DESCRIPTION_MASK = 'Use this code to wrap around lbl'
 # get the logger
-log = base_classes.log
+log = io.log
 # define keys to remove from run params
 REMOVE_KEYS = [  # core
     'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES', 'DATA_SOURCE',

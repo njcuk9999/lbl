@@ -16,6 +16,7 @@ import wget
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import io
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -29,7 +30,7 @@ __authors__ = base.__authors__
 # get classes
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
-log = base_classes.log
+log = io.log
 # set the path to the data
 URL_TO_DATA = '/etiennes/path/'
 # set packed file format (zip, tar, gztar, bztar)

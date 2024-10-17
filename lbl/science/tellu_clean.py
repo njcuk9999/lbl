@@ -40,7 +40,7 @@ TimeDelta = base.AstropyTimeDelta
 Instrument = default.Instrument
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
-log = base_classes.log
+log = io.log
 InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value

@@ -35,7 +35,7 @@ Time = base.AstropyTime
 # get classes
 Instrument = default.Instrument
 LblException = base_classes.LblException
-log = base_classes.log
+log = io.log
 
 
 # =============================================================================

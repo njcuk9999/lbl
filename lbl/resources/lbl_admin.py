@@ -17,6 +17,7 @@ from astropy.table import Table, vstack
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import io
 from lbl.core import parameters
 from lbl.instruments import select
 from lbl.resources import lbl_misc
@@ -29,7 +30,7 @@ __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
 # get classes
-log = base_classes.log
+log = io.log
 LblException = base_classes.LblException
 QArg = lbl_misc.QuickArg
 

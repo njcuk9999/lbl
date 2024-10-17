@@ -26,6 +26,7 @@ from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import logger
 
 # =============================================================================
 # Define variables
@@ -36,7 +37,7 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 # get classes
 LblException = base_classes.LblException
-log = base_classes.log
+log = logger.Log(filename=base.LOG_FILE)
 # set forbidden header keys (not to be copied)
 FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
                   'EXTEND', 'COMMENT', 'CRVAL1', 'CRPIX1', 'CDELT1',
