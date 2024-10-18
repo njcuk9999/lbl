@@ -1,2 +1,3 @@
 include lbl/resources/*.md
 include doc/*
+include version.txt
