@@ -1,4 +1,7 @@
+import os
+import shutil
 import sys
+
 from setuptools import setup
 
 def get_version() -> str:
@@ -6,6 +9,10 @@ def get_version() -> str:
     Get the version from the version file
     :return:
     """
+    # copy version.txt file to apero-core
+    if os.path.exists('version.txt'):
+        os.remove('version.txt')
+    shutil.copy('../version.txt', 'version.txt')
     # try to open version file
     try:
         with open('version.txt', 'r') as vfile:
@@ -17,4 +24,5 @@ def get_version() -> str:
     # return version
     return vtext[0]
 
-setup(version=get_version())
+setup(version=get_version(),
+      include_package_data=True)
