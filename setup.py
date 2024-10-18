@@ -9,6 +9,8 @@ def get_version() -> str:
     Get the version from the version file
     :return:
     """
+    # copy version.txt
+    shutil.copy('version.txt', 'lbl/version.txt')
     # try to open version file
     try:
         with open('version.txt', 'r') as vfile:
