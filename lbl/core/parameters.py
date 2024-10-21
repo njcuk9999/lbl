@@ -81,6 +81,8 @@ params.set(key='DATA_SOURCE', value='None', source=__NAME__,
            arg='--data_source', dtype=str, not_none=True)
 
 # add instrument earth location (for use in astropy.coordinates.EarthLocation)
+# Must be in this list: Must be in this list:
+# https://github.com/astropy/astropy-data/blob/gh-pages/coordinates/sites.json
 params.set(key='EARTH_LOCATION', value=None, source=__NAME__,
            desc='The instrument earth location (for use in '
                 'astropy.coordinates.EarthLocation)',

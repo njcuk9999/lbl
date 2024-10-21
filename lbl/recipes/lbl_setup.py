@@ -17,6 +17,7 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import parameters
 from lbl.core import wrap_setup
+from lbl.core import io
 from lbl.instruments import select
 
 # =============================================================================
@@ -250,6 +251,10 @@ def main(**kwargs):
     wrap_dict['ROTBROAD'] = '[{0}]'.format(','.join(['']))
     # set plotting
     wrap_dict['DO_PLOT'] = False
+    # -------------------------------------------------------------------------
+    # if instrument is Generic we have push keywords into the wrap file
+    if params['instrument'] == 'Generic':
+        wrap_dict = wrap_setup.generic_instrument(wrap_dict)
     # -------------------------------------------------------------------------
     # print progress
     log.info('Saving wrap file: {0}. '.format(params['wrap_file']))

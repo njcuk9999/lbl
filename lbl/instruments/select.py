@@ -22,6 +22,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import logger
 from lbl.core import parameters
+from lbl.instruments import generic
 from lbl.instruments import carmenes
 from lbl.instruments import default
 from lbl.instruments import espresso
@@ -46,7 +47,7 @@ ParamDict = base_classes.ParamDict
 log = io.log
 LblException = base_classes.LblException
 # instruments list
-InstrumentsType = Union[default.Instrument,
+InstrumentsType = Union[default.Instrument, generic.Generic,
                         spirou.Spirou, spirou.SpirouCADC,
                         harps.Harps_ORIG, harps.Harps_ESO,
                         espresso.Espresso,
@@ -57,7 +58,7 @@ InstrumentsType = Union[default.Instrument,
                         maroonx.MaroonX,
                         sophie.Sophie,
                         coralie.Coralie]
-InstrumentsList = (default.Instrument,
+InstrumentsList = (default.Instrument, generic.Generic,
                    spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps_ORIG, harps.Harps_ESO,
                    espresso.Espresso,
@@ -73,6 +74,8 @@ InstrumentsList = (default.Instrument,
 #   classes
 #   Format:  InstDict[{INSTRUMENT}][{DATA_SOURCE}]
 InstDict = dict()
+InstDict['Generic'] = dict()
+InstDict['Generic']['None'] = generic.Generic
 InstDict['SPIROU'] = dict()
 InstDict['SPIROU']['APERO'] = spirou.Spirou
 InstDict['SPIROU']['CADC'] = spirou.SpirouCADC
