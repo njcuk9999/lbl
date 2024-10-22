@@ -245,33 +245,23 @@ class Generic(Instrument):
         # we iterate once more. Expressed in m/s
         self.params.set('MAX_CONVERGENCE_TEMPLATE_RV',  None, not_none=True,
                         source=func_name)
-
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
-                        source=func_name)
+        self.params.set('KW_MID_EXP_TIME', 'BJD', source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'HIERARCH ESO QC BJD', source=func_name)
+        self.params.set('KW_MJDATE', 'BJD', source=func_name)
         # define snr keyword
-        self.params.set('KW_SNR', 'HIERARCH ESO QC ORDER100 SNR',
-                        source=func_name)
+        self.params.set('KW_SNR', 'SNR', source=func_name)
         # define berv keyword
-        self.params.set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
+        self.params.set('KW_BERV', 'BERV', source=func_name)
         # # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
-                        source=func_name)
+        self.params.set('KW_BLAZE_FILE', 'NONE', source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
-                        source=func_name)
+        self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS',
-                        ['HIERARCH ESO TEL1 AIRM START',
-                         'HIERARCH ESO TEL2 AIRM START',
-                         'HIERARCH ESO TEL3 AIRM START',
-                         'HIERARCH ESO TEL4 AIRM START'],
-                        source=func_name)
+        self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
         # define the human date of the observation
         self.params.set('KW_DATE', 'DATE', source=func_name)
         # define the tau_h20 of the observation
@@ -279,30 +269,24 @@ class Generic(Instrument):
         # define the tau_other of the observation
         self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
-                        source=func_name)
+        self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL15 NAME',
-                        source=func_name)
+        self.params.set('KW_WAVEFILE', 'NONE', source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
-                        source=func_name)
+        self.params.set('KW_OBJNAME', 'OBJNAME', source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        # TODO -> no equivalent in ESPRESSO
         self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER100 SNR',
-                        source=func_name)
+        self.params.set('KW_EXT_SNR', 'EXT_SNR', source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
+        self.params.set('KW_BJD', 'BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'HIERARCH ESO DPR TYPE', source=func_name)
+        self.params.set('KW_REF_KEY', 'DPRTYPE', source=func_name)
         # velocity of template from CCF
         self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        # TODO: how do we get the temperature for ESPRESSO?
         self.params.set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------

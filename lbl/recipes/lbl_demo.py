@@ -114,6 +114,19 @@ def main():
     with open(epath, 'w') as efile:
         for newline in newlines:
             efile.write(newline + '\n')
+    # return locals
+    return locals()
+
+
+def run():
+    """
+    Main function for running the setup from the command line
+    (avoids returning locals)
+
+    :return:
+    """
+    # run the main function
+    _ = main()
 
 
 # =============================================================================

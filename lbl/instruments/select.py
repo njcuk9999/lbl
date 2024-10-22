@@ -47,7 +47,7 @@ ParamDict = base_classes.ParamDict
 log = io.log
 LblException = base_classes.LblException
 # instruments list
-InstrumentsType = Union[default.Instrument, generic.Generic,
+InstrumentsType = Union[default.Instrument,
                         spirou.Spirou, spirou.SpirouCADC,
                         harps.Harps_ORIG, harps.Harps_ESO,
                         espresso.Espresso,
@@ -57,8 +57,9 @@ InstrumentsType = Union[default.Instrument, generic.Generic,
                         harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                         maroonx.MaroonX,
                         sophie.Sophie,
-                        coralie.Coralie]
-InstrumentsList = (default.Instrument, generic.Generic,
+                        coralie.Coralie,
+                        generic.Generic]
+InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
                    harps.Harps_ORIG, harps.Harps_ESO,
                    espresso.Espresso,
@@ -68,14 +69,13 @@ InstrumentsList = (default.Instrument, generic.Generic,
                    harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
                    sophie.Sophie,
-                   coralie.Coralie)
+                   coralie.Coralie,
+                   generic.Generic)
 
 # Add all the instrument + source combinations and link them to instrument
 #   classes
 #   Format:  InstDict[{INSTRUMENT}][{DATA_SOURCE}]
 InstDict = dict()
-InstDict['Generic'] = dict()
-InstDict['Generic']['None'] = generic.Generic
 InstDict['SPIROU'] = dict()
 InstDict['SPIROU']['APERO'] = spirou.Spirou
 InstDict['SPIROU']['CADC'] = spirou.SpirouCADC
@@ -104,6 +104,8 @@ InstDict['SOPHIE'] = dict()
 InstDict['SOPHIE']['None'] = sophie.Sophie
 InstDict['CORALIE'] = dict()
 InstDict['CORALIE']['None'] = coralie.Coralie
+InstDict['Generic'] = dict()
+InstDict['Generic']['None'] = generic.Generic
 
 
 # =============================================================================

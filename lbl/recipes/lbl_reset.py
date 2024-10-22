@@ -126,6 +126,17 @@ def __main__(inst: InstrumentsType, **kwargs):
     return locals()
 
 
+def run():
+    """
+    Main function for running the setup from the command line
+    (avoids returning locals)
+
+    :return:
+    """
+    # run the main function
+    _ = main()
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

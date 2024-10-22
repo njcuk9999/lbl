@@ -108,9 +108,9 @@ def main(**kwargs):
         if not cond1 and cond2:
             # noinspection PyBroadException
             try:
-                question = ('Data directory {0} does not exist, create it? '
-                            '[Y]es/[N]o:\t')
-                uinput = input(question)
+                question = ('Data directory {0} does not exist, '
+                            'create it? [Y]es/[N]o:\t')
+                uinput = input(question.format(params['data_dir']))
                 if 'Y' in uinput.upper():
                     # print that we are creating directory
                     msg = 'Creating data directory: {0}'
@@ -294,12 +294,23 @@ def main(**kwargs):
     return locals()
 
 
+def run():
+    """
+    Main function for running the setup from the command line
+    (avoids returning locals)
+
+    :return:
+    """
+    # run the main function
+    _ = main()
+
+
 # =============================================================================
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
     # print hello world
-    ll = main()
+    _ = main()
 
 # =============================================================================
 # End of code

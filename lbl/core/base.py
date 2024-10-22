@@ -30,6 +30,9 @@ __package__: str = 'lbl'
 INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
                'NIRPS_HE', 'HARPSN', 'MAROONX', 'SOPHIE', 'CORALIE']
 
+# add generic instrument last
+INSTRUMENTS += ['Generic']
+
 # log variables
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')
 LOG_FORMAT = '%(asctime)s %(message)s'
