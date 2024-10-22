@@ -181,7 +181,7 @@ def main(**kwargs):
     # get instrument class
     instrument = select.InstDict[params['instrument']][params['data_source']]
     # construct the instrumnet instance
-    inst = instrument(parameters.params.copy(), override=False)
+    inst = instrument(parameters.params.copy())
 
     # -------------------------------------------------------------------------
     # Save the wrap file

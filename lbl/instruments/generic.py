@@ -40,8 +40,7 @@ log = io.log
 # Define Spirou class
 # =============================================================================
 class Generic(Instrument):
-    def __init__(self, params: base_classes.ParamDict,
-                 override: bool = True):
+    def __init__(self, params: base_classes.ParamDict):
         # call to super function
         super().__init__('Generic')
         # extra parameters (specific to instrument)
@@ -52,16 +51,15 @@ class Generic(Instrument):
         # set parameters for instrument
         self.params = params
         # override params
-        if override:
-            self.param_override()
+        self.param_override()
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def generic_validate(self, key):
         if self.params[key] is None:
-            log.error('Key {0} must be defined when using '
-                      'Generic Instrument').format(key)
+            log.error(('Key {0} must be defined when using '
+                      'Generic Instrument').format(key))
         self.params.set(key, self.params[key], source='USER[Generic]')
         return self.params[key]
 

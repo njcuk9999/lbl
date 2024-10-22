@@ -228,7 +228,7 @@ def generic_instrument(wrap_dict: Dict[str, Any]) -> Dict[str, Any]:
     # The minimum wavelength for the instrument/mode
     # Example: 377.189
     # Type: FLOAT
-    rparams['GENERIC_WAVEMIN] = None 
+    rparams['GENERIC_WAVEMIN'] = None 
     
     # The maxmimum wavelength for the instrument/mode
     # Example: 790.788
