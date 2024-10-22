@@ -40,8 +40,7 @@ log = io.log
 # Define Spirou class
 # =============================================================================
 class Generic(Instrument):
-    def __init__(self, params: base_classes.ParamDict,
-                 override: bool = True):
+    def __init__(self, params: base_classes.ParamDict):
         # call to super function
         super().__init__('Generic')
         # extra parameters (specific to instrument)
@@ -52,16 +51,17 @@ class Generic(Instrument):
         # set parameters for instrument
         self.params = params
         # override params
-        if override:
-            self.param_override()
+        self.param_override()
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def generic_validate(self, key):
         if self.params[key] is None:
-            log.error(('Key {0} must be defined when using '
-                      'Generic Instrument').format(key))
+            emsg = ('Key {0} must be defined when using Generic Instrument'
+                    '').format(key)
+            raise LblException(emsg)
+
         self.params.set(key, self.params[key], source='USER[Generic]')
         return self.params[key]
 
@@ -115,7 +115,7 @@ class Generic(Instrument):
         # define the maximum pixel width allowed for lines [pixels]
         self.generic_validate('COMPIL_MAX_PIXEL_WIDTH')
         # define min likelihood of correlation with BERV
-        self.generic_validate('COMPIL_CUT_BERV')
+        self.generic_validate('COMPIL_CUT_PEARSONR')
         # define the CCF e-width to use for FP files
         self.generic_validate('COMPIL_FP_EWID')
         # define whether to add the magic "binned wavelength" bands rv
@@ -133,6 +133,8 @@ class Generic(Instrument):
         self.generic_validate('COMPILE_BINNED_BAND3')
         # define the reference wavelength used in the slope fitting in nm
         self.generic_validate('COMPIL_SLOPE_REF_WAVE')
+        # Set FLUX_EXTENSION_NAME
+        self.params.set('FLUX_EXTENSION_NAME', 'FLUX', source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid.fits', source=func_name)
@@ -394,6 +396,16 @@ class Generic(Instrument):
         # deal with already flagged as corrected
         if self.params['BLAZE_CORRECTED']:
             return None
+
+        # have to check for blaze extension
+        with fits.open(science_file) as hdul:
+            if 'BLAZE' not in hdul:
+                emsg = ('Blaze extension not found in {0} for {1}. '
+                        '\n\tEither data format is wrong or '
+                        'BLAZE_CORRECTED needs to be set to True')
+                eargs = [science_file, self.params['INSTRUMENT']]
+                raise LblException(emsg.format(*eargs))
+
         # load blaze
         blaze = io.load_fits(science_file, kind='blaze fits extension',
                              extname='BLAZE')
@@ -438,9 +450,6 @@ class Generic(Instrument):
             raise LblException('OBJECT_SCIENCE name must be defined')
         else:
             objname = self.params['OBJECT_SCIENCE']
-        # deal the input file string
-        if self.params['INPUT_FILE'] is None:
-            raise LblException('INPUT_FILE must be defined')
         # check that the object sub-directory exists
         abspath = io.make_dir(directory, objname, 'Science object')
         # set up basename
@@ -493,11 +502,11 @@ class Generic(Instrument):
         # Fiber must be set for SPIROU CADC
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
-                    'SPIROU CADC mode')
+                    'Generic mode')
             base_classes.LblException(emsg)
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
-                    'SPIROU CADC mode')
+                    'Generic mode')
             base_classes.LblException(emsg)
         # full extension name
         extname = 'FLUX'
@@ -619,7 +628,7 @@ class Generic(Instrument):
         _ = data, header
         # load wavemap
         wavemap = io.load_fits(science_filename, 'wave fits extension',
-                               extname='WAVE')
+                               extname='WAVELENGTH')
         # return wave solution map
         return wavemap
 

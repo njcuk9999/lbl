@@ -39,9 +39,7 @@ log = io.log
 # Define SOPHIE class
 # =============================================================================
 class Coralie(Instrument):
-    def __init__(self, params: base_classes.ParamDict, override: bool = True):
-        # don't override the params
-        _ = override
+    def __init__(self, params: base_classes.ParamDict):
         # call to super function
         super().__init__('CORALIE')
         # extra parameters (specific to instrument)

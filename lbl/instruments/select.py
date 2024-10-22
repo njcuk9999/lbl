@@ -306,11 +306,11 @@ def load_instrument(args: ParamDict,
         source_dict = InstDict[instrument]
         # None should only be in there if there are no data sources
         if 'None' in source_dict.keys():
-            inst = source_dict['None']
+            inst_class = source_dict['None']
         # use the data source to get instance
         elif data_source in source_dict:
             # get the instance from the source dictionary
-            inst = source_dict[data_source]
+            inst_class = source_dict[data_source]
         else:
             emsg = 'Data source "{0}" invalid'
             eargs = [data_source]
@@ -320,14 +320,15 @@ def load_instrument(args: ParamDict,
         emsg = 'Instrument name "{0}" invalid'
         eargs = [instrument]
         raise base_classes.LblException(emsg.format(*eargs))
-    # construct instrument instance
-    inst(params, override=False)
+
     # override inst params with args (from input/cmd/yaml)
     for argname in args:
-        if argname in inst.params:
+        if argname in params:
             # get source
-            inst.params.set(argname, args[argname],
+            params.set(argname, args[argname],
                             source=args.instances[argname].source)
+    # construct instrument instance
+    inst = inst_class(params)
     # -------------------------------------------------------------------------
     # update log verbosity level and program name
     verbose = inst.params.get('VERBOSE', 2)

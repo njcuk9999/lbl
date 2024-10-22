@@ -39,10 +39,7 @@ log = io.log
 # Define HARPS class
 # =============================================================================
 class Harps(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None,
-                 override: bool = True):
-        # don't override the params
-        _ = override
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'HARPS'
@@ -842,10 +839,7 @@ class Harps(Instrument):
 # =============================================================================
 # noinspection PyPep8Naming
 class Harps_ORIG(Harps):
-    def __init__(self, params: base_classes.ParamDict, name: str = None,
-                 override: bool = True):
-        # don't override the params
-        _ = override
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'HARPS_ORIG'
@@ -1150,10 +1144,7 @@ class Harps_ORIG(Harps):
 # =============================================================================
 # noinspection PyPep8Naming
 class Harps_ESO(Harps):
-    def __init__(self, params: base_classes.ParamDict, name: str = None,
-                 override: bool = True):
-        # don't override the params
-        _ = override
+    def __init__(self, params: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'HARPS_ESO'

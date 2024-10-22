@@ -216,7 +216,7 @@ params.set(key='TEMPLATE_FILE', value=None, source=__NAME__,
            arg='--template', dtype=str)
 
 # define the input files
-params.set(key='INPUT_FILE', value=None, source=__NAME__,
+params.set(key='INPUT_FILE', value='*', source=__NAME__,
            desc='The input file expression to use (i.e. *e2dsff*AB.fits)',
            arg='--input_file', dtype=str,
            not_none=True)

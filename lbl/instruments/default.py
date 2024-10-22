@@ -44,15 +44,13 @@ class Instrument:
     name: str = 'None'
     params: ParamDict = ParamDict()
 
-    def __init__(self, name: str, override: bool = True):
+    def __init__(self, name: str):
         """
         Default Instrument class - this should be inherited by an instrument
         class - not used by itself
 
         :param name: str, the name of the Instrument
         """
-        # don't override the params
-        _ = override
         self.name = name
         # extra parameters (specific to instrument) may not be required
         #   for all instruments but all should be here to know they are used

@@ -3158,11 +3158,11 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     # -------------------------------------------------------------------------
     # store in a table for on going use
     table = Table()
-    table['ll_mask_s'] = ll_mask_s
-    table['ll_mask_e'] = ll_mask_e
-    table['w_mask'] = w_mask
-    table['value'] = f_mask
-    table['depth'] = depth
+    table['ll_mask_s'] = np.array(ll_mask_s)
+    table['ll_mask_e'] = np.array(ll_mask_e)
+    table['w_mask'] = np.array(w_mask)
+    table['value'] = np.array(f_mask)
+    table['depth'] = np.array(depth)
     table['line_snr'] = abs(depth * snr_mask)
     # return the mask table
     return table
