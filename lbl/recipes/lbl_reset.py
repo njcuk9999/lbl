@@ -118,7 +118,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     io.clean_directory(dparams['CALIB_DIR'],
                        include_files=inst.params['SAMPLE_WAVE_GRID_FILE'])
     # clean log directory
-    logpath = os.path.dirname(base_classes.log.filepath)
+    logpath = os.path.dirname(io.log.filepath)
     io.clean_directory(logpath)
     # -------------------------------------------------------------------------
     # return local namespace
