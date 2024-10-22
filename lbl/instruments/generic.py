@@ -40,7 +40,8 @@ log = io.log
 # Define Spirou class
 # =============================================================================
 class Generic(Instrument):
-    def __init__(self, params: base_classes.ParamDict):
+    def __init__(self, params: base_classes.ParamDict,
+                 override: bool = True):
         # call to super function
         super().__init__('Generic')
         # extra parameters (specific to instrument)
@@ -51,7 +52,8 @@ class Generic(Instrument):
         # set parameters for instrument
         self.params = params
         # override params
-        self.param_override()
+        if override:
+            self.param_override()
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
