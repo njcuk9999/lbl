@@ -44,7 +44,10 @@ log = io.log
 # Define NIRPS class
 # =============================================================================
 class NIRPS(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         """
         Global NIRPS parameters (do not use directly)
 
@@ -1137,7 +1140,10 @@ class NIRPS(Instrument):
 # =============================================================================
 # noinspection PyPep8Naming
 class NIRPS_HA(NIRPS):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'NIRPS_HA'
@@ -1216,7 +1222,10 @@ class NIRPS_HA(NIRPS):
 
 # noinspection PyPep8Naming
 class NIRPS_HE(NIRPS):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'NIRPS_HE'
@@ -1298,7 +1307,10 @@ class NIRPS_HE(NIRPS):
 # Define NIRPS CADC class
 # =============================================================================
 class NIRPS_HA_CADC(NIRPS_HA):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'NIRPS_HA_CADC'
@@ -1512,7 +1524,10 @@ class NIRPS_HA_CADC(NIRPS_HA):
 
 
 class NIRPS_HE_CADC(NIRPS_HE):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'NIRPS_HE_CADC'
@@ -1730,7 +1745,10 @@ class NIRPS_HE_CADC(NIRPS_HE):
 # =============================================================================
 # noinspection PyPep8Naming
 class NIRPS_HA_ESO(NIRPS_HA):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'NIRPS_HA_ESO'
@@ -2224,7 +2242,10 @@ class NIRPS_HA_ESO(NIRPS_HA):
 
 # noinspection PyPep8Naming
 class NIRPS_HE_ESO(NIRPS_HE):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'NIRPS_HE_ESO'

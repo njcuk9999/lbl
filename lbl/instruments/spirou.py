@@ -42,7 +42,10 @@ log = io.log
 # Define Spirou class
 # =============================================================================
 class Spirou(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'SPIROU'
@@ -1174,7 +1177,10 @@ class Spirou(Instrument):
 # Define Spirou CADC class
 # =============================================================================
 class SpirouCADC(Spirou):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'SPIROU_CADC'

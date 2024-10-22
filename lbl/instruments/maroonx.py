@@ -40,7 +40,10 @@ log = io.log
 # Define MaroonX class
 # =============================================================================
 class MaroonX(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # call to super function
         super().__init__(name)
         # extra parameters (specific to instrument)
@@ -716,7 +719,10 @@ class MaroonX(Instrument):
 # =============================================================================
 # noinspection PyPep8Naming
 class MaroonXBlue(MaroonX):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'MaroonXBlue'
@@ -1055,7 +1061,10 @@ class MaroonXBlue(MaroonX):
 # =============================================================================
 # noinspection PyPep8Naming
 class MaroonXRed(MaroonX):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict, name: str = None,
+                 override: bool = True):
+        # don't override the params
+        _ = override
         # get the name
         if name is None:
             name = 'MaroonXRed'

@@ -40,7 +40,9 @@ log = io.log
 # Define Spirou class
 # =============================================================================
 class Espresso(Instrument):
-    def __init__(self, params: base_classes.ParamDict):
+    def __init__(self, params: base_classes.ParamDict, override: bool = True):
+        # don't override the params
+        _ = override
         # call to super function
         super().__init__('ESPRESSO')
         # extra parameters (specific to instrument)
