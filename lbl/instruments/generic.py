@@ -89,6 +89,12 @@ class Generic(Instrument):
         self.wavemin = value
         value = self.generic_validate('GENERIC_WAVEMAX')
         self.wavemax = value
+        # ---------------------------------------------------------------------
+        # Now override parameters that would be overwritten by a normal
+        # instrument
+        # They are set to None in the wrap script so we make sure the user
+        # has set these
+        # ---------------------------------------------------------------------
         # add instrument earth location
         #    (for use in astropy.coordinates.EarthLocation)
         self.generic_validate('EARTH_LOCATION')
