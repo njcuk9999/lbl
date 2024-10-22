@@ -214,153 +214,257 @@ def generic_instrument(wrap_dict: Dict[str, Any]) -> Dict[str, Any]:
     
     # IMPORTANT: For a generic instrument these MUST be set!
 
-    # Instrument name + mode (avoid spaces and punctuation other than underscores)
-    rparams['INSTRUMENT'] = 'ESPRESSO'
+    # Instrument name (avoid spaces and punctuation other than underscores)
+    # Example: 'ESPRESSO'
+    # TYPE: STRING
+    rparams['GENERIC_INSTRUMENT'] = None
+    
+    # Data source (default is 'None' but can be set if you have multiple modes per instrument)
+    # Can be a different reduction pipeline or instrument mode or both
+    # Example: 'None' or 'RED' or 'H' or 'CADC'
+    # TYPE: STRING
+    rparams['GENERIC_DATA_SOURCE'] = None
+    
+    # The minimum wavelength for the instrument/mode
+    # Example: 377.189
+    # Type: FLOAT
+    rparams['GENERIC_WAVEMIN] = None 
+    
+    # The maxmimum wavelength for the instrument/mode
+    # Example: 790.788
+    # Type: FLOAT
+    rparams['GENERIC_WAVEMAX'] = None
 
     # add instrument earth location
     #    (for use in astropy.coordinates.EarthLocation)
     #    Must be in this list: https://github.com/astropy/astropy-data/blob/gh-pages/coordinates/sites.json
-    rparams['EARTH_LOCATION'] = 'paranal'
+    # Example: 'paranal' or 'gemini_south'
+    # Type: STRING
+    rparams['EARTH_LOCATION'] = None
 
     # define the High pass width in km/s
-    rparams['HP_WIDTH'] = 256
+    # Example: 256
+    # Type: INT
+    rparams['HP_WIDTH'] = None
 
     # define the SNR cut off threshold
-    rparams['SNR_THRESHOLD'] = 10
+    # Example: 15
+    # Type: FLOAT
+    rparams['SNR_THRESHOLD'] = None
 
     # define which bands to use for the clean CCF
     # from lbl.core.astro.py
     # currently: r, i, y, h, k
-    rparams['CCF_CLEAN_BANDS'] = ['r']
+    # Example: ['r']
+    # Type: LIST of STRINGS
+    rparams['CCF_CLEAN_BANDS'] = None
 
     # define the plot order for the compute rv model plot
-    rparams['COMPUTE_MODEL_PLOT_ORDERS'] = [60]
+    # Example: [60]
+    # Type: LIST of INTS
+    rparams['COMPUTE_MODEL_PLOT_ORDERS'] = None
 
     # define the compil minimum wavelength allowed for lines [nm]
-    rparams['COMPIL_WAVE_MIN'] = 450
+    # Example: 450
+    # Type: FLOAT
+    rparams['COMPIL_WAVE_MIN'] = None
 
     # define the compil maximum wavelength allowed for lines [nm]
-    rparams['COMPIL_WAVE_MAX'] = 750
+    # Example: 750
+    # Type: FLOAT
+    rparams['COMPIL_WAVE_MAX'] = None
 
     # define the maximum pixel width allowed for lines [pixels]
-    rparams['COMPIL_MAX_PIXEL_WIDTH'] = 50
+    # Example: 50
+    # Type: INT
+    rparams['COMPIL_MAX_PIXEL_WIDTH'] = None
 
-    # define min likelihood of correlation with BERV
+    # define min likelihood of correlation with BERV (-1 to turn off)
+    # Example: -1 
+    # Type: INT
     rparams['COMPIL_CUT_PEARSONR'] = -1
 
     # define the CCF e-width to use for FP files
-    rparams['COMPIL_FP_EWID'] = 3.0
+    # Example: 3.0 
+    # Type: FLOAT
+    rparams['COMPIL_FP_EWID'] = None
 
     # define whether to add the magic "binned wavelength" bands rv
-    rparams['COMPIL_ADD_UNIFORM_WAVEBIN'] = True
+    # Example: True
+    # Type: BOOL
+    rparams['COMPIL_ADD_UNIFORM_WAVEBIN'] = None
 
     # define the number of bins used in the magic "binned wavelength" bands
-    rparams['COMPIL_NUM_UNIFORM_WAVEBIN'] = 15
+    # Example: 15
+    # Type: INT
+    rparams['COMPIL_NUM_UNIFORM_WAVEBIN'] = None
 
     # define the first band (from get_binned_parameters) to plot (band1)
     # u,g,r,i,z,y,j,h,k
-    rparams['COMPILE_BINNED_BAND1'] = 'g'
+    # Example: 'g'
+    # Type: STRING
+    rparams['COMPILE_BINNED_BAND1'] = None
 
     # define the second band (from get_binned_parameters) to plot (band2)
     #    this is used for colour   band2 - band3
     # u,g,r,i,z,y,j,h,k
-    rparams['COMPILE_BINNED_BAND2'] = 'r'
+    # Example: 'r'
+    # Type: STRING
+    rparams['COMPILE_BINNED_BAND2'] = None
 
     # define the third band (from get_binned_parameters) to plot (band3)
     #    this is used for colour   band2 - band3
     # u,g,r,i,z,y,j,h,k
-    rparams['COMPILE_BINNED_BAND3'] = 'i'
+    # Example: 'i'
+    # Type: STRING
+    rparams['COMPILE_BINNED_BAND3'] = None
 
     # define the reference wavelength used in the slope fitting in nm
-    rparams['COMPIL_SLOPE_REF_WAVE'] = 650
+    # Example: 650
+    # Type: FLOAT
+    rparams['COMPIL_SLOPE_REF_WAVE'] = None
 
     # define readout noise per instrument (assumes ~5e- and 10 pixels)
-    rparams['READ_OUT_NOISE'] = 15
+    # Example: 15
+    # Type: FLOAT
+    rparams['READ_OUT_NOISE'] = None
 
     # Define the minimum allowed SNR in a pixel to add it to the mask
-    rparams['MASK_SNR_MIN'] = 20
+    # Example: 20
+    # Type: FLOAT
+    rparams['MASK_SNR_MIN'] = None
 
     # blaze smoothing size (s1d template)
-    rparams['BLAZE_SMOOTH_SIZE'] = 20
+    # Example: 20
+    # Type: FLOAT
+    rparams['BLAZE_SMOOTH_SIZE'] = None
 
     # blaze threshold (s1d template)
-    rparams['BLAZE_THRESHOLD'] = 0.2
+    # Example: 0.2
+    # Type: FLOAT
+    rparams['BLAZE_THRESHOLD'] = None
 
     # define the size of the berv bins in m/s
-    rparams['BERVBIN_SIZE'] = 3000
+    # Example: 3000
+    # Type: FLOAT
+    rparams['BERVBIN_SIZE'] = None
 
     # define whether to do the tellu-clean
-    rparams['DO_TELLUCLEAN'] = True
+    # Example: True
+    # Type: BOOL
+    rparams['DO_TELLUCLEAN'] = None
 
     # define the dv offset for tellu-cleaning in km/s
-    rparams['TELLUCLEAN_DV0'] = 0
+    # Example: 0.0
+    # Type: FLOAT
+    rparams['TELLUCLEAN_DV0'] = None
 
     # Define the lower wave limit for the absorber spectrum masks in nm
-    rparams['TELLUCLEAN_MASK_DOMAIN_LOWER'] = 550
+    # Example: 550
+    # Type: FLOAT
+    rparams['TELLUCLEAN_MASK_DOMAIN_LOWER'] = None
 
     # Define the upper wave limit for the absorber spectrum masks in nm
-    rparams['TELLUCLEAN_MASK_DOMAIN_UPPER'] = 670
+    # Example: 670
+    # Type: FLOAT
+    rparams['TELLUCLEAN_MASK_DOMAIN_UPPER'] = None
 
     # Define whether to force using airmass from header
-    rparams['TELLUCLEAN_FORCE_AIRMASS'] = True
+    # Example: True
+    # Type: BOOL
+    rparams['TELLUCLEAN_FORCE_AIRMASS'] = None
 
     # Define the CCF scan range in km/s
-    rparams['TELLUCLEAN_CCF_SCAN_RANGE'] = 150
+    # Example: 150
+    # Type: FLOAT
+    rparams['TELLUCLEAN_CCF_SCAN_RANGE'] = None
 
     # Define the maximum number of iterations for the tellu-cleaning loop
-    rparams['TELLUCLEAN_MAX_ITERATIONS'] = 20
+    # Example: 20
+    # Type: INT
+    rparams['TELLUCLEAN_MAX_ITERATIONS'] = None
 
     # Define the kernel width in pixels
-    rparams['TELLUCLEAN_KERNEL_WID'] = 1.4
+    # Example: 1.4
+    # Type: FLOAT
+    rparams['TELLUCLEAN_KERNEL_WID'] = None
 
     # Define the gaussian shape (2=pure gaussian, >2=boxy)
-    rparams['TELLUCLEAN_GAUSSIAN_SHAPE'] = 2.2
+    # Example: 2.2
+    # Type: FLOAT
+    rparams['TELLUCLEAN_GAUSSIAN_SHAPE'] = None
 
     # Define the wave grid lower wavelength limit in nm
-    rparams['TELLUCLEAN_WAVE_LOWER'] = 350
+    # Example: 350
+    # Type: FLOAT
+    rparams['TELLUCLEAN_WAVE_LOWER'] = None
 
     # Define the wave griv upper wavelength limit
-    rparams['TELLUCLEAN_WAVE_UPPER'] = 750
+    # Example: 750
+    # Type: FLOAT
+    rparams['TELLUCLEAN_WAVE_UPPER'] = None
 
     # Define the transmission threshold exp(-1) at which tellurics are
     #     uncorrectable
-    rparams['TELLUCLEAN_TRANSMISSION_THRESHOLD'] = -1
+    # Example: -1
+    # Type: FLOAT
+    rparams['TELLUCLEAN_TRANSMISSION_THRESHOLD'] = None
 
     # Define the sigma cut threshold above which pixels are removed from fit
-    rparams['TELLUCLEAN_SIGMA_THRESHOLD'] = 10
+    # Example: 10
+    # Type: FLOAT
+    rparams['TELLUCLEAN_SIGMA_THRESHOLD'] = None
 
     # Define whether to recenter the CCF on the first iteration
-    rparams['TELLUCLEAN_RECENTER_CCF'] = False
+    # Example: False
+    # Type: BOOL
+    rparams['TELLUCLEAN_RECENTER_CCF'] = None
 
     # Define whether to recenter the CCF of others on the first iteration
-    rparams['TELLUCLEAN_RECENTER_CCF_FIT_OTHERS'] = True
+    # Example: False
+    # Type: BOOL
+    rparams['TELLUCLEAN_RECENTER_CCF_FIT_OTHERS'] = None
 
     # Define the default water absorption to use
-    rparams['TELLUCLEAN_DEFAULT_WATER_ABSO'] = 5.0
+    # Example: 5.0
+    # Type: FLOAT
+    rparams['TELLUCLEAN_DEFAULT_WATER_ABSO'] = None
 
     # Define the lower limit on valid exponent of water absorbers
-    rparams['TELLUCLEAN_WATER_BOUNDS_LOWER'] = 0.05
+    # Example: 0.05
+    # Type: FLOAT
+    rparams['TELLUCLEAN_WATER_BOUNDS_LOWER'] = None
 
     # Define the upper limit on valid exponent of water absorbers
-    rparams['TELLUCLEAN_WATER_BOUNDS_UPPER'] = 15
+    # Example: 15
+    # Type: FLOAT
+    rparams['TELLUCLEAN_WATER_BOUNDS_UPPER'] = None
 
     # Define the lower limit on valid exponent of other absorbers
-    rparams['TELLUCLEAN_OTHERS_BOUNDS_LOWER'] = 0.05
-
+    # Example: 0.05
+    # Type: FLOAT
+    rparams['TELLUCLEAN_OTHERS_BOUNDS_LOWER'] = None
+    
     # Define the upper limit on valid exponent of other absorbers
-    rparams['TELLUCLEAN_OTHERS_BOUNDS_UPPER'] = 15
-
+    # Example: 15
+    # Type: FLOAT
+    rparams['TELLUCLEAN_OTHERS_BOUNDS_UPPER'] = None
+    
     # ---------------------------------------------------------------------
     # Parameters for the template construction
     # ---------------------------------------------------------------------
     # max number of bins for the median of the template. Avoids handling
     # too many spectra at once.
-    rparams['TEMPLATE_MEDBINMAX'] = 19
+    # Example: 19
+    # Type: INT
+    rparams['TEMPLATE_MEDBINMAX'] = None
 
     # maximum RMS between the template and the median of the template
     # to accept the median of the template as a good template. If above
     # we iterate once more. Expressed in m/s
-    rparams['MAX_CONVERGENCE_TEMPLATE_RV'] = 100
+    # Example: 100
+    # Type: FLOAT
+    rparams['MAX_CONVERGENCE_TEMPLATE_RV'] = None
     
     """
     # add to wrap dict

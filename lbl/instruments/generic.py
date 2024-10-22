@@ -56,6 +56,13 @@ class Generic(Instrument):
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
+    def generic_validate(self, key):
+        if self.params[key] is None:
+            log.error('Key {0} must be defined when using '
+                      'Generic Instrument').format(key)
+        self.params.set(key, self.params[key], source='USER[Generic]')
+        return self.params[key]
+
     def param_override(self):
         """
         Parameter override for SPIRou parameters
@@ -65,68 +72,59 @@ class Generic(Instrument):
         """
         # set function name
         func_name = __NAME__ + '.Generic.override()'
-        # set parameters to update
-        self.params.set('INSTRUMENT', 'Generic', source=func_name)
+        # update instrument
+        value = self.generic_validate('GENERIC_INSTRUMENT')
+        self.params.set('INSTRUMENT', value, source=func_name)
+        # set a new template name
+        newtname = self.default_template_name.replace('Generic', value)
+        # update data source
+        value = self.generic_validate('GENERIC_DATA_SOURCE')
+        self.params.set('DATA_SOURCE', value, source=func_name)
+        # ---------------------------------------------------------------------
+        # update the template name
+        self.default_template_name = newtname
+        # ---------------------------------------------------------------------
+        # generic wave min and max
+        value = self.generic_validate('GENERIC_WAVEMIN')
+        self.wavemin = value
+        value = self.generic_validate('GENERIC_WAVEMAX')
+        self.wavemax = value
         # add instrument earth location
         #    (for use in astropy.coordinates.EarthLocation)
-        self.params.set('EARTH_LOCATION', None)
-        # define the default science input files
-        self.params.set('INPUT_FILE', '*.fits', source=func_name)
-        # The input science data are blaze corrected
-        self.params.set('BLAZE_CORRECTED', None, not_none=True,
-                        source=func_name)
-        # define the mask table format
-        self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
-        # define the mask type
-        self.params.set('SCIENCE_MASK_TYPE', 'full', source=func_name)
-        self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
-        self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
-        # define the default mask url and filename
-        self.params.set('DEFAULT_MASK_FILE', source=func_name,
-                        value=None)
+        self.generic_validate('EARTH_LOCATION')
         # define the High pass width in km/s
-        self.params.set('HP_WIDTH', None, not_none=True, source=func_name)
+        self.generic_validate('HP_WIDTH')
         # define the SNR cut off threshold
-        self.params.set('SNR_THRESHOLD', None, not_none=True, source=func_name)
+        self.generic_validate('SNR_THRESHOLD')
         # define which bands to use for the clean CCF (see astro.ccf_regions)
-        self.params.set('CCF_CLEAN_BANDS', None,  not_none=True,
-                        source=func_name)
+        self.generic_validate('CCF_CLEAN_BANDS')
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPUTE_MODEL_PLOT_ORDERS')
         # define the compil minimum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MIN', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPIL_WAVE_MIN')
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPIL_WAVE_MAX')
         # define the maximum pixel width allowed for lines [pixels]
-        self.params.set('COMPIL_MAX_PIXEL_WIDTH', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPIL_MAX_PIXEL_WIDTH')
         # define min likelihood of correlation with BERV
-        self.params.set('COMPIL_CUT_PEARSONR', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPIL_CUT_BERV')
         # define the CCF e-width to use for FP files
-        # Question: Espresso value?
-        self.params.set('COMPIL_FP_EWID', None, not_none=True, source=func_name)
+        self.generic_validate('COMPIL_FP_EWID')
         # define whether to add the magic "binned wavelength" bands rv
-        self.params.set('COMPIL_ADD_UNIFORM_WAVEBIN', None, not_none=True)
+        self.generic_validate('COMPIL_ADD_UNIFORM_WAVEBIN')
         # define the number of bins used in the magic "binned wavelength" bands
-        self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', None, not_none=True)
+        self.generic_validate('COMPIL_NUM_UNIFORM_WAVEBIN')
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.params.set('COMPILE_BINNED_BAND1', None, not_none=True,
-                        source=func_name)
+        #    this is used for colour   band2 - band3
+        self.generic_validate('COMPILE_BINNED_BAND1')
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND2', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPILE_BINNED_BAND2')
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND3', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPILE_BINNED_BAND3')
         # define the reference wavelength used in the slope fitting in nm
-        self.params.set('COMPIL_SLOPE_REF_WAVE', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('COMPIL_SLOPE_REF_WAVE')
         # define the name of the sample wave grid file (saved to the calib dir)
         self.params.set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid.fits', source=func_name)
@@ -139,7 +137,7 @@ class Generic(Instrument):
         # Question: Check DRP TYPE for STAR,FP file
         self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define readout noise per instrument (assumes ~5e- and 10 pixels)
-        self.params.set('READ_OUT_NOISE', None, not_none=True, source=func_name)
+        self.generic_validate('READ_OUT_NOISE')
         # Define the wave url for the stellar models
         self.params.set('STELLAR_WAVE_URL', source=func_name,
                         value='ftp://phoenix.astro.physik.uni-goettingen.de/'
@@ -153,7 +151,7 @@ class Generic(Instrument):
                               'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
-        self.params.set('MASK_SNR_MIN', None, not_none=True, source=func_name)
+        self.generic_validate('MASK_SNR_MIN')
         # Define the stellar model file name (using wget, with appropriate
         #     format  cards)
         self.params.set('STELLAR_MODEL_FILE', source=func_name,
@@ -166,85 +164,63 @@ class Generic(Instrument):
         # Define the object alpha (stellar model)
         self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
         # blaze smoothing size (s1d template)
-        self.params.set('BLAZE_SMOOTH_SIZE', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('BLAZE_SMOOTH_SIZE')
         # blaze threshold (s1d template)
-        self.params.set('BLAZE_THRESHOLD', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('BLAZE_THRESHOLD')
         # define the size of the berv bins in m/s
-        self.params.set('BERVBIN_SIZE', None, not_none=True, source=func_name)
+        self.generic_validate('BERVBIN_SIZE')
         # ---------------------------------------------------------------------
         # define whether to do the tellu-clean
-        self.params.set('DO_TELLUCLEAN', None, not_none=True, source=func_name)
+        self.generic_validate('DO_TELLUCLEAN')
         # define the dv offset for tellu-cleaning in km/s
-        self.params.set('TELLUCLEAN_DV0', None, not_none=True,source=func_name)
+        self.generic_validate('TELLUCLEAN_DV0')
         # Define the lower wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_MASK_DOMAIN_LOWER')
         # Define the upper wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_MASK_DOMAIN_UPPER')
         # Define whether to force using airmass from header
-        self.params.set('TELLUCLEAN_FORCE_AIRMASS', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_FORCE_AIRMASS')
         # Define the CCF scan range in km/s
-        self.params.set('TELLUCLEAN_CCF_SCAN_RANGE', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_CCF_SCAN_RANGE')
         # Define the maximum number of iterations for the tellu-cleaning loop
-        self.params.set('TELLUCLEAN_MAX_ITERATIONS', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_MAX_ITERATIONS')
         # Define the kernel width in pixels
-        self.params.set('TELLUCLEAN_KERNEL_WID', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_KERNEL_WID')
         # Define the gaussian shape (2=pure gaussian, >2=boxy)
-        self.params.set('TELLUCLEAN_GAUSSIAN_SHAPE', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_GAUSSIAN_SHAPE')
         # Define the wave grid lower wavelength limit in nm
-        self.params.set('TELLUCLEAN_WAVE_LOWER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_WAVE_LOWER')
         # Define the wave griv upper wavelength limit
-        self.params.set('TELLUCLEAN_WAVE_UPPER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_WAVE_UPPER')
         # Define the transmission threshold exp(-1) at which tellurics are
         #     uncorrectable
-        self.params.set('TELLUCLEAN_TRANSMISSION_THRESHOLD', None,
-                        not_none=True,  source=func_name)
+        self.generic_validate('TELLUCLEAN_TRANSMISSION_THRESHOLD')
         # Define the sigma cut threshold above which pixels are removed from fit
-        self.params.set('TELLUCLEAN_SIGMA_THRESHOLD', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_SIGMA_THRESHOLD')
         # Define whether to recenter the CCF on the first iteration
-        self.params.set('TELLUCLEAN_RECENTER_CCF', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_RECENTER_CCF')
         # Define whether to recenter the CCF of others on the first iteration
-        self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS')
         # Define the default water absorption to use
-        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_DEFAULT_WATER_ABSO')
         # Define the lower limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_WATER_BOUNDS_LOWER')
         # Define the upper limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_UPPER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_WATER_BOUNDS_UPPER')
         # Define the lower limit on valid exponent of other absorbers
-        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_OTHERS_BOUNDS_LOWER')
         # Define the upper limit on valid exponent of other absorbers
-        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TELLUCLEAN_OTHERS_BOUNDS_UPPER')
         # ---------------------------------------------------------------------
         # Parameters for the template construction
         # ---------------------------------------------------------------------
         # max number of bins for the median of the template. Avoids handling
         # too many spectra at once.
-        self.params.set('TEMPLATE_MEDBINMAX',  None, not_none=True,
-                        source=func_name)
+        self.generic_validate('TEMPLATE_MEDBINMAX')
         # maximum RMS between the template and the median of the template
         # to accept the median of the template as a good template. If above
         # we iterate once more. Expressed in m/s
-        self.params.set('MAX_CONVERGENCE_TEMPLATE_RV',  None, not_none=True,
-                        source=func_name)
+        self.generic_validate('MAX_CONVERGENCE_TEMPLATE_RV')
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------

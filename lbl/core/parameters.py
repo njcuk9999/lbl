@@ -142,6 +142,28 @@ params.set(key='TOTAL', value=-1, source=__NAME__, dtype=int,
                 '-1 means no multiprocessing',
            arg='--total')
 
+
+# =============================================================================
+# Define generic instrument parameters
+# =============================================================================
+# add instrument
+params.set(key='GENERIC_INSTRUMENT', value=None, source=__NAME__,
+           desc='The instrument to use when using Generic Instrument',
+           options=base.INSTRUMENTS, dtype=str)
+
+# add instrument
+params.set(key='GENERIC_DATA_SOURCE', value=None, source=__NAME__,
+           desc='The data source to use when using Generic Instrument',
+           options=base.INSTRUMENTS, dtype=str)
+
+# add wave min
+params.set(key='GENERIC_WAVEMIN', value=None, source=__NAME__,
+           desc='Wave minimum for Generic Instrument [nm]', dtype=float)
+
+# add wave max
+params.set(key='GENERIC_WAVEMAX', value=None, source=__NAME__,
+           desc='Wave maximum for Generic Instrument [nm]', dtype=float)
+
 # =============================================================================
 # Define common parameters (between compute / compil)
 # =============================================================================
