@@ -34,7 +34,7 @@ INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
 INSTRUMENTS += ['Generic']
 
 # log variables
-TIME_NOW = Time.now().unix.replace('.', '_')
+TIME_NOW = str(Time.now().unix).replace('.', '_')
 LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl', 'lbl_{0}.log')
 LOG_FORMAT = '%(asctime)s %(message)s'
 # make sure log path exists
