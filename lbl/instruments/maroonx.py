@@ -75,192 +75,192 @@ class MaroonX(Instrument):
         # set function name
         func_name = __NAME__ + '.MaroonX.override()'
         # set parameters to update
-        self.params.set('INSTRUMENT', 'MAROONX', source=func_name)
+        self.param_set('INSTRUMENT', 'MAROONX', source=func_name)
         # add instrument earth location
         #    (for use in astropy.coordinates.EarthLocation)
-        self.params.set('EARTH_LOCATION', 'gemini_north')
+        self.param_set('EARTH_LOCATION', 'gemini_north')
         # define the default science input files
-        self.params.set('INPUT_FILE', '*.hd5', source=func_name)
+        self.param_set('INPUT_FILE', '*.hd5', source=func_name)
         # The input science data are blaze corrected
-        self.params.set('BLAZE_CORRECTED', False, source=func_name)
+        self.param_set('BLAZE_CORRECTED', False, source=func_name)
         # set blaze file
-        self.params.set('BLAZE_FILE',
+        self.param_set('BLAZE_FILE',
                         '20200603T13_masterflat_backgroundsubtracted_FFFFF'
                         '_x_0000.hd5', source=func_name)
         # define the mask table format
-        self.params.set('REF_TABLE_FMT', 'csv', source=func_name)
+        self.param_set('REF_TABLE_FMT', 'csv', source=func_name)
         # define the mask type
-        self.params.set('SCIENCE_MASK_TYPE', 'full', source=func_name)
-        self.params.set('FP_MASK_TYPE', 'neg', source=func_name)
-        self.params.set('LFC_MASK_TYPE', 'neg', source=func_name)
+        self.param_set('SCIENCE_MASK_TYPE', 'full', source=func_name)
+        self.param_set('FP_MASK_TYPE', 'neg', source=func_name)
+        self.param_set('LFC_MASK_TYPE', 'neg', source=func_name)
         # define the default mask url and filename
-        self.params.set('DEFAULT_MASK_FILE', source=func_name,
+        self.param_set('DEFAULT_MASK_FILE', source=func_name,
                         value='mdwarf_harps.fits')
         # define the High pass width in km/s
-        self.params.set('HP_WIDTH', 500, source=func_name)
+        self.param_set('HP_WIDTH', 500, source=func_name)
         # define the SNR cut off threshold
-        self.params.set('SNR_THRESHOLD', 10, source=func_name)
+        self.param_set('SNR_THRESHOLD', 10, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
-        self.params.set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
+        self.param_set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
         # define min likelihood of correlation with BERV
-        self.params.set('COMPIL_CUT_PEARSONR', -1, source=func_name)
+        self.param_set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # define the CCF e-width to use for FP files
-        self.params.set('COMPIL_FP_EWID', 5.0, source=func_name)
+        self.param_set('COMPIL_FP_EWID', 5.0, source=func_name)
         # define whether to add the magic "binned wavelength" bands rv
-        self.params.set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
+        self.param_set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
         # define the number of bins used in the magic "binned wavelength" bands
-        self.params.set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
+        self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.params.set('COMPILE_BINNED_BAND1', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND2', 'g', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.params.set('COMPILE_BINNED_BAND3', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
-        self.params.set('FP_REF_LIST', ['FP_FP'], source=func_name)
+        self.param_set('FP_REF_LIST', ['FP_FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
-        self.params.set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
+        self.param_set('FP_STD_LIST', ['OBJ_FP'], source=func_name)
         # define readout noise per instrument (assumes ~5e- and 10 pixels)
-        self.params.set('READ_OUT_NOISE', 15, source=func_name)
+        self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
-        self.params.set('STELLAR_WAVE_URL', source=func_name,
+        self.param_set('STELLAR_WAVE_URL', source=func_name,
                         value='ftp://phoenix.astro.physik.uni-goettingen.de/'
                               'HiResFITS/')
         # Define the wave file for the stellar models (using wget)
-        self.params.set('STELLAR_WAVE_FILE', source=func_name,
+        self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
-        self.params.set('STELLAR_MODEL_URL', source=func_name,
+        self.param_set('STELLAR_MODEL_URL', source=func_name,
                         value='ftp://phoenix.astro.physik.uni-goettingen.de/'
                               'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
-        self.params.set('MASK_SNR_MIN', value=5, source=func_name)
+        self.param_set('MASK_SNR_MIN', value=5, source=func_name)
         # Define the stellar model file name (using wget, with appropriate
         #     format  cards)
-        self.params.set('STELLAR_MODEL_FILE', source=func_name,
+        self.param_set('STELLAR_MODEL_FILE', source=func_name,
                         value='lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}'
                               '.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits')
         # Define the object surface gravity (log g) (stellar model)
-        self.params.set('OBJECT_LOGG', value=4.5, source=func_name)
+        self.param_set('OBJECT_LOGG', value=4.5, source=func_name)
         # Define the object Z (stellar model)
-        self.params.set('OBJECT_Z', value=0.0, source=func_name)
+        self.param_set('OBJECT_Z', value=0.0, source=func_name)
         # Define the object alpha (stellar model)
-        self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
+        self.param_set('OBJECT_ALPHA', value=0.0, source=func_name)
         # blaze smoothing size (s1d template)
-        self.params.set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
+        self.param_set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
         # blaze threshold (s1d template)
-        self.params.set('BLAZE_THRESHOLD', value=0.2, source=func_name)
+        self.param_set('BLAZE_THRESHOLD', value=0.2, source=func_name)
         # define the size of the berv bins in m/s
-        self.params.set('BERVBIN_SIZE', value=3000)
+        self.param_set('BERVBIN_SIZE', value=3000)
         # ---------------------------------------------------------------------
         # define whether to do the tellu-clean
-        self.params.set('DO_TELLUCLEAN', value=True, source=func_name)
+        self.param_set('DO_TELLUCLEAN', value=True, source=func_name)
         # define the dv offset for tellu-cleaning in km/s
-        self.params.set('TELLUCLEAN_DV0', value=0, source=func_name)
+        self.param_set('TELLUCLEAN_DV0', value=0, source=func_name)
 
         # Define whether to force using airmass from header
-        self.params.set('TELLUCLEAN_FORCE_AIRMASS', value=False,
+        self.param_set('TELLUCLEAN_FORCE_AIRMASS', value=False,
                         source=func_name)
         # Define the CCF scan range in km/s
-        self.params.set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
+        self.param_set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
                         source=func_name)
         # Define the maximum number of iterations for the tellu-cleaning loop
-        self.params.set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
+        self.param_set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
         # Define the kernel width in pixels
-        self.params.set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
+        self.param_set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
         # Define the gaussian shape (2=pure gaussian, >2=boxy)
-        self.params.set('TELLUCLEAN_GAUSSIAN_SHAPE', value=2.2,
+        self.param_set('TELLUCLEAN_GAUSSIAN_SHAPE', value=2.2,
                         source=func_name)
         # Define the transmission threshold exp(-1) at which tellurics are
         #     uncorrectable
-        self.params.set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
+        self.param_set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
                         source=func_name)
         # Define the sigma cut threshold above which pixels are removed from fit
-        self.params.set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
+        self.param_set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
                         source=func_name)
         # Define whether to recenter the CCF on the first iteration
-        self.params.set('TELLUCLEAN_RECENTER_CCF', value=False,
+        self.param_set('TELLUCLEAN_RECENTER_CCF', value=False,
                         source=func_name)
         # Define whether to recenter the CCF of others on the first iteration
-        self.params.set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
+        self.param_set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
                         source=func_name)
         # Define the default water absorption to use
-        self.params.set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
+        self.param_set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
                         source=func_name)
         # Define the lower limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
+        self.param_set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
                         source=func_name)
         # Define the upper limit on valid exponent of water absorbers
-        self.params.set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
+        self.param_set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
                         source=func_name)
         # Define the lower limit on valid exponent of other absorbers
-        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
+        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
                         source=func_name)
         # Define the upper limit on valid exponent of other absorbers
-        self.params.set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
+        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
         # ---------------------------------------------------------------------
         # Parameters for the template construction
         # ---------------------------------------------------------------------
         # max number of bins for the median of the template. Avoids handling
         # too many spectra at once.
-        self.params.set('TEMPLATE_MEDBINMAX', 19, source=func_name)
+        self.param_set('TEMPLATE_MEDBINMAX', 19, source=func_name)
         # maximum RMS between the template and the median of the template
         # to accept the median of the template as a good template. If above
         # we iterate once more. Expressed in m/s
-        self.params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=func_name)
+        self.param_set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=func_name)
 
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'MJDFWFRD', source=func_name)
+        self.param_set('KW_MID_EXP_TIME', 'MJDFWFRD', source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'MJSTART', source=func_name)
+        self.param_set('KW_MJDATE', 'MJSTART', source=func_name)
         # define snr keyword (set per arm)
-        self.params.set('KW_SNR', None, source=func_name)
+        self.param_set('KW_SNR', None, source=func_name)
         # define berv keyword
-        self.params.set('KW_BERV', 'BERV', source=func_name)
+        self.param_set('KW_BERV', 'BERV', source=func_name)
         # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', None, source=func_name)
+        self.param_set('KW_BLAZE_FILE', None, source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
+        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
+        self.param_set('KW_AIRMASS', 'AIRMASS', source=func_name)
         # define the human date of the observation (set in load_header)
-        self.params.set('KW_DATE', 'DATE-OBS', source=func_name)
+        self.param_set('KW_DATE', 'DATE-OBS', source=func_name)
         # define the tau_h20 of the observation
-        self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
+        self.param_set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
-        self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
+        self.param_set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
+        self.param_set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'OBJNAME', source=func_name)
+        self.param_set('KW_OBJNAME', 'OBJNAME', source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        self.params.set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
+        self.param_set('KW_SNRGOAL', 'SNRGOAL', source=func_name)
         # define the SNR in chosen order (set per arm)
-        self.params.set('KW_EXT_SNR', None, source=func_name)
+        self.param_set('KW_EXT_SNR', None, source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'MJDFWFRD', source=func_name)
+        self.param_set('KW_BJD', 'MJDFWFRD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', None, source=func_name)
+        self.param_set('KW_REF_KEY', None, source=func_name)
         # velocity of template from CCF
-        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
+        self.param_set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
         # TODO: how do we get the temperature for MAROONX?
-        self.params.set('KW_TEMPERATURE', None, source=func_name)
+        self.param_set('KW_TEMPERATURE', None, source=func_name)
         # define the instrumental drift key
-        self.params.set('KW_INST_DRIFT', 'INSDRIFT', source=func_name)
+        self.param_set('KW_INST_DRIFT', 'INSDRIFT', source=func_name)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC METHODS
@@ -749,33 +749,33 @@ class MaroonXBlue(MaroonX):
         # set parameters to update
         # ---------------------------------------------------------------------
         # define snr keyword
-        self.params.set('KW_SNR', 'SNR_100', source=func_name)
+        self.param_set('KW_SNR', 'SNR_100', source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
-        self.params.set('CCF_CLEAN_BANDS', ['r'], source=func_name)
+        self.param_set('CCF_CLEAN_BANDS', ['r'], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MIN', 491, source=func_name)
+        self.param_set('COMPIL_WAVE_MIN', 491, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', 668, source=func_name)
+        self.param_set('COMPIL_WAVE_MAX', 668, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.params.set('SAMPLE_WAVE_GRID_FILE',
+        self.param_set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid_moroonx_b.fits', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'SNR_100', source=func_name)
+        self.param_set('KW_EXT_SNR', 'SNR_100', source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [25], source=func_name)
+        self.param_set('COMPUTE_MODEL_PLOT_ORDERS', [25], source=func_name)
         # define the reference wavelength used in the slope fitting in nm
-        self.params.set('COMPIL_SLOPE_REF_WAVE', 500, source=func_name)
+        self.param_set('COMPIL_SLOPE_REF_WAVE', 500, source=func_name)
         # Define the lower wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=500,
+        self.param_set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=500,
                         source=func_name)
         # Define the upper wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=680,
+        self.param_set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=680,
                         source=func_name)
         # Define the wave grid lower wavelength limit in nm
-        self.params.set('TELLUCLEAN_WAVE_LOWER', value=self.wavemin,
+        self.param_set('TELLUCLEAN_WAVE_LOWER', value=self.wavemin,
                         source=func_name)
         # Define the wave griv upper wavelength limit
-        self.params.set('TELLUCLEAN_WAVE_UPPER', value=self.wavemax,
+        self.param_set('TELLUCLEAN_WAVE_UPPER', value=self.wavemax,
                         source=func_name)
 
     # -------------------------------------------------------------------------
@@ -1088,33 +1088,33 @@ class MaroonXRed(MaroonX):
         # set parameters to update
         # ---------------------------------------------------------------------
         # define snr keyword
-        self.params.set('KW_SNR', 'SNR_74', source=func_name)
+        self.param_set('KW_SNR', 'SNR_74', source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
-        self.params.set('CCF_CLEAN_BANDS', ['i'], source=func_name)
+        self.param_set('CCF_CLEAN_BANDS', ['i'], source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MIN', 647, source=func_name)
+        self.param_set('COMPIL_WAVE_MIN', 647, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
-        self.params.set('COMPIL_WAVE_MAX', 907, source=func_name)
+        self.param_set('COMPIL_WAVE_MAX', 907, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.params.set('SAMPLE_WAVE_GRID_FILE',
+        self.param_set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid_moroonx_r.fits', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'SNR_74', source=func_name)
+        self.param_set('KW_EXT_SNR', 'SNR_74', source=func_name)
         # define the plot order for the compute rv model plot
-        self.params.set('COMPUTE_MODEL_PLOT_ORDERS', [11], source=func_name)
+        self.param_set('COMPUTE_MODEL_PLOT_ORDERS', [11], source=func_name)
         # define the reference wavelength used in the slope fitting in nm
-        self.params.set('COMPIL_SLOPE_REF_WAVE', 800, source=func_name)
+        self.param_set('COMPIL_SLOPE_REF_WAVE', 800, source=func_name)
         # Define the lower wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=650,
+        self.param_set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=650,
                         source=func_name)
         # Define the upper wave limit for the absorber spectrum masks in nm
-        self.params.set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=900,
+        self.param_set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=900,
                         source=func_name)
         # Define the wave grid lower wavelength limit in nm
-        self.params.set('TELLUCLEAN_WAVE_LOWER', value=self.wavemin,
+        self.param_set('TELLUCLEAN_WAVE_LOWER', value=self.wavemin,
                         source=func_name)
         # Define the wave griv upper wavelength limit
-        self.params.set('TELLUCLEAN_WAVE_UPPER', value=self.wavemax,
+        self.param_set('TELLUCLEAN_WAVE_UPPER', value=self.wavemax,
                         source=func_name)
 
     # -------------------------------------------------------------------------

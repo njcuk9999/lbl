@@ -19,6 +19,7 @@ from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_mask
 from lbl.recipes import lbl_telluclean
 from lbl.recipes import lbl_template
+from lbl.recipes import lbl_reset
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -40,6 +41,7 @@ REMOVE_KEYS = [  # core
     'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
     'BLAZE_CORRECTED', 'BLAZE_FILE',
     # run keys
+    'RUN_LBL_RESET',
     'RUN_LBL_TELLUCLEAN', 'RUN_LBL_TEMPLATE', 'RUN_LBL_MASK',
     'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
     # skip keys
@@ -50,6 +52,7 @@ REMOVE_KEYS = [  # core
 
 # Define the default values
 DEFAULTS = dict()
+DEFAULTS['RUN_LBL_RESET'] = False
 DEFAULTS['RUN_LBL_TELLUCLEAN'] = False
 DEFAULTS['RUN_LBL_TEMPLATE'] = False
 DEFAULTS['RUN_LBL_MASK'] = False
@@ -132,6 +135,10 @@ def main(runparams: dict):
                                             'BLAZE_CORRECTED', **wkargs)
         blaze_file = lbl_misc.wraplistcheck(blaze_files,
                                             'BLAZE_FILE', **wkargs)
+        # ---------------------------------------------------------------------
+        if runparams['RUN_LBL_RESET']:
+            lbl_reset.main(instrument=instrument, data_dir=data_dir,
+                           data_source=data_source, **keyword_args)
         # ---------------------------------------------------------------------
         # run all pre-cleaning steps
         if runparams['RUN_LBL_TELLUCLEAN'] and data_type == 'SCIENCE':

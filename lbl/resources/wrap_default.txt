@@ -60,6 +60,8 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     # what to run and skip if already on disk
     # -------------------------------------------------------------------------
+    # Whether to reset all files before processing
+    rparams['RUN_LBL_RESET'] = {RUN_LBL_RESET}
     # Whether to run the telluric cleaning process (NOT recommended for data
     #   that has better telluric cleaning i.e. SPIROU using APERO)
     rparams['RUN_LBL_TELLUCLEAN'] = {RUN_LBL_TELLUCLEAN}

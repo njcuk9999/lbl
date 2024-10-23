@@ -93,6 +93,21 @@ class Instrument:
         emsg = 'Must implement {0} in specific instrument class'
         raise NotImplemented(emsg.format(method))
 
+    def param_set(self, key: str, value: Any, source: str = None) -> None:
+        """
+        Set a parameter in the parameter dictionary
+
+        :param key: str, the key to set
+        :param value: any, the value to set
+        :param source: str, the source of the parameter
+        :return: None
+        """
+        # do not update parameters that the user has set themselves
+        if 'KWARGS' in self.params.sources():
+            return
+        # set the parameter
+        self.params.set(key, value, source=source)
+
     # -------------------------------------------------------------------------
     # Common instrument methods (should be overridden if instrument requires)
     # -------------------------------------------------------------------------
@@ -417,7 +432,7 @@ class Instrument:
             objname = self.params['OBJECT_SCIENCE']
         # deal with no object
         if self.params['OBJECT_TEMPLATE'] is None:
-            self.params.set('OBJECT_TEMPLATE', value=objname, source=func_name)
+            self.param_set('OBJECT_TEMPLATE', value=objname, source=func_name)
 
     def write_rdb_fits(self, filename: str, rdb_data: Dict[str, Any]):
         """

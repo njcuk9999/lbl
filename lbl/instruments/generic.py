@@ -56,12 +56,21 @@ class Generic(Instrument):
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
-    def generic_validate(self, key):
+    def generic_validate(self, key: str) -> Any:
+        """
+        We must validate the keys for a generic instrument as these are not
+        being set by default
+
+        :param key: str, the key to validate
+
+        :raises LblException: if key is not set
+        :return: Any, the value in params
+        """
         if self.params[key] is None:
             emsg = ('Key {0} must be defined when using Generic Instrument'
                     '').format(key)
             raise LblException(emsg)
-
+        # set the parameter
         self.params.set(key, self.params[key], source='USER[Generic]')
         return self.params[key]
 
@@ -76,12 +85,12 @@ class Generic(Instrument):
         func_name = __NAME__ + '.Generic.override()'
         # update instrument
         value = self.generic_validate('GENERIC_INSTRUMENT')
-        self.params.set('INSTRUMENT', value, source=func_name)
+        self.param_set('INSTRUMENT', value, source=func_name)
         # set a new template name
         newtname = self.default_template_name.replace('Generic', value)
         # update data source
         value = self.generic_validate('GENERIC_DATA_SOURCE')
-        self.params.set('DATA_SOURCE', value, source=func_name)
+        self.param_set('DATA_SOURCE', value, source=func_name)
         # ---------------------------------------------------------------------
         # update the template name
         self.default_template_name = newtname
@@ -134,29 +143,29 @@ class Generic(Instrument):
         # define the reference wavelength used in the slope fitting in nm
         self.generic_validate('COMPIL_SLOPE_REF_WAVE')
         # Set FLUX_EXTENSION_NAME
-        self.params.set('FLUX_EXTENSION_NAME', 'FLUX', source=func_name)
+        self.param_set('FLUX_EXTENSION_NAME', 'FLUX', source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.params.set('SAMPLE_WAVE_GRID_FILE',
+        self.param_set('SAMPLE_WAVE_GRID_FILE',
                         'sample_wave_grid.fits', source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
-        self.params.set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
+        self.param_set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define the FP standard string that defines that an FP observation
         #    was NOT a reference file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
-        self.params.set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
+        self.param_set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
         # define readout noise per instrument (assumes ~5e- and 10 pixels)
         self.generic_validate('READ_OUT_NOISE')
         # Define the wave url for the stellar models
-        self.params.set('STELLAR_WAVE_URL', source=func_name,
+        self.param_set('STELLAR_WAVE_URL', source=func_name,
                         value='ftp://phoenix.astro.physik.uni-goettingen.de/'
                               'HiResFITS/')
         # Define the wave file for the stellar models (using wget)
-        self.params.set('STELLAR_WAVE_FILE', source=func_name,
+        self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
-        self.params.set('STELLAR_MODEL_URL', source=func_name,
+        self.param_set('STELLAR_MODEL_URL', source=func_name,
                         value='ftp://phoenix.astro.physik.uni-goettingen.de/'
                               'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
@@ -164,15 +173,15 @@ class Generic(Instrument):
         self.generic_validate('MASK_SNR_MIN')
         # Define the stellar model file name (using wget, with appropriate
         #     format  cards)
-        self.params.set('STELLAR_MODEL_FILE', source=func_name,
+        self.param_set('STELLAR_MODEL_FILE', source=func_name,
                         value='lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}'
                               '.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits')
         # Define the object surface gravity (log g) (stellar model)
-        self.params.set('OBJECT_LOGG', value=4.5, source=func_name)
+        self.param_set('OBJECT_LOGG', value=4.5, source=func_name)
         # Define the object Z (stellar model)
-        self.params.set('OBJECT_Z', value=0.0, source=func_name)
+        self.param_set('OBJECT_Z', value=0.0, source=func_name)
         # Define the object alpha (stellar model)
-        self.params.set('OBJECT_ALPHA', value=0.0, source=func_name)
+        self.param_set('OBJECT_ALPHA', value=0.0, source=func_name)
         # blaze smoothing size (s1d template)
         self.generic_validate('BLAZE_SMOOTH_SIZE')
         # blaze threshold (s1d template)
@@ -235,45 +244,45 @@ class Generic(Instrument):
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        self.params.set('KW_MID_EXP_TIME', 'BJD', source=func_name)
+        self.param_set('KW_MID_EXP_TIME', 'BJD', source=func_name)
         # define the start time of the observation
-        self.params.set('KW_MJDATE', 'BJD', source=func_name)
+        self.param_set('KW_MJDATE', 'BJD', source=func_name)
         # define snr keyword
-        self.params.set('KW_SNR', 'SNR', source=func_name)
+        self.param_set('KW_SNR', 'SNR', source=func_name)
         # define berv keyword
-        self.params.set('KW_BERV', 'BERV', source=func_name)
+        self.param_set('KW_BERV', 'BERV', source=func_name)
         # # define the Blaze calibration file
-        self.params.set('KW_BLAZE_FILE', 'NONE', source=func_name)
+        self.param_set('KW_BLAZE_FILE', 'NONE', source=func_name)
         # define the exposure time of the observation
-        self.params.set('KW_EXPTIME', 'EXPTIME', source=func_name)
+        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
-        self.params.set('KW_AIRMASS', 'AIRMASS', source=func_name)
+        self.param_set('KW_AIRMASS', 'AIRMASS', source=func_name)
         # define the human date of the observation
-        self.params.set('KW_DATE', 'DATE', source=func_name)
+        self.param_set('KW_DATE', 'DATE', source=func_name)
         # define the tau_h20 of the observation
-        self.params.set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
+        self.param_set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
-        self.params.set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
+        self.param_set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.params.set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
+        self.param_set('KW_DPRTYPE', 'DPRTYPE', source=func_name)
         # define the filename of the wave solution
-        self.params.set('KW_WAVEFILE', 'NONE', source=func_name)
+        self.param_set('KW_WAVEFILE', 'NONE', source=func_name)
         # define the original object name
-        self.params.set('KW_OBJNAME', 'OBJNAME', source=func_name)
+        self.param_set('KW_OBJNAME', 'OBJNAME', source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        self.params.set('KW_SNRGOAL', 'NONE', source=func_name)
+        self.param_set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-        self.params.set('KW_EXT_SNR', 'EXT_SNR', source=func_name)
+        self.param_set('KW_EXT_SNR', 'EXT_SNR', source=func_name)
         # define the barycentric julian date
-        self.params.set('KW_BJD', 'BJD', source=func_name)
+        self.param_set('KW_BJD', 'BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.params.set('KW_REF_KEY', 'DPRTYPE', source=func_name)
+        self.param_set('KW_REF_KEY', 'DPRTYPE', source=func_name)
         # velocity of template from CCF
-        self.params.set('KW_MODELVEL', 'MODELVEL', source=func_name)
+        self.param_set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        self.params.set('KW_TEMPERATURE', None, source=func_name)
+        self.param_set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC METHODS

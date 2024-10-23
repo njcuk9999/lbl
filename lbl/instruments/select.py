@@ -326,7 +326,7 @@ def load_instrument(args: ParamDict,
         if argname in params:
             # get source
             params.set(argname, args[argname],
-                            source=args.instances[argname].source)
+                       source=args.instances[argname].source)
     # construct instrument instance
     inst = inst_class(params)
     # -------------------------------------------------------------------------

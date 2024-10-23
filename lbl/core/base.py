@@ -34,8 +34,13 @@ INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
 INSTRUMENTS += ['Generic']
 
 # log variables
-LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl.log')
+TIME_NOW = Time.now().unix.replace('.', '_')
+LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl', 'lbl_{0}.log')
 LOG_FORMAT = '%(asctime)s %(message)s'
+# make sure log path exists
+if not os.path.exists(os.path.dirname(LOG_FILE)):
+    os.makedirs(os.path.dirname(LOG_FILE))
+
 # astropy time is slow the first time - get it done now and do not re-import
 __now__ = Time.now()
 AstropyTime = Time
