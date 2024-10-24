@@ -1450,8 +1450,6 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # get orders
         orders = ref_table['ORDER']
-        # keep track of which order we are looking at
-        current_order = None
         # set these for use/update later
         nwavegrid = mp.doppler_shift(wavegrid, -sys_rv)
         # get splines between shifted wave grid and pixel grid
@@ -1499,11 +1497,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if (iteration != 1) and not (mask_keep[line_it]):
                 continue
             # -----------------------------------------------------------------
-            # if this is a new order the get residuals for this order
-            if order_num != current_order:
-                # update current order
-                current_order = int(order_num)
-            # get this orders values
+            # get this orders values (shallow copy)
             ww_ord = nwavegrid[order_num]
             sci_ord = sci_data[order_num]
             wave2pix = wave2pixlist[order_num]
