@@ -36,6 +36,9 @@ INSTRUMENTS = ['carmenes_vis',
 # define global params to override
 GLOBAL = dict()
 GLOBAL['PLOT'] = False
+
+# reset all data before running
+GLOBAL['RUN_LBL_RESET'] = True
 # Dictionary of table name for the file used in the projection against the
 #     derivative. Key is to output column name that will propagate into the
 #     final RDB table and the value is the filename of the table. The table
