@@ -1,11 +1,12 @@
-numpy==1.24.3
+
 astropy==5.3
 Bottleneck==1.3.7
 ipython==8.13.2
 scipy==1.10.1
 numba==0.57.0
+numpy==1.24.3
 matplotlib==3.7.1
-pandas==2.0.2
+pandas==2.2.3
 tables==3.9.2
 tqdm==4.65.0
 PyYAML==6.0
