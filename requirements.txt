@@ -2,7 +2,7 @@ numpy==1.24.3
 astropy==5.3
 Bottleneck==1.3.7
 ipython==8.13.2
-scipy==1.10.0
+scipy==1.10.1
 numba==0.57.0
 matplotlib==3.7.1
 pandas==2.0.2
