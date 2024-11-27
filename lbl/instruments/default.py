@@ -292,6 +292,8 @@ class Instrument:
         # add the template velocity from CCF
         header = self.set_hkey(header, 'KW_MODELVEL',
                                value=outputs['MODEL_VELOCITY'])
+        # add the raw hash from the science file
+        header = self.set_hkey(header, 'KW_RAW_HASH', value=outputs['RAW_HASH'])
         # ---------------------------------------------------------------------
         # Convert ref table dictionary to table
         # ---------------------------------------------------------------------

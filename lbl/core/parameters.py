@@ -1015,6 +1015,11 @@ params.set(key='KW_INST_DRIFT', value=None, source=__NAME__, not_none=False,
            desc='define the instrumental drift key word in m/s',
            comment='Instrumental drift in m/s')
 
+# Define the raw hash
+params.set(key='KW_RAW_HASH', value='LBLRHASH', source=__NAME__,
+           desc='The input science file hash',
+           comment='The input science file hash')
+
 
 # =============================================================================
 # Header conversion dictionary

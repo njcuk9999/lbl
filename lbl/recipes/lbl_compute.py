@@ -170,7 +170,6 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # filter science files if in multi-mode
     science_files = general.filter_science_files(inst, science_files)
-
     # load bad odometer codes
     bad_hdr_keys, bad_hdr_key = inst.load_bad_hdr_keys()
     # store all systemic velocities and mid exposure times in mjd
@@ -226,11 +225,18 @@ def __main__(inst: InstrumentsType, **kwargs):
             log.general('We read model velo = {0:.2f} m/s'.format(*largs))
         # if file exists and we are skipping done files
         if lblrv_exists and inst.params['SKIP_DONE']:
-            # log message about skipping
-            log.general('\t\tFile exists and skipping activated. '
-                        'Skipping file.')
-            # skip
-            continue
+            # get the lblrv_hash from the lblrv file
+            lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
+            lblrv_hash = lblrv_hdr.get_hkey('KW_RAW_HASH', required=False)
+            # check hash of science file
+            hash_identical = io.check_hash(science_file, lblrv_hash)
+            # skip if the hash is identical
+            if hash_identical:
+                # log message about skipping
+                log.general('\t\tFile exists and skipping activated. '
+                            'Skipping file.')
+                # skip
+                continue
         # ---------------------------------------------------------------------
         # 6.3 load science file
         # ---------------------------------------------------------------------
@@ -315,6 +321,9 @@ def __main__(inst: InstrumentsType, **kwargs):
             continue
         # get back ref_table and outputs
         ref_table, outputs = cout
+        # ---------------------------------------------------------------------
+        # add the rash hash to the outputs
+        outputs['RAW_HASH'] = io.generate_checksum(science_file)
         # ---------------------------------------------------------------------
         # update iterables (for next iteration)
         systemic_all = outputs['SYSTEMIC_ALL']
