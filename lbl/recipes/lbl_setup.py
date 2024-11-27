@@ -225,6 +225,8 @@ def main(**kwargs):
     # -------------------------------------------------------------------------
     # default run conditions
     # -------------------------------------------------------------------------
+    # We don't reset by default (we don't want to remove uses data)
+    wrap_dict['RUN_LBL_RESET'] = False
     # No tellu clean for spirou/nirps in apero/cadc
     wrap_dict['RUN_LBL_TELLUCLEAN'] = False
     if params['instrument'] in ['SPIROU', 'NIRPS_HE', 'NIRPS_HA']:
