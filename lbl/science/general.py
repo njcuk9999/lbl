@@ -1389,9 +1389,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
                 # normalize by the median
                 with warnings.catch_warnings(record=True):
+                    # get the sci data nad model for this order and valid points
+                    rpart1 = sci_data0[order_num][valid]
+                    rpart2 = model0[order_num][valid]
                     # science to model ratio
-                    ratio_sci = mp.nanmedian((sci_data0[order_num][valid] / 
-                                              model0[order_num][valid]))
+                    ratio_sci = mp.nanmedian(rpart1 / rpart2)
                     model0[order_num] = model0[order_num] * ratio_sci
             # -----------------------------------------------------------------
             # update the other splines

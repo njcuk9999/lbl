@@ -134,3 +134,6 @@ dmypy.json
 # python swp files
 *.swp
 *.py.swp
+
+# Mac OSC Finder files
+.DS_Store
