@@ -740,6 +740,10 @@ params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=__NAME__)
 # ignore weights below this value for the template construction
 params.set('TEMPLATE_WEIGHT_MIN', 0.1, source=__NAME__)
 
+# define the mnimal SNR required for a pixel to be considered valid in
+# the template
+params.set('TEMPLATE_SNR_THRES', 10, source=__NAME__)
+
 # =============================================================================
 # Define other parameters
 # =============================================================================
@@ -1014,6 +1018,11 @@ params.set(key='KW_TEMPLATE_BERVBINS', value='LBLTBRVB', source=__NAME__,
 params.set(key='KW_INST_DRIFT', value=None, source=__NAME__, not_none=False,
            desc='define the instrumental drift key word in m/s',
            comment='Instrumental drift in m/s')
+
+# Define the mask file used
+params.set(key='KW_LBLMASK', value=None, source=__NAME__, not_none=False,
+           desc='define the mask file used',
+           comment='The mask file used')
 
 # Define the raw hash
 params.set(key='KW_RAW_HASH', value='LBLRHASH', source=__NAME__,

@@ -10,6 +10,7 @@ Created on 2021-03-15
 @author: cook
 """
 import numpy as np
+import os
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -322,6 +323,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         # get back ref_table and outputs
         ref_table, outputs = cout
         # ---------------------------------------------------------------------
+        # add the mask file
+        outputs['MASK_FILE'] = os.path.basename(mask_file)
         # add the rash hash to the outputs
         outputs['RAW_HASH'] = io.generate_checksum(science_file)
         # ---------------------------------------------------------------------
@@ -331,7 +334,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         reset_rv = outputs['RESET_RV']
         ccf_ewidth = outputs['CCF_EW']
         model_velocity = outputs['MODEL_VELOCITY']
-
+        # ---------------------------------------------------------------------
         all_durations.append(outputs['TOTAL_DURATION'])
         # ---------------------------------------------------------------------
         # 6.8 save to file
