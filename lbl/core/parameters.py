@@ -1020,7 +1020,7 @@ params.set(key='KW_INST_DRIFT', value=None, source=__NAME__, not_none=False,
            comment='Instrumental drift in m/s')
 
 # Define the mask file used
-params.set(key='KW_LBLMASK', value=None, source=__NAME__, not_none=False,
+params.set(key='KW_LBLMASK', value='LBLMASK', source=__NAME__, not_none=False,
            desc='define the mask file used',
            comment='The mask file used')
 
