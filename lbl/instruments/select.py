@@ -320,15 +320,15 @@ def load_instrument(args: ParamDict,
         emsg = 'Instrument name "{0}" invalid'
         eargs = [instrument]
         raise base_classes.LblException(emsg.format(*eargs))
-
-    # override inst params with args (from input/cmd/yaml)
-    for argname in args:
-        if argname in params:
-            # get source
-            params.set(argname, args[argname],
-                       source=args.instances[argname].source)
+    # -------------------------------------------------------------------------
     # construct instrument instance
     inst = inst_class(params)
+    # override inst params with args (from input/cmd/yaml)
+    for argname in args:
+        if argname in inst.params:
+            # get source
+            inst.params.set(argname, args[argname],
+                            source=args.instances[argname].source)
     # -------------------------------------------------------------------------
     # update log verbosity level and program name
     verbose = inst.params.get('VERBOSE', 2)

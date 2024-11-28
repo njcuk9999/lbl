@@ -253,7 +253,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         # ---------------------------------------------------------------------
         if blaze is None:
             bout = inst.load_blaze_from_science(science_file, sci_data,
-                                                    sci_hdr, calib_dir)
+                                                sci_hdr, calib_dir)
             blazeimage, blaze_flag = bout
         # test for all ones (no blaze)
         elif np.sum(blaze.ravel()) == len(blaze.ravel()):
