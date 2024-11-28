@@ -17,6 +17,7 @@ import warnings
 from collections import UserDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
+import hashlib
 
 import numpy as np
 import pandas as pd
@@ -1052,6 +1053,47 @@ def write_table(filename: str, table: Table, fmt: str = 'fits',
         emsg = 'Cannot write table {0} to disk \n\t{1}: {2}'
         eargs = [filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
+
+
+def generate_checksum(filename: str, size: int = 16) -> Optional[str]:
+    """
+    Generate a checksum for a file
+
+    :param filename: str, the filename to generate the checksum for
+
+    :return: str or None, the checksum or None if cannot generate
+    """
+    try:
+        with open(filename, 'rb') as f:
+            # read the file in chunks
+            checksum = hashlib.md5()
+            for chunk in iter(lambda: f.read(4096), b""):
+                checksum.update(chunk)
+            # return the checksum
+            return checksum.hexdigest()[:size]
+    except Exception as _:
+        return None
+
+
+def check_hash(filename: str, prev_checksum: Optional[str] = None) -> bool:
+    """
+    Check the checksum of a file against a previous checksum
+
+    :param filename: str, the filename to check
+    :param prev_checksum: str, the previous checksum to check against
+
+    :return: bool, True if checksums match, False otherwise
+    """
+    # deal with no check sum
+    if prev_checksum is None:
+        return False
+    # generate the checksum for the file
+    str_checksum = generate_checksum(filename)
+    # deal with no checksum
+    if str_checksum is None:
+        return False
+    # compare the checksums
+    return str_checksum == prev_checksum
 
 
 # =============================================================================

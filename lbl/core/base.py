@@ -35,7 +35,8 @@ INSTRUMENTS += ['Generic']
 
 # log variables
 TIME_NOW = str(Time.now().unix).replace('.', '_')
-LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl', 'lbl_{0}.log')
+LOG_FILE = os.path.join(os.path.expanduser('~'), 'lbl',
+                        'lbl_{0}.log'.format(TIME_NOW))
 LOG_FORMAT = '%(asctime)s %(message)s'
 # make sure log path exists
 if not os.path.exists(os.path.dirname(LOG_FILE)):
