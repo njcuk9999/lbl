@@ -448,19 +448,24 @@ class LBLHeader(UserDict):
 # =============================================================================
 # Define functions
 # =============================================================================
-def check_file_exists(filename: str, required: bool = True) -> bool:
+def check_file_exists(filename: str, fkind: Optional[str] = None,
+                      required: bool = True) -> bool:
     """
     Check if a file exists
 
     :param filename: str, the filename
+    :param fkind: str, the type of file we are checking
     :param required: bool, if required raise an error on not existing
     :return:
     """
     if os.path.exists(filename):
         return True
     elif required:
-        emsg = 'File {0} cannot be found'
-        eargs = [filename]
+        if fkind is not None:
+            emsg = '{0} file {1} cannot be found'
+        else:
+            emsg = 'File {1} cannot be found'
+        eargs = [fkind.capitalize(), filename]
         raise LblException(emsg.format(*eargs))
     else:
         return False

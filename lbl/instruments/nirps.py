@@ -318,7 +318,7 @@ class NIRPS(Instrument):
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'mask')
         # return absolute path
         return abspath
 
@@ -344,7 +344,7 @@ class NIRPS(Instrument):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -363,7 +363,7 @@ class NIRPS(Instrument):
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # return absolute path
         return abspath
 
@@ -505,7 +505,7 @@ class NIRPS(Instrument):
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # normalize by order
@@ -1878,7 +1878,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -2109,7 +2109,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
@@ -2365,7 +2365,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -2598,7 +2598,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)

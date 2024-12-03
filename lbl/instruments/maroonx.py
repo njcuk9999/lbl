@@ -85,7 +85,7 @@ class MaroonX(Instrument):
         self.param_set('BLAZE_CORRECTED', False, source=func_name)
         # set blaze file
         self.param_set('BLAZE_FILE',
-                        '20200603T13_masterflat_backgroundsubtracted_FFFFF'
+                       '20200603T13_masterflat_backgroundsubtracted_FFFFF'
                         '_x_0000.hd5', source=func_name)
         # define the mask table format
         self.param_set('REF_TABLE_FMT', 'csv', source=func_name)
@@ -320,7 +320,7 @@ class MaroonX(Instrument):
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'mask')
         # return absolute path
         return abspath
 
@@ -351,7 +351,7 @@ class MaroonX(Instrument):
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # return absolute path
         return abspath
 
@@ -892,7 +892,7 @@ class MaroonXBlue(MaroonX):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -1231,7 +1231,7 @@ class MaroonXRed(MaroonX):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 

@@ -205,7 +205,7 @@ class Instrument:
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        if not io.check_file_exists(abspath, required=False):
+        if not io.check_file_exists(abspath, 'ref_table', required=False):
             # ref_table does not exist --> return None
             return abspath, False
         else:
@@ -240,7 +240,7 @@ class Instrument:
         # construct absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        if not io.check_file_exists(abspath, required=False):
+        if not io.check_file_exists(abspath, 'lblrv', required=False):
             # ref_table does not exist --> return None
             return abspath, False
         else:

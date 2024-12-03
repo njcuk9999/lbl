@@ -204,7 +204,7 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             if not isinstance(config_file, (str, Path)):
                 raise LblException('config file not a valid path or string')
             # check if exists
-            if not io.check_file_exists(config_file):
+            if not io.check_file_exists(config_file, 'config'):
                 emsg = 'config file = "{0}" does not exist'
                 eargs = [os.path.realpath(config_file)]
                 raise base_classes.LblException(emsg.format(*eargs))
@@ -230,6 +230,9 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
     for kwarg in kwargs:
         # force kwarg to upper case
         kwargname = kwarg.upper()
+        # skip None keys
+        if kwargs[kwarg] is None:
+            continue
         # make sure these are in default_values
         if kwargname not in list(default_values.keys()):
             emsg = 'Python Argument "{0}" is invalid'

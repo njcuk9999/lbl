@@ -351,7 +351,7 @@ class Sophie(Instrument):
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'mask')
         # return absolute path
         return abspath
 
@@ -377,7 +377,7 @@ class Sophie(Instrument):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -396,7 +396,7 @@ class Sophie(Instrument):
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # return absolute path
         return abspath
 
@@ -538,7 +538,7 @@ class Sophie(Instrument):
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # normalize by order

@@ -352,7 +352,7 @@ class Harps(Instrument):
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'mask')
         # return absolute path
         return abspath
 
@@ -378,7 +378,7 @@ class Harps(Instrument):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -397,7 +397,7 @@ class Harps(Instrument):
         # get absolute path
         abspath = os.path.join(directory, basename)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # return absolute path
         return abspath
 
@@ -547,7 +547,7 @@ class Harps(Instrument):
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
@@ -967,7 +967,7 @@ class Harps_ORIG(Harps):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -1042,7 +1042,7 @@ class Harps_ORIG(Harps):
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # get wave solution for reference file
@@ -1280,7 +1280,7 @@ class Harps_ESO(Harps):
         abspath = os.path.join(directory, basename)
         # check that this file exists
         if required:
-            io.check_file_exists(abspath)
+            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -1324,7 +1324,7 @@ class Harps_ESO(Harps):
         # construct absolute path
         abspath = os.path.join(calib_directory, blaze_file)
         # check that this file exists
-        io.check_file_exists(abspath)
+        io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
