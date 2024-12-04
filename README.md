@@ -23,11 +23,22 @@ Please see our website for documentation: [lbl.exoplanets.ca](https://lbl.exopla
 
 If you make use of the lbl code for you scientific publication, please cite the following:
 
+
+Release paper:
+
     Artigau, E., Cadieux, C., Cook, N. J., et al. 2022, AJ, 164, 84
 
 [Link to publisher](https://doi.org/10.3847/1538-3881/ac7ce6)
 
 [Link to ADS](https://ui.adsabs.harvard.edu/abs/2022AJ....164...84A/abstract)
+
+
+DTemp paper:
+
+    Artigau, E., Cadieux, C., Cook, N. J., et al. 2024, AJ, 168, 252
+
+[Link to publisher](https://ui.adsabs.harvard.edu/link_gateway/2024AJ....168..252A/PUB_PDF)
+[Link to ADS](https://ui.adsabs.harvard.edu/abs/2024AJ....168..252A/abstract)
 
 
 ---
