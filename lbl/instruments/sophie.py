@@ -498,8 +498,8 @@ class Sophie(Instrument):
             # load header
             sci_hdr = self.load_header(science_file)
             # get mid exposure time
-            # noinspection PyTypeChecker
-            mid_exp_time = float(sci_hdr[self.params['KW_MID_EXP_TIME']])
+            mid_exp_time = sci_hdr.get_hkey(self.params['KW_MID_EXP_TIME'],
+                                            science_file, dtype=float)
             # get time
             times.append(mid_exp_time)
         # get sort mask

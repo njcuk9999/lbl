@@ -500,8 +500,11 @@ class Espresso(Instrument):
         for science_file in science_files:
             # load header
             sci_hdr = self.load_header(science_file)
+            # get mid exposure time
+            mid_exp_time = sci_hdr.get_hkey(self.params['KW_MID_EXP_TIME'],
+                                            science_file, dtype=float)
             # get time
-            times.append(sci_hdr[self.params['KW_MID_EXP_TIME']])
+            times.append(mid_exp_time)
         # get sort mask
         sortmask = np.argsort(times)
         # apply sort mask
