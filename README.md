@@ -30,9 +30,6 @@ If you make use of the lbl code for you scientific publication, please cite the 
 [Link to ADS](https://ui.adsabs.harvard.edu/abs/2022AJ....164...84A/abstract)
 
 
-[back to top](#contents)
-
-
 ---
 
 # GitHub
