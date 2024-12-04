@@ -38,6 +38,7 @@ DTemp paper:
     Artigau, E., Cadieux, C., Cook, N. J., et al. 2024, AJ, 168, 252
 
 [Link to publisher](https://ui.adsabs.harvard.edu/link_gateway/2024AJ....168..252A/PUB_PDF)
+
 [Link to ADS](https://ui.adsabs.harvard.edu/abs/2024AJ....168..252A/abstract)
 
 
