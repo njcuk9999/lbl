@@ -1,7 +1,7 @@
 # lbl
 Line by line code for precision radial velocity described in [Artigau et al. 2022](https://www.doi.org/10.3847/1538-3881/ac7ce6)
 
-version 0.64.016 (2024-12-04)
+version 0.65.001 (2024-12-06)
 
 Compatible with:
 - SPIRou (APERO and CADC)
