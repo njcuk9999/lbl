@@ -235,10 +235,14 @@ def __main__(inst: InstrumentsType, **kwargs):
             # skip if the hash is identical
             if hash_identical:
                 # log message about skipping
-                log.general('\t\tFile exists and skipping activated. '
+                log.general('\t\tLBL.fits file exists and skipping activated. '
                             'Skipping file.')
                 # skip
                 continue
+        elif not lblrv_exists:
+            log.general('\t\tLBL.fits file does not exist, computing.')
+        else:
+            log.general('\t\tLBL.fits file exists, overwriting')
         # ---------------------------------------------------------------------
         # 6.3 load science file
         # ---------------------------------------------------------------------
