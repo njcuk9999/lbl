@@ -228,7 +228,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         if lblrv_exists and inst.params['SKIP_DONE']:
             # get the lblrv_hash from the lblrv file
             lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
-            lblrv_hash = lblrv_hdr.get_hkey('KW_RAW_HASH', required=False)
+            lblrv_hash = lblrv_hdr.get_hkey(inst.params['KW_RAW_HASH'],
+                                            required=False)
             # check hash of science file
             hash_identical = io.check_hash(science_file, lblrv_hash)
             # skip if the hash is identical

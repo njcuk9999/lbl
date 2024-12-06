@@ -31,7 +31,8 @@ INSTRUMENTS = ['carmenes_vis',
                'spirou_apero', 'spirou_cadc',
                'maroonx_b', 'maroonx_r',
                'sophie',
-               'coralie']
+               'coralie'
+               ]
 
 # define global params to override
 GLOBAL = dict()
