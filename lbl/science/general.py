@@ -1975,6 +1975,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['vrad_chromatic_slope'] = np.zeros_like(lblrvfiles, dtype=float)
     # error in chromatic slope
     rdb_dict['svrad_chromatic_slope'] = np.zeros_like(lblrvfiles, dtype=float)
+    # wavelength dependency of velocity following Zechmeister et al. 2018 (CRX)
+    rdb_dict['CRX'] = np.zeros_like(lblrvfiles, dtype=float)
+    # error on CRX
+    rdb_dict['sCRX'] = np.zeros_like(lblrvfiles, dtype=float)
     # get filename column
     rdb_dict['FILENAME'] = [[]] * len(lblrvfiles)
     # add header keys
@@ -2408,6 +2412,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         achromatic_velo, sig_achromatic_velo = np.nan, np.nan
         # chromatic slope of velocity
         chromatic_slope, sig_chromatic_slope = np.nan, np.nan
+        # crx value
+        crx, scrx = np.nan, np.nan
         # store count
         itr_count = 1
         # loop around 10 iterations (but break on convergence)
@@ -2421,6 +2427,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             good &= (err < 100 * np.nanmedian(err))
             # get valid wave and subtract reference wavelength
             valid_wave = rvtable0['WAVE_START'][good] - reference_wavelength
+            valid_log_wave = np.log(rvtable0['WAVE_START'][good])
             # get valid rv an dv drms
             valid_rv = (rvs_row - rv_per_line_model[0])[good]
             valid_dvrms = err[good]
@@ -2442,6 +2449,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # noinspection PyTupleAssignmentBalance
             scoeffs, scov = np.polyfit(valid_wave, valid_rv, 1,
                                        w=weight_lin_fit, cov=True)
+            # fitting the lines with weights (in CRX frame)
+            scoeffs_crx, scov_crx = np.polyfit(valid_log_wave, valid_rv, 1,
+                                               w=weight_lin_fit, cov=True)
             # work out the fitted vector
             sfit = np.polyval(scoeffs, valid_wave)
             # work out how many sigma off we are from the fit
@@ -2456,6 +2466,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # errors from covariance matrix
             sig_chromatic_slope = np.sqrt(scov[0, 0]) * 1000
             sig_achromatic_velo = np.sqrt(scov[1, 1])
+            # get the crx values
+            crx = scoeffs_crx[0]
+            scrx = np.sqrt(scov_crx[0, 0])
             # see whether we need another iteration
             if np.abs(achromatic_velo - prev_velo) < 0.1 * sig_achromatic_velo:
                 # if within 10% of errors break
@@ -2502,7 +2515,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['svrad_achromatic'][row] = sig_achromatic_velo
         rdb_dict['vrad_chromatic_slope'][row] = chromatic_slope
         rdb_dict['svrad_chromatic_slope'][row] = sig_chromatic_slope
-
+        rdb_dict['CRX'][row] = crx
+        rdb_dict['sCRX'][row] = scrx
         # ---------------------------------------------------------------------
         # Per-band per region RV measurements
         # ---------------------------------------------------------------------
