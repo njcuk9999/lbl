@@ -36,7 +36,7 @@ QArg = lbl_misc.QuickArg
 
 # -----------------------------------------------------------------------------
 # define the working directory
-WORKSPACE = '/data/lbl/data/misc'
+WORKSPACE = '.'
 # define the name for the full param config yaml
 PARAM_FULL_YAML = 'full_config.yaml'
 # define the parameter readme table file (copied into full README.md)
@@ -61,21 +61,22 @@ for _key in pargs:
 # =============================================================================
 # Define functions
 # =============================================================================
-def make_param_table(instrument: Union[str, None] = 'SPIROU') -> Table:
+def make_param_table(instrument: str, data_source: str) -> Table:
     """
     Make a parameter table from global and instrument parameters
 
-    :param instrument:
+    :param instrument: str, the instrument name
+    :param data_source: str, the data source
+
     :return:
     """
     # get global params
     gparams = parameters.params.copy()
-
     if instrument is not None:
         # set up fake arguments
         args_compute = ['INSTRUMENT']
         # set up fake kwargs
-        kwargs = dict(instrument=instrument)
+        kwargs = dict(instrument=instrument, data_source=data_source)
         # deal with parsing arguments
         cargs = select.parse_args(args_compute, kwargs, '')
         # load instrument
@@ -85,7 +86,7 @@ def make_param_table(instrument: Union[str, None] = 'SPIROU') -> Table:
     else:
         params = gparams.copy()
 
-    # create table elemetns
+    # create table elements
     keys, dvalues, ivalues, comments = [], [], [], []
     for pkey in params:
         keys.append(str(pkey))
@@ -97,7 +98,10 @@ def make_param_table(instrument: Union[str, None] = 'SPIROU') -> Table:
     table['KEY'] = keys
     table['DEFAULT_VALUE'] = dvalues
     if instrument is not None:
-        table['{0}_VALUE'.format(instrument)] = ivalues
+        if data_source in [None, 'None']:
+            table['{0}'.format(instrument)] = ivalues
+        else:
+            table['{0}[{1}]'.format(instrument, data_source)] = ivalues
     table['DESCRIPTION'] = comments
 
     return table
@@ -155,6 +159,7 @@ def make_readme_param_table(tables: List[Table]):
                       overwrite=True)
     final_table.write(abspath.replace('.md', '.csv'), format='csv',
                       overwrite=True)
+    final_table.write(abspath.replace('.md', '.html'), format='ascii.html')
 
 
 def make_full_config_yaml(table: Table):
@@ -267,15 +272,22 @@ if __name__ == "__main__":
     if _args.make_readme:
         # loop around instruments
         _tables = []
-        for instrument in base.INSTRUMENTS:
-            log.general('Adding instrument {0}'.format(instrument))
-            _table = make_param_table(instrument)
-            _tables.append(_table)
+        for instrument in select.InstDict.keys():
+            # skip the generic instrument here
+            if instrument == 'Generic':
+                continue
+            for data_source in select.InstDict[instrument].keys():
+                msg = 'Adding instrument {0} [{1}]'
+                margs = [instrument, data_source]
+                log.general(msg.format(*margs))
+                _table = make_param_table(instrument, data_source)
+                _tables.append(_table)
+
         make_readme_param_table(_tables)
     # -------------------------------------------------------------------------
     # run make full yaml config file (if True)
     if _args.make_full_yaml:
-        _table = make_param_table('SPIROU')
+        _table = make_param_table('SPIROU', 'APERO')
         make_full_config_yaml(_table)
 
 # =============================================================================
