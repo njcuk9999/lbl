@@ -1,3 +1,39 @@
 [build-system]
 requires = ["setuptools", "wheel", "setuptools_scm"]
 build-backend = 'setuptools.build_meta'
+
+[project]
+dynamic = ['version']
+name = 'lbl'
+authors = [
+    {name = 'Neil Cook', email = 'neil.james.cook@gmail.com'},
+    {name = 'Etienne Artigau', email = 'etienne.artigau@umontreal.ca'},
+]
+description = 'LBL - Line-by-line velocity measurements, an outlier-resistant method for precision velocimetry'
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = 'LICENSE'}
+requires-python = "==3.11"
+dependencies = [
+    "astropy==7.0.1",
+    "Bottleneck==1.4.2",
+    "ipython==8.32.0",
+    "scipy==1.10.1",
+    "numba==0.61.0",
+    "numpy==1.24.3",
+    "matplotlib==3.10.0",
+    "pandas==2.2.3",
+    "tables==3.10.2",
+    "tqdm==4.67.1",
+    "PyYAML==6.0.2",
+    "wget==3.2",
+]
+
+[project.urls]
+Homepage = 'http://lbl.exoplanets.ca'
+Repository = 'https://github.com/njcuk9999/lbl'
+
+[project.scripts]
+lbl_find = "lbl.recipes.lbl_find:run"
+lbl_reset = "lbl.recipes.lbl_reset:run"
+lbl_demo = "lbl.recipes.lbl_demo:run"
+lbl_setup = "lbl.recipes.lbl_setup:run"
