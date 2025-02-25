@@ -17,6 +17,7 @@ from lbl.core import io
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_mask
+from lbl.recipes import lbl_resmap
 from lbl.recipes import lbl_telluclean
 from lbl.recipes import lbl_template
 from lbl.recipes import lbl_reset
@@ -54,6 +55,7 @@ REMOVE_KEYS = [  # core
 DEFAULTS = dict()
 DEFAULTS['RUN_LBL_RESET'] = False
 DEFAULTS['RUN_LBL_TELLUCLEAN'] = False
+DEFAULTS['RUN_LBL_RESMAP'] = False
 DEFAULTS['RUN_LBL_TEMPLATE'] = False
 DEFAULTS['RUN_LBL_MASK'] = False
 DEFAULTS['RUN_LBL_COMPUTE'] = False
@@ -182,16 +184,16 @@ def main(runparams: dict):
             if not object_science.endswith('_tc'):
                 object_science = object_science + '_tc'
         # ---------------------------------------------------------------------
-        if runparams['RUN_LBL_RESMAP']:
-            lbl_resmap.main(instrument=instrument, data_dir=data_dir,
-                            data_source=data_source,
-                            data_type=data_type,
-                            object_science=object_science,
-                            object_template=object_template,
-                            blaze_corrected=blaze_corr,
-                            blaze_file=blaze_file,
-                            overwrite=not runparams['SKIP_LBL_RESMAP'],
-                            **keyword_args)
+        # if runparams['RUN_LBL_RESMAP']:
+        #     lbl_resmap.main(instrument=instrument, data_dir=data_dir,
+        #                     data_source=data_source,
+        #                     data_type=data_type,
+        #                     object_science=object_science,
+        #                     object_template=object_template,
+        #                     blaze_corrected=blaze_corr,
+        #                     blaze_file=blaze_file,
+        #                     overwrite=not runparams['SKIP_LBL_RESMAP'],
+        #                     **keyword_args)
         # ---------------------------------------------------------------------
         # make the template (if not present)
         if runparams['RUN_LBL_TEMPLATE']:
