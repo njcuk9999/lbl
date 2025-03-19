@@ -16,7 +16,7 @@ requires-python = "==3.11.*"
 dependencies = [
     "astropy==7.0.1",
     "Bottleneck==1.4.2",
-    "ipython==9.0.0",
+    "ipython==8.32.0",
     "scipy==1.15.2",
     "numba==0.61.0",
     "numpy==1.26.4",
