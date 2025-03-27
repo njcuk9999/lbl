@@ -390,22 +390,6 @@ def spline_template(inst: InstrumentsType, template_file: str,
         # set this to the flux we would have had from before
         tflux = tflux2
     # -------------------------------------------------------------------------
-    # copy the flux
-    tflux0 = np.array(tflux)
-    # deal with the odd/even templates
-    if 'flux_odd' in template_table.colnames:
-        tflux0_odd = np.array(tflux_odd)
-        tflux0_even = np.array(tflux_even)
-    else:
-        tflux0_odd = np.array([])
-        tflux0_even = np.array([])
-    # -------------------------------------------------------------------------
-    # work out the velocity scale
-    width = get_velo_scale(twave, hp_width)
-    # -------------------------------------------------------------------------
-    # we high-pass on a scale of ~101 pixels in the e2ds
-    tflux -= mp.lowpassfilter(tflux, width=width)
-    # -------------------------------------------------------------------------
     # get the gradient of the log of the wave
     grad_log_wave = np.gradient(np.log(twave))
     # work out the glw_c (grad_log_wave / speed_of_light_ms)
@@ -446,7 +430,6 @@ def spline_template(inst: InstrumentsType, template_file: str,
     #   for good
     k_order = 2
     # flux, 1st and 2nd derivatives
-    sps['spline0'] = mp.iuv_spline(ntwave, tflux0[valid], k=k_order, ext=1)
     sps['spline'] = mp.iuv_spline(ntwave, tflux[valid], k=k_order, ext=1)
     # deal with the odd/even templates
     if 'flux_odd' in template_table.colnames:
@@ -455,10 +438,6 @@ def spline_template(inst: InstrumentsType, template_file: str,
                                           k=k_order, ext=1)
         sps['spline_even'] = mp.iuv_spline(ntwave, tflux_even[valid],
                                            k=k_order, ext=1)
-        sps['spline0_odd'] = mp.iuv_spline(ntwave, tflux0_odd[valid],
-                                           k=k_order, ext=1)
-        sps['spline0_even'] = mp.iuv_spline(ntwave, tflux0_even[valid],
-                                            k=k_order, ext=1)
         sps['dspline_odd'] = mp.iuv_spline(ntwave, dflux_odd[valid],
                                            k=k_order, ext=1)
         sps['dspline_even'] = mp.iuv_spline(ntwave, dflux_even[valid],
@@ -1258,15 +1237,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # correction of the model from the low-passed ratio of science to model
     ratio = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
-    if 'spline0_odd' not in splines:
-        spline0 = splines['spline0'], splines['spline0']
+    if 'spline_odd' not in splines:
         dspline = splines['dspline'], splines['dspline']
         d2spline = splines['d2spline'], splines['d2spline']
         d3spline = splines['d3spline'], splines['d3spline']
         spline_mask = [splines['spline_mask'], splines['spline_mask']]
         log.general('\tThe template has no left/right asymetry')
     else:
-        spline0 = splines['spline0_odd'], splines['spline0_even']
+        spline = splines['spline_odd'], splines['spline_even']
         dspline = splines['dspline_odd'], splines['dspline_even']
         d2spline = splines['d2spline_odd'], splines['d2spline_even']
         d3spline = splines['d3spline_odd'], splines['d3spline_even']
@@ -1339,9 +1317,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # set spline mask splined values to NaN
             model_mask[smask] = np.nan
             # RV shift the spline and correct for blaze and add model mask
-            # TODO spline0 or spline depending on the type of filtering and
-            #      normalization
-            ord_model = spline0[is_even](wave_ord) * blaze_ord * model_mask
+            ord_model = spline[is_even](wave_ord) * blaze_ord * model_mask
             # push into mask
             model[order_num] = ord_model
             # we are so close in RV with RV_mean<10*sigma that there is no need
@@ -1370,18 +1346,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
             model[order_num] *= ratio[order_num]
 
-            # work out the ratio between spectrum and model
-            # amp = get_scaling_ratio(sci_data[order_num], model[order_num])
-            # apply this scaling ratio to the model
-            # model[order_num] = model[order_num] * amp
-
-            # corr_model = mp.lowpassfilter(model[order_num] - sci_data[order_num],
-            #                              width=100)
-            # model[order_num] -= corr_model
             # if this is the first iteration update model0
             if iteration == 0:
                 # spline the original template and apply blaze
-                model0[order_num] = spline0[is_even](wave_ord) * blaze_ord
+                model0[order_num] = spline[is_even](wave_ord) * blaze_ord
                 model0[order_num][model0[order_num] == 0] = np.nan
                 # get the good values for the median
                 valid = np.isfinite(model0[order_num])
