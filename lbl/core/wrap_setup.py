@@ -466,6 +466,54 @@ def generic_instrument(wrap_dict: Dict[str, Any]) -> Dict[str, Any]:
     # Type: FLOAT
     rparams['MAX_CONVERGENCE_TEMPLATE_RV'] = None
     
+    # ---------------------------------------------------------------------
+    # Keywords which must be in the header of science files
+    # ---------------------------------------------------------------------
+    
+    # define the header key that gives the mid exposure time in MJD
+    # Example: MJDMID
+    rparams['KW_MID_EXP_TIME'] = None
+    
+    # define the header key that gives the start time of the observation
+    # Example: MJSTART
+    rparams['KW_MJDATE'] = None
+    
+    # define the header key that gives the barycentric julian date
+    # Example: BJD
+    rparams['KW_BJD'] = None
+        
+    # define the header key that gives human date of the observation 
+    # yyyy-mm-dd HH:MM:SS
+    # Example: DATE
+    rparams['KW_DATE'] = None
+    
+    # define the header key that gives the berv (in km/s)
+    # Example: BERV
+    rparams['KW_BERV'] = None
+    
+    # define the header key that gives the original object name
+    # Example: OBJECT
+    rparams['KW_OBJNAME'] = None
+    
+    # define the header key that gives the exposure time of the observation
+    # Example: EXPTIME
+    rparams['KW_EXPTIME'] = None
+    
+    # define the header key that gives the airmass of the observation 
+    # (if value is unknown set to a sensible value)
+    # Example: AIRMASS
+    rparams['KW_AIRMASS'] = None
+
+    # define the header key that gives the snr
+    # (if value is unknown set to a sensible value)
+    # Example: SNR
+    rparams['KW_SNR'] = None
+    
+    # define the header key that gives the SNR in chosen order 
+    # (if value is unknown set to a sensible value)
+    # Example: SNR
+    rparams['KW_EXT_SNR'] = None
+    
     """
     # add to wrap dict
     wrap_dict['OTHER_SETTINGS'] = OTHER_SETTINGS
