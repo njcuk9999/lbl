@@ -119,18 +119,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # template filename
     template_file = inst.template_file(template_dir, required=False)
-    # science filenames
-    science_files = inst.science_files(science_dir)
-    # blaze filename (None if not set)
-    blaze_file = inst.blaze_file(calib_dir)
-    # load blaze file if set
-    if blaze_file is not None:
-        blaze = inst.load_blaze(blaze_file, science_file=str(science_files[0]),
-                                normalize=True)
-    else:
-        blaze = None
+
     # -------------------------------------------------------------------------
-    # Step 3: Check if mask exists
+    # Step 3: Check if template exists
     # -------------------------------------------------------------------------
     if os.path.exists(template_file) and not inst.params['OVERWRITE']:
         # log that mask exist
@@ -143,6 +134,21 @@ def __main__(inst: InstrumentsType, **kwargs):
         log.general(f'--overwrite=True. Recalculating template {template_file}')
     else:
         log.general(f'Could not find {template_file}. Calculating template.')
+
+    # -------------------------------------------------------------------------
+    # Step 2: Check and set filenames (after checking if template exists)
+    # -------------------------------------------------------------------------
+    # science filenames
+    science_files = inst.science_files(science_dir)
+    # blaze filename (None if not set)
+    blaze_file = inst.blaze_file(calib_dir)
+    # load blaze file if set
+    if blaze_file is not None:
+        blaze = inst.load_blaze(blaze_file, science_file=str(science_files[0]),
+                                normalize=True)
+    else:
+        blaze = None
+
     # -------------------------------------------------------------------------
     # Step 4: Deal with reference file (first file)
     # -------------------------------------------------------------------------
