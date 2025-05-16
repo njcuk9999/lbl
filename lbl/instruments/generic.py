@@ -40,7 +40,7 @@ log = io.log
 # Define Spirou class
 # =============================================================================
 class Generic(Instrument):
-    def __init__(self, params: base_classes.ParamDict):
+    def __init__(self, params: base_classes.ParamDict, setup: bool = False):
         # call to super function
         super().__init__('Generic')
         # extra parameters (specific to instrument)
@@ -51,7 +51,8 @@ class Generic(Instrument):
         # set parameters for instrument
         self.params = params
         # override params
-        self.param_override()
+        if not setup:
+            self.param_override()
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
@@ -244,21 +245,21 @@ class Generic(Instrument):
         # Header keywords
         # ---------------------------------------------------------------------
         # define the key that gives the mid exposure time in MJD
-        self.param_set('KW_MID_EXP_TIME', 'BJD', source=func_name)
+        self.generic_validate('KW_MID_EXP_TIME')
         # define the start time of the observation
-        self.param_set('KW_MJDATE', 'BJD', source=func_name)
+        self.generic_validate('KW_MJDATE')
         # define snr keyword
-        self.param_set('KW_SNR', 'SNR', source=func_name)
+        self.generic_validate('KW_SNR')
         # define berv keyword
-        self.param_set('KW_BERV', 'BERV', source=func_name)
+        self.generic_validate('KW_BERV')
         # # define the Blaze calibration file
         self.param_set('KW_BLAZE_FILE', 'NONE', source=func_name)
         # define the exposure time of the observation
-        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
+        self.generic_validate('KW_EXPTIME')
         # define the airmass of the observation
-        self.param_set('KW_AIRMASS', 'AIRMASS', source=func_name)
+        self.generic_validate('KW_AIRMASS')
         # define the human date of the observation
-        self.param_set('KW_DATE', 'DATE', source=func_name)
+        self.generic_validate('KW_DATE')
         # define the tau_h20 of the observation
         self.param_set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
@@ -268,14 +269,14 @@ class Generic(Instrument):
         # define the filename of the wave solution
         self.param_set('KW_WAVEFILE', 'NONE', source=func_name)
         # define the original object name
-        self.param_set('KW_OBJNAME', 'OBJNAME', source=func_name)
+        self.generic_validate('KW_OBJNAME')
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
         self.param_set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
-        self.param_set('KW_EXT_SNR', 'EXT_SNR', source=func_name)
+        self.generic_validate('KW_EXT_SNR')
         # define the barycentric julian date
-        self.param_set('KW_BJD', 'BJD', source=func_name)
+        self.generic_validate('KW_BJD')
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         self.param_set('KW_REF_KEY', 'DPRTYPE', source=func_name)
