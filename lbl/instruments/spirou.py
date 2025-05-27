@@ -42,19 +42,22 @@ log = io.log
 # Define Spirou class
 # =============================================================================
 class Spirou(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'SPIROU'
         # call to super function
         super().__init__(name)
+        # define wave limits in nm
+        self.wavemin = 955.793
+        self.wavemax = 2515.771
         # set parameters for instrument
         self.params = params
         # override params
         self.param_override()
-        # define wave limits in nm
-        self.wavemin = 955.793
-        self.wavemax = 2515.771
+        # update from args
+        self.update_from_args(args)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
@@ -1174,16 +1177,19 @@ class Spirou(Instrument):
 # Define Spirou CADC class
 # =============================================================================
 class SpirouCADC(Spirou):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'SPIROU_CADC'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # set parameters for instrument
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         """

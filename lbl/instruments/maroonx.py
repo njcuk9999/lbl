@@ -40,7 +40,8 @@ log = io.log
 # Define MaroonX class
 # =============================================================================
 class MaroonX(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # call to super function
         super().__init__(name)
         # extra parameters (specific to instrument)
@@ -61,6 +62,8 @@ class MaroonX(Instrument):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
@@ -716,12 +719,13 @@ class MaroonX(Instrument):
 # =============================================================================
 # noinspection PyPep8Naming
 class MaroonXBlue(MaroonX):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'MaroonXBlue'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.orders = np.arange(91, 125, 1).astype(int)[::-1]
         self.norders = len(self.orders)
@@ -739,6 +743,8 @@ class MaroonXBlue(MaroonX):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         # set function name
@@ -1055,12 +1061,13 @@ class MaroonXBlue(MaroonX):
 # =============================================================================
 # noinspection PyPep8Naming
 class MaroonXRed(MaroonX):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'MaroonXRed'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.orders = np.arange(67, 95, 1).astype(int)[::-1]
         self.norders = len(self.orders)
@@ -1078,6 +1085,8 @@ class MaroonXRed(MaroonX):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         # set function name

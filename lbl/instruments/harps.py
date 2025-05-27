@@ -39,7 +39,8 @@ log = io.log
 # Define HARPS class
 # =============================================================================
 class Harps(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'HARPS'
@@ -54,6 +55,8 @@ class Harps(Instrument):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
@@ -839,12 +842,13 @@ class Harps(Instrument):
 # =============================================================================
 # noinspection PyPep8Naming
 class Harps_ORIG(Harps):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'HARPS_ORIG'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPS_ORIG.fits'
         # define wave limits in nm
@@ -855,6 +859,8 @@ class Harps_ORIG(Harps):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS
@@ -1144,12 +1150,13 @@ class Harps_ORIG(Harps):
 # =============================================================================
 # noinspection PyPep8Naming
 class Harps_ESO(Harps):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'HARPS_ESO'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPS_ESO.fits'
         # define wave limits in nm
@@ -1160,6 +1167,8 @@ class Harps_ESO(Harps):
         self.params = params
         # override params
         self.param_override()
+       # update from args
+        self.update_from_args(args)
 
     # -------------------------------------------------------------------------
     # INSTRUMENT SPECIFIC PARAMETERS

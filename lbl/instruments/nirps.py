@@ -44,7 +44,8 @@ log = io.log
 # Define NIRPS class
 # =============================================================================
 class NIRPS(Instrument):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         """
         Global NIRPS parameters (do not use directly)
 
@@ -62,6 +63,8 @@ class NIRPS(Instrument):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     # -------------------------------------------------------------------------
     # NIRPS_HA SPECIFIC PARAMETERS
@@ -1137,12 +1140,13 @@ class NIRPS(Instrument):
 # =============================================================================
 # noinspection PyPep8Naming
 class NIRPS_HA(NIRPS):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'NIRPS_HA'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_nirps_ha.fits'
         self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
@@ -1153,6 +1157,8 @@ class NIRPS_HA(NIRPS):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         """
@@ -1216,12 +1222,13 @@ class NIRPS_HA(NIRPS):
 
 # noinspection PyPep8Naming
 class NIRPS_HE(NIRPS):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'NIRPS_HE'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_nirps_he.fits'
         # define wave limits in nm
@@ -1231,6 +1238,8 @@ class NIRPS_HE(NIRPS):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         """
@@ -1298,16 +1307,19 @@ class NIRPS_HE(NIRPS):
 # Define NIRPS CADC class
 # =============================================================================
 class NIRPS_HA_CADC(NIRPS_HA):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'NIRPS_HA_CADC'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # set parameters for instrument
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         """
@@ -1512,16 +1524,19 @@ class NIRPS_HA_CADC(NIRPS_HA):
 
 
 class NIRPS_HE_CADC(NIRPS_HE):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'NIRPS_HE_CADC'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # set parameters for instrument
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         """
@@ -1730,12 +1745,13 @@ class NIRPS_HE_CADC(NIRPS_HE):
 # =============================================================================
 # noinspection PyPep8Naming
 class NIRPS_HA_ESO(NIRPS_HA):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'NIRPS_HA_ESO'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_NIRPS_HA_ESO.fits'
         # define wave limits in nm
@@ -1745,6 +1761,8 @@ class NIRPS_HA_ESO(NIRPS_HA):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         """
@@ -2224,12 +2242,13 @@ class NIRPS_HA_ESO(NIRPS_HA):
 
 # noinspection PyPep8Naming
 class NIRPS_HE_ESO(NIRPS_HE):
-    def __init__(self, params: base_classes.ParamDict, name: str = None):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
             name = 'NIRPS_HE_ESO'
         # call to super function
-        super().__init__(params, name)
+        super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_NIRPS_HE_ESO.fits'
         # define wave limits in nm
@@ -2239,6 +2258,8 @@ class NIRPS_HE_ESO(NIRPS_HE):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     def param_override(self):
         """
