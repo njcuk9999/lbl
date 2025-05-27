@@ -39,7 +39,8 @@ log = io.log
 # Define SOPHIE class
 # =============================================================================
 class Coralie(Instrument):
-    def __init__(self, params: base_classes.ParamDict):
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict):
         # call to super function
         super().__init__('CORALIE')
         # extra parameters (specific to instrument)
@@ -51,6 +52,8 @@ class Coralie(Instrument):
         self.params = params
         # override params
         self.param_override()
+        # update from args
+        self.update_from_args(args)
 
     # -------------------------------------------------------------------------
     # SPIROU SPECIFIC PARAMETERS

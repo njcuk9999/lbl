@@ -108,6 +108,14 @@ class Instrument:
         # set the parameter
         self.params.set(key, value, source=source)
 
+    def update_from_args(self, args: ParamDict):
+        # override inst params with args (from input/cmd/yaml)
+        for argname in args:
+            if argname in self.params:
+                # get source
+                self.params.set(argname, args[argname],
+                                source=args.instances[argname].source)
+
     # -------------------------------------------------------------------------
     # Common instrument methods (should be overridden if instrument requires)
     # -------------------------------------------------------------------------
