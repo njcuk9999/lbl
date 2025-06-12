@@ -182,9 +182,9 @@ def main(**kwargs):
     instrument = select.InstDict[params['instrument']][params['data_source']]
     # construct the instrumnet instance
     if params['instrument'] == 'Generic':
-        inst = instrument(parameters.params.copy(), setup=True)
+        inst = instrument(parameters.params.copy(), ParamDict(), setup=True)
     else:
-        inst = instrument(parameters.params.copy())
+        inst = instrument(parameters.params.copy(), ParamDict())
 
     # -------------------------------------------------------------------------
     # Save the wrap file
