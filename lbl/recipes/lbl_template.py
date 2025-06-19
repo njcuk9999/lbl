@@ -145,7 +145,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # load blaze file if set
     if blaze_file is not None:
         blaze = inst.load_blaze(blaze_file, science_file=str(science_files[0]),
-                                normalize=True)
+                                normalize=False)
     else:
         blaze = None
 
