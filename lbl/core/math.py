@@ -11,7 +11,7 @@ Created on 2021-03-16
 """
 import copy
 import warnings
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 from astropy import constants
@@ -960,6 +960,64 @@ def bin_by_time(longitude: float, time_value: Union[np.ndarray, float],
     local_binned_time_value = binned_time_value + local_bin_time
     # return the binned time
     return local_binned_time_value
+
+
+def smart_blaze_norm(wavegrid: np.ndarray, blaze: np.ndarray,
+                     nth_deg: int = 7,
+                     bad_domain: Union[List[tuple], None] = None,
+                     full: bool = False
+                     ) -> Union[np.ndarray, Tuple[Any]]:
+    """
+    A smarter way to normalize the blaze.
+
+    We find the peak value of all orders and use that to derive a shape of
+    the SED. This is fitted with a log-log polynomial fit to the blaze
+    function. The resulting polynomial is then used to correct the blaze
+    function for each order, in particular to get the slope within each order
+    and to correct for the blaze function shape. This allows for a good
+    order-to-order match of the tranmission while not assuming that the blaze
+    function is flat and constant across with time between files.
+
+    :param wavegrid: np.ndarray, the wavegrid for the blaze to normalize
+    :param blaze: np.ndarray, the blaze to normalize
+    :param nth_deg: int, the degree of the polynomial to fit to
+    :param bad_domain: list, optional, the domain of the bad points to normalize
+                       in form of [[start1, end1], [start2, end2], ...]
+
+    :return: np.ndarray, the normalized blaze
+    """
+    # deal with no bad_domain
+    if bad_domain is None:
+        bad_domain = []
+    # storage for poly fit
+    bl_ord = []
+    wa_ord = []
+    # loop around orders and find the center of each order
+    for order_num in range(wavegrid.shape[0]):
+        # find the peak value in the order
+        peak = blaze[order_num] > np.nanpercentile(blaze[order_num], 95)
+        # keep mean of peak pixels and mean of wavelength at peak value
+        bl_ord.append(np.nanmean(blaze[order_num][peak]))
+        wa_ord.append(np.nanmean(wavegrid[order_num][peak]))
+    # convert to numpy arrays
+    wa_ord = np.array(wa_ord)
+    bl_ord = np.array(bl_ord)
+    # deal with instrument specific rejection of bad domain (domain not to be
+    #  used in the polyfit)
+    keep = np.ones_like(wa_ord, dtype=bool)
+    for bad in bad_domain:
+        keep &= ~((wa_ord > bad[0]) & (wa_ord < bad[1]))
+    # fit the blaze for regions that we are keeping
+    with warnings.catch_warnings(record=True) as _:
+        npolyfit = np.polyfit(np.log(wa_ord[keep]), np.log(bl_ord[keep]),
+                              nth_deg)
+        sed_blaze = np.exp(np.polyval(npolyfit, np.log(wavegrid)))
+    # return the updated, normalized blaze
+    if full:
+        return wa_ord, bl_ord, keep, npolyfit, wavegrid, blaze, sed_blaze
+    else:
+        return blaze / sed_blaze
+
 
 
 # =============================================================================

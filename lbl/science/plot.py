@@ -520,6 +520,64 @@ def tellu_corr_plot(inst: InstrumentsType, wave_vector: np.ndarray,
     plt.close()
 
 
+def smart_nblaze_plot(inst: InstrumentsType, wa_ord: np.ndarray,
+                      bl_ord: np.ndarray, keep: np.ndarray,
+                      npolyfit: np.ndarray, wavemap: np.ndarray,
+                      blaze: np.ndarray, sed_blaze: np.ndarray,
+                      nth_deg: int):
+    # import matplotlib
+    plt = import_matplotlib()
+    # this is a plot skip if this is True
+    if not inst.params['PLOT']:
+        return
+    # set up plot
+    fig, frames = plt.subplots(ncols=1, nrows=2, sharex='all')
+    # -------------------------------------------------------------------------
+    # plot 1: fit
+    frames[0].plot(wa_ord[keep], bl_ord[keep], 'o',
+             label='Data Points [used in fit]')
+    frames[0].plot(wa_ord[~keep], bl_ord[~keep], 'o',
+             label='Data Points [not used in fit]', color='gray', alpha=0.5)
+    frames[0].plot(wa_ord, np.exp(np.polyval(npolyfit, np.log(wa_ord))),
+             'r-', label=f'Polyfit (degree {nth_deg})')
+    frames[0].set(xlabel='Wavelength (nm)', ylabel='Blaze (ADU)',
+              title='Blaze vs Wavelength')
+    frames[0].grid()
+    frames[0].legend(loc=0)
+    # -------------------------------------------------------------------------
+    # plot 2 + 3: old method, new
+
+    # loop around orders and plot original method
+    for order_num in range(wavemap.shape[0]):
+        nblaze = blaze[order_num] / np.nanpercentile(blaze[order_num], 95)
+        frames[1].plot(wavemap[order_num], nblaze,
+                       label=f'Normalize by 95th percentile',
+                       alpha=0.5, color='blue')
+    # get the new blaze value
+    new_blaze = blaze / sed_blaze
+    # loop around orders and plot new method
+    for order_num in range(wavemap.shape[0]):
+        frames[1].plot(wavemap[order_num], new_blaze[order_num],
+                       label=f'Smart normalize', alpha=0.5, color='red')
+    # set axis
+    frames[1].set(xlabel='Wavelength [nm]')
+    # remove all duplicate labels
+    handles, labels = frames[1].get_legend_handles_labels()
+    uhandles, ulabels = [], []
+    for handle, label in zip(handles, labels):
+        if label not in ulabels:
+            uhandles.append(handle)
+            ulabels.append(label)
+
+    frames[1].legend(handles=uhandles, labels=ulabels)
+    # set title
+    plt.suptitle(f'{inst.name} [{inst.params["DATA_SOURCE"]}]')
+    # -------------------------------------------------------------------------
+    # show and close plot
+    plt.show(block=True)
+    plt.close()
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

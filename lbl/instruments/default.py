@@ -852,6 +852,19 @@ class Instrument:
         _ = sci_image, sci_wave
         raise self._not_implemented('no_blaze_corr')
 
+    def norm_blaze_params(self) -> Tuple[int, List[tuple]]:
+        """
+        Define the smart_blaze_norm parameters for an instrument
+        :return:
+        """
+        # define the degree to fit
+        blaze_nth_deg = 9
+        # define the bad regions
+        #   In form: bad_domain = [[start1, end1], [start2, end2], ...]
+        bad_domain = []
+        # return blaze nth deg and bad domains
+        return blaze_nth_deg, bad_domain
+
     def get_wave_solution(self, science_filename: Optional[str] = None,
                           data: Optional[np.ndarray] = None,
                           header: Optional[io.LBLHeader] = None):
