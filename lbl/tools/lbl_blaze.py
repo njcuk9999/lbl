@@ -155,7 +155,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # deal with not having blaze (for s1d weighting)
     if blaze_flag:
         sci_image, blazeimage = inst.no_blaze_corr(refimage, refwave)
-
+    # --------------------------------------------------------------------------
     # get the blaze parameters (may be instrument specific)
     nth_deg, bdomain = inst.norm_blaze_params()
     # do the blaze correction

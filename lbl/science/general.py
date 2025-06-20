@@ -1162,9 +1162,42 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # Systemic velocity estimate
     # -------------------------------------------------------------------------
-    # deal with first estimate of RV / CCF equivalent width
     if inst.params['DATA_TYPE'] == 'SCIENCE':
-        sys_rv, ccf_fwhm = berv - systemic_props['VSYS'], systemic_props['FWHM']
+        if systemic_props['SCI_TABLE'] is None:
+            # warn user that non-lbl template used
+            msg = ('No SCI_TABLE table found in template - '
+                   'we recommend using only LBL templates. '
+                   'Settings velocity estimate to zero')
+            log.warnings(msg)
+            # set velocity estimate to zero
+            velo_estimate = 0.0
+        else:
+            # get the science table from template
+            sci_table = systemic_props['SCI_TABLE']
+            # deal with first estimate of RV / CCF equivalent width
+            # exptimes in days
+            expday = sci_table['KW_EXPTIME']/86400
+            # times used to match the systemic velocity
+            # to the observation time
+            mid_times = sci_table['KW_MID_EXP_TIME']
+            mjd_table_low = mid_times - expday/2.0
+            mjd_table_high = mid_times + expday/2.0
+            valid = (mjd_table_low < mjdate) & (mjdate < mjd_table_high)
+            if np.sum(valid) == 0:
+                # this could occur if we pass a friend template (no measure on
+                # that day) or if we add a new file but do not recompute the
+                # template. The last mjd in SCI_TABLE is before the observation.
+                velo_estimate = 0.0
+            else:
+                # we do it if we have more than one value to get an estimate
+                # for the starting point of the LBL iteration. If we have only
+                # one value, this just returns a single numpy value that is not
+                # a list. It avoids passing a list to sys_rv.
+                velo_estimate = np.mean(sci_table['VSYS'][valid])
+
+        # deal with first estimate of RV / CCF equivalent width
+        vtot = velo_estimate + systemic_props['VSYS']
+        sys_rv, ccf_fwhm = berv - vtot, systemic_props['FWHM']
         ccf_ewidth = ccf_fwhm / mp.fwhm_value()
     else:
         # for FP files
