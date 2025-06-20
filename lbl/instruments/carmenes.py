@@ -714,8 +714,12 @@ class Carmenes(Instrument):
                 key = self.params[drs_key]
             else:
                 key = str(drs_key)
-            # get value from header
-            value = sci_hdr.get(key, 'NULL')
+            # deal with no key
+            if key.lower() in ['none', 'null', '']:
+                value = 'NULL'
+            else:
+                # get value from header
+                value = sci_hdr.get(key, 'NULL')
             # add to tdict
             tdict = self.add_dict_list_value(tdict, drs_key, value)
         # add the berv separately
