@@ -34,6 +34,18 @@ INSTRUMENTS = ['carmenes_vis',
                'coralie'
                ]
 
+INSTRUMENTS = [#'carmenes_vis',
+               #'espresso',
+               #'harps_orig', 'harps_eso',
+               'harpsn_orig', 'harpsn_eso',
+               'nirps_ha_apero', 'nirps_he_apero',
+               'nirps_ha_eso', 'nirps_he_eso',
+               'spirou_apero', 'spirou_cadc',
+               'maroonx_b', 'maroonx_r',
+               'sophie',
+               'coralie'
+               ]
+
 # define global params to override
 GLOBAL = dict()
 GLOBAL['PLOT'] = False

@@ -1163,38 +1163,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # Systemic velocity estimate
     # -------------------------------------------------------------------------
     if inst.params['DATA_TYPE'] == 'SCIENCE':
-        if systemic_props['SCI_TABLE'] is None:
-            # warn user that non-lbl template used
-            msg = ('No SCI_TABLE table found in template - '
-                   'we recommend using only LBL templates. '
-                   'Settings velocity estimate to zero')
-            log.warnings(msg)
-            # set velocity estimate to zero
-            velo_estimate = 0.0
-        else:
-            # get the science table from template
-            sci_table = systemic_props['SCI_TABLE']
-            # deal with first estimate of RV / CCF equivalent width
-            # exptimes in days
-            expday = sci_table['KW_EXPTIME']/86400
-            # times used to match the systemic velocity
-            # to the observation time
-            mid_times = sci_table['KW_MID_EXP_TIME']
-            mjd_table_low = mid_times - expday/2.0
-            mjd_table_high = mid_times + expday/2.0
-            valid = (mjd_table_low < mjdate) & (mjdate < mjd_table_high)
-            if np.sum(valid) == 0:
-                # this could occur if we pass a friend template (no measure on
-                # that day) or if we add a new file but do not recompute the
-                # template. The last mjd in SCI_TABLE is before the observation.
-                velo_estimate = 0.0
-            else:
-                # we do it if we have more than one value to get an estimate
-                # for the starting point of the LBL iteration. If we have only
-                # one value, this just returns a single numpy value that is not
-                # a list. It avoids passing a list to sys_rv.
-                velo_estimate = np.mean(sci_table['VSYS'][valid])
-
+        # get the velocity estimate from the template (if possible)
+        velo_estimate = get_velo_estimate(systemic_props, mjdate)
         # deal with first estimate of RV / CCF equivalent width
         vtot = velo_estimate + systemic_props['VSYS']
         sys_rv, ccf_fwhm = berv - vtot, systemic_props['FWHM']
@@ -1853,6 +1823,61 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs
+
+
+def get_velo_estimate(systemic_props: Dict[str, Any],
+                      mjdate: np.ndarray) -> float:
+    """
+    Get the velocity estimate (if using a LBL generated template)
+    otherwise we set this to zero
+
+    :param systemic_props: dict, containing the SCI_TABLE from the loaded
+                           template
+    :param mjdate: np.ndarray, the mid exposure times of each file
+
+    :return: float, the velocity estimate of the star (from the template)
+    """
+    if systemic_props['SCI_TABLE'] is None:
+        # warn user that non-lbl template used
+        msg = ('No SCI_TABLE table found in template - '
+               'we recommend using only LBL templates. '
+               'Settings velocity estimate to zero')
+        log.warning(msg)
+        # set velocity estimate to zero
+        return 0.0
+    # -------------------------------------------------------------------------
+    # get the science table from template
+    sci_table = systemic_props['SCI_TABLE']
+    # -------------------------------------------------------------------------
+    # deal with first estimate of RV / CCF equivalent width
+    # exptimes in days
+    # if KW_EXPTIME is null this will raise a ValueError
+    try:
+        expday = sci_table['KW_EXPTIME'] / 86400
+    except Exception as _:
+        # warn user that KW_EXPTIME is not valid
+        msg = ('KW_EXPTIME not valid - seeting velocity estimate to zero')
+        log.warning(msg)
+        return 0.0
+    # -------------------------------------------------------------------------
+    # times used to match the systemic velocity
+    # to the observation time
+    mid_times = sci_table['KW_MID_EXP_TIME']
+    mjd_table_low = mid_times - expday / 2.0
+    mjd_table_high = mid_times + expday / 2.0
+    valid = (mjd_table_low < mjdate) & (mjdate < mjd_table_high)
+    # -------------------------------------------------------------------------
+    if np.sum(valid) == 0:
+        # this could occur if we pass a friend template (no measure on
+        # that day) or if we add a new file but do not recompute the
+        # template. The last mjd in SCI_TABLE is before the observation.
+        return 0.0
+    # -------------------------------------------------------------------------
+    # we do it if we have more than one value to get an estimate
+    # for the starting point of the LBL iteration. If we have only
+    # one value, this just returns a single numpy value that is not
+    # a list. It avoids passing a list to sys_rv.
+    return np.mean(sci_table['VSYS'][valid])
 
 
 def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
