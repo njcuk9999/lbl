@@ -428,12 +428,12 @@ class Carmenes(Instrument):
             blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order
             if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
+                # get the blaze parameters (may be instrument specific)
+                nth_deg, bdomain = self.norm_blaze_params()
+                # require the wave grid
+                wavegrid = self.get_wave_solution(science_file)
+                # normalizse the blaze
+                blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
             # return blaze
             return blaze
         else:
@@ -714,8 +714,12 @@ class Carmenes(Instrument):
                 key = self.params[drs_key]
             else:
                 key = str(drs_key)
-            # get value from header
-            value = sci_hdr.get(key, 'NULL')
+            # deal with no key
+            if key.lower() in ['none', 'null', '']:
+                value = 'NULL'
+            else:
+                # get value from header
+                value = sci_hdr.get(key, 'NULL')
             # add to tdict
             tdict = self.add_dict_list_value(tdict, drs_key, value)
         # add the berv separately

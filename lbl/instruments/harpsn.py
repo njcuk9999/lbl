@@ -424,12 +424,12 @@ class HarpsN(Instrument):
             blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order
             if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
+                # get the blaze parameters (may be instrument specific)
+                nth_deg, bdomain = self.norm_blaze_params()
+                # require the wave grid
+                wavegrid = self.get_wave_solution(science_file)
+                # normalizse the blaze
+                blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
             # return blaze
             return blaze
         else:
@@ -874,12 +874,10 @@ class HarpsN_ORIG(HarpsN):
             blaze = blaze * gradwave
             # deal with normalizing per order
             if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
+                # get the blaze parameters (may be instrument specific)
+                nth_deg, bdomain = self.norm_blaze_params()
+                # normalizse the blaze
+                blaze = mp.smart_blaze_norm(sci_wave, blaze, nth_deg, bdomain)
             # return blaze
             return blaze
         else:
@@ -925,14 +923,12 @@ class HarpsN_ORIG(HarpsN):
         for order_num in range(blaze.shape[0]):
             gradwave[order_num] /= np.nanmedian(gradwave[order_num])
         blaze = blaze * gradwave
-        # normalize by order
+        # deal with normalizing per order
         if normalize:
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # normalizse the blaze
+            blaze = mp.smart_blaze_norm(sci_wave, blaze, nth_deg, bdomain)
         # return blaze
         return blaze, False
 
@@ -1209,14 +1205,12 @@ class HarpsN_ESO(HarpsN):
         for order_num in range(blaze.shape[0]):
             gradwave[order_num] /= np.nanmedian(gradwave[order_num])
         blaze = blaze * gradwave
-        # normalize by order
+        # deal with normalizing per order
         if normalize:
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # normalizse the blaze
+            blaze = mp.smart_blaze_norm(sci_wave, blaze, nth_deg, bdomain)
         # return blaze
         return blaze, False
 

@@ -12,7 +12,8 @@ import argparse
 import os
 
 from lbl import base
-from lbl import lbl_wrap
+from lbl.recipes import lbl_wrap
+from lbl.tools import lbl_blaze
 
 # =============================================================================
 # Define variables
@@ -25,18 +26,6 @@ TEST_PATH = '/scratch3/lbl/data/test/'
 INSTRUMENTS = ['carmenes_vis',
                'espresso',
                'harps_orig', 'harps_eso',
-               'harpsn_orig', 'harpsn_eso',
-               'nirps_ha_apero', 'nirps_he_apero',
-               'nirps_ha_eso', 'nirps_he_eso',
-               'spirou_apero', 'spirou_cadc',
-               'maroonx_b', 'maroonx_r',
-               'sophie',
-               'coralie'
-               ]
-
-INSTRUMENTS = [#'carmenes_vis',
-               #'espresso',
-               #'harps_orig', 'harps_eso',
                'harpsn_orig', 'harpsn_eso',
                'nirps_ha_apero', 'nirps_he_apero',
                'nirps_ha_eso', 'nirps_he_eso',
@@ -550,13 +539,21 @@ def main():
             print(msg.format(instrument))
             continue
         # ---------------------------------------------------------------------
-        # Run the wrapper code using the above settings
+        # Run the wrapper for the lbl_blaze code
         # ---------------------------------------------------------------------
+        rkwargs = ['INSTRUMENT', 'CONFIG_FILE', 'DATA_SOURCE', 'DATA_TYPE',
+        # directory
+        'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
+        # science
+        'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'BLAZE_FILE', 'BLAZE_CORRECTED',
+        # other
+        'VERBOSE', 'PROGRAM'
+        ]
         # override global params
         for key in GLOBAL:
             rparams[key] = GLOBAL[key]
         # run main
-        lbl_wrap(rparams)
+        lbl_wrap.custom(rparams, lbl_blaze, rkwargs)
 
 
 # =============================================================================

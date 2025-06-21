@@ -391,12 +391,12 @@ class NIRPS(Instrument):
             blaze = io.load_fits(filename, kind='blaze fits file')
             # deal with normalizing per order
             if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
+                # get the blaze parameters (may be instrument specific)
+                nth_deg, bdomain = self.norm_blaze_params()
+                # require the wave grid
+                wavegrid = self.get_wave_solution(science_file)
+                # normalizse the blaze
+                blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
             # return blaze
             return blaze
         else:
@@ -511,16 +511,31 @@ class NIRPS(Instrument):
         io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
-        # normalize by order
+        # deal with normalizing per order
         if normalize:
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # require the wave grid
+            wavegrid = self.get_wave_solution(science_file, sci_image, sci_hdr)
+            # normalizse the blaze
+            blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
         # return blaze
         return blaze, False
+
+    def norm_blaze_params(self) -> Tuple[int, List[List[float]]]:
+        """
+        Define the smart_blaze_norm parameters for an instrument
+        :return:
+        """
+        # define the degree to fit
+        blaze_nth_deg = 9
+        # define the bad regions
+        #   In form: bad_domain = [[start1, end1], [start2, end2], ...]
+        bad_domain = []
+        bad_domain.append([1230, 1280])
+        bad_domain.append([1310, 1490])
+        # return blaze nth deg and bad domains
+        return blaze_nth_deg, bad_domain
 
     def get_wave_solution(self, science_filename: Optional[str] = None,
                           data: Optional[np.ndarray] = None,
@@ -1425,12 +1440,12 @@ class NIRPS_HA_CADC(NIRPS_HA):
                              extname=self.get_extname('Blaze'))
         # deal with normalizing per order
         if normalize:
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # require the wave grid
+            wavegrid = self.get_wave_solution(science_file)
+            # normalizse the blaze
+            blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
         # return blaze
         return blaze
 
@@ -1642,12 +1657,12 @@ class NIRPS_HE_CADC(NIRPS_HE):
                              extname=self.get_extname('Blaze'))
         # deal with normalizing per order
         if normalize:
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # require the wave grid
+            wavegrid = self.get_wave_solution(science_file)
+            # normalizse the blaze
+            blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
         # return blaze
         return blaze
 
@@ -2078,12 +2093,10 @@ class NIRPS_HA_ESO(NIRPS_HA):
             blaze = blaze * gradwave
             # deal with normalizing per order
             if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
+                # get the blaze parameters (may be instrument specific)
+                nth_deg, bdomain = self.norm_blaze_params()
+                # normalizse the blaze
+                blaze = mp.smart_blaze_norm(sci_wave, blaze, nth_deg, bdomain)
             # return blaze
             return blaze
         else:
@@ -2138,14 +2151,12 @@ class NIRPS_HA_ESO(NIRPS_HA):
         for order_num in range(blaze.shape[0]):
             gradwave[order_num] /= np.nanmedian(gradwave[order_num])
         blaze = blaze * gradwave
-        # normalize by order
+        # deal with normalizing per order
         if normalize:
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # normalizse the blaze
+            blaze = mp.smart_blaze_norm(sci_wave, blaze, nth_deg, bdomain)
         # return blaze
         return blaze, False
 
@@ -2568,12 +2579,10 @@ class NIRPS_HE_ESO(NIRPS_HE):
             blaze = blaze * gradwave
             # deal with normalizing per order
             if normalize:
-                # normalize blaze per order
-                for order_num in range(blaze.shape[0]):
-                    # normalize by the 90% percentile
-                    norm = np.nanpercentile(blaze[order_num], 90)
-                    # apply to blaze
-                    blaze[order_num] = blaze[order_num] / norm
+                # get the blaze parameters (may be instrument specific)
+                nth_deg, bdomain = self.norm_blaze_params()
+                # normalizse the blaze
+                blaze = mp.smart_blaze_norm(sci_wave, blaze, nth_deg, bdomain)
             # return blaze
             return blaze
         else:
@@ -2630,14 +2639,12 @@ class NIRPS_HE_ESO(NIRPS_HE):
         for order_num in range(blaze.shape[0]):
             gradwave[order_num] /= np.nanmedian(gradwave[order_num])
         blaze = blaze * gradwave
-        # normalize by order
+        # deal with normalizing per order
         if normalize:
-            # normalize blaze per order
-            for order_num in range(blaze.shape[0]):
-                # normalize by the 90% percentile
-                norm = np.nanpercentile(blaze[order_num], 90)
-                # apply to blaze
-                blaze[order_num] = blaze[order_num] / norm
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # normalizse the blaze
+            blaze = mp.smart_blaze_norm(sci_wave, blaze, nth_deg, bdomain)
         # return blaze
         return blaze, False
 
