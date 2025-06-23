@@ -374,6 +374,19 @@ class MaroonX(Instrument):
         _ = self, filename, normalize
         raise self._not_implemented('load_blaze')
 
+    def norm_blaze_params(self) -> Tuple[int, List[tuple]]:
+        """
+        Define the smart_blaze_norm parameters for an instrument
+        :return:
+        """
+        # define the degree to fit
+        blaze_nth_deg = 1
+        # define the bad regions
+        #   In form: bad_domain = [[start1, end1], [start2, end2], ...]
+        bad_domain = []
+        # return blaze nth deg and bad domains
+        return blaze_nth_deg, bad_domain
+
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
         Get the systemic velocity in m/s of the mask
