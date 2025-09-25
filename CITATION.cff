@@ -1,0 +1,156 @@
+cff-version: 1.2.0
+title: >-
+  LBL: Line by line code for radial velocity
+message: >-
+  If you made the use of LBL, we would appreciate it if you
+  give credit.
+type: software
+authors:
+  - given-names: Étienne
+    family-names: Artigau
+    email: etienne.artigau@umontreal.ca
+    orcid: 'https://orcid.org/0000-0003-3506-5667'
+  - given-names: Charles
+    family-names: Cadieux
+    orcid: 'https://orcid.org/0000-0001-9291-5555'
+  - given-names: Neil J.
+    family-names: Cook
+    orcid: 'https://orcid.org/0000-0003-4166-4121'
+  - given-names: René
+    family-names: Doyon
+    orcid: 'https://orcid.org/0000-0001-5485-4675'
+  - given-names: Thomas
+    family-names: Vandal
+    orcid: 'https://orcid.org/0000-0002-5922-8267'
+  - given-names: Jean-François
+    family-names: Donati
+    orcid: 'https://orcid.org/0000-0001-5541-2887'
+  - given-names: Claire
+    family-names: Moutou
+    orcid: 'https://orcid.org/0000-0002-2842-3924'
+  - given-names: Xavier
+    family-names: Delfosse
+    orcid: 'https://orcid.org/0000-0001-5099-7978'
+  - given-names: Pascal
+    family-names: Fouqué
+    orcid: 'https://orcid.org/0000-0002-1436-7351'
+  - given-names: Eder
+    family-names: Martioli
+    orcid: 'https://orcid.org/0000-0002-5084-168X'
+  - given-names: François
+    family-names: Bouchy
+    orcid: 'https://orcid.org/0000-0002-7613-393X'
+  - given-names: Jasmine
+    family-names: Parsons
+    orcid: 'https://orcid.org/0000-0002-6013-4655'
+  - given-names: Andres
+    family-names: Carmona
+    orcid: 'https://orcid.org/0000-0003-2471-1299'
+  - given-names: Xavier
+    family-names: Dumusque
+    orcid: 'https://orcid.org/0000-0002-9332-2011'
+  - given-names: Nicola
+    family-names: Astudillo-Defru
+    orcid: 'https://orcid.org/0000-0002-8462-515X'
+  - given-names: Xavier
+    family-names: Bonfils
+    orcid: 'https://orcid.org/0000-0001-9003-8894'
+  - given-names: Lucile
+    family-names: Mignon
+    orcid: 'https://orcid.org/0000-0002-5407-3905'
+identifiers:
+  - type: ascl
+    value: 2023ascl.soft01014A
+repository-code: 'https://github.com/njcuk9999/lbl'
+abstract: >-
+  We present a new algorithm for precision radial velocity (pRV) measurements,
+  a line-by-line (LBL) approach designed to handle outlying spectral
+  information in a simple but efficient manner. The effectiveness of the LBL
+  method is demonstrated on two data sets, one obtained with SPIRou on
+  Barnard's star, and the other with the High Accuracy Radial velocity Planet
+  Searcher (HARPS) on Proxima Centauri. In the near-infrared, the LBL provides
+  a framework for meters-per-second-level accuracy in pRV measurements despite
+  the challenges associated with telluric absorption and sky emission lines. We
+  confirm with SPIRou measurements spanning 2.7 yr that the candidate
+  super-Earth on a 233 day orbit around Barnard's star is an artifact due to a
+  combination of time sampling and activity. The LBL analysis of the Proxima
+  Centauri HARPS post-upgrade data alone easily recovers the Proxima b signal
+  and also provides a 2σ detection of the recently confirmed 5 day Proxima d
+  planet, but argues against the presence of the candidate Proxima c with a
+  period of 1900 days. We provide evidence that the Proxima c signal is
+  associated with small, unaccounted systematic effects affecting the
+  HARPS-TERRA template-matching radial velocity extraction method for
+  long-period signals. Finally, the LBL framework provides a very effective
+  activity indicator, akin to the FWHM derived from the cross-correlation
+  function, from which we infer a rotation period of 92.1(+4.2,-3.5) days for
+  Proxima. 
+keywords:
+  - 'exoplanets'
+  - 'radial velocity'
+  - 'astronomy data analysis'
+preferred-citation:
+  type: article
+  title: >-
+    Line-by-line Velocity Measurements: an Outlier-resistant Method for
+    Precision Velocimetry
+  authors:
+  - given-names: Étienne
+    family-names: Artigau
+    email: etienne.artigau@umontreal.ca
+    orcid: 'https://orcid.org/0000-0003-3506-5667'
+  - given-names: Charles
+    family-names: Cadieux
+    orcid: 'https://orcid.org/0000-0001-9291-5555'
+  - given-names: Neil J.
+    family-names: Cook
+    orcid: 'https://orcid.org/0000-0003-4166-4121'
+  - given-names: René
+    family-names: Doyon
+    orcid: 'https://orcid.org/0000-0001-5485-4675'
+  - given-names: Thomas
+    family-names: Vandal
+    orcid: 'https://orcid.org/0000-0002-5922-8267'
+  - given-names: Jean-François
+    family-names: Donati
+    orcid: 'https://orcid.org/0000-0001-5541-2887'
+  - given-names: Claire
+    family-names: Moutou
+    orcid: 'https://orcid.org/0000-0002-2842-3924'
+  - given-names: Xavier
+    family-names: Delfosse
+    orcid: 'https://orcid.org/0000-0001-5099-7978'
+  - given-names: Pascal
+    family-names: Fouqué
+    orcid: 'https://orcid.org/0000-0002-1436-7351'
+  - given-names: Eder
+    family-names: Martioli
+    orcid: 'https://orcid.org/0000-0002-5084-168X'
+  - given-names: François
+    family-names: Bouchy
+    orcid: 'https://orcid.org/0000-0002-7613-393X'
+  - given-names: Jasmine
+    family-names: Parsons
+    orcid: 'https://orcid.org/0000-0002-6013-4655'
+  - given-names: Andres
+    family-names: Carmona
+    orcid: 'https://orcid.org/0000-0003-2471-1299'
+  - given-names: Xavier
+    family-names: Dumusque
+    orcid: 'https://orcid.org/0000-0002-9332-2011'
+  - given-names: Nicola
+    family-names: Astudillo-Defru
+    orcid: 'https://orcid.org/0000-0002-8462-515X'
+  - given-names: Xavier
+    family-names: Bonfils
+    orcid: 'https://orcid.org/0000-0001-9003-8894'
+  - given-names: Lucile
+    family-names: Mignon
+    orcid: 'https://orcid.org/0000-0002-5407-3905'
+  doi: '10.3847/1538-3881/ac7ce6'
+  journal: 'The Astronomical Journal'
+  year: 2022
+  month: 9
+  volume: 164
+  issue: 3
+  url: 'https://iopscience.iop.org/article/10.3847/1538-3881/ac7ce6'
+license: MIT
