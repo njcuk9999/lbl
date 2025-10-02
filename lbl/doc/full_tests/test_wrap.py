@@ -31,19 +31,21 @@ INSTRUMENTS = ['carmenes_vis',
                'spirou_apero', 'spirou_cadc',
                'maroonx_b', 'maroonx_r',
                'sophie',
-               'coralie'
+               'coralie',
+               'expres',
                ]
 
 INSTRUMENTS = [#'carmenes_vis',
                #'espresso',
                #'harps_orig', 'harps_eso',
-               'harpsn_orig', 'harpsn_eso',
-               'nirps_ha_apero', 'nirps_he_apero',
-               'nirps_ha_eso', 'nirps_he_eso',
-               'spirou_apero', 'spirou_cadc',
-               'maroonx_b', 'maroonx_r',
-               'sophie',
-               'coralie'
+               #'harpsn_orig', 'harpsn_eso',
+               #'nirps_ha_apero', 'nirps_he_apero',
+               #'nirps_ha_eso', 'nirps_he_eso',
+               #'spirou_apero', 'spirou_cadc',
+               #'maroonx_b', 'maroonx_r',
+               #'sophie',
+               #'coralie',
+               'expres',
                ]
 
 # define global params to override
@@ -51,7 +53,7 @@ GLOBAL = dict()
 GLOBAL['PLOT'] = False
 
 # reset all data before running
-GLOBAL['RUN_LBL_RESET'] = True
+GLOBAL['RUN_LBL_RESET'] = False
 # Dictionary of table name for the file used in the projection against the
 #     derivative. Key is to output column name that will propagate into the
 #     final RDB table and the value is the filename of the table. The table
@@ -488,6 +490,32 @@ def coralie():
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True
     rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
+
+def expres():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'EXPRES'
+    rparams['DATA_SOURCE'] = 'None'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'EXPRES')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['SUN']
+    rparams['OBJECT_TEMPLATE'] = ['SUN']
+    rparams['OBJECT_TEFF'] = [5772]
+    rparams['BLAZE_CORRECTED'] = True
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = False
+    rparams['RUN_LBL_MASK'] = False
     rparams['RUN_LBL_COMPUTE'] = True
     rparams['RUN_LBL_COMPILE'] = True
     rparams['SKIP_LBL_TEMPLATE'] = True

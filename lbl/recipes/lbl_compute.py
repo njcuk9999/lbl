@@ -291,7 +291,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         snr_key = inst.params['KW_SNR']
         snr_limit = inst.params['SNR_THRESHOLD']
         # check we have snr key in science header
-        if snr_key in sci_hdr:
+        if (snr_key is not None) and (snr_key in sci_hdr):
             # get snr value
             snr_value = sci_hdr.get_hkey(snr_key, dtype=float)
             # check if value is less than limit

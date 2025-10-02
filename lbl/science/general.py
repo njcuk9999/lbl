@@ -965,6 +965,10 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     for order_num in range(spectrum.shape[0]):
         # get the wavelength for this order
         waveord = wavegrid[order_num]
+        # deal with all-nan waveord
+        if np.sum(np.isfinite(waveord)) < 5:
+            rms[order_num] = np.full(model.shape[1], fill_value=np.nan)
+            continue
         # calculate the number of points for the sliding error rms
         npoints = get_velo_scale(waveord, noise_sampling_width)
         # get the residuals between science and model
@@ -1425,6 +1429,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         wave2pixlist = []
         xpix = np.arange(model.shape[1])
         for order_num in range(wavegrid.shape[0]):
+            # deal with too few finite points in wavegrid
+            if np.sum(np.isfinite(nwavegrid[order_num])) < 5:
+                wave2pixlist.append(np.full(len(xpix), np.nan))
+                continue
+            # spline between wavelength and pixel position
             wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
         # ---------------------------------------------------------------------
         # debug plot dictionary for plotting later
@@ -1853,7 +1862,7 @@ def get_velo_estimate(systemic_props: Dict[str, Any],
     # exptimes in days
     # if KW_EXPTIME is null this will raise a ValueError
     try:
-        expday = sci_table['KW_EXPTIME'] / 86400
+        expday = np.array(sci_table['KW_EXPTIME']).astype(float) / 86400
     except Exception as _:
         # warn user that KW_EXPTIME is not valid
         msg = ('KW_EXPTIME not valid - seeting velocity estimate to zero')
@@ -1862,7 +1871,7 @@ def get_velo_estimate(systemic_props: Dict[str, Any],
     # -------------------------------------------------------------------------
     # times used to match the systemic velocity
     # to the observation time
-    mid_times = sci_table['KW_MID_EXP_TIME']
+    mid_times = np.array(sci_table['KW_MID_EXP_TIME'].astype(float))
     mjd_table_low = mid_times - expday / 2.0
     mjd_table_high = mid_times + expday / 2.0
     valid = (mjd_table_low < mjdate) & (mjdate < mjd_table_high)

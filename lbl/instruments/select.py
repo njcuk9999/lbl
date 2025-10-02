@@ -33,6 +33,7 @@ from lbl.instruments import nirps
 from lbl.instruments import spirou
 from lbl.instruments import maroonx
 from lbl.instruments import coralie
+from lbl.instruments import expres
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -58,6 +59,7 @@ InstrumentsType = Union[default.Instrument,
                         maroonx.MaroonX,
                         sophie.Sophie,
                         coralie.Coralie,
+                        expres.Expres,
                         generic.Generic]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
@@ -70,6 +72,7 @@ InstrumentsList = (default.Instrument,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
                    sophie.Sophie,
                    coralie.Coralie,
+                   expres.Expres,
                    generic.Generic)
 
 # Add all the instrument + source combinations and link them to instrument
@@ -104,6 +107,8 @@ InstDict['SOPHIE'] = dict()
 InstDict['SOPHIE']['None'] = sophie.Sophie
 InstDict['CORALIE'] = dict()
 InstDict['CORALIE']['None'] = coralie.Coralie
+InstDict['EXPRES'] = dict()
+InstDict['EXPRES']['None'] = expres.Expres
 InstDict['Generic'] = dict()
 InstDict['Generic']['None'] = generic.Generic
 

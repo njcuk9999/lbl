@@ -472,7 +472,9 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     # copy x and y
     x, y = np.array(x), np.array(y)
     # find all NaN values
-    nanmask = ~np.isfinite(y)
+    validmask = np.isfinite(x) & np.isfinite(y)
+    nanmask = ~validmask
+    nanmasky = ~np.isfinite(y)
     # deal with dimensions error (on k)
     #   otherwise get   dfitpack.error: (m>k) failed for hidden m
     if kwargs.get('k', None) is not None:
@@ -501,7 +503,7 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     else:
         # replace all NaN's with linear interpolation
         badspline = IUVSpline(x[~nanmask], y[~nanmask], k=1, ext=1)
-        y[nanmask] = badspline(x[nanmask])
+        y[nanmasky] = badspline(x[nanmasky])
     # return spline
     return IUVSpline(x, y, **kwargs)
 

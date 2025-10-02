@@ -23,7 +23,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.coralie.py'
+__NAME__ = 'instruments.expres.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -38,7 +38,7 @@ log = io.log
 # =============================================================================
 # Define SOPHIE class
 # =============================================================================
-class Coralie(Instrument):
+class Expres(Instrument):
     def __init__(self, params: base_classes.ParamDict,
                  args: base_classes.ParamDict):
         # call to super function
@@ -46,8 +46,8 @@ class Coralie(Instrument):
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_CORALIE.fits'
         # define wave limits in nm
-        self.wavemin = 386.8
-        self.wavemax = 689.8
+        self.wavemin = 379.66
+        self.wavemax = 822.36
         # set parameters for instrument
         self.params = params
         # override params
@@ -71,7 +71,7 @@ class Coralie(Instrument):
         self.param_set('INSTRUMENT', 'CORALIE', source=func_name)
         # add instrument earth location
         #    (for use in astropy.coordinates.EarthLocation)
-        self.param_set('EARTH_LOCATION', 'OHP')
+        self.param_set('EARTH_LOCATION', 'lowell')
         # define the default science input files
         self.param_set('INPUT_FILE', '*.fits', source=func_name)
         # The input science data are blaze corrected
@@ -236,59 +236,47 @@ class Coralie(Instrument):
         # Header keywords
         # ---------------------------------------------------------------------
         # define wave coeff key in header
-        self.param_set('KW_WAVECOEFFS', 'HIERARCH ESO DRS CAL TH COEFF LL{0}',
-                        source=func_name)
+        self.param_set('KW_WAVECOEFFS', None, source=func_name)
         # define wave num orders key in header
-        self.param_set('KW_WAVEORDN', 'HIERARCH ESO DRS CAL TH ORDER NBR',
-                        source=func_name)
+        self.param_set('KW_WAVEORDN', None, source=func_name)
         # define wave degree key in header
-        self.param_set('KW_WAVEDEGN', 'HIERARCH ESO DRS CAL TH DEG LL',
-                        source=func_name)
+        self.param_set('KW_WAVEDEGN', None, source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.param_set('KW_MID_EXP_TIME', 'HIERARCH ESO DRS BJD',
-                        source=func_name)
+        self.param_set('KW_MID_EXP_TIME', 'TELMJD', source=func_name)
         # define the start time of the observation
-        self.param_set('KW_MJDATE', 'HIERARCH ESO DRS BJD', source=func_name)
+        self.param_set('KW_MJDATE', 'TELMJD', source=func_name)
         # define snr keyword
-        self.param_set('KW_SNR', 'HIERARCH OHP DRS SPE EXT SN50',
-                        source=func_name)
+        self.param_set('KW_SNR', None, source=func_name)
         # define berv keyword
-        self.param_set('KW_BERV', 'HIERARCH ESO DRS BERV', source=func_name)
+        self.param_set('KW_BERV', None, source=func_name)
         # define the Blaze calibration file
-        self.param_set('KW_BLAZE_FILE', 'HIERARCH ESO DRS BLAZE FILE',
-                        source=func_name)
+        self.param_set('KW_BLAZE_FILE', None, source=func_name)
         # define the exposure time of the observation
-        self.param_set('KW_EXPTIME', 'EXPTIME',
-                        source=func_name)
+        self.param_set('KW_EXPTIME', 'AEXPTIME', source=func_name)
         # define the airmass of the observation
-        self.param_set('KW_AIRMASS', 'HIERARCH ESO OBS AMBI DIMM AIRMASS',
-                        source=func_name)
+        self.param_set('KW_AIRMASS', 'AIRMASS', source=func_name)
         # define the human date of the observation
-        self.param_set('KW_DATE', 'HIERARCH ESO OBS FDATE', source=func_name)
+        self.param_set('KW_DATE', 'MIDPOINT', source=func_name)
         # define the tau_h20 of the observation
         self.param_set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
         self.param_set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.param_set('KW_DPRTYPE', 'HIERARCH ESO TPL TYPE',
-                        source=func_name)
+        self.param_set('KW_DPRTYPE', 'CAL-TYPE', source=func_name)
         # define the filename of the wave solution
-        self.param_set('KW_WAVEFILE', 'HIERARCH ESO DRS CAL TH FILE',
-                        source=func_name)
+        self.param_set('KW_WAVEFILE', None, source=func_name)
         # define the original object name (no name given just target code)
-        self.param_set('KW_OBJNAME', 'HIERARCH ESO OBS TARG NAME',
-                        source=func_name)
+        self.param_set('KW_OBJNAME', 'OBJECT', source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
         self.param_set('KW_SNRGOAL', 'HIERARCH ESO OBS SN ', source=func_name)
         # define the SNR in chosen order
-        self.param_set('KW_EXT_SNR', 'HIERARCH ESO DRS CAL EXT SN50',
-                        source=func_name)
+        self.param_set('KW_EXT_SNR', None, source=func_name)
         # define the barycentric julian date
-        self.param_set('KW_BJD', 'HIERARCH ESO DRS BJD', source=func_name)
+        self.param_set('KW_BJD', 'MIDPOINT', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
-        self.param_set('KW_REF_KEY', 'HIERARCH ESO TPL TYPE', source=func_name)
+        self.param_set('KW_REF_KEY', None, source=func_name)
         # velocity of template from CCF
         self.param_set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
@@ -433,6 +421,27 @@ class Coralie(Instrument):
         else:
             return None
 
+    def load_science_file(self, science_file: str
+                          ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        Load a science exposure
+
+        Note data should be a 2D array (even if data is 1D)
+        Treat 1D data as a single order?
+
+        :param science_file: str, absolute path to filename
+
+        :return: tuple, data (np.ndarray) and header (io.LBLHeader)
+        """
+        # load the first extension of each
+        data_array = io.load_fits(science_file,
+                                  kind='science fits file',
+                                  extname='optimal')
+        sci_data = data_array['spectrum']
+        sci_hdr = self.load_header(science_file, kind='science fits file')
+        # return data and header
+        return sci_data, sci_hdr
+
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
         Get the systemic velocity in m/s of the mask
@@ -554,6 +563,52 @@ class Coralie(Instrument):
         # return blaze
         return blaze, False
 
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # espresso has 2 orders per 'true' order so have to take every other
+        #   wave element
+        wave_cen = wave_cen[::2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # ---------------------------------------------------------------------
+        # use the fit to get the blaze assuming a sinc**2 profile.
+        # The minima of a given order corresponds to the position of the
+        # consecutive orders
+        # ---------------------------------------------------------------------
+        # storage for the calculated blaze
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # get the center of this order (with a small offset to avoid
+            #  a division by zero in the sinc at phase = 0
+            owave_cen = owave[len(owave) // 2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1 / owave)
+            # calculate the phase of the sinc**2
+            phase = np.pi * (owave - owave_cen) / period
+            # assume the sinc profile. There is a factor 2 difference in the
+            #   phase as the sinc is squared. sin**2 has a period that is a
+            #   factor of 2 shorter than the sin
+            blaze[order_num] = (np.sin(phase) / phase) ** 2
+        # un-correct the science image
+        sci_image = sci_image * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
+
     def get_wave_solution(self, science_filename: Optional[str] = None,
                           data: Optional[np.ndarray] = None,
                           header: Optional[io.LBLHeader] = None
@@ -570,42 +625,18 @@ class Coralie(Instrument):
 
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
-        # get header keys
-        kw_wavecoeffs = self.params['KW_WAVECOEFFS']
-        kw_waveordn = self.params['KW_WAVEORDN']
-        kw_wavedegn = self.params['KW_WAVEDEGN']
         # ---------------------------------------------------------------------
         # get header
-        if header is None or data is None:
-            sci_data = io.load_fits(science_filename, 'wave fits file')
-            sci_hdr = self.load_header(science_filename, 'wave fits file')
-        else:
-            sci_data, sci_hdr = data, header
+        wavemap = io.load_fits(science_filename, 'wave fits file',
+                               extname='optimal')['bary_excalibur']
         # ---------------------------------------------------------------------
-        # get the data shape
-        nby, nbx = sci_data.shape
-        # get xpix
-        xpix = np.arange(nbx)
-        # ---------------------------------------------------------------------
-        # get wave order from header
-        waveordn = sci_hdr.get_hkey(kw_waveordn, science_filename, dtype=int)
-        wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename, dtype=int)
-        # get the wave 2d list
-        wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
-                                         dim1=waveordn, dim2=wavedegn + 1,
-                                         filename=science_filename)
-        # ---------------------------------------------------------------------
-        # convert to wave map
-        wavemap = np.zeros([waveordn, nbx])
-        for order_num in range(waveordn):
-            wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1], xpix)
-        # ---------------------------------------------------------------------
-        # HARPS wave solution is in Angstrom - convert to nm for consistency
+        # EXPRES wave solution is in Angstrom - convert to nm for consistency
         wavemap = wavemap / 10.0
         # ---------------------------------------------------------------------
-        # HARPS wave solution is in air - convert to vacuum
-        n_index = mp.air_index(wavemap)
-        wavemap = wavemap * n_index
+        # TODO: check this
+        # # EXPRES wave solution is in air - convert to vacuum
+        # n_index = mp.air_index(wavemap)
+        # wavemap = wavemap * n_index
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
@@ -632,10 +663,10 @@ class Coralie(Instrument):
         # get BERV header key
         hdr_key = self.params['KW_BERV']
         # BERV depends on whether object is FP or not
-        if 'FP' not in self.params['OBJECT_SCIENCE']:
-            berv = sci_hdr.get_hkey(hdr_key, dtype=float) * 1000
-        else:
+        if self.params['OBJECT_SCIENCE'] in ['FP', 'LFC', 'SUN']:
             berv = 0.0
+        else:
+            berv = sci_hdr.get_hkey(hdr_key, dtype=float) * 1000
         # return the berv measurement (in m/s)
         return berv
 
@@ -654,7 +685,7 @@ class Coralie(Instrument):
         """
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
-                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR']
+                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME']
         # add the filename
         tdict = self.add_dict_list_value(tdict, 'FILENAME', filename)
         # loop around header keys

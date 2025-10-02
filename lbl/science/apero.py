@@ -130,7 +130,7 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
             # skip this order
             continue
         # check that the grid increases or decreases in a monotonic way
-        gradwave = np.gradient(owave)
+        gradwave = np.gradient(owave[valid])
         # check the signs of wave map gradient
         if np.sign(np.min(gradwave)) != np.sign(np.max(gradwave)):
             msg = ('\tOrder {0}: Wavelength grid curves around. '
