@@ -205,8 +205,8 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         # loop around orders
         for order_num in range(wavegrid.shape[0]):
             # get the min max wavelengths for this order
-            min_wave = np.min(wavegrid[order_num])
-            max_wave = np.max(wavegrid[order_num])
+            min_wave = np.nanmin(wavegrid[order_num])
+            max_wave = np.nanmax(wavegrid[order_num])
             # build a mask for mask lines in this order
             good = mask_table['ll_mask_s'] > min_wave
             good &= mask_table['ll_mask_s'] < max_wave
@@ -274,7 +274,11 @@ def make_ref_dict(inst: InstrumentsType, reftable_file: str,
         # write to file
         io.write_table(reftable_file, ref_table,
                        fmt=inst.params['REF_TABLE_FMT'])
-
+    # -------------------------------------------------------------------------
+    # deal with empty ref table (shouldn't happen)
+    if len(ref_dict['ORDER']) == 0:
+        emsg = 'Reference table is empty - something went wrong'
+        raise LblException(emsg)
     # -------------------------------------------------------------------------
     # return table (either loaded from file or constructed from mask +
     #               wave solution)

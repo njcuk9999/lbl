@@ -470,16 +470,16 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     :return: spline instance (from InterpolatedUnivariateSpline(x, y, **kwargs))
     """
     # copy x and y
-    x, y = np.array(x), np.array(y)
+    x = np.asarray(x, float)
+    y = np.asarray(y, float)
     # find all NaN values
-    validmask = np.isfinite(x) & np.isfinite(y)
-    nanmask = ~validmask
-    nanmasky = ~np.isfinite(y)
+    valid = np.isfinite(x) & np.isfinite(y)
+    n_valid = np.count_nonzero(valid)
     # deal with dimensions error (on k)
     #   otherwise get   dfitpack.error: (m>k) failed for hidden m
     if kwargs.get('k', None) is not None:
         # deal with to few parameters in x
-        if len(x[~nanmask]) < (kwargs['k'] + 1):
+        if len(x[valid]) < (kwargs['k'] + 1):
             # raise exception if len(x) is bad
             emsg = ('IUV Spline len(x) < k+1 '
                     '\n\tk={0}\n\tlen(x) = {1}'
@@ -487,7 +487,7 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
             eargs = [kwargs['k'], len(x), str(x)[:70], str(y)[:70]]
             # return a nan spline
             return NanSpline(emsg.format(*eargs), x=x, y=y, **kwargs)
-        if len(y[~nanmask]) < (kwargs['k'] + 1):
+        if len(y[valid]) < (kwargs['k'] + 1):
             # raise exception if len(x) is bad
             emsg = ('IUV Spline len(y) < k+1 '
                     '\n\tk={0}\n\tlen(y) = {1}'
@@ -495,17 +495,24 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
             eargs = [kwargs['k'], len(y), str(x)[:70], str(y)[:70]]
             # return a nan spline
             return NanSpline(emsg.format(*eargs), x=x, y=y, **kwargs)
-
-    if np.sum(~nanmask) < 2:
-        y = np.repeat(np.nan, len(x))
-    elif np.sum(~nanmask) == 0:
-        y = np.repeat(np.nan, len(x))
+    # restrict to valid data only
+    x_valid, y_valid = x[valid], y[valid]
+    # ensure x is strictly increasing (required by spline)
+    order = np.argsort(x_valid)
+    x_valid, y_valid = x_valid[order], y_valid[order]
+    # build base spline on valid data
+    base_spline = IUVSpline(x_valid, y_valid, **kwargs)
+    # if y had NaNs, fill them by interpolation
+    if np.any(~np.isfinite(y)):
+        y_filled = y.copy()
+        nan_y = ~np.isfinite(y)
+        y_filled[nan_y] = base_spline(x[nan_y])
     else:
-        # replace all NaN's with linear interpolation
-        badspline = IUVSpline(x[~nanmask], y[~nanmask], k=1, ext=1)
-        y[nanmasky] = badspline(x[nanmasky])
+        y_filled = y
+    # final spline (with clean x, filled y)
+    valid2 = np.isfinite(x) & np.isfinite(y_filled)
     # return spline
-    return IUVSpline(x, y, **kwargs)
+    return IUVSpline(x[valid2], y_filled[valid2], **kwargs)
 
 
 def lowpassfilter(input_vect: np.ndarray, width: int = 101,

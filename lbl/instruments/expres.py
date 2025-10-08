@@ -42,9 +42,9 @@ class Expres(Instrument):
     def __init__(self, params: base_classes.ParamDict,
                  args: base_classes.ParamDict):
         # call to super function
-        super().__init__('CORALIE')
+        super().__init__('EXPRES')
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_CORALIE.fits'
+        self.default_template_name = 'Template_{0}_EXPRES.fits'
         # define wave limits in nm
         self.wavemin = 379.66
         self.wavemax = 822.36
@@ -66,9 +66,9 @@ class Expres(Instrument):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.Coralie.override()'
+        func_name = __NAME__ + '.Expres.override()'
         # set parameters to update
-        self.param_set('INSTRUMENT', 'CORALIE', source=func_name)
+        self.param_set('INSTRUMENT', 'EXPRES', source=func_name)
         # add instrument earth location
         #    (for use in astropy.coordinates.EarthLocation)
         self.param_set('EARTH_LOCATION', 'lowell')

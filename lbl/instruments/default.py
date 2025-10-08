@@ -185,7 +185,9 @@ class Instrument:
             if key in self.params.instances:
                 # get comment from Const.comment
                 comment = self.params.instances[key].comment
-
+        # don't want NaNs
+        if isinstance(value, float) and np.isnan(value):
+            value = None
         # assign value to header
         if comment is None:
             header[key] = (value, '')
