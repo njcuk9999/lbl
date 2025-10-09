@@ -1241,6 +1241,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     ratio = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
     if 'spline_odd' not in splines:
+        spline = splines['spline'], splines['spline']
         dspline = splines['dspline'], splines['dspline']
         d2spline = splines['d2spline'], splines['d2spline']
         d3spline = splines['d3spline'], splines['d3spline']
