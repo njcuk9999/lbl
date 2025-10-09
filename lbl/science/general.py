@@ -1249,6 +1249,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     ratio = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
     if 'spline_odd' not in splines:
+        spline = splines['spline'], splines['spline']
         dspline = splines['dspline'], splines['dspline']
         d2spline = splines['d2spline'], splines['d2spline']
         d3spline = splines['d3spline'], splines['d3spline']
@@ -2022,6 +2023,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_dict['FILENAME'] = [[]] * len(lblrvfiles)
     # add header keys
     for hdr_key in header_keys:
+        # ignore header keys that are None
+        if hdr_key is None:
+            continue
         # empty elements in a list for each key to fill
         rdb_dict[hdr_key] = [[]] * len(lblrvfiles)
     # add version
@@ -2117,6 +2121,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # loop around header keys
         for ikey, key in enumerate(header_keys):
+            # ignore keys that are none
+            if key is None:
+                continue
             # make sure key is a string
             key = str(key)
             # deal with FP flags
@@ -2741,6 +2748,15 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             # if not vrad or svrad then try to mean the column or if not
             #   just take the first value
             elif colname not in wmean_pairs.values():
+                # do not try to do a mean on strings (its stupid)
+                if isinstance(itable[colname][0], str):
+                    rdb_dict2[colname].append(itable[colname][0])
+                    continue
+                # deal with masked columns
+                if hasattr(itable[colname], 'mask'):
+                    if itable[colname].mask[0]:
+                        rdb_dict2[colname].append(np.nan)
+                        continue
                 # try to produce the mean of rdb table
                 # noinspection PyBroadException
                 try:

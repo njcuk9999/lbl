@@ -1181,8 +1181,10 @@ class Instrument:
                     'astropy.coordinates.EarthLocation\n\tError {1}: {2}')
             eargs = [earth_location, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
+        # get times from rdb table and force to floats
+        times = np.array(rdb_table[kw_mjd], dtype=float)
         # get local time at midnight
-        epoch_values = mp.bin_by_time(loc.lon.value, rdb_table[kw_mjd],
+        epoch_values = mp.bin_by_time(loc.lon.value, times,
                                       day_frac=0)
         # get the unique epoch groups
         epoch_groups = np.unique(epoch_values)

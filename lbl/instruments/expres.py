@@ -12,6 +12,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+from astropy.io import fits
 
 from lbl.core import astro
 from lbl.core import base
@@ -665,6 +666,8 @@ class Expres(Instrument):
         # BERV depends on whether object is FP or not
         if self.params['OBJECT_SCIENCE'] in ['FP', 'LFC', 'SUN']:
             berv = 0.0
+        elif hdr_key is None:
+            berv = 0.0
         else:
             berv = sci_hdr.get_hkey(hdr_key, dtype=float) * 1000
         # return the berv measurement (in m/s)
@@ -783,15 +786,17 @@ class Expres(Instrument):
         kw_bjd = self.params['KW_BJD']
         # get mjdmid and bjd
         mid_exp_time = header.get_hkey(kw_mjdmid, dtype=float)
-        bjd = header.get_hkey(kw_bjd, dtype=float)
-        if isinstance(bjd, str) or np.isnan(bjd):
-            # return RJD = MJD + 0.5
-            return float(mid_exp_time) + 0.5
-        else:
-            # convert bjd to mjd
-            bjd_mjd = Time(bjd, format='jd').mjd
-            # return RJD = MJD + 0.5
-            return float(bjd_mjd) + 0.5
+        bjd = header.get_hkey(kw_bjd, required=False)
+        if bjd is None or isinstance(bjd, str) or np.isnan(bjd):
+            try:
+                # return RJD = MJD + 0.5
+                return float(mid_exp_time) + 0.5
+            except Exception:
+                pass
+        # convert bjd to mjd
+        bjd_mjd = Time(bjd, format='jd').mjd
+        # return RJD = MJD + 0.5
+        return float(bjd_mjd) + 0.5
 
     def get_plot_date(self, header: io.LBLHeader):
         """
@@ -849,6 +854,73 @@ class Expres(Instrument):
         # return this binning dictionary
         return binned
 
+    def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
+                            sci_hdict: io.LBLHeader,
+                            science_filename: Optional[str] = None):
+        """
+        Write the write_tellu_file to disk
+
+        :param write_tellu_file: str, the file and path to write to
+        :param props: dictionnary output from the TELLUCLEANed code
+        :param sci_hdict: fits Header, an input file header to copy the header
+                          from to the new template file
+        :param science_filename: str, the science filename (not used for
+                                 default)
+        :return:
+        """
+        _ = science_filename
+        # convert hdict to header
+        sci_hdr = sci_hdict.to_fits()
+        # populate primary header
+        header = fits.Header()
+        # copy header from reference header
+        header = io.copy_header(header, sci_hdr)
+        # add custom keys
+        header = self.set_hkey(header, 'KW_VERSION', __version__)
+        header = self.set_hkey(header, 'KW_VDATE', __date__)
+        header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
+        header = self.set_hkey(header, 'KW_INSTRUMENT',
+                               self.params['INSTRUMENT'])
+        header = self.set_hkey(header, 'KW_TAU_H2O',
+                               props['pre_cleaned_exponent_water'])
+        header = self.set_hkey(header, 'KW_TAU_OTHERS',
+                               props['pre_cleaned_exponent_others'])
+        # set image as pre_cleaned_flux
+        image = props['pre_cleaned_flux']
+        # we need to get the data array from the fits file
+        data_array = io.load_fits(props['FILENAME'],
+                                  kind='science fits file',
+                                  extname='optimal')
+        # we push the image into the data arrays "spectrum" column
+        data_array['spectrum'] = image
+        # adding extensions that are not the flux after telluric correction
+        #   (error propagation, wavelength grid)
+        datalist = [None, data_array]
+        headerlist = [header, None]
+        datatypelist = [None, 'table']
+        # open hdulist
+        with fits.open(props['FILENAME']) as hdulist:
+            # add the header for extension 1
+            if len(hdulist) > 1:
+                headerlist[1] = hdulist[1].header
+            # loop around and add other extensions
+            for hdu in hdulist[2:]:
+                datalist.append(hdu.data)
+                headerlist.append(hdu.header)
+                if isinstance(hdu, fits.hdu.image.ImageHDU):
+                    datatypelist.append('image')
+                else:
+                    datatypelist.append('table')
+        # ---------------------------------------------------------------------
+        # change the file name
+        write_tellu_file = self.modify_tellu_filename(write_tellu_file)
+        # ---------------------------------------------------------------------
+        # Save template to disk
+        log.general('Saving tellu-cleaned file: {0}'.format(write_tellu_file))
+        # ---------------------------------------------------------------------
+        # write to file
+        io.write_fits(write_tellu_file, data=datalist,
+                      header=headerlist, dtype=datatypelist)
 
 # =============================================================================
 # Start of code

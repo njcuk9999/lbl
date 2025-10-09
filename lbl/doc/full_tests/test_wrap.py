@@ -513,9 +513,9 @@ def expres():
     rparams['OBJECT_TEFF'] = [5772]
     rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
-    rparams['RUN_LBL_TELLUCLEAN'] = False
-    rparams['RUN_LBL_TEMPLATE'] = False
-    rparams['RUN_LBL_MASK'] = False
+    rparams['RUN_LBL_TELLUCLEAN'] = True
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
     rparams['RUN_LBL_COMPUTE'] = True
     rparams['RUN_LBL_COMPILE'] = True
     rparams['SKIP_LBL_TEMPLATE'] = True
