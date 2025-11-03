@@ -597,7 +597,7 @@ params.set(key='TELLUCLEAN_USE_TEMPLATE', value=True, source=__NAME__,
 
 # define the default model repo url
 params.set(key='MODEL_REPO_URL',
-           value='https://www.astro.umontreal.ca/~artigau/lbl/models',
+           value='http://206.12.93.77/ari/data/lbl/models',
            source=__NAME__,
            desc='define the default model repo url', not_none=True)
 

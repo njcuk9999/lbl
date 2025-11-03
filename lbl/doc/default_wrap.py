@@ -7,7 +7,7 @@ Created on 2024-07-08 14:09:38.491
 
 @author: Neil Cook, Etienne Artigau, Charles Cadieux, Thomas Vandal, Ryan Cloutier, Pierre Larue
 
-user: cook@jupiter.astro.umontreal.ca
+user: cook
 lbl version: 0.63.009
 lbl date: 2024-07-08
 """

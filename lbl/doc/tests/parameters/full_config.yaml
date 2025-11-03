@@ -332,8 +332,9 @@ DO_TELLUCLEAN: False
 TELLUCLEAN_USE_TEMPLATE: True
 
 # the tapas url used in tellu-cleaning
-## Default = https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits   SPIROU_VALUE = https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits
-TELLUCLEAN_TAPAS_URL: https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits
+## Default = https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits
+## SPIROU_VALUE = https://www.astro.umontreal.ca/~artigau/lbl/tapas_lbl.fits
+TELLUCLEAN_TAPAS_URL: http://206.12.93.77/ari/data/lbl/tapas/tapas_lbl.fits
 
 # the dv offset for tellu-cleaning in km/s
 ## Default = None   SPIROU_VALUE = None
