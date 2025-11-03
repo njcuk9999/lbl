@@ -12,20 +12,20 @@ authors = [
 description = 'LBL - Line-by-line velocity measurements, an outlier-resistant method for precision velocimetry'
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = 'LICENSE'}
-requires-python = "==3.11.*"
+requires-python = "==3.9.*"
 dependencies = [
-    "astropy==7.0.1",
-    "Bottleneck==1.4.2",
-    "ipython==8.32.0",
-    "scipy==1.15.2",
-    "numba==0.61.0",
-    "numpy==1.26.4",
-    "matplotlib==3.10.1",
+    "astropy==5.3",
+    "Bottleneck==1.3.7",
+    "ipython==8.13.2",
+    "scipy==1.10.1",
+    "numba==0.57.0",
+    "numpy==1.24.3",
+    "matplotlib==3.7.1",
     "pandas==2.2.3",
-    "requests==2.32.3",
-    "tables==3.10.2",
-    "tqdm==4.67.1",
-    "PyYAML==6.0.2",
+    "tables==3.9.2",
+    "tqdm==4.65.0",
+    "PyYAML==6.0",
+    "requests==2.28.2",
     "wget==3.2",
 ]
 
