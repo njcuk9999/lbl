@@ -50,6 +50,7 @@ class MaroonX(Instrument):
         self.npixel = None  # set in blue/red
         self.sci_header = None  # set in blue/red
         self.default_template_name = None  # set in blue/red
+        self.default_sample_wave_name = None # set in blue/red
         # extension of the science files
         self.science_ext = '.hd5'
         # Question: Do we want 6?
@@ -747,6 +748,7 @@ class MaroonXBlue(MaroonX):
         self.blaze_storekey = 'blaze_blue'
         self.sci_storekey = 'spec_blue'
         self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_maroonx_blue.fits'
         self.tcorr_extension = '_tb_'
         self.valid_suffices = ['_x_', '_b_']
         # define wave limits in nm
@@ -776,8 +778,8 @@ class MaroonXBlue(MaroonX):
         # define the compil maximum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MAX', 668, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_moroonx_b.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the SNR in chosen order
         self.param_set('KW_EXT_SNR', 'SNR_100', source=func_name)
         # define the plot order for the compute rv model plot
@@ -1089,6 +1091,7 @@ class MaroonXRed(MaroonX):
         self.blaze_storekey = 'blaze_red'
         self.sci_storekey = 'spec_red'
         self.default_template_name = 'Template_{0}_MAROONX_RED.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_maroonx_red.fits'
         self.tcorr_extension = '_tr_'
         self.valid_suffices = ['_x_', '_r_']
         # define wave limits in nm
@@ -1118,8 +1121,8 @@ class MaroonXRed(MaroonX):
         # define the compil maximum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MAX', 907, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_moroonx_r.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the SNR in chosen order
         self.param_set('KW_EXT_SNR', 'SNR_74', source=func_name)
         # define the plot order for the compute rv model plot

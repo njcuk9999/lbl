@@ -46,6 +46,7 @@ class Expres(Instrument):
         super().__init__('EXPRES')
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_EXPRES.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_expres.fits'
         # define wave limits in nm
         self.wavemin = 379.66
         self.wavemax = 822.36
@@ -121,8 +122,8 @@ class Expres(Instrument):
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_sophie.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file

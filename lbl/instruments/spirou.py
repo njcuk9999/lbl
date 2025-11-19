@@ -49,6 +49,9 @@ class Spirou(Instrument):
             name = 'SPIROU'
         # call to super function
         super().__init__(name)
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_spirou.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_spirou.fits'
         # define wave limits in nm
         self.wavemin = 955.793
         self.wavemax = 2515.771
@@ -363,7 +366,7 @@ class Spirou(Instrument):
         objname = self.params['OBJECT_TEMPLATE']
         # get template file
         if self.params['TEMPLATE_FILE'] is None:
-            basename = 'Template_s1dv_{0}_sc1d_v_file_AB.fits'.format(objname)
+            basename = self.default_template_name.format(objname)
         else:
             basename = self.params['TEMPLATE_FILE']
         # get absolute path

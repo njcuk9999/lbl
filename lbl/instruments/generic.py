@@ -46,6 +46,7 @@ class Generic(Instrument):
         super().__init__('Generic')
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_Generic.fits'
+        self.default_sample_wave_name = 'sample_wave_grid.fits'
         # define wave limits in nm
         self.wavemin = 377.189
         self.wavemax = 790.788
@@ -150,8 +151,8 @@ class Generic(Instrument):
         # Set FLUX_EXTENSION_NAME
         self.param_set('FLUX_EXTENSION_NAME', 'FLUX', source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file

@@ -59,6 +59,7 @@ class Instrument:
         self.norders: Optional[int] = None
         self.npixel: Optional[int] = None
         self.default_template_name: Optional[str] = None
+        self.default_sample_wave_name: Optional[str] = None
         # extension of the science files
         self.science_ext = '.fits'
         # hd5 file definitions

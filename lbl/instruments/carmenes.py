@@ -46,6 +46,7 @@ class Carmenes(Instrument):
         super().__init__('CARMENES')
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_CARMENES.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_carmenes.fits'
         # define wave limits in nm
         self.wavemin = 513.651
         # self.wavemax = 1063.125
@@ -122,8 +123,8 @@ class Carmenes(Instrument):
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 750, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_carmenes.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file

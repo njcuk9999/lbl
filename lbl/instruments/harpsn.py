@@ -48,6 +48,7 @@ class HarpsN(Instrument):
         super().__init__(name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPSN.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_harpsn.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -122,8 +123,8 @@ class HarpsN(Instrument):
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_harps.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
@@ -717,6 +718,7 @@ class HarpsN_ORIG(HarpsN):
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPSN_ORIG.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_harpsn_orig.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -751,6 +753,9 @@ class HarpsN_ORIG(HarpsN):
         self.param_set('CCF_CLEAN_BANDS', ['r'], source=func_name)
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -1021,6 +1026,7 @@ class HarpsN_ESO(HarpsN):
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPSN_ESO.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_harpsn_eso.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -1057,6 +1063,9 @@ class HarpsN_ESO(HarpsN):
         self.param_set('MASK_SNR_MIN', value=20, source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
         self.param_set('CCF_CLEAN_BANDS', ['r'], source=func_name)
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
