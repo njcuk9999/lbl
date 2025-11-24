@@ -1391,7 +1391,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     # loop around residual project tables
                     for key in inst.params['RESPROJ_TABLES']:
                         # calculate spline
-                        rp_spline = splines[key](wave_ord) * b_ratio
+                        rp_spline = splines[key](wave_ord)# * b_ratio
                         # The models are always expressed in terms of the
                         # original spectrum
                         # rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
