@@ -506,14 +506,24 @@ def __main__(inst: InstrumentsType, **kwargs):
     total_nobs_berv = len(np.unique(berv // 1000))  # in m/s
 
     # -------------------------------------------------------------------------
-    # Step 7. Write template
+    # Step 7. Calculate Savitzky-Golay filtered template for better handling
+    #         of higher derivatives
+    # -------------------------------------------------------------------------
+    savgol_fluxes = inst.calculate_savgol_template(dv_grid=grid_step_magic,
+                                                   flux_dict=dict(flux=p50,
+                                                   flux_odd=p50_odd,
+                                                   flux_even=p50_even))
+
+    # -------------------------------------------------------------------------
+    # Step 8. Write template
     # -------------------------------------------------------------------------
     # get props
     props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms,
                  flux_odd=p50_odd, eflux_odd=rms_odd, flux_even=p50_even,
                  eflux_even=rms_even, rms_odd=rms_odd,
                  rms_even=rms_even, template_coverage=template_coverage,
-                 total_nobs_berv=total_nobs_berv, template_nobs=nfiles)
+                 total_nobs_berv=total_nobs_berv, template_nobs=nfiles,
+                 savgol_fluxes=savgol_fluxes)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
 

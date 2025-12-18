@@ -15,8 +15,10 @@ from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 from astropy import constants
+from numpy.lib.stride_tricks import sliding_window_view
 from scipy import optimize
 from scipy import signal
+from scipy.special import factorial
 from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
 from scipy.special import erf
 
@@ -1027,6 +1029,225 @@ def smart_blaze_norm(wavegrid: np.ndarray, blaze: np.ndarray,
     else:
         return blaze / sed_blaze
 
+
+def gaussian_weighted_savgol(data: np.ndarray,
+                             window_size: int,
+                             polyorder: int, deriv: int = 0,
+                             delta: float = 1.0):
+    """
+    Gaussian-weighted Savitzky-Golay filter that can handle NaN values.
+
+    Center holds the truth,
+    Distant points fade to silence—
+    Polynomials dance.
+
+    Parameters
+    ----------
+    data : array_like
+        Input data to filter (may contain NaN values).
+    window_size : int
+        Full width at half maximum (FWHM) of the Gaussian weights.
+        Total window spans 3 × window_size points.
+    polyorder : int
+        Polynomial order for local fitting.
+    deriv : int, optional
+        Derivative order (0 = smoothing only).
+    delta : float, optional
+        Sample spacing for derivative scaling.
+
+    Returns
+    -------
+    y : ndarray
+        Filtered data. Returns NaN where >50% of window points are NaN.
+    """
+    data = np.asarray(data, dtype=float)
+
+    # Total window is 3× the window_size, rounded to next odd number
+    total_window = int(3 * window_size)
+    if total_window % 2 == 0:
+        total_window += 1
+
+    half_window = total_window // 2
+
+    # Gaussian weights: FWHM = 2 * sqrt(2 * ln(2)) * sigma ≈ 2.355 * sigma
+    sigma = window_size / (2 * np.sqrt(2 * np.log(2)))
+    x_window = np.arange(-half_window, half_window + 1)
+    weights = np.exp(-x_window ** 2 / (2 * sigma ** 2))
+
+    # Precompute filter coefficients for the no-NaN case
+    coeffs = _compute_weighted_savgol_coeffs(half_window, polyorder,
+                                             deriv, delta, weights)
+
+    # Check for NaNs
+    has_nans = np.any(np.isnan(data))
+
+    if not has_nans:
+        # Fast path: pure convolution
+        return _apply_filter_fast(data, coeffs, half_window)
+    else:
+        # Slow path: handle NaNs
+        return _apply_filter_with_nans(data, coeffs, weights, half_window,
+                                       polyorder, deriv, delta)
+
+
+def _apply_filter_fast(data: np.ndarray, coeffs: np.ndarray,
+                       half_window: int):
+    """
+    Fast filtering using numpy convolution.
+    No NaN handling - assumes clean data.
+
+    :param data: Input data array.
+    :param coeffs: Precomputed filter coefficients.
+    :param half_window: Half window size.
+
+    :return: Filtered data array.
+    """
+    # Pad with reflection
+    padded = np.pad(data, half_window, mode='reflect')
+
+    # Convolve (flip coeffs because np.convolve does correlation-style indexing)
+    result = np.convolve(padded, coeffs[::-1], mode='valid')
+
+    return result
+
+
+def _apply_filter_with_nans(data: np.ndarray, coeffs: np.ndarray,
+                            weights: np.ndarray,
+                            half_window: int, polyorder: int,
+                            deriv: int, delta: float):
+    """
+    Filter with NaN handling.
+    Uses vectorized operations where possible, falls back to per-point
+    calculation only for windows containing NaNs.
+    """
+    npoints = len(data)
+    total_window = 2 * half_window + 1
+
+    # Pad with reflection
+    padded = np.pad(data, half_window, mode='reflect')
+
+    # Create sliding windows view (no memory copy)
+    windows = sliding_window_view(padded, total_window)
+
+    # Find NaN locations in each window
+    nan_counts = np.sum(np.isnan(windows), axis=1)
+
+    # Threshold: >50% NaN means output NaN
+    nan_threshold = total_window * 0.5
+
+    # Initialize output
+    yarr = np.zeros(npoints)
+
+    # Mask for different cases
+    no_nan_mask = nan_counts == 0
+    too_many_nan_mask = nan_counts > nan_threshold
+    partial_nan_mask = ~no_nan_mask & ~too_many_nan_mask
+
+    # Fast path: windows without NaNs (vectorized dot product)
+    if np.any(no_nan_mask):
+        yarr[no_nan_mask] = windows[no_nan_mask] @ coeffs
+
+    # Windows with too many NaNs
+    yarr[too_many_nan_mask] = np.nan
+
+    # Partial NaN windows: need individual coefficient computation
+    partial_indices = np.where(partial_nan_mask)[0]
+    for it in partial_indices:
+        window_data = windows[it]
+        nan_mask = np.isnan(window_data)
+
+        # Zero out NaN weights
+        adjusted_weights = weights.copy()
+        adjusted_weights[nan_mask] = 0.0
+
+        # Recompute coefficients
+        adjusted_coeffs = _compute_weighted_savgol_coeffs(
+            half_window, polyorder, deriv, delta, adjusted_weights
+        )
+
+        # Apply (replace NaNs with 0 for dot product)
+        window_clean = np.where(nan_mask, 0.0, window_data)
+        yarr[it] = np.dot(adjusted_coeffs, window_clean)
+
+    return yarr
+
+
+def _compute_weighted_savgol_coeffs(half_window: int, polyorder: int,
+                                    deriv: int, delta: float,
+                                    weights: np.ndarray):
+    """
+    Compute Savitzky-Golay filter coefficients with arbitrary weights.
+
+    Uses weighted least squares to fit polynomial, then extracts
+    coefficients that yield value (or derivative) at window center.
+    """
+    window_size = 2 * half_window + 1
+    x = np.arange(-half_window, half_window + 1, dtype=float)
+
+    # Check if we have enough valid points
+    valid_count = np.sum(weights > 0)
+    if valid_count <= polyorder:
+        return np.zeros(window_size)
+
+    # Vandermonde matrix (increasing order): V[i,j] = x[i]^j
+    V = np.column_stack([x ** j for j in range(polyorder + 1)])
+
+    # Weighted least squares: minimize ||W^{1/2}(Vc - y)||^2
+    # Solution: c = (V^T W V)^{-1} V^T W y
+    W = np.diag(weights)
+    VtW = V.T @ W
+    VtWV = VtW @ V
+
+    try:
+        VtWV_inv = np.linalg.inv(VtWV)
+    except np.linalg.LinAlgError:
+        VtWV_inv = np.linalg.pinv(VtWV)
+
+    # Filter coefficients: row 'deriv' of (V^T W V)^{-1} V^T W
+    # scaled by deriv! / delta^deriv
+    if deriv > polyorder:
+        return np.zeros(window_size)
+
+    filter_coeffs = VtWV_inv[deriv, :] @ VtW
+    filter_coeffs *= factorial(deriv, exact=True) / (delta ** deriv)
+
+    return filter_coeffs
+
+
+def gaussian_weighted_savgol_2d(data: np.ndarray, window_size: int,
+                                polyorder: int, deriv: int=0,
+                                delta: float=1.0, axis: int = -1):
+    """
+    Along one axis,
+    The filter glides through the grid—
+    Each row finds its peace.
+
+    Parameters
+    ----------
+    data : array_like
+        2D input data to filter.
+    window_size : int
+        FWHM of Gaussian weights.
+    polyorder : int
+        Polynomial order.
+    deriv : int, optional
+        Derivative order.
+    delta : float, optional
+        Sample spacing.
+    axis : int, optional
+        Axis along which to filter.
+
+    Returns
+    -------
+    y : ndarray
+        Filtered 2D data.
+    """
+    data = np.asarray(data)
+    return np.apply_along_axis(
+        lambda x: gaussian_weighted_savgol(x, window_size, polyorder, deriv,
+                                           delta),
+        axis, data
+    )
 
 
 # =============================================================================

@@ -449,6 +449,39 @@ class Instrument:
         if self.params['OBJECT_TEMPLATE'] is None:
             self.param_set('OBJECT_TEMPLATE', value=objname, source=func_name)
 
+    def calculate_savgol_template(self, dv_grid: float,
+                                  flux_dict: Dict[str, np.ndarray]):
+        # check if we are using savgol templates
+        if not self.params['USE_SAVGOL_TEMPLATE']:
+            return dict()
+        # get approximate resolution in m/s
+        approx_res = self.params['APPROX_RESOLUTION']
+        # get the rough number of pixels per fwhm
+        pix_per_fwhm = np.round((mp.speed_of_light_ms / dv_grid) / approx_res)
+        # get the window size
+        window_size = int(pix_per_fwhm)
+        # Ensure window_size is odd for scipy
+        window_size = window_size if window_size % 2 == 1 else window_size + 1
+
+        flux_savgol_dict = dict()
+        # loop around all fluxes given
+        for key in flux_dict:
+            # calculate derivatives 0 to 3
+            for deriv in range(0, 4):
+                msg = 'Calculating SavGol derivative {0} for: {1}'
+                margs = [deriv, key]
+                log.general(msg.format(*margs))
+                # get flux from key
+                flux = flux_dict[key]
+                # compute the savgol derivatives order=deriv
+                o_savgol = mp.gaussian_weighted_savgol(flux, window_size,
+                                                      polyorder=3,
+                                                      deriv=deriv, delta=1.0)
+                # push into output dictionary
+                flux_savgol_dict[f'{key}_savgol_d{deriv}'] = o_savgol
+        # return the savgol dictionary
+        return flux_savgol_dict
+
     def write_rdb_fits(self, filename: str, rdb_data: Dict[str, Any]):
         """
         Write the rdb fits file to disk
@@ -496,7 +529,8 @@ class Instrument:
                       dtype=datatypelist, names=name_list)
 
     def write_template(self, template_file: str, props: Dict[str, Any],
-                       sci_hdict: io.LBLHeader, sci_table):
+                       sci_hdict: io.LBLHeader, sci_table,
+                       savgol_fluxes: Dict[str, np.ndarray] = None):
         """
         Write the template file to disk
 
@@ -537,6 +571,13 @@ class Instrument:
         table1['flux_even'] = props['flux_even']
         table1['eflux_even'] = props['eflux_even']
         table1['rms_even'] = props['rms_even']
+        # ---------------------------------------------------------------------
+        # deal with savgol fluxes being None
+        if savgol_fluxes is None:
+            savgol_fluxes = dict()
+        # loop around and add to table
+        for key in savgol_fluxes:
+            table1[key] = savgol_fluxes[key]
         # ---------------------------------------------------------------------
         # construct table 2 - the science list
         table2 = Table()

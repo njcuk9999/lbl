@@ -234,6 +234,15 @@ params.set(key='REF_TABLE_FMT', value='csv', source=__NAME__,
 params.set(key='HP_WIDTH', value=None, source=__NAME__,
            desc='The High pass width [km/s]', not_none=True)
 
+# approximate mean resolution in lambda/dlambda
+params.set(key='APPROX_RESOLUTION', value=None, source=__NAME__,
+              desc='The approximate mean resolution in lambda/dlambda',
+              not_none=True)
+
+# whether to generate and use savgol template
+params.set(key='USE_SAVGOL_TEMPLATE', value=True, source=__NAME__,
+           desc='Whether to generate and use savgol template')
+
 # define the SNR cut off threshold
 params.set(key='SNR_THRESHOLD', value=None, source=__NAME__,
            desc='The SNR cut off threshold', not_none=True)

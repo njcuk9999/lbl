@@ -331,17 +331,23 @@ def spline_template(inst: InstrumentsType, template_file: str,
     template_table = inst.load_template(template_file)
     # get properties from template table
     twave = np.array(template_table['wavelength'])
-    tflux = np.array(template_table['flux'])
-    # deal with the odd/even templates
-    if 'flux_odd' in template_table.colnames:
-        # this captures the odd/even asymetry in resolution along orders
-        # we have 3 templates, one averaing the odd, one the even and one
-        # having all the flux from the entire ordes
-        tflux_odd = np.array(template_table['flux_odd'])
-        tflux_even = np.array(template_table['flux_even'])
+    # -------------------------------------------------------------------------
+    if not inst.params['USE_SAVGOL_TEMPLATE']:
+        tflux = np.array(template_table['flux'])
+        # deal with the odd/even templates
+        if 'flux_odd' in template_table.colnames:
+            # this captures the odd/even asymetry in resolution along orders
+            # we have 3 templates, one averaing the odd, one the even and one
+            # having all the flux from the entire ordes
+            tflux_odd = np.array(template_table['flux_odd'])
+            tflux_even = np.array(template_table['flux_even'])
+        else:
+            tflux_odd, tflux_even = np.array([]), np.array([])
     else:
-        tflux_odd, tflux_even = np.array([]), np.array([])
-
+        tflux = np.array(template_table['flux_savgol_d0'])
+        tflux_odd = np.array(template_table['flux_odd_savgol_d0'])
+        tflux_even = np.array(template_table['flux_even_savgol_d0'])
+    # -------------------------------------------------------------------------
     # some masking to avoid errors later
     # if we have the n_valid flag in the table, then we must have at least
     # 1/2 of points valid
@@ -398,28 +404,55 @@ def spline_template(inst: InstrumentsType, template_file: str,
     grad_log_wave = np.gradient(np.log(twave))
     # work out the glw_c (grad_log_wave / speed_of_light_ms)
     glw_c = grad_log_wave * speed_of_light_ms
-    # get the derivative of the flux
-    dflux = np.gradient(tflux) / glw_c
-    # get the 2nd derivative of the flux
-    d2flux = np.gradient(dflux) / glw_c
-    # get the 3rd derivative of the flux
-    d3flux = np.gradient(d2flux) / glw_c
-    # deal with the odd/even templates
-    if 'flux_odd' in template_table.colnames:
-        # get the derivative of the flux
-        dflux_odd = np.gradient(tflux_odd) / glw_c
-        dflux_even = np.gradient(tflux_even) / glw_c
-        # get the 2nd derivative of the flux
-        d2flux_odd = np.gradient(dflux_odd) / glw_c
-        d2flux_even = np.gradient(dflux_even) / glw_c
-        # get the 3rd derivative of the flux
-        d3flux_odd = np.gradient(d2flux_odd) / glw_c
-        d3flux_even = np.gradient(d2flux_even) / glw_c
-    else:
-        dflux_odd, dflux_even = np.array([]), np.array([])
-        d2flux_odd, d2flux_even = np.array([]), np.array([])
-        d3flux_odd, d3flux_even = np.array([]), np.array([])
 
+    if not inst.params['USE_SAVGOL_TEMPLATE']:
+        # get the derivative of the flux
+        dflux = np.gradient(tflux) / glw_c
+        # get the 2nd derivative of the flux
+        d2flux = np.gradient(dflux) / glw_c
+        # get the 3rd derivative of the flux
+        d3flux = np.gradient(d2flux) / glw_c
+        # deal with the odd/even templates
+        if 'flux_odd' in template_table.colnames:
+            # get the derivative of the flux
+            dflux_odd = np.gradient(tflux_odd) / glw_c
+            dflux_even = np.gradient(tflux_even) / glw_c
+            # get the 2nd derivative of the flux
+            d2flux_odd = np.gradient(dflux_odd) / glw_c
+            d2flux_even = np.gradient(dflux_even) / glw_c
+            # get the 3rd derivative of the flux
+            d3flux_odd = np.gradient(d2flux_odd) / glw_c
+            d3flux_even = np.gradient(d2flux_even) / glw_c
+        else:
+            dflux_odd, dflux_even = np.array([]), np.array([])
+            d2flux_odd, d2flux_even = np.array([]), np.array([])
+            d3flux_odd, d3flux_even = np.array([]), np.array([])
+    else:
+        def savgol_deriv(ttable: Table, flux_key: str, deriv: int = 0):
+            """
+            Temporary function to get derivatives from savgol columns
+            """
+            key = '{0}_savgol_d{1}'.format(flux_key, deriv)
+            dd = np.array(ttable[key]) / (glw_c ** (deriv))
+            return dd
+        # get the derivative of the flux
+        dflux = savgol_deriv(template_table, 'flux', 1)
+        # get the 2nd derivative of the flux
+        d2flux = savgol_deriv(template_table, 'flux', 2)
+        # get the 3rd derivative of the flux
+        d3flux = savgol_deriv(template_table, 'flux', 3)
+        # get the derivative of the flux
+        dflux_odd = savgol_deriv(template_table, 'flux_odd', 1)
+        # get the 2nd derivative of the flux
+        d2flux_odd = savgol_deriv(template_table, 'flux_odd', 2)
+        # get the 3rd derivative of the flux
+        d3flux_odd = savgol_deriv(template_table, 'flux_odd', 3)
+        # get the derivative of the flux
+        dflux_even = savgol_deriv(template_table, 'flux_even', 1)
+        # get the 2nd derivative of the flux
+        d2flux_even = savgol_deriv(template_table, 'flux_even', 1)
+        # get the 3rd derivative of the flux
+        d3flux_even = savgol_deriv(template_table, 'flux_even', 1)
     # -------------------------------------------------------------------------
     # we create the spline of the template to be used everywhere later
     valid = np.isfinite(tflux) & np.isfinite(dflux)
@@ -3149,23 +3182,29 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # get the wave and flux vectors for the tempalte
     t_wave = np.array(template_table['wavelength'])
-    t_flux = np.array(template_table['flux'])
+
+    # -------------------------------------------------------------------------
+    if not inst.params['USE_SAVGOL_TEMPLATE']:
+        t_flux = np.array(template_table['flux'])
+        # smooth the spectrum to avoid lines that coincide with small-scale noise
+        #   excursion
+        t_flux_tmp = np.zeros_like(t_flux)
+        for offset in range(-2, 3):
+            t_flux_tmp += np.roll(t_flux, offset)
+        # copy over original vector
+        t_flux = np.array(t_flux_tmp)
+        # find the first and second derivative of the flux
+        dflux = np.gradient(t_flux)
+        ddflux = np.gradient(dflux)
+    else:
+        t_flux = np.array(template_table['flux_savgol_d0'])
+        dflux = np.array(template_table['flux_savgol_d1'])
+        ddflux = np.array(template_table['flux_savgol_d2'])
+    # -------------------------------------------------------------------------
     with warnings.catch_warnings(record=True) as _:
         t_snr = t_flux / template_table['rms']
         # remove infinite values
         t_snr[np.isinf(t_snr)] = np.nan
-    # -------------------------------------------------------------------------
-    # smooth the spectrum to avoid lines that coincide with small-scale noise
-    #   excursion
-    t_flux_tmp = np.zeros_like(t_flux)
-    for offset in range(-2, 3):
-        t_flux_tmp += np.roll(t_flux, offset)
-    # copy over original vector
-    t_flux = np.array(t_flux_tmp)
-    # -------------------------------------------------------------------------
-    # find the first and second derivative of the flux
-    dflux = np.gradient(t_flux)
-    ddflux = np.gradient(dflux)
     # -------------------------------------------------------------------------
     # lines are regions there is a sign change in the derivative of the flux
     #   we also have some checks for NaNs
