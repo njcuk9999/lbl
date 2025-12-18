@@ -529,8 +529,7 @@ class Instrument:
                       dtype=datatypelist, names=name_list)
 
     def write_template(self, template_file: str, props: Dict[str, Any],
-                       sci_hdict: io.LBLHeader, sci_table,
-                       savgol_fluxes: Dict[str, np.ndarray] = None):
+                       sci_hdict: io.LBLHeader, sci_table):
         """
         Write the template file to disk
 
@@ -573,11 +572,10 @@ class Instrument:
         table1['rms_even'] = props['rms_even']
         # ---------------------------------------------------------------------
         # deal with savgol fluxes being None
-        if savgol_fluxes is None:
-            savgol_fluxes = dict()
-        # loop around and add to table
-        for key in savgol_fluxes:
-            table1[key] = savgol_fluxes[key]
+        if props['savgol_fluxes'] is not None:
+            # loop around and add to table
+            for key in props['savgol_fluxes']:
+                table1[key] = props['savgol_fluxes'][key]
         # ---------------------------------------------------------------------
         # construct table 2 - the science list
         table2 = Table()
