@@ -1996,8 +1996,8 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
         values = headers[key]
         comment = comments[key]
         # ---------------------------------------------------------------------
-        if len(key) > 8 and key[:8] != 'HIEARACH':
-            key = 'HIEARACH ' + key
+        if len(key) > 8 and key[:8] != 'HIERARCH':
+            key = 'HIERARCH ' + key
         # ---------------------------------------------------------------------
         # don't add this key if we have no values (shouldn't happen)
         if len(values) == 0:
@@ -2007,7 +2007,9 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
         all_same = all(x == values[0] for x in values)
         # if all values are the same, this is easy, just use the first
         if all_same:
-
+            # we have to avoid too long header keys
+            if len(key) + len(str(values[0])) > 75:
+                continue
             c_header[key] = (values[0], comment)
             # and continue
             continue
@@ -2025,9 +2027,9 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
             if len(key) + len(str(std_val)) > 75:
                 continue
 
-            key1 = f'HIEARACH CAVG {key}'
-            key2 = f'HIEARACH CSTD {key}'
-            key3 = f'HIEARACH CNUM {key}'
+            key1 = f'HIERARCH CAVG {key}'
+            key2 = f'HIERARCH CSTD {key}'
+            key3 = f'HIERARCH CNUM {key}'
             c_header[key1] = (mean_val, comment)
             c_header[key2] = (std_val, comment)
             c_header[key3] = (num, comment)
