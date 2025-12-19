@@ -1994,6 +1994,11 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
         # ---------------------------------------------------------------------
         # get the values from the headers
         values = headers[key]
+        comment = comments[key]
+        # ---------------------------------------------------------------------
+        if len(key) > 8 and key[:8] != 'HIEARACH':
+            key = 'HIEARACH ' + key
+        # ---------------------------------------------------------------------
         # don't add this key if we have no values (shouldn't happen)
         if len(values) == 0:
             continue
@@ -2002,7 +2007,8 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
         all_same = all(x == values[0] for x in values)
         # if all values are the same, this is easy, just use the first
         if all_same:
-            c_header[key] = (values[0], comments[key])
+
+            c_header[key] = (values[0], comment)
             # and continue
             continue
         # ---------------------------------------------------------------------
@@ -2013,16 +2019,21 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
             std_val = np.nanstd(values)
             num = len(values)
 
-            key1 = f'HIEARACH COMB MEAN {key}'
-            key2 = f'HIEARACH COMB STD {key}'
-            key3 = f'HIEARACH COMB NUM {key}'
-            c_header[key1] = (mean_val, comments[key])
-            c_header[key2] = (std_val, comments[key])
-            c_header[key3] = (num, comments[key])
+            # we have to avoid too long header keys
+            if len(key) + len(str(mean_val)) > 75:
+                continue
+            if len(key) + len(str(std_val)) > 75:
+                continue
+
+            key1 = f'HIEARACH CAVG {key}'
+            key2 = f'HIEARACH CSTD {key}'
+            key3 = f'HIEARACH CNUM {key}'
+            c_header[key1] = (mean_val, comment)
+            c_header[key2] = (std_val, comment)
+            c_header[key3] = (num, comment)
         # otherwise we are dealing with strings - just use the last
         else:
-            key1 = f'HIEARACH COMB LAST {key}'
-            c_header[key1] = (values[-1], comments[key])
+            c_header[key] = (values[-1], comment)
     # -------------------------------------------------------------------------
     # return the combined header
     return c_header
