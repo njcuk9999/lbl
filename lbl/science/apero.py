@@ -116,9 +116,6 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
         valid &= wavemask
         # check that we have at least 5 valid points
         if np.sum(valid) < 5:
-            msg = ('\tOrder {0}: Less than 5 valid points. '
-                   'Skipping order.')
-            log.info(msg.format(order_num))
             continue
         # get this orders vectors
         owave = wavemap[order_num]
