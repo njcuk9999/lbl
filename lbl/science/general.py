@@ -2020,7 +2020,11 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
             mean_val = np.nanmean(values)
             std_val = np.nanstd(values)
             num = len(values)
-
+            # deal with NaNs and infinite values
+            if not np.isfinite(mean_val):
+                mean_val = 'NaN'
+            if not np.isfinite(std_val):
+                std_val = 'NaN'
             # we have to avoid too long header keys
             if len(key) + len(str(mean_val)) > 75:
                 continue
