@@ -1953,11 +1953,86 @@ def smart_timing(durations: List[float], left: int) -> Tuple[float, float, str]:
     return mean_time, std_time, time_left
 
 
+def add_to_rv_headers(headers: Dict[str, List[Any]],
+                      comments: Dict[str, str],
+                      header: Any) -> Tuple[Dict[str, List[Any]], Dict[str, str]]:
+    """
+    Add to rv headers + comments (for merging later)
+
+    :param headers: dictionary of lists, all header keys for all files
+    :param comments: dictionary of strs, all comments for each header key
+    :param header: fits.Header, the header to add
+
+    :return: the updated headers and comments dictionaries
+    """
+    # loop around header keys
+    for key in header:
+        if key not in headers:
+            headers[key] = [header[key]]
+        else:
+            headers[key].append(header[key])
+        if key not in comments:
+            comments[key] = header.comments[key]
+
+    return headers, comments
+
+
+def combine_rv_headers(headers: Dict[str, List[Any]],
+                      comments: Dict[str, str]) -> Dict[str, Tuple[Any, str]]:
+    """
+    Combine rv headers into a single header
+
+    :param headers: dictionary of lists, all header keys for all files
+    :param comments: dictionary of strs, comments for each header key
+
+    :return: dictionary, combined header with (value, comment) tuples
+    """
+    # storage for combined headers
+    c_header = dict()
+    # loop around header keys
+    for key in headers:
+        # ---------------------------------------------------------------------
+        # get the values from the headers
+        values = headers[key]
+        # don't add this key if we have no values (shouldn't happen)
+        if len(values) == 0:
+            continue
+        # ---------------------------------------------------------------------
+        # check if all values are the same
+        all_same = all(x == values[0] for x in values)
+        # if all values are the same, this is easy, just use the first
+        if all_same:
+            c_header[key] = (values[0], comments[key])
+            # and continue
+            continue
+        # ---------------------------------------------------------------------
+        # otherwise, we need to combine depending on type
+        if all(isinstance(x, (int, float)) for x in values):
+            # numerical values - take mean and std
+            mean_val = np.nanmean(values)
+            std_val = np.nanstd(values)
+            num = len(values)
+
+            key1 = f'HIEARACH COMB MEAN {key}'
+            key2 = f'HIEARACH COMB STD {key}'
+            key3 = f'HIEARACH COMB NUM {key}'
+            c_header[key1] = (mean_val, comments[key])
+            c_header[key2] = (std_val, comments[key])
+            c_header[key3] = (num, comments[key])
+        # otherwise we are dealing with strings - just use the last
+        else:
+            key1 = f'HIEARACH COMB LAST {key}'
+            c_header[key1] = (values[-1], comments[key])
+    # -------------------------------------------------------------------------
+    # return the combined header
+    return c_header
+
 # =============================================================================
 # Define compil functions
 # =============================================================================
 def make_rdb_table(inst: InstrumentsType, rdbfile: str,
-                   lblrvfiles: np.ndarray, plot_dir: str) -> Dict[str, Any]:
+                   lblrvfiles: np.ndarray, plot_dir: str
+                   ) -> Tuple[Dict[str, Any], Dict[str, Tuple[Any, str]]]:
     """
     Make the primary rdb table (row per observation)
 
@@ -2009,6 +2084,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # -------------------------------------------------------------------------
     # output rdb column set up
     # -------------------------------------------------------------------------
+    # storage for the header keys
+    rdb_headers, rdb_comments = dict(), dict()
     # storage for rdb table dictionary
     rdb_dict: Dict[str, Any] = dict()
     # add columns (dv, sdv, d2v, sd2v, d3v, sd3v, rjd, vrad, svrad)
@@ -2144,6 +2221,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['rjd'][row] = inst.get_rjd_value(rvhdr)
         # fill in plot date
         rdb_dict['plot_date'][row] = inst.get_plot_date(rvhdr)
+        # add keys to rdb_headers
+        rdb_headers, rdb_comments = add_to_rv_headers(rdb_headers, rdb_comments,
+                                                      rvhdr)
         # ---------------------------------------------------------------------
         # fill in filename
         # ---------------------------------------------------------------------
@@ -2706,9 +2786,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # ---------------------------------------------------------------------
     # add to output dictionary
     rdb_fitsdata['RDB'] = rdb_table
-
+    # ---------------------------------------------------------------------
+    # merge all rv headers into a single header
+    rdb_header = combine_rv_headers(rdb_headers, rdb_comments)
+    # ---------------------------------------------------------------------
     # return rdb table
-    return rdb_fitsdata
+    return rdb_fitsdata, rdb_header
 
 
 def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:

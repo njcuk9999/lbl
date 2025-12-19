@@ -513,7 +513,11 @@ def __main__(inst: InstrumentsType, **kwargs):
                                                    flux_dict=dict(flux=p50,
                                                    flux_odd=p50_odd,
                                                    flux_even=p50_even))
-
+    # set a key to tell us the type of template created
+    if len(savgol_fluxes) > 0:
+        template_type = 'LBL_SAVGOL'
+    else:
+        template_type = 'LBL_NON_SAVGOL'
     # -------------------------------------------------------------------------
     # Step 8. Write template
     # -------------------------------------------------------------------------
@@ -523,7 +527,7 @@ def __main__(inst: InstrumentsType, **kwargs):
                  eflux_even=rms_even, rms_odd=rms_odd,
                  rms_even=rms_even, template_coverage=template_coverage,
                  total_nobs_berv=total_nobs_berv, template_nobs=nfiles,
-                 savgol_fluxes=savgol_fluxes)
+                 savgol_fluxes=savgol_fluxes, template_type=template_type)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
 

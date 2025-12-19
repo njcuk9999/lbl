@@ -47,7 +47,8 @@ class HarpsN(Instrument):
         # call to super function
         super().__init__(name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_HARPSN.fits'
+        self.default_template_name = 'LBL_Template_{0}_harpsn.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_harpsn.fits'
         self.default_sample_wave_name = 'sample_wave_grid_harpsn.fits'
         # define wave limits in nm
         # TODO: check these values
@@ -92,6 +93,8 @@ class HarpsN(Instrument):
                         value='mdwarf_harps.fits')
         # define the High pass width in km/s
         self.param_set('HP_WIDTH', 500, source=func_name)
+        # approximate mean resolution in lambda/dlambda
+        self.param_set('APPROX_RESOLUTION', 115000, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 8, source=func_name)
@@ -350,7 +353,8 @@ class HarpsN(Instrument):
         else:
             objname = self.params['OBJECT_TEMPLATE']
             # define base name
-            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            basename = self.default_mask_name.format(obj=objname,
+                                                     mtype=mask_type)
             # get absolute path
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists

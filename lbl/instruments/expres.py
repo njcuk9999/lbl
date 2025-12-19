@@ -45,7 +45,8 @@ class Expres(Instrument):
         # call to super function
         super().__init__('EXPRES')
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_EXPRES.fits'
+        self.default_template_name = 'LBL_Template_{0}_expres.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_expres.fits'
         self.default_sample_wave_name = 'sample_wave_grid_expres.fits'
         # define wave limits in nm
         self.wavemin = 379.66
@@ -89,6 +90,8 @@ class Expres(Instrument):
                         value='mdwarf_harps.fits')
         # define the High pass width in km/s
         self.param_set('HP_WIDTH', 500, source=func_name)
+        # approximate mean resolution in lambda/dlambda
+        self.param_set('APPROX_RESOLUTION', 150000, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
@@ -339,7 +342,8 @@ class Expres(Instrument):
         else:
             objname = self.params['OBJECT_TEMPLATE']
             # define base name
-            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            basename = self.default_mask_name.format(obj=objname,
+                                                     mtype=mask_type)
             # get absolute path
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
@@ -882,6 +886,15 @@ class Expres(Instrument):
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                               self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # add telluric key words
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
         header = self.set_hkey(header, 'KW_TAU_OTHERS',

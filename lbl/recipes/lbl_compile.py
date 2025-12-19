@@ -146,7 +146,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # else we generate the rdb file
     else:
         # generate table using make_rdb_table function
-        rdb_data = general.make_rdb_table(inst, rdbfile1, lblrv_files, plot_dir)
+        rdb_data, rdb_header = general.make_rdb_table(inst, rdbfile1,
+                                                      lblrv_files, plot_dir)
         # get the rdb table out of rdb data
         rdb_table = rdb_data['RDB']
         # plot here based on table (not required when loading)
@@ -158,7 +159,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         io.write_table(rdbfile1, rdb_table, fmt='rdb')
         # write fits file
         if inst.params['WRITE_RDB_FITS']:
-            inst.write_rdb_fits(rdbfile1, rdb_data)
+            inst.write_rdb_fits(rdbfile1, rdb_data, rdb_header)
         else:
             rdbfitsfile = rdbfile1.replace('.rdb', '.fits')
             log.general('Skipping {0}'.format(rdbfitsfile))

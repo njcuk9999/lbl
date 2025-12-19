@@ -319,7 +319,8 @@ class NIRPS(Instrument):
         else:
             objname = self.params['OBJECT_TEMPLATE']
             # define base name
-            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            basename = self.default_mask_name.format(obj=objname,
+                                                     mtype=mask_type)
             # get absolute path
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
@@ -1166,7 +1167,8 @@ class NIRPS_HA(NIRPS):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_nirps_ha.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_ha.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_ha.fits'
         self.default_sample_wave_name = 'sample_wave_grid_nirps_ha.fits'
         # define wave limits in nm
         self.wavemin = 965.707
@@ -1248,7 +1250,8 @@ class NIRPS_HE(NIRPS):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_nirps_he.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_he.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_he.fits'
         self.default_sample_wave_name = 'sample_wave_grid_nirps_he.fits'
         # define wave limits in nm
         self.wavemin = 965.827
@@ -1772,7 +1775,8 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_NIRPS_HA_ESO.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_ha_eso.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_ha_eso.fits'
         self.default_sample_wave_name = 'sample_wave_grid_nirps_ha_eso.fits'
         # define wave limits in nm
         self.wavemin = 966.051
@@ -2265,7 +2269,8 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_NIRPS_HE_ESO.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_he_eso.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_he_eso.fits'
         self.default_sample_wave_name = 'sample_wave_grid_nirps_he_eso.fits'
         # define wave limits in nm
         self.wavemin = 966.051

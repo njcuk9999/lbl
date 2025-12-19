@@ -59,6 +59,7 @@ class Instrument:
         self.norders: Optional[int] = None
         self.npixel: Optional[int] = None
         self.default_template_name: Optional[str] = None
+        self.default_mask_name: Optional[str] = None
         self.default_sample_wave_name: Optional[str] = None
         # extension of the science files
         self.science_ext = '.fits'
@@ -300,6 +301,14 @@ class Instrument:
         header = self.set_hkey(header, 'KW_PDATE', value=Time.now().fits)
         # add which lbl instrument was used
         header = self.set_hkey(header, 'KW_INSTRUMENT', value=self.name)
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_FITS')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
         # add the mask
         header = self.set_hkey(header, 'KW_LBLMASK', value=outputs['MASK_FILE'])
         # add the template velocity from CCF
@@ -482,7 +491,8 @@ class Instrument:
         # return the savgol dictionary
         return flux_savgol_dict
 
-    def write_rdb_fits(self, filename: str, rdb_data: Dict[str, Any]):
+    def write_rdb_fits(self, filename: str, rdb_data: Dict[str, Any],
+                       rdb_header: Dict[str, Tuple[Any, str]]):
         """
         Write the rdb fits file to disk
 
@@ -496,14 +506,29 @@ class Instrument:
         filename = filename.replace('.rdb', '.fits')
         # populate primary header
         header0 = fits.Header()
+        # ---------------------------------------------------------------------
+        # add header keys to header 0
+        for key in rdb_header:
+            header0[key] = rdb_header[key]
+        # ---------------------------------------------------------------------
         # add custom keys
         header0 = self.set_hkey(header0, 'KW_VERSION', __version__)
         header0 = self.set_hkey(header0, 'KW_VDATE', __date__)
         header0 = self.set_hkey(header0, 'KW_PDATE', Time.now().iso)
         header0 = self.set_hkey(header0, 'KW_INSTRUMENT',
                                 self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header0 = self.set_hkey(header0, 'KW_OUTPUT', 'LBL_RDB_FITS')
+        # set the LBL input object object name
+        header0 = self.set_hkey(header0, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header0 = self.set_hkey(header0, 'KW_LBL_TMPNAME',
+                                self.params['OBJECT_TEMPLATE'].strip())
+        # ---------------------------------------------------------------------
         # construct the parameter table
-        param_table = self.params.param_table()
+        param_table = self.params.param_table(header0)
+        # ---------------------------------------------------------------------
         # set up data extensions
         datalist = [None, rdb_data['WAVE'],
                     rdb_data['DV'], rdb_data['SDV'],
@@ -552,6 +577,17 @@ class Instrument:
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TEMPLATE')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # Write template specific keys
+        header = self.set_hkey(header, 'KW_TEMPLATE_TYPE',
+                               props['template_type'])
         header = self.set_hkey(header, 'KW_TEMPLATE_COVERAGE',
                                value=props['template_coverage'])
         header = self.set_hkey(header, 'KW_TEMPLATE_BERVBINS',
@@ -618,6 +654,15 @@ class Instrument:
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # define the telluric parameters
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
         header = self.set_hkey(header, 'KW_TAU_OTHERS',
@@ -696,6 +741,16 @@ class Instrument:
             header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
             header = self.set_hkey(header, 'KW_INSTRUMENT',
                                    self.params['INSTRUMENT'])
+            # set the LBL output data type
+            header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_MASK')
+            # set the LBL input object object name
+            header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                   self.params['OBJECT_SCIENCE'].strip())
+            # set the LBL input template object name
+            header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                                   self.params['OBJECT_TEMPLATE'].strip())
+            # set the LBL mask tpye
+            header = self.set_hkey(header, 'KW_MASK_TYPE', extensions[it])
             # log writing
             msg = 'Writing mask file to disk: {0}'
             log.general(msg.format(new_mask_file))

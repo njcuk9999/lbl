@@ -420,7 +420,7 @@ class ParamDict(UserDict):
         """
         return self.__str__()
 
-    def param_table(self) -> Table:
+    def param_table(self, header = None) -> Table:
         """
         Create a parameter table as a snapshot of the current parameters
         being used
@@ -443,6 +443,15 @@ class ParamDict(UserDict):
                 descriptions.append('None')
                 sources.append('Unknown')
                 dtypes.append('Unknown')
+
+        # add some from header if given
+        if header is not None:
+            for key in header.keys():
+                keys.append('HEADER:' + key)
+                values.append(str(header[key]))
+                descriptions.append(header.comments[key])
+                sources.append('Header')
+                dtypes.append(str(type(header[key])))
         # add some from base
         keys += ['LBLVERSION', 'LBLDATE', 'LBLAUTHORS', 'TIMENOW']
         values += [base.__version__, base.__date__, base.__authors__,

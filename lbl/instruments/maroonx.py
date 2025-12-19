@@ -102,6 +102,8 @@ class MaroonX(Instrument):
                         value='mdwarf_harps.fits')
         # define the High pass width in km/s
         self.param_set('HP_WIDTH', 500, source=func_name)
+        # approximate mean resolution in lambda/dlambda
+        self.param_set('APPROX_RESOLUTION', 85000, source=func_name)
         # define the SNR cut off threshold
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
@@ -319,7 +321,8 @@ class MaroonX(Instrument):
         else:
             objname = self.params['OBJECT_TEMPLATE']
             # define base name
-            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            basename = self.default_mask_name.format(obj=objname,
+                                                     mtype=mask_type)
             # get absolute path
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
@@ -747,7 +750,8 @@ class MaroonXBlue(MaroonX):
         self.header_storekey = 'header_blue'
         self.blaze_storekey = 'blaze_blue'
         self.sci_storekey = 'spec_blue'
-        self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
+        self.default_template_name = 'LBL_Template_{0}_maroonx_blue.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_maroonx_blue.fits'
         self.default_sample_wave_name = 'sample_wave_grid_maroonx_blue.fits'
         self.tcorr_extension = '_tb_'
         self.valid_suffices = ['_x_', '_b_']
@@ -1031,6 +1035,15 @@ class MaroonXBlue(MaroonX):
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                               self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # add telluric key words
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
         header = self.set_hkey(header, 'KW_TAU_OTHERS',
@@ -1090,7 +1103,8 @@ class MaroonXRed(MaroonX):
         self.header_storekey = 'header_red'
         self.blaze_storekey = 'blaze_red'
         self.sci_storekey = 'spec_red'
-        self.default_template_name = 'Template_{0}_MAROONX_RED.fits'
+        self.default_template_name = 'LBL_Template_{0}_MAROONX_RED.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_maroonx_red.fits'
         self.default_sample_wave_name = 'sample_wave_grid_maroonx_red.fits'
         self.tcorr_extension = '_tr_'
         self.valid_suffices = ['_x_', '_r_']
@@ -1369,6 +1383,15 @@ class MaroonXRed(MaroonX):
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                               self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # add telluric key words
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
         header = self.set_hkey(header, 'KW_TAU_OTHERS',
