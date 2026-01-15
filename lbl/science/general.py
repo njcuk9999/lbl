@@ -450,9 +450,9 @@ def spline_template(inst: InstrumentsType, template_file: str,
         # get the derivative of the flux
         dflux_even = savgol_deriv(template_table, 'flux_even', 1)
         # get the 2nd derivative of the flux
-        d2flux_even = savgol_deriv(template_table, 'flux_even', 1)
+        d2flux_even = savgol_deriv(template_table, 'flux_even', 2)
         # get the 3rd derivative of the flux
-        d3flux_even = savgol_deriv(template_table, 'flux_even', 1)
+        d3flux_even = savgol_deriv(template_table, 'flux_even', 3)
     # -------------------------------------------------------------------------
     # we create the spline of the template to be used everywhere later
     valid = np.isfinite(tflux) & np.isfinite(dflux)
