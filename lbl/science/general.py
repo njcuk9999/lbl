@@ -1247,6 +1247,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
     # correction of the model from the low-passed ratio of science to model
     ratio = np.zeros_like(sci_data)
+    b_ratio = np.zeros_like(sci_data)
+    norm = np.zeros_like(sci_data)
     # get the splines out of the spline dictionary
     if 'spline_odd' not in splines:
         spline = splines['spline'], splines['spline']
@@ -1360,9 +1362,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
             # if this is the first iteration update model0
             if iteration == 0:
-                # spline the original template and apply blaze
-                model0[order_num] = spline[is_even](wave_ord) * blaze_ord
+                # normalization of the local pseudo continuum level of the unblazed
+                # model
+                model0[order_num] = spline[is_even](wave_ord)
                 model0[order_num][model0[order_num] == 0] = np.nan
+                lp_wid = model0.shape[1] // 2 # half the blaze length
+                norm[order_num] = mp.lowpassfilter(model0[order_num], lp_wid, k=2)
+
+                # spline the original template and apply blaze
+                model0[order_num] *= blaze_ord
                 # get the good values for the median
                 valid = np.isfinite(model0[order_num])
                 valid &= np.isfinite(sci_data[order_num])
@@ -1374,16 +1382,16 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     rpart2 = model0[order_num][valid]
                     # science to model ratio
                     ratio_sci = mp.nanmedian(rpart1 / rpart2)
-                    model0[order_num] = model0[order_num] * ratio_sci
+                    model0[order_num] = model0[order_num] * ratio_sci  
             # -----------------------------------------------------------------
             # update the other splines
             # track ratio if relevant
-            b_ratio = blaze_ord * ratio[order_num]
-            dmodel[order_num] = dspline[is_even](wave_ord) * b_ratio
+            b_ratio[order_num] = blaze_ord * ratio[order_num]
+            dmodel[order_num] = dspline[is_even](wave_ord) * b_ratio[order_num]
             # only do the d2 and d3 stuff if on last iteration
             if flag_last_iter:
-                d2model_ord = d2spline[is_even](wave_ord) * b_ratio
-                d3model_ord = d3spline[is_even](wave_ord) * b_ratio
+                d2model_ord = d2spline[is_even](wave_ord) * b_ratio[order_num]
+                d3model_ord = d3spline[is_even](wave_ord) * b_ratio[order_num]
                 d2model[order_num] = d2model_ord
                 d3model[order_num] = d3model_ord
                 # deal with residual projection tables if required
@@ -1391,13 +1399,17 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     # loop around residual project tables
                     for key in inst.params['RESPROJ_TABLES']:
                         # calculate spline
-                        rp_spline = splines[key](wave_ord)# * b_ratio
+                        # To keep the physical units of the gradient files
+                        # (computed on pseudo-continuum normalised spectra),
+                        # we need to multiply by the local continuum level
+                        rp_spline = splines[key](wave_ord)# * b_ratio[order_num] / norm[order_num]
                         # The models are always expressed in terms of the
                         # original spectrum
-                        # rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
+                        #rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
                         # rp_spline *= (blaze_ord * rblaze)
                         # add to projection model
                         proj_model[key]['model'][order_num] = rp_spline
+
         # ---------------------------------------------------------------------
         # estimate rms
         # ---------------------------------------------------------------------
@@ -1488,6 +1500,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             model_ord = model[order_num]
             dmodel_ord = dmodel[order_num]
             blaze_ord = blaze[order_num]
+            b_ratio_ord = b_ratio[order_num]
+            norm_ord = norm[order_num]
             # only do the d2 and d3 stuff if on last iteration
             if flag_last_iter:
                 d2model_ord = d2model[order_num]
@@ -1577,6 +1591,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # not happen with SPIRou data
             sci_seg = sci_ord[x_start:x_end + 1]
             model_seg = model_ord[x_start:x_end + 1]
+            b_ratio_seg = b_ratio_ord[x_start:x_end + 1]
+            norm_seg = norm_ord[x_start:x_end + 1]
 
             # keep track of the fraction of each lines that is not finite
             frac_mask = np.isfinite(sci_ord[x_start:x_end + 1])
@@ -1686,6 +1702,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         # Same for error
                         frac_diff_seg = diff_seg
                         frac_mean_rms = mean_rms
+                        # performed on the unblazed, pseudo-continuum normalised
+                        # spectra
+                        frac_diff_seg /= (b_ratio_seg * norm_seg)
+                        frac_mean_rms /= (b_ratio_seg * norm_seg)
+
                         pbout = bouchy_equation_line(pd_seg, frac_diff_seg,
                                                      frac_mean_rms)
                         # push into the projection model
