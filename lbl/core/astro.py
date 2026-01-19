@@ -102,7 +102,7 @@ ccf_regions = dict()
 # clean r band
 ccf_regions['r'] = [500, 650]
 # clean i band
-ccf_regions['i'] = [650, 850]
+ccf_regions['i'] = [750, 850]
 # clean y band
 ccf_regions['y'] = [985, 1113]
 # clean h band
