@@ -307,7 +307,12 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
         template_table = inst.load_template(template_file)
         # get wave and flux for the template
         wave_template = template_table['wavelength']
-        flux_template = template_table['flux']
+
+        if not inst.params['USE_SAVGOL_TEMPLATE']:
+            flux_template = np.array(template_table['flux'])
+        else:
+            flux_template = np.array(template_table['flux_savgol_d0'])
+
         # mask out nans
         keep_mask = np.isfinite(flux_template)
         wave_template = wave_template[keep_mask]

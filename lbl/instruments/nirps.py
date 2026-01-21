@@ -59,6 +59,7 @@ class NIRPS(Instrument):
         super().__init__(name)
         # extra parameters (specific to instrument)
         self.default_template_name = None  # set in child classes
+        self.default_sample_wave_name = None # set in child classes
         # set parameters for instrument
         self.params = params
         # override params
@@ -100,6 +101,8 @@ class NIRPS(Instrument):
                         value=None)
         # define the High pass width in km/s
         self.param_set('HP_WIDTH', 500, source=func_name)
+        # approximate mean resolution in lambda/dlambda
+        self.param_set('APPROX_RESOLUTION', 80000, source=func_name)
         # define the SNR cut off threshold
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
@@ -131,8 +134,8 @@ class NIRPS(Instrument):
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 1600, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_nirps_ha.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         self.param_set('FP_REF_LIST', ['FP_FP'], source=func_name)
@@ -316,7 +319,8 @@ class NIRPS(Instrument):
         else:
             objname = self.params['OBJECT_TEMPLATE']
             # define base name
-            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            basename = self.default_mask_name.format(obj=objname,
+                                                     mtype=mask_type)
             # get absolute path
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
@@ -1163,8 +1167,9 @@ class NIRPS_HA(NIRPS):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_nirps_ha.fits'
-        self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_ha.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_ha.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_nirps_ha.fits'
         # define wave limits in nm
         self.wavemin = 965.707
         self.wavemax = 1949.050
@@ -1192,8 +1197,8 @@ class NIRPS_HA(NIRPS):
         self.param_set('DEFAULT_MASK_FILE', source=func_name,
                         value='mdwarf_nirps_ha.fits')
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_nirps_ha.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
+                       source=func_name)
 
     def get_binned_parameters(self) -> Dict[str, list]:
         """
@@ -1245,7 +1250,9 @@ class NIRPS_HE(NIRPS):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_nirps_he.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_he.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_he.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_nirps_he.fits'
         # define wave limits in nm
         self.wavemin = 965.827
         self.wavemax = 1951.499
@@ -1275,8 +1282,8 @@ class NIRPS_HE(NIRPS):
         self.param_set('DEFAULT_MASK_FILE', source=func_name,
                         value='mdwarf_nirps_he.fits')
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_nirps_he.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
 
     def get_binned_parameters(self) -> Dict[str, list]:
         """
@@ -1768,7 +1775,9 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_NIRPS_HA_ESO.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_ha_eso.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_ha_eso.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_nirps_ha_eso.fits'
         # define wave limits in nm
         self.wavemin = 966.051
         self.wavemax = 1923.084
@@ -1794,9 +1803,8 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # set parameters to update
         # ---------------------------------------------------------------------
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_nirps_ha_ESO.fits',
-                        source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         self.param_set('FP_REF_LIST', ['FP_FP'], source=func_name)
@@ -2261,7 +2269,9 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_NIRPS_HE_ESO.fits'
+        self.default_template_name = 'LBL_Template_{0}_nirps_he_eso.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_nirps_he_eso.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_nirps_he_eso.fits'
         # define wave limits in nm
         self.wavemin = 966.051
         self.wavemax = 1923.084
@@ -2287,9 +2297,8 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # set parameters to update
         # ---------------------------------------------------------------------
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_nirps_he_ESO.fits',
-                        source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         self.param_set('FP_REF_LIST', ['FP_FP'], source=func_name)

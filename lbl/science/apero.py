@@ -114,8 +114,8 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
         # identify the valid pixels
         valid = np.isfinite(se2ds[order_num]) & np.isfinite(sblaze[order_num])
         valid &= wavemask
-        # if we have no valid points we need to skip
-        if np.sum(valid) == 0:
+        # check that we have at least 5 valid points
+        if np.sum(valid) < 5:
             continue
         # get this orders vectors
         owave = wavemap[order_num]
@@ -130,9 +130,9 @@ def e2ds_to_s1d(params: ParamDict, wavemap: np.ndarray, e2ds: np.ndarray,
             # skip this order
             continue
         # check that the grid increases or decreases in a monotonic way
-        gradwave = np.gradient(owave[valid])
+        diffwave = np.diff(owave[valid])
         # check the signs of wave map gradient
-        if np.sign(np.min(gradwave)) != np.sign(np.max(gradwave)):
+        if np.sign(np.min(diffwave)) != np.sign(np.max(diffwave)):
             msg = ('\tOrder {0}: Wavelength grid curves around. '
                    'Skipping order')
             log.info(msg.format(order_num))
