@@ -50,6 +50,7 @@ class MaroonX(Instrument):
         self.npixel = None  # set in blue/red
         self.sci_header = None  # set in blue/red
         self.default_template_name = None  # set in blue/red
+        self.default_sample_wave_name = None # set in blue/red
         # extension of the science files
         self.science_ext = '.hd5'
         # Question: Do we want 6?
@@ -101,6 +102,8 @@ class MaroonX(Instrument):
                         value='mdwarf_harps.fits')
         # define the High pass width in km/s
         self.param_set('HP_WIDTH', 500, source=func_name)
+        # approximate mean resolution in lambda/dlambda
+        self.param_set('APPROX_RESOLUTION', 85000, source=func_name)
         # define the SNR cut off threshold
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
@@ -318,7 +321,8 @@ class MaroonX(Instrument):
         else:
             objname = self.params['OBJECT_TEMPLATE']
             # define base name
-            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            basename = self.default_mask_name.format(obj=objname,
+                                                     mtype=mask_type)
             # get absolute path
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
@@ -746,7 +750,9 @@ class MaroonXBlue(MaroonX):
         self.header_storekey = 'header_blue'
         self.blaze_storekey = 'blaze_blue'
         self.sci_storekey = 'spec_blue'
-        self.default_template_name = 'Template_{0}_MAROONX_BLUE.fits'
+        self.default_template_name = 'LBL_Template_{0}_maroonx_blue.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_maroonx_blue.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_maroonx_blue.fits'
         self.tcorr_extension = '_tb_'
         self.valid_suffices = ['_x_', '_b_']
         # define wave limits in nm
@@ -776,8 +782,8 @@ class MaroonXBlue(MaroonX):
         # define the compil maximum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MAX', 668, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_moroonx_b.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the SNR in chosen order
         self.param_set('KW_EXT_SNR', 'SNR_100', source=func_name)
         # define the plot order for the compute rv model plot
@@ -1029,6 +1035,15 @@ class MaroonXBlue(MaroonX):
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                               self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # add telluric key words
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
         header = self.set_hkey(header, 'KW_TAU_OTHERS',
@@ -1088,7 +1103,9 @@ class MaroonXRed(MaroonX):
         self.header_storekey = 'header_red'
         self.blaze_storekey = 'blaze_red'
         self.sci_storekey = 'spec_red'
-        self.default_template_name = 'Template_{0}_MAROONX_RED.fits'
+        self.default_template_name = 'LBL_Template_{0}_MAROONX_RED.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_maroonx_red.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_maroonx_red.fits'
         self.tcorr_extension = '_tr_'
         self.valid_suffices = ['_x_', '_r_']
         # define wave limits in nm
@@ -1118,8 +1135,8 @@ class MaroonXRed(MaroonX):
         # define the compil maximum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MAX', 907, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_moroonx_r.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the SNR in chosen order
         self.param_set('KW_EXT_SNR', 'SNR_74', source=func_name)
         # define the plot order for the compute rv model plot
@@ -1366,6 +1383,15 @@ class MaroonXRed(MaroonX):
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                               self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # add telluric key words
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
         header = self.set_hkey(header, 'KW_TAU_OTHERS',

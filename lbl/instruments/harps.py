@@ -47,7 +47,9 @@ class Harps(Instrument):
         # call to super function
         super().__init__(name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'Template_{0}_HARPS.fits'
+        self.default_template_name = 'LBL_Template_{0}_harps.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_harps.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_harps.fits'
         # define wave limits in nm
         self.wavemin = 378.060
         self.wavemax = 691.476
@@ -90,6 +92,8 @@ class Harps(Instrument):
                         value='mdwarf_harps.fits')
         # define the High pass width in km/s
         self.param_set('HP_WIDTH', 500, source=func_name)
+        # approximate mean resolution in lambda/dlambda
+        self.param_set('APPROX_RESOLUTION', 115000, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
@@ -123,8 +127,8 @@ class Harps(Instrument):
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE',
-                        'sample_wave_grid_harps.fits', source=func_name)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # define the FP reference string that defines that an FP observation was
         #    a reference (calibration) file - should be a list of strings
         # Question: Check DRP TYPE for STAR,FP file
@@ -350,7 +354,8 @@ class Harps(Instrument):
         else:
             objname = self.params['OBJECT_TEMPLATE']
             # define base name
-            basename = '{0}_{1}.fits'.format(objname, mask_type)
+            basename = self.default_mask_name.format(obj=objname,
+                                                     mtype=mask_type)
             # get absolute path
             abspath = os.path.join(mask_directory, basename)
         # check that this file exists
@@ -847,6 +852,7 @@ class Harps_ORIG(Harps):
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPS_ORIG.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_harps_orig.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -881,6 +887,9 @@ class Harps_ORIG(Harps):
         self.param_set('CCF_CLEAN_BANDS', ['r'], source=func_name)
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
+                       source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
@@ -1164,6 +1173,7 @@ class Harps_ESO(Harps):
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPS_ESO.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_harps_eso.fits'
         # define wave limits in nm
         # TODO: check these values
         self.wavemin = 378.060
@@ -1200,6 +1210,9 @@ class Harps_ESO(Harps):
         self.param_set('MASK_SNR_MIN', value=20, source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
         self.param_set('CCF_CLEAN_BANDS', ['r'], source=func_name)
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
+                       source=func_name)
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------

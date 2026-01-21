@@ -234,6 +234,15 @@ params.set(key='REF_TABLE_FMT', value='csv', source=__NAME__,
 params.set(key='HP_WIDTH', value=None, source=__NAME__,
            desc='The High pass width [km/s]', not_none=True)
 
+# approximate mean resolution in lambda/dlambda
+params.set(key='APPROX_RESOLUTION', value=None, source=__NAME__,
+              desc='The approximate mean resolution in lambda/dlambda',
+              not_none=True)
+
+# whether to generate and use savgol template
+params.set(key='USE_SAVGOL_TEMPLATE', value=True, source=__NAME__,
+           desc='Whether to generate and use savgol template')
+
 # define the SNR cut off threshold
 params.set(key='SNR_THRESHOLD', value=None, source=__NAME__,
            desc='The SNR cut off threshold', not_none=True)
@@ -853,6 +862,21 @@ params.set(key='KW_INSTRUMENT', value='LBLINSTR', source=__NAME__,
            desc='the LBL processed date',
            comment='LBL instrument used')
 
+# define the lbl mask type key for header (neg, pos, full)
+params.set(key='KW_MASK_TYPE', value='LBLMSKTP', source=__NAME__,
+           desc='the lbl mask type key for header (neg, pos, full)',
+           comment='LBL mask type (neg, pos, full)')
+
+# define the lbl object name key for header
+params.set(key='KW_LBL_OBJNAME', value='LBL_OBJN', source=__NAME__,
+           desc='the lbl object name key for header',
+           comment='LBL object name')
+
+# define the lbl template name key for header
+params.set(key='KW_LBL_TMPNAME', value='LBL_TMPN', source=__NAME__,
+           desc='the lbl template name key for header',
+           comment='LBL template object name')
+
 # define the start time of the observation key
 params.set(key='KW_MJDATE', value=None, source=__NAME__, not_none=False,
            desc='the start time of the observation')
@@ -882,8 +906,9 @@ params.set(key='KW_DPRTYPE', value=None, source=__NAME__, not_none=False,
            desc='the DPRTYPE of the observation')
 
 # define the output type of the file
-params.set(key='KW_OUTPUT', value=None, source=__NAME__, not_none=False,
-           desc='the output type of the file')
+params.set(key='KW_OUTPUT', value='DRSOUTID', source=__NAME__, not_none=False,
+           desc='the output type of the file',
+           comment='LBL file output type')
 
 # define the drs object name
 params.set(key='KW_DRSOBJN', value=None, source=__NAME__, not_none=False,

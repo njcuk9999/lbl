@@ -59,6 +59,8 @@ class Instrument:
         self.norders: Optional[int] = None
         self.npixel: Optional[int] = None
         self.default_template_name: Optional[str] = None
+        self.default_mask_name: Optional[str] = None
+        self.default_sample_wave_name: Optional[str] = None
         # extension of the science files
         self.science_ext = '.fits'
         # hd5 file definitions
@@ -299,6 +301,14 @@ class Instrument:
         header = self.set_hkey(header, 'KW_PDATE', value=Time.now().fits)
         # add which lbl instrument was used
         header = self.set_hkey(header, 'KW_INSTRUMENT', value=self.name)
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_FITS')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
         # add the mask
         header = self.set_hkey(header, 'KW_LBLMASK', value=outputs['MASK_FILE'])
         # add the template velocity from CCF
@@ -448,7 +458,41 @@ class Instrument:
         if self.params['OBJECT_TEMPLATE'] is None:
             self.param_set('OBJECT_TEMPLATE', value=objname, source=func_name)
 
-    def write_rdb_fits(self, filename: str, rdb_data: Dict[str, Any]):
+    def calculate_savgol_template(self, dv_grid: float,
+                                  flux_dict: Dict[str, np.ndarray]):
+        # check if we are using savgol templates
+        if not self.params['USE_SAVGOL_TEMPLATE']:
+            return dict()
+        # get approximate resolution in m/s
+        approx_res = self.params['APPROX_RESOLUTION']
+        # get the rough number of pixels per fwhm
+        pix_per_fwhm = np.round((mp.speed_of_light_ms / dv_grid) / approx_res)
+        # get the window size
+        window_size = int(pix_per_fwhm)
+        # Ensure window_size is odd for scipy
+        window_size = window_size if window_size % 2 == 1 else window_size + 1
+
+        flux_savgol_dict = dict()
+        # loop around all fluxes given
+        for key in flux_dict:
+            # calculate derivatives 0 to 3
+            for deriv in range(0, 4):
+                msg = 'Calculating SavGol derivative {0} for: {1}'
+                margs = [deriv, key]
+                log.general(msg.format(*margs))
+                # get flux from key
+                flux = flux_dict[key]
+                # compute the savgol derivatives order=deriv
+                o_savgol = mp.gaussian_weighted_savgol(flux, window_size,
+                                                      polyorder=3,
+                                                      deriv=deriv, delta=1.0)
+                # push into output dictionary
+                flux_savgol_dict[f'{key}_savgol_d{deriv}'] = o_savgol
+        # return the savgol dictionary
+        return flux_savgol_dict
+
+    def write_rdb_fits(self, filename: str, rdb_data: Dict[str, Any],
+                       rdb_header: Dict[str, Tuple[Any, str]]):
         """
         Write the rdb fits file to disk
 
@@ -462,14 +506,29 @@ class Instrument:
         filename = filename.replace('.rdb', '.fits')
         # populate primary header
         header0 = fits.Header()
+        # ---------------------------------------------------------------------
+        # add header keys to header 0
+        for key in rdb_header:
+            header0[key] = rdb_header[key]
+        # ---------------------------------------------------------------------
         # add custom keys
         header0 = self.set_hkey(header0, 'KW_VERSION', __version__)
         header0 = self.set_hkey(header0, 'KW_VDATE', __date__)
         header0 = self.set_hkey(header0, 'KW_PDATE', Time.now().iso)
         header0 = self.set_hkey(header0, 'KW_INSTRUMENT',
                                 self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header0 = self.set_hkey(header0, 'KW_OUTPUT', 'LBL_RDB_FITS')
+        # set the LBL input object object name
+        header0 = self.set_hkey(header0, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header0 = self.set_hkey(header0, 'KW_LBL_TMPNAME',
+                                self.params['OBJECT_TEMPLATE'].strip())
+        # ---------------------------------------------------------------------
         # construct the parameter table
-        param_table = self.params.param_table()
+        param_table = self.params.param_table(header0)
+        # ---------------------------------------------------------------------
         # set up data extensions
         datalist = [None, rdb_data['WAVE'],
                     rdb_data['DV'], rdb_data['SDV'],
@@ -518,6 +577,17 @@ class Instrument:
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TEMPLATE')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # Write template specific keys
+        header = self.set_hkey(header, 'KW_TEMPLATE_TYPE',
+                               props['template_type'])
         header = self.set_hkey(header, 'KW_TEMPLATE_COVERAGE',
                                value=props['template_coverage'])
         header = self.set_hkey(header, 'KW_TEMPLATE_BERVBINS',
@@ -536,6 +606,12 @@ class Instrument:
         table1['flux_even'] = props['flux_even']
         table1['eflux_even'] = props['eflux_even']
         table1['rms_even'] = props['rms_even']
+        # ---------------------------------------------------------------------
+        # deal with savgol fluxes being None
+        if props['savgol_fluxes'] is not None:
+            # loop around and add to table
+            for key in props['savgol_fluxes']:
+                table1[key] = props['savgol_fluxes'][key]
         # ---------------------------------------------------------------------
         # construct table 2 - the science list
         table2 = Table()
@@ -578,6 +654,15 @@ class Instrument:
         header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
         header = self.set_hkey(header, 'KW_INSTRUMENT',
                                self.params['INSTRUMENT'])
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip())
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_TEMPLATE'].strip())
+        # define the telluric parameters
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
         header = self.set_hkey(header, 'KW_TAU_OTHERS',
@@ -656,6 +741,16 @@ class Instrument:
             header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
             header = self.set_hkey(header, 'KW_INSTRUMENT',
                                    self.params['INSTRUMENT'])
+            # set the LBL output data type
+            header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_MASK')
+            # set the LBL input object object name
+            header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                   self.params['OBJECT_SCIENCE'].strip())
+            # set the LBL input template object name
+            header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                                   self.params['OBJECT_TEMPLATE'].strip())
+            # set the LBL mask tpye
+            header = self.set_hkey(header, 'KW_MASK_TYPE', extensions[it])
             # log writing
             msg = 'Writing mask file to disk: {0}'
             log.general(msg.format(new_mask_file))
