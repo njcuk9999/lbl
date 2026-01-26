@@ -599,22 +599,44 @@ class Spirou(Instrument):
         # get wave order from header
         waveordn = sci_hdr.get_hkey(kw_waveordn, science_filename, dtype=int)
         wavedegn = sci_hdr.get_hkey(kw_wavedegn, science_filename, dtype=int)
-        # get the wave 2d list
-        wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
-                                         dim1=waveordn, dim2=wavedegn + 1,
-                                         filename=science_filename)
         # ---------------------------------------------------------------------
-        # convert to wave map
-        wavemap = np.zeros([waveordn, nbx])
-        for order_num in range(waveordn):
-            # we can have two type of polynomial type
-            #  TODO: in future should only be chebyshev
-            if poly_type == 'Chebyshev':
-                wavemap[order_num] = mp.val_cheby(wavecoeffs[order_num], xpix,
-                                                  domain=[0, nbx])
-            else:
-                wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1],
-                                                xpix)
+        # We need to check whether we have wavecoeffs key in header
+        # New versions of APERO do not have the wave coefficients in the
+        # header and we need to read a wave solution
+        # ---------------------------------------------------------------------
+        if kw_wavecoeffs.format(0, 0) in sci_hdr.keys():
+            # get the wave 2d list
+            wavecoeffs = sci_hdr.get_hkey_2d(key=kw_wavecoeffs,
+                                             dim1=waveordn, dim2=wavedegn + 1,
+                                             filename=science_filename)
+            # -----------------------------------------------------------------
+            # convert to wave map
+            wavemap = np.zeros([waveordn, nbx])
+            for order_num in range(waveordn):
+                # we can have two type of polynomial type
+                #  TODO: in future should only be chebyshev
+                if poly_type == 'Chebyshev':
+                    wavemap[order_num] = mp.val_cheby(wavecoeffs[order_num],
+                                                      xpix, domain=[0, nbx])
+                else:
+                    wavemap[order_num] = np.polyval(wavecoeffs[order_num][::-1],
+                                                    xpix)
+        # ---------------------------------------------------------------------
+        # fall back method requires a wave solution file in the calib
+        else:
+            # get calibration directory
+            calib_dir = str(os.path.join(self.params['DATA_DIR', ],
+                                         self.params['CALIB_SUBDIR']))
+            # -----------------------------------------------------------------
+            # load wave solution file
+            wavefile = sci_hdr.get_hkey(self.params['KW_CDBWAVE'],
+                                        science_filename)
+            # get the wave solution file path
+            wavepath = os.path.join(calib_dir, wavefile)
+            # check that this file exists
+            io.check_file_exists(wavepath, 'wave solution')
+            # load wave solution
+            wavemap = io.load_fits(wavepath, kind='wave solution fits file')
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
