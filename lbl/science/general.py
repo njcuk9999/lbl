@@ -1466,10 +1466,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # get splines between shifted wave grid and pixel grid
         wave2pixlist = []
         xpix = np.arange(model.shape[1])
+        # fallback spline that returns NaNs for any input
+        def nan_spline(x):
+            return np.full_like(np.array(x, dtype=float), np.nan, dtype=float)
+        # loop around orders
         for order_num in range(wavegrid.shape[0]):
             # deal with too few finite points in wavegrid
             if np.sum(np.isfinite(nwavegrid[order_num])) < 5:
-                wave2pixlist.append(np.full(len(xpix), np.nan))
+                wave2pixlist.append(nan_spline)
                 continue
             # spline between wavelength and pixel position
             wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
@@ -1537,10 +1541,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 d2model_ord = None
                 d3model_ord = None
             # -----------------------------------------------------------------
+            # deal with not enough valid pixels in this order
+            if np.sum(np.isfinite(sci_ord)) < 5:
+                continue
+            # -----------------------------------------------------------------
             # get the start and end wavelengths and pixels for this line
             wave_start = ref_table['WAVE_START'][line_it]
             wave_end = ref_table['WAVE_END'][line_it]
             x_start, x_end = wave2pix([wave_start, wave_end])
+            # -----------------------------------------------------------------
             # round pixel positions to nearest pixel
             x_start, x_end = int(np.floor(x_start)), int(np.floor(x_end))
             # -----------------------------------------------------------------
