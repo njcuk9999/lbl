@@ -609,7 +609,7 @@ class NIRPS(Instrument):
                                          self.params['CALIB_SUBDIR']))
             # -----------------------------------------------------------------
             # load wave solution file
-            wavefile = sci_hdr.get_hkey(self.params['KW_CDBWAVE'],
+            wavefile = sci_hdr.get_hkey(self.params['KW_WAVEFILE'],
                                         science_filename)
             # get the wave solution file path
             wavepath = os.path.join(calib_dir, wavefile)
