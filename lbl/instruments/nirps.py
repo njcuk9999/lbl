@@ -605,7 +605,7 @@ class NIRPS(Instrument):
         # fall back method requires a wave solution file in the calib
         else:
             # get calibration directory
-            calib_dir = str(os.path.join(self.params['DATA_DIR', ],
+            calib_dir = str(os.path.join(self.params['DATA_DIR'],
                                          self.params['CALIB_SUBDIR']))
             # -----------------------------------------------------------------
             # load wave solution file
