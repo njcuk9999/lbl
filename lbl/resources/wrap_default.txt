@@ -53,7 +53,7 @@ if __name__ == "__main__":
     rparams['OBJECT_SCIENCE'] = {OBJECT_SCIENCE}
     # This is the template that will be used or created (depending on what is
     #   run)
-    rparams['OBJECT_TEMPLATE'] = {OBJECT_TEMPLATE}
+    rparams['OBJECT_COMPARISON'] = {OBJECT_COMPARISON}
     # This is the object temperature in K - used for getting a stellar model
     #   for the masks it only has to be good to a few 100 K
     rparams['OBJECT_TEFF'] = {OBJECT_TEFF}

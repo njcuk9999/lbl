@@ -68,7 +68,7 @@ def carmenes_vis():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'CARMENES-vis')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['K2-18']
-    rparams['OBJECT_TEMPLATE'] = ['K2-18']
+    rparams['OBJECT_COMPARISON'] = ['K2-18']
     rparams['OBJECT_TEFF'] = [3500]
     rparams['BLAZE_FILE'] = None
     rparams['BLAZE_CORRECTED'] = True
@@ -95,7 +95,7 @@ def espresso():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'ESPRESSO')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['LHS1140']
-    rparams['OBJECT_TEMPLATE'] = ['LHS1140']
+    rparams['OBJECT_COMPARISON'] = ['LHS1140']
     rparams['OBJECT_TEFF'] = [3216]
     rparams['BLAZE_FILE'] = 'M.ESPRESSO.2020-09-03T23_38_07.710.fits'
     rparams['BLAZE_CORRECTED'] = True
@@ -122,7 +122,7 @@ def harps_orig():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPS_ORIG')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['PROXIMA']
-    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_COMPARISON'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'HARPS.2014-09-02T21_06_48.529_blaze_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -149,7 +149,7 @@ def harps_eso():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPS_ESO')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['GJ682']
-    rparams['OBJECT_TEMPLATE'] = ['GJ682']
+    rparams['OBJECT_COMPARISON'] = ['GJ682']
     rparams['OBJECT_TEFF'] = [3349]
     rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
@@ -175,7 +175,7 @@ def nirps_ha_apero():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'NIRPS-HA-apero')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['PROXIMA']
-    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_COMPARISON'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'E967E354D8_pp_blaze_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -202,7 +202,7 @@ def nirps_he_apero():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'NIRPS-HE-apero')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['PROXIMA']
-    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_COMPARISON'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = '5F59EED6FE_pp_blaze_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -229,7 +229,7 @@ def nirps_ha_eso():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'NIRPS-HA-eso')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['PROXIMA']
-    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_COMPARISON'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'r.NIRPS.2023-03-05T103313.641_BLAZE_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -256,7 +256,7 @@ def nirps_he_eso():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'NIRPS-HE-eso')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['PROXIMA']
-    rparams['OBJECT_TEMPLATE'] = ['PROXIMA']
+    rparams['OBJECT_COMPARISON'] = ['PROXIMA']
     rparams['OBJECT_TEFF'] = [2810]
     rparams['BLAZE_FILE'] = 'r.NIRPS.2023-01-22T144532.460_BLAZE_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -283,7 +283,7 @@ def spirou_apero():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'SPIROU-apero')
     rparams['DATA_TYPES'] = ['FP', 'SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['FP', 'GL699']
-    rparams['OBJECT_TEMPLATE'] = ['FP', 'GL699']
+    rparams['OBJECT_COMPARISON'] = ['FP', 'GL699']
     rparams['OBJECT_TEFF'] = [300, 3224]
     rparams['BLAZE_FILE'] = 'F8018F48F0_pp_blaze_AB.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -310,7 +310,7 @@ def spirou_cadc():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'SPIROU-cadc')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['GL699']
-    rparams['OBJECT_TEMPLATE'] = ['GL699']
+    rparams['OBJECT_COMPARISON'] = ['GL699']
     rparams['OBJECT_TEFF'] = [3224]
     rparams['BLAZE_CORRECTED'] = False
     # what to run and skip if already on disk
@@ -336,7 +336,7 @@ def harpsn_orig():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_ORIG')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS3.7_TOI1266']
-    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS3.7_TOI1266']
+    rparams['OBJECT_COMPARISON'] = ['HARPSN_DRS3.7_TOI1266']
     rparams['OBJECT_TEFF'] = [5668]
     rparams['BLAZE_FILE'] = 'HARPN.2022-05-12T05-15-56.213_blaze_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -363,7 +363,7 @@ def harpsn_eso():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_ESO')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['HARPSN_DRS2.3.5_TOI1266']
-    rparams['OBJECT_TEMPLATE'] = ['HARPSN_DRS2.3.5_TOI1266']
+    rparams['OBJECT_COMPARISON'] = ['HARPSN_DRS2.3.5_TOI1266']
     rparams['OBJECT_TEFF'] = [5668]
     rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
@@ -389,7 +389,7 @@ def maroonx_b():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'MAROONX_b')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['GJ486']
-    rparams['OBJECT_TEMPLATE'] = ['GJ486']
+    rparams['OBJECT_COMPARISON'] = ['GJ486']
     rparams['OBJECT_TEFF'] = [3400]
     rparams['BLAZE_FILE'] = '20200603T13_masterflat_backgroundsubtracted_FFFFF_x_0000.hd5'
     rparams['BLAZE_CORRECTED'] = False
@@ -416,7 +416,7 @@ def maroonx_r():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'MAROONX_r')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['GJ486']
-    rparams['OBJECT_TEMPLATE'] = ['GJ486']
+    rparams['OBJECT_COMPARISON'] = ['GJ486']
     rparams['OBJECT_TEFF'] = [3400]
     rparams['BLAZE_FILE'] = '20200603T13_masterflat_backgroundsubtracted_FFFFF_x_0000.hd5'
     rparams['BLAZE_CORRECTED'] = False
@@ -443,7 +443,7 @@ def sophie():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'SOPHIE')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['Gl873']
-    rparams['OBJECT_TEMPLATE'] = ['Gl873']
+    rparams['OBJECT_COMPARISON'] = ['Gl873']
     rparams['OBJECT_TEFF'] = [3228]
     rparams['BLAZE_FILE'] = 'SOPHIE.2021-08-31T15-29-01.650_blaze_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -470,7 +470,7 @@ def coralie():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'CORALIE')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['HD114082']
-    rparams['OBJECT_TEMPLATE'] = ['HD114082']
+    rparams['OBJECT_COMPARISON'] = ['HD114082']
     rparams['OBJECT_TEFF'] = [6600]
     rparams['BLAZE_FILE'] = 'CORALIE.2022-02-04T22:01:57.000_blaze_A.fits'
     rparams['BLAZE_CORRECTED'] = False
@@ -497,7 +497,7 @@ def expres():
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'EXPRES')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['SUN']
-    rparams['OBJECT_TEMPLATE'] = ['SUN']
+    rparams['OBJECT_COMPARISON'] = ['SUN']
     rparams['OBJECT_TEFF'] = [5772]
     rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk

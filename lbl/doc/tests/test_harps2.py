@@ -44,35 +44,35 @@ num = 0
 # =============================================================================
 if __name__ == "__main__":
     # run clean (reset everything)
-    _ = lbl_reset(object_science=objs[num], object_template=templates[num],
+    _ = lbl_reset(object_science=objs[num], object_comparison=templates[num],
                   **keyword_args)
     # run tellu-clean
-    _ = lbl_telluclean(object_science=objs[num], object_template=templates[num],
+    _ = lbl_telluclean(object_science=objs[num], object_comparison=templates[num],
                        telluclean_use_template=False,
                        **keyword_args)
     # run template
     _ = lbl_template(object_science=objs[num]+'_tc',
-                     object_template=templates[num]+'_tc',
+                     object_comparison=templates[num]+'_tc',
                      **keyword_args)
     # run tellu-clean
     _ = lbl_telluclean(object_science=objs[num],
-                       object_template=templates[num]+'_tc',
+                       object_comparison=templates[num]+'_tc',
                        skip_done=False, **keyword_args)
     # run template
     _ = lbl_template(object_science=objs[num]+'_tc',
-                     object_template=templates[num]+'_tc',
+                     object_comparison=templates[num]+'_tc',
                      **keyword_args)
     # run mask code
     _ = lbl_mask(object_science=objs[num]+'_tc',
-                 object_template=templates[num]+'_tc',
+                 object_comparison=templates[num]+'_tc',
                  object_teff=teffs[num], **keyword_args)
     # run compute
     _ = lbl_compute(object_science=objs[num]+'_tc',
-                    object_template=templates[num]+'_tc',
+                    object_comparison=templates[num]+'_tc',
                     **keyword_args)
     # run compile
     _ = lbl_compil(object_science=objs[num]+'_tc',
-                   object_template=templates[num]+'_tc',
+                   object_comparison=templates[num]+'_tc',
                    **keyword_args)
 
 

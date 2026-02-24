@@ -124,7 +124,7 @@ def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     frame.plot(-(dvgrid - inst.params['BERV']) / 1000, ccf_vector)
     frame.plot(-(dvgrid - inst.params['BERV']) / 1000, ccf_fit)
     # construct title
-    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE'],
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON'],
              -gcoeffs[0] / 1000, gcoeffs[1] / 1000,
              -(gcoeffs[0] - inst.params['BERV']) / 1000]
     title = ('CCF Plot\nOBJ_SCI={0} OBJ_TEMP={1}\nCCF: cent={2:.4f} km/s '
@@ -174,7 +174,7 @@ def compute_plot_sysvel(inst: InstrumentsType, dvgrid: np.ndarray,
     frames[1].set(xlabel='dv [km/s]', ylabel='residuals')
     frames[1].grid(color='grey', linestyle='--', linewidth=0.5)
     # construct title
-    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE'],
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON'],
              props['VSYS'] / 1000, props['FWHM'] / 1000, props['SNR']]
     title = ('CCF Plot\nOBJ_SCI={0} OBJ_TEMP={1}\nCCF: Vsys={2:.4f} km/s '
              'fwhm={3:.4f} km/s\nCCF SNR={4:.4f}')
@@ -256,7 +256,7 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
     else:
         str_orders = np.array(plot_orders).astype(str)
         targs = ['orders {0}'.format(','.join(str_orders))]
-    targs += [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE']]
+    targs += [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON']]
     # set labels and title
     frame[0].set(ylabel='Arbitrary flux', title=title.format(*targs))
     frame[1].set(xlabel='Wavelength [nm]', ylabel='Residuals')
@@ -304,8 +304,8 @@ def compil_cumulative_plot(inst: InstrumentsType, vrange: List[np.ndarray],
         frames[1].plot(vrange[it] / 1000.0, pdf[it] - pdf_fit[it],
                        alpha=0.2, color='grey')
     # construct title
-    title = 'OBJECT_SCIENCE = {0}    OBJECT_TEMPLATE_{1}'
-    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE']]
+    title = 'OBJECT_SCIENCE = {0}    OBJECT_COMPARISON_{1}'
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON']]
     # set labels and titles
     frames[0].set(xlabel='Velocity [km/s]',
                   ylabel='Distribution function of RVs')
@@ -384,8 +384,8 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     frames[0].set(xlabel='rjd', ylabel='RV [m/s]', title=title0)
     frames[1].set(xlabel='rjd', ylabel='RV [m/s]', title=title1)
     # construct main title
-    title = 'OBJECT_SCIENCE = {0}    OBJECT_TEMPLATE_{1}'
-    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE']]
+    title = 'OBJECT_SCIENCE = {0}    OBJECT_COMPARISON_{1}'
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON']]
     # set super title
     plt.suptitle(title.format(*targs))
     # -------------------------------------------------------------------------
@@ -422,7 +422,7 @@ def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     # plot functions here
     frame.plot(dvgrid, ccf_vector)
     # construct title
-    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_TEMPLATE'],
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON'],
              sys_vel]
     title = 'OBJ_SCI={0} OBJ_TEMP={1}\nSystem Velocity: {2:.4f} km/s '
     # set labels and title

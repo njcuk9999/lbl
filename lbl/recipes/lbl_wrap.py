@@ -40,7 +40,7 @@ log = io.log
 REMOVE_KEYS = [  # core
     'INSTRUMENT', 'DATA_DIR', 'DATA_TYPES', 'DATA_SOURCE',
     # science keys
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
+    'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'OBJECT_TEFF',
     'BLAZE_CORRECTED', 'BLAZE_FILE',
     # run keys
     'RUN_LBL_RESET',
@@ -87,7 +87,7 @@ def main(runparams: dict):
     data_source = lbl_misc.check_runparams(runparams, 'DATA_SOURCE')
     data_types = lbl_misc.check_runparams(runparams, 'DATA_TYPES')
     object_sciences = lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE')
-    object_templates = lbl_misc.check_runparams(runparams, 'OBJECT_TEMPLATE')
+    object_comparisons = lbl_misc.check_runparams(runparams, 'OBJECT_COMPARISON')
     object_teffs = lbl_misc.check_runparams(runparams, 'OBJECT_TEFF')
     blaze_corrs = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED',
                                            required=False)
@@ -130,8 +130,9 @@ def main(runparams: dict):
         #    length to object_sciences) or just a single value
         data_type = lbl_misc.wraplistcheck(data_types,
                                            'DATA_TYPES', **wkargs)
-        object_template = lbl_misc.wraplistcheck(object_templates,
-                                                 'OBJECT_TEMPLATE', **wkargs)
+        object_comparison = lbl_misc.wraplistcheck(object_comparisons,
+                                                   'OBJECT_COMPARISON',
+                                                   **wkargs)
         object_teff = lbl_misc.wraplistcheck(object_teffs,
                                              'OBJECT_TEFF', **wkargs)
         blaze_corr = lbl_misc.wraplistcheck(blaze_corrs,
@@ -150,21 +151,21 @@ def main(runparams: dict):
                                 data_source=data_source,
                                 data_type=data_type,
                                 object_science=object_science,
-                                object_template=object_template,
+                                object_comparison=object_comparison,
                                 skip_done=False,
                                 telluclean_use_template=False,
                                 blaze_corrected=blaze_corr,
                                 blaze_file=blaze_file,
                                 **keyword_args)
             # update template name
-            if not object_template.endswith('_tc'):
-                object_template = object_template + '_tc'
+            if not object_comparison.endswith('_tc'):
+                object_comparison = object_comparison + '_tc'
             # make the template (if not present)
             lbl_template.main(instrument=instrument, data_dir=data_dir,
                               data_source=data_source,
                               data_type=data_type,
                               object_science=object_science + '_tc',
-                              object_template=object_template,
+                              object_comparison=object_comparison,
                               blaze_corrected=blaze_corr,
                               blaze_file=blaze_file,
                               overwrite=True,
@@ -175,7 +176,7 @@ def main(runparams: dict):
                                 data_source=data_source,
                                 data_type=data_type,
                                 object_science=object_science,
-                                object_template=object_template,
+                                object_comparison=object_comparison,
                                 skip_done=False,
                                 telluclean_use_template=True,
                                 blaze_corrected=blaze_corr,
@@ -190,7 +191,7 @@ def main(runparams: dict):
         #                     data_source=data_source,
         #                     data_type=data_type,
         #                     object_science=object_science,
-        #                     object_template=object_template,
+        #                     object_comparison=object_comparison,
         #                     blaze_corrected=blaze_corr,
         #                     blaze_file=blaze_file,
         #                     overwrite=not runparams['SKIP_LBL_RESMAP'],
@@ -200,12 +201,12 @@ def main(runparams: dict):
         if runparams['RUN_LBL_TEMPLATE']:
             # Must produce the template for the science data and the template
             #   we use a set to do this (only runs once if they are the same)
-            for _obj_template in {object_science, object_template}:
+            for _obj_template in {object_science, object_comparison}:
                 lbl_template.main(instrument=instrument, data_dir=data_dir,
                                   data_source=data_source,
                                   data_type=data_type,
                                   object_science=object_science,
-                                  object_template=_obj_template,
+                                  object_comparison=_obj_template,
                                   blaze_corrected=blaze_corr,
                                   blaze_file=blaze_file,
                                   overwrite=not runparams['SKIP_LBL_TEMPLATE'],
@@ -215,12 +216,12 @@ def main(runparams: dict):
         if runparams['RUN_LBL_MASK']:
             # Must produce the mask for the science data and the template
             #   we use a set to do this (only runs once if they are the same)
-            for _obj_template in {object_science, object_template}:
+            for _obj_comparison in {object_science, object_comparison}:
                 lbl_mask.main(instrument=instrument, data_dir=data_dir,
                               data_source=data_source,
                               data_type=data_type,
                               object_science=object_science,
-                              object_template=_obj_template,
+                              object_comparison=_obj_comparison,
                               object_teff=object_teff,
                               overwrite=not runparams['SKIP_LBL_MASK'],
                               **keyword_args)
@@ -229,7 +230,7 @@ def main(runparams: dict):
         # if runparams['RUN_LBL_NOISE']:
         #     lbl_noise(instrument=instrument, data_dir=data_dir,
         #               object_science=object_science,
-        #               object_template=object_template,
+        #               object_comparison=object_comparison,
         #               **keyword_args)
         # ---------------------------------------------------------------------
         # run the compute code
@@ -238,7 +239,7 @@ def main(runparams: dict):
                              data_source=data_source,
                              data_type=data_type,
                              object_science=object_science,
-                             object_template=object_template,
+                             object_comparison=object_comparison,
                              blaze_corrected=blaze_corr,
                              blaze_file=blaze_file,
                              skip_done=runparams['SKIP_LBL_COMPUTE'],
@@ -250,7 +251,7 @@ def main(runparams: dict):
                              data_source=data_source,
                              data_type=data_type,
                              object_science=object_science,
-                             object_template=object_template,
+                             object_comparison=object_comparison,
                              skip_done=runparams['SKIP_LBL_COMPILE'],
                              **keyword_args)
 
@@ -273,7 +274,7 @@ def custom(runparams: dict, func, required_kwargs: List[str]):
     data_source = lbl_misc.check_runparams(runparams, 'DATA_SOURCE')
     data_types = lbl_misc.check_runparams(runparams, 'DATA_TYPES')
     object_sciences = lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE')
-    object_templates = lbl_misc.check_runparams(runparams, 'OBJECT_TEMPLATE')
+    object_comparisons = lbl_misc.check_runparams(runparams, 'OBJECT_COMPARISON')
     object_teffs = lbl_misc.check_runparams(runparams, 'OBJECT_TEFF')
     blaze_corrs = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED',
                                            required=False)
@@ -316,8 +317,8 @@ def custom(runparams: dict, func, required_kwargs: List[str]):
         #    length to object_sciences) or just a single value
         data_type = lbl_misc.wraplistcheck(data_types,
                                            'DATA_TYPES', **wkargs)
-        object_template = lbl_misc.wraplistcheck(object_templates,
-                                                 'OBJECT_TEMPLATE', **wkargs)
+        object_comparison = lbl_misc.wraplistcheck(object_comparisons,
+                                                 'OBJECT_COMPARISON', **wkargs)
         object_teff = lbl_misc.wraplistcheck(object_teffs,
                                              'OBJECT_TEFF', **wkargs)
         blaze_corr = lbl_misc.wraplistcheck(blaze_corrs,
@@ -331,7 +332,7 @@ def custom(runparams: dict, func, required_kwargs: List[str]):
         all_kwargs['data_dir'] = data_dir
         all_kwargs['data_type'] = data_type
         all_kwargs['object_science'] = object_science
-        all_kwargs['object_template'] = object_template
+        all_kwargs['object_comparison'] = object_comparison
         all_kwargs['object_teff'] = object_teff
         all_kwargs['blaze_corrected'] = blaze_corr
         all_kwargs['blaze_corrected'] = blaze_corr
@@ -362,7 +363,7 @@ if __name__ == "__main__":
     # science criteria
     rparams['DATA_TYPES'] = ['FP', 'SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['FP', 'GL699']
-    rparams['OBJECT_TEMPLATE'] = ['FP', 'GL699']
+    rparams['OBJECT_COMPARISON'] = ['FP', 'GL699']
     rparams['OBJECT_TEFF'] = [300, 3224]
     # what to run
     rparams['RUN_LBL_TELLUCLEAN'] = True

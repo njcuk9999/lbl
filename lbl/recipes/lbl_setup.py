@@ -221,8 +221,8 @@ def main(**kwargs):
     wrap_dict['DATA_TYPES'] = wrap_setup.get_str_list(['SCIENCE'])
     # set the object science
     wrap_dict['OBJECT_SCIENCE'] = wrap_setup.get_str_list(['OBJECT_NAME'])
-    # set the template
-    wrap_dict['OBJECT_TEMPLATE'] = wrap_setup.get_str_list(['TEMPLATE_NAME'])
+    # set the comparison template
+    wrap_dict['OBJECT_COMPARISON'] = wrap_setup.get_str_list(['OBJECT_COMPARISON'])
     # set the teffs
     wrap_dict['OBJECT_TEFF'] = '[3000]'
     # -------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 
+
 # =============================================================================
 # Define variables
 # =============================================================================
@@ -58,9 +59,9 @@ class Instrument:
         self.orders: Optional[List[int]] = None
         self.norders: Optional[int] = None
         self.npixel: Optional[int] = None
-        self.default_template_name: Optional[str] = None
-        self.default_mask_name: Optional[str] = None
-        self.default_sample_wave_name: Optional[str] = None
+        self.default_template_name = 'LBL_Template_{0}_default.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_default.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_default.fits'
         # extension of the science files
         self.science_ext = '.fits'
         # hd5 file definitions
@@ -209,7 +210,7 @@ class Instrument:
         :return: absolute path to ref_table file (if it exists) or None
         """
         # deal with no object template
-        self._set_object_template()
+        self._set_object_comparison()
         # set object name
         mask_name = os.path.basename(mask_file).replace('.fits', '')
         # set base name
@@ -240,9 +241,9 @@ class Instrument:
         else:
             sobjname = self.params['OBJECT_SCIENCE']
         # deal with no object template
-        self._set_object_template()
+        self._set_object_comparison()
         # set object template
-        tobjname = self.params['OBJECT_TEMPLATE']
+        tobjname = self.params['OBJECT_COMPARISON']
         # get science file basename
         science_basename = os.path.basename(science_filename)
         science_basename = science_basename.split(self.science_ext)[0]
@@ -308,7 +309,7 @@ class Instrument:
                                 self.params['OBJECT_SCIENCE'].strip())
         # set the LBL input template object name
         header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                               self.params['OBJECT_TEMPLATE'].strip())
+                               self.params['OBJECT_COMPARISON'].strip())
         # add the mask
         header = self.set_hkey(header, 'KW_LBLMASK', value=outputs['MASK_FILE'])
         # add the template velocity from CCF
@@ -336,12 +337,12 @@ class Instrument:
     def get_lblrv_files(self, directory: str) -> np.ndarray:
         """
         Get all lbl rv files from directory for this object_science and
-        object_template
+        object_comparison
 
         :param directory: str, the lbl rv directory absolute path
 
         :return: list of strs, the lbl rv files for this object_science and
-                 object_template
+                 object_comparison
         """
         # deal with no object
         if self.params['OBJECT_SCIENCE'] is None:
@@ -349,9 +350,9 @@ class Instrument:
         else:
             sobjname = self.params['OBJECT_SCIENCE']
         # deal with no object template
-        self._set_object_template()
+        self._set_object_comparison()
         # set object template
-        tobjname = self.params['OBJECT_TEMPLATE']
+        tobjname = self.params['OBJECT_COMPARISON']
         # construct base name
         bargs = ['*', sobjname, tobjname]
         basename = '{0}_{1}_{2}_lbl.fits'.format(*bargs)
@@ -388,10 +389,10 @@ class Instrument:
         :return:
         """
         # deal with no template set
-        self._set_object_template()
+        self._set_object_comparison()
         # construct base filename
         outargs = [self.params['OBJECT_SCIENCE'],
-                   self.params['OBJECT_TEMPLATE'],
+                   self.params['OBJECT_COMPARISON'],
                    self.params['RDB_SUFFIX']]
         outname1 = 'lbl_{0}_{1}{2}.rdb'.format(*outargs)
         outname2 = 'lbl2_{0}_{1}{2}.rdb'.format(*outargs)
@@ -434,29 +435,29 @@ class Instrument:
         else:
             sobjname = self.params['OBJECT_SCIENCE']
         # deal with no object template
-        self._set_object_template()
+        self._set_object_comparison()
         # set object template
-        tobjname = self.params['OBJECT_TEMPLATE']
+        tobjname = self.params['OBJECT_COMPARISON']
         # return sub directory
         return '{0}_{1}'.format(sobjname, tobjname)
 
-    def _set_object_template(self):
+    def _set_object_comparison(self):
         """
-        Check that if OBJECT_TEMPLATE is not set, if it is not set
+        Check that if OBJECT_COMPARISON is not set, if it is not set
         then set it to OBJECT_SCIENCE
 
-        :return: None - updates OBJECT_TEMPLATE if not set
+        :return: None - updates OBJECT_COMPARISON if not set
         """
         # set function name
-        func_name = __NAME__ + '.Spirou._set_object_template()'
+        func_name = __NAME__ + '.Spirou._set_object_comparison()'
         # deal with no object
         if self.params['OBJECT_SCIENCE'] is None:
             raise LblException('OBJECT_SCIENCE name must be defined')
         else:
             objname = self.params['OBJECT_SCIENCE']
         # deal with no object
-        if self.params['OBJECT_TEMPLATE'] is None:
-            self.param_set('OBJECT_TEMPLATE', value=objname, source=func_name)
+        if self.params['OBJECT_COMPARISON'] is None:
+            self.param_set('OBJECT_COMPARISON', value=objname, source=func_name)
 
     def calculate_savgol_template(self, dv_grid: float,
                                   flux_dict: Dict[str, np.ndarray]):
@@ -524,7 +525,7 @@ class Instrument:
                                 self.params['OBJECT_SCIENCE'].strip())
         # set the LBL input template object name
         header0 = self.set_hkey(header0, 'KW_LBL_TMPNAME',
-                                self.params['OBJECT_TEMPLATE'].strip())
+                                self.params['OBJECT_COMPARISON'].strip())
         # ---------------------------------------------------------------------
         # construct the parameter table
         param_table = self.params.param_table(header0)
@@ -584,7 +585,7 @@ class Instrument:
                                 self.params['OBJECT_SCIENCE'].strip())
         # set the LBL input template object name
         header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                               self.params['OBJECT_TEMPLATE'].strip())
+                               self.params['OBJECT_COMPARISON'].strip())
         # Write template specific keys
         header = self.set_hkey(header, 'KW_TEMPLATE_TYPE',
                                props['template_type'])
@@ -661,7 +662,7 @@ class Instrument:
                                 self.params['OBJECT_SCIENCE'].strip())
         # set the LBL input template object name
         header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                               self.params['OBJECT_TEMPLATE'].strip())
+                               self.params['OBJECT_COMPARISON'].strip())
         # define the telluric parameters
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
@@ -748,7 +749,7 @@ class Instrument:
                                    self.params['OBJECT_SCIENCE'].strip())
             # set the LBL input template object name
             header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                                   self.params['OBJECT_TEMPLATE'].strip())
+                                   self.params['OBJECT_COMPARISON'].strip())
             # set the LBL mask tpye
             header = self.set_hkey(header, 'KW_MASK_TYPE', extensions[it])
             # log writing
@@ -826,7 +827,8 @@ class Instrument:
         _ = model_directory, mask_directory
         raise self._not_implemented('mask_file')
 
-    def template_file(self, directory: str, required: bool = True):
+    def template_file(self, directory: str, tkind: str,
+                      required: bool = True) -> str:
         """
         Make the absolute path for the template file
 
@@ -835,8 +837,33 @@ class Instrument:
 
         :return: absolute path to template file
         """
-        _ = self, directory
-        raise self._not_implemented('template_file')
+        # set function name
+        func_name = __NAME__ + '.Instrument.template_file()'
+        # deal with no object template
+        self._set_object_comparison()
+        # set template name
+        if tkind == 'science':
+            objname = self.params['OBJECT_SCIENCE']
+            template_file = self.params['SCIENCE_TEMPLATE_FILE']
+        elif tkind == 'comparison':
+            objname = self.params['OBJECT_COMPARISON']
+            template_file = self.params['COMPARISON_TEMPLATE_FILE']
+        else:
+            emsg = 'tkind must be either "science" or "comparison" for {0}'
+            raise base_classes.LblException(emsg.format(func_name))
+        # ---------------------------------------------------------------------
+        # get template file
+        if template_file is None:
+            basename = self.default_template_name.format(objname)
+        else:
+            basename = template_file
+        # get absolute path
+        abspath = os.path.join(directory, basename)
+        # check that this file exists
+        if required:
+            io.check_file_exists(abspath, '{0} template'.format(tkind))
+        # return absolute path
+        return abspath
 
     def blaze_file(self, directory: str):
         """

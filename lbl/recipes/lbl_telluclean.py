@@ -39,7 +39,7 @@ ARGS_TEMPLATE = [  # core
     # directory
     'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
     # science
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'BLAZE_FILE', 'BLAZE_CORRECTED',
+    'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'BLAZE_FILE', 'BLAZE_CORRECTED',
     # other
     'VERBOSE', 'PROGRAM',
 ]
@@ -131,7 +131,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
     # template filename
-    template_file = inst.template_file(template_dir, required=False)
+    template_file = inst.template_file(template_dir, 'science', required=False)
     # science filenames (always non _tc files)
     science_files = inst.science_files(science_dir)
 

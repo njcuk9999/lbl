@@ -337,10 +337,10 @@ class Expres(Instrument):
             else:
                 # get absolute path
                 abspath = os.path.join(mask_directory, basename)
-        elif self.params['OBJECT_TEMPLATE'] is None:
-            raise LblException('OBJECT_TEMPLATE name must be defined')
+        elif self.params['OBJECT_COMPARISON'] is None:
+            raise LblException('OBJECT_COMPARISON name must be defined')
         else:
-            objname = self.params['OBJECT_TEMPLATE']
+            objname = self.params['OBJECT_COMPARISON']
             # define base name
             basename = self.default_mask_name.format(obj=objname,
                                                      mtype=mask_type)
@@ -349,32 +349,6 @@ class Expres(Instrument):
         # check that this file exists
         if required:
             io.check_file_exists(abspath, 'mask')
-        # return absolute path
-        return abspath
-
-    def template_file(self, directory: str, required: bool = True) -> str:
-        """
-        Make the absolute path for the template file
-
-        :param directory: str, the directory the file is located at
-        :param required: bool, if True checks that file exists on disk
-
-        :return: absolute path to template file
-        """
-        # deal with no object template
-        self._set_object_template()
-        # set template name
-        objname = self.params['OBJECT_TEMPLATE']
-        # get template file
-        if self.params['TEMPLATE_FILE'] is None:
-            basename = self.default_template_name.format(objname)
-        else:
-            basename = self.params['TEMPLATE_FILE']
-        # get absolute path
-        abspath = os.path.join(directory, basename)
-        # check that this file exists
-        if required:
-            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -893,7 +867,7 @@ class Expres(Instrument):
                                self.params['OBJECT_SCIENCE'].strip())
         # set the LBL input template object name
         header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                               self.params['OBJECT_TEMPLATE'].strip())
+                               self.params['OBJECT_COMPARISON'].strip())
         # add telluric key words
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])

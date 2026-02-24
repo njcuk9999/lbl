@@ -67,9 +67,9 @@ PROGRAM: None
 ## Default = None   SPIROU_VALUE = None
 OBJECT_SCIENCE: None
 
-# The object name to use for the template (If None set to OBJECT_SCIENCE)
+# The object name to use for the comparison (If None set to OBJECT_SCIENCE)
 ## Default = None   SPIROU_VALUE = None
-OBJECT_TEMPLATE: None
+OBJECT_COMPARISON: None
 
 # Set the data type (science, FP or LFC)
 ## Default = None   SPIROU_VALUE = None
@@ -91,9 +91,10 @@ LFC_MASK_TYPE: neg
 ## Default = None   SPIROU_VALUE = None
 BLAZE_FILE: None
 
-# Template file to use (if not defined will try to find template for OBJECT_TEMPLATE) must be present in theTEMPLATES directory
+# Template file to use (if not defined will try to find template for OBJECT_COMPARISON) must be present in theTEMPLATES directory
 ## Default = None   SPIROU_VALUE = None
-TEMPLATE_FILE: None
+SCIENCE_TEMPLATE_FILE: None
+COMPARISON_TEMPLATE_FILE: None
 
 # The input file expression to use (i.e. *e2dsff*AB.fits)
 ## Default = None   SPIROU_VALUE = *.fits

@@ -172,9 +172,9 @@ params.set(key='OBJECT_SCIENCE', value=None, source=__NAME__,
            desc='The object name for the compute function',
            arg='--obj_sci', dtype=str, not_none=True)
 
-# The object name to use for the template
-params.set(key='OBJECT_TEMPLATE', value=None, source=__NAME__,
-           desc='The object name to use for the template '
+# The object name to use for the comparison template
+params.set(key='OBJECT_COMPARISON', value=None, source=__NAME__,
+           desc='The object name to use for the comparison template '
                 '(If None set to OBJECT_SCIENCE)',
            arg='--obj_template', dtype=str)
 
@@ -207,13 +207,21 @@ params.set(key='BLAZE_FILE', value=None, source=__NAME__,
            desc='Blaze file to use (must be present in the CALIB directory)',
            arg='--blaze', dtype=str)
 
-# Template file to use (if not defined will try to find template for OBJECT)
-#   - can be None
-params.set(key='TEMPLATE_FILE', value=None, source=__NAME__,
-           desc='Template file to use (if not defined will try to find'
-                ' template for OBJECT_TEMPLATE) must be present in the'
+# Science template file to use (if not defined a template names is guessed).
+# If given must be present in the TEMPLATES directory
+params.set(key='SCIENCE_TEMPLATE_FILE', value=None, source=__NAME__,
+           desc='Science template file to use (if not defined a template '
+                'names is guessed). If given must be present in the '
                 'TEMPLATES directory',
-           arg='--template', dtype=str)
+           arg='--sci_template', dtype=str)
+
+# Comparison template file to use (if not defined a template names is guessed).
+# If given must be present in the TEMPLATES directory
+params.set(key='COMPARISON_TEMPLATE_FILE', value=None, source=__NAME__,
+           desc='Comparison template file to use (if not defined a template '
+                'names is guessed). If given must be present in the '
+                'TEMPLATES directory',
+           arg='--sci_template', dtype=str)
 
 # define the input files
 params.set(key='INPUT_FILE', value='*', source=__NAME__,

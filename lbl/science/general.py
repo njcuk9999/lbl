@@ -583,7 +583,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
         return props
     # get the object name
     sci_objname = inst.params['OBJECT_SCIENCE']
-    template_objname = inst.params['OBJECT_TEMPLATE']
+    template_objname = inst.params['OBJECT_COMPARISON']
     rv_min = inst.params['ROUGH_CCF_MIN_RV']
     rv_max = inst.params['ROUGH_CCF_MAX_RV']
     rv_step = inst.params['ROUGH_CCF_STEP_RV']
@@ -3419,7 +3419,7 @@ def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
     sys_vel = -0.5 * fit_coeffs[1] / fit_coeffs[0]
     # display system velocity
     msg = 'System velocity for {0} is {1:.3f} km/s'
-    log.general(msg.format(inst.params['OBJECT_TEMPLATE'], sys_vel))
+    log.general(msg.format(inst.params['OBJECT_COMPARISON'], sys_vel))
     # -------------------------------------------------------------------------
     # ccf plot
     plot.mask_plot_ccf(inst, dvs, ccf, sys_vel)

@@ -41,9 +41,9 @@ if __name__ == "__main__":
     # The object name (this is the directory name under the /science/
     #    sub-directory and thus does not have to be the name in the header
     rparams['OBJECT_SCIENCE'] = ['GL699']
-    # This is the template that will be used or created (depending on what is
-    #   run)
-    rparams['OBJECT_TEMPLATE'] = ['GL699']
+    # This is the comparison template that will be used or created
+    #   (depending on what is run)
+    rparams['OBJECT_COMPARISON'] = ['GL699']
     # This is the object temperature in K - used for getting a stellar model
     #   for the masks it only has to be good to a few 100 K
     rparams['OBJECT_TEFF'] = [3224]

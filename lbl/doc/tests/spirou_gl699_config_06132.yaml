@@ -12,8 +12,8 @@ DATA_TYPE: SCIENCE
 # Set science object name
 OBJECT_SCIENCE: GL699
 
-# Set template object name
-OBJECT_TEMPLATE: GL699
+# Set comparison object name
+OBJECT_COMPARISON: GL699
 
 # Set the object Teff (for mask creation)
 OBJECT_TEFF: 3224
@@ -25,7 +25,8 @@ INPUT_FILE: '*e2dsff*AB.fits'
 BLAZE_FILE: None
 
 # Set template file (None for default)
-TEMPLATE_FILE: None
+SCIENCE_TEMPLATE_FILE: None
+COMPARISON_TEMPLATE_FILE: None
 
 # Overwrite current mask file (if present)
 OVERWRITE: True

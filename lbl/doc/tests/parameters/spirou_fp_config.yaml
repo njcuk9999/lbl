@@ -13,7 +13,7 @@ DATA_TYPE: FP
 OBJECT_SCIENCE: FP
 
 # Set template object name
-OBJECT_TEMPLATE: FP
+OBJECT_COMPARISON: FP
 
 # Define the earliest file allowed for template construction
 TEMPLATE_MJDSTART: 58850
@@ -28,7 +28,8 @@ INPUT_FILE: '*e2dsff*.fits'
 BLAZE_FILE: A87ACF59FD_pp_blaze_AB.fits
 
 # Set template file (None for default)
-TEMPLATE_FILE: None
+SCIENCE_TEMPLATE_FILE: None
+COMPARISON_TEMPLATE_FILE: None
 
 # Overwrite current mask file (if present)
 OVERWRITE: True

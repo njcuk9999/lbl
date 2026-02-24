@@ -41,7 +41,7 @@ ARGS_MASK = [  # core
     # directory
     'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR',
     # science
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'OBJECT_TEFF',
+    'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'OBJECT_TEFF',
     'OBJECT_LOGG', 'OBJECT_Z', 'OBJECT_ALPHA',
     # plotting
     'PLOT', 'PLOT_MASK_CCF',
@@ -104,7 +104,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # must force object science to object template
-    inst.params['OBJECT_SCIENCE'] = str(inst.params['OBJECT_TEMPLATE'])
+    inst.params['OBJECT_SCIENCE'] = str(inst.params['OBJECT_COMPARISON'])
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # mask filename
     mask_file = inst.mask_file(models_dir, mask_dir, required=False)
     # template filename
-    template_file = inst.template_file(template_dir)
+    template_file = inst.template_file(template_dir, 'comparison')
     # get template file
     template_table, template_hdr = inst.load_template(template_file,
                                                       get_hdr=True)

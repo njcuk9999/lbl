@@ -54,10 +54,10 @@ if __name__ == "__main__":
     #    sub-directory and thus does not have to be the name in the header
     rparams['OBJECT_SCIENCE'] = ['FP', 'GJ1002', 'GJ1286', 'GJ1289', 'GL15A',
                                  'GL411', 'GL412A', 'GL687', 'GL699', 'GL905']
-    # This is the template that will be used or created (depending on what is
-    #   run)
-    rparams['OBJECT_TEMPLATE'] = ['FP', 'GJ1002', 'GJ1286', 'GJ1289', 'GL15A',
-                                  'GL411', 'GL412A', 'GL687', 'GL699', 'GL905']
+    # This is the comparison template that will be used or created
+    #   (depending on what is run)
+    rparams['OBJECT_COMPARISON'] = ['FP', 'GJ1002', 'GJ1286', 'GJ1289', 'GL15A',
+                                   'GL411', 'GL412A', 'GL687', 'GL699', 'GL905']
     # This is the object temperature in K - used for getting a stellar model
     #   for the masks it only has to be good to a few 100 K
     rparams['OBJECT_TEFF'] = [300, 2900, 2900, 3250, 3603, 3550, 3549, 3420,

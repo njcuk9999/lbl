@@ -43,7 +43,7 @@ ARGS_TEMPLATE = [  # core
     # directory
     'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
     # science
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'BLAZE_FILE', 'BLAZE_CORRECTED',
+    'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'BLAZE_FILE', 'BLAZE_CORRECTED',
     # other
     'VERBOSE', 'PROGRAM',
 ]
@@ -100,14 +100,46 @@ def __main__(inst: InstrumentsType, **kwargs):
         # assert inst type (for python typing later)
         amsg = 'inst must be a valid Instrument class'
         assert isinstance(inst, InstrumentsList), amsg
+
+    # must run the template on BOTH the science and comparison objects
+    # if science and comparison are the same we just run one template
+    if inst.params['OBJECT_SCIENCE'] == inst.params['OBJECT_COMPARISON']:
+        objnames = [str(inst.params['OBJECT_SCIENCE'])]
+        objkinds = ['science']
+    # if comparison is not set, we just run one template on the science object
+    elif inst.params['OBJECT_COMPARISON'] in [None, '', 'None', 'Null']:
+        inst.params['OBJECT_COMPARISON'] = str(inst.params['OBJECT_SCIENCE'])
+        objnames = [str(inst.params['OBJECT_SCIENCE'])]
+        objkinds = ['science']
+    # otherwise we run both
+    else:
+        objnames = [str(inst.params['OBJECT_SCIENCE']),
+                    str(inst.params['OBJECT_COMPARISON'])]
+        objkinds = ['science', 'comparison']
+    # loop around object names
+    for objname, objkind in zip(objnames, objkinds):
+        # print a printout to show which object with are making a template for
+        # only if we have more than one templates to loop around
+        if len(objnames) > 1:
+            log.info('*'*50)
+            lmsg = 'Running template for {0} object: {1}'.format(objkind, objname)
+            log.info(lmsg)
+            log.info('*' * 50)
+        # run the full template code
+        run_template(inst, objname, objkind)
+    # return all local variables (for debug)
+    return locals()
+
+
+def run_template(inst, objname: str, objkind: str):
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # must force object science to object template
-    inst.params['OBJECT_SCIENCE'] = str(inst.params['OBJECT_TEMPLATE'])
+    inst.params['OBJECT_SCIENCE'] = str(objname)
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
     # get the pixel hp_width [needs to be in m/s]
-    hp_width = inst.params['HP_WIDTH'] * 1000
+    hp_width = float(inst.params['HP_WIDTH']) * 1000
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
@@ -118,7 +150,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
     # template filename
-    template_file = inst.template_file(template_dir, required=False)
+    template_file = inst.template_file(template_dir, objkind, required=False)
 
     # -------------------------------------------------------------------------
     # Step 3: Check if template exists

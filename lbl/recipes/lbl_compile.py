@@ -39,7 +39,7 @@ ARGS_COMPIL = [  # core
     # directory
     'DATA_DIR', 'LBLRV_SUBDIR', 'LBLRDB_SUBDIR',
     # science
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE',
+    'OBJECT_SCIENCE', 'OBJECT_COMPARISON',
     # plotting
     'PLOT', 'PLOT_COMPIL_CUMUL', 'PLOT_COMPIL_BINNED',
     # other
@@ -120,7 +120,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 2: set filenames
     # -------------------------------------------------------------------------
-    # get all lblrv files for this object_science and object_template
+    # get all lblrv files for this object_science and object_comparison
     lblrv_files = inst.get_lblrv_files(lblrv_dir)
 
     # deal with no lblrv files (we cannot run compile)
@@ -129,7 +129,7 @@ def __main__(inst: InstrumentsType, **kwargs):
         wargs = [lblrv_dir]
         raise LblException(wmsg.format(*wargs))
 
-    # get rdb files for this object_science and object_template
+    # get rdb files for this object_science and object_comparison
     rdbfiles = inst.get_lblrdb_files(lbl_rdb_dir)
     rdbfile1, rdbfile2, rdbfile3, rdbfile4, drift_file = rdbfiles
 

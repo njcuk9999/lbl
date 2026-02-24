@@ -340,10 +340,10 @@ class Spirou(Instrument):
             else:
                 # get absolute path
                 abspath = os.path.join(mask_directory, basename)
-        elif self.params['OBJECT_TEMPLATE'] is None:
-            raise LblException('OBJECT_TEMPLATE name must be defined')
+        elif self.params['OBJECT_COMPARISON'] is None:
+            raise LblException('OBJECT_COMPARISON name must be defined')
         else:
-            objname = self.params['OBJECT_TEMPLATE']
+            objname = self.params['OBJECT_COMPARISON']
             # define base name
             basename = self.default_mask_name.format(obj=objname, 
                                                      mtype=mask_type)
@@ -352,32 +352,6 @@ class Spirou(Instrument):
         # check that this file exists
         if required:
             io.check_file_exists(abspath, 'mask')
-        # return absolute path
-        return abspath
-
-    def template_file(self, directory: str, required: bool = True) -> str:
-        """
-        Make the absolute path for the template file
-
-        :param directory: str, the directory the file is located at
-        :param required: bool, if True checks that file exists on disk
-
-        :return: absolute path to template file
-        """
-        # deal with no object template
-        self._set_object_template()
-        # set template name
-        objname = self.params['OBJECT_TEMPLATE']
-        # get template file
-        if self.params['TEMPLATE_FILE'] is None:
-            basename = self.default_template_name.format(objname)
-        else:
-            basename = self.params['TEMPLATE_FILE']
-        # get absolute path
-        abspath = os.path.join(directory, basename)
-        # check that this file exists
-        if required:
-            io.check_file_exists(abspath, 'template')
         # return absolute path
         return abspath
 
@@ -1085,17 +1059,24 @@ class Spirou(Instrument):
         log.general('\tFound {0} Science files'.format(len(science_files)))
         # remove these from files
         files = list(np.array(files)[~np.in1d(files, science_files)])
-
         # --------------------------------------------------------------------
         # print progress
         log.general('Locating Template files')
         # find template files
-        if params['TEMPLATE_FILE'] in ['None', '', None]:
+        temp_files = []
+        if params['SCIENCE_TEMPLATE_FILE'] in ['None', '', None]:
             suffix = 'Template_s1dv_{0}_sc1d_v_file_AB.fits'
-            suffix = suffix.format(params['OBJECT_TEMPLATE'])
+            suffix = suffix.format(params['OBJECT_SCIENCE'])
         else:
-            suffix = params['TEMPLATE_FILE']
-        temp_files = io.find_files(files, suffix=suffix)
+            suffix = params['SCIENCE_TEMPLATE_FILE']
+        temp_files += io.find_files(files, suffix=suffix)
+        # for comparison
+        if params['COMPARISON_TEMPLATE_FILE'] in ['None', '', None]:
+            suffix = 'Template_s1dv_{0}_sc1d_v_file_AB.fits'
+            suffix = suffix.format(params['OBJECT_COMPARISON'])
+        else:
+            suffix = params['COMPARISON_TEMPLATE_FILE']
+        temp_files += io.find_files(files, suffix=suffix)
         # print number found
         log.general('\tFound {0} Template files'.format(len(temp_files)))
         # remove these from files

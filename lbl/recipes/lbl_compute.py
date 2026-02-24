@@ -41,7 +41,8 @@ ARGS_COMPUTE = [  # core
     'DATA_DIR', 'MASK_SUBDIR', 'TEMPLATE_SUBDIR', 'CALIB_SUBDIR',
     'SCIENCE_SUBDIR', 'LBLRV_SUBDIR', 'LBLREFTAB_SUBDIR',
     # science
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'INPUT_FILE', 'TEMPLATE_FILE',
+    'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'INPUT_FILE',
+    'SCIENCE_TEMPLATE_FILE', 'COMPANION_TEMPLATE_FILE',
     'BLAZE_FILE', 'BLAZE_CORRECTED', 'HP_WIDTH', 'USE_NOISE_MODEL',
     # plotting
     'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
@@ -131,7 +132,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # mask filename
     mask_file = inst.mask_file(models_dir, mask_dir)
     # template filename
-    template_file = inst.template_file(template_dir)
+    # TODO: Sort out inst.template_file
+    science_template_file = inst.template_file(template_dir, 'science')
+    comparison_template_file = inst.template_file(template_dir, 'comparison')
     # blaze filename (None if not set)
     blaze_file = inst.blaze_file(calib_dir)
     # science filenames
@@ -157,14 +160,18 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 5: Get the systemic velocity properties for template
     # -------------------------------------------------------------------------
-    systemic_vel_props = general.get_systemic_vel_props(inst, template_file,
-                                                        mask_file)
+    # get systemic velocity for the science template
+    sargs = [inst, science_template_file, mask_file]
+    science_sys_vel_props = general.get_systemic_vel_props(*sargs)
+    # get systemic velocity for the comparison template
+    cargs = [inst, comparison_template_file, mask_file]
+    comparison_sys_vel_props = general.get_systemic_vel_props(*cargs)
 
     # -------------------------------------------------------------------------
     # Step 5: spline the template
     # -------------------------------------------------------------------------
-    splines = general.spline_template(inst, template_file,
-                                      systemic_vel_props['MASK_SYS_VEL'],
+    splines = general.spline_template(inst, comparison_template_file,
+                                      comparison_sys_vel_props['MASK_SYS_VEL'],
                                       models_dir)
     # -------------------------------------------------------------------------
     # Step 6: Loop around science files
@@ -315,7 +322,7 @@ def __main__(inst: InstrumentsType, **kwargs):
             cout = general.compute_rv(inst, it, sci_data, sci_hdr,
                                       splines=splines,
                                       ref_table=ref_table, blaze=blazeimage,
-                                      systemic_props=systemic_vel_props,
+                                      systemic_props=science_sys_vel_props,
                                       systemic_all=systemic_all,
                                       mjdate_all=mjdate_all,
                                       model_velocity=model_velocity,

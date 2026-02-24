@@ -15,13 +15,13 @@ VERBOSE,2,2,2,2,2,"Verbosity 0=only warnings/errors, 1=info/warnings/errors,2=ge
 USE_TQDM,True,True,True,True,True,Whether to use tqdm module in loops (only for verbose=2)
 PROGRAM,None,None,None,None,None,Whether to add program id to the logging message
 OBJECT_SCIENCE,None,None,None,None,None,The object name for the compute function
-OBJECT_TEMPLATE,None,None,None,None,None,The object name to use for the template (If None set to OBJECT_SCIENCE)
+OBJECT_COMPARISON,None,None,None,None,None,The object name to use for the comparison (If None set to OBJECT_SCIENCE)
 DATA_TYPE,None,None,None,None,None,"Set the data type (science, FP or LFC)"
 SCIENCE_MASK_TYPE,pos,pos,pos,pos,pos,"the mask type (pos, neg, full)"
 FP_MASK_TYPE,neg,neg,neg,neg,neg,"the mask type (pos, neg, full)"
 LFC_MASK_TYPE,neg,neg,neg,neg,neg,"the mask type (pos, neg, full)"
 BLAZE_FILE,None,None,None,None,None,Blaze file to use (must be present in the CALIB directory)
-TEMPLATE_FILE,None,None,None,None,None,Template file to use (if not defined will try to find template for OBJECT_TEMPLATE) must be present in theTEMPLATES directory
+OBJECT_COMPARISON,None,None,None,None,None,Template file to use (if not defined will try to find template for OBJECT_COMPARISON) must be present in the TEMPLATES directory
 INPUT_FILE,None,*.fits,*e2ds*A.fits,ES_*.fits,*e2ds*A.fits,The input file expression to use (i.e. *e2dsff*AB.fits)
 MASK_FILE,None,None,None,None,None,Override the mask to be used (within mask dir or full path)
 REF_TABLE_FMT,csv,csv,csv,csv,csv,Ref table format (i.e. csv)

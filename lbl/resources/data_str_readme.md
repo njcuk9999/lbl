@@ -14,7 +14,7 @@
 
 - /lblrv/
 
-        LBL RV files (in `{OBJECT_SCIENCE}_{OBJECT_TEMPLATE}` sub-directories) are stored here
+        LBL RV files (in `{OBJECT_SCIENCE}_{OBJECT_COMPARISON}` sub-directories) are stored here
 
 - /masks/
 

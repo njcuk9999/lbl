@@ -40,7 +40,7 @@ ARGS_TEMPLATE = [  # core
     # directory
     'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
     # science
-    'OBJECT_SCIENCE', 'OBJECT_TEMPLATE', 'BLAZE_FILE', 'BLAZE_CORRECTED',
+    'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'BLAZE_FILE', 'BLAZE_CORRECTED',
     # other
     'VERBOSE', 'PROGRAM',
 ]
@@ -100,7 +100,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # must force object science to object template
-    inst.params['OBJECT_SCIENCE'] = str(inst.params['OBJECT_TEMPLATE'])
+    inst.params['OBJECT_SCIENCE'] = str(inst.params['OBJECT_COMPARISON'])
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
     # get the pixel hp_width [needs to be in m/s]
