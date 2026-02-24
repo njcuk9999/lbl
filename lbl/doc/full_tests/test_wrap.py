@@ -22,17 +22,18 @@ from lbl import lbl_wrap
 TEST_PATH = '/scratch3/lbl/data/test/'
 
 # define which instruments to test (using functions in this module)
-INSTRUMENTS = [#'carmenes_vis',
-               # 'espresso',
-               # 'harps_orig', 'harps_eso',
-               # 'harpsn_orig', 'harpsn_eso',
+INSTRUMENTS = [
+               'carmenes_vis',
+               'espresso',
+               'harps_orig', 'harps_eso',
+               'harpsn_orig', 'harpsn_eso',
                'nirps_ha_apero', 'nirps_he_apero',
-               # 'nirps_ha_eso', 'nirps_he_eso',
+               'nirps_ha_eso', 'nirps_he_eso',
                'spirou_apero', 'spirou_cadc',
-               # 'maroonx_b', 'maroonx_r',
-               # 'sophie',
-               # 'coralie',
-               # 'expres',
+               'maroonx_b', 'maroonx_r',
+               'sophie',
+               'coralie',
+               'expres',
                ]
 
 # define global params to override
