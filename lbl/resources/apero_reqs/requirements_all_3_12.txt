@@ -1,0 +1,122 @@
+# requirements for apero-core,apero-drs,lbl,pogos,sossisse,scarvs,sorbet,tsovore
+# PYTHON 3.12 ONLY - no longer supporting 3.11
+# requires-python = ">=3.12,<3.13"
+# ✓ = Explicit Python 3.12 classifier support
+# Notes on packages without 3.12 classifiers: they work via requires_python >= constraint
+# EXOPLANET & ASTRONOMY PACKAGES
+juliet                          # Current version: 2.2.10 (upgraded from 2.2.7)
+jwst                            # Current version: 1.20.2 ✓ (upgraded from 1.17.1)
+# STATISTICAL & ANALYSIS PACKAGES
+arviz                           # Current version: 0.23.4 ✓ (upgraded from 0.20.0)
+astropy                         # Current version: 7.2.0 ✓ (upgraded from 7.0.1)
+astroquery                      # Current version: 0.4.11 (upgraded from 0.4.9.post1)
+astroplan                       # Current version: 0.10.1 (no upgrade needed)
+batman-package                  # Current version: 2.5.3 (upgraded from 2.5.2)
+barycorrpy                      # Current version: 0.4.4 (no upgrade needed)
+beautifulsoup4                  # Current version: 4.12.3 ✓ (added for web scraping support)
+bokeh                           # Current version: 3.8.2 ✓ (upgraded from 3.6.3)
+Bottleneck                      # Current version: 1.6.0 ✓ (upgraded from 1.4.2)
+corner                          # Current version: 2.2.3 (no upgrade needed)
+duckdb                          # Current version: 1.4.4 ✓ (upgraded from 1.2.0)
+dynesty                         # Current version: 3.0.0 (upgraded from 2.1.5, MAJOR VERSION)
+emcee                           # Current version: 3.1.6 (no upgrade needed)
+exotic-ld                       # Current version: 3.2.0 (no upgrade needed)
+GitPython                       # Current version: 3.1.46 ✓ (upgraded from 3.1.44)
+gitchangelog                    # Current version: 3.0.4 (no upgrade needed)
+gspread-pandas                  # Current version: 3.3.0 (no upgrade needed)
+gspread                         # Current version: 5.12.4 (kept at 5.x, gspread-pandas requires <6)
+h5py                            # Current version: 3.15.1 ✓ (upgraded from 3.13.0)
+ipython                         # Current version: 8.32.0 (KEPT at 8.x, 9.x breaks PyCharm)
+ipdb                            # Current version: 0.13.13 (no upgrade needed)
+jax                             # Current version: 0.9.0.1 ✓ (upgraded from 0.4.31, MAJOR VERSION)
+jaxoplanet                      # Current version: 0.1.0 (upgraded from 0.0.3)
+kepmodel                        # Current version: 1.0.8 (no upgrade needed)
+lightkurve                      # Current version: 2.5.1 ✓ (upgraded from 2.5.0)
+matplotlib                      # Current version: 3.10.8 ✓ (upgraded from 3.10.1)
+notebook                        # Current version: 7.5.4 ✓ (upgraded from 7.3.2)
+# CORE NUMERICAL PACKAGES - CRITICAL
+numba                           # Current version: 0.64.0 ✓ (upgraded from 0.61.0, compatible with NumPy 2.4.2)
+numexpr                         # Current version: 2.14.1 ✓ (upgraded from 2.10.2)
+numpy                           # Current version: 2.4.2 ✓ (upgraded from 1.26.4, MAJOR VERSION CHANGE)
+numpyro                         # Current version: 0.20.0 ✓ (upgraded from 0.17.0)
+pandas                          # Current version: 3.0.1 ✓ (upgraded from 2.2.3, MAJOR VERSION CHANGE)
+pandastable                     # Current version: 0.14.0 (upgraded from 0.13.1)
+pandasql                        # Current version: 0.7.3 (no upgrade needed)
+psutil                          # Current version: 7.2.2 (upgraded from 7.0.0)
+PyYAML                          # Current version: 6.0.3 ✓ (upgraded from 6.0.2)
+PyMySQL                         # Current version: 1.1.2 (upgraded from 1.1.1)
+pytz                            # Current version: 2025.2 ✓ (added for timezone support)
+ruamel.yaml                     # Current version: 0.19.1 ✓ (upgraded from 0.18.10)
+pytz
+requests                        # Current version: 2.32.5 ✓ (upgraded from 2.32.3)
+ruamel.yaml                     # Current version: 0.19.1 ✓ (upgraded from 0.18.10)
+# SCIENTIFIC PACKAGES
+pastasoss                       # Current version: 1.2.2 (no upgrade needed)
+scikit-image                    # Current version: 0.26.0 ✓ (upgraded from 0.25.2)
+scikit-learn                    # Current version: 1.8.0 ✓ (upgraded from 1.6.1)
+scipy                           # Current version: 1.17.1 ✓ (upgraded from 1.15.2, scipy.stats compatible)
+ipdb                            # Current version: 0.13.13 (no upgrade needed)
+SQLAlchemy                      # Current version: 2.0.47 ✓ (upgraded from 2.0.38)
+sqlalchemy_utils                # Current version: 0.42.1 ✓ (upgraded from 0.41.2)
+starry                          # Current version: 1.2.0 (no upgrade needed)
+statsmodels                     # Current version: 0.14.6 ✓ (upgraded from 0.14.4)
+tables                          # Current version: 3.11.0 ✓ (upgraded from 3.10.2)
+tinygp                          # Current version: 0.3.0 (no upgrade needed)
+tqdm                            # Current version: 4.67.3 ✓ (upgraded from 4.67.1)
+ttkthemes                       # Current version: 3.3.0 ✓ (upgraded from 3.2.2)
+# DOCUMENTATION & UTILITY PACKAGES
+Sphinx                          # Current version: 9.1.0 ✓ (upgraded from 8.2.1, requires >=3.12)
+sphinx-toolbox                  # Current version: 3.9.0 (kept at 3.9.0 due to ruamel.yaml<=0.18.16 constraint)
+wget                            # Current version: 3.2 (no upgrade needed)
+wpca                            # Current version: 0.1 (no upgrade needed)
+xarray                          # Current version: 2026.2.0 ✓ (upgraded from 2025.1.2)
+xlrd                            # Current version: 2.0.2 (upgraded from 2.0.1)
+yagmail                         # Current version: 0.15.293 (no upgrade needed)
+# ======================
+# External git packages
+# ======================
+Astraeus @ git+https://github.com/kevin218/Astraeus.git
+# ======================
+# Internal git packages
+# ======================
+# aperocore @ git+https://github.com/njcuk9999/apero-drs.git@v0.8.003#subdirectory=apero-core
+# lbl @ git+https://github.com/njcuk9999/lbl.git
+# sossisse @ git+https://github.com/njcuk9999/sossisse.git
+# ======================
+# CRITICAL MIGRATION NOTES FOR PYTHON 3.12
+# ======================
+# 1. NUMPY 2.x BREAKING CHANGES
+#    Removed types (search your code for these):
+#    - np.int, np.float, np.bool_, np.complex_
+#    - np.unicode_, np.object_, np.str_
+#    Replace with: int, float, bool, complex, str, or np.int64, np.float64, etc.
+# 2. PANDAS 3.0 BREAKING CHANGES
+#    - Index.to_list() behavior changed
+#    - groupby() operation changes
+#    - Categorical dtype handling changes
+#    ACTION: Run full DataFrame test suite
+# 3. JAX MAJOR UPGRADE (0.4.31 → 0.9.0.1)
+#    - Significant API changes likely
+#    - jaxoplanet also updated to 0.1.0
+#    ACTION: Test all JAX-dependent code thoroughly
+# 4. NUMBA & NUMPY 2.4.2
+#    - numba 0.64.0 confirmed compatible with numpy 2.4.2
+#    - Earlier numba versions (0.61.0) NOT compatible with numpy 2.x
+# 5. DYNESTY 3.0 UPGRADE
+#    - Major version change from 2.1.5
+#    ACTION: Check for parameter/API changes in nested sampling
+# 6. IPYTHON CONSTRAINT
+#    - Kept at 8.32.0 (8.x series)
+#    - Version 9.x breaks PyCharm integration
+#    - This is intentional and recommended
+# 7. RADVEL COMPATIBILITY
+#    - Upgraded from 1.4.11 to 1.5.0
+#    - Explicit Python 3.12 support (has 3.12 classifier)
+#    - requires_python: >=3.8
+#    - Must be installed FIRST, before juliet
+#    - No known breaking changes
+# 8. PACKAGES WITHOUT EXPLICIT 3.12 CLASSIFIERS
+#    These work via requires_python constraints but should be tested:
+#    astroplan, astroquery, barycorrpy, batman-package, corner, dynesty, emcee,
+#    exotic-ld, gspread, gspread-pandas, gitchangelog, jaxoplanet, kepmodel,
+#    pandastable, pandasql, pastasoss, spleaf, starry, tinygp, wget, wpca, xlrd, yagmail

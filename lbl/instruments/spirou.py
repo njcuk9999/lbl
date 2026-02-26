@@ -1030,7 +1030,7 @@ class Spirou(Instrument):
         # print number found
         log.general('\tFound {0} sym FP files'.format(len(symfp_files)))
         # remove these from files
-        files = list(np.array(files)[~np.in1d(files, symfp_files)])
+        files = list(np.array(files)[~np.isin(files, symfp_files)])
         # --------------------------------------------------------------------
         # print progress
         log.general('Locating FP_FP files')
@@ -1043,7 +1043,7 @@ class Spirou(Instrument):
         # print number found
         log.general('\tFound {0} FP_FP files'.format(len(fpfp_files)))
         # remove these from files
-        files = list(np.array(files)[~np.in1d(files, fpfp_files)])
+        files = list(np.array(files)[~np.isin(files, fpfp_files)])
         # --------------------------------------------------------------------
         # print progress
         log.general('Locating Science files')
@@ -1058,7 +1058,7 @@ class Spirou(Instrument):
         # print number found
         log.general('\tFound {0} Science files'.format(len(science_files)))
         # remove these from files
-        files = list(np.array(files)[~np.in1d(files, science_files)])
+        files = list(np.array(files)[~np.isin(files, science_files)])
         # --------------------------------------------------------------------
         # print progress
         log.general('Locating Template files')
@@ -1080,7 +1080,7 @@ class Spirou(Instrument):
         # print number found
         log.general('\tFound {0} Template files'.format(len(temp_files)))
         # remove these from files
-        files = list(np.array(files)[~np.in1d(files, temp_files)])
+        files = list(np.array(files)[~np.isin(files, temp_files)])
         # --------------------------------------------------------------------
         # print progress
         log.general('Locating Mask files')
@@ -1090,7 +1090,7 @@ class Spirou(Instrument):
         # print number found
         log.general('\tFound {0} Mask files'.format(len(temp_files)))
         # remove these from files
-        files = list(np.array(files)[~np.in1d(files, mask_files)])
+        files = list(np.array(files)[~np.isin(files, mask_files)])
         # --------------------------------------------------------------------
         # storage of blaze files
         blaze_files = []

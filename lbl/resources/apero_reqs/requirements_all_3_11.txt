@@ -1,0 +1,78 @@
+# requirements for apero-core,apero-drs,lbl,pogos,sossisse,scarvs,sorbet,tsovore
+# requires-python = "==3.11.*"
+
+radvel                        # Current version: 1.4.11
+juliet                          # must be first (but after radvel) # Current version: 2.2.7
+jwst                            # Current version: 1.17.1
+
+arviz                           # Current version: 0.20.0
+astropy                         # Current version: 7.0.1
+astroquery                      # Current version: 0.4.9.post1
+astroplan                       # Current version: 0.10.1
+batman-package                  # Current version: 2.5.2
+barycorrpy                      # Current version: 0.4.4
+bokeh                           # Current version: 3.6.3
+Bottleneck                      # Current version: 1.4.2
+corner                          # Current version: 2.2.3
+duckdb                          # Current version: 1.2.0
+dynesty                         # Current version: 2.1.5
+emcee                           # Current version: 3.1.6
+exotic-ld                       # Current version: 3.2.0
+GitPython                       # Current version: 3.1.44
+gitchangelog                    # Current version: 3.0.4
+gspread-pandas                  # Current version: 3.3.0
+gspread                         # Current version: 5.12.4
+h5py                            # Current version: 3.13.0
+ipython                         # version 9.* breaks pycharm # Current version: 8.32.0
+ipdb                            # Current version: 0.13.13
+jax                             # Current version: 0.4.31
+jaxoplanet                      # Current version: 0.0.3
+kepmodel                        # Current version: 1.0.8
+lightkurve                      # Current version: 2.5.0
+matplotlib                      # Current version: 3.10.1
+notebook                        # Current version: 7.3.2
+numba                           # Current version: 0.61.0
+numexpr                         # Current version: 2.10.2
+numpy                           # Current version: 1.26.4
+numpyro                         # Current version: 0.17.0
+pastasoss                       # Current version: 1.2.2
+pandas                          # Current version: 2.2.3
+pandastable                     # Current version: 0.13.1
+pandasql                        # Current version: 0.7.3
+Pillow                          # Current version: 11.1.0
+psutil                          # Current version: 7.0.0
+PyYAML                          # Current version: 6.0.2
+PyMySQL                         # Current version: 1.1.1
+requests                        # Current version: 2.32.3
+ruamel.yaml                     # Current version: 0.18.10
+scikit-image                    # Current version: 0.25.2
+scikit-learn                    # Current version: 1.6.1
+scipy                           # Current version: 1.15.2
+Sphinx                          # Current version: 8.2.1
+sphinx-toolbox                  # Current version: 3.9.0
+spleaf                          # Current version: 2.1.13
+SQLAlchemy                      # Current version: 2.0.38
+sqlalchemy_utils                # Current version: 0.41.2
+starry                          # Current version: 1.2.0
+statsmodels                     # Current version: 0.14.4
+tables                          # Current version: 3.10.2
+tinygp                          # Current version: 0.3.0
+tqdm                            # Current version: 4.67.1
+ttkthemes                       # Current version: 3.2.2
+wget                            # Current version: 3.2
+wpca                            # Current version: 0.1
+xarray                          # Current version: 2025.1.2
+xlrd                            # Current version: 2.0.1
+yagmail                         # Current version: 0.15.293
+
+# ======================
+# External git packages
+# ======================
+Astraeus @ git+https://github.com/kevin218/Astraeus.git
+
+# ======================
+# Internal git packages
+# ======================
+# aperocore @ git+https://github.com/njcuk9999/apero-drs.git@v0.8.003#subdirectory=apero-core
+# lbl @ git+https://github.com/njcuk9999/lbl.git
+# sossisse @ git+https://github.com/njcuk9999/sossisse.git
