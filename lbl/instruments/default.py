@@ -459,6 +459,58 @@ class Instrument:
         if self.params['OBJECT_COMPARISON'] is None:
             self.param_set('OBJECT_COMPARISON', value=objname, source=func_name)
 
+    def check_quality_nan(self, refwave: np.ndarray, wavegrid: np.ndarray,
+                          vectors: List[np.ndarray], vectorname: str):
+        """
+        Check that at least 50% of the data is valid (not NaN) in the template
+        This is done order by order (hence needing refwave) as we expect
+        in some instruments that some orders may have very little data
+
+        :param refwave: np.ndarray, the reference wavelength grid
+                        (shape norders x npixels)
+        :param wavegrid: np.ndarray, the wavelength grid of the data
+                         (shape npixels)
+        :param vectors: list of np.ndarray, the list of vectors to check
+                        (shape of each vector npixels)
+        :param vectorname: str, the name of the vector being checked
+                          (for error message)
+
+        :raises: LblException if less than 50% of the data is valid in the
+                 template
+        :return: None, raises exception if less than 50% of the data is valid
+                 in the template
+        """
+
+        # we check that at least 50% of the data is valid (not NaN) in the template
+        frac_valid = np.ones(refwave.shape[0])
+
+        # need to get back "orders"
+        for ordernum in range(refwave.shape[0]):
+            wavemin = np.nanmin(refwave[ordernum, :])
+            wavemax = np.nanmax(refwave[ordernum, :])
+
+            wavemask = (wavegrid > wavemin) & (wavegrid < wavemax)
+
+            n_valid = 0
+            for vector in vectors:
+                n_valid += np.sum(np.isfinite(vector[wavemask]))
+
+            n_total = np.sum(wavemask)
+            frac_valid[ordernum] = n_valid / n_total
+
+        # we check that at least 50% of the data is valid (not NaN) in the template
+        if np.mean(frac_valid) < 0.5:
+            emsg = ('Less than 50% of the data in "{0}" valid in the template.')
+            emsg = emsg.format(vectorname)
+            for order_num in np.where(frac_valid > 0.5)[0]:
+                emsg += (f'\n\t- Order {order_num} has only '
+                         f'{frac_valid[order_num]:.1%} valid data')
+            raise LblException(emsg)
+        else:
+            log.general(f'Quality control pass: '
+                        f'At least 50% of the data in "{vectorname}" '
+                        f'is valid in the template.')
+
     def calculate_savgol_template(self, dv_grid: float,
                                   flux_dict: Dict[str, np.ndarray]):
         # check if we are using savgol templates

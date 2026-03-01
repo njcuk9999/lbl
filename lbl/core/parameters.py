@@ -1062,6 +1062,11 @@ params.set(key='KW_RAW_HASH', value='LBLRHASH', source=__NAME__,
            desc='The input science file hash',
            comment='The input science file hash')
 
+# Define the lbl template type
+params.set(key='KW_TEMPLATE_TYPE', value='LBLTMPLT', source=__NAME__,
+           not_none=False, desc='The lbl template type',
+           comment='The lbl template type')
+
 
 # =============================================================================
 # Header conversion dictionary

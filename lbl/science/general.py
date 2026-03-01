@@ -1469,8 +1469,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         for order_num in range(wavegrid.shape[0]):
             # deal with too few finite points in wavegrid
             if np.sum(np.isfinite(nwavegrid[order_num])) < 5:
-                wave2pixlist.append(np.full(len(xpix), np.nan))
-                continue
+                emsg = ('Order {0} has too few finite points (<5) in '
+                        'wavegrid to spline')
+                log.warning(emsg.format(order_num))
+                nspline = mp.NanSpline(emsg.format(order_num),
+                                       nwavegrid[order_num], xpix)
+                wave2pixlist.append(nspline)
             # spline between wavelength and pixel position
             wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
         # ---------------------------------------------------------------------

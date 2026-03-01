@@ -497,11 +497,14 @@ def run_template(inst, objname: str, objkind: str):
         # to get statistics on the ber-bin rms, we need more than 3
         # bervbins
         log.general('computation done per-berv bin')
+        log.general('\t- computation on flux cube')
         p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
                                          axis=1)
         # same for left and right
+        log.general('\t- computation on odd cube')
         p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube, [16, 50, 84],
                                                      axis=1)
+        log.general('\t- computation on even cube')
         p16_even, p50_even, p84_even = np.nanpercentile(even_cube, [16, 50, 84],
                                                         axis=1)
         # calculate the rms of each wavelength element
@@ -521,15 +524,17 @@ def run_template(inst, objname: str, objkind: str):
     # We reject domains that are below and SNR = 10
     # TODO -> makes this a global parameter
     # The minimal SNR required for a pixel considered to be valid
-    # We determine the SNR from the -1 to +1 sigma equivalent distribution
-    # of the input spectra
-    snr_threshold = inst.params['TEMPLATE_SNR_THRES']
-    low_snr_odd = snr_odd < snr_threshold
-    p50_odd[low_snr_odd] = np.nan
-    rms_odd[low_snr_odd] = np.nan
-    low_snr_odd = snr_even < snr_threshold
-    p50_even[low_snr_odd] = np.nan
-    rms_odd[low_snr_odd] = np.nan
+    # - only for science data
+    if inst.params['DATA_TYPE'] == 'SCIENCE':
+        # We determine the SNR from the -1 to +1 sigma equivalent distribution
+        # of the input spectra
+        snr_threshold = inst.params['TEMPLATE_SNR_THRES']
+        low_snr_odd = snr_odd < snr_threshold
+        p50_odd[low_snr_odd] = np.nan
+        rms_odd[low_snr_odd] = np.nan
+        low_snr_odd = snr_even < snr_threshold
+        p50_even[low_snr_odd] = np.nan
+        rms_odd[low_snr_odd] = np.nan
     # -------------------------------------------------------------------------
     # other parameters for the header
     nfiles = len(science_files)
@@ -538,7 +543,14 @@ def run_template(inst, objname: str, objkind: str):
     total_nobs_berv = len(np.unique(berv // 1000))  # in m/s
 
     # -------------------------------------------------------------------------
-    # Step 7. Calculate Savitzky-Golay filtered template for better handling
+    # Step 7. check quality of data
+    # -------------------------------------------------------------------------
+    inst.check_quality_nan(refwave, wavegrid, [p50], 'flux')
+    inst.check_quality_nan(refwave, wavegrid, [p50_odd, p50_even],
+                           'flux_odd_even')
+
+    # -------------------------------------------------------------------------
+    # Step 8. Calculate Savitzky-Golay filtered template for better handling
     #         of higher derivatives
     # -------------------------------------------------------------------------
     savgol_fluxes = inst.calculate_savgol_template(dv_grid=grid_step_magic,
@@ -548,10 +560,42 @@ def run_template(inst, objname: str, objkind: str):
     # set a key to tell us the type of template created
     if len(savgol_fluxes) > 0:
         template_type = 'LBL_SAVGOL'
+        # repeat quality control checks for savgol fluxes
+        for col in savgol_fluxes:
+            inst.check_quality_nan(refwave, wavegrid, [savgol_fluxes[col]],
+                                   col)
     else:
         template_type = 'LBL_NON_SAVGOL'
+
     # -------------------------------------------------------------------------
-    # Step 8. Write template
+    # Step 9. check quality of data
+    # -------------------------------------------------------------------------
+    # we check that at least 50% of the data is valid (not NaN) in the template
+    frac_valid = np.ones(refwave.shape[0])
+    frac_valid_odd_even = np.ones(refwave.shape[0])
+    frac_valid_savgol = np.ones(refwave.shape[0])
+
+    # need to get back "orders"
+    for ordernum in range(refwave.shape[0]):
+        wavemin = np.nanmin(refwave[ordernum, :])
+        wavemax = np.nanmax(refwave[ordernum, :])
+
+        wavemask = (wavegrid > wavemin) & (wavegrid < wavemax)
+
+        n_valid = np.sum(np.isfinite(p50[wavemask]))
+        n_total = np.sum(wavemask)
+        frac_valid[ordernum] = n_valid / n_total
+
+        # For odd/even we add the number of odd + even
+        # since odd orders have even orders set to nan and vice versa.
+        n_valid_even = np.sum(np.isfinite(p50_even[wavemask]))
+        n_valid_odd = np.sum(np.isfinite(p50_odd[wavemask]))
+        frac_valid_odd_even[ordernum] = (n_valid_even + n_valid_odd) / n_total
+
+
+
+    # -------------------------------------------------------------------------
+    # Step 9. Write template
     # -------------------------------------------------------------------------
     # get props
     props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms,

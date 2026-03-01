@@ -1028,6 +1028,8 @@ def load_table(filename: str, kind: Union[str, None] = None,
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
+    # need to fix the table for masked values
+    table = no_mask_table(table)
     # deal with obtaining table header
     if get_hdr:
         # get header
@@ -1038,6 +1040,23 @@ def load_table(filename: str, kind: Union[str, None] = None,
         return table, hdr
     else:
         return table
+
+
+def no_mask_table(table: Table) -> Table:
+    """
+    Deal with masked tables by converting them to normal tables.
+    This is needed for some functions that do not work with masked tables.
+    """
+    # deal with non tables
+    if not isinstance(table, Table):
+        return table
+    # loop around columns and look for "mask"
+    for col in table.columns:
+        if hasattr(table[col], 'mask'):
+            # copy the table to remove the "mask" - they are set to NaNs
+            table[col] = np.array(table[col].data)
+    # return the table
+    return table
 
 
 def write_table(filename: str, table: Table, fmt: str = 'fits',
