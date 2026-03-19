@@ -562,8 +562,19 @@ def run_template(inst, objname: str, objkind: str):
         template_type = 'LBL_SAVGOL'
         # repeat quality control checks for savgol fluxes
         for col in savgol_fluxes:
-            inst.check_quality_nan(refwave, wavegrid, [savgol_fluxes[col]],
-                                   col)
+            # skip odd cols (we will deal with odd/even in even cases)
+            if 'odd' in col:
+                continue
+            # deal with even (odd + even)
+            elif 'even' in col:
+                svec = [savgol_fluxes[col.replace('even', 'odd')],
+                        savgol_fluxes[col]]
+                inst.check_quality_nan(refwave, wavegrid, svec,
+                                       col.replace('even', 'odd_even'))
+            # deal with full orders
+            else:
+                inst.check_quality_nan(refwave, wavegrid, [savgol_fluxes[col]],
+                                       col)
     else:
         template_type = 'LBL_NON_SAVGOL'
 
