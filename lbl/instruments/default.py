@@ -260,6 +260,35 @@ class Instrument:
             # return absolute path
             return abspath, True
 
+    def lbl_hkeys(self, header: Union[io.LBLHeader, fits.Header],
+                  output: str):
+        # add custom keys
+        header = self.set_hkey(header, 'KW_VERSION', __version__,
+                               comment='LBL version')
+        header = self.set_hkey(header, 'KW_VDATE', __date__,
+                               comment='LBL versions date')
+        header = self.set_hkey(header, 'KW_PDATE', Time.now().iso,
+                               comment='LBL processed date')
+        header = self.set_hkey(header, 'KW_INSTRUMENT',
+                               self.params['INSTRUMENT'],
+                               comment='LBL instrument')
+        header = self.set_hkey(header, 'KW_INSTMODE',
+                               self.params['DATA_SOURCE'],
+                               comment='LBL instrument mode used')
+        # set the LBL output data type
+        header = self.set_hkey(header, 'KW_OUTPUT', output,
+                               comment='LBL file output type')
+        # set the LBL input object object name
+        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
+                                self.params['OBJECT_SCIENCE'].strip(),
+                               comment='LBL object name')
+        # set the LBL input template object name
+        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
+                               self.params['OBJECT_COMPARISON'].strip(),
+                               comment='LBL comparison object name')
+        # ---------------------------------------------------------------------
+        return header
+
     def write_lblrv_table(self, ref_table: Dict[str, Any],
                           ref_filename: str, header_dict: io.LBLHeader,
                           outputs: Dict[str, Any]):
@@ -294,22 +323,8 @@ class Instrument:
         header = self.set_hkey(header, 'KW_CCF_EW', value=outputs['CCF_EW'])
         # add the high-pass LBL width [km/s]
         header = self.set_hkey(header, 'KW_HP_WIDTH', value=outputs['HP_WIDTH'])
-        # add LBL version
-        header = self.set_hkey(header, 'KW_VERSION', value=__version__)
-        # add LBL date
-        header = self.set_hkey(header, 'KW_VDATE', value=__date__)
-        # add process date
-        header = self.set_hkey(header, 'KW_PDATE', value=Time.now().fits)
-        # add which lbl instrument was used
-        header = self.set_hkey(header, 'KW_INSTRUMENT', value=self.name)
-        # set the LBL output data type
-        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_FITS')
-        # set the LBL input object object name
-        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
-                                self.params['OBJECT_SCIENCE'].strip())
-        # set the LBL input template object name
-        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                               self.params['OBJECT_COMPARISON'].strip())
+        # standard lbl keys
+        header = self.lbl_hkeys(header, output='LBL_FITS')
         # add the mask
         header = self.set_hkey(header, 'KW_LBLMASK', value=outputs['MASK_FILE'])
         # add the template velocity from CCF
@@ -564,20 +579,8 @@ class Instrument:
         for key in rdb_header:
             header0[key] = rdb_header[key]
         # ---------------------------------------------------------------------
-        # add custom keys
-        header0 = self.set_hkey(header0, 'KW_VERSION', __version__)
-        header0 = self.set_hkey(header0, 'KW_VDATE', __date__)
-        header0 = self.set_hkey(header0, 'KW_PDATE', Time.now().iso)
-        header0 = self.set_hkey(header0, 'KW_INSTRUMENT',
-                                self.params['INSTRUMENT'])
-        # set the LBL output data type
-        header0 = self.set_hkey(header0, 'KW_OUTPUT', 'LBL_RDB_FITS')
-        # set the LBL input object object name
-        header0 = self.set_hkey(header0, 'KW_LBL_OBJNAME',
-                                self.params['OBJECT_SCIENCE'].strip())
-        # set the LBL input template object name
-        header0 = self.set_hkey(header0, 'KW_LBL_TMPNAME',
-                                self.params['OBJECT_COMPARISON'].strip())
+        # standard lbl keys
+        header0 = self.lbl_hkeys(header0, output='LBL_RDB_FITS')
         # ---------------------------------------------------------------------
         # construct the parameter table
         param_table = self.params.param_table(header0)
@@ -624,20 +627,8 @@ class Instrument:
         header = fits.Header()
         # copy header from reference header
         header = io.copy_header(header, sci_hdr)
-        # add custom keys
-        header = self.set_hkey(header, 'KW_VERSION', __version__)
-        header = self.set_hkey(header, 'KW_VDATE', __date__)
-        header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
-        header = self.set_hkey(header, 'KW_INSTRUMENT',
-                               self.params['INSTRUMENT'])
-        # set the LBL output data type
-        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TEMPLATE')
-        # set the LBL input object object name
-        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
-                                self.params['OBJECT_SCIENCE'].strip())
-        # set the LBL input template object name
-        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                               self.params['OBJECT_COMPARISON'].strip())
+        # standard lbl header keys
+        header = self.lbl_hkeys(header, output='LBL_TEMPLATE')
         # Write template specific keys
         header = self.set_hkey(header, 'KW_TEMPLATE_TYPE',
                                props['template_type'])
@@ -701,20 +692,8 @@ class Instrument:
         header = fits.Header()
         # copy header from reference header
         header = io.copy_header(header, sci_hdr)
-        # add custom keys
-        header = self.set_hkey(header, 'KW_VERSION', __version__)
-        header = self.set_hkey(header, 'KW_VDATE', __date__)
-        header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
-        header = self.set_hkey(header, 'KW_INSTRUMENT',
-                               self.params['INSTRUMENT'])
-        # set the LBL output data type
-        header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_TELLU_CLEAN')
-        # set the LBL input object object name
-        header = self.set_hkey(header, 'KW_LBL_OBJNAME',
-                                self.params['OBJECT_SCIENCE'].strip())
-        # set the LBL input template object name
-        header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                               self.params['OBJECT_COMPARISON'].strip())
+        # standard lbl keys
+        header = self.lbl_hkeys(header, output='LBL_TELLU_CLEAN')
         # define the telluric parameters
         header = self.set_hkey(header, 'KW_TAU_H2O',
                                props['pre_cleaned_exponent_water'])
@@ -789,19 +768,8 @@ class Instrument:
             header = io.copy_header(header, template_hdr)
             # add keys
             header = self.set_hkey(header, 'KW_SYSTEMIC_VELO', sys_vel * 1000)
-            header = self.set_hkey(header, 'KW_VERSION', __version__)
-            header = self.set_hkey(header, 'KW_VDATE', __date__)
-            header = self.set_hkey(header, 'KW_PDATE', Time.now().iso)
-            header = self.set_hkey(header, 'KW_INSTRUMENT',
-                                   self.params['INSTRUMENT'])
-            # set the LBL output data type
-            header = self.set_hkey(header, 'KW_OUTPUT', 'LBL_MASK')
-            # set the LBL input object object name
-            header = self.set_hkey(header, 'KW_LBL_OBJNAME',
-                                   self.params['OBJECT_SCIENCE'].strip())
-            # set the LBL input template object name
-            header = self.set_hkey(header, 'KW_LBL_TMPNAME',
-                                   self.params['OBJECT_COMPARISON'].strip())
+            # standard lbl keys
+            header = self.lbl_hkeys(header, output='LBL_MASK')
             # set the LBL mask tpye
             header = self.set_hkey(header, 'KW_MASK_TYPE', extensions[it])
             # log writing
@@ -1141,6 +1109,42 @@ class Instrument:
         _ = filename, tdict, sci_hdr, berv
         raise self._not_implemented('get_berv')
 
+    def sort_files_by_hkey(self, science_files: List[str],
+                           hkey='KW_MID_EXP_TIME') -> List[str]:
+        """
+        Sort science files by a header key
+
+        :param science_files: list of strings, list of files to load
+        :param hkey: str, the header key or constant in params to load
+
+        :return: list of strings, science files in order
+        """
+        # get tqdm
+        tqdm = base.tqdm_module(self.params['USE_TQDM'], log.console_verbosity)
+        # deal with hkey in params
+        if hkey in self.params:
+            hkey = self.params[hkey]
+        # filtering files
+        largs = [len(science_files), hkey]
+        log.general('Sorting {0} files by {1}...'.format(*largs))
+        # storage
+        keep_files = []
+        keep_time = []
+        # loop around science files
+        for science_file in tqdm(science_files):
+            # load science file header
+            sci_hdr = self.load_header(science_file)
+            # get mjdmid
+            mjdmid = sci_hdr[hkey]
+            keep_files.append(science_file)
+            keep_time.append(mjdmid)
+        # ---------------------------------------------------------------------
+        # sort by time
+        sort_mask = np.argsort(keep_time)
+        keep_files = list(np.array(keep_files)[sort_mask])
+        # ---------------------------------------------------------------------
+        return keep_files
+
     def filter_files(self, science_files: List[str]) -> List[str]:
         """
         Filter calibrations - no simutaenous calibrations
@@ -1160,11 +1164,12 @@ class Instrument:
         mcond3 = end in [None, 'None', '']
         # return all files if this is the case
         if mcond2 and mcond3:
-            return science_files
+            return self.sort_files_by_hkey(science_files)
         # filtering files
         log.general('Filtering {0} files...'.format(self.params['DATA_TYPE']))
         # storage
         keep_files = []
+        keep_time = []
         # loop around science files
         for science_file in tqdm(science_files):
             # load science file header
@@ -1184,6 +1189,7 @@ class Instrument:
             # if all conditions are met keep files
             if cond2 and cond3:
                 keep_files.append(science_file)
+                keep_time.append(mjdmid)
             # -----------------------------------------------------------------
         # if we have no files break here
         if len(keep_files) == 0:
@@ -1207,6 +1213,11 @@ class Instrument:
             margs = [len(keep_files),
                      len(science_files) - len(keep_files)]
             log.info(msg.format(*margs))
+        # ---------------------------------------------------------------------
+        # sort by time
+        sort_mask = np.argsort(keep_time)
+        keep_files = list(np.array(keep_files)[sort_mask])
+        # ---------------------------------------------------------------------
         # return only files with DPRTYPE same in both fibers
         return keep_files
 

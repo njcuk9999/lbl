@@ -870,20 +870,25 @@ params.set(key='KW_INSTRUMENT', value='LBLINSTR', source=__NAME__,
            desc='the LBL processed date',
            comment='LBL instrument used')
 
+# define the lbl instrument mode that was used
+params.set(key='KW_INSTMODE', value='LBLIMODE', source=__NAME__,
+           desc='the LBL instrument mode used',
+           comment='LBL instrument mode used')
+
 # define the lbl mask type key for header (neg, pos, full)
 params.set(key='KW_MASK_TYPE', value='LBLMSKTP', source=__NAME__,
            desc='the lbl mask type key for header (neg, pos, full)',
            comment='LBL mask type (neg, pos, full)')
 
 # define the lbl object name key for header
-params.set(key='KW_LBL_OBJNAME', value='LBL_OBJN', source=__NAME__,
+params.set(key='KW_LBL_OBJNAME', value='LBL_OBJS', source=__NAME__,
            desc='the lbl object name key for header',
            comment='LBL object name')
 
 # define the lbl template name key for header
-params.set(key='KW_LBL_TMPNAME', value='LBL_TMPN', source=__NAME__,
-           desc='the lbl template name key for header',
-           comment='LBL template object name')
+params.set(key='KW_LBL_TMPNAME', value='LBL_OBJC', source=__NAME__,
+           desc='the lbl comparison name key for header',
+           comment='LBL comparison object name')
 
 # define the start time of the observation key
 params.set(key='KW_MJDATE', value=None, source=__NAME__, not_none=False,

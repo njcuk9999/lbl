@@ -186,10 +186,10 @@ def run_template(inst, objname: str, objkind: str):
     # -------------------------------------------------------------------------
     # may need to filter out calibrations
     science_files = inst.filter_files(science_files)
-    # select the first science file as a reference file
-    refimage, refhdr = inst.load_science_file(science_files[0])
+    # select the most recent science file as a reference file
+    refimage, refhdr = inst.load_science_file(science_files[-1])
     # get wave solution for reference file
-    refwave = inst.get_wave_solution(science_files[0], refimage, refhdr)
+    refwave = inst.get_wave_solution(science_files[-1], refimage, refhdr)
     # get domain coverage
     wavemin = inst.params['COMPIL_WAVE_MIN']
     wavemax = inst.params['COMPIL_WAVE_MAX']

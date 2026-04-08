@@ -719,7 +719,7 @@ class NIRPS(Instrument):
         mcond3 = end in [None, 'None', '']
         # return all files if this is the case
         if mcond2 and mcond3 and mcond1:
-            return science_files
+            return self.sort_files_by_hkey(science_files)
         # filtering files
         log.general('Filtering {0} files...'.format(self.params['DATA_TYPE']))
         # select the first science file as a reference file
@@ -727,6 +727,7 @@ class NIRPS(Instrument):
         ref_fibertype = self.get_dpr_fibtype(refhdr)
         # storage
         keep_files = []
+        keep_time = []
         # loop around science files
         for science_file in tqdm(science_files):
             # load science file header
@@ -755,6 +756,7 @@ class NIRPS(Instrument):
             # if all conditions are met keep files
             if cond1 and cond2 and cond3:
                 keep_files.append(science_file)
+                keep_time.append(mjdmid)
             # -----------------------------------------------------------------
         # if we have no files break here
         if len(keep_files) == 0:
@@ -791,6 +793,11 @@ class NIRPS(Instrument):
             margs = [ref_fibertype, len(keep_files),
                      len(science_files) - len(keep_files)]
             log.info(msg.format(*margs))
+        # ---------------------------------------------------------------------
+        # sort by time
+        sort_mask = np.argsort(keep_time)
+        keep_files = list(np.array(keep_files)[sort_mask])
+        # ---------------------------------------------------------------------
         # return only files with DPRTYPE same in both fibers
         return keep_files
 
