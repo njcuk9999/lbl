@@ -497,6 +497,11 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
             eargs = [kwargs['k'], len(y), str(x)[:70], str(y)[:70]]
             # return a nan spline
             return NanSpline(emsg.format(*eargs), x=x, y=y, **kwargs)
+        # return NaNSpline if too few points
+        if np.sum(valid) < 5:
+            # raise exception if len(x) is bad
+            emsg = ('IUV Spline sum(valid) < 5')
+            return NanSpline(emsg)
     # restrict to valid data only
     x_valid, y_valid = x[valid], y[valid]
     # ensure x is strictly increasing (required by spline)
@@ -1016,6 +1021,7 @@ def smart_blaze_norm(wavegrid: np.ndarray, blaze: np.ndarray,
     # deal with instrument specific rejection of bad domain (domain not to be
     #  used in the polyfit)
     keep = np.ones_like(wa_ord, dtype=bool)
+    keep &= np.isfinite(wa_ord) & np.isfinite(bl_ord)
     for bad in bad_domain:
         keep &= ~((wa_ord > bad[0]) & (wa_ord < bad[1]))
     # fit the blaze for regions that we are keeping

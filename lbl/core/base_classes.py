@@ -7,6 +7,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+import string
 from collections import UserDict
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
@@ -420,6 +421,9 @@ class ParamDict(UserDict):
         """
         return self.__str__()
 
+
+
+
     def param_table(self, header = None) -> Table:
         """
         Create a parameter table as a snapshot of the current parameters
@@ -449,7 +453,7 @@ class ParamDict(UserDict):
             for key in header.keys():
                 keys.append('HEADER:' + key)
                 values.append(str(header[key]))
-                descriptions.append(header.comments[key])
+                descriptions.append(str(header.comments[key]))
                 sources.append('Header')
                 dtypes.append(str(type(header[key])))
         # add some from base
@@ -460,13 +464,23 @@ class ParamDict(UserDict):
                          'LBL authors', 'Time of parameter snapshot']
         sources += [func_name] * 4
         dtypes += ['str', 'str', 'str', 'str']
+        # ---------------------------------------------------------------------
+        # make sure everything is clean strings
+        ckeys, cvalues, cdescriptions, csources, cdtypes = [], [], [], [], []
+        for it in range(len(keys)):
+            ckeys.append(_clean_str(keys[it]))
+            cvalues.append(_clean_str(values[it]))
+            cdescriptions.append(_clean_str(descriptions[it]))
+            csources.append(_clean_str(sources[it]))
+            cdtypes.append(_clean_str(dtypes[it]))
+        # ---------------------------------------------------------------------
         # push into a table
         ptable = Table()
-        ptable['NAME'] = keys
-        ptable['VALUE'] = values
-        ptable['DESCRIPTION'] = descriptions
-        ptable['SOURCE'] = sources
-        ptable['DATATYPE'] = dtypes
+        ptable['NAME'] = ckeys
+        ptable['VALUE'] = cvalues
+        ptable['DESCRIPTION'] = cdescriptions
+        ptable['SOURCE'] = csources
+        ptable['DATATYPE'] = cdtypes
         # return ptable
         return ptable
 
@@ -529,6 +543,21 @@ class HeaderTranslate:
                 header[new_key] = (value, comment)
         # return the header
         return header
+
+
+def _clean_str(text: str):
+    """
+    Return ASCII-only version of text (replacing newlines/tabs with spaces).
+    """
+    if not isinstance(text, str):
+        return text
+    # Replace newlines/tabs with space
+    text = text.replace('\n', ' ').replace('\t', ' ')
+    # Keep only printable ASCII characters
+    printable = set(string.printable)
+    newtext = ''.join(ch for ch in text if ch in printable)
+    # force all other to ignore
+    return newtext.encode('ascii', 'ignore').decode('ascii')
 
 
 # =============================================================================

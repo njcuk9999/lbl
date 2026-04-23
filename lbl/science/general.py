@@ -1487,8 +1487,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                 nspline = mp.NanSpline(emsg.format(order_num),
                                        nwavegrid[order_num], xpix)
                 wave2pixlist.append(nspline)
-            # spline between wavelength and pixel position
-            wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
+            else:
+                # spline between wavelength and pixel position
+                wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
         # ---------------------------------------------------------------------
         # debug plot dictionary for plotting later
         if iteration == 0:

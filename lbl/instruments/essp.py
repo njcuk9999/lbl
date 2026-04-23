@@ -20,8 +20,6 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
-from lbl.instruments import essp
-
 
 # =============================================================================
 # Define variables
@@ -41,18 +39,31 @@ log = io.log
 # =============================================================================
 # Define SOPHIE class
 # =============================================================================
-class Expres(Instrument):
+class ESSP(Instrument):
+    """
+    DO NOT USE DIRECTLY please use one of the instruments that inherits this
+
+    This is just for the common functionality of the ESSP pipeline
+    """
     def __init__(self, params: base_classes.ParamDict,
-                 args: base_classes.ParamDict):
+                 args: base_classes.ParamDict, name: str = None):
+        """
+        :param params:
+        :param args:
+        :param name:
+        """
+        # get the name
+        if name is None:
+            name = 'ESSP'
         # call to super function
-        super().__init__('EXPRES')
+        super().__init__(name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'LBL_Template_{0}_expres.fits'
-        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_expres.fits'
-        self.default_sample_wave_name = 'sample_wave_grid_expres.fits'
+        self.default_template_name = None
+        self.default_mask_name = None
+        self.default_sample_wave_name = None
         # define wave limits in nm
-        self.wavemin = 379.66
-        self.wavemax = 822.36
+        self.wavemin = None
+        self.wavemax = None
         # set parameters for instrument
         self.params = params
         # override params
@@ -61,256 +72,72 @@ class Expres(Instrument):
         self.update_from_args(args)
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC PARAMETERS
+    # ESSP SPECIFIC PARAMETERS --> set in instrument
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for ESSP parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.Expres.override()'
-        # set parameters to update
-        self.param_set('INSTRUMENT', 'EXPRES', source=func_name)
-        # add instrument earth location
-        #    (for use in astropy.coordinates.EarthLocation)
-        self.param_set('EARTH_LOCATION', 'lowell')
-        # define the default science input files
-        self.param_set('INPUT_FILE', '*.fits', source=func_name)
-        # The input science data are blaze corrected
-        self.param_set('BLAZE_CORRECTED', False, source=func_name)
-        # define the mask table format
-        self.param_set('REF_TABLE_FMT', 'csv', source=func_name)
-        # define the mask type
-        self.param_set('SCIENCE_MASK_TYPE', 'full', source=func_name)
-        self.param_set('FP_MASK_TYPE', 'neg', source=func_name)
-        self.param_set('LFC_MASK_TYPE', 'neg', source=func_name)
-        # define the default mask url and filename
-        self.param_set('DEFAULT_MASK_FILE', source=func_name,
-                        value='mdwarf_harps.fits')
-        # define the High pass width in km/s
-        self.param_set('HP_WIDTH', 500, source=func_name)
-        # approximate mean resolution in lambda/dlambda
-        self.param_set('APPROX_RESOLUTION', 150000, source=func_name)
-        # define the SNR cut off threshold
-        # Question: HARPS value?
-        self.param_set('SNR_THRESHOLD', 10, source=func_name)
-        # define which bands to use for the clean CCF (see astro.ccf_regions)
-        self.param_set('CCF_CLEAN_BANDS', ['r'], source=func_name)
-        # define the plot order for the compute rv model plot
-        self.param_set('COMPUTE_MODEL_PLOT_ORDERS', [50], source=func_name)
-        # define the compil minimum wavelength allowed for lines [nm]
-        self.param_set('COMPIL_WAVE_MIN', self.wavemin, source=func_name)
-        # define the compil maximum wavelength allowed for lines [nm]
-        self.param_set('COMPIL_WAVE_MAX', self.wavemax, source=func_name)
-        # define the maximum pixel width allowed for lines [pixels]
-        self.param_set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
-        # define min likelihood of correlation with BERV
-        self.param_set('COMPIL_CUT_PEARSONR', -1, source=func_name)
-        # define the CCF e-width to use for FP files
-        # Question: HARPS value?
-        self.param_set('COMPIL_FP_EWID', 5.0, source=func_name)
-        # define whether to add the magic "binned wavelength" bands rv
-        self.param_set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
-        # define the number of bins used in the magic "binned wavelength" bands
-        self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
-        # define the first band (from get_binned_parameters) to plot (band1)
-        self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
-        # define the second band (from get_binned_parameters) to plot (band2)
-        #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
-        # define the third band (from get_binned_parameters) to plot (band3)
-        #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
-        # define the reference wavelength used in the slope fitting in nm
-        self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
-        # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name, 
-                       source=func_name)
-        # define the FP reference string that defines that an FP observation was
-        #    a reference (calibration) file - should be a list of strings
-        # Question: Check DRP TYPE for STAR,FP file
-        # TODO verify DPR TYPE in SOPHIE headers for FPs
-        self.param_set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
-        # define the FP standard string that defines that an FP observation
-        #    was NOT a reference file - should be a list of strings
-        # Question: Check DRP TYPE for STAR,FP file
-        # TODO verify DPR TYPE in SOPHIE headers for STAR+FPs
-        self.param_set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
-        # define readout noise per instrument (assumes ~5e- and 10 pixels)
-        self.param_set('READ_OUT_NOISE', 15, source=func_name)
-        # Define the wave url for the stellar models
-        self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
-        # Define the wave file for the stellar models (using wget)
-        self.param_set('STELLAR_WAVE_FILE', source=func_name,
-                        value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
-        # Define the stellar model url
-        self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
-                              '{ZSTR}{ASTR}/')
-        # Define the minimum allowed SNR in a pixel to add it to the mask
-        self.param_set('MASK_SNR_MIN', value=5, source=func_name)
-        # Define the stellar model file name (using wget, with appropriate
-        #     format  cards)
-        self.param_set('STELLAR_MODEL_FILE', source=func_name,
-                        value='lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}'
-                              '.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits')
-        # Define the object surface gravity (log g) (stellar model)
-        self.param_set('OBJECT_LOGG', value=4.5, source=func_name)
-        # Define the object Z (stellar model)
-        self.param_set('OBJECT_Z', value=0.0, source=func_name)
-        # Define the object alpha (stellar model)
-        self.param_set('OBJECT_ALPHA', value=0.0, source=func_name)
-        # blaze smoothing size (s1d template)
-        self.param_set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
-        # blaze threshold (s1d template)
-        self.param_set('BLAZE_THRESHOLD', value=0.2, source=func_name)
-        # define the size of the berv bins in m/s
-        self.param_set('BERVBIN_SIZE', value=3000)
-        # ---------------------------------------------------------------------
-        # define whether to do the tellu-clean
-        self.param_set('DO_TELLUCLEAN', value=True, source=func_name)
-        # define the dv offset for tellu-cleaning in km/s
-        self.param_set('TELLUCLEAN_DV0', value=0, source=func_name)
-        # Define the lower wave limit for the absorber spectrum masks in nm
-        self.param_set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=500,
-                        source=func_name)
-        # Define the upper wave limit for the absorber spectrum masks in nm
-        self.param_set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=700,
-                        source=func_name)
-        # Define whether to force using airmass from header
-        self.param_set('TELLUCLEAN_FORCE_AIRMASS', value=False,
-                        source=func_name)
-        # Define the CCF scan range in km/s
-        self.param_set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
-                        source=func_name)
-        # Define the maximum number of iterations for the tellu-cleaning loop
-        self.param_set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
-        # Define the kernel width in pixels
-        self.param_set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
-        # Define the gaussian shape (2=pure gaussian, >2=boxy)
-        self.param_set('TELLUCLEAN_GAUSSIAN_SHAPE', value=2.2,
-                        source=func_name)
-        # Define the wave grid lower wavelength limit in nm
-        self.param_set('TELLUCLEAN_WAVE_LOWER', value=350, source=func_name)
-        # Define the wave griv upper wavelength limit
-        self.param_set('TELLUCLEAN_WAVE_UPPER', value=750, source=func_name)
-        # Define the transmission threshold exp(-1) at which tellurics are
-        #     uncorrectable
-        self.param_set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
-                        source=func_name)
-        # Define the sigma cut threshold above which pixels are removed from fit
-        self.param_set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
-                        source=func_name)
-        # Define whether to recenter the CCF on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF', value=False,
-                        source=func_name)
-        # Define whether to recenter the CCF of others on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
-                        source=func_name)
-        # Define the default water absorption to use
-        self.param_set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
-                        source=func_name)
-        # Define the lower limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
-                        source=func_name)
-        # Define the upper limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
-                        source=func_name)
-        # Define the lower limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
-                        source=func_name)
-        # Define the upper limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
-                        source=func_name)
-        # ---------------------------------------------------------------------
-        # Parameters for the template construction
-        # ---------------------------------------------------------------------
-        # max number of bins for the median of the template. Avoids handling
-        # too many spectra at once.
-        self.param_set('TEMPLATE_MEDBINMAX', 19, source=func_name)
-        # maximum RMS between the template and the median of the template
-        # to accept the median of the template as a good template. If above
-        # we iterate once more. Expressed in m/s
-        self.param_set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=func_name)
-
+        func_name = __NAME__ + '.ESSP.param_override()'
         # ---------------------------------------------------------------------
         # Header keywords
         # ---------------------------------------------------------------------
-        # define wave coeff key in header
-        self.param_set('KW_WAVECOEFFS', None, source=func_name)
-        # define wave num orders key in header
-        self.param_set('KW_WAVEORDN', None, source=func_name)
-        # define wave degree key in header
-        self.param_set('KW_WAVEDEGN', None, source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.param_set('KW_MID_EXP_TIME', 'TELMJD', source=func_name)
+        self.param_set('KW_MID_EXP_TIME', 'MJD_UTC',
+                        source=func_name)
         # define the start time of the observation
-        self.param_set('KW_MJDATE', 'TELMJD', source=func_name)
+        self.param_set('KW_MJDATE', 'MJD_UTC', source=func_name)
         # define snr keyword
         self.param_set('KW_SNR', None, source=func_name)
         # define berv keyword
-        self.param_set('KW_BERV', None, source=func_name)
+        self.param_set('KW_BERV', 'BERV', source=func_name)
         # define the Blaze calibration file
         self.param_set('KW_BLAZE_FILE', None, source=func_name)
         # define the exposure time of the observation
-        self.param_set('KW_EXPTIME', 'AEXPTIME', source=func_name)
+        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
         self.param_set('KW_AIRMASS', 'AIRMASS', source=func_name)
         # define the human date of the observation
-        self.param_set('KW_DATE', 'MIDPOINT', source=func_name)
+        self.param_set('KW_DATE', 'DATE', source=func_name)
         # define the tau_h20 of the observation
         self.param_set('KW_TAU_H2O', 'TLPEH2O', source=func_name)
         # define the tau_other of the observation
         self.param_set('KW_TAU_OTHERS', 'TLPEOTR', source=func_name)
         # define the DPRTYPE of the observation
-        self.param_set('KW_DPRTYPE', 'CAL-TYPE', source=func_name)
-        # define the filename of the wave solution
+        self.param_set('KW_DPRTYPE', None, source=func_name)
+        # define the filename of the wave solution  ## SUSPECT
         self.param_set('KW_WAVEFILE', None, source=func_name)
-        # define the original object name (no name given just target code)
-        self.param_set('KW_OBJNAME', 'OBJECT', source=func_name)
+        # define the original object name
+        self.param_set('KW_OBJNAME', None, source=func_name)
         # define the SNR goal per pixel per frame (can not exist - will be
         #   set to zero)
-        self.param_set('KW_SNRGOAL', 'HIERARCH ESO OBS SN ', source=func_name)
+        # TODO -> no equivalent in ESPRESSO
+        self.param_set('KW_SNRGOAL', 'NONE', source=func_name)
         # define the SNR in chosen order
         self.param_set('KW_EXT_SNR', None, source=func_name)
         # define the barycentric julian date
-        self.param_set('KW_BJD', 'MIDPOINT', source=func_name)
+        self.param_set('KW_BJD', None, source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         self.param_set('KW_REF_KEY', None, source=func_name)
         # velocity of template from CCF
+        # self.param_set('KW_MODELVEL', 'HIERARCH TNG QC CCF RV',
+        #                source=func_name)
         self.param_set('KW_MODELVEL', 'MODELVEL', source=func_name)
         # the temperature of the object
-        # TODO: how do we get the temperature for HARPS? / SOPHIE ?
+        # TODO: how do we get the temperature for ESPRESSO?
         self.param_set('KW_TEMPERATURE', None, source=func_name)
 
-    # -------------------------------------------------------------------------
-    # SOPHIE SPECIFIC METHODS
-    # -------------------------------------------------------------------------
-    def load_header(self, filename: str, kind: str = 'fits file',
-                    extnum: int = 0, extname: str = None) -> io.LBLHeader:
-        """
-        Load a header into a dictionary (may not be a fits file)
-        We must push this to a dictinoary as not all instrument confirm to
-        a fits header
 
-        :param filename: str, the filename to load
-        :param kind: str, the kind of file we are loading
-        :param extnum: int, the extension number to load
-        :param extname: str, the extension name to load
-        :return:
-        """
-        # get header
-        hdr = io.load_header(filename, kind, extnum, extname)
-        # return the LBL Header class
-        return io.LBLHeader.from_fits(hdr, filename)
 
+
+    # -------------------------------------------------------------------------
+    # ESSP SPECIFIC METHODS
+    # -------------------------------------------------------------------------
     def mask_file(self, model_directory: str, mask_directory: str,
                   required: bool = True) -> str:
         """
@@ -362,16 +189,9 @@ class Expres(Instrument):
 
         :return: absolute path to blaze file or None (if not set)
         """
-        if self.params['BLAZE_FILE'] is None:
-            return None
-        # set base name
-        basename = self.params['BLAZE_FILE']
-        # get absolute path
-        abspath = os.path.join(directory, basename)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
-        # return absolute path
-        return abspath
+        # Should always be taken from .fits extension
+        #   but there is a blaze (so should not be None)
+        return ''
 
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
                    normalize: bool = True) -> Union[np.ndarray, None]:
@@ -386,22 +206,24 @@ class Expres(Instrument):
 
         :return: data (np.ndarray) or None
         """
-        _ = self
-        if filename is not None:
-            blaze = io.load_fits(filename, kind='blaze fits file')
-            # deal with normalizing per order
-            if normalize:
-                # get the blaze parameters (may be instrument specific)
-                nth_deg, bdomain = self.norm_blaze_params()
-                # require the wave grid
-                wavegrid = self.get_wave_solution(science_file)
-                # normalizse the blaze
-                blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg,
-                                            bdomain)
-            # return blaze
-            return blaze
-        else:
+        # loaded from science file --> filename not required
+        _ = filename
+        # deal with already flagged as corrected
+        if self.params['BLAZE_CORRECTED']:
             return None
+        # load blaze
+        blaze = io.load_fits(science_file, kind='blaze fits extension',
+                             extname='blaze')
+        # deal with normalizing per order
+        if normalize:
+            # get the blaze parameters (may be instrument specific)
+            nth_deg, bdomain = self.norm_blaze_params()
+            # require the wave grid
+            wavegrid = self.get_wave_solution(science_file)
+            # normalize the blaze
+            blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
+        # return blaze
+        return blaze
 
     def load_science_file(self, science_file: str
                           ) -> Tuple[np.ndarray, io.LBLHeader]:
@@ -416,10 +238,8 @@ class Expres(Instrument):
         :return: tuple, data (np.ndarray) and header (io.LBLHeader)
         """
         # load the first extension of each
-        data_array = io.load_fits(science_file,
-                                  kind='science fits file',
-                                  extname='optimal')
-        sci_data = data_array['spectrum']
+        sci_data = io.load_fits(science_file, kind='science fits file',
+                                extname='FLUX')
         sci_hdr = self.load_header(science_file, kind='science fits file')
         # return data and header
         return sci_data, sci_hdr
@@ -532,14 +352,16 @@ class Expres(Instrument):
         # check that this file exists
         io.check_file_exists(abspath, 'blaze')
         # read blaze file (data and header)
-        blaze = io.load_fits(abspath, kind='blaze fits file')
+        blaze = io.load_fits(abspath, kind='blaze fits file', extname='BLAZE')
+        # require the wave grid
+        wavegrid = self.get_wave_solution(science_file, sci_image,
+                                          sci_hdr)
+        # blaze is not pixel blaze (spectral density blaze)
+        blaze = blaze * np.gradient(wavegrid, axis=1)
         # deal with normalizing per order
         if normalize:
             # get the blaze parameters (may be instrument specific)
             nth_deg, bdomain = self.norm_blaze_params()
-            # require the wave grid
-            wavegrid = self.get_wave_solution(science_file, sci_image,
-                                              sci_hdr)
             # normalizse the blaze
             blaze = mp.smart_blaze_norm(wavegrid, blaze, nth_deg, bdomain)
         # return blaze
@@ -596,7 +418,7 @@ class Expres(Instrument):
                           header: Optional[io.LBLHeader] = None
                           ) -> np.ndarray:
         """
-        Get a wave solution from a file (for HARPS this is from the header)
+        Get a wave solution from a file
         :param science_filename: str, the absolute path to the file - for
                                  spirou this is a file with the wave solution
                                  in the header
@@ -607,25 +429,20 @@ class Expres(Instrument):
 
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
-        # ---------------------------------------------------------------------
-        # get header
-        wavemap = io.load_fits(science_filename, 'wave fits file',
-                               extname='optimal')['bary_excalibur']
-        # ---------------------------------------------------------------------
-        # EXPRES wave solution is in Angstrom - convert to nm for consistency
+        # we load wavelength solution from extension
+        # so we do not use data and header
+        _ = data, header
+        # load wavemap
+        wavemap = io.load_fits(science_filename, 'wave fits extension',
+                               extname='WAVELENGTH')
+        # wave solution is in angstrom --> nm
         wavemap = wavemap / 10.0
-        # ---------------------------------------------------------------------
-        # TODO: check this
-        # # EXPRES wave solution is in air - convert to vacuum
-        # n_index = mp.air_index(wavemap)
-        # wavemap = wavemap * n_index
-        # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
 
     def load_bad_hdr_keys(self) -> Tuple[list, Any]:
         """
-        Load the bad values and bad key for HARPS -- not used currently
+        Load the bad values and bad key-- not used currently
 
         :return: tuple, 1. the list of bad values, 2. the bad key in
                  a file header to check against bad values
@@ -669,7 +486,7 @@ class Expres(Instrument):
         """
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
-                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME']
+                    'KW_DATE']
         # add the filename
         tdict = self.add_dict_list_value(tdict, 'FILENAME', filename)
         # loop around header keys
@@ -698,11 +515,10 @@ class Expres(Instrument):
         """
         # there are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
-                    'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
+                    'KW_AIRMASS', 'KW_DATE', 'KW_BERV',
                     'KW_TAU_H2O', 'KW_TAU_OTHERS', 'KW_NITERATIONS',
                     'KW_RESET_RV',
-                    'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_OBJNAME',
-                    'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
+                    'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_CCF_EW']
         # convert to actual keys (not references to keys)
         keys = []
         fp_flags = []
@@ -911,214 +727,6 @@ class Expres(Instrument):
         # write to file
         io.write_fits(write_tellu_file, data=datalist,
                       header=headerlist, dtype=datatypelist)
-
-
-# =============================================================================
-# Define EXPRES ESSP class
-# =============================================================================
-class Expres_ESSP(essp.ESSP):
-    def __init__(self, params: base_classes.ParamDict,
-                 args: base_classes.ParamDict, name: str = None):
-        # get the name
-        if name is None:
-            name = 'HARPS_ESSP'
-        # call to super function
-        super().__init__(params, args, name)
-        # extra parameters (specific to instrument)
-        self.default_template_name = 'LBL_Template_{0}_harps_essp.fits'
-        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_harps_essp.fits'
-        self.default_sample_wave_name = 'sample_wave_grid_harps_essp.fits'
-        # define wave limits in nm
-        self.wavemin = 387.515
-        self.wavemax = 691.128
-        # set parameters for instrument
-        self.params = params
-        # override params
-        self.param_override()
-        # update from args
-        self.update_from_args(args)
-
-    def param_override(self):
-        """
-        Parameter override for EXPRES_ESSP parameters
-        (update default params)
-
-        :return: None - updates self.params
-        """
-        # set function name
-        func_name = __NAME__ + '.neid_ESSP.param_override()'
-        # first run the inherited method
-        super().param_override()
-        # ---------------------------------------------------------------------
-        # set parameters to update
-        # ---------------------------------------------------------------------
-        # set parameters to update
-        self.param_set('INSTRUMENT', 'EXPRES', source=func_name)
-        # add instrument earth location
-        #    (for use in astropy.coordinates.EarthLocation)
-        self.param_set('EARTH_LOCATION', 'lowell')
-        # define the default science input files
-        self.param_set('INPUT_FILE', '*.fits', source=func_name)
-        # The input science data are blaze corrected
-        self.param_set('BLAZE_CORRECTED', False, source=func_name)
-        # define the mask table format
-        self.param_set('REF_TABLE_FMT', 'csv', source=func_name)
-        # define the mask type
-        self.param_set('SCIENCE_MASK_TYPE', 'full', source=func_name)
-        self.param_set('FP_MASK_TYPE', 'neg', source=func_name)
-        self.param_set('LFC_MASK_TYPE', 'neg', source=func_name)
-        # define the default mask url and filename
-        self.param_set('DEFAULT_MASK_FILE', source=func_name,
-                        value='mdwarf_harps.fits')
-        # define the High pass width in km/s
-        self.param_set('HP_WIDTH', 500, source=func_name)
-        # approximate mean resolution in lambda/dlambda
-        self.param_set('APPROX_RESOLUTION', 150000, source=func_name)
-        # define the SNR cut off threshold
-        # Question: HARPS value?
-        self.param_set('SNR_THRESHOLD', 10, source=func_name)
-        # define which bands to use for the clean CCF (see astro.ccf_regions)
-        self.param_set('CCF_CLEAN_BANDS', ['r'], source=func_name)
-        # define the plot order for the compute rv model plot
-        self.param_set('COMPUTE_MODEL_PLOT_ORDERS', [50], source=func_name)
-        # define the compil minimum wavelength allowed for lines [nm]
-        self.param_set('COMPIL_WAVE_MIN', self.wavemin, source=func_name)
-        # define the compil maximum wavelength allowed for lines [nm]
-        self.param_set('COMPIL_WAVE_MAX', self.wavemax, source=func_name)
-        # define the maximum pixel width allowed for lines [pixels]
-        self.param_set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
-        # define min likelihood of correlation with BERV
-        self.param_set('COMPIL_CUT_PEARSONR', -1, source=func_name)
-        # define the CCF e-width to use for FP files
-        # Question: HARPS value?
-        self.param_set('COMPIL_FP_EWID', 5.0, source=func_name)
-        # define whether to add the magic "binned wavelength" bands rv
-        self.param_set('COMPIL_ADD_UNIFORM_WAVEBIN', True)
-        # define the number of bins used in the magic "binned wavelength" bands
-        self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
-        # define the first band (from get_binned_parameters) to plot (band1)
-        self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
-        # define the second band (from get_binned_parameters) to plot (band2)
-        #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
-        # define the third band (from get_binned_parameters) to plot (band3)
-        #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
-        # define the reference wavelength used in the slope fitting in nm
-        self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
-        # define the name of the sample wave grid file (saved to the calib dir)
-        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
-                       source=func_name)
-        # define the FP reference string that defines that an FP observation was
-        #    a reference (calibration) file - should be a list of strings
-        # Question: Check DRP TYPE for STAR,FP file
-        # TODO verify DPR TYPE in SOPHIE headers for FPs
-        self.param_set('FP_REF_LIST', ['STAR,WAVE,FP'], source=func_name)
-        # define the FP standard string that defines that an FP observation
-        #    was NOT a reference file - should be a list of strings
-        # Question: Check DRP TYPE for STAR,FP file
-        # TODO verify DPR TYPE in SOPHIE headers for STAR+FPs
-        self.param_set('FP_STD_LIST', ['STAR,WAVE,FP'], source=func_name)
-        # define readout noise per instrument (assumes ~5e- and 10 pixels)
-        self.param_set('READ_OUT_NOISE', 15, source=func_name)
-        # Define the wave url for the stellar models
-        self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
-        # Define the wave file for the stellar models (using wget)
-        self.param_set('STELLAR_WAVE_FILE', source=func_name,
-                        value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
-        # Define the stellar model url
-        self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
-                              '{ZSTR}{ASTR}/')
-        # Define the minimum allowed SNR in a pixel to add it to the mask
-        self.param_set('MASK_SNR_MIN', value=5, source=func_name)
-        # Define the stellar model file name (using wget, with appropriate
-        #     format  cards)
-        self.param_set('STELLAR_MODEL_FILE', source=func_name,
-                        value='lte{TEFF}-{LOGG}-{ZVALUE}{ASTR}'
-                              '.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits')
-        # Define the object surface gravity (log g) (stellar model)
-        self.param_set('OBJECT_LOGG', value=4.5, source=func_name)
-        # Define the object Z (stellar model)
-        self.param_set('OBJECT_Z', value=0.0, source=func_name)
-        # Define the object alpha (stellar model)
-        self.param_set('OBJECT_ALPHA', value=0.0, source=func_name)
-        # blaze smoothing size (s1d template)
-        self.param_set('BLAZE_SMOOTH_SIZE', value=20, source=func_name)
-        # blaze threshold (s1d template)
-        self.param_set('BLAZE_THRESHOLD', value=0.2, source=func_name)
-        # define the size of the berv bins in m/s
-        self.param_set('BERVBIN_SIZE', value=3000)
-        # ---------------------------------------------------------------------
-        # define whether to do the tellu-clean
-        self.param_set('DO_TELLUCLEAN', value=True, source=func_name)
-        # define the dv offset for tellu-cleaning in km/s
-        self.param_set('TELLUCLEAN_DV0', value=0, source=func_name)
-        # Define the lower wave limit for the absorber spectrum masks in nm
-        self.param_set('TELLUCLEAN_MASK_DOMAIN_LOWER', value=500,
-                        source=func_name)
-        # Define the upper wave limit for the absorber spectrum masks in nm
-        self.param_set('TELLUCLEAN_MASK_DOMAIN_UPPER', value=700,
-                        source=func_name)
-        # Define whether to force using airmass from header
-        self.param_set('TELLUCLEAN_FORCE_AIRMASS', value=False,
-                        source=func_name)
-        # Define the CCF scan range in km/s
-        self.param_set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
-                        source=func_name)
-        # Define the maximum number of iterations for the tellu-cleaning loop
-        self.param_set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
-        # Define the kernel width in pixels
-        self.param_set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
-        # Define the gaussian shape (2=pure gaussian, >2=boxy)
-        self.param_set('TELLUCLEAN_GAUSSIAN_SHAPE', value=2.2,
-                        source=func_name)
-        # Define the wave grid lower wavelength limit in nm
-        self.param_set('TELLUCLEAN_WAVE_LOWER', value=350, source=func_name)
-        # Define the wave griv upper wavelength limit
-        self.param_set('TELLUCLEAN_WAVE_UPPER', value=750, source=func_name)
-        # Define the transmission threshold exp(-1) at which tellurics are
-        #     uncorrectable
-        self.param_set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
-                        source=func_name)
-        # Define the sigma cut threshold above which pixels are removed from fit
-        self.param_set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
-                        source=func_name)
-        # Define whether to recenter the CCF on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF', value=False,
-                        source=func_name)
-        # Define whether to recenter the CCF of others on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
-                        source=func_name)
-        # Define the default water absorption to use
-        self.param_set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
-                        source=func_name)
-        # Define the lower limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
-                        source=func_name)
-        # Define the upper limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
-                        source=func_name)
-        # Define the lower limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
-                        source=func_name)
-        # Define the upper limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
-                        source=func_name)
-        # ---------------------------------------------------------------------
-        # Parameters for the template construction
-        # ---------------------------------------------------------------------
-        # max number of bins for the median of the template. Avoids handling
-        # too many spectra at once.
-        self.param_set('TEMPLATE_MEDBINMAX', 19, source=func_name)
-        # maximum RMS between the template and the median of the template
-        # to accept the median of the template as a good template. If above
-        # we iterate once more. Expressed in m/s
-        self.param_set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=func_name)
-
 
 # =============================================================================
 # Start of code

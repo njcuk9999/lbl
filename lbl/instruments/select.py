@@ -34,6 +34,7 @@ from lbl.instruments import spirou
 from lbl.instruments import maroonx
 from lbl.instruments import coralie
 from lbl.instruments import expres
+from lbl.instruments import neid
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -50,29 +51,31 @@ LblException = base_classes.LblException
 # instruments list
 InstrumentsType = Union[default.Instrument,
                         spirou.Spirou, spirou.SpirouCADC,
-                        harps.Harps_ORIG, harps.Harps_ESO,
+                        harps.Harps_ORIG, harps.Harps_ESO, harps.Harps_ESSP,
                         espresso.Espresso,
                         carmenes.Carmenes,
                         nirps.NIRPS_HA, nirps.NIRPS_HA_CADC, nirps.NIRPS_HA_ESO,
                         nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
-                        harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
+                        harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO, harpsn.HarpsN_ESSP,
                         maroonx.MaroonX,
                         sophie.Sophie,
                         coralie.Coralie,
-                        expres.Expres,
+                        expres.Expres, expres.Expres_ESSP,
+                        neid.Neid_ESSP,
                         generic.Generic]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
-                   harps.Harps_ORIG, harps.Harps_ESO,
+                   harps.Harps_ORIG, harps.Harps_ESO, harps.Harps_ESSP,
                    espresso.Espresso,
                    carmenes.Carmenes,
                    nirps.NIRPS_HA, nirps.NIRPS_HA_CADC, nirps.NIRPS_HA_ESO,
                    nirps.NIRPS_HE, nirps.NIRPS_HE_CADC, nirps.NIRPS_HE_ESO,
-                   harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO,
+                   harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO, harpsn.HarpsN_ESSP,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
                    sophie.Sophie,
                    coralie.Coralie,
-                   expres.Expres,
+                   expres.Expres, expres.Expres_ESSP,
+                   neid.Neid_ESSP,
                    generic.Generic)
 
 # Add all the instrument + source combinations and link them to instrument
@@ -93,6 +96,7 @@ InstDict['NIRPS_HE']['ESO'] = nirps.NIRPS_HE_ESO
 InstDict['HARPS'] = dict()
 InstDict['HARPS']['ORIG'] = harps.Harps_ORIG
 InstDict['HARPS']['ESO'] = harps.Harps_ESO
+InstDict['HARPS']['ESSP'] = harps.Harps_ESSP
 InstDict['CARMENES'] = dict()
 InstDict['CARMENES']['None'] = carmenes.Carmenes
 InstDict['ESPRESSO'] = dict()
@@ -100,6 +104,7 @@ InstDict['ESPRESSO']['None'] = espresso.Espresso
 InstDict['HARPSN'] = dict()
 InstDict['HARPSN']['ORIG'] = harpsn.HarpsN_ORIG
 InstDict['HARPSN']['ESO'] = harpsn.HarpsN_ESO
+InstDict['HARPSN']['ESSP'] = harpsn.HarpsN_ESSP
 InstDict['MAROONX'] = dict()
 InstDict['MAROONX']['RED'] = maroonx.MaroonXRed
 InstDict['MAROONX']['BLUE'] = maroonx.MaroonXBlue
@@ -108,7 +113,10 @@ InstDict['SOPHIE']['None'] = sophie.Sophie
 InstDict['CORALIE'] = dict()
 InstDict['CORALIE']['None'] = coralie.Coralie
 InstDict['EXPRES'] = dict()
-InstDict['EXPRES']['None'] = expres.Expres
+InstDict['EXPRES']['ORIG'] = expres.Expres
+InstDict['EXPRES']['ESSP'] = expres.Expres_ESSP
+InstDict['NEID'] = dict()
+InstDict['NEID']['ESSP'] = neid.Neid_ESSP
 InstDict['Generic'] = dict()
 InstDict['Generic']['None'] = generic.Generic
 

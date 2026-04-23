@@ -493,7 +493,7 @@ def expres():
     rparams = dict()
     # LBL parameters
     rparams['INSTRUMENT'] = 'EXPRES'
-    rparams['DATA_SOURCE'] = 'None'
+    rparams['DATA_SOURCE'] = 'ORIG'
     rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'EXPRES')
     rparams['DATA_TYPES'] = ['SCIENCE']
     rparams['OBJECT_SCIENCE'] = ['SUN']
