@@ -1,7 +1,7 @@
 # lbl
 Line by line code for precision radial velocity described in [Artigau et al. 2022](https://www.doi.org/10.3847/1538-3881/ac7ce6)
 
-version 0.65.014  (2025-11-03)
+version 0.67.006 (2026-04-29)
 
 
 Compatible with:
@@ -15,11 +15,16 @@ Compatible with:
 - Maroon-X (Blue and Red)
 - SOPHIE
 - CORALIE
+- ESSP (EXPRES, NEID, HARPS, HARPS-N)
 - Generic instruments
 
 ---
 
 Please see our website for documentation: [lbl.exoplanets.ca](https://lbl.exoplanets.ca/)
+
+Especially [how to install](https://lbl.exoplanets.ca/#h.kwwr8g1mundr) and [how to use](https://lbl.exoplanets.ca/how-to-use).
+
+Note that all instructions are for the main branch and other branches may vary in their instruments and features.
 
 # Cite
 

@@ -175,8 +175,12 @@ params.set(key='OBJECT_SCIENCE', value=None, source=__NAME__,
 # The object name to use for the comparison template
 params.set(key='OBJECT_COMPARISON', value=None, source=__NAME__,
            desc='The object name to use for the comparison template '
-                '(If None set to OBJECT_SCIENCE)',
-           arg='--obj_template', dtype=str)
+                '(If None set to OBJECT_SCIENCE). '
+                ' Note the COMPARISON object can be '
+                'science target - but this is not always the best choice '
+                '- but for a first pass should be at least attempted with '
+                'object name science=comparison',
+           arg='--obj_comp', dtype=str)
 
 # Set the data type (science, FP or LFC)
 params.set(key='DATA_TYPE', value=None, source=__NAME__,
@@ -218,10 +222,13 @@ params.set(key='SCIENCE_TEMPLATE_FILE', value=None, source=__NAME__,
 # Comparison template file to use (if not defined a template names is guessed).
 # If given must be present in the TEMPLATES directory
 params.set(key='COMPARISON_TEMPLATE_FILE', value=None, source=__NAME__,
-           desc='Comparison template file to use (if not defined a template '
+           desc='Comparison template file to use (if not defined a comparison '
                 'names is guessed). If given must be present in the '
-                'TEMPLATES directory',
-           arg='--sci_template', dtype=str)
+                'TEMPLATES directory. Note the COMPARISON object can be '
+                'science target - but this is not always the best choice '
+                '- but for a first pass should be at least attempted with '
+                'object name science=comparison',
+           arg='--comp_template', dtype=str)
 
 # define the input files
 params.set(key='INPUT_FILE', value='*', source=__NAME__,
