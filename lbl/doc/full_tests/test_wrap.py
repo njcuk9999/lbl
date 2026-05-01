@@ -34,6 +34,10 @@ INSTRUMENTS = [
                'sophie',
                'coralie',
                'expres',
+               'harpsn_essp',
+               'harps_essp',
+               'expres_essp',
+               'neid_essp',
                ]
 
 # define global params to override
@@ -512,6 +516,111 @@ def expres():
     rparams['SKIP_LBL_COMPILE'] = True
     # return parameters
     return rparams
+
+
+def harpsn_essp():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'HARPSN'
+    rparams['DATA_SOURCE'] = 'ESSP'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPSN_ESSP')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['SUN']
+    rparams['OBJECT_COMPARISON'] = ['SUN']
+    rparams['OBJECT_TEFF'] = [5775]
+    rparams['BLAZE_CORRECTED'] = False
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
+
+def harps_essp():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'HARPS'
+    rparams['DATA_SOURCE'] = 'ESSP'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'HARPS_ESSP')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['SUN']
+    rparams['OBJECT_COMPARISON'] = ['SUN']
+    rparams['OBJECT_TEFF'] = [5775]
+    rparams['BLAZE_CORRECTED'] = False
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
+
+def expres_essp():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'EXPRES'
+    rparams['DATA_SOURCE'] = 'ESSP'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'EXPRES_ESSP')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['SUN']
+    rparams['OBJECT_COMPARISON'] = ['SUN']
+    rparams['OBJECT_TEFF'] = [5775]
+    rparams['BLAZE_CORRECTED'] = False
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
+
+def neid_essp():
+    # set up parameters
+    rparams = dict()
+    # LBL parameters
+    rparams['INSTRUMENT'] = 'NEID'
+    rparams['DATA_SOURCE'] = 'ESSP'
+    rparams['DATA_DIR'] = os.path.join(TEST_PATH, 'NEID_ESSP')
+    rparams['DATA_TYPES'] = ['SCIENCE']
+    rparams['OBJECT_SCIENCE'] = ['SUN']
+    rparams['OBJECT_COMPARISON'] = ['SUN']
+    rparams['OBJECT_TEFF'] = [5775]
+    rparams['BLAZE_CORRECTED'] = False
+    # what to run and skip if already on disk
+    rparams['RUN_LBL_TELLUCLEAN'] = False
+    rparams['RUN_LBL_TEMPLATE'] = True
+    rparams['RUN_LBL_MASK'] = True
+    rparams['RUN_LBL_COMPUTE'] = True
+    rparams['RUN_LBL_COMPILE'] = True
+    rparams['SKIP_LBL_TEMPLATE'] = True
+    rparams['SKIP_LBL_MASK'] = True
+    rparams['SKIP_LBL_COMPUTE'] = True
+    rparams['SKIP_LBL_COMPILE'] = True
+    # return parameters
+    return rparams
+
 
 
 # =============================================================================
