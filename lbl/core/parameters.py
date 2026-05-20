@@ -292,6 +292,10 @@ params.set(key='ROUGH_CCF_STEP_RV', value=500, source=__NAME__,
 params.set(key='ROUGH_CCF_FILTER_SIZE', value=100000, source=__NAME__,
            desc='The rough CCF filter size in m/s')
 
+# The sigma to flag completely spurious data in the template
+params.set(key='COMPUTE_FLAG_SPURIOUS_SIG', value=10, source=__NAME__,
+           desc='The sigma to flag completely spurious data in the template')
+
 # define which bands to use for the clean CCF (see astro.ccf_regions)
 params.set(key='CCF_CLEAN_BANDS', value=None, source=__NAME__,
            desc='which bands to use for the clean CCF (see astro.ccf_regions) ',

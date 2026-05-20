@@ -361,7 +361,8 @@ def spline_template(inst: InstrumentsType, template_file: str,
 
     # flag completely spurious data in the template. Negative values
     # and values > 10x the median are rejected
-    bad = (tflux < 0) | (tflux / np.nanmedian(tflux) > 10)
+    flag_spurious_sig = inst.params['COMPUTE_FLAG_SPURIOUS_SIG']
+    bad = (tflux < 0) | (tflux / np.nanmedian(tflux) > flag_spurious_sig)
     tflux[bad] = np.nan
     # -------------------------------------------------------------------------
     # Deal with Rotational broadening
