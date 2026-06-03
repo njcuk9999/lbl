@@ -2195,6 +2195,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # -------------------------------------------------------------------------
     # load table and header
     rvtable0, rvhdr0 = inst.load_lblrv_file(str(lblrvfiles[0]))
+
     # get columns of rvtable0
     wavestart0 = np.array(rvtable0['WAVE_START'])
     npixline0 = np.array(rvtable0['NPIXLINE'])
@@ -2207,11 +2208,11 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # do not consider lines wider than max_pix_wid limit
     good &= npixline0 < max_pix_wid
     # remove good from rv table
-    rvtable0 = rvtable0[good]
+    rvtable0_good = rvtable0[good]
     ref_good_pix = np.array(good)  # if a calibration, we'll need this later
     # get columns of rvtable0
-    dv0 = np.array(rvtable0['dv'])
-    sdv0 = np.array(rvtable0['sdv'])
+    dv0 = np.array(rvtable0_good['dv'])
+    sdv0 = np.array(rvtable0_good['sdv'])
     # size of arrays
     nby, nbx = len(lblrvfiles), np.sum(good)
     # set up rv and dvrms
@@ -2242,6 +2243,25 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     best_mask = sdv0 < np.nanpercentile(sdv0, 5.0)
     # list for plot storage
     vrange_all, pdf_all, pdf_fit_all = [], [], []
+
+    # -------------------------------------------------------------------------
+    # Validate all rvtables
+    # -------------------------------------------------------------------------
+    # log progress
+    log.info('Validating all lbl rv files...')
+    # loop around lbl rv files
+    for row in tqdm(range(len(lblrvfiles))):
+        # ---------------------------------------------------------------------
+        # get lbl rv file table and header
+        # ---------------------------------------------------------------------
+        # load table and header
+        rvtable, rvhdr = inst.load_lblrv_file(str(lblrvfiles[row]))
+        # most importantly check that we have the same lines
+        # compared to original rvtable0
+        check_rvtables(inst, rvtable0, rvtable, str(lblrvfiles[0]),
+                       str(lblrvfiles[row]))
+        # remove files (open again later)
+        del rvtable, rvhdr
 
     # -------------------------------------------------------------------------
     # Loop around lbl rv files
@@ -2492,13 +2512,16 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_error[line_it] = np.nan
                 continue
             # find valid velocity measurements
-            good = np.isfinite(dv_arr[:, line_it])
+            good1 = np.isfinite(dv_arr[:, line_it])
             per_line_diff = (dv_arr[:, line_it] - rdb_dict['vrad'])
             # skip if less that 3 valid values for this line
-            if np.sum(good) < 3:
+            if np.sum(good1) < 3:
                 if dv_arr.shape[0] < 5:
                     per_line_mean[line_it] = np.nanmean(dv_arr[:, line_it])
-                    per_line_error[line_it] = np.nanstd(dv_arr[:, line_it])/np.sqrt(np.sum(good))
+                    # calculate the per line error
+                    part1 = np.nanstd(dv_arr[:, line_it])
+                    part2 = np.sqrt(np.sum(good))
+                    per_line_error[line_it] = part1 / part2
                 else:
                     per_line_mean[line_it] = np.nan
                     per_line_error[line_it] = np.nan
@@ -2522,7 +2545,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # and can be used to flag lines that suspiciously correlate
             # with BERV.
             with warnings.catch_warnings(record=True) as _:
-                pout = pearsonr(berv[good], per_line_diff[good])
+                pout = pearsonr(berv[good1], per_line_diff[good1])
             prob_pearsonr[line_it] = pout[1]
 
             if prob_pearsonr[line_it] < cut_pearsonr:
@@ -2572,7 +2595,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_fitsdata['SD2V'] = sd2v_arr
     rdb_fitsdata['D3V'] = d3v_arr
     rdb_fitsdata['SD3V'] = sd3v_arr
-    rdb_fitsdata['RDB0'] = rvtable0
+    rdb_fitsdata['RDB0'] = rvtable0_good
     # -------------------------------------------------------------------------
     # print progress
     log.info('Computing chromatic slope and per-bandpass statistics')
@@ -2622,18 +2645,20 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # loop around 10 iterations (but break on convergence)
         while itr_count <= 10:
             # find finite points
-            good = np.isfinite(err) & np.isfinite(rvs_row)
-            good &= np.isfinite(rv_per_line_model[0])
+            good2 = np.isfinite(err) & np.isfinite(rvs_row)
+            good2 &= np.isfinite(rv_per_line_model[0])
             # find very large outliers in the per-line velocities
             nsig = np.abs(rvs_row - np.nanmedian(rvs_row)) / err
-            good &= (nsig < 10)
-            good &= (err < 100 * np.nanmedian(err))
+            good2 &= (nsig < 10)
+            good2 &= (err < 100 * np.nanmedian(err))
+            # apply the path
+            rvtable0_good2 = rvtable0_good[good2]
             # get valid wave and subtract reference wavelength
-            valid_wave = rvtable0['WAVE_START'][good] - reference_wavelength
-            valid_log_wave = np.log(rvtable0['WAVE_START'][good])
+            valid_wave = rvtable0_good2['WAVE_START']- reference_wavelength
+            valid_log_wave = np.log(rvtable0_good2['WAVE_START'])
             # get valid rv an dv drms
-            valid_rv = (rvs_row - rv_per_line_model[0])[good]
-            valid_dvrms = err[good]
+            valid_rv = (rvs_row - rv_per_line_model[0])[good2]
+            valid_dvrms = err[good2]
             # get weights for the np.polyval fit. Do *not* use the square of
             # error bars for weight (see polyfit help)
 
@@ -2647,7 +2672,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 suspicious = valid_dvrms < threshold
                 valid_dvrms[suspicious] = threshold
 
-            weight_lin_fit = prob_good[good] / valid_dvrms
+            weight_lin_fit = prob_good[good2] / valid_dvrms
             # fitting the lines with weights
             # noinspection PyTupleAssignmentBalance
             scoeffs, scov = np.polyfit(valid_wave, valid_rv, 1,
@@ -2661,7 +2686,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             nsig = (valid_rv - sfit) / valid_dvrms
             # work out the likelihood of the line being a valid point
             gpart = np.exp(-0.5 * nsig ** 2)
-            prob_good[good] = (1 + 1.0e-4) * gpart / (1.0e-4 + gpart)
+            prob_good[good2] = (1 + 1.0e-4) * gpart / (1.0e-4 + gpart)
             # get the slope and velocity from the fit
             achromatic_velo = scoeffs[1]
             # expressed in m/s/um, hence the *1000 to go from nm (wave grid)
@@ -2776,8 +2801,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         for iband in range(len(bands)):
             # make a mask based on the band (can use rvtable0 as wave start
             #   is the same for all rvtables)
-            band_mask = rvtable0['WAVE_START'] > blue_end[iband]
-            band_mask &= rvtable0['WAVE_START'] < red_end[iband]
+            band_mask = rvtable0_good['WAVE_START'] > blue_end[iband]
+            band_mask &= rvtable0_good['WAVE_START'] < red_end[iband]
             # decide whether to use regions
             if use_regions[iband]:
                 band_regions = list(region_names)
@@ -2791,8 +2816,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # loop around the regions
             for iregion in range(len(band_regions)):
                 # mask based on region
-                region_mask = rvtable0['XPIX'] > band_region_low[iregion]
-                region_mask &= rvtable0['XPIX'] < band_region_high[iregion]
+                region_mask = rvtable0_good['XPIX'] > band_region_low[iregion]
+                region_mask &= rvtable0_good['XPIX'] < band_region_high[iregion]
                 # -------------------------------------------------------------
                 # get combined mask for band and region
                 comb_mask = band_mask & region_mask
@@ -3195,6 +3220,50 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # ---------------------------------------------------------------------
     # return rdb table
     return rdb_table4
+
+
+def check_rvtables(inst: InstrumentsType,
+                   rvtable1: Table, rvtable2: Table,
+                   file1: str, file2: str,
+                   raise_exception: bool = True) -> bool:
+    """
+    Check that two rvtables are consistent (length and value of WAVE_START and
+    WAVE_END)
+
+    :param inst: Lbl Instrument instance
+    :param rvtable1: astropy.Table - the first rv table to compare
+    :param rvtable2: astropy.Table - the second rv table to compare
+    :param file1: str - the path of the first file
+    :param file2: str - the path of the second file
+    :param raise_exception: bool - if True raises exception on failure
+
+    :raises: LblException error on check failure (if raise_exception is True)
+
+    :return: bool, True if passes, False otherwise
+    """
+    # Case 1: table are same length but wave start/wave end are different
+    if len(rvtable1) == len(rvtable2):
+        # match rows in file
+        match1 = rvtable1['WAVE_START'] != rvtable2['WAVE_START']
+        match2 = rvtable1['WAVE_END'] != rvtable2['WAVE_END']
+        # if they both match
+        if (np.sum(match1) + np.sum(match2)) == 0:
+            return True
+    # get object science and object comparison
+    obj_sci = inst.params['OBJECT_SCIENCE']
+    obj_comp =inst.params['OBJECT_COMPARISON']
+    # error message
+    emsg = (f'RV Tables line definitions do not match.'
+            f'\n File1: {os.path.basename(file1)} Nlines={len(rvtable1)}'
+            f'\n File2: {os.path.basename(file2)} Nlines={len(rvtable2)}'
+            f'\n\tPlease remove all lbl.fits files for  '
+            f'{obj_sci}_{obj_comp} files and re-run lbl_compute '
+            f'for OBJECT_SCIENCE={obj_sci} OBJECT_COMPARISON={obj_comp}')
+    if raise_exception:
+        raise LblException(emsg)
+    # other wise log a warning and return False
+    log.warning(emsg)
+    return False
 
 
 # =============================================================================
