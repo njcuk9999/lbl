@@ -12,7 +12,7 @@ Created on 2026-06-03
 import argparse
 import ast
 import sys
-from typing import Dict
+from typing import Dict, Optional
 
 from lbl.recipes import (lbl_compute, lbl_template, lbl_mask, lbl_find,
                          lbl_setup, lbl_compile, lbl_noise, lbl_wrap,
@@ -30,6 +30,23 @@ __STRNAME__ = 'LBL Apero Run'
 # =============================================================================
 # Define functions
 # =============================================================================
+def get_clipboard_input() -> Optional[str]:
+    """
+    Read text directly from the system clipboard using tkinter.
+    Returns None if clipboard is unavailable or empty.
+    """
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()
+        text = root.clipboard_get()
+        root.destroy()
+        return text if text.strip() else None
+    except Exception as e:
+        print(f"Could not read clipboard: {e}")
+        return None
+
+
 def get_user_input():
     """
     Prompt the user to paste APERO log lines.
@@ -263,6 +280,10 @@ if __name__ == "__main__":
         help="Path to a file containing the APERO log lines (bypasses interactive paste)."
     )
     parser.add_argument(
+        "--clipboard", action="store_true",
+        help="Read APERO log lines from the clipboard instead of interactive paste."
+    )
+    parser.add_argument(
         "--yes", action="store_true",
         help="Automatically answer yes to the run confirmation prompt."
     )
@@ -272,6 +293,13 @@ if __name__ == "__main__":
     if _args.log_file:
         with open(_args.log_file, 'r') as _fh:
             apero_input = _fh.read()
+    elif _args.clipboard:
+        apero_input = get_clipboard_input() or ''
+        if apero_input:
+            print("Read log from clipboard.")
+        else:
+            print("Clipboard was empty or unreadable. Exiting.")
+            sys.exit(1)
     else:
         # Get log input from the user interactively
         apero_input = get_user_input()
