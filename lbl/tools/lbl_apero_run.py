@@ -260,7 +260,8 @@ def run_lbl_from_log(recipe_name: str, arguments: Dict[str, str]):
         user_input = input("Do you want to run (y/n): ")
 
     if 'y' in user_input.lower():
-        # Call main with parsed arguments
+        # Clear sys.argv so the recipe's own argparse doesn't see our flags
+        sys.argv = [sys.argv[0]]
         try:
             recipe_module.main(**arguments)
         except Exception as e:
