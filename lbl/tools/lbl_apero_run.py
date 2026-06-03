@@ -9,6 +9,7 @@ Created on 2026-06-03
 
 @author: cook
 """
+import argparse
 import ast
 import sys
 from typing import Dict
@@ -236,7 +237,10 @@ def run_lbl_from_log(recipe_name: str, arguments: Dict[str, str]):
     print("\n\n")
 
     # ask user whether to run recipe
-    user_input = input("Do you want to run (y/n): ")
+    if _AUTO_YES:
+        user_input = 'y'
+    else:
+        user_input = input("Do you want to run (y/n): ")
 
     if 'y' in user_input.lower():
         # Call main with parsed arguments
@@ -251,8 +255,26 @@ def run_lbl_from_log(recipe_name: str, arguments: Dict[str, str]):
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
-    # Get log input from the user interactively
-    apero_input = get_user_input()
+    parser = argparse.ArgumentParser(
+        description="Run an LBL recipe from an APERO log snippet."
+    )
+    parser.add_argument(
+        "--log-file", metavar="PATH",
+        help="Path to a file containing the APERO log lines (bypasses interactive paste)."
+    )
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="Automatically answer yes to the run confirmation prompt."
+    )
+    _args = parser.parse_args()
+    _AUTO_YES = _args.yes
+
+    if _args.log_file:
+        with open(_args.log_file, 'r') as _fh:
+            apero_input = _fh.read()
+    else:
+        # Get log input from the user interactively
+        apero_input = get_user_input()
 
     if not apero_input.strip():
         print("No input provided. Exiting.")
