@@ -9,6 +9,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+import contextlib
 import copy
 import fnmatch
 import itertools
@@ -28,6 +29,7 @@ from astropy.table import Table
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import logger
+from lbl.core import npreplica
 
 # =============================================================================
 # Define variables
@@ -50,6 +52,82 @@ FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
 # =============================================================================
 # Define classes
 # =============================================================================
+class _FrozenConf:
+    def __init__(self, conf: Any):
+        """
+        Stand-in for an astropy configuration namespace: each setting is read
+        from the real one once, then kept
+
+        :param conf: the astropy configuration namespace
+        """
+        self._conf = conf
+
+    def __getattr__(self, name: str) -> Any:
+        value = getattr(self._conf, name)
+        setattr(self, name, value)
+        return value
+
+
+@contextlib.contextmanager
+def fast_fits_config():
+    """
+    astropy.io.fits cards read their configuration (e.g.
+    conf.strip_header_whitespace) at every access to a card value, at a few
+    microseconds each: with ~1000 cards per header this is a good part of
+    reading and writing LBL files. Within this context these settings are
+    read once and kept (same values, so the same behaviour). Nothing is
+    changed if FAST_KERNELS is off.
+    """
+    if not npreplica.FAST_KERNELS:
+        yield
+        return
+    from astropy.io.fits import card as fits_card
+    real_conf = fits_card.conf
+    fits_card.conf = _FrozenConf(real_conf)
+    try:
+        yield
+    finally:
+        fits_card.conf = real_conf
+
+
+def header_set(header: fits.Header, key: str, value: Any,
+               comment: Optional[str]):
+    """
+    Same as header[key] = (value, comment) on an astropy fits.Header, but a
+    new keyword is appended with end=True, which skips astropy's O(n) index
+    update on each insertion (O(n^2) for a whole header).
+
+    The resulting header is identical: astropy only inserts a new keyword
+    before the end when the header ends with blank or commentary cards, and
+    in that case (or for commentary / existing keywords, or wildcards, or if
+    FAST_KERNELS is off) we use header[key] = (value, comment).
+
+    :param header: fits.Header, updated in place
+    :param key: str, the keyword
+    :param value: the value
+    :param comment: str or None, the comment
+    """
+    # pylint: disable=protected-access
+    # noinspection PyProtectedMember
+    commentary = fits.Card._commentary_keywords
+    lookup = key.strip().upper().removeprefix('HIERARCH ')
+    cards = header._cards
+    fallback = not npreplica.FAST_KERNELS
+    fallback |= lookup in commentary or lookup in header._keyword_indices
+    fallback |= ('*' in key) or ('?' in key) or ('...' in key)
+    if len(cards) > 0 and not fallback:
+        fallback = cards[-1].is_blank or cards[-1].keyword in commentary
+    if fallback:
+        header[key] = (value, comment)
+        return
+    # same value/comment handling as fits.Header.__setitem__ with a 2-tuple
+    if value is None:
+        value = fits.card.UNDEFINED
+    if comment is None:
+        comment = ''
+    header.append((key, value, comment), end=True)
+
+
 class LBLHeader(UserDict):
     def __init__(self, *arg, **kw):
         """
@@ -180,12 +258,17 @@ class LBLHeader(UserDict):
         :return: LBLHeader, the header
         """
         new = cls()
+        # unique keys, in header order: header[key] of a repeated key always
+        #   returns the same (first card / commentary) value, so copying it
+        #   once gives the same result as copying it at every occurrence
+        #   (a deepcopy of a commentary value copies the whole header)
+        keys = list(dict.fromkeys(header))
         # loop around keys and add them to the header dictionary
-        for key in header:
+        for key in keys:
             new[key] = copy.deepcopy(header[key])
         # add comments
         new.comments = dict()
-        for key in header:
+        for key in keys:
             new.comments[key] = copy.deepcopy(header.comments[key])
         # set filename
         new.filename = filename
@@ -215,7 +298,7 @@ class LBLHeader(UserDict):
             if key in ['COMMENT', 'HISTORY']:
                 continue
             # Add key to dictionary
-            header[outkey] = (self.data[key], self.comments[key])
+            header_set(header, outkey, self.data[key], self.comments[key])
         # return header
         return header
 
@@ -833,7 +916,7 @@ def write_fits(filename: str, data: FitsData = None,
                 continue
             # add key
             with warnings.catch_warnings(record=True) as _:
-                hdu0.header[key] = (value, comment)
+                header_set(hdu0.header, key, value, comment)
     # add primary extension to hdu list
     hdus = [hdu0]
     # -------------------------------------------------------------------------
@@ -1091,7 +1174,7 @@ def generate_checksum(filename: str, size: int = 16) -> Optional[str]:
         with open(filename, 'rb') as f:
             # read the file in chunks
             checksum = hashlib.md5()
-            for chunk in iter(lambda: f.read(4096), b""):
+            for chunk in iter(lambda: f.read(1 << 20), b""):
                 checksum.update(chunk)
             # return the checksum
             return checksum.hexdigest()[:size]
