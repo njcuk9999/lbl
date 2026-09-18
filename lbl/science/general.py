@@ -24,6 +24,7 @@ from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import fastmath
 from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
@@ -49,6 +50,11 @@ InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value
 speed_of_light_kms = constants.c.value / 1000.0
+# the two percentiles of mp.estimate_sigma (sigma=1), as fractions computed
+#   the way np.nanpercentile does (p / 100)
+_P1 = (1 - (1 - mp.normal_fraction(1.0)) / 2) * 100
+ESTIMATE_SIGMA_Q_HI = float(np.true_divide(_P1, np.float64(100)))
+ESTIMATE_SIGMA_Q_LO = float(np.true_divide(100 - _P1, np.float64(100)))
 
 
 # =============================================================================
@@ -1011,30 +1017,12 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
         npoints = get_velo_scale(waveord, noise_sampling_width)
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
-        # get the pixels along the model to spline at (box centers)
-        indices = np.arange(0, model.shape[1], npoints // 4)
-        # store the sigmas
-        sigma = np.zeros_like(indices, dtype=float)
-        # loop around each pixel and work out sigma value
-        for it in range(len(indices)):
-            # get start and end values for this box
-            istart = indices[it] - npoints // 2
-            iend = indices[it] + npoints // 2
-            # fix boundary problems
-            if istart < 0:
-                istart = 0
-            if iend > model.shape[1]:
-                iend = model.shape[1]
-            tmp = residuals[istart: iend]
-            # if more than 50% of the points are valid. If shorter at the
-            # start or end of domain, we compare to npoints rather than the
-            # length of tmp
-            frac_valid = np.sum(np.isfinite(tmp)) / npoints
-            if frac_valid > 0.5:
-                # work out the sigma of this box
-                sigma[it] = mp.estimate_sigma(tmp)
-            # set any zero values to NaN
-            sigma[sigma == 0] = np.nan
+        # robust sigma in boxes of npoints pixels, every npoints // 4 pixels
+        #   (box centers = indices). Boxes with <= 50% valid points (compared
+        #   to npoints, also at the edges) and zero sigmas are NaN.
+        indices, sigma = fastmath.noise_model_windows(
+            np.ascontiguousarray(residuals, dtype=float), int(npoints),
+            ESTIMATE_SIGMA_Q_HI, ESTIMATE_SIGMA_Q_LO)
         # mask all NaN values
         good = np.isfinite(sigma)
         # if we have enough points calculate the rms
@@ -1050,6 +1038,14 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     rms[rms == 0] = np.nan
     # return rms
     return rms
+
+
+def _f64(array: np.ndarray) -> np.ndarray:
+    """
+    Native-endian, C-contiguous float64 version of an array (FITS data are
+    big-endian, which numba does not take). No copy if already the case.
+    """
+    return np.ascontiguousarray(array, dtype=np.float64)
 
 
 def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
@@ -1256,6 +1252,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # a keep mask - for keep good mask lines
     mask_keep = np.ones_like(ref_table['ORDER'], dtype=bool)
+    # line indices in each order and line edges (for the line-by-line loop)
+    line_orders = np.asarray(ref_table['ORDER'], dtype=np.int64)
+    order_lines = [np.where(line_orders == order_num)[0]
+                   for order_num in range(sci_data.shape[0])]
+    line_wave_start = _f64(ref_table['WAVE_START'])
+    line_wave_end = _f64(ref_table['WAVE_END'])
     # store number of iterations required to converge
     num_to_converge = 0
     # set up models to spline onto
@@ -1473,7 +1475,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # work out dv line-by-line
         # ---------------------------------------------------------------------
         # get orders
-        orders = ref_table['ORDER']
+        orders = line_orders
         # set these for use/update later
         nwavegrid = mp.doppler_shift(wavegrid, -sys_rv)
         # get splines between shifted wave grid and pixel grid
@@ -1522,250 +1524,78 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             continue
         # ---------------------------------------------------------------------
         # loop through all lines
-        for line_it in range(0, len(orders)):
-            # get the order number for this line
-            order_num = orders[line_it]
-            # -----------------------------------------------------------------
-            # if line has been flagged as bad (in all but the first iteration)
-            #   skip this line
-            if (iteration != 1) and not (mask_keep[line_it]):
+        #   (numba kernel with the same arithmetic as the per-line python
+        #    code it replaces: see lbl.core.fastmath.line_loop)
+        # lines visited in this iteration (lines flagged as bad are skipped
+        #   in all but the second iteration)
+        if iteration != 1:
+            visit = np.array(mask_keep)
+        else:
+            visit = np.ones(len(orders), dtype=bool)
+        # pixel position of the line edges (one spline call per order)
+        x_start_f = np.full(len(orders), np.nan)
+        x_end_f = np.full(len(orders), np.nan)
+        for order_num in range(len(order_lines)):
+            in_order = order_lines[order_num]
+            if len(in_order) == 0:
                 continue
-            # -----------------------------------------------------------------
-            # get this orders values (shallow copy)
-            ww_ord = nwavegrid[order_num]
-            sci_ord = sci_data[order_num]
             wave2pix = wave2pixlist[order_num]
-            rms_ord = rms[order_num]
-            model_ord = model[order_num]
-            dmodel_ord = dmodel[order_num]
-            blaze_ord = blaze[order_num]
-            b_ratio_ord = b_ratio[order_num]
-            norm_ord = norm[order_num]
-            # only do the d2 and d3 stuff if on last iteration
-            if flag_last_iter:
-                d2model_ord = d2model[order_num]
-                d3model_ord = d3model[order_num]
-                # deal with residual projection tables if required
-                if resproj_flag:
-                    # loop around residual project tables
-                    for key in inst.params['RESPROJ_TABLES']:
-                        # add the model for this order
-                        pmodel_ord = proj_model[key]['model'][order_num]
-                        # add to projection_model
-                        proj_model[key]['model_ord'] = pmodel_ord
-            else:
-                d2model_ord = None
-                d3model_ord = None
-            # -----------------------------------------------------------------
-            # get the start and end wavelengths and pixels for this line
-            wave_start = ref_table['WAVE_START'][line_it]
-            wave_end = ref_table['WAVE_END'][line_it]
-            x_start, x_end = wave2pix([wave_start, wave_end])
-            # round pixel positions to nearest pixel
-            x_start, x_end = int(np.floor(x_start)), int(np.floor(x_end))
-            # -----------------------------------------------------------------
-            # boundary conditions
-            if (x_end - x_start) < min_line_width:
-                mask_keep[line_it] = False
-                continue
-            if x_start < 0:
-                mask_keep[line_it] = False
-                continue
-            if x_end > len(ww_ord) - 2:
-                mask_keep[line_it] = False
-                continue
-            # -----------------------------------------------------------------
-            # get weights at the edge of the domain. Pixels inside have a
-            # weight of 1, at the edge, it's proportional to the overlap
-            weight_mask = np.ones(x_end - x_start + 1)
-            # deal with overlapping pixels (before start)
-            if ww_ord[x_start] < wave_start:
-                refdiff = ww_ord[x_start + 1] - wave_start
-                wavediff = ww_ord[x_start + 1] - ww_ord[x_start]
-                weight_mask[0] = 1 - refdiff / wavediff
-            # deal with overlapping pixels (after end)
-            if ww_ord[x_end + 1] > wave_end:
-                refdiff = wave_end - ww_ord[x_end]
-                wavediff = ww_ord[x_end] - ww_ord[x_end - 1]
-                weight_mask[-1] = 1 - (refdiff / wavediff)
-            # get the x pixels
-            xpix = np.arange(x_start, len(weight_mask) + x_start)
-            # get mean xpix and mean blaze for line
-            mean_xpix = mp.nansum(weight_mask * xpix) / mp.nansum(weight_mask)
-            mean_blaze = blaze_ord[(x_start + x_end) // 2]
-            # push mean xpix and mean blaze into ref table
-            ref_table['MEANXPIX'][line_it] = mean_xpix
-            ref_table['MEANBLAZE'][line_it] = mean_blaze
-            # -----------------------------------------------------------------
-            # add to the plots dictionary (for plotting later)
-            if iteration == 1:
+            x_start_f[in_order] = wave2pix(line_wave_start[in_order])
+            x_end_f[in_order] = wave2pix(line_wave_end[in_order])
+        # the per-line code did int(np.floor(x)): it fails on a non-finite x
+        if not np.all(np.isfinite(x_start_f[visit]) &
+                      np.isfinite(x_end_f[visit])):
+            raise ValueError('cannot convert float NaN to integer')
+        x_start_i = np.zeros(len(orders), dtype=np.int64)
+        x_end_i = np.zeros(len(orders), dtype=np.int64)
+        x_start_i[visit] = np.floor(x_start_f[visit]).astype(np.int64)
+        x_end_i[visit] = np.floor(x_end_f[visit]).astype(np.int64)
+        # residual projection models (only used on the last iteration)
+        if flag_last_iter and resproj_flag:
+            resproj_keys = list(inst.params['RESPROJ_TABLES'].keys())
+            proj_models = np.array([proj_model[key]['model']
+                                    for key in resproj_keys], dtype=float)
+            proj_all = np.array([proj_model[key]['proj']
+                                 for key in resproj_keys], dtype=float)
+            sproj_all = np.array([proj_model[key]['sproj']
+                                  for key in resproj_keys], dtype=float)
+        else:
+            resproj_keys = []
+            proj_models = np.zeros((0, 1, 1))
+            proj_all = np.zeros((0, len(orders)))
+            sproj_all = np.zeros((0, len(orders)))
+        # lines that passed the boundary conditions (for the plot)
+        passed_bounds = np.zeros(len(orders), dtype=bool)
+        # run the line-by-line loop
+        fastmath.line_loop(iteration, flag_last_iter, orders,
+                           line_wave_start, line_wave_end,
+                           x_start_i, x_end_i, mask_keep,
+                           _f64(nwavegrid), _f64(sci_data), _f64(rms),
+                           _f64(model), _f64(dmodel), _f64(d2model),
+                           _f64(d3model), _f64(blaze), _f64(b_ratio),
+                           _f64(norm), proj_models,
+                           min_line_width, dv, sdv, d0v, sd0v, d2v, sd2v,
+                           d3v, sd3v, frac_line_valid,
+                           ref_table['MEANXPIX'], ref_table['MEANBLAZE'],
+                           ref_table['RMSRATIO'], ref_table['NPIXLINE'],
+                           ref_table['CHI2'], proj_all, sproj_all,
+                           passed_bounds)
+        # push the residual projections back
+        for ikey, key in enumerate(resproj_keys):
+            proj_model[key]['proj'] = proj_all[ikey]
+            proj_model[key]['sproj'] = sproj_all[ikey]
+        # add to the plots dictionary (for plotting later)
+        if iteration == 1:
+            for line_it in np.where(passed_bounds)[0]:
+                order_num = orders[line_it]
+                x_start, x_end = x_start_i[line_it], x_end_i[line_it]
                 plot_dict['LINE_ORDERS'] += [order_num]
-                plot_dict['WW_ORD_LINE'] += [ww_ord[x_start:x_end + 1]]
-                plot_dict['SPEC_ORD_LINE'] += [sci_ord[x_start:x_end + 1]]
-                plot_dict['MODEL_ORD_LINE'] += [model_ord[x_start:x_end + 1]]
-            # -----------------------------------------------------------------
-            # derivative of the segment
-            d_seg = dmodel_ord[x_start: x_end + 1] * weight_mask
-
-            # only do the d2 and d3 stuff if on last iteration
-            if flag_last_iter:
-                # keep track of second and third derivatives
-                d2_seg = d2model_ord[x_start: x_end + 1] * weight_mask
-                d3_seg = d3model_ord[x_start: x_end + 1] * weight_mask
-                # deal with residual projection tables if required
-                if resproj_flag:
-                    # loop around residual project tables
-                    for key in inst.params['RESPROJ_TABLES']:
-                        # get model_order projection
-                        pmodel_ord = proj_model[key]['model_ord']
-                        # work out the d_seg for this projection
-                        pd_seg = pmodel_ord[x_start: x_end + 1] * weight_mask
-                        # add to projection_model
-                        proj_model[key]['d_seg'] = pd_seg
-            else:
-                d2_seg, d3_seg = None, None
-            # residual of the segment
-            # TODO -> investigate data type problem
-            # data type should work in the sum below. Does
-            # not happen with SPIRou data
-            sci_seg = sci_ord[x_start:x_end + 1]
-            model_seg = model_ord[x_start:x_end + 1]
-            b_ratio_seg = b_ratio_ord[x_start:x_end + 1]
-            norm_seg = norm_ord[x_start:x_end + 1]
-
-            # keep track of the fraction of each lines that is not finite
-            frac_mask = np.isfinite(sci_ord[x_start:x_end + 1])
-            frac_line_valid[line_it] = np.mean(frac_mask)
-
-            # diff_seg = (sci_seg - model_seg) * weight_mask
-            # work out the sum of the weights of the weight mask
-            sum_weight_mask = np.sum(weight_mask)
-
-            # -----------------------------------------------------------------
-            # This is part of the code we had when we had to subtract
-            #   a mean value for each segment as we high-passed
-            #   - no longer used (remove later)
-
-            # denominator = np.nansum(model_seg ** 2 * weight_mask ** 2)
-            # if (sum_weight_mask != 0) and (denominator != 0):
-            #     # subtract off normalized science sum
-            #     # scisum = mp.nansum(sci_seg * weight_mask)
-            #     # sci_seg = sci_seg - (scisum / sum_weight_mask)
-            #     # subtract off normalized model sum
-            #     # modsum = mp.nansum(model_seg * weight_mask)
-            #     #  model_seg = model_seg - (modsum / sum_weight_mask)
-            #     # to be consistent between the spectrum residuals and model
-            #     # d_sum = mp.nansum(d_seg * weight_mask)
-            #
-            #     # TODO --> check if useful at all
-            #     # TODO -> should be an option to subtraction or not the
-            #     # TODO -> mean line flux
-            #     # d_seg = d_seg# - (d_sum / sum_weight_mask)
-            #     # only do the d2 and d3 stuff if on last iteration
-            #     if flag_last_iter:
-            #         # to be consistent between the spectrum residuals and model
-            #         d2_sum = mp.nansum(d2_seg * weight_mask)
-            #         # to be consistent between the spectrum residuals and model
-            #         d3_sum = mp.nansum(d3_seg * weight_mask)
-            #         # deal with residual projection tables if required
-            #         if resproj_flag:
-            #             # loop around residual project tables
-            #             for key in inst.params['RESPROJ_TABLES']:
-            #                 # get the d_seg value
-            #                 d_seg = proj_model[key]['d_seg']
-            #                 # calculate the sum of the d_seg
-            #                 d_sum = mp.nansum(d_seg * weight_mask)
-            #                 # push into the projection model
-            #                 proj_model[key]['d_sum'] = d_sum
-            # -----------------------------------------------------------------
-            # calculate the difference of this segment (weighted by the mask)
-            # -----------------------------------------------------------------
-            # if we have any NaNs in our segment - reject this segment
-            if np.any(np.isnan(model_seg)):
-                continue
-            # remove any pixels are zero or negative remove segment
-            if np.any(model_seg <= 0):
-                continue
-
-            diff_seg = (sci_seg - model_seg) * weight_mask
-            # work out the sum of the rms
-            sum_rms = np.sum(rms_ord[x_start: x_end + 1] * weight_mask)
-
-            # We remove any segment that has a NaN in its template (any
-            # pixel) or has no valid pixel in the spectrum considered.
-            if not np.isfinite(sum_rms):
-                continue
-
-            # work out the mean rms
-            mean_rms = sum_rms / sum_weight_mask
-
-            # -----------------------------------------------------------------
-            # work out the 1st derivative
-            #    From bouchy 2001 equation, RV error for each pixel
-            # -----------------------------------------------------------------
-            bout = bouchy_equation_line(d_seg, diff_seg, mean_rms)
-            dv[line_it], sdv[line_it] = bout
-
-            if flag_last_iter:
-                # to be consistent between the spectrum residuals and model
-                # -------------------------------------------------------------
-                # work out the 0th derivative
-                #    From bouchy 2001 equation, RV error for each pixel
-                # -------------------------------------------------------------
-                if np.sum(np.isfinite(model_seg)) >= 2:
-                    v1 = np.nanmean(model_seg)
-                    bout = bouchy_equation_line(model_seg - v1, diff_seg,
-                                                mean_rms)
-                    d0v[line_it], sd0v[line_it] = bout
-                # -------------------------------------------------------------
-                # work out the 2nd derivative
-                #    From bouchy 2001 equation, RV error for each pixel
-                # -------------------------------------------------------------
-                bout = bouchy_equation_line(d2_seg, diff_seg, mean_rms)
-                d2v[line_it], sd2v[line_it] = bout
-                # -------------------------------------------------------------
-                # work out the 3rd derivative
-                #    From bouchy 2001 equation, RV error for each pixel
-                # -------------------------------------------------------------
-                bout = bouchy_equation_line(d3_seg, diff_seg, mean_rms)
-                d3v[line_it], sd3v[line_it] = bout
-                # deal with residual projection tables if required
-                if resproj_flag:
-                    # loop around residual project tables
-                    for key in inst.params['RESPROJ_TABLES']:
-                        # get d_seg
-                        pd_seg = proj_model[key]['d_seg']
-                        # calculate the bouchy equation
-                        # Express as a fraction of the model rather than a 'raw'
-                        # value.
-                        # Same for error
-                        frac_diff_seg = diff_seg
-                        frac_mean_rms = mean_rms
-                        # performed on the unblazed, pseudo-continuum normalised
-                        # spectra
-                        frac_diff_seg /= (b_ratio_seg * norm_seg)
-                        frac_mean_rms /= (b_ratio_seg * norm_seg)
-
-                        pbout = bouchy_equation_line(pd_seg, frac_diff_seg,
-                                                     frac_mean_rms)
-                        # push into the projection model
-                        pd_key, psd_key = pbout
-                        if np.isfinite(pd_key) and np.isfinite(psd_key):
-                            # only update if both finite
-                            proj_model[key]['proj'][line_it] = pd_key
-                            proj_model[key]['sproj'][line_it] = psd_key
-
-            # only add stuff to the ref_table if on last iteration
-            if flag_last_iter:
-                # -----------------------------------------------------------------
-                # ratio of expected VS actual RMS in difference of model vs line
-                ref_table['RMSRATIO'][line_it] = mp.nanstd(diff_seg) / mean_rms
-                # effective number of pixels in line
-                ref_table['NPIXLINE'][line_it] = len(diff_seg)
-                # Considering the number of pixels, expected and actual RMS, this
-                #   is the likelihood that the line is actually valid from chi2
-                #   point of view
-                ref_table['CHI2'][line_it] = mp.nansum((diff_seg / mean_rms) ** 2)
+                plot_dict['WW_ORD_LINE'] += [
+                    nwavegrid[order_num][x_start:x_end + 1]]
+                plot_dict['SPEC_ORD_LINE'] += [
+                    sci_data[order_num][x_start:x_end + 1]]
+                plot_dict['MODEL_ORD_LINE'] += [
+                    model[order_num][x_start:x_end + 1]]
         # ---------------------------------------------------------------------
         # get the best etimate of the velocity and update sline
         rv_mean, bulk_error = mp.odd_ratio_mean(dv, sdv)
