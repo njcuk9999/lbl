@@ -9,6 +9,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+import contextlib
 import copy
 import fnmatch
 import itertools
@@ -50,6 +51,40 @@ FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
 # =============================================================================
 # Define classes
 # =============================================================================
+class _FrozenConf:
+    def __init__(self, conf: Any):
+        """
+        Stand-in for an astropy configuration namespace: each setting is read
+        from the real one once, then kept
+
+        :param conf: the astropy configuration namespace
+        """
+        self._conf = conf
+
+    def __getattr__(self, name: str) -> Any:
+        value = getattr(self._conf, name)
+        setattr(self, name, value)
+        return value
+
+
+@contextlib.contextmanager
+def fast_fits_config():
+    """
+    astropy.io.fits cards read their configuration (e.g.
+    conf.strip_header_whitespace) at every access to a card value, at a few
+    microseconds each: with ~1000 cards per header this is a good part of
+    reading and writing LBL files. Within this context these settings are
+    read once and kept (same values, so the same behaviour).
+    """
+    from astropy.io.fits import card as fits_card
+    real_conf = fits_card.conf
+    fits_card.conf = _FrozenConf(real_conf)
+    try:
+        yield
+    finally:
+        fits_card.conf = real_conf
+
+
 def header_set(header: fits.Header, key: str, value: Any,
                comment: Optional[str]):
     """
