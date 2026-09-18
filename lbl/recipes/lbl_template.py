@@ -11,12 +11,14 @@ Created on 2021-08-24
 """
 import os
 import warnings
+from typing import List
 
 import numpy as np
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import fastmath
 from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.resources import lbl_misc
@@ -129,6 +131,19 @@ def __main__(inst: InstrumentsType, **kwargs):
         run_template(inst, objname, objkind)
     # return all local variables (for debug)
     return locals()
+
+
+def _nanpercentile_rows(cube: np.ndarray, percents: List[float]
+                        ) -> np.ndarray:
+    """
+    np.nanpercentile(cube, percents, axis=1), with a numba kernel for 2D
+    float64 cubes (same values)
+    """
+    if cube.ndim == 2 and cube.dtype == np.float64:
+        # the fractions np.nanpercentile uses
+        qs = np.true_divide(np.asarray(percents), np.float64(100))
+        return fastmath.nanpercentile_rows(np.ascontiguousarray(cube), qs)
+    return np.nanpercentile(cube, percents, axis=1)
 
 
 def run_template(inst, objname: str, objkind: str):
@@ -296,10 +311,10 @@ def run_template(inst, objname: str, objkind: str):
                 sci_wave = mp.doppler_shift(sci_wave, -berv[it] + rv0[it])
             # set exactly zeros to NaNs
             sci_image[sci_image == 0] = np.nan
-            # compute s1d from e2ds
-            s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                     sci_image, blazeimage,
-                                                     wavegrid)
+            # compute s1d from e2ds (all orders, odd orders, even orders)
+            if ite == 0:
+                s1d_all = apero.e2ds_to_s1d(inst.params, sci_wave, sci_image,
+                                            blazeimage, wavegrid, parity=True)
             # if this is not the first iteration we recompute the wave grid
             #   given what we know from the previous loop
             if ite != 0:
@@ -314,6 +329,14 @@ def run_template(inst, objname: str, objkind: str):
                 cut_low = inst.params['COMPIL_SLOPE_REF_WAVE'] * 0.95
                 cut_high = inst.params['COMPIL_SLOPE_REF_WAVE'] * 1.05
                 rms_domain = (wavegrid > cut_low) * (wavegrid < cut_high)
+                # s1d from e2ds, only needed in rms_domain (orders that do
+                #   not reach it are skipped)
+                rms_index = np.where(rms_domain)[0]
+                s1d_flux, _ = apero.e2ds_to_s1d(inst.params, sci_wave,
+                                                sci_image, blazeimage,
+                                                wavegrid,
+                                                domain=(rms_index[0],
+                                                        rms_index[-1] + 1))
                 # domain that is at the center of the detector
                 s1d_flux_tmp = s1d_flux[rms_domain]
                 # we remove the low frequency content
@@ -323,10 +346,15 @@ def run_template(inst, objname: str, objkind: str):
                 # -------------------------------------------------------------
                 # perform a sigma clip of the edges (to avoid dummy edge
                 #    effects)
-                for idv in range(len(dv)):
-                    tmp = np.roll(s1d_flux_tmp, dv[idv]) / med_spec_hp_domain
-                    n1, p1 = np.nanpercentile(tmp, [16, 84])
-                    sig[idv] = (p1 - n1) / 2.0
+                #   for each shift: np.nanpercentile of
+                #   np.roll(s1d_flux_tmp, shift) / med_spec_hp_domain
+                #   at 16 and 84 (numba kernel, same values)
+                qs = np.true_divide(np.asarray([16, 84]), np.float64(100))
+                sig[:] = fastmath.roll_ratio_sigma(
+                    np.ascontiguousarray(s1d_flux_tmp, dtype=np.float64),
+                    np.ascontiguousarray(med_spec_hp_domain,
+                                         dtype=np.float64),
+                    dv.astype(np.int64), qs[0], qs[1])
                 sig /= np.nanmedian(sig)
                 imin = np.argmin(sig)
                 # just to avoid dummy edge effects
@@ -349,20 +377,16 @@ def run_template(inst, objname: str, objkind: str):
                 sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
                 sci_wave = mp.doppler_shift(sci_wave, -berv[it] + rv0[it])
 
-                # compute s1d from e2ds
+                # compute s1d from e2ds (all, odd and even orders)
                 # with an updated wavelength grid
-                s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                         sci_image, blazeimage,
-                                                         wavegrid)
+                s1d_all = apero.e2ds_to_s1d(inst.params, sci_wave, sci_image,
+                                            blazeimage, wavegrid, parity=True)
 
-            # these two see the updated wavelength grid if we are not at ite ==0
-            s1d_odd_args = [inst.params, sci_wave[1::2], sci_image[1::2],
-                            blazeimage[1::2], wavegrid]
-            s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(*s1d_odd_args)
-
-            s1d_even_args = [inst.params, sci_wave[::2], sci_image[::2],
-                             blazeimage[::2], wavegrid]
-            s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(*s1d_even_args)
+            # odd and even orders see the updated wavelength grid if we are
+            #   not at ite ==0
+            s1d_flux, s1d_weight = s1d_all[0], s1d_all[1]
+            s1d_flux_odd, s1d_weight_odd = s1d_all[2], s1d_all[3]
+            s1d_flux_even, s1d_weight_even = s1d_all[4], s1d_all[5]
 
             # push into arrays
             flux_cube[:, ibin[it]] += s1d_flux
@@ -498,15 +522,12 @@ def run_template(inst, objname: str, objkind: str):
         # bervbins
         log.general('computation done per-berv bin')
         log.general('\t- computation on flux cube')
-        p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
-                                         axis=1)
+        p16, p50, p84 = _nanpercentile_rows(flux_cube, [16, 50, 84])
         # same for left and right
         log.general('\t- computation on odd cube')
-        p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube, [16, 50, 84],
-                                                     axis=1)
+        p16_odd, p50_odd, p84_odd = _nanpercentile_rows(odd_cube, [16, 50, 84])
         log.general('\t- computation on even cube')
-        p16_even, p50_even, p84_even = np.nanpercentile(even_cube, [16, 50, 84],
-                                                        axis=1)
+        p16_even, p50_even, p84_even = _nanpercentile_rows(even_cube, [16, 50, 84])
         # calculate the rms of each wavelength element
         rms = (p84 - p16) / 2
         # same for left and right
