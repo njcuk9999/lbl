@@ -1397,6 +1397,20 @@ class SpirouCADC(Spirou):
         """
         return self.load_header(science_file, extname=self.get_extname('Flux'))
 
+    def load_lblrv_file(self, filename: str) -> Tuple[Table, io.LBLHeader]:
+        """
+        Load an LBL RV file: the table and the header (load_header, i.e.
+        the extension named as the flux extension, which is the primary
+        header of lblrv files), opening the file once
+
+        :param filename: str, the LBL RV filename
+
+        :return: tuple, 1. the LBL RV table, 2. the LBL RV header
+        """
+        table, hdr = io.load_table_and_header(
+            filename, self.get_extname('Flux'), kind='lbl rv fits table')
+        return table, io.LBLHeader.from_fits(hdr, filename)
+
     def load_header_keys(self, filename: str, keys: List[str],
                          kind: str = 'fits file') -> io.LBLHeader:
         """

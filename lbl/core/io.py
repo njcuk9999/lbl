@@ -1162,6 +1162,37 @@ def load_table(filename: str, kind: Union[str, None] = None,
         return table
 
 
+def load_table_and_header(filename: str, header_extname: str,
+                          kind: Union[str, None] = None
+                          ) -> Tuple[Table, fits.Header]:
+    """
+    Load the first table of a fits file and the header of extension
+    header_extname, opening the file once. Same table as
+    load_table(filename) (Table.read opens the file with
+    character_as_bytes=True and memmap=False, then reads the first table
+    HDU) and same header as load_header(filename, extname=header_extname).
+
+    :param filename: str, the filename
+    :param header_extname: str, the extension name of the header to load
+    :param kind: str, the kind of file (for error messages)
+
+    :return: tuple, 1. the table (no masked columns), 2. the header (copy)
+    """
+    if kind is None:
+        kind = 'fits table'
+    try:
+        with warnings.catch_warnings(record=True) as _:
+            with fits.open(filename, character_as_bytes=True,
+                           memmap=False) as hdulist:
+                table = Table.read(hdulist, format='fits')
+                header = hdulist[header_extname].header.copy()
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return no_mask_table(table), header
+
+
 def no_mask_table(table: Table) -> Table:
     """
     Deal with masked tables by converting them to normal tables.
