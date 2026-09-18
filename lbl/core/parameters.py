@@ -284,6 +284,14 @@ params.set(key='USE_NOISE_MODEL', value=False, source=__NAME__,
 params.set(key='NOISE_SAMPLING_WIDTH', value=2e5, source=__NAME__,
            desc='Size of the running window (in m/s) for the RMS calculation.')
 
+# Define the number of noise sampling windows per window width: the robust
+#    rms is measured in windows of NOISE_SAMPLING_WIDTH, every
+#    NOISE_SAMPLING_WIDTH / NOISE_SAMPLING_NSTEP (4: the original sampling;
+#    smaller values are faster and approximate)
+params.set(key='NOISE_SAMPLING_NSTEP', value=4, source=__NAME__, dtype=int,
+           desc='number of noise sampling windows per window width '
+                '(4 = original; fewer is faster, approximate)')
+
 # define the rough CCF rv minimum limit in m/s
 params.set(key='ROUGH_CCF_MIN_RV', value=-3e5, source=__NAME__,
            desc='The rough CCF rv minimum limit in m/s')

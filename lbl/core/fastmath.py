@@ -317,17 +317,17 @@ def _two_quantiles(buf, n, q1, q2):
 # compute_rv kernels
 # =============================================================================
 @njit(cache=True, error_model='numpy')
-def noise_model_windows(residuals, npoints, q_hi, q_lo):
+def noise_model_windows(residuals, npoints, q_hi, q_lo, nstep=4):
     """
     Inner loop of lbl.science.general.estimate_noise_model for one order:
     robust sigma of the residuals in boxes of npoints pixels every
-    npoints // 4 pixels (boxes with <= 50% valid pixels, and zero sigmas,
-    are set to NaN)
+    npoints // nstep pixels (boxes with <= 50% valid pixels, and zero
+    sigmas, are set to NaN). nstep=4 is the original sampling.
 
     :return: box centers (pixels) and sigma in each box
     """
     npix = residuals.shape[0]
-    indices = np.arange(0, npix, npoints // 4)
+    indices = np.arange(0, npix, max(npoints // nstep, 1))
     sigma = np.zeros(indices.shape[0])
     buf = np.empty(npoints + 1)
     for it in range(indices.shape[0]):

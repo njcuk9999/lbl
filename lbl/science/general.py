@@ -1014,8 +1014,8 @@ def get_scaling_ratio(spectrum1: np.ndarray,
 def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
                          model: np.ndarray,
                          noise_sampling_width: float,
-                         npoints_orders: Optional[List[int]] = None
-                         ) -> np.ndarray:
+                         npoints_orders: Optional[List[int]] = None,
+                         nstep: int = 4) -> np.ndarray:
     """
     Estimate the noise on spectrum given the model
 
@@ -1027,6 +1027,8 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     :param npoints_orders: optional, the number of points of the sliding
                            window for each order (get_velo_scale of each
                            order of wavegrid), if already known
+    :param nstep: int, number of windows per window width (the windows
+                  are npoints // nstep apart; 4 is the original sampling)
 
     :return: np.ndarray, the rms vector for this spectrum give the model
     """
@@ -1052,7 +1054,7 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
         #   to npoints, also at the edges) and zero sigmas are NaN.
         indices, sigma = fastmath.noise_model_windows(
             np.ascontiguousarray(residuals, dtype=float), int(npoints),
-            ESTIMATE_SIGMA_Q_HI, ESTIMATE_SIGMA_Q_LO)
+            ESTIMATE_SIGMA_Q_HI, ESTIMATE_SIGMA_Q_LO, int(nstep))
         # mask all NaN values
         good = np.isfinite(sigma)
         # if we have enough points calculate the rms
@@ -1542,7 +1544,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
             rms = estimate_noise_model(sci_data, wavegrid, model,
                                        noise_sampling_width,
-                                       npoints_orders=noise_npoints)
+                                       npoints_orders=noise_npoints,
+                                       nstep=inst.params['NOISE_SAMPLING_NSTEP'])
             # work out the number of sigma away from the model
             nsig = (sci_data - model) / rms
             # mask for nsigma
