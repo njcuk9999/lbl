@@ -17,6 +17,7 @@ import numpy as np
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import npreplica
 from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.resources import lbl_misc
@@ -46,6 +47,7 @@ ARGS_TEMPLATE = [  # core
     'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'BLAZE_FILE', 'BLAZE_CORRECTED',
     # other
     'VERBOSE', 'PROGRAM',
+    'FAST_KERNELS',
 ]
 
 DESCRIPTION_TEMPLATE = 'Use this code to create the LBL template'
@@ -67,6 +69,8 @@ def main(**kwargs):
     args = select.parse_args(ARGS_TEMPLATE, kwargs, DESCRIPTION_TEMPLATE)
     # load instrument
     inst = select.load_instrument(args, plogger=log)
+    # fast code paths on or off (lbl.core.npreplica)
+    npreplica.set_fast_kernels(inst.params['FAST_KERNELS'])
     # get data directory
     data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
