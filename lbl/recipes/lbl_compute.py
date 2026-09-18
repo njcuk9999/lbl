@@ -616,19 +616,8 @@ def _fix_carried_values(lblrv_file: str, not_set: Dict[str, np.ndarray],
     if len(changes) == 0:
         return False
     # layout of the table (offset of the data and record format)
-    columns_used = [col for col, _ in changes] + ['CHI2', 'NPIXLINE',
-                                                  'CHI2_VALID_CDF']
-    with fits.open(lblrv_file, memmap=True) as hdulist:
-        table_hdu = hdulist[1]
-        data_offset = table_hdu._data_offset
-        raw_dtype = table_hdu.data.dtype
-        nrows = table_hdu.header['NAXIS2']
-        scaled = False
-        for column in table_hdu.columns:
-            if column.name in columns_used:
-                scaled |= column.bscale not in (None, 1)
-                scaled |= column.bzero not in (None, 0)
-    if scaled:
+    layout = _lblrv_table_layout(lblrv_file)
+    if layout is None:
         # columns with scaling: let astropy write them
         with fits.open(lblrv_file, mode='update') as hdulist:
             table = hdulist[1].data
@@ -641,19 +630,75 @@ def _fix_carried_values(lblrv_file: str, not_set: Dict[str, np.ndarray],
             npixline = np.array(table['NPIXLINE'], dtype=np.int64)
             table['CHI2_VALID_CDF'][:] = 1 - stats.chi2.cdf(chi2, npixline)
         return True
-    # write the new values in place in the file (big-endian records, as
-    #   astropy writes them)
-    records = np.memmap(lblrv_file, dtype=raw_dtype, mode='r+',
-                        offset=data_offset, shape=(nrows,))
-    for col, rows in changes:
-        records[col][rows] = state[col][rows]
-    # as in compute_rv
-    chi2 = np.array(records['CHI2'], dtype=np.float64)
-    npixline = np.array(records['NPIXLINE'], dtype=np.int64)
-    records['CHI2_VALID_CDF'][:] = 1 - stats.chi2.cdf(chi2, npixline)
-    records.flush()
-    del records
+    data_offset, raw_dtype, nrows = layout
+    # write the new values in the file (big-endian records, as astropy
+    #   writes them)
+    with open(lblrv_file, 'r+b') as rawfile:
+        rawfile.seek(data_offset)
+        records = np.fromfile(rawfile, dtype=raw_dtype, count=nrows)
+        for col, rows in changes:
+            records[col][rows] = state[col][rows]
+        # as in compute_rv
+        chi2 = np.array(records['CHI2'], dtype=np.float64)
+        npixline = np.array(records['NPIXLINE'], dtype=np.int64)
+        records['CHI2_VALID_CDF'][:] = 1 - stats.chi2.cdf(chi2, npixline)
+        rawfile.seek(data_offset)
+        records.tofile(rawfile)
     return True
+
+
+# table layouts already seen: {table header bytes: (dtype, nrows)}
+_LAYOUTS = dict()
+
+
+def _lblrv_table_layout(lblrv_file: str):
+    """
+    Offset of the table data, record dtype and number of rows of an lblrv
+    file (primary header without data, then the table), or None if the
+    table has scaled columns (or an unexpected structure)
+
+    The headers are located by their END cards; the record dtype is taken
+    from astropy the first time a given table header is seen.
+
+    :param lblrv_file: str, the lblrv file
+
+    :return: None or (data offset, record dtype, number of rows)
+    """
+    block_size = 2880
+    headers = []
+    with open(lblrv_file, 'rb') as rawfile:
+        for _ in range(2):
+            header = b''
+            while True:
+                block = rawfile.read(block_size)
+                if len(block) < block_size:
+                    return None
+                header += block
+                cards = [block[i:i + 80] for i in range(0, block_size, 80)]
+                if any(card[:8] == b'END     ' for card in cards):
+                    break
+            headers.append(header)
+    # the primary HDU must have no data
+    primary_cards = [headers[0][i:i + 80]
+                     for i in range(0, len(headers[0]), 80)]
+    naxis = [card for card in primary_cards if card[:8] == b'NAXIS   ']
+    if len(naxis) != 1 or naxis[0][10:30].strip() != b'0':
+        return None
+    data_offset = len(headers[0]) + len(headers[1])
+    key = headers[1]
+    if key not in _LAYOUTS:
+        with fits.open(lblrv_file, memmap=True) as hdulist:
+            table_hdu = hdulist[1]
+            if table_hdu._data_offset != data_offset:
+                return None
+            for column in table_hdu.columns:
+                if column.bscale not in (None, 1):
+                    return None
+                if column.bzero not in (None, 0):
+                    return None
+            _LAYOUTS[key] = (table_hdu.data.dtype, table_hdu.header['NAXIS2'])
+    raw_dtype, nrows = _LAYOUTS[key]
+    return data_offset, raw_dtype, nrows
 
 
 def worker_main(task_file: str):
