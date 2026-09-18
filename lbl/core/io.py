@@ -753,6 +753,37 @@ def load_fits(filename: str,
     return np.array(data)
 
 
+def load_fits_multi(filename: str, extnames: List[str],
+                    header_extname: str, kind: Union[str, None] = None
+                    ) -> Tuple[List[np.ndarray], fits.Header]:
+    """
+    Load several image extensions (by name) and one extension header from a
+    fits file, opening the file once. Same data and header as load_fits and
+    load_header (np.array copies of the data, a copy of the header).
+
+    :param filename: str, the filename
+    :param extnames: list of str, the extension names to load the data of
+    :param header_extname: str, the extension name to load the header of
+    :param kind: the kind (for error message)
+
+    :return: tuple, 1. list of data arrays (same order as extnames),
+             2. the header of header_extname
+    """
+    # deal with no kind
+    if kind is None:
+        kind = 'fits file'
+    # try to load fits file
+    try:
+        with fits.open(filename) as hdulist:
+            datas = [np.array(hdulist[extname].data) for extname in extnames]
+            header = hdulist[header_extname].header.copy()
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return datas, header
+
+
 def load_header(filename: str,
                 kind: Union[str, None] = None,
                 extnum: Optional[int] = None,

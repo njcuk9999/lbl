@@ -11,16 +11,18 @@ import glob
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import requests
+from astropy.io import fits
 from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
+from lbl.core import npreplica
 from lbl.instruments import default
 
 # =============================================================================
@@ -468,6 +470,21 @@ class Spirou(Instrument):
         """
         return self.load_header(science_file)
 
+    def science_header_value(self, science_file: str, key: str,
+                             dtype: Any = None) -> Any:
+        """
+        Value of one key of the science file header
+        (same as self.load_science_header(science_file).get_hkey(key, ...))
+
+        :param science_file: str, the science file
+        :param key: str, the header key
+        :param dtype: type to convert the value to (None: no conversion)
+
+        :return: the header value
+        """
+        sci_hdr = self.load_science_header(science_file)
+        return sci_hdr.get_hkey(key, science_file, dtype=dtype)
+
     def sort_science_files(self, science_files: List[str]) -> List[str]:
         """
         Sort science files (instrument specific)
@@ -479,11 +496,9 @@ class Spirou(Instrument):
         times = []
         # loop around science files
         for science_file in science_files:
-            # load header
-            sci_hdr = self.load_science_header(science_file)
             # get mid exposure time
-            mid_exp_time = sci_hdr.get_hkey(self.params['KW_MID_EXP_TIME'],
-                                            science_file, dtype=float)
+            mid_exp_time = self.science_header_value(
+                science_file, self.params['KW_MID_EXP_TIME'], dtype=float)
             # get time
             times.append(mid_exp_time)
         # get sort mask
@@ -1193,6 +1208,20 @@ class Spirou(Instrument):
 # =============================================================================
 # Define Spirou CADC class
 # =============================================================================
+# last wave solution read by SpirouCADC.load_science_file, so that
+#   get_wave_solution does not read it again: {file key: wave map}
+_WAVE_CACHE = dict()
+
+
+def _file_key(filename: str) -> Tuple[str, int, int]:
+    """
+    Identify a file on disk (path, modification time, size) so that a cached
+    read is not reused if the file changes
+    """
+    stat = os.stat(filename)
+    return str(filename), stat.st_mtime_ns, stat.st_size
+
+
 class SpirouCADC(Spirou):
     def __init__(self, params: base_classes.ParamDict,
                  args: base_classes.ParamDict, name: str = None):
@@ -1268,6 +1297,20 @@ class SpirouCADC(Spirou):
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name
         extname = self.get_extname(flux_extname)
+        if npreplica.FAST_KERNELS:
+            # load the flux, its header and the wave solution (file opened
+            #   once, same data as below)
+            wave_extname = self.get_extname('Wave')
+            datas, hdr = io.load_fits_multi(science_file,
+                                            [extname, wave_extname],
+                                            header_extname=extname,
+                                            kind='science Flux extension')
+            sci_data, wavemap = datas
+            sci_hdr = io.LBLHeader.from_fits(hdr, science_file)
+            # keep the wave solution for get_wave_solution (same file)
+            _WAVE_CACHE.clear()
+            _WAVE_CACHE[_file_key(science_file)] = wavemap
+            return sci_data, sci_hdr
         # load the first extension of each
         sci_data = io.load_fits(science_file, kind='science Flux extension',
                                 extname=extname)
@@ -1351,6 +1394,34 @@ class SpirouCADC(Spirou):
         """
         return self.load_header(science_file, extname=self.get_extname('Flux'))
 
+    def science_header_value(self, science_file: str, key: str,
+                             dtype: Any = None) -> Any:
+        """
+        Value of one key of the science file (Flux extension) header, read
+        without building the whole LBLHeader (only the requested card is
+        parsed). Same value as load_science_header(science_file)[key]; any
+        problem (e.g. missing key), or FAST_KERNELS off, goes through the
+        full path.
+
+        :param science_file: str, the science file
+        :param key: str, the header key
+        :param dtype: type to convert the value to (None: no conversion)
+
+        :return: the header value
+        """
+        if npreplica.FAST_KERNELS:
+            # noinspection PyBroadException
+            try:
+                header = fits.getheader(science_file,
+                                        extname=self.get_extname('Flux'))
+                value = header[key]
+                if dtype is not None:
+                    value = dtype(value)
+                return value
+            except Exception as _:
+                pass
+        return super().science_header_value(science_file, key, dtype)
+
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
                                 sci_hdr: io.LBLHeader,
@@ -1402,6 +1473,10 @@ class SpirouCADC(Spirou):
         # we load wavelength solution from extension
         # so we do not use data and header
         _ = data, header
+        # wave solution already read with the science data (a copy)
+        file_key = _file_key(science_filename)
+        if npreplica.FAST_KERNELS and file_key in _WAVE_CACHE:
+            return np.array(_WAVE_CACHE[file_key])
         # load wavemap
         wavemap = io.load_fits(science_filename, 'wave fits extension',
                                extname=self.get_extname('Wave'))
