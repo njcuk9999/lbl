@@ -241,6 +241,9 @@ def run_template(inst, objname: str, objkind: str):
     ibin = np.array(nbin * (np.argsort(berv) / len(berv)), dtype=int)
     # storage of the science table - reset
     sci_table = dict()
+    # s1ds of all / odd / even orders computed in one pass (same values;
+    #   needs an increasing wavegrid, which the magic grid is)
+    fast_s1d = npreplica.FAST_KERNELS and bool(np.all(np.diff(wavegrid) > 0))
     # iterate 5 times
     for ite in range(5):
         # create a cube that contains one line for each file
@@ -301,9 +304,25 @@ def run_template(inst, objname: str, objkind: str):
             # set exactly zeros to NaNs
             sci_image[sci_image == 0] = np.nan
             # compute s1d from e2ds
-            s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                     sci_image, blazeimage,
-                                                     wavegrid)
+            if not fast_s1d:
+                s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params,
+                                                         sci_wave, sci_image,
+                                                         blazeimage, wavegrid)
+            elif ite == 0:
+                # all, odd and even orders in one pass (same s1ds)
+                s1d_all = apero.e2ds_to_s1d_multi(inst.params, sci_wave,
+                                                  sci_image, blazeimage,
+                                                  wavegrid, parity=True)
+                s1d_flux, s1d_weight = s1d_all[0], s1d_all[1]
+            else:
+                # only needed around COMPIL_SLOPE_REF_WAVE below
+                cut_low = inst.params['COMPIL_SLOPE_REF_WAVE'] * 0.95
+                cut_high = inst.params['COMPIL_SLOPE_REF_WAVE'] * 1.05
+                rms_index = np.where((wavegrid > cut_low) *
+                                     (wavegrid < cut_high))[0]
+                s1d_flux, _ = apero.e2ds_to_s1d_multi(
+                    inst.params, sci_wave, sci_image, blazeimage, wavegrid,
+                    domain=(rms_index[0], rms_index[-1] + 1))
             # if this is not the first iteration we recompute the wave grid
             #   given what we know from the previous loop
             if ite != 0:
@@ -355,18 +374,33 @@ def run_template(inst, objname: str, objkind: str):
 
                 # compute s1d from e2ds
                 # with an updated wavelength grid
-                s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                         sci_image, blazeimage,
-                                                         wavegrid)
+                if not fast_s1d:
+                    s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params,
+                                                             sci_wave,
+                                                             sci_image,
+                                                             blazeimage,
+                                                             wavegrid)
+                else:
+                    # all, odd and even orders in one pass (same s1ds)
+                    s1d_all = apero.e2ds_to_s1d_multi(inst.params, sci_wave,
+                                                      sci_image, blazeimage,
+                                                      wavegrid, parity=True)
+                    s1d_flux, s1d_weight = s1d_all[0], s1d_all[1]
 
             # these two see the updated wavelength grid if we are not at ite ==0
-            s1d_odd_args = [inst.params, sci_wave[1::2], sci_image[1::2],
-                            blazeimage[1::2], wavegrid]
-            s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(*s1d_odd_args)
+            if fast_s1d:
+                s1d_flux_odd, s1d_weight_odd = s1d_all[2], s1d_all[3]
+                s1d_flux_even, s1d_weight_even = s1d_all[4], s1d_all[5]
+            else:
+                s1d_odd_args = [inst.params, sci_wave[1::2], sci_image[1::2],
+                                blazeimage[1::2], wavegrid]
+                s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(
+                    *s1d_odd_args)
 
-            s1d_even_args = [inst.params, sci_wave[::2], sci_image[::2],
-                             blazeimage[::2], wavegrid]
-            s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(*s1d_even_args)
+                s1d_even_args = [inst.params, sci_wave[::2], sci_image[::2],
+                                 blazeimage[::2], wavegrid]
+                s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(
+                    *s1d_even_args)
 
             # push into arrays
             flux_cube[:, ibin[it]] += s1d_flux
