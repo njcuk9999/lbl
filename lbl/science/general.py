@@ -24,7 +24,9 @@ from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import fast_noise
 from lbl.core import math as mp
+from lbl.core import npreplica
 from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import plot
@@ -1016,30 +1018,14 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
         npoints = get_velo_scale(waveord, noise_sampling_width)
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
-        # get the pixels along the model to spline at (box centers)
-        indices = np.arange(0, model.shape[1], npoints // 4)
-        # store the sigmas
-        sigma = np.zeros_like(indices, dtype=float)
-        # loop around each pixel and work out sigma value
-        for it in range(len(indices)):
-            # get start and end values for this box
-            istart = indices[it] - npoints // 2
-            iend = indices[it] + npoints // 2
-            # fix boundary problems
-            if istart < 0:
-                istart = 0
-            if iend > model.shape[1]:
-                iend = model.shape[1]
-            tmp = residuals[istart: iend]
-            # if more than 50% of the points are valid. If shorter at the
-            # start or end of domain, we compare to npoints rather than the
-            # length of tmp
-            frac_valid = np.sum(np.isfinite(tmp)) / npoints
-            if frac_valid > 0.5:
-                # work out the sigma of this box
-                sigma[it] = mp.estimate_sigma(tmp)
-            # set any zero values to NaN
-            sigma[sigma == 0] = np.nan
+        # fast path: numba kernel with the same results (fast_noise)
+        if npreplica.use_fast() and residuals.dtype == np.float64:
+            indices, sigma = fast_noise.noise_model_windows(
+                np.ascontiguousarray(residuals), int(npoints),
+                fast_noise.Q_HI, fast_noise.Q_LO)
+        else:
+            indices, sigma = _noise_model_windows(residuals, npoints,
+                                                  model.shape[1])
         # mask all NaN values
         good = np.isfinite(sigma)
         # if we have enough points calculate the rms
@@ -1055,6 +1041,45 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     rms[rms == 0] = np.nan
     # return rms
     return rms
+
+
+def _noise_model_windows(residuals: np.ndarray, npoints: int,
+                         npix: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    The original loop of estimate_noise_model for one order (also the
+    fallback of fast_noise.noise_model_windows)
+
+    :param residuals: np.ndarray, spectrum - model for this order
+    :param npoints: int, the box size in pixels
+    :param npix: int, the number of pixels in the order
+
+    :return: box centres and sigma in each box
+    """
+    # get the pixels along the model to spline at (box centers)
+    indices = np.arange(0, npix, npoints // 4)
+    # store the sigmas
+    sigma = np.zeros_like(indices, dtype=float)
+    # loop around each pixel and work out sigma value
+    for it in range(len(indices)):
+        # get start and end values for this box
+        istart = indices[it] - npoints // 2
+        iend = indices[it] + npoints // 2
+        # fix boundary problems
+        if istart < 0:
+            istart = 0
+        if iend > npix:
+            iend = npix
+        tmp = residuals[istart: iend]
+        # if more than 50% of the points are valid. If shorter at the
+        # start or end of domain, we compare to npoints rather than the
+        # length of tmp
+        frac_valid = np.sum(np.isfinite(tmp)) / npoints
+        if frac_valid > 0.5:
+            # work out the sigma of this box
+            sigma[it] = mp.estimate_sigma(tmp)
+        # set any zero values to NaN
+        sigma[sigma == 0] = np.nan
+    return indices, sigma
 
 
 def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
