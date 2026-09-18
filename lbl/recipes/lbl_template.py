@@ -11,11 +11,13 @@ Created on 2021-08-24
 """
 import os
 import warnings
+from typing import List
 
 import numpy as np
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import fast_template
 from lbl.core import io
 from lbl.core import npreplica
 from lbl.core import math as mp
@@ -134,6 +136,20 @@ def __main__(inst: InstrumentsType, **kwargs):
         run_template(inst, objname, objkind)
     # return all local variables (for debug)
     return locals()
+
+
+def _nanpercentile_rows(cube: np.ndarray, percents: List[float]
+                        ) -> np.ndarray:
+    """
+    np.nanpercentile(cube, percents, axis=1), with the numba kernel
+    fast_template.nanpercentile_rows for 2D float64 cubes (same values)
+    """
+    if cube.ndim == 2 and cube.dtype == np.float64 and npreplica.use_fast():
+        # the fractions np.nanpercentile uses
+        qs = np.true_divide(np.asarray(percents), np.float64(100))
+        return fast_template.nanpercentile_rows(np.ascontiguousarray(cube),
+                                                qs)
+    return np.nanpercentile(cube, percents, axis=1)
 
 
 def run_template(inst, objname: str, objkind: str):
@@ -347,10 +363,21 @@ def run_template(inst, objname: str, objkind: str):
                 # -------------------------------------------------------------
                 # perform a sigma clip of the edges (to avoid dummy edge
                 #    effects)
-                for idv in range(len(dv)):
-                    tmp = np.roll(s1d_flux_tmp, dv[idv]) / med_spec_hp_domain
-                    n1, p1 = np.nanpercentile(tmp, [16, 84])
-                    sig[idv] = (p1 - n1) / 2.0
+                if npreplica.use_fast():
+                    # numba kernel, same values as the loop below
+                    qs = np.true_divide(np.asarray([16, 84]),
+                                        np.float64(100))
+                    sig[:] = fast_template.roll_ratio_sigma(
+                        np.ascontiguousarray(s1d_flux_tmp, dtype=np.float64),
+                        np.ascontiguousarray(med_spec_hp_domain,
+                                             dtype=np.float64),
+                        dv.astype(np.int64), qs[0], qs[1])
+                else:
+                    for idv in range(len(dv)):
+                        tmp = (np.roll(s1d_flux_tmp, dv[idv]) /
+                               med_spec_hp_domain)
+                        n1, p1 = np.nanpercentile(tmp, [16, 84])
+                        sig[idv] = (p1 - n1) / 2.0
                 sig /= np.nanmedian(sig)
                 imin = np.argmin(sig)
                 # just to avoid dummy edge effects
@@ -537,15 +564,14 @@ def run_template(inst, objname: str, objkind: str):
         # bervbins
         log.general('computation done per-berv bin')
         log.general('\t- computation on flux cube')
-        p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
-                                         axis=1)
+        p16, p50, p84 = _nanpercentile_rows(flux_cube, [16, 50, 84])
         # same for left and right
         log.general('\t- computation on odd cube')
-        p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube, [16, 50, 84],
-                                                     axis=1)
+        p16_odd, p50_odd, p84_odd = _nanpercentile_rows(odd_cube,
+                                                        [16, 50, 84])
         log.general('\t- computation on even cube')
-        p16_even, p50_even, p84_even = np.nanpercentile(even_cube, [16, 50, 84],
-                                                        axis=1)
+        p16_even, p50_even, p84_even = _nanpercentile_rows(even_cube,
+                                                           [16, 50, 84])
         # calculate the rms of each wavelength element
         rms = (p84 - p16) / 2
         # same for left and right
