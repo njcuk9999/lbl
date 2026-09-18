@@ -450,3 +450,75 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                 x = diff_seg[i] / mean_rms
                 tmp[i] = x * x
             chi2[line_it] = _bn_nansum(tmp)
+
+
+# =============================================================================
+# lowpassfilter kernel
+# =============================================================================
+@njit(cache=True, error_model='numpy')
+def _bn_nanmedian(values, n_in):
+    """bottleneck.nanmedian of values[:n_in] (float64); values is modified"""
+    n = 0
+    for i in range(n_in):
+        if values[i] == values[i]:
+            values[n] = values[i]
+            n += 1
+    if n == 0:
+        return np.nan
+    srt = np.sort(values[:n])
+    k = n >> 1
+    if n % 2 == 0:
+        return 0.5 * (srt[k] + srt[k - 1])
+    return srt[k]
+
+
+@njit(cache=True, error_model='numpy')
+def lowpass_windows(input_vect, width):
+    """
+    Window loop of lbl.core.math.lowpassfilter: for boxes of `width` pixels
+    every width // 4 pixels (starting half a box before the vector), the
+    mean pixel position (bottleneck nanmean) and the NaN-median of the values
+    (bottleneck nanmedian), skipping boxes with < 3 pixels or < 3 finite
+    values.
+
+    :return: xmed, ymed (float64 arrays)
+    """
+    nvect = input_vect.shape[0]
+    start = -width // 2
+    stop = nvect + width // 2
+    step = width // 4
+    nmax = 0
+    if stop > start:
+        nmax = (stop - start + step - 1) // step
+    xmed = np.empty(nmax)
+    ymed = np.empty(nmax)
+    buf = np.empty(max(width, 1))
+    count = 0
+    for iw in range(nmax):
+        it = start + iw * step
+        low_bound = it
+        high_bound = it + width
+        if low_bound < 0:
+            low_bound = 0
+        if high_bound > (nvect - 1):
+            high_bound = nvect - 1
+        npix = high_bound - low_bound
+        if npix < 3:
+            continue
+        nfinite = 0
+        for i in range(low_bound, high_bound):
+            if np.isfinite(input_vect[i]):
+                nfinite += 1
+        if nfinite < 3:
+            continue
+        # bottleneck nanmean of the (integer) pixel positions
+        asum = 0.0
+        for i in range(low_bound, high_bound):
+            asum += i
+        xmed[count] = asum / npix
+        # bottleneck nanmedian of the values
+        for i in range(npix):
+            buf[i] = input_vect[low_bound + i]
+        ymed[count] = _bn_nanmedian(buf, npix)
+        count += 1
+    return xmed[:count], ymed[:count]

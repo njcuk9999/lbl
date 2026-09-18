@@ -24,6 +24,7 @@ from scipy.special import erf
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import fastmath
 
 # try to import bottleneck module
 # noinspection PyBroadException
@@ -549,6 +550,12 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
 
     :return:
     """
+    # fast path (numba, same arithmetic) for float64 vectors and integer
+    #   widths
+    if _lowpass_fast_ok(input_vect, width):
+        xmed, ymed = fastmath.lowpass_windows(
+            np.ascontiguousarray(input_vect, dtype=np.float64), int(width))
+        return _lowpass_spline(input_vect, xmed, ymed, k)
     # indices along input vector
     index = np.arange(len(input_vect))
     # placeholders for x and y position along vector
@@ -582,6 +589,29 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
     # convert to arrays
     xmed = np.array(xmed, dtype=float)
     ymed = np.array(ymed, dtype=float)
+    return _lowpass_spline(input_vect, xmed, ymed, k)
+
+
+def _lowpass_fast_ok(input_vect: np.ndarray, width: Any) -> bool:
+    """
+    Whether lowpassfilter can use the numba window loop: a 1D float64 vector
+    (any byte order) and an integer width with a non-zero step
+    """
+    if not isinstance(input_vect, np.ndarray) or input_vect.ndim != 1:
+        return False
+    if input_vect.dtype.kind != 'f' or input_vect.dtype.itemsize != 8:
+        return False
+    if isinstance(width, bool) or not isinstance(width, (int, np.integer)):
+        return False
+    return int(width) // 4 > 0
+
+
+def _lowpass_spline(input_vect: np.ndarray, xmed: np.ndarray,
+                    ymed: np.ndarray, k: int) -> np.ndarray:
+    """
+    End of lowpassfilter: spline the box medians (ymed) at the box positions
+    (xmed) onto every pixel of input_vect
+    """
     # we need at least 3 valid points to return a
     # low-passed vector.
     if len(xmed) < 3:
