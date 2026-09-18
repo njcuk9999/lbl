@@ -133,6 +133,29 @@ def __main__(inst: InstrumentsType, **kwargs):
     return locals()
 
 
+def _load_template_header(inst, filename: str):
+    """
+    Science header for the template loop: only the keys the template uses
+    if the instrument knows them (same values), else the full header
+    """
+    keys = inst.template_header_keys()
+    if keys is None:
+        return inst.load_header(filename)
+    return inst.load_header_keys(filename, keys)
+
+
+def _load_template_science(inst, filename: str):
+    """
+    Science data and header for the template loop: only the header keys the
+    template uses if the instrument knows them (same values), else the full
+    header
+    """
+    keys = inst.template_header_keys()
+    if keys is None:
+        return inst.load_science_file(filename)
+    return inst.load_science_file_keys(filename, keys)
+
+
 def _nanpercentile_rows(cube: np.ndarray, percents: List[float]
                         ) -> np.ndarray:
     """
@@ -243,7 +266,7 @@ def run_template(inst, objname: str, objkind: str):
 
     berv = np.zeros_like(science_files, dtype=float)
     for sci_it in range(len(science_files)):
-        sci_hdr = inst.load_header(science_files[sci_it])
+        sci_hdr = _load_template_header(inst, science_files[sci_it])
         berv[sci_it] = inst.get_berv(sci_hdr)
     # storage of the science table
     med_spec_hp = 1
@@ -280,7 +303,7 @@ def run_template(inst, objname: str, objkind: str):
             margs = [it + 1, len(science_files)]
             log.general(msg.format(*margs))
             # select the first science file as a reference file
-            sci_image, sci_hdr = inst.load_science_file(filename)
+            sci_image, sci_hdr = _load_template_science(inst, filename)
 
             # get wave solution for reference file
             sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
