@@ -140,6 +140,44 @@ class Instrument:
         # return the LBL Header class
         return io.LBLHeader.from_fits(hdr, filename)
 
+    def load_header_keys(self, filename: str, keys: List[str],
+                         kind: str = 'fits file') -> io.LBLHeader:
+        """
+        Load a header, of which only the given keys will be used (instruments
+        can then skip the others; the values of these keys are those of
+        load_header). Default: the full header (load_header)
+
+        :param filename: str, the filename to load
+        :param keys: list of str, the keys that will be used
+        :param kind: str, the kind of file we are loading
+
+        :return: LBLHeader with (at least) these keys
+        """
+        _ = keys
+        return self.load_header(filename, kind=kind)
+
+    def load_science_file_keys(self, science_file: str, keys: List[str]
+                               ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        load_science_file when only the given keys of the header will be
+        used (see load_header_keys). Default: load_science_file
+
+        :param science_file: str, the filename to load
+        :param keys: list of str, the header keys that will be used
+
+        :return: the science data and header
+        """
+        _ = keys
+        return self.load_science_file(science_file)
+
+    def template_header_keys(self) -> Optional[List[str]]:
+        """
+        The science header keys used by lbl_template (get_berv and
+        populate_sci_table), or None if not known (the full headers are
+        then loaded)
+        """
+        return None
+
     def load_mask(self, filename: str) -> Table:
         """
         Load a mask
@@ -1132,8 +1170,8 @@ class Instrument:
         keep_time = []
         # loop around science files
         for science_file in tqdm(science_files):
-            # load science file header
-            sci_hdr = self.load_header(science_file)
+            # load science file header (only hkey is used)
+            sci_hdr = self.load_header_keys(science_file, [hkey])
             # get mjdmid
             mjdmid = sci_hdr[hkey]
             keep_files.append(science_file)
