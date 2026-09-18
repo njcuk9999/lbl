@@ -11,10 +11,11 @@ import glob
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import requests
+from astropy.io import fits
 from astropy.table import Table
 
 from lbl.core import base
@@ -468,6 +469,21 @@ class Spirou(Instrument):
         """
         return self.load_header(science_file)
 
+    def science_header_value(self, science_file: str, key: str,
+                             dtype: Any = None) -> Any:
+        """
+        Value of one key of the science file header
+        (same as self.load_science_header(science_file).get_hkey(key, ...))
+
+        :param science_file: str, the science file
+        :param key: str, the header key
+        :param dtype: type to convert the value to (None: no conversion)
+
+        :return: the header value
+        """
+        sci_hdr = self.load_science_header(science_file)
+        return sci_hdr.get_hkey(key, science_file, dtype=dtype)
+
     def sort_science_files(self, science_files: List[str]) -> List[str]:
         """
         Sort science files (instrument specific)
@@ -479,11 +495,9 @@ class Spirou(Instrument):
         times = []
         # loop around science files
         for science_file in science_files:
-            # load header
-            sci_hdr = self.load_science_header(science_file)
             # get mid exposure time
-            mid_exp_time = sci_hdr.get_hkey(self.params['KW_MID_EXP_TIME'],
-                                            science_file, dtype=float)
+            mid_exp_time = self.science_header_value(
+                science_file, self.params['KW_MID_EXP_TIME'], dtype=float)
             # get time
             times.append(mid_exp_time)
         # get sort mask
@@ -1369,6 +1383,32 @@ class SpirouCADC(Spirou):
         :return: fits header, the loaded header
         """
         return self.load_header(science_file, extname=self.get_extname('Flux'))
+
+    def science_header_value(self, science_file: str, key: str,
+                             dtype: Any = None) -> Any:
+        """
+        Value of one key of the science file (Flux extension) header, read
+        without building the whole LBLHeader (only the requested card is
+        parsed). Same value as load_science_header(science_file)[key]; any
+        problem (e.g. missing key) goes through the full path for the usual
+        error.
+
+        :param science_file: str, the science file
+        :param key: str, the header key
+        :param dtype: type to convert the value to (None: no conversion)
+
+        :return: the header value
+        """
+        # noinspection PyBroadException
+        try:
+            header = fits.getheader(science_file,
+                                    extname=self.get_extname('Flux'))
+            value = header[key]
+            if dtype is not None:
+                value = dtype(value)
+            return value
+        except Exception as _:
+            return super().science_header_value(science_file, key, dtype)
 
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,

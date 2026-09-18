@@ -588,3 +588,89 @@ def lowpass_windows(input_vect, width):
         ymed[count] = _bn_nanmedian(buf, npix)
         count += 1
     return xmed[:count], ymed[:count]
+
+
+# =============================================================================
+# FITPACK spline evaluation
+# =============================================================================
+@njit(cache=True, error_model='numpy')
+def splev_group(t, cs, k, x, ext):
+    """
+    FITPACK splev (scipy's Fortran splev.f + fpbspl.f, der=0) of several
+    splines that share the knots t and the degree k: cs[ispl] are their
+    coefficients. The B-spline basis is computed once per point.
+
+    The arithmetic is FITPACK's as compiled for scipy on arm64, where the
+    compiler fuses h(i) + f * (t(li) - x) and sp + c(ll) * h(j) into fused
+    multiply-adds: the values are identical to scipy's splev.
+
+    :param t: knots (n)
+    :param cs: coefficients (nspl, >= n - k - 1)
+    :param k: spline degree
+    :param x: points (m)
+    :param ext: 0 extrapolate, 1 zero outside, 3 boundary value
+                (2, raise, is not handled here)
+
+    :return: values (nspl, m)
+    """
+    n = t.shape[0]
+    nspl = cs.shape[0]
+    m = x.shape[0]
+    out = np.empty((nspl, m))
+    tb = t[k]
+    te = t[n - k - 1]
+    lmin = k
+    lmax = n - k - 2
+    h = np.empty(k + 1)
+    hh = np.empty(k + 1)
+    # knot interval (0-based: t[ll] <= arg < t[ll + 1]), found by bisection
+    #   for the first point, then moved step by step as FITPACK does
+    ll = -1
+    for i in range(m):
+        arg = x[i]
+        if arg != arg:
+            for ispl in range(nspl):
+                out[ispl, i] = np.nan
+            continue
+        if arg < tb or arg > te:
+            if ext == 1:
+                for ispl in range(nspl):
+                    out[ispl, i] = 0.0
+                continue
+            elif ext == 3:
+                if arg < tb:
+                    arg = tb
+                else:
+                    arg = te
+        if ll < 0:
+            ll = np.searchsorted(t, arg, side='right') - 1
+            if ll < lmin:
+                ll = lmin
+            if ll > lmax:
+                ll = lmax
+        while arg < t[ll] and ll > lmin:
+            ll -= 1
+        while arg >= t[ll + 1] and ll < lmax:
+            ll += 1
+        # fpbspl: the k + 1 non-zero B-splines at arg
+        h[0] = 1.0
+        for j in range(1, k + 1):
+            for ii in range(j):
+                hh[ii] = h[ii]
+            h[0] = 0.0
+            for ii in range(1, j + 1):
+                li = ll + ii
+                lj = li - j
+                if t[li] == t[lj]:
+                    h[ii] = 0.0
+                    continue
+                f = hh[ii - 1] / (t[li] - t[lj])
+                h[ii - 1] = _fma(f, t[li] - arg, h[ii - 1])
+                h[ii] = f * (arg - t[lj])
+        # value of each spline
+        for ispl in range(nspl):
+            sp = 0.0
+            for j in range(k + 1):
+                sp = _fma(cs[ispl, ll - k + j], h[j], sp)
+            out[ispl, i] = sp
+    return out
