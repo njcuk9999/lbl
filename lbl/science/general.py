@@ -2463,12 +2463,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration we set the rvs and dvrms from rv table
         if not flag_calib:
-            dv_arr[row] = rvtable[good]['dv']
-            sdv_arr[row] = rvtable[good]['sdv']
+            dv_arr[row] = rvtable['dv'][good]
+            sdv_arr[row] = rvtable['sdv'][good]
         # else we calculate it using odd ratio mean
         else:
-            cal_rv = np.array(rvtable[good]['dv'], dtype=float)
-            cal_dvrms = np.array(rvtable[good]['sdv'], dtype=float)
+            cal_rv = np.array(rvtable['dv'][good], dtype=float)
+            cal_dvrms = np.array(rvtable['sdv'][good], dtype=float)
             # estimate using odd ratio mean
             cal_guess, cal_bulk_error = mp.odd_ratio_mean(cal_rv, cal_dvrms)
             # push into rdb_dict
@@ -2486,22 +2486,22 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                             'key {0}')
                     raise LblException(emsg.format(key))
                 # copy the rvtable array for this residual projection
-                arr = np.array(rvtable[good][key], dtype=float)
+                arr = np.array(rvtable[key][good], dtype=float)
                 # copy the rvtable error array for this residual projection
-                sarr = np.array(rvtable[good]['s' + key], dtype=float)
+                sarr = np.array(rvtable['s' + key][good], dtype=float)
                 # get the guess and bulk error
                 val_guess, val_bulk_error = mp.odd_ratio_mean(arr, sarr)
                 # push into the rdb dictioanry
                 rdb_dict[key][row] = val_guess
                 rdb_dict['s' + key][row] = val_bulk_error
         # get the d2v, sd2v, d3v and sd3v values from table
-        wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
-        contrast = np.array(rvtable[good]['contrast'], dtype=float)
-        scontrast = np.array(rvtable[good]['sig_contrast'], dtype=float)
-        d2v = np.array(rvtable[good]['d2v'], dtype=float)
-        sd2v = np.array(rvtable[good]['sd2v'], dtype=float)
-        d3v = np.array(rvtable[good]['d3v'], dtype=float)
-        sd3v = np.array(rvtable[good]['sd3v'], dtype=float)
+        wave_vec = np.array(rvtable['WAVE_START'][good], dtype=float)
+        contrast = np.array(rvtable['contrast'][good], dtype=float)
+        scontrast = np.array(rvtable['sig_contrast'][good], dtype=float)
+        d2v = np.array(rvtable['d2v'][good], dtype=float)
+        sd2v = np.array(rvtable['sd2v'][good], dtype=float)
+        d3v = np.array(rvtable['d3v'][good], dtype=float)
+        sd3v = np.array(rvtable['sd3v'][good], dtype=float)
         # push these values into array (for saving images later)
         wave_arr[row] = wave_vec
         d2v_arr[row], sd2v_arr[row] = d2v, sd2v
@@ -2525,8 +2525,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['d3v'][row] = d3v_guess
         rdb_dict['sd3v'][row] = d3v_bulk_error
         # ---------------------------------------------------------------------
-        # if we don't have a calibration add plot values
-        if not flag_calib:
+        # if we don't have a calibration add plot values (only used by the
+        #   cumulative plot)
+        cumul_plot = inst.params['PLOT'] and inst.params['PLOT_COMPIL_CUMUL']
+        if not flag_calib and (cumul_plot or not npreplica.FAST_KERNELS):
             # plot specific domain. We use the median velocity of the file
             # for the plot domain. +-15 km/s to get an idea of residuals.
             xlim = [med_velo - 15000, med_velo + 15000]
