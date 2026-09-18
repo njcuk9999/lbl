@@ -212,9 +212,14 @@ def estimate_sigma(tmp, q_hi, q_lo):
     q_lo and q_hi np.nanpercentile values (q given as fractions, computed as
     numpy does, p / 100.)
     """
+    return _estimate_sigma_buf(tmp, q_hi, q_lo, np.empty(tmp.shape[0]))
+
+
+@njit(cache=True, error_model='numpy')
+def _estimate_sigma_buf(tmp, q_hi, q_lo, buf):
+    """estimate_sigma with a work buffer (len(buf) >= len(tmp))"""
     n_fin = 0
     n = 0
-    buf = np.empty(tmp.shape[0])
     for i in range(tmp.shape[0]):
         x = tmp[i]
         if np.isfinite(x):
@@ -224,7 +229,8 @@ def estimate_sigma(tmp, q_hi, q_lo):
             n += 1
     if n_fin == 0:
         return np.nan
-    srt = np.sort(buf[:n])
+    srt = buf[:n]
+    srt.sort()
     upper = _np_quantile_sorted(srt, n, q_hi)
     lower = _np_quantile_sorted(srt, n, q_lo)
     return (upper - lower) / 2.0
@@ -246,6 +252,7 @@ def noise_model_windows(residuals, npoints, q_hi, q_lo):
     npix = residuals.shape[0]
     indices = np.arange(0, npix, npoints // 4)
     sigma = np.zeros(indices.shape[0])
+    buf = np.empty(npoints + 1)
     for it in range(indices.shape[0]):
         istart = indices[it] - npoints // 2
         iend = indices[it] + npoints // 2
@@ -260,7 +267,9 @@ def noise_model_windows(residuals, npoints, q_hi, q_lo):
                 nvalid += 1
         frac_valid = nvalid / npoints
         if frac_valid > 0.5:
-            sigma[it] = estimate_sigma(tmp, q_hi, q_lo)
+            if buf.shape[0] < tmp.shape[0]:
+                buf = np.empty(tmp.shape[0])
+            sigma[it] = _estimate_sigma_buf(tmp, q_hi, q_lo, buf)
     for it in range(indices.shape[0]):
         if sigma[it] == 0:
             sigma[it] = np.nan
@@ -268,10 +277,12 @@ def noise_model_windows(residuals, npoints, q_hi, q_lo):
 
 
 @njit(cache=True, error_model='numpy')
-def _bouchy(vector, diff_vector, mean_rms):
-    """bouchy_equation_line with a scalar mean_rms"""
+def _bouchy(vector, diff_vector, mean_rms, tmp):
+    """
+    bouchy_equation_line with a scalar mean_rms (tmp: work buffer of the
+    same length as vector)
+    """
     n = vector.shape[0]
-    tmp = np.empty(n)
     for i in range(n):
         rms_pix = mean_rms / vector[i]
         tmp[i] = 1 / (rms_pix * rms_pix)
@@ -286,10 +297,12 @@ def _bouchy(vector, diff_vector, mean_rms):
 
 
 @njit(cache=True, error_model='numpy')
-def _bouchy_arr(vector, diff_vector, mean_rms):
-    """bouchy_equation_line with a per-pixel mean_rms array"""
+def _bouchy_arr(vector, diff_vector, mean_rms, tmp):
+    """
+    bouchy_equation_line with a per-pixel mean_rms array (tmp: work buffer
+    of the same length as vector)
+    """
     n = vector.shape[0]
-    tmp = np.empty(n)
     for i in range(n):
         rms_pix = mean_rms[i] / vector[i]
         tmp[i] = 1 / (rms_pix * rms_pix)
@@ -323,6 +336,15 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
     """
     npix = nwavegrid.shape[1]
     nproj = proj_models.shape[0]
+    # work buffers (a line is at most npix pixels long): slices of these
+    #   are used for the per-line vectors, instead of allocating them
+    wbuf = np.empty(npix)
+    tbuf = np.empty(npix)
+    dbuf = np.empty(npix)
+    diffbuf = np.empty(npix)
+    sbuf = np.empty(npix)
+    bbuf = np.empty(npix)
+    rbuf = np.empty(npix)
     for line_it in range(orders.shape[0]):
         order_num = orders[line_it]
         # skip lines flagged as bad (in all but the second iteration)
@@ -346,7 +368,8 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
         wave_e = wave_end[line_it]
         # weights at the edge of the domain
         nseg = x_end - x_start + 1
-        weight_mask = np.ones(nseg)
+        weight_mask = wbuf[:nseg]
+        weight_mask[:] = 1.0
         if ww_ord[x_start] < wave_s:
             refdiff = ww_ord[x_start + 1] - wave_s
             wavediff = ww_ord[x_start + 1] - ww_ord[x_start]
@@ -356,7 +379,7 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
             wavediff = ww_ord[x_end] - ww_ord[x_end - 1]
             weight_mask[nseg - 1] = 1 - (refdiff / wavediff)
         # mean xpix (bottleneck nansums) and mean blaze
-        tmp = np.empty(nseg)
+        tmp = tbuf[:nseg]
         for i in range(nseg):
             tmp[i] = weight_mask[i] * (x_start + i)
         meanxpix[line_it] = _bn_nansum(tmp) / _bn_nansum(weight_mask)
@@ -364,7 +387,7 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
         # segments
         sci_seg = sci_data[order_num, x_start:x_end + 1]
         model_seg = model[order_num, x_start:x_end + 1]
-        d_seg = np.empty(nseg)
+        d_seg = dbuf[:nseg]
         for i in range(nseg):
             d_seg[i] = dmodel[order_num, x_start + i] * weight_mask[i]
         # fraction of the line that is finite
@@ -389,7 +412,7 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                 break
         if bad_model:
             continue
-        diff_seg = np.empty(nseg)
+        diff_seg = diffbuf[:nseg]
         for i in range(nseg):
             diff_seg[i] = (sci_seg[i] - model_seg[i]) * weight_mask[i]
         for i in range(nseg):
@@ -399,8 +422,9 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
             continue
         mean_rms = sum_rms / sum_weight_mask
         # 1st derivative
-        dv[line_it], sdv[line_it] = _bouchy(d_seg, diff_seg, mean_rms)
+        dv[line_it], sdv[line_it] = _bouchy(d_seg, diff_seg, mean_rms, tmp)
         if flag_last_iter:
+            seg = sbuf[:nseg]
             # 0th derivative
             nfin_model = 0
             for i in range(nseg):
@@ -409,37 +433,36 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
             if nfin_model >= 2:
                 # np.nanmean (model_seg has no NaN here)
                 v1 = _np_sum(model_seg) / nseg
-                seg0 = np.empty(nseg)
                 for i in range(nseg):
-                    seg0[i] = model_seg[i] - v1
-                d0v[line_it], sd0v[line_it] = _bouchy(seg0, diff_seg,
-                                                      mean_rms)
+                    seg[i] = model_seg[i] - v1
+                d0v[line_it], sd0v[line_it] = _bouchy(seg, diff_seg,
+                                                      mean_rms, tmp)
             # 2nd derivative
-            seg2 = np.empty(nseg)
             for i in range(nseg):
-                seg2[i] = d2model[order_num, x_start + i] * weight_mask[i]
-            d2v[line_it], sd2v[line_it] = _bouchy(seg2, diff_seg, mean_rms)
+                seg[i] = d2model[order_num, x_start + i] * weight_mask[i]
+            d2v[line_it], sd2v[line_it] = _bouchy(seg, diff_seg, mean_rms,
+                                                  tmp)
             # 3rd derivative
-            seg3 = np.empty(nseg)
             for i in range(nseg):
-                seg3[i] = d3model[order_num, x_start + i] * weight_mask[i]
-            d3v[line_it], sd3v[line_it] = _bouchy(seg3, diff_seg, mean_rms)
+                seg[i] = d3model[order_num, x_start + i] * weight_mask[i]
+            d3v[line_it], sd3v[line_it] = _bouchy(seg, diff_seg, mean_rms,
+                                                  tmp)
             # residual projection tables
             #   note: as in compute_rv, frac_diff_seg is diff_seg itself, so
             #   diff_seg is divided in place once per table
+            bn_seg = bbuf[:nseg]
+            frac_mean_rms = rbuf[:nseg]
             for ikey in range(nproj):
-                pd_seg = np.empty(nseg)
-                bn_seg = np.empty(nseg)
-                frac_mean_rms = np.empty(nseg)
                 for i in range(nseg):
-                    pd_seg[i] = (proj_models[ikey, order_num, x_start + i] *
-                                 weight_mask[i])
+                    seg[i] = (proj_models[ikey, order_num, x_start + i] *
+                              weight_mask[i])
                     bn_seg[i] = (b_ratio[order_num, x_start + i] *
                                  norm[order_num, x_start + i])
                 for i in range(nseg):
                     diff_seg[i] /= bn_seg[i]
                     frac_mean_rms[i] = mean_rms / bn_seg[i]
-                pd_key, psd_key = _bouchy_arr(pd_seg, diff_seg, frac_mean_rms)
+                pd_key, psd_key = _bouchy_arr(seg, diff_seg, frac_mean_rms,
+                                              tmp)
                 if np.isfinite(pd_key) and np.isfinite(psd_key):
                     proj[ikey, line_it] = pd_key
                     sproj[ikey, line_it] = psd_key
@@ -456,6 +479,44 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
 # lowpassfilter kernel
 # =============================================================================
 @njit(cache=True, error_model='numpy')
+def _select(a, n, k):
+    """
+    Quickselect: reorder a[:n] (no NaN) so that a[k] is the k-th smallest
+    value, with a[:k] <= a[k] <= a[k + 1:n]. Returns a[k].
+    """
+    lo = 0
+    hi = n - 1
+    while hi > lo:
+        mid = (lo + hi) >> 1
+        # median of three as pivot
+        if a[mid] < a[lo]:
+            a[mid], a[lo] = a[lo], a[mid]
+        if a[hi] < a[lo]:
+            a[hi], a[lo] = a[lo], a[hi]
+        if a[hi] < a[mid]:
+            a[hi], a[mid] = a[mid], a[hi]
+        pivot = a[mid]
+        i = lo
+        j = hi
+        while i <= j:
+            while a[i] < pivot:
+                i += 1
+            while a[j] > pivot:
+                j -= 1
+            if i <= j:
+                a[i], a[j] = a[j], a[i]
+                i += 1
+                j -= 1
+        if k <= j:
+            hi = j
+        elif k >= i:
+            lo = i
+        else:
+            break
+    return a[k]
+
+
+@njit(cache=True, error_model='numpy')
 def _bn_nanmedian(values, n_in):
     """bottleneck.nanmedian of values[:n_in] (float64); values is modified"""
     n = 0
@@ -465,11 +526,16 @@ def _bn_nanmedian(values, n_in):
             n += 1
     if n == 0:
         return np.nan
-    srt = np.sort(values[:n])
     k = n >> 1
+    med = _select(values, n, k)
     if n % 2 == 0:
-        return 0.5 * (srt[k] + srt[k - 1])
-    return srt[k]
+        # largest value below the k-th: max of values[:k]
+        amax = values[0]
+        for i in range(1, k):
+            if values[i] > amax:
+                amax = values[i]
+        return 0.5 * (med + amax)
+    return med
 
 
 @njit(cache=True, error_model='numpy')
