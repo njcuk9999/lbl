@@ -516,6 +516,58 @@ class KnotWindowSpline:
         return _fitpack_splev(x, tck, der=0, ext=self.ext)
 
 
+class SplineGroup:
+    def __init__(self, splines: List[Any]):
+        """
+        Several splines evaluated at the same points in one go.
+
+        When all are scipy InterpolatedUnivariateSplines (or
+        KnotWindowSplines) with the same knots, degree and extrapolation mode
+        (e.g. splines of a template and of its derivatives, all fitted on the
+        same wavelength grid), the FITPACK evaluation is done by
+        fastmath.splev_group, which finds the knot interval and the B-spline
+        basis once per point and gives the same values as scipy. Otherwise
+        each spline is called.
+
+        :param splines: list of splines (callables)
+        """
+        self.splines = list(splines)
+        self.fast = False
+        bases = [sp.spline if isinstance(sp, KnotWindowSpline) else sp
+                 for sp in self.splines]
+        if all(isinstance(sp, IUVSpline) for sp in bases):
+            t0, _, k0 = bases[0]._eval_args
+            ext0 = bases[0].ext
+            same = all(np.array_equal(sp._eval_args[0], t0) and
+                       sp._eval_args[2] == k0 and sp.ext == ext0
+                       for sp in bases)
+            # ext=2 (raise outside) is left to scipy
+            if same and ext0 in (0, 1, 3) and len(t0) >= 2 * k0 + 2:
+                self.fast = True
+                self.t = np.ascontiguousarray(t0, dtype=np.float64)
+                self.k = int(k0)
+                self.ext = int(ext0)
+                self.cs = np.ascontiguousarray(
+                    [sp._eval_args[1] for sp in bases], dtype=np.float64)
+
+    def __call__(self, x: np.ndarray, nspl: Optional[int] = None
+                 ) -> List[np.ndarray]:
+        """
+        Evaluate the first nspl splines (all by default) at x
+
+        :return: list of arrays, one per spline
+        """
+        if nspl is None:
+            nspl = len(self.splines)
+        x = np.asarray(x)
+        if not self.fast or x.ndim != 1 or x.size == 0:
+            return [self.splines[it](x) for it in range(nspl)]
+        out = fastmath.splev_group(self.t, self.cs[:nspl], self.k,
+                                   np.ascontiguousarray(x, dtype=np.float64),
+                                   self.ext)
+        return list(out)
+
+
 def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
                ) -> Union[IUVSpline, NanSpline]:
     """

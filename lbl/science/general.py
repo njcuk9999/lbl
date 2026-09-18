@@ -503,7 +503,9 @@ def spline_template(inst: InstrumentsType, template_file: str,
                                         k=k_order, ext=1)
 
     # deal with residual projection tables
+    resproj_keys = []
     if isinstance(inst.params['RESPROJ_TABLES'], dict):
+        resproj_keys = list(inst.params['RESPROJ_TABLES'].keys())
         # loop around table
         for key in inst.params['RESPROJ_TABLES'].keys():
             # log that we are constructing the spline
@@ -558,9 +560,23 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # evaluate the splines on a window of knots around the requested points
     #   (same values, without FITPACK's linear search along all the knots)
-    for key in sps:
+    for key in list(sps.keys()):
         if isinstance(sps[key], mp.IUVSpline):
             sps[key] = mp.KnotWindowSpline(sps[key])
+    # groups of splines evaluated together at the same wavelengths in
+    #   compute_rv: the template and its derivatives (same knots), the masks
+    #   and the residual projection splines
+    if 'flux_odd' in template_table.colnames:
+        for suffix in ['_odd', '_even']:
+            names = ['spline', 'dspline', 'd2spline', 'd3spline']
+            sps['group' + suffix] = mp.SplineGroup(
+                [sps[name + suffix] for name in names])
+    else:
+        names = ['spline', 'dspline', 'd2spline', 'd3spline']
+        sps['group'] = mp.SplineGroup([sps[name] for name in names])
+    for key in list(sps.keys()):
+        if key.startswith('spline_mask') or key in resproj_keys:
+            sps['group_' + key] = mp.SplineGroup([sps[key]])
     # -------------------------------------------------------------------------
     # return splines
     return sps
@@ -1046,6 +1062,17 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     return rms
 
 
+def _spline_group(splines: Dict[str, Any], key: str,
+                  members: List[Any]) -> mp.SplineGroup:
+    """
+    The spline group splines[key] (made by spline_template), or a new group
+    of the member splines if the dictionary does not have it
+    """
+    if key in splines:
+        return splines[key]
+    return mp.SplineGroup(members)
+
+
 def _f64(array: np.ndarray) -> np.ndarray:
     """
     Native-endian, C-contiguous float64 version of an array (FITS data are
@@ -1307,6 +1334,20 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         spline_mask = [splines['spline_mask_odd'], splines['spline_mask_even']]
         log.general('\tThe template has left/right asymetry handled '
                     'with odd/even splines')
+    # the same splines grouped for a joint evaluation (template and its
+    #   derivatives share their knots): same values as calling them
+    tgroup = (_spline_group(splines, 'group_odd', [spline[0], dspline[0],
+                                                   d2spline[0], d3spline[0]]),
+              _spline_group(splines, 'group_even', [spline[1], dspline[1],
+                                                    d2spline[1], d3spline[1]]))
+    if 'spline_odd' not in splines:
+        tgroup = (_spline_group(splines, 'group', [spline[0], dspline[0],
+                                                   d2spline[0], d3spline[0]]),) * 2
+    mgroup = (_spline_group(splines, 'group_spline_mask_odd', [spline_mask[0]]),
+              _spline_group(splines, 'group_spline_mask_even', [spline_mask[1]]))
+    if 'spline_odd' not in splines:
+        mgroup = (_spline_group(splines, 'group_spline_mask',
+                                [spline_mask[0]]),) * 2
 
     # set up storage for the dv, d2v, d3v and corresponding rms values
     #    fill with NaNs
@@ -1366,14 +1407,18 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             wave_ord = mp.doppler_shift(wavegrid[order_num], shift)
             # get the blaze for this order
             blaze_ord = blaze[order_num]
+            # template spline and derivatives at these wavelengths (d2 and
+            #   d3 only needed on the last iteration)
+            nspl = 4 if flag_last_iter else 2
+            tvals = tgroup[is_even](wave_ord, nspl)
             # get the low-frequency component out
             model_mask = np.ones_like(model[order_num])
             # add the spline mask values to model_mask (spline mask is 0 or 1)
-            smask = spline_mask[is_even](wave_ord) < 0.99
+            smask = mgroup[is_even](wave_ord)[0] < 0.99
             # set spline mask splined values to NaN
             model_mask[smask] = np.nan
             # RV shift the spline and correct for blaze and add model mask
-            ord_model = spline[is_even](wave_ord) * blaze_ord * model_mask
+            ord_model = tvals[0] * blaze_ord * model_mask
             # push into mask
             model[order_num] = ord_model
             # we are so close in RV with RV_mean<10*sigma that there is no need
@@ -1406,7 +1451,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if iteration == 0:
                 # normalization of the local pseudo continuum level of the unblazed
                 # model
-                model0[order_num] = spline[is_even](wave_ord)
+                model0[order_num] = tvals[0]
                 model0[order_num][model0[order_num] == 0] = np.nan
                 lp_wid = model0.shape[1] // 2 # half the blaze length
                 norm[order_num] = mp.lowpassfilter(model0[order_num], lp_wid, k=2)
@@ -1429,11 +1474,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # update the other splines
             # track ratio if relevant
             b_ratio[order_num] = blaze_ord * ratio[order_num]
-            dmodel[order_num] = dspline[is_even](wave_ord) * b_ratio[order_num]
+            dmodel[order_num] = tvals[1] * b_ratio[order_num]
             # only do the d2 and d3 stuff if on last iteration
             if flag_last_iter:
-                d2model_ord = d2spline[is_even](wave_ord) * b_ratio[order_num]
-                d3model_ord = d3spline[is_even](wave_ord) * b_ratio[order_num]
+                d2model_ord = tvals[2] * b_ratio[order_num]
+                d3model_ord = tvals[3] * b_ratio[order_num]
                 d2model[order_num] = d2model_ord
                 d3model[order_num] = d3model_ord
                 # deal with residual projection tables if required
@@ -1444,7 +1489,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         # To keep the physical units of the gradient files
                         # (computed on pseudo-continuum normalised spectra),
                         # we need to multiply by the local continuum level
-                        rp_spline = splines[key](wave_ord)# * b_ratio[order_num] / norm[order_num]
+                        rp_spline = _spline_group(
+                            splines, 'group_' + key, [splines[key]])(
+                            wave_ord)[0]  # * b_ratio[order_num] / norm[order_num]
                         # The models are always expressed in terms of the
                         # original spectrum
                         # rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
