@@ -75,7 +75,8 @@ def main(**kwargs):
                     params=args, plogger=log)
     # run __main__
     try:
-        namespace = __main__(inst)
+        with io.fast_fits_config():
+            namespace = __main__(inst)
     except LblException as e:
         tbmsg = traceback.format_exc()
         emsg = '{0}\n\nTraceback:\n{1}'
