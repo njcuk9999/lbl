@@ -332,7 +332,7 @@ if not HAS_NUMBA:
 
 
 # Set "nopython" mode for best performance, equivalent to @nji
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
                    odd_ratio: float = 2e-4, nmax: int = 10,
                    conv_cut=1e-2) -> Tuple[float, float]:

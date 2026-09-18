@@ -24,6 +24,7 @@ from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import fast_lines
 from lbl.core import fast_noise
 from lbl.core import math as mp
 from lbl.core import npreplica
@@ -1077,6 +1078,112 @@ def _noise_model_windows(residuals: np.ndarray, npoints: int,
     return indices, sigma
 
 
+def _f64(array: np.ndarray) -> np.ndarray:
+    """
+    Native-endian, C-contiguous float64 version of an array (FITS data are
+    big-endian, which numba does not take). No copy if already the case.
+    """
+    return np.ascontiguousarray(array, dtype=np.float64)
+
+
+def _fast_line_loop(inst: InstrumentsType, iteration: int,
+                    flag_last_iter: bool, orders: np.ndarray,
+                    order_lines: List[np.ndarray],
+                    line_wave_start: np.ndarray, line_wave_end: np.ndarray,
+                    wave2pixlist: List[Any], mask_keep: np.ndarray,
+                    nwavegrid: np.ndarray, sci_data: np.ndarray,
+                    rms: np.ndarray, model: np.ndarray, dmodel: np.ndarray,
+                    d2model: np.ndarray, d3model: np.ndarray,
+                    blaze: np.ndarray, b_ratio: np.ndarray, norm: np.ndarray,
+                    proj_model: Dict[str, Any], resproj_flag: bool,
+                    min_line_width: int, dv: np.ndarray, sdv: np.ndarray,
+                    d0v: np.ndarray, sd0v: np.ndarray, d2v: np.ndarray,
+                    sd2v: np.ndarray, d3v: np.ndarray, sd3v: np.ndarray,
+                    frac_line_valid: np.ndarray, ref_table: Dict[str, Any],
+                    plot_dict: Dict[str, Any]):
+    """
+    The 'loop through all lines' block of compute_rv with the numba kernel
+    fast_lines.line_loop (same results). Updates, as the python loop does:
+    mask_keep, dv, sdv, d0v, sd0v, d2v, sd2v, d3v, sd3v, frac_line_valid,
+    ref_table MEANXPIX, MEANBLAZE, RMSRATIO, NPIXLINE, CHI2, the residual
+    projections in proj_model and the plot lists in plot_dict.
+
+    :return: None, arrays updated in place
+    """
+    # lines visited in this iteration (lines flagged as bad are skipped in
+    #   all but the second iteration)
+    if iteration != 1:
+        visit = np.array(mask_keep)
+    else:
+        visit = np.ones(len(orders), dtype=bool)
+    # pixel position of the line edges: the same wave -> pixel splines as
+    #   the python loop, called once per order instead of once per line
+    x_start_f = np.full(len(orders), np.nan)
+    x_end_f = np.full(len(orders), np.nan)
+    for order_num in range(len(order_lines)):
+        in_order = order_lines[order_num]
+        if len(in_order) == 0:
+            continue
+        wave2pix = wave2pixlist[order_num]
+        x_start_f[in_order] = wave2pix(line_wave_start[in_order])
+        x_end_f[in_order] = wave2pix(line_wave_end[in_order])
+    # the python loop does int(np.floor(x)), which fails on a non-finite x
+    if not np.all(np.isfinite(x_start_f[visit]) &
+                  np.isfinite(x_end_f[visit])):
+        raise ValueError('cannot convert float NaN to integer')
+    x_start_i = np.zeros(len(orders), dtype=np.int64)
+    x_end_i = np.zeros(len(orders), dtype=np.int64)
+    x_start_i[visit] = np.floor(x_start_f[visit]).astype(np.int64)
+    x_end_i[visit] = np.floor(x_end_f[visit]).astype(np.int64)
+    # residual projection models (only used on the last iteration)
+    if flag_last_iter and resproj_flag:
+        resproj_keys = list(inst.params['RESPROJ_TABLES'].keys())
+        proj_models = np.array([proj_model[key]['model']
+                                for key in resproj_keys], dtype=float)
+        proj_all = np.array([proj_model[key]['proj']
+                             for key in resproj_keys], dtype=float)
+        sproj_all = np.array([proj_model[key]['sproj']
+                              for key in resproj_keys], dtype=float)
+    else:
+        resproj_keys = []
+        proj_models = np.zeros((0, 1, 1))
+        proj_all = np.zeros((0, len(orders)))
+        sproj_all = np.zeros((0, len(orders)))
+    # lines that passed the boundary conditions (for the plot) and lines
+    #   whose RMSRATIO / NPIXLINE / CHI2 were set
+    passed_bounds = np.zeros(len(orders), dtype=bool)
+    stats_updated = np.zeros(len(orders), dtype=bool)
+    # run the line-by-line loop
+    fast_lines.line_loop(iteration, flag_last_iter, orders,
+                         line_wave_start, line_wave_end, x_start_i, x_end_i,
+                         mask_keep, _f64(nwavegrid), _f64(sci_data),
+                         _f64(rms), _f64(model), _f64(dmodel),
+                         _f64(d2model), _f64(d3model), _f64(blaze),
+                         _f64(b_ratio), _f64(norm), proj_models,
+                         min_line_width, dv, sdv, d0v, sd0v, d2v, sd2v, d3v,
+                         sd3v, frac_line_valid, ref_table['MEANXPIX'],
+                         ref_table['MEANBLAZE'], ref_table['RMSRATIO'],
+                         ref_table['NPIXLINE'], ref_table['CHI2'], proj_all,
+                         sproj_all, passed_bounds, stats_updated,
+                         npreplica.BN_NANSTD_FMA)
+    # push the residual projections back
+    for ikey, key in enumerate(resproj_keys):
+        proj_model[key]['proj'] = proj_all[ikey]
+        proj_model[key]['sproj'] = sproj_all[ikey]
+    # add to the plots dictionary (for plotting later)
+    if iteration == 1:
+        for line_it in np.where(passed_bounds)[0]:
+            order_num = orders[line_it]
+            x_start, x_end = x_start_i[line_it], x_end_i[line_it]
+            plot_dict['LINE_ORDERS'] += [order_num]
+            plot_dict['WW_ORD_LINE'] += [
+                nwavegrid[order_num][x_start:x_end + 1]]
+            plot_dict['SPEC_ORD_LINE'] += [
+                sci_data[order_num][x_start:x_end + 1]]
+            plot_dict['MODEL_ORD_LINE'] += [
+                model[order_num][x_start:x_end + 1]]
+
+
 def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
                          mean_rms: np.ndarray) -> Tuple[float, float]:
     """
@@ -1281,6 +1388,16 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # a keep mask - for keep good mask lines
     mask_keep = np.ones_like(ref_table['ORDER'], dtype=bool)
+    # fast line-by-line loop (numba kernel fast_lines.line_loop, same
+    #   results as the python loop over lines below, which it replaces)
+    use_fast_lines = npreplica.use_fast()
+    if use_fast_lines:
+        # line indices in each order and line edges
+        line_orders = np.asarray(ref_table['ORDER'], dtype=np.int64)
+        order_lines = [np.where(line_orders == order_num)[0]
+                       for order_num in range(sci_data.shape[0])]
+        line_wave_start = _f64(ref_table['WAVE_START'])
+        line_wave_end = _f64(ref_table['WAVE_END'])
     # store number of iterations required to converge
     num_to_converge = 0
     # set up models to spline onto
@@ -1546,8 +1663,20 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # we don't want to continue this run if we have model_velocity
             continue
         # ---------------------------------------------------------------------
+        # fast path: all the lines with the numba kernel (then the python
+        #   loop below does nothing)
+        if use_fast_lines:
+            _fast_line_loop(inst, iteration, flag_last_iter, line_orders,
+                            order_lines, line_wave_start, line_wave_end,
+                            wave2pixlist, mask_keep, nwavegrid, sci_data,
+                            rms, model, dmodel, d2model, d3model, blaze,
+                            b_ratio, norm, proj_model, resproj_flag,
+                            min_line_width, dv, sdv, d0v, sd0v, d2v, sd2v,
+                            d3v, sd3v, frac_line_valid, ref_table,
+                            plot_dict)
+        # ---------------------------------------------------------------------
         # loop through all lines
-        for line_it in range(0, len(orders)):
+        for line_it in range(0, 0 if use_fast_lines else len(orders)):
             # get the order number for this line
             order_num = orders[line_it]
             # -----------------------------------------------------------------
