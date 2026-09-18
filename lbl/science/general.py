@@ -556,6 +556,12 @@ def spline_template(inst: InstrumentsType, template_file: str,
         sps['spline_mask_even'] = mp.iuv_spline(ntwave1, tmask_even,
                                                 k=1, ext=1)
     # -------------------------------------------------------------------------
+    # evaluate the splines on a window of knots around the requested points
+    #   (same values, without FITPACK's linear search along all the knots)
+    for key in sps:
+        if isinstance(sps[key], mp.IUVSpline):
+            sps[key] = mp.KnotWindowSpline(sps[key])
+    # -------------------------------------------------------------------------
     # return splines
     return sps
 

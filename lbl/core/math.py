@@ -20,6 +20,7 @@ from scipy import optimize
 from scipy import signal
 from scipy.special import factorial
 from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
+from scipy.interpolate._fitpack_impl import splev as _fitpack_splev
 from scipy.special import erf
 
 from lbl.core import base
@@ -459,6 +460,62 @@ class NanSpline:
         return np.repeat(np.nan, len(x))
 
 
+class KnotWindowSpline:
+    def __init__(self, spline: IUVSpline):
+        """
+        Wrap an InterpolatedUnivariateSpline so that spline(x) only hands
+        FITPACK the knots around the range of x.
+
+        FITPACK's splev looks for the knot interval of the first point with
+        a linear search from the start of the knot vector, which dominates
+        the cost for a spline with ~1e5-1e6 knots (e.g. a template) evaluated
+        on a short range. The value of a degree-k B-spline at x only depends
+        on the k+1 coefficients and 2k knots around its knot interval, so
+        evaluating on a window of knots (with margins) runs the same
+        arithmetic and gives the same values. Points outside the support of
+        the full spline, NaNs or derivatives use the full spline.
+
+        :param spline: the scipy InterpolatedUnivariateSpline to wrap
+        """
+        self.spline = spline
+        self.t, self.c, self.k = spline._eval_args
+        self.ext = spline.ext
+        self.nknots = len(self.t)
+        # support of the spline
+        self.tb = self.t[self.k]
+        self.te = self.t[self.nknots - self.k - 1]
+
+    def __call__(self, x: np.ndarray, nu: int = 0,
+                 ext: Optional[int] = None) -> np.ndarray:
+        x = np.asarray(x)
+        if nu != 0 or ext is not None or x.ndim != 1 or x.size == 0:
+            return self.spline(x, nu=nu, ext=ext)
+        xmin, xmax = np.min(x), np.max(x)
+        # NaNs: use the full spline
+        if not (np.isfinite(xmin) and np.isfinite(xmax)):
+            return self.spline(x)
+        t, k, nknots = self.t, self.k, self.nknots
+        # knot interval of the first and last point (FITPACK uses the
+        #   intervals k to nknots - k - 2, the last one up to te included)
+        l_min = np.searchsorted(t, xmin, side='right') - 1
+        l_max = np.searchsorted(t, xmax, side='right') - 1
+        l_min = min(max(l_min, k), nknots - k - 2)
+        l_max = min(max(l_max, k), nknots - k - 2)
+        # window of knots: k knots before, k + 1 after, plus a margin
+        #   (and the full ends if a point is at or beyond the support edges)
+        margin = 2
+        lo = l_min - k - margin
+        hi = l_max + k + 2 + margin
+        if xmin < self.tb or lo < 0:
+            lo = 0
+        if xmax >= self.te or hi > nknots:
+            hi = nknots
+        if lo == 0 and hi == nknots:
+            return self.spline(x)
+        tck = (t[lo:hi], self.c[lo:hi], k)
+        return _fitpack_splev(x, tck, der=0, ext=self.ext)
+
+
 def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
                ) -> Union[IUVSpline, NanSpline]:
     """
@@ -503,6 +560,12 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
             # raise exception if len(x) is bad
             emsg = ('IUV Spline sum(valid) < 5')
             return NanSpline(emsg)
+    # if y has no NaN/inf the fill below does not happen and the returned
+    #   spline is IUVSpline(x[valid], y[valid]): build it directly (the base
+    #   spline would not be used)
+    y_finite = np.isfinite(y)
+    if y_finite.all():
+        return IUVSpline(x[valid], y[valid], **kwargs)
     # restrict to valid data only
     x_valid, y_valid = x[valid], y[valid]
     # ensure x is strictly increasing (required by spline)
@@ -511,9 +574,9 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     # build base spline on valid data
     base_spline = IUVSpline(x_valid, y_valid, **kwargs)
     # if y had NaNs, fill them by interpolation
-    if np.any(~np.isfinite(y)):
+    if np.any(~y_finite):
         y_filled = y.copy()
-        nan_y = ~np.isfinite(y)
+        nan_y = ~y_finite
         y_filled[nan_y] = base_spline(x[nan_y])
     else:
         y_filled = y
