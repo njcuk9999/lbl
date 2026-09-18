@@ -857,3 +857,114 @@ def nanpercentile_rows(cube, qs):
         for iq in range(qs.shape[0]):
             out[iq, r] = _np_quantile_sorted(srt, m, qs[iq])
     return out
+
+
+# =============================================================================
+# FITPACK interpolating spline fit
+# =============================================================================
+@njit(cache=True, error_model='numpy')
+def fpcurf_interp(x, y, k):
+    """
+    Knots and coefficients of FITPACK's interpolating spline of degree k
+    through (x, y) (curfit / fpcurf with s=0, unit weights, bounds x[0] and
+    x[-1]): same t and c as scipy's InterpolatedUnivariateSpline(x, y, k=k)
+    _eval_args, with FITPACK's arithmetic as compiled for scipy on arm64
+    (fused multiply-adds in fpbspl, fpgivs, fprota and fpback).
+
+    x must be strictly increasing and len(x) > k.
+
+    :return: t (n), c (n) with n = len(x) + k + 1
+    """
+    m = x.shape[0]
+    k1 = k + 1
+    n = m + k1
+    nk1 = n - k1
+    t = np.zeros(n)
+    c = np.zeros(n)
+    # knots: k + 1 at each end, the interior ones at data points (odd k)
+    #   or between them (even k)
+    mk1 = m - k1
+    k3 = k // 2
+    for jj in range(mk1):
+        if k3 * 2 == k:
+            t[k1 + jj] = (x[k3 + 1 + jj] + x[k3 + jj]) * 0.5
+        else:
+            t[k1 + jj] = x[k3 + 1 + jj]
+    for ii in range(k1):
+        t[ii] = x[0]
+        t[n - 1 - ii] = x[m - 1]
+    # triangularise the observation matrix with Givens rotations
+    a = np.zeros((nk1, k1))
+    z = np.zeros(nk1)
+    h = np.empty(k1)
+    hh = np.empty(k1)
+    # knot interval (0-based: t[ll] <= xi < t[ll + 1])
+    ll = k
+    for it in range(m):
+        xi = x[it]
+        yi = y[it]
+        while not (xi < t[ll + 1] or ll == nk1 - 1):
+            ll += 1
+        # fpbspl: the k + 1 non-zero B-splines at xi
+        h[0] = 1.0
+        for jj in range(1, k + 1):
+            for ii in range(jj):
+                hh[ii] = h[ii]
+            h[0] = 0.0
+            for ii in range(1, jj + 1):
+                li = ll + ii
+                lj = li - jj
+                if t[li] == t[lj]:
+                    h[ii] = 0.0
+                    continue
+                f = hh[ii - 1] / (t[li] - t[lj])
+                h[ii - 1] = _fma(f, t[li] - xi, h[ii - 1])
+                h[ii] = f * (xi - t[lj])
+        # rotate the new row into the triangle
+        jrow = ll - k
+        for ii in range(k1):
+            piv = h[ii]
+            if piv != 0.0:
+                # fpgivs
+                ww = a[jrow, 0]
+                store = abs(piv)
+                if store >= ww:
+                    r = ww / piv
+                    dd = store * np.sqrt(_fma(r, r, 1.0))
+                else:
+                    r = piv / ww
+                    dd = ww * np.sqrt(_fma(r, r, 1.0))
+                cos = ww / dd
+                sin = piv / dd
+                a[jrow, 0] = dd
+                # fprota on the right hand side
+                stor1 = yi
+                stor2 = z[jrow]
+                z[jrow] = _fma(cos, stor2, sin * stor1)
+                yi = _fma(cos, stor1, -(sin * stor2))
+                if ii == k1 - 1:
+                    break
+                # fprota on the rest of the row
+                i2 = 0
+                for i1 in range(ii + 1, k1):
+                    i2 += 1
+                    stor1 = h[i1]
+                    stor2 = a[jrow, i2]
+                    a[jrow, i2] = _fma(cos, stor2, sin * stor1)
+                    h[i1] = _fma(cos, stor1, -(sin * stor2))
+            jrow += 1
+    # fpback: backward substitution
+    c[nk1 - 1] = z[nk1 - 1] / a[nk1 - 1, 0]
+    i = nk1 - 1
+    for jj in range(2, nk1 + 1):
+        store = z[i - 1]
+        i1 = k1 - 1
+        if jj <= k1 - 1:
+            i1 = jj - 1
+        mm = i
+        for lq in range(1, i1 + 1):
+            mm += 1
+            store = _fma(-c[mm - 1], a[i - 1, lq], store)
+        c[i - 1] = store / a[i - 1, 0]
+        i -= 1
+    return t, c

@@ -1060,9 +1060,11 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
         # if we have enough points calculate the rms
         if np.sum(good) > 2:
             # get the spline across all indices
-            rms_spline = mp.iuv_spline(indices[good], sigma[good], k=1, ext=1)
+            rms_values = mp.iuv_spline_eval(indices[good], sigma[good],
+                                            np.arange(model.shape[1]),
+                                            k=1, ext=1)
             # apply the spline to the model positions
-            rms[order_num] = rms_spline(np.arange(model.shape[1]))
+            rms[order_num] = rms_values
         # else we don't have a noise model
         else:
             # we fill the rms with NaNs for each pixel
@@ -1570,21 +1572,17 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         orders = line_orders
         # set these for use/update later
         nwavegrid = mp.doppler_shift(wavegrid, -sys_rv)
-        # get splines between shifted wave grid and pixel grid
-        wave2pixlist = []
+        # the wave -> pixel splines of the orders (evaluated at the line
+        #   edges below); orders with too few finite points give NaNs
         xpix = np.arange(model.shape[1])
+        wave2pix_ok = np.ones(wavegrid.shape[0], dtype=bool)
         for order_num in range(wavegrid.shape[0]):
             # deal with too few finite points in wavegrid
             if np.sum(np.isfinite(nwavegrid[order_num])) < 5:
                 emsg = ('Order {0} has too few finite points (<5) in '
                         'wavegrid to spline')
                 log.warning(emsg.format(order_num))
-                nspline = mp.NanSpline(emsg.format(order_num),
-                                       nwavegrid[order_num], xpix)
-                wave2pixlist.append(nspline)
-            else:
-                # spline between wavelength and pixel position
-                wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
+                wave2pix_ok[order_num] = False
         # ---------------------------------------------------------------------
         # debug plot dictionary for plotting later
         if iteration == 0:
@@ -1624,16 +1622,19 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             visit = np.array(mask_keep)
         else:
             visit = np.ones(len(orders), dtype=bool)
-        # pixel position of the line edges (one spline call per order)
+        # pixel position of the line edges: spline between wavelength and
+        #   pixel position of each order (one spline per order)
         x_start_f = np.full(len(orders), np.nan)
         x_end_f = np.full(len(orders), np.nan)
         for order_num in range(len(order_lines)):
             in_order = order_lines[order_num]
-            if len(in_order) == 0:
+            if len(in_order) == 0 or not wave2pix_ok[order_num]:
                 continue
-            wave2pix = wave2pixlist[order_num]
-            x_start_f[in_order] = wave2pix(line_wave_start[in_order])
-            x_end_f[in_order] = wave2pix(line_wave_end[in_order])
+            edges = np.concatenate([line_wave_start[in_order],
+                                    line_wave_end[in_order]])
+            pix_edges = mp.iuv_spline_eval(nwavegrid[order_num], xpix, edges)
+            x_start_f[in_order] = pix_edges[:len(in_order)]
+            x_end_f[in_order] = pix_edges[len(in_order):]
         # the per-line code did int(np.floor(x)): it fails on a non-finite x
         if not np.all(np.isfinite(x_start_f[visit]) &
                       np.isfinite(x_end_f[visit])):
@@ -2232,12 +2233,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration we set the rvs and dvrms from rv table
         if not flag_calib:
-            dv_arr[row] = rvtable[good]['dv']
-            sdv_arr[row] = rvtable[good]['sdv']
+            dv_arr[row] = rvtable['dv'][good]
+            sdv_arr[row] = rvtable['sdv'][good]
         # else we calculate it using odd ratio mean
         else:
-            cal_rv = np.array(rvtable[good]['dv'], dtype=float)
-            cal_dvrms = np.array(rvtable[good]['sdv'], dtype=float)
+            cal_rv = np.array(rvtable['dv'][good], dtype=float)
+            cal_dvrms = np.array(rvtable['sdv'][good], dtype=float)
             # estimate using odd ratio mean
             cal_guess, cal_bulk_error = mp.odd_ratio_mean(cal_rv, cal_dvrms)
             # push into rdb_dict
@@ -2255,22 +2256,22 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                             'key {0}')
                     raise LblException(emsg.format(key))
                 # copy the rvtable array for this residual projection
-                arr = np.array(rvtable[good][key], dtype=float)
+                arr = np.array(rvtable[key][good], dtype=float)
                 # copy the rvtable error array for this residual projection
-                sarr = np.array(rvtable[good]['s' + key], dtype=float)
+                sarr = np.array(rvtable['s' + key][good], dtype=float)
                 # get the guess and bulk error
                 val_guess, val_bulk_error = mp.odd_ratio_mean(arr, sarr)
                 # push into the rdb dictioanry
                 rdb_dict[key][row] = val_guess
                 rdb_dict['s' + key][row] = val_bulk_error
         # get the d2v, sd2v, d3v and sd3v values from table
-        wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
-        contrast = np.array(rvtable[good]['contrast'], dtype=float)
-        scontrast = np.array(rvtable[good]['sig_contrast'], dtype=float)
-        d2v = np.array(rvtable[good]['d2v'], dtype=float)
-        sd2v = np.array(rvtable[good]['sd2v'], dtype=float)
-        d3v = np.array(rvtable[good]['d3v'], dtype=float)
-        sd3v = np.array(rvtable[good]['sd3v'], dtype=float)
+        wave_vec = np.array(rvtable['WAVE_START'][good], dtype=float)
+        contrast = np.array(rvtable['contrast'][good], dtype=float)
+        scontrast = np.array(rvtable['sig_contrast'][good], dtype=float)
+        d2v = np.array(rvtable['d2v'][good], dtype=float)
+        sd2v = np.array(rvtable['sd2v'][good], dtype=float)
+        d3v = np.array(rvtable['d3v'][good], dtype=float)
+        sd3v = np.array(rvtable['sd3v'][good], dtype=float)
         # push these values into array (for saving images later)
         wave_arr[row] = wave_vec
         d2v_arr[row], sd2v_arr[row] = d2v, sd2v
@@ -2294,8 +2295,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['d3v'][row] = d3v_guess
         rdb_dict['sd3v'][row] = d3v_bulk_error
         # ---------------------------------------------------------------------
-        # if we don't have a calibration add plot values
-        if not flag_calib:
+        # if we don't have a calibration add plot values (only used by the
+        #   cumulative plot)
+        cumul_plot = inst.params['PLOT'] and inst.params['PLOT_COMPIL_CUMUL']
+        if not flag_calib and cumul_plot:
             # plot specific domain. We use the median velocity of the file
             # for the plot domain. +-15 km/s to get an idea of residuals.
             xlim = [med_velo - 15000, med_velo + 15000]

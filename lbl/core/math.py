@@ -638,6 +638,54 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     return IUVSpline(x[valid2], y_filled[valid2], **kwargs)
 
 
+def iuv_spline_eval(x: np.ndarray, y: np.ndarray, xnew: np.ndarray,
+                    **kwargs) -> np.ndarray:
+    """
+    iuv_spline(x, y, **kwargs)(xnew), with the numba FITPACK kernels
+    (fastmath.fpcurf_interp and fastmath.splev_group, same values) in the
+    usual case: finite y, strictly increasing finite x, integer ext 0, 1 or
+    3. Anything else goes through iuv_spline.
+
+    :param x: the x values of the spline
+    :param y: the y values of the spline
+    :param xnew: the points to evaluate the spline at (1D)
+    :param kwargs: k and ext, as for iuv_spline
+
+    :return: np.ndarray, the spline values at xnew
+    """
+    k = kwargs.get('k', 3)
+    ext = kwargs.get('ext', 0)
+    fast = set(kwargs.keys()) <= {'k', 'ext'}
+    fast &= isinstance(k, (int, np.integer)) and 1 <= int(k) <= 5
+    fast &= (isinstance(ext, (int, np.integer)) and
+             not isinstance(ext, bool) and int(ext) in (0, 1, 3))
+    if fast:
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+        xnew = np.asarray(xnew, float)
+        fast = x.ndim == 1 and x.shape == y.shape and xnew.ndim == 1
+    if fast:
+        valid = np.isfinite(x) & np.isfinite(y)
+        n_valid = int(np.count_nonzero(valid))
+        # iuv_spline returns a NaN spline for too few points (if k is given)
+        if 'k' in kwargs and (n_valid < int(k) + 1 or n_valid < 5):
+            fast = False
+        # iuv_spline fills NaN y values first
+        elif not np.all(np.isfinite(y)):
+            fast = False
+    if fast:
+        x_valid = x[valid]
+        y_valid = y[valid]
+        fast = (x_valid.size > int(k) and xnew.size > 0 and
+                bool(np.all(np.diff(x_valid) > 0)))
+    if not fast:
+        return iuv_spline(x, y, **kwargs)(xnew)
+    t, c = fastmath.fpcurf_interp(np.ascontiguousarray(x_valid),
+                                  np.ascontiguousarray(y_valid), int(k))
+    return fastmath.splev_group(t, c.reshape(1, -1), int(k),
+                                np.ascontiguousarray(xnew), int(ext))[0]
+
+
 def lowpassfilter(input_vect: np.ndarray, width: int = 101,
                   k: int = 2) -> np.ndarray:
     """
@@ -740,8 +788,8 @@ def _lowpass_spline(input_vect: np.ndarray, xmed: np.ndarray,
         xmed = xmed2
         ymed = ymed2
     # splining the vector
-    spline = iuv_spline(xmed, ymed, k=k, ext=3)
-    lowpass = spline(np.arange(len(input_vect)))
+    lowpass = iuv_spline_eval(xmed, ymed, np.arange(len(input_vect)), k=k,
+                              ext=3)
     # return the low pass filtered input vector
     return lowpass
 
