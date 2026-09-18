@@ -142,6 +142,14 @@ params.set(key='TOTAL', value=-1, source=__NAME__, dtype=int,
                 '-1 means no multiprocessing',
            arg='--total')
 
+# Define the number of processes lbl_compute uses (1 = sequential). With
+#    more than one, the science files are split in contiguous blocks run in
+#    parallel, with the same results as a sequential run
+params.set(key='COMPUTE_NPROC', value=1, source=__NAME__, dtype=int,
+           desc='number of processes used by lbl_compute (1 = sequential, '
+                'results are identical)',
+           arg='--nproc')
+
 # Use the fast (numba) code paths when they are identical to the original
 #    code on this machine (see lbl.core.npreplica); False runs the original
 #    python code everywhere

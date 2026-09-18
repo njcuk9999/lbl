@@ -1106,7 +1106,8 @@ def _fast_line_loop(inst: InstrumentsType, iteration: int,
                     d0v: np.ndarray, sd0v: np.ndarray, d2v: np.ndarray,
                     sd2v: np.ndarray, d3v: np.ndarray, sd3v: np.ndarray,
                     frac_line_valid: np.ndarray, ref_table: Dict[str, Any],
-                    plot_dict: Dict[str, Any]):
+                    plot_dict: Dict[str, Any]
+                    ) -> Tuple[np.ndarray, np.ndarray]:
     """
     The 'loop through all lines' block of compute_rv with the numba kernel
     fast_lines.line_loop (same results). Updates, as the python loop does:
@@ -1114,7 +1115,9 @@ def _fast_line_loop(inst: InstrumentsType, iteration: int,
     ref_table MEANXPIX, MEANBLAZE, RMSRATIO, NPIXLINE, CHI2, the residual
     projections in proj_model and the plot lists in plot_dict.
 
-    :return: None, arrays updated in place
+    :return: the lines whose MEANXPIX / MEANBLAZE were set and the lines
+             whose RMSRATIO / NPIXLINE / CHI2 were set (other arrays are
+             updated in place)
     """
     # lines visited in this iteration (lines flagged as bad are skipped in
     #   all but the second iteration)
@@ -1188,6 +1191,7 @@ def _fast_line_loop(inst: InstrumentsType, iteration: int,
                 sci_data[order_num][x_start:x_end + 1]]
             plot_dict['MODEL_ORD_LINE'] += [
                 model[order_num][x_start:x_end + 1]]
+    return passed_bounds, stats_updated
 
 
 def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
@@ -1404,6 +1408,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                        for order_num in range(sci_data.shape[0])]
         line_wave_start = _f64(ref_table['WAVE_START'])
         line_wave_end = _f64(ref_table['WAVE_END'])
+        # lines whose MEANXPIX / MEANBLAZE and RMSRATIO / NPIXLINE / CHI2
+        #   values in ref_table are set by this file (the others keep the
+        #   values of a previous file; used by the parallel lbl_compute)
+        lines_xpix_set = np.zeros(len(line_orders), dtype=bool)
+        lines_stats_set = np.zeros(len(line_orders), dtype=bool)
     # store number of iterations required to converge
     num_to_converge = 0
     # set up models to spline onto
@@ -1672,7 +1681,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # fast path: all the lines with the numba kernel (then the python
         #   loop below does nothing)
         if use_fast_lines:
-            _fast_line_loop(inst, iteration, flag_last_iter, line_orders,
+            set_flags = _fast_line_loop(
+                            inst, iteration, flag_last_iter, line_orders,
                             order_lines, line_wave_start, line_wave_end,
                             wave2pixlist, mask_keep, nwavegrid, sci_data,
                             rms, model, dmodel, d2model, d3model, blaze,
@@ -1680,6 +1690,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                             min_line_width, dv, sdv, d0v, sd0v, d2v, sd2v,
                             d3v, sd3v, frac_line_valid, ref_table,
                             plot_dict)
+            # keep track of the reference table values set for this file
+            lines_xpix_set |= set_flags[0]
+            lines_stats_set |= set_flags[1]
         # ---------------------------------------------------------------------
         # loop through all lines
         for line_it in range(0, 0 if use_fast_lines else len(orders)):
@@ -2054,6 +2067,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['HP_WIDTH'] = hp_width
     outputs['TOTAL_DURATION'] = total_time
     outputs['MODEL_VELOCITY'] = model_velocity
+    outputs['LINES_XPIX_SET'] = lines_xpix_set if use_fast_lines else None
+    outputs['LINES_STATS_SET'] = lines_stats_set if use_fast_lines else None
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs
