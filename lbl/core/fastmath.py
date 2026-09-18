@@ -48,44 +48,95 @@ def _fma(typingctx, a, b, c):
 
 
 @njit(cache=True, error_model='numpy')
-def _pairwise_sum(a, start, n):
-    """numpy's pairwise_sum_DOUBLE on a[start:start + n]"""
+def _block_sum(a, start, n):
+    """numpy's pairwise_sum_DOUBLE on a[start:start + n] for n <= 128"""
     if n < 8:
         res = 0.0
         for i in range(n):
             res += a[start + i]
         return res
-    elif n <= PW_BLOCKSIZE:
-        r0 = a[start + 0]
-        r1 = a[start + 1]
-        r2 = a[start + 2]
-        r3 = a[start + 3]
-        r4 = a[start + 4]
-        r5 = a[start + 5]
-        r6 = a[start + 6]
-        r7 = a[start + 7]
-        i = 8
-        nlim = n - (n % 8)
-        while i < nlim:
-            r0 += a[start + i + 0]
-            r1 += a[start + i + 1]
-            r2 += a[start + i + 2]
-            r3 += a[start + i + 3]
-            r4 += a[start + i + 4]
-            r5 += a[start + i + 5]
-            r6 += a[start + i + 6]
-            r7 += a[start + i + 7]
-            i += 8
-        res = ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7))
-        while i < n:
-            res += a[start + i]
-            i += 1
-        return res
-    else:
-        n2 = n // 2
-        n2 -= n2 % 8
-        return (_pairwise_sum(a, start, n2) +
-                _pairwise_sum(a, start + n2, n - n2))
+    r0 = a[start + 0]
+    r1 = a[start + 1]
+    r2 = a[start + 2]
+    r3 = a[start + 3]
+    r4 = a[start + 4]
+    r5 = a[start + 5]
+    r6 = a[start + 6]
+    r7 = a[start + 7]
+    i = 8
+    nlim = n - (n % 8)
+    while i < nlim:
+        r0 += a[start + i + 0]
+        r1 += a[start + i + 1]
+        r2 += a[start + i + 2]
+        r3 += a[start + i + 3]
+        r4 += a[start + i + 4]
+        r5 += a[start + i + 5]
+        r6 += a[start + i + 6]
+        r7 += a[start + i + 7]
+        i += 8
+    res = ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7))
+    while i < n:
+        res += a[start + i]
+        i += 1
+    return res
+
+
+@njit(cache=True, error_model='numpy')
+def _pairwise_sum(a, start, n):
+    """
+    numpy's pairwise_sum_DOUBLE on a[start:start + n]: blocks of <= 128
+    values, larger ranges split in two (first half rounded down to a
+    multiple of 8) and summed as left + right.
+
+    Written with an explicit stack: numba segfaults when it loads a cached
+    recursive function.
+    """
+    if n <= PW_BLOCKSIZE:
+        return _block_sum(a, start, n)
+    # node stack (start, length, visited flag) and value stack
+    nstack = 128
+    node_start = np.empty(nstack, dtype=np.int64)
+    node_len = np.empty(nstack, dtype=np.int64)
+    node_seen = np.zeros(nstack, dtype=np.bool_)
+    values = np.empty(nstack)
+    top = 0
+    vtop = 0
+    node_start[0] = start
+    node_len[0] = n
+    node_seen[0] = False
+    top = 1
+    while top > 0:
+        top -= 1
+        nstart = node_start[top]
+        nlen = node_len[top]
+        if nlen <= PW_BLOCKSIZE:
+            values[vtop] = _block_sum(a, nstart, nlen)
+            vtop += 1
+        elif node_seen[top]:
+            # both children are on the value stack: left then right
+            right = values[vtop - 1]
+            left = values[vtop - 2]
+            vtop -= 2
+            values[vtop] = left + right
+            vtop += 1
+        else:
+            n2 = nlen // 2
+            n2 -= n2 % 8
+            # revisit this node once its children are summed
+            node_seen[top] = True
+            top += 1
+            # right child (processed second)
+            node_start[top] = nstart + n2
+            node_len[top] = nlen - n2
+            node_seen[top] = False
+            top += 1
+            # left child (processed first)
+            node_start[top] = nstart
+            node_len[top] = n2
+            node_seen[top] = False
+            top += 1
+    return values[0]
 
 
 @njit(cache=True, error_model='numpy')
