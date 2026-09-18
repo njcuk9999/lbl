@@ -207,12 +207,16 @@ class LBLHeader(UserDict):
 
     @classmethod
     def from_fits(cls, header: fits.Header,
-                  filename: Optional[str] = None) -> 'LBLHeader':
+                  filename: Optional[str] = None,
+                  keys: Optional[List[str]] = None) -> 'LBLHeader':
         """
         Construct a LBLHeader from a fits file
 
         :param header: fits.Header, the loaded fits header (astro.io.FitsHeader)
         :param filename: str, the filename of the header (for error reporting)
+        :param keys: optional list of keys: only keep these (same values and
+                     comments as in the full LBLHeader, the other keys are
+                     absent)
 
         :return: LBLHeader, the header
         """
@@ -221,7 +225,15 @@ class LBLHeader(UserDict):
         #   returns the same (first card / commentary) value, so copying it
         #   once gives the same result as copying it at every occurrence
         #   (a deepcopy of a commentary value copies the whole header)
-        keys = list(dict.fromkeys(header))
+        keys_all = list(dict.fromkeys(header))
+        if keys is None:
+            keys = keys_all
+        else:
+            # keys as they are looked up (with or without 'HIERARCH ')
+            wanted = set(keys)
+            wanted |= set(key[len('HIERARCH '):] for key in keys
+                          if key.startswith('HIERARCH '))
+            keys = [key for key in keys_all if key in wanted]
         # loop around keys and add them to the header dictionary
         for key in keys:
             new[key] = copy.deepcopy(header[key])

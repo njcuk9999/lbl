@@ -1283,6 +1283,19 @@ class SpirouCADC(Spirou):
         :param science_file: str, the filename to load
         :return:
         """
+        return self._load_science_file(science_file)
+
+    def _load_science_file(self, science_file: str,
+                           keys: Optional[List[str]] = None
+                           ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        Load science data and header (only the given keys of the header if
+        keys is set)
+
+        :param science_file: str, the filename to load
+        :param keys: optional list of header keys to keep
+        :return:
+        """
         # Fiber must be set for SPIROU CADC
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
@@ -1302,7 +1315,7 @@ class SpirouCADC(Spirou):
                                         header_extname=extname,
                                         kind='science Flux extension')
         sci_data, wavemap = datas
-        sci_hdr = io.LBLHeader.from_fits(hdr, science_file)
+        sci_hdr = io.LBLHeader.from_fits(hdr, science_file, keys=keys)
         # keep the wave solution for get_wave_solution (same file)
         _WAVE_CACHE.clear()
         _WAVE_CACHE[_file_key(science_file)] = wavemap
@@ -1383,6 +1396,49 @@ class SpirouCADC(Spirou):
         :return: fits header, the loaded header
         """
         return self.load_header(science_file, extname=self.get_extname('Flux'))
+
+    def load_header_keys(self, filename: str, keys: List[str],
+                         kind: str = 'fits file') -> io.LBLHeader:
+        """
+        load_header with only the given keys (same values and comments),
+        without converting the whole header
+
+        :param filename: str, the filename to load
+        :param keys: list of str, the keys to keep
+        :param kind: str, the kind of file we are loading
+
+        :return: LBLHeader with these keys (those present in the file)
+        """
+        hdr = io.load_header(filename, kind, None, self.get_extname('Flux'))
+        return io.LBLHeader.from_fits(hdr, filename, keys=keys)
+
+    def load_science_file_keys(self, science_file: str, keys: List[str]
+                               ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        load_science_file with only the given keys in the header (same
+        values and comments)
+
+        :param science_file: str, the filename to load
+        :param keys: list of str, the header keys to keep
+
+        :return: the science data and header
+        """
+        return self._load_science_file(science_file, keys=keys)
+
+    def template_header_keys(self) -> Optional[List[str]]:
+        """
+        The science header keys used by lbl_template: get_berv (KW_BERV) and
+        populate_sci_table (keep in line with these two methods)
+        """
+        drs_keys = ['KW_BERV', 'KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR']
+        keys = []
+        for drs_key in drs_keys:
+            if drs_key in self.params:
+                keys.append(self.params[drs_key])
+            else:
+                keys.append(str(drs_key))
+        return keys
 
     def science_header_value(self, science_file: str, key: str,
                              dtype: Any = None) -> Any:
