@@ -260,13 +260,14 @@ def __main__(inst: InstrumentsType, **kwargs):
     if nproc is None:
         nproc = 1
     multi_mode = inst.params['ITERATION'] >= 0 and inst.params['TOTAL'] >= 0
-    if nproc > 1 and not multi_mode and recipe_kwargs is not None:
-        compute_parallel(inst, ctx, run, science_files, int(nproc),
-                         recipe_kwargs)
-    else:
-        # loop through each science file
-        for it, science_file in enumerate(science_files):
-            compute_file(inst, ctx, run, it, science_file)
+    with io.fast_fits_config():
+        if nproc > 1 and not multi_mode and recipe_kwargs is not None:
+            compute_parallel(inst, ctx, run, science_files, int(nproc),
+                             recipe_kwargs)
+        else:
+            # loop through each science file
+            for it, science_file in enumerate(science_files):
+                compute_file(inst, ctx, run, it, science_file)
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------
@@ -660,15 +661,16 @@ def worker_main(task_file: str):
     for _, flag in CARRIED_COLUMNS:
         ever_set[flag] = np.zeros(nlines, dtype=bool)
     files = []
-    for it in task['indices']:
-        outputs = compute_file(inst, ctx, run, it, science_files[it])
-        if outputs is None:
-            continue
-        not_set = dict()
-        for _, flag in CARRIED_COLUMNS:
-            ever_set[flag] |= outputs[flag]
-            not_set[flag] = ~ever_set[flag]
-        files.append((outputs['LBLRV_FILE'], copy.deepcopy(not_set)))
+    with io.fast_fits_config():
+        for it in task['indices']:
+            outputs = compute_file(inst, ctx, run, it, science_files[it])
+            if outputs is None:
+                continue
+            not_set = dict()
+            for _, flag in CARRIED_COLUMNS:
+                ever_set[flag] |= outputs[flag]
+                not_set[flag] = ~ever_set[flag]
+            files.append((outputs['LBLRV_FILE'], copy.deepcopy(not_set)))
     end_state = dict()
     for columns, _ in CARRIED_COLUMNS:
         for col in columns:

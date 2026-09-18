@@ -128,7 +128,8 @@ def __main__(inst: InstrumentsType, **kwargs):
             log.info(lmsg)
             log.info('*' * 50)
         # run the full template code
-        run_template(inst, objname, objkind)
+        with io.fast_fits_config():
+            run_template(inst, objname, objkind)
     # return all local variables (for debug)
     return locals()
 
