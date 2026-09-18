@@ -142,6 +142,13 @@ params.set(key='TOTAL', value=-1, source=__NAME__, dtype=int,
                 '-1 means no multiprocessing',
            arg='--total')
 
+# Use the fast (numba) code paths when they are identical to the original
+#    code on this machine (see lbl.core.npreplica); False runs the original
+#    python code everywhere
+params.set(key='FAST_KERNELS', value=True, source=__NAME__, dtype=bool,
+           desc='use the fast (numba) code paths (results identical to the '
+                'original code); False: original python code')
+
 
 # =============================================================================
 # Define generic instrument parameters

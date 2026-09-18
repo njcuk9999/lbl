@@ -14,6 +14,7 @@ import os
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import npreplica
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 from lbl.science import general
@@ -44,6 +45,7 @@ ARGS_COMPIL = [  # core
     'PLOT', 'PLOT_COMPIL_CUMUL', 'PLOT_COMPIL_BINNED',
     # other
     'SKIP_DONE', 'RDB_SUFFIX', 'VERBOSE', 'PROGRAM',
+    'FAST_KERNELS',
 ]
 
 DESCRIPTION_COMPIL = 'Use this code to compile the LBL rdb files'
@@ -65,6 +67,8 @@ def main(**kwargs):
     args = select.parse_args(ARGS_COMPIL, kwargs, DESCRIPTION_COMPIL)
     # load instrument
     inst = select.load_instrument(args, plogger=log)
+    # fast code paths on or off (lbl.core.npreplica)
+    npreplica.set_fast_kernels(inst.params['FAST_KERNELS'])
     # get data directory
     data_dir = io.check_directory(inst.params['DATA_DIR'])
     # move log file (now we have data directory)
