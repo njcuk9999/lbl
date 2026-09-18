@@ -36,9 +36,11 @@ import llvmlite.ir as llvm_ir
 
 # numpy's pairwise summation block size (numpy/_core/src/umath/loops_utils.h)
 PW_BLOCKSIZE = 128
+# the environment variable LBL_FAST_KERNELS=0 forces the original code
+_ENV_FAST = os.environ.get('LBL_FAST_KERNELS', '1') not in ['0', 'False',
+                                                            'false']
 # switch for the fast code paths (see use_fast)
-FAST_KERNELS = os.environ.get('LBL_FAST_KERNELS', '1') not in ['0', 'False',
-                                                               'false']
+FAST_KERNELS = _ENV_FAST
 # result of the self test (None: not run yet)
 _SELF_TEST = None
 # whether the installed bottleneck.nanstd uses a fused multiply-add
@@ -382,12 +384,13 @@ def self_test(verbose: bool = False) -> bool:
 
 def set_fast_kernels(value: bool):
     """
-    Switch the fast code paths on or off (parameter FAST_KERNELS)
+    Switch the fast code paths on or off (parameter FAST_KERNELS); the
+    environment variable LBL_FAST_KERNELS=0 keeps them off
 
     :param value: bool
     """
     global FAST_KERNELS
-    FAST_KERNELS = bool(value)
+    FAST_KERNELS = bool(value) and _ENV_FAST
 
 
 def use_fast() -> bool:
