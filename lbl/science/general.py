@@ -1013,7 +1013,9 @@ def get_scaling_ratio(spectrum1: np.ndarray,
 
 def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
                          model: np.ndarray,
-                         noise_sampling_width: float) -> np.ndarray:
+                         noise_sampling_width: float,
+                         npoints_orders: Optional[List[int]] = None
+                         ) -> np.ndarray:
     """
     Estimate the noise on spectrum given the model
 
@@ -1022,6 +1024,9 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     :param model: np.ndarray, the model
     :param noise_sampling_width: float, the width of the window used to sample
                                    the noise.
+    :param npoints_orders: optional, the number of points of the sliding
+                           window for each order (get_velo_scale of each
+                           order of wavegrid), if already known
 
     :return: np.ndarray, the rms vector for this spectrum give the model
     """
@@ -1036,7 +1041,10 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
             rms[order_num] = np.full(model.shape[1], fill_value=np.nan)
             continue
         # calculate the number of points for the sliding error rms
-        npoints = get_velo_scale(waveord, noise_sampling_width)
+        if npoints_orders is None:
+            npoints = get_velo_scale(waveord, noise_sampling_width)
+        else:
+            npoints = npoints_orders[order_num]
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
         # robust sigma in boxes of npoints pixels, every npoints // 4 pixels
@@ -1071,6 +1079,16 @@ def _spline_group(splines: Dict[str, Any], key: str,
     if key in splines:
         return splines[key]
     return mp.SplineGroup(members)
+
+
+def _native(array: np.ndarray) -> np.ndarray:
+    """
+    Native byte order version of an array (same dtype precision, same
+    values); FITS data are big-endian. No copy if already native.
+    """
+    array = np.asarray(array)
+    return np.ascontiguousarray(array,
+                                dtype=array.dtype.newbyteorder('='))
 
 
 def _f64(array: np.ndarray) -> np.ndarray:
@@ -1188,6 +1206,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     else:
         rms = np.sqrt(np.abs(sci_data) + readout_noise ** 2)
     # -------------------------------------------------------------------------
+    # work on a native byte order copy of the science data (FITS data are
+    #   big-endian): same values, no conversion in every operation below
+    sci_data = _native(sci_data)
     # copy science data
     sci_data0 = np.array(sci_data)
     # get the mid exposure time in MJD
@@ -1198,6 +1219,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # instrument specific wave solution --> use instrument method
     wavegrid = inst.get_wave_solution(data=sci_data, header=sci_hdr,
                                       science_filename=science_file)
+    wavegrid = _native(wavegrid)
+    # window size of the noise model in each order (depends on wavegrid only)
+    noise_npoints = []
+    for order_num in range(wavegrid.shape[0]):
+        if np.sum(np.isfinite(wavegrid[order_num])) < 5:
+            noise_npoints.append(None)
+        else:
+            noise_npoints.append(get_velo_scale(wavegrid[order_num],
+                                                noise_sampling_width))
     # loop around orders
     # for order_num in range(sci_data.shape[0]):
     #    # work out the velocity scale
@@ -1506,7 +1536,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         if not use_noise_model:
 
             rms = estimate_noise_model(sci_data, wavegrid, model,
-                                       noise_sampling_width)
+                                       noise_sampling_width,
+                                       npoints_orders=noise_npoints)
             # work out the number of sigma away from the model
             nsig = (sci_data - model) / rms
             # mask for nsigma
