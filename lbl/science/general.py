@@ -1315,6 +1315,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # a keep mask - for keep good mask lines
     mask_keep = np.ones_like(ref_table['ORDER'], dtype=bool)
+    # lines whose MEANXPIX / MEANBLAZE and RMSRATIO / NPIXLINE / CHI2 values
+    #   in ref_table are set by this file (the others keep the values of a
+    #   previous file)
+    lines_xpix_set = np.zeros(len(ref_table['ORDER']), dtype=bool)
+    lines_stats_set = np.zeros(len(ref_table['ORDER']), dtype=bool)
     # line indices in each order and line edges (for the line-by-line loop)
     line_orders = np.asarray(ref_table['ORDER'], dtype=np.int64)
     order_lines = [np.where(line_orders == order_num)[0]
@@ -1650,6 +1655,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             sproj_all = np.zeros((0, len(orders)))
         # lines that passed the boundary conditions (for the plot)
         passed_bounds = np.zeros(len(orders), dtype=bool)
+        # lines whose RMSRATIO / NPIXLINE / CHI2 are set (last iteration)
+        stats_updated = np.zeros(len(orders), dtype=bool)
         # run the line-by-line loop
         fastmath.line_loop(iteration, flag_last_iter, orders,
                            line_wave_start, line_wave_end,
@@ -1663,7 +1670,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                            ref_table['MEANXPIX'], ref_table['MEANBLAZE'],
                            ref_table['RMSRATIO'], ref_table['NPIXLINE'],
                            ref_table['CHI2'], proj_all, sproj_all,
-                           passed_bounds)
+                           passed_bounds, stats_updated)
+        # keep track of the reference table values set for this file
+        lines_xpix_set |= passed_bounds
+        lines_stats_set |= stats_updated
         # push the residual projections back
         for ikey, key in enumerate(resproj_keys):
             proj_model[key]['proj'] = proj_all[ikey]
@@ -1808,6 +1818,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['HP_WIDTH'] = hp_width
     outputs['TOTAL_DURATION'] = total_time
     outputs['MODEL_VELOCITY'] = model_velocity
+    outputs['LINES_XPIX_SET'] = lines_xpix_set
+    outputs['LINES_STATS_SET'] = lines_stats_set
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs

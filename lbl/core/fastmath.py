@@ -323,11 +323,14 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
               proj_models, min_line_width,
               dv, sdv, d0v, sd0v, d2v, sd2v, d3v, sd3v, frac_line_valid,
               meanxpix, meanblaze, rmsratio, npixline, chi2, proj, sproj,
-              passed_bounds):
+              passed_bounds, stats_updated):
     """
     The 'loop through all lines' block of lbl.science.general.compute_rv,
     with identical arithmetic. Arrays after min_line_width are updated in
     place.
+
+    passed_bounds flags the lines whose meanxpix / meanblaze were set,
+    stats_updated the lines whose rmsratio / npixline / chi2 were set.
 
     x_start_all / x_end_all are the floor()ed pixel positions of the line
     edges (from the wave -> pixel spline of the order), as int64.
@@ -473,6 +476,7 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                 x = diff_seg[i] / mean_rms
                 tmp[i] = x * x
             chi2[line_it] = _bn_nansum(tmp)
+            stats_updated[line_it] = True
 
 
 # =============================================================================
