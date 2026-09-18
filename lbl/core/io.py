@@ -50,6 +50,43 @@ FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
 # =============================================================================
 # Define classes
 # =============================================================================
+def header_set(header: fits.Header, key: str, value: Any,
+               comment: Optional[str]):
+    """
+    Same as header[key] = (value, comment) on an astropy fits.Header, but a
+    new keyword is appended with end=True, which skips astropy's O(n) index
+    update on each insertion (O(n^2) for a whole header).
+
+    The resulting header is identical: astropy only inserts a new keyword
+    before the end when the header ends with blank or commentary cards, and
+    in that case (or for commentary / existing keywords, or wildcards) we
+    fall back to header[key] = (value, comment).
+
+    :param header: fits.Header, updated in place
+    :param key: str, the keyword
+    :param value: the value
+    :param comment: str or None, the comment
+    """
+    # pylint: disable=protected-access
+    # noinspection PyProtectedMember
+    commentary = fits.Card._commentary_keywords
+    lookup = key.strip().upper().removeprefix('HIERARCH ')
+    cards = header._cards
+    fallback = lookup in commentary or lookup in header._keyword_indices
+    fallback |= ('*' in key) or ('?' in key) or ('...' in key)
+    if len(cards) > 0 and not fallback:
+        fallback = cards[-1].is_blank or cards[-1].keyword in commentary
+    if fallback:
+        header[key] = (value, comment)
+        return
+    # same value/comment handling as fits.Header.__setitem__ with a 2-tuple
+    if value is None:
+        value = fits.card.UNDEFINED
+    if comment is None:
+        comment = ''
+    header.append((key, value, comment), end=True)
+
+
 class LBLHeader(UserDict):
     def __init__(self, *arg, **kw):
         """
@@ -180,12 +217,17 @@ class LBLHeader(UserDict):
         :return: LBLHeader, the header
         """
         new = cls()
+        # unique keys, in header order: header[key] of a repeated key always
+        #   returns the same (first card / commentary) value, so copying it
+        #   once gives the same result as copying it at every occurrence
+        #   (a deepcopy of a commentary value copies the whole header)
+        keys = list(dict.fromkeys(header))
         # loop around keys and add them to the header dictionary
-        for key in header:
+        for key in keys:
             new[key] = copy.deepcopy(header[key])
         # add comments
         new.comments = dict()
-        for key in header:
+        for key in keys:
             new.comments[key] = copy.deepcopy(header.comments[key])
         # set filename
         new.filename = filename
@@ -215,7 +257,7 @@ class LBLHeader(UserDict):
             if key in ['COMMENT', 'HISTORY']:
                 continue
             # Add key to dictionary
-            header[outkey] = (self.data[key], self.comments[key])
+            header_set(header, outkey, self.data[key], self.comments[key])
         # return header
         return header
 
@@ -670,6 +712,37 @@ def load_fits(filename: str,
     return np.array(data)
 
 
+def load_fits_multi(filename: str, extnames: List[str],
+                    header_extname: str, kind: Union[str, None] = None
+                    ) -> Tuple[List[np.ndarray], fits.Header]:
+    """
+    Load several image extensions (by name) and one extension header from a
+    fits file, opening the file once. Same data and header as load_fits and
+    load_header (np.array copies of the data, a copy of the header).
+
+    :param filename: str, the filename
+    :param extnames: list of str, the extension names to load the data of
+    :param header_extname: str, the extension name to load the header of
+    :param kind: the kind (for error message)
+
+    :return: tuple, 1. list of data arrays (same order as extnames),
+             2. the header of header_extname
+    """
+    # deal with no kind
+    if kind is None:
+        kind = 'fits file'
+    # try to load fits file
+    try:
+        with fits.open(filename) as hdulist:
+            datas = [np.array(hdulist[extname].data) for extname in extnames]
+            header = hdulist[header_extname].header.copy()
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return datas, header
+
+
 def load_header(filename: str,
                 kind: Union[str, None] = None,
                 extnum: Optional[int] = None,
@@ -833,7 +906,7 @@ def write_fits(filename: str, data: FitsData = None,
                 continue
             # add key
             with warnings.catch_warnings(record=True) as _:
-                hdu0.header[key] = (value, comment)
+                header_set(hdu0.header, key, value, comment)
     # add primary extension to hdu list
     hdus = [hdu0]
     # -------------------------------------------------------------------------
@@ -1091,7 +1164,7 @@ def generate_checksum(filename: str, size: int = 16) -> Optional[str]:
         with open(filename, 'rb') as f:
             # read the file in chunks
             checksum = hashlib.md5()
-            for chunk in iter(lambda: f.read(4096), b""):
+            for chunk in iter(lambda: f.read(1 << 20), b""):
                 checksum.update(chunk)
             # return the checksum
             return checksum.hexdigest()[:size]

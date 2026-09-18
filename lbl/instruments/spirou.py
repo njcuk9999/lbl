@@ -1193,6 +1193,20 @@ class Spirou(Instrument):
 # =============================================================================
 # Define Spirou CADC class
 # =============================================================================
+# last wave solution read by SpirouCADC.load_science_file, so that
+#   get_wave_solution does not read it again: {file key: wave map}
+_WAVE_CACHE = dict()
+
+
+def _file_key(filename: str) -> Tuple[str, int, int]:
+    """
+    Identify a file on disk (path, modification time, size) so that a cached
+    read is not reused if the file changes
+    """
+    stat = os.stat(filename)
+    return str(filename), stat.st_mtime_ns, stat.st_size
+
+
 class SpirouCADC(Spirou):
     def __init__(self, params: base_classes.ParamDict,
                  args: base_classes.ParamDict, name: str = None):
@@ -1268,11 +1282,16 @@ class SpirouCADC(Spirou):
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name
         extname = self.get_extname(flux_extname)
-        # load the first extension of each
-        sci_data = io.load_fits(science_file, kind='science Flux extension',
-                                extname=extname)
-        sci_hdr = self.load_header(science_file, kind='science Flux extension',
-                                   extname=extname)
+        wave_extname = self.get_extname('Wave')
+        # load the flux, its header and the wave solution (file opened once)
+        datas, hdr = io.load_fits_multi(science_file, [extname, wave_extname],
+                                        header_extname=extname,
+                                        kind='science Flux extension')
+        sci_data, wavemap = datas
+        sci_hdr = io.LBLHeader.from_fits(hdr, science_file)
+        # keep the wave solution for get_wave_solution (same file)
+        _WAVE_CACHE.clear()
+        _WAVE_CACHE[_file_key(science_file)] = wavemap
         # return data and header
         return sci_data, sci_hdr
 
@@ -1402,6 +1421,10 @@ class SpirouCADC(Spirou):
         # we load wavelength solution from extension
         # so we do not use data and header
         _ = data, header
+        # wave solution already read with the science data
+        file_key = _file_key(science_filename)
+        if file_key in _WAVE_CACHE:
+            return np.array(_WAVE_CACHE[file_key])
         # load wavemap
         wavemap = io.load_fits(science_filename, 'wave fits extension',
                                extname=self.get_extname('Wave'))
