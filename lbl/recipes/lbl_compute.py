@@ -615,16 +615,44 @@ def _fix_carried_values(lblrv_file: str, not_set: Dict[str, np.ndarray],
                 changes.append((col, rows))
     if len(changes) == 0:
         return False
-    with fits.open(lblrv_file, mode='update') as hdulist:
-        table = hdulist[1].data
-        for col, rows in changes:
-            column = np.array(table[col])
-            column[rows] = state[col][rows]
-            table[col][:] = column
-        # as in compute_rv
-        chi2 = np.array(table['CHI2'], dtype=np.float64)
-        npixline = np.array(table['NPIXLINE'], dtype=np.int64)
-        table['CHI2_VALID_CDF'][:] = 1 - stats.chi2.cdf(chi2, npixline)
+    # layout of the table (offset of the data and record format)
+    columns_used = [col for col, _ in changes] + ['CHI2', 'NPIXLINE',
+                                                  'CHI2_VALID_CDF']
+    with fits.open(lblrv_file, memmap=True) as hdulist:
+        table_hdu = hdulist[1]
+        data_offset = table_hdu._data_offset
+        raw_dtype = table_hdu.data.dtype
+        nrows = table_hdu.header['NAXIS2']
+        scaled = False
+        for column in table_hdu.columns:
+            if column.name in columns_used:
+                scaled |= column.bscale not in (None, 1)
+                scaled |= column.bzero not in (None, 0)
+    if scaled:
+        # columns with scaling: let astropy write them
+        with fits.open(lblrv_file, mode='update') as hdulist:
+            table = hdulist[1].data
+            for col, rows in changes:
+                column = np.array(table[col])
+                column[rows] = state[col][rows]
+                table[col][:] = column
+            # as in compute_rv
+            chi2 = np.array(table['CHI2'], dtype=np.float64)
+            npixline = np.array(table['NPIXLINE'], dtype=np.int64)
+            table['CHI2_VALID_CDF'][:] = 1 - stats.chi2.cdf(chi2, npixline)
+        return True
+    # write the new values in place in the file (big-endian records, as
+    #   astropy writes them)
+    records = np.memmap(lblrv_file, dtype=raw_dtype, mode='r+',
+                        offset=data_offset, shape=(nrows,))
+    for col, rows in changes:
+        records[col][rows] = state[col][rows]
+    # as in compute_rv
+    chi2 = np.array(records['CHI2'], dtype=np.float64)
+    npixline = np.array(records['NPIXLINE'], dtype=np.int64)
+    records['CHI2_VALID_CDF'][:] = 1 - stats.chi2.cdf(chi2, npixline)
+    records.flush()
+    del records
     return True
 
 
