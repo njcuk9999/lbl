@@ -229,11 +229,88 @@ def _estimate_sigma_buf(tmp, q_hi, q_lo, buf):
             n += 1
     if n_fin == 0:
         return np.nan
-    srt = buf[:n]
-    srt.sort()
-    upper = _np_quantile_sorted(srt, n, q_hi)
-    lower = _np_quantile_sorted(srt, n, q_lo)
+    upper, lower = _two_quantiles(buf, n, q_hi, q_lo)
     return (upper - lower) / 2.0
+
+
+@njit(cache=True, error_model='numpy')
+def _quantile_ranks(n, q):
+    """numpy 'linear' quantile q of n values: ranks prev, next and gamma"""
+    v = (n - 1) * q
+    if v >= n - 1:
+        return n - 1, n - 1, v - (-1.0)
+    elif v < 0:
+        return 0, 0, v - 0.0
+    prev = int(np.floor(v))
+    return prev, prev + 1, v - prev
+
+
+@njit(cache=True, error_model='numpy')
+def _lerp(a, b, gamma):
+    """numpy's _lerp"""
+    diff_b_a = b - a
+    if gamma >= 0.5:
+        return b - diff_b_a * (1 - gamma)
+    return a + diff_b_a * gamma
+
+
+@njit(cache=True, error_model='numpy')
+def _two_quantiles(buf, n, q1, q2):
+    """
+    numpy 'linear' quantiles q1 and q2 of buf[:n] (no NaN), by selection:
+    the values of the ranks involved are found with quickselect (buf[:n]
+    is reordered). Same values as from a sorted array.
+    """
+    p1, n1, g1 = _quantile_ranks(n, q1)
+    p2, n2, g2 = _quantile_ranks(n, q2)
+    # the (up to 4) ranks needed, in increasing order, each selected in the
+    #   part of buf that is above the previous one
+    ranks = np.empty(4, dtype=np.int64)
+    ranks[0] = p1
+    ranks[1] = n1
+    ranks[2] = p2
+    ranks[3] = n2
+    ranks.sort()
+    vals = np.empty(4)
+    lo = 0
+    last = -1
+    for ir in range(4):
+        rank = ranks[ir]
+        if rank == last:
+            vals[ir] = vals[ir - 1]
+            continue
+        if rank == last + 1 and last >= 0:
+            # smallest value above the previous rank
+            best = buf[lo]
+            for i in range(lo + 1, n):
+                if buf[i] < best:
+                    best = buf[i]
+            vals[ir] = best
+            # keep the invariant: put it at position rank
+            for i in range(lo, n):
+                if buf[i] == best:
+                    buf[i] = buf[lo]
+                    buf[lo] = best
+                    break
+        else:
+            vals[ir] = _select_range(buf, lo, n - 1, rank)
+        last = rank
+        lo = rank + 1
+    # values at the ranks of each quantile
+    v1p = vals[0]
+    v1n = vals[0]
+    v2p = vals[0]
+    v2n = vals[0]
+    for ir in range(4):
+        if ranks[ir] == p1:
+            v1p = vals[ir]
+        if ranks[ir] == n1:
+            v1n = vals[ir]
+        if ranks[ir] == p2:
+            v2p = vals[ir]
+        if ranks[ir] == n2:
+            v2n = vals[ir]
+    return _lerp(v1p, v1n, g1), _lerp(v2p, v2n, g2)
 
 
 # =============================================================================
@@ -488,8 +565,16 @@ def _select(a, n, k):
     Quickselect: reorder a[:n] (no NaN) so that a[k] is the k-th smallest
     value, with a[:k] <= a[k] <= a[k + 1:n]. Returns a[k].
     """
-    lo = 0
-    hi = n - 1
+    return _select_range(a, 0, n - 1, k)
+
+
+@njit(cache=True, error_model='numpy')
+def _select_range(a, lo, hi, k):
+    """
+    Quickselect within a[lo:hi + 1] (no NaN): reorder it so that a[k] is
+    the value of rank k - lo in it, smaller ones before, larger ones after.
+    Returns a[k].
+    """
     while hi > lo:
         mid = (lo + hi) >> 1
         # median of three as pivot
