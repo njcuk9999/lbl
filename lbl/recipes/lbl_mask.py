@@ -197,10 +197,13 @@ def __main__(inst: InstrumentsType, **kwargs):
         sys_vel = 0.0
     # -------------------------------------------------------------------------
     # remove lines that have a weight that is suscpiciously large
-    med_weight = np.nanmedian(np.abs(line_table['w_mask']))
-    weight_nsig = np.abs(line_table['w_mask']) < 10 * med_weight
-    # cut down the line table
-    line_table = line_table[weight_nsig]
+    #   (not for a mask built from the noise-free model: there the largest
+    #   weights are those of the strongest lines)
+    if not use_model:
+        med_weight = np.nanmedian(np.abs(line_table['w_mask']))
+        weight_nsig = np.abs(line_table['w_mask']) < 10 * med_weight
+        # cut down the line table
+        line_table = line_table[weight_nsig]
     # -------------------------------------------------------------------------
     # Step 7: Write masks to file
     # -------------------------------------------------------------------------

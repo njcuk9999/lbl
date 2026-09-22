@@ -277,6 +277,12 @@ params.set(key='MASK_MODEL_WAVE_MAX', value=2500.0, source=__NAME__,
            desc='Maximum wavelength [nm] of the masks built from the model',
            dtype=float)
 
+# minimum depth of the lines of the masks built from the stellar model
+#   (absolute value of the depth column: local minima and local maxima)
+params.set(key='MASK_MODEL_MIN_DEPTH', value=0.01, source=__NAME__,
+           desc='Minimum depth of the lines of the masks built from the '
+                'model', dtype=float)
+
 # nominal SNR per pixel given to the (noise-free) stellar model: the
 #   line_snr column of the masks built from the model is depth * this value
 #   (lines with line_snr < 3 are not used in the rough CCF of the model)
@@ -959,6 +965,11 @@ params.set(key='KW_MASK_MODEL_WMIN', value='LBLMMWMN', source=__NAME__,
 params.set(key='KW_MASK_MODEL_WMAX', value='LBLMMWMX', source=__NAME__,
            desc='the maximum wavelength of a mask built from the model',
            comment='LBL model mask max wavelength [nm]')
+
+# define the minimum line depth of a mask built from the model
+params.set(key='KW_MASK_MODEL_MINDEPTH', value='LBLMMDEP', source=__NAME__,
+           desc='the minimum line depth of a mask built from the model',
+           comment='LBL model mask min line depth')
 
 # define the lbl object name key for header
 params.set(key='KW_LBL_OBJNAME', value='LBL_OBJS', source=__NAME__,

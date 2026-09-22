@@ -3458,6 +3458,9 @@ def find_model_mask_lines(inst: InstrumentsType, m_wavemap: np.ndarray,
     # keep the lines within the mask domain
     keep = line_table['ll_mask_s'] > wavemin
     keep &= line_table['ll_mask_s'] < wavemax
+    # keep the lines deeper than MASK_MODEL_MIN_DEPTH (the noise-free model
+    #   has many shallow features that are not seen in the data)
+    keep &= np.abs(line_table['depth']) > params['MASK_MODEL_MIN_DEPTH']
     # return the mask table
     return line_table[keep]
 
@@ -3465,7 +3468,7 @@ def find_model_mask_lines(inst: InstrumentsType, m_wavemap: np.ndarray,
 def model_mask_header(inst: InstrumentsType) -> io.LBLHeader:
     """
     Header keys of a mask built from the stellar model: the model file, the
-    resolution and the wavelength domain
+    resolution, the wavelength domain and the minimum line depth
 
     :param inst: the instrument class
 
@@ -3485,6 +3488,8 @@ def model_mask_header(inst: InstrumentsType) -> io.LBLHeader:
                           float(params['MASK_MODEL_WAVE_MIN']))
     hdict = inst.set_hkey(hdict, 'KW_MASK_MODEL_WMAX',
                           float(params['MASK_MODEL_WAVE_MAX']))
+    hdict = inst.set_hkey(hdict, 'KW_MASK_MODEL_MINDEPTH',
+                          float(params['MASK_MODEL_MIN_DEPTH']))
     # return the header keys
     return hdict
 
@@ -3492,8 +3497,8 @@ def model_mask_header(inst: InstrumentsType) -> io.LBLHeader:
 def check_model_mask(inst: InstrumentsType, mask_file: str):
     """
     Warn if an existing mask built from the stellar model was built with a
-    different model (e.g. log g), resolution or wavelength domain: the mask
-    name only contains the model temperature
+    different model (e.g. log g), resolution, wavelength domain or minimum
+    line depth: the mask name only contains the model temperature
 
     :param inst: the instrument class
     :param mask_file: str, the mask file
