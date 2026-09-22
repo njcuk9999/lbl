@@ -242,6 +242,7 @@ def main(runparams: dict):
                              object_comparison=object_comparison,
                              blaze_corrected=blaze_corr,
                              blaze_file=blaze_file,
+                             object_teff=object_teff,
                              skip_done=runparams['SKIP_LBL_COMPUTE'],
                              **keyword_args)
         # ---------------------------------------------------------------------

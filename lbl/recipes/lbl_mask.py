@@ -9,6 +9,7 @@ Created on 2021-08-24
 
 @author: cook
 """
+import glob
 import os
 
 import numpy as np
@@ -46,7 +47,7 @@ ARGS_MASK = [  # core
     # plotting
     'PLOT', 'PLOT_MASK_CCF',
     # other
-    'OVERWRITE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
+    'OVERWRITE', 'VERBOSE', 'PROGRAM', 'MASK_FILE', 'MASK_FROM_MODEL',
 ]
 
 DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'
@@ -117,13 +118,24 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
-    # mask filename
-    mask_file = inst.mask_file(models_dir, mask_dir, required=False)
-    # template filename
-    template_file = inst.template_file(template_dir, 'comparison')
-    # get template file
-    template_table, template_hdr = inst.load_template(template_file,
-                                                      get_hdr=True)
+    # masks built from the stellar model (MASK_FROM_MODEL) instead of the
+    #   template (science data only)
+    use_model = inst.use_model_mask()
+    if inst.params['MASK_FROM_MODEL'] and not use_model:
+        msg = 'MASK_FROM_MODEL is only used for science data (DATA_TYPE={0})'
+        log.warning(msg.format(inst.params['DATA_TYPE']))
+    # mask filename (the template is not used for a mask built from the
+    #   model)
+    if use_model:
+        mask_file = inst.model_mask_file(mask_dir, required=False)
+        template_table, template_hdr = None, None
+    else:
+        mask_file = inst.mask_file(models_dir, mask_dir, required=False)
+        # template filename
+        template_file = inst.template_file(template_dir, 'comparison')
+        # get template file
+        template_table, template_hdr = inst.load_template(template_file,
+                                                          get_hdr=True)
     # see if the template is a calibration template
     flag_calib = inst.params['DATA_TYPE'] != 'SCIENCE'
 
@@ -135,6 +147,10 @@ def __main__(inst: InstrumentsType, **kwargs):
         msg = 'Mask {0} exists. Skipping mask creation. '
         log.warning(msg.format(mask_file))
         log.warning('Set --overwrite to recalculate mask')
+        # a mask built from the model is named after the model temperature
+        #   only: warn if it was built with other model settings
+        if use_model:
+            general.check_model_mask(inst, mask_file)
         # return here
         return locals()
     elif os.path.exists(mask_file) and inst.params['OVERWRITE']:
@@ -153,12 +169,22 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 5: Find the lines (regions of sign change in the derivative)
     # -------------------------------------------------------------------------
-    line_table = general.find_mask_lines(inst, template_table)
+    if use_model:
+        line_table = general.find_model_mask_lines(inst, m_wavemap,
+                                                   m_spectrum)
+        # the mask header gets the model settings (not the template header)
+        template_hdr = general.model_mask_header(inst)
+    else:
+        line_table = general.find_mask_lines(inst, template_table)
 
     # -------------------------------------------------------------------------
     # Step 6: Work out systemic velocity for the template
     # -------------------------------------------------------------------------
-    if not flag_calib:
+    if use_model:
+        # the lines of the model are in its rest frame: the systemic velocity
+        #   of each template is measured in lbl_compute
+        sys_vel = 0.0
+    elif not flag_calib:
         # work out the systemic velocity in km/s
         sys_vel = general.mask_systemic_velocity(inst, line_table, m_wavemap,
                                                  m_spectrum)
@@ -194,8 +220,18 @@ def __main__(inst: InstrumentsType, **kwargs):
     # get ref table filename (None if not set)
     reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir,
                                                          mask_file)
-    # remove ref table if it exists
-    if reftable_exists:
+    # a mask built from the model is shared by all objects and instruments:
+    #   remove the ref tables of all of them
+    if use_model:
+        mask_name = os.path.basename(mask_file).replace('.fits', '')
+        reftable_files = glob.glob(os.path.join(
+            lbl_reftable_dir, 'ref_table_{0}_*'.format(mask_name)))
+    elif reftable_exists:
+        reftable_files = [reftable_file]
+    else:
+        reftable_files = []
+    # remove ref tables if they exist
+    for reftable_file in reftable_files:
         # print removal
         msg = f'Removing old reftable for this mask: {reftable_file}'
         log.warning(msg)

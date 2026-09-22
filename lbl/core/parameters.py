@@ -249,6 +249,41 @@ params.set(key='MASK_FILE', value='None', source=__NAME__,
            desc='Override the mask to be used (within mask dir or full path)',
            arg='--mask_file', dtype=str)
 
+# build the masks (full, pos, neg) from the stellar model instead of the
+#   template (science data only). The masks are named after the model
+#   (e.g. LBL_Mask_model3100K_full.fits), not after the object, and cover
+#   MASK_MODEL_WAVE_MIN to MASK_MODEL_WAVE_MAX (any instrument)
+params.set(key='MASK_FROM_MODEL', value=False, source=__NAME__,
+           desc='Build the masks from the stellar model (closest Teff to '
+                'OBJECT_TEFF) instead of the template (science data only)',
+           arg='--mask_from_model', dtype=bool)
+
+# resolution (lambda/dlambda) the stellar model is convolved to before
+#   finding the lines of a mask built from the model. Below the resolution
+#   of all instruments: the line edges (local maxima) of the mask are then
+#   resolved by all of them (on GL725B / SPIRou, the RV uncertainties are
+#   5% larger than with the template mask at R=40000-50000, 14% at 100000
+#   and 26% at 150000)
+params.set(key='MASK_MODEL_RESOLUTION', value=50000, source=__NAME__,
+           desc='Resolution the stellar model is convolved to for the masks '
+                'built from the model', dtype=float)
+
+# wavelength domain [nm] of the masks built from the stellar model
+#   (from the blue to the K band, for all instruments)
+params.set(key='MASK_MODEL_WAVE_MIN', value=300.0, source=__NAME__,
+           desc='Minimum wavelength [nm] of the masks built from the model',
+           dtype=float)
+params.set(key='MASK_MODEL_WAVE_MAX', value=2500.0, source=__NAME__,
+           desc='Maximum wavelength [nm] of the masks built from the model',
+           dtype=float)
+
+# nominal SNR per pixel given to the (noise-free) stellar model: the
+#   line_snr column of the masks built from the model is depth * this value
+#   (lines with line_snr < 3 are not used in the rough CCF of the model)
+params.set(key='MASK_MODEL_SNR', value=1000.0, source=__NAME__,
+           desc='Nominal SNR per pixel of the stellar model (line_snr of the '
+                'masks built from the model)', dtype=float)
+
 # Define ref table format
 params.set(key='REF_TABLE_FMT', value='csv', source=__NAME__,
            desc='Ref table format (i.e. csv)')
@@ -906,6 +941,24 @@ params.set(key='KW_INSTMODE', value='LBLIMODE', source=__NAME__,
 params.set(key='KW_MASK_TYPE', value='LBLMSKTP', source=__NAME__,
            desc='the lbl mask type key for header (neg, pos, full)',
            comment='LBL mask type (neg, pos, full)')
+
+# define the stellar model a mask was built from (MASK_FROM_MODEL)
+params.set(key='KW_MASK_MODEL', value='LBLMMODL', source=__NAME__,
+           desc='the stellar model a mask was built from',
+           comment='LBL mask built from this stellar model')
+
+# define the resolution of the model a mask was built from
+params.set(key='KW_MASK_MODEL_RES', value='LBLMMRES', source=__NAME__,
+           desc='the resolution of the model a mask was built from',
+           comment='LBL model mask resolution')
+
+# define the wavelength domain of a mask built from the model
+params.set(key='KW_MASK_MODEL_WMIN', value='LBLMMWMN', source=__NAME__,
+           desc='the minimum wavelength of a mask built from the model',
+           comment='LBL model mask min wavelength [nm]')
+params.set(key='KW_MASK_MODEL_WMAX', value='LBLMMWMX', source=__NAME__,
+           desc='the maximum wavelength of a mask built from the model',
+           comment='LBL model mask max wavelength [nm]')
 
 # define the lbl object name key for header
 params.set(key='KW_LBL_OBJNAME', value='LBL_OBJS', source=__NAME__,

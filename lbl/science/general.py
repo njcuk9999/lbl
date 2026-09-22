@@ -3387,6 +3387,155 @@ def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
     return sys_vel
 
 
+def find_model_mask_lines(inst: InstrumentsType, m_wavemap: np.ndarray,
+                          m_spectrum: np.ndarray) -> Table:
+    """
+    Get the mask lines from the stellar model (MASK_FROM_MODEL): the model
+    is convolved to MASK_MODEL_RESOLUTION, resampled on a constant velocity
+    grid and its lines are found as for a template (find_mask_lines), between
+    MASK_MODEL_WAVE_MIN and MASK_MODEL_WAVE_MAX. The lines are in the rest
+    frame of the model.
+
+    :param inst: the instrument class
+    :param m_wavemap: np.ndarray, the 1D model wave map [nm]
+    :param m_spectrum: np.ndarray, the 1D model flux spectrum
+
+    :return: astropy table, the table of lines
+    """
+    # get parameters from instrument class
+    params = inst.params
+    resolution = params['MASK_MODEL_RESOLUTION']
+    wavemin = params['MASK_MODEL_WAVE_MIN']
+    wavemax = params['MASK_MODEL_WAVE_MAX']
+    # resolution element (FWHM) in m/s
+    fwhm = speed_of_light_ms / resolution
+    # grid step: 6 points per resolution element
+    dv_grid = fwhm / 6
+    # domain padded by 1000 km/s so that the edges of the convolution and of
+    #   the derivatives are outside the mask
+    wave0 = mp.doppler_shift(wavemin, 1000e3)
+    wave1 = mp.doppler_shift(wavemax, -1000e3)
+    if wave0 < np.min(m_wavemap) or wave1 > np.max(m_wavemap):
+        emsg = ('Stellar model ({0:.1f} to {1:.1f} nm) does not cover the '
+                'model mask domain (MASK_MODEL_WAVE_MIN={2}, '
+                'MASK_MODEL_WAVE_MAX={3})')
+        margs = [np.min(m_wavemap), np.max(m_wavemap), wavemin, wavemax]
+        raise LblException(emsg.format(*margs))
+    # print progress
+    msg = 'Convolving the stellar model to R={0:.0f} ({1:.1f} to {2:.1f} nm)'
+    log.general(msg.format(resolution, wavemin, wavemax))
+    # the model is interpolated on a 4 times finer constant velocity grid
+    #   and convolved there. It is converted to photons (the model is an
+    #   energy flux, the templates are in photons)
+    fine_grid = get_magic_grid(wave0, wave1, dv_grid=dv_grid / 4)
+    keep = (m_wavemap > 0.99 * wave0) & (m_wavemap < 1.01 * wave1)
+    fine_flux = np.interp(fine_grid, m_wavemap[keep],
+                          m_spectrum[keep] * m_wavemap[keep])
+    # gaussian kernel of the resolution element (in fine grid points)
+    sigma = fwhm / mp.fwhm_value() / (dv_grid / 4)
+    xkernel = np.arange(-int(np.ceil(5 * sigma)), int(np.ceil(5 * sigma)) + 1)
+    kernel = np.exp(-0.5 * (xkernel / sigma) ** 2)
+    fine_flux = np.convolve(fine_flux, kernel / np.sum(kernel), mode='same')
+    # model on the constant velocity grid of the mask (normalized flux)
+    grid = get_magic_grid(wave0, wave1, dv_grid=dv_grid)
+    flux = np.interp(grid, fine_grid, fine_flux)
+    flux = flux / np.median(flux)
+    # -------------------------------------------------------------------------
+    # model as a template table: the noise-free model gets a nominal SNR per
+    #   pixel and the savgol derivatives are computed at the resolution of
+    #   the model (as lbl_template does at the instrument resolution)
+    model_table = Table()
+    model_table['wavelength'] = grid
+    model_table['flux'] = flux
+    model_table['rms'] = flux / params['MASK_MODEL_SNR']
+    savgol_fluxes = inst.calculate_savgol_template(dv_grid=dv_grid,
+                                                   flux_dict=dict(flux=flux),
+                                                   approx_res=resolution)
+    for key in savgol_fluxes:
+        model_table[key] = savgol_fluxes[key]
+    # find the lines as for a template
+    line_table = find_mask_lines(inst, model_table)
+    # keep the lines within the mask domain
+    keep = line_table['ll_mask_s'] > wavemin
+    keep &= line_table['ll_mask_s'] < wavemax
+    # return the mask table
+    return line_table[keep]
+
+
+def model_mask_header(inst: InstrumentsType) -> io.LBLHeader:
+    """
+    Header keys of a mask built from the stellar model: the model file, the
+    resolution and the wavelength domain
+
+    :param inst: the instrument class
+
+    :return: io.LBLHeader, the header keys
+    """
+    # get parameters from instrument class
+    params = inst.params
+    # the stellar model file used
+    fkwargs = inst.get_stellar_model_format_dict(params)
+    model_file = params['STELLAR_MODEL_FILE'].format(**fkwargs)
+    # push into header
+    hdict = io.LBLHeader()
+    hdict = inst.set_hkey(hdict, 'KW_MASK_MODEL', model_file)
+    hdict = inst.set_hkey(hdict, 'KW_MASK_MODEL_RES',
+                          float(params['MASK_MODEL_RESOLUTION']))
+    hdict = inst.set_hkey(hdict, 'KW_MASK_MODEL_WMIN',
+                          float(params['MASK_MODEL_WAVE_MIN']))
+    hdict = inst.set_hkey(hdict, 'KW_MASK_MODEL_WMAX',
+                          float(params['MASK_MODEL_WAVE_MAX']))
+    # return the header keys
+    return hdict
+
+
+def check_model_mask(inst: InstrumentsType, mask_file: str):
+    """
+    Warn if an existing mask built from the stellar model was built with a
+    different model (e.g. log g), resolution or wavelength domain: the mask
+    name only contains the model temperature
+
+    :param inst: the instrument class
+    :param mask_file: str, the mask file
+
+    :return: None, logs a warning for each difference
+    """
+    # load the mask header
+    mask_hdr = inst.load_header(mask_file, kind='mask fits file')
+    # compare with the current model mask settings
+    expected = model_mask_header(inst)
+    for key in expected:
+        value = mask_hdr[key] if key in mask_hdr else None
+        if value != expected[key]:
+            msg = ('Mask {0} was built with {1}={2} (current settings: {3}). '
+                   'Set --overwrite to recalculate mask')
+            log.warning(msg.format(mask_file, key, value, expected[key]))
+
+
+def template_systemic_velocity(inst: InstrumentsType, template_file: str,
+                               models_dir: str) -> float:
+    """
+    Systemic velocity of a template relative to the stellar model, measured
+    as lbl_mask does for the masks built from the template (lines of the
+    template correlated with the model). Used with the masks built from the
+    model (in the rest frame of the model, shared by all objects)
+
+    :param inst: the instrument class
+    :param template_file: str, the template file
+    :param models_dir: str, the model directory
+
+    :return: float, the systemic velocity in km/s
+    """
+    # load the template
+    template_table = inst.load_template(template_file)
+    # get the stellar model
+    m_wavemap, m_spectrum = get_stellar_models(inst, models_dir)
+    # find the lines of the template
+    line_table = find_mask_lines(inst, template_table)
+    # return the systemic velocity of the template lines against the model
+    return mask_systemic_velocity(inst, line_table, m_wavemap, m_spectrum)
+
+
 # =============================================================================
 # Start of code
 # =============================================================================

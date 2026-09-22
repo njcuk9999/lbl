@@ -238,6 +238,7 @@ def main(**kwargs):
     # All others are True by default
     wrap_dict['RUN_LBL_TEMPLATE'] = True
     wrap_dict['RUN_LBL_MASK'] = True
+    wrap_dict['MASK_FROM_MODEL'] = False
     wrap_dict['RUN_LBL_COMPUTE'] = True
     wrap_dict['RUN_LBL_COMPILE'] = True
     wrap_dict['SKIP_LBL_TEMPLATE'] = True

@@ -58,6 +58,9 @@ ARGS_COMPUTE = [  # core
     'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
     # other
     'SKIP_DONE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
+    # masks built from the stellar model
+    'MASK_FROM_MODEL', 'OBJECT_TEFF', 'OBJECT_LOGG', 'OBJECT_Z',
+    'OBJECT_ALPHA',
     # multiprocessing arguments
     'ITERATION', 'TOTAL', 'COMPUTE_NPROC',
 ]
@@ -163,8 +166,11 @@ def setup_compute(inst: InstrumentsType,
     # -------------------------------------------------------------------------
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
-    # mask filename
-    mask_file = inst.mask_file(models_dir, mask_dir)
+    # mask filename (built from the stellar model or from the template)
+    if inst.use_model_mask():
+        mask_file = inst.model_mask_file(mask_dir)
+    else:
+        mask_file = inst.mask_file(models_dir, mask_dir)
     # template filename
     # TODO: Sort out inst.template_file
     science_template_file = inst.template_file(template_dir, 'science')
@@ -201,6 +207,15 @@ def setup_compute(inst: InstrumentsType,
     # get systemic velocity for the comparison template
     cargs = [inst, comparison_template_file, mask_file]
     comparison_sys_vel_props = general.get_systemic_vel_props(*cargs)
+    # a mask built from the stellar model is in the rest frame of the model
+    #   (shared by all objects): the template is shifted by its own systemic
+    #   velocity relative to the model, measured as lbl_mask does for the
+    #   masks built from the template
+    if inst.use_model_mask():
+        sys_vel = general.template_systemic_velocity(
+            inst, comparison_template_file, models_dir)
+        science_sys_vel_props['MASK_SYS_VEL'] = 1000 * sys_vel
+        comparison_sys_vel_props['MASK_SYS_VEL'] = 1000 * sys_vel
 
     # -------------------------------------------------------------------------
     # Step 5: spline the template

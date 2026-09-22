@@ -84,6 +84,12 @@ if __name__ == "__main__":
     rparams['RUN_LBL_TEMPLATE'] = True
     # Whether to create a mask using the template created or supplied
     rparams['RUN_LBL_MASK'] = True
+    # Whether to create the masks (full, pos, neg) from the stellar model
+    #   (closest Teff to OBJECT_TEFF) instead of the template. These masks
+    #   cover the blue to the K band, are named after the model temperature
+    #   (e.g. LBL_Mask_model3100K_full.fits) and not after the object, and
+    #   can be used with any instrument (science data only)
+    rparams['MASK_FROM_MODEL'] = False
     # Whether to run the LBL compute step - which computes the line by line
     #   for each observation
     rparams['RUN_LBL_COMPUTE'] = True

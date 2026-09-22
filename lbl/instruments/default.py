@@ -61,6 +61,9 @@ class Instrument:
         self.npixel: Optional[int] = None
         self.default_template_name = 'LBL_Template_{0}_default.fits'
         self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_default.fits'
+        # masks built from the stellar model (MASK_FROM_MODEL): named after
+        #   the model temperature, the same for all objects and instruments
+        self.model_mask_name = 'LBL_Mask_model{teff}K_{mtype}.fits'
         self.default_sample_wave_name = 'sample_wave_grid_default.fits'
         # extension of the science files
         self.science_ext = '.fits'
@@ -251,6 +254,13 @@ class Instrument:
         self._set_object_comparison()
         # set object name
         mask_name = os.path.basename(mask_file).replace('.fits', '')
+        # a mask built from the stellar model is shared by all objects and
+        #   instruments: the ref table (lines per order of this instrument)
+        #   is kept per object and instrument
+        if self.use_model_mask():
+            mask_name = '{0}_{1}_{2}_{3}'.format(
+                mask_name, self.params['OBJECT_COMPARISON'],
+                self.params['INSTRUMENT'], self.params['DATA_SOURCE'])
         # set base name
         basename = 'ref_table_{0}.csv'.format(mask_name)
         # get absolute path
@@ -565,12 +575,14 @@ class Instrument:
                         f'is valid in the template.')
 
     def calculate_savgol_template(self, dv_grid: float,
-                                  flux_dict: Dict[str, np.ndarray]):
+                                  flux_dict: Dict[str, np.ndarray],
+                                  approx_res: Optional[float] = None):
         # check if we are using savgol templates
         if not self.params['USE_SAVGOL_TEMPLATE']:
             return dict()
-        # get approximate resolution in m/s
-        approx_res = self.params['APPROX_RESOLUTION']
+        # get approximate resolution in m/s (default: the instrument's)
+        if approx_res is None:
+            approx_res = self.params['APPROX_RESOLUTION']
         # get the rough number of pixels per fwhm
         pix_per_fwhm = np.round((mp.speed_of_light_ms / dv_grid) / approx_res)
         # get the window size
@@ -884,6 +896,51 @@ class Instrument:
         """
         _ = model_directory, mask_directory
         raise self._not_implemented('mask_file')
+
+    def use_model_mask(self) -> bool:
+        """
+        Whether the masks are built from the stellar model (MASK_FROM_MODEL)
+        instead of the template (science data only)
+
+        :return: bool, True if the masks are built from the stellar model
+        """
+        if not self.params['MASK_FROM_MODEL']:
+            return False
+        return self.params['DATA_TYPE'] == 'SCIENCE'
+
+    def model_mask_file(self, mask_directory: str,
+                        required: bool = True) -> str:
+        """
+        Make the absolute path for a mask built from the stellar model: the
+        name contains the model temperature (closest Teff of the model grid
+        to OBJECT_TEFF), not the object name
+
+        :param mask_directory: str, the directory the mask is located at
+        :param required: bool, if True checks that file exists on disk
+
+        :return: absolute path to mask file
+        """
+        # a mask file given by the user cannot be used with a model mask
+        if self.params['MASK_FILE'] not in [None, 'None', '', 'Null']:
+            emsg = ('MASK_FROM_MODEL=True cannot be used with MASK_FILE={0} '
+                    '(Must be unset)')
+            raise LblException(emsg.format(self.params['MASK_FILE']))
+        # get data type
+        data_type = self.params['DATA_TYPE']
+        # get type of mask
+        mask_type = self.params['{0}_MASK_TYPE'.format(data_type)]
+        # temperature of the stellar model
+        fkwargs = self.get_stellar_model_format_dict(self.params)
+        teff = int(fkwargs['TEFF'])
+        # define base name
+        basename = self.model_mask_name.format(teff=teff, mtype=mask_type)
+        # get absolute path
+        abspath = os.path.join(mask_directory, basename)
+        # check that this file exists
+        if required:
+            io.check_file_exists(abspath, 'mask')
+        # return absolute path
+        return abspath
 
     def template_file(self, directory: str, tkind: str,
                       required: bool = True) -> str:
