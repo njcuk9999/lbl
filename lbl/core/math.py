@@ -1068,21 +1068,10 @@ def gaussian_weighted_savgol(data: np.ndarray,
     """
     data = np.asarray(data, dtype=float)
 
-    # Total window is 3× the window_size, rounded to next odd number
-    total_window = int(3 * window_size)
-    if total_window % 2 == 0:
-        total_window += 1
-
-    half_window = total_window // 2
-
-    # Gaussian weights: FWHM = 2 * sqrt(2 * ln(2)) * sigma ≈ 2.355 * sigma
-    sigma = window_size / (2 * np.sqrt(2 * np.log(2)))
-    x_window = np.arange(-half_window, half_window + 1)
-    weights = np.exp(-x_window ** 2 / (2 * sigma ** 2))
-
-    # Precompute filter coefficients for the no-NaN case
-    coeffs = _compute_weighted_savgol_coeffs(half_window, polyorder,
-                                             deriv, delta, weights)
+    # the gaussian weights and the coefficients of the filter
+    weights, coeffs = gaussian_weighted_savgol_coeffs(window_size, polyorder,
+                                                      deriv, delta)
+    half_window = len(weights) // 2
 
     # Check for NaNs
     has_nans = np.any(np.isnan(data))
@@ -1094,6 +1083,39 @@ def gaussian_weighted_savgol(data: np.ndarray,
         # Slow path: handle NaNs
         return _apply_filter_with_nans(data, coeffs, weights, half_window,
                                        polyorder, deriv, delta)
+
+
+def gaussian_weighted_savgol_coeffs(window_size: int, polyorder: int,
+                                    deriv: int = 0, delta: float = 1.0
+                                    ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Gaussian weights and coefficients of the gaussian weighted savgol filter
+    (the no-NaN case): the filtered value at a point is the sum of the
+    coefficients times the values around it
+
+    Used by gaussian_weighted_savgol, and by the mask code to propagate the
+    uncertainties through the filter (the filter is linear)
+
+    :param window_size: int, FWHM of the gaussian weights [points]
+    :param polyorder: int, polynomial order of the fit
+    :param deriv: int, derivative order (0 = smoothing only)
+    :param delta: float, sample spacing for the derivative scaling
+
+    :return: tuple, 1. the gaussian weights, 2. the coefficients of the filter
+    """
+    # Total window is 3× the window_size, rounded to next odd number
+    total_window = int(3 * window_size)
+    if total_window % 2 == 0:
+        total_window += 1
+    half_window = total_window // 2
+    # Gaussian weights: FWHM = 2 * sqrt(2 * ln(2)) * sigma ≈ 2.355 * sigma
+    sigma = window_size / (2 * np.sqrt(2 * np.log(2)))
+    x_window = np.arange(-half_window, half_window + 1)
+    weights = np.exp(-x_window ** 2 / (2 * sigma ** 2))
+    # the coefficients of the filter
+    coeffs = _compute_weighted_savgol_coeffs(half_window, polyorder, deriv,
+                                             delta, weights)
+    return weights, coeffs
 
 
 def _apply_filter_fast(data: np.ndarray, coeffs: np.ndarray,

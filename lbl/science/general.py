@@ -3393,6 +3393,359 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     return table
 
 
+def template_uncertainty(inst: InstrumentsType, template_table: Table,
+                         template_hdr: io.LBLHeader) -> np.ndarray:
+    """
+    Uncertainty of each point of the template
+
+    The template flux is the median of nbin binned spectra (nbin is the number
+    of files of the template, capped at TEMPLATE_MEDBINMAX) and the rms column
+    is (p84 - p16) / 2 of these spectra, which is their standard deviation, so
+    the uncertainty of the median is sqrt(pi / 2) rms / sqrt(nbin)
+
+    :param inst: Instrument instance
+    :param template_table: astropy Table, the template
+    :param template_hdr: io.LBLHeader, the header of the template
+
+    :return: np.ndarray, the uncertainty of each point of the template
+    """
+    # number of files the template was made of
+    nfiles = template_hdr.get_hkey(inst.params['KW_NTFILES'], dtype=int)
+    # they are stacked in at most TEMPLATE_MEDBINMAX bins (lbl_template)
+    nbin = int(min(inst.params['TEMPLATE_MEDBINMAX'], nfiles))
+    # sqrt(pi / 2): uncertainty of a median vs uncertainty of a mean
+    median_to_mean = np.sqrt(np.pi / 2)
+    # the uncertainty of the median of the nbin binned spectra
+    return median_to_mean * np.array(template_table['rms']) / np.sqrt(nbin)
+
+
+def savgol_window_of_template(inst: InstrumentsType,
+                              template_table: Table) -> int:
+    """
+    Width of the savgol window lbl_template applied to this template: one
+    resolution element of the instrument, in points of the grid of the
+    template (as calculate_savgol_template computes it)
+
+    The resolution comes from the parameters of the instrument
+    (APPROX_RESOLUTION) and the dispersion (the step of the grid, in velocity)
+    from the template itself. As a safety net the window is also measured on
+    the template (it keeps both the raw and the filtered flux, so the window
+    that turns one into the other is the one that was used) and a warning is
+    given if the two disagree.
+
+    :param inst: Instrument instance
+    :param template_table: astropy Table, the template
+
+    :return: int, the width of the window [points]
+    """
+    # the wavelength grid of the template is at constant velocity: its step
+    wavegrid = np.array(template_table['wavelength'])
+    dispersion = mp.nanmedian(np.diff(np.log(wavegrid))) * speed_of_light_ms
+    # one resolution element of the instrument, in points of that grid
+    resolution_element = speed_of_light_ms / inst.params['APPROX_RESOLUTION']
+    window = int(np.round(resolution_element / dispersion))
+    # the window must have a centre
+    if window % 2 == 0:
+        window += 1
+    # -------------------------------------------------------------------------
+    # safety net: the window that the template itself says was used
+    # -------------------------------------------------------------------------
+    measured = measure_savgol_window(template_table)
+    if measured != window:
+        wmsg = ('The resolution gives a savgol window of {0} points but the '
+                'template was filtered with {1} points: using {1}')
+        log.warning(wmsg.format(window, measured))
+        window = measured
+    # print progress
+    msg = ('Template: dispersion {0:.2f} km/s, resolution element {1:.2f} '
+           'km/s, savgol window {2} points')
+    margs = [dispersion / 1000, resolution_element / 1000, window]
+    log.general(msg.format(*margs))
+    # return the window
+    return window
+
+
+def measure_savgol_window(template_table: Table, max_window: int = 41,
+                          max_points: int = 100000) -> int:
+    """
+    Width of the savgol window lbl_template used, measured on the template
+
+    The template keeps both the raw flux and the filtered one
+    (flux_savgol_d0). The filter is fully defined by the width of its window,
+    so the widths are tried one by one and the one that turns the raw flux
+    into the filtered flux is the one that was used: it reproduces it to the
+    rounding of the numbers while the others are off by orders of magnitude.
+
+    The test is done on the longest run of points without a hole, because
+    around the holes the coefficients are recomputed to ignore the NaNs.
+
+    :param template_table: astropy Table, the template
+    :param max_window: int, the largest window tried [points]
+    :param max_points: int, how many points of the template to use
+
+    :return: int, the width of the window [points]
+    """
+    flux = np.array(template_table['flux'])
+    filtered = np.array(template_table['flux_savgol_d0'])
+    # the longest run of points where both are finite
+    finite = np.isfinite(flux) & np.isfinite(filtered)
+    steps = np.diff(np.concatenate([[0], finite.astype(int), [0]]))
+    starts, ends = np.flatnonzero(steps > 0), np.flatnonzero(steps < 0)
+    longest = int(np.argmax(ends - starts))
+    start = starts[longest]
+    end = int(min(ends[longest], start + max_points))
+    flux, filtered = flux[start:end], filtered[start:end]
+    # scale of the variations of the template, to judge the residuals
+    scale = np.std(filtered)
+    # try every odd window
+    best_window, best_residual = 0, np.inf
+    for window in range(3, max_window + 1, 2):
+        _, coeffs = mp.gaussian_weighted_savgol_coeffs(window, 3, 0)
+        half_window = len(coeffs) // 2
+        padded = np.pad(flux, half_window, mode='reflect')
+        trial = np.convolve(padded, coeffs[::-1], mode='valid')
+        # the edges of the chunk are ignored (the padding is not LBL's)
+        residual = np.std((trial - filtered)[half_window:-half_window]) / scale
+        if residual < best_residual:
+            best_window, best_residual = window, residual
+    # return the best window
+    return best_window
+
+
+def derivative_uncertainty(sigma_template: np.ndarray,
+                           coeffs: np.ndarray) -> np.ndarray:
+    """
+    Uncertainty of the savgol derivative of the template, point by point
+
+    The savgol filter is linear: the derivative at a point is a fixed
+    combination of the fluxes around it, with the coefficients of the filter,
+    so its variance is the sum of the variances of these fluxes times the
+    square of the coefficients.
+
+    The points of a template are not independent (its grid oversamples the
+    pixels of the spectrograph, so the noise is correlated), so this is a
+    lower bound of the true noise, by a factor of about 1.2 to 2. This is what
+    MASK_EDGE_NOISE_FACTOR is for.
+
+    :param sigma_template: np.ndarray, the uncertainty of each point
+    :param coeffs: np.ndarray, the coefficients of the derivative
+
+    :return: np.ndarray, the uncertainty of the derivative at each point
+    """
+    # points without an uncertainty (NaN) do not contribute
+    variance = np.where(np.isfinite(sigma_template), sigma_template ** 2, 0.0)
+    # sum of variance * coefficient^2 over the window, at every point
+    sigma_deriv = np.sqrt(np.convolve(variance, coeffs[::-1] ** 2,
+                                      mode='same'))
+    # give back the NaNs where the template has no uncertainty
+    sigma_deriv[~np.isfinite(sigma_template)] = np.nan
+    # return the uncertainty of the derivative
+    return sigma_deriv
+
+
+def significant_extrema(wavegrid: np.ndarray, flux: np.ndarray,
+                        dflux: np.ndarray, sigma_dflux: np.ndarray,
+                        nsig: float) -> Tuple[np.ndarray, np.ndarray,
+                                              np.ndarray]:
+    """
+    Local maxima and minima of the template where the derivative is
+    significant on both sides
+
+    Walking along the spectrum, the sign of the significant derivative is
+    followed: while z = dflux / sigma_dflux stays between -nsig and +nsig
+    nothing is decided (this is where the noise wiggles live). When z goes
+    from above +nsig to below -nsig, the flux was significantly rising and is
+    now significantly falling: there is a maximum in between. The other way
+    round gives a minimum. Maxima and minima therefore alternate, as the rest
+    of LBL expects.
+
+    :param wavegrid: np.ndarray, the wavelength of the template [nm]
+    :param flux: np.ndarray, the (savgol) flux of the template
+    :param dflux: np.ndarray, the savgol first derivative
+    :param sigma_dflux: np.ndarray, its uncertainty
+    :param nsig: float, the significance required [sigma]
+
+    :return: tuple, 1. the index of each extremum (the point left of the zero
+             crossing of the derivative), 2. its wavelength [nm], 3. its kind
+             (+1 maximum, -1 minimum)
+    """
+    zvalues = dflux / sigma_dflux
+    # the template has holes (NaN): an extremum is never declared across one
+    valid = np.isfinite(zvalues) & np.isfinite(flux)
+    # storage for the outputs
+    indices, wavelengths, kinds = [], [], []
+    # sign of the last significant derivative, and where it was seen
+    last_sign, last_position = 0, 0
+    # walk along the spectrum
+    for position in range(len(zvalues)):
+        # a hole resets the walk: the two sides of it cannot be paired
+        if not valid[position]:
+            last_sign, last_position = 0, position
+            continue
+        # is the derivative significant here, and of which sign?
+        if zvalues[position] > nsig:
+            sign = 1
+        elif zvalues[position] < -nsig:
+            sign = -1
+        else:
+            # not significant: nothing to decide, keep walking
+            continue
+        # a change of significant sign means there is an extremum between
+        #   last_position and position: +1 then -1 is a maximum, -1 then +1
+        #   is a minimum
+        if last_sign != 0 and sign != last_sign:
+            kind = 1 if last_sign > 0 else -1
+            iout, wout = locate_extremum(wavegrid, flux, dflux, last_position,
+                                         position, kind)
+            indices.append(iout)
+            wavelengths.append(wout)
+            kinds.append(kind)
+        # remember where the derivative was last significant
+        last_sign, last_position = sign, position
+    # return the extrema
+    return np.array(indices), np.array(wavelengths), np.array(kinds)
+
+
+def locate_extremum(wavegrid: np.ndarray, flux: np.ndarray,
+                    dflux: np.ndarray, start: int, end: int,
+                    kind: int) -> Tuple[int, float]:
+    """
+    Position of an extremum lying between two points
+
+    The extremum is where the derivative crosses zero. Between start and end
+    the derivative may cross zero several times on noise, so the crossing next
+    to the highest point of the flux (for a maximum; the lowest for a minimum)
+    is taken, and the exact wavelength comes from a linear interpolation of
+    the derivative between the two points around that crossing (the same
+    interpolation as find_mask_lines).
+
+    :param wavegrid: np.ndarray, the wavelength of the template [nm]
+    :param flux: np.ndarray, the (savgol) flux of the template
+    :param dflux: np.ndarray, the savgol first derivative
+    :param start: int, the last point where the derivative was significant
+                  with the sign it had before the extremum
+    :param end: int, the first point where it is significant with the other
+                sign
+    :param kind: int, +1 for a maximum, -1 for a minimum
+
+    :return: tuple, 1. the index of the point left of the zero crossing,
+             2. the wavelength of the extremum [nm]
+    """
+    # the highest (maximum) or lowest (minimum) point of the flux in between
+    if kind > 0:
+        peak = start + int(np.argmax(flux[start:end + 1]))
+    else:
+        peak = start + int(np.argmin(flux[start:end + 1]))
+    # the zero crossing is between peak and peak + 1 if the derivative still
+    #   has the sign it had before the extremum, otherwise between peak - 1
+    #   and peak
+    if peak < len(dflux) - 1 and np.sign(dflux[peak]) == kind:
+        index = peak
+    else:
+        index = max(peak - 1, start)
+    # linear interpolation of the wavelength where the derivative is zero
+    left, right = dflux[index], dflux[index + 1]
+    if np.sign(left) != np.sign(right):
+        slope = (wavegrid[index + 1] - wavegrid[index]) / (right - left)
+        return index, wavegrid[index] - left * slope
+    # no crossing (the derivative can be flat): take the peak itself
+    return index, wavegrid[peak]
+
+
+def find_mask_lines_significant(inst: InstrumentsType, template_table: Table,
+                                template_hdr: io.LBLHeader) -> Table:
+    """
+    Get the mask lines at the significant extrema of the template
+
+    Used instead of find_mask_lines() when MASK_SIGNIFICANT_EDGES is True.
+    find_mask_lines() puts a line edge at every sign change of the derivative
+    of the template: where the template is noisy the derivative crosses zero
+    on noise alone, and most edges are noise. Here an extremum is kept only
+    where the derivative is significant on both sides of it, at
+    MASK_EDGE_NSIG sigma of its propagated uncertainty.
+
+    The threshold adapts on its own to the quality of the template: with
+    MASK_EDGE_NSIG = 3, on a template of 98 HARPS-N spectra of an F star 59%
+    of the extrema are removed, while on a template of 971 SPIRou spectra of
+    an M dwarf (SNR of about 1400 per point) only 7% are, because there
+    nearly every extremum is a real feature of the star.
+
+    The weight cut of lbl_mask must not be applied to these lines: the
+    extrema are already significant, and that cut removes the strongest lines
+    of the star (their second derivative is the largest of all).
+
+    :param inst: Instrument instance
+    :param template_table: astropy Table, the template
+    :param template_hdr: io.LBLHeader, the header of the template
+
+    :return: astropy Table, the table of lines
+    """
+    # get the wave and flux vectors of the template, and its derivatives
+    #   (the savgol derivatives, computed by lbl_template)
+    t_wave = np.array(template_table['wavelength'])
+    t_flux = np.array(template_table['flux_savgol_d0'])
+    dflux = np.array(template_table['flux_savgol_d1'])
+    ddflux = np.array(template_table['flux_savgol_d2'])
+    t_rms = np.array(template_table['rms'])
+    # -------------------------------------------------------------------------
+    # uncertainty of the derivative of the template
+    # -------------------------------------------------------------------------
+    # uncertainty of each point of the template
+    sigma_template = template_uncertainty(inst, template_table, template_hdr)
+    # the window of the savgol filter lbl_template applied, and the
+    #   coefficients of its first derivative
+    window = savgol_window_of_template(inst, template_table)
+    _, coeffs = mp.gaussian_weighted_savgol_coeffs(window, 3, 1)
+    # the uncertainty of the derivative, times MASK_EDGE_NOISE_FACTOR
+    sigma_dflux = derivative_uncertainty(sigma_template, coeffs)
+    sigma_dflux = sigma_dflux * inst.params['MASK_EDGE_NOISE_FACTOR']
+    # print the quality of the template
+    with warnings.catch_warnings(record=True) as _:
+        msg = 'Template SNR: {0:.0f} per point (median)'
+        log.general(msg.format(mp.nanmedian(t_flux / sigma_template)))
+    # -------------------------------------------------------------------------
+    # the significant extrema
+    # -------------------------------------------------------------------------
+    # print progress
+    log.general('Finding the significant mask lines')
+    # walk along the spectrum
+    nsig = inst.params['MASK_EDGE_NSIG']
+    line, wave_cent, kind = significant_extrema(t_wave, t_flux, dflux,
+                                                sigma_dflux, nsig)
+    # print how many lines we have
+    msg = '\t{0} significant extrema at {1:.1f} sigma ({2} maxima, {3} minima)'
+    margs = [len(line), nsig, int(np.sum(kind > 0)), int(np.sum(kind < 0))]
+    log.general(msg.format(*margs))
+    # -------------------------------------------------------------------------
+    # the line table, with the same columns as find_mask_lines
+    # -------------------------------------------------------------------------
+    # the flux at each extremum
+    f_mask = t_flux[line]
+    # depth of each line relative to the extrema on either side of it
+    depth = np.zeros_like(line, dtype=float)
+    with warnings.catch_warnings(record=True) as _:
+        depth[1:-1] = 1 - f_mask[1:-1] / (0.5 * (f_mask[0:-2] + f_mask[2:]))
+    # the weight is the second derivative of the flux (the sharper the line,
+    #   the more weight we give it). Its sign says what the extremum is:
+    #   w_mask > 0 for the minima (the lines), w_mask < 0 for the maxima
+    #   (the edges of the lines)
+    w_mask = np.abs(ddflux[line]) * (-kind)
+    # the signal to noise of the line
+    with warnings.catch_warnings(record=True) as _:
+        snr_mask = f_mask / t_rms[line]
+        snr_mask[np.isinf(snr_mask)] = np.nan
+    # store in a table for on going use
+    table = Table()
+    table['ll_mask_s'] = np.array(wave_cent)
+    table['ll_mask_e'] = np.array(wave_cent)
+    table['w_mask'] = np.array(w_mask)
+    table['value'] = np.array(f_mask)
+    table['depth'] = np.array(depth)
+    table['line_snr'] = abs(depth * snr_mask)
+    # return the mask table
+    return table
+
+
 def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
                            m_wavemap: np.ndarray,
                            m_spectrum: np.ndarray) -> float:
