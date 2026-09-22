@@ -2208,6 +2208,32 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     good &= npixline0 < max_pix_wid
     # remove good from rv table
     rvtable0 = rvtable0[good]
+    # -------------------------------------------------------------------------
+    # residual projections per photometric band: the bands of astro.bands
+    #   that overlap the wavelength domain of the lines, each with a
+    #   {KEY}_{band} and s{KEY}_{band} column after s{KEY}
+    resproj_bands = []
+    if resproj_flag:
+        wave_lines = np.array(rvtable0['WAVE_START'], dtype=float)
+        bout = astro.choose_bands(astro.bands, np.nanmin(wave_lines),
+                                  np.nanmax(wave_lines), overlap=True)
+        for bname, blue, red in zip(bout[0], bout[1], bout[2]):
+            # lines of this band (as for the per-band velocities)
+            bmask = (wave_lines > blue) & (wave_lines < red)
+            resproj_bands.append((bname, bmask))
+        # add the columns (NaN until measured) after s{KEY}
+        rdb_dict_ordered = dict()
+        for colname in rdb_dict:
+            rdb_dict_ordered[colname] = rdb_dict[colname]
+            for key in inst.params['RESPROJ_TABLES']:
+                if colname != 's' + key:
+                    continue
+                for bname, _ in resproj_bands:
+                    bkey = '{0}_{1}'.format(key, bname)
+                    rdb_dict_ordered[bkey] = np.full(len(lblrvfiles), np.nan)
+                    rdb_dict_ordered['s' + bkey] = np.full(len(lblrvfiles),
+                                                           np.nan)
+        rdb_dict = rdb_dict_ordered
     ref_good_pix = np.array(good)  # if a calibration, we'll need this later
     # get columns of rvtable0
     dv0 = np.array(rvtable0['dv'])
@@ -2334,6 +2360,20 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 # push into the rdb dictioanry
                 rdb_dict[key][row] = val_guess
                 rdb_dict['s' + key][row] = val_bulk_error
+                # per photometric band, as the per-band velocities: at
+                #   least 5 lines in the band and a tenth of them finite
+                for bname, bmask in resproj_bands:
+                    finite_mask = np.isfinite(arr[bmask])
+                    finite_mask &= np.isfinite(sarr[bmask])
+                    if np.sum(finite_mask) < np.sum(bmask) / 10:
+                        continue
+                    if np.sum(bmask) < 5:
+                        continue
+                    bguess, bbulk_error = mp.odd_ratio_mean(arr[bmask],
+                                                            sarr[bmask])
+                    bkey = '{0}_{1}'.format(key, bname)
+                    rdb_dict[bkey][row] = bguess
+                    rdb_dict['s' + bkey][row] = bbulk_error
         # get the d2v, sd2v, d3v and sd3v values from table
         wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
         contrast = np.array(rvtable[good]['contrast'], dtype=float)

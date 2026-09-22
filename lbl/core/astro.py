@@ -37,7 +37,8 @@ class Band:
 # =============================================================================
 # Define functions
 # =============================================================================
-def choose_bands(bandobjs: List[Band], wavemin: float, wavemax: float
+def choose_bands(bandobjs: List[Band], wavemin: float, wavemax: float,
+                 overlap: bool = False
                  ) -> Tuple[List[str], List[float], List[float], List[bool]]:
     """
     Choose bands to use for a given wavelength range
@@ -45,6 +46,9 @@ def choose_bands(bandobjs: List[Band], wavemin: float, wavemax: float
     :param bandobjs: list of bands
     :param wavemin: float, the minimum wavelength in nm
     :param wavemax: float, the maximum wavelength in nm
+    :param overlap: bool, if False (default) keep the bands entirely within
+                    [wavemin, wavemax]; if True keep the bands that overlap
+                    [wavemin, wavemax]
     :return:
     """
     bandnames = []
@@ -53,8 +57,12 @@ def choose_bands(bandobjs: List[Band], wavemin: float, wavemax: float
     use_regions = []
     # loop around bands
     for band in bandobjs:
-        cond = band.minimum > wavemin
-        cond &= band.maximum < wavemax
+        if overlap:
+            cond = band.maximum > wavemin
+            cond &= band.minimum < wavemax
+        else:
+            cond = band.minimum > wavemin
+            cond &= band.maximum < wavemax
         # only add if within limits
         if cond:
             bandnames.append(band.name)
@@ -81,7 +89,7 @@ zband = Band('z', minimum=796.470, maximum=1087.333, mean=899.226,
              ref='/SDSS')
 yband = Band('y', minimum=938.600, maximum=1113.400, mean=1025.880,
              ref='CFHT/Wircam')
-jband = Band('j', minimum=1148.178, maximum=13494.41, mean=1248.414,
+jband = Band('j', minimum=1148.178, maximum=1349.441, mean=1248.414,
              ref='MKO/NSFCam')
 hband = Band('h', minimum=1450.980, maximum=1809.105, mean=1629.826,
              ref='MKO/NSFCam')
