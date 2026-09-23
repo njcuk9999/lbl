@@ -49,6 +49,11 @@ InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value
 speed_of_light_kms = constants.c.value / 1000.0
+# minimum number of lines a photometric band must hold to get its own
+#   residual projection columns (e.g. DTEMP3000_j)
+RESPROJ_BAND_MIN_LINES = 5
+# minimum fraction of the lines of a band with a valid value for a file
+RESPROJ_BAND_MIN_FRAC = 0.1
 
 
 # =============================================================================
@@ -2208,6 +2213,41 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     good &= npixline0 < max_pix_wid
     # remove good from rv table
     rvtable0 = rvtable0[good]
+    # -------------------------------------------------------------------------
+    # residual projections (e.g. DTEMP3000) per photometric band
+    # -------------------------------------------------------------------------
+    # the bands are the ones already defined for the per-band velocities
+    #   (astro.bands): every band that holds lines gets a {KEY}_{band} and a
+    #   s{KEY}_{band} column, next to the {KEY} and s{KEY} of the whole domain
+    resproj_bands = []
+    if resproj_flag:
+        # the wavelength of each line kept above
+        wave_lines = np.array(rvtable0['WAVE_START'], dtype=float)
+        # the lines of each band
+        for band in astro.bands:
+            bandmask = wave_lines > band.minimum
+            bandmask &= wave_lines < band.maximum
+            # a band with too few lines is not used at all
+            if np.sum(bandmask) < RESPROJ_BAND_MIN_LINES:
+                continue
+            resproj_bands.append((band.name, bandmask))
+        # add the columns (NaN until they are measured), each right after the
+        #   s{KEY} column of its residual projection
+        rdb_dict_bands = dict()
+        for colname in rdb_dict:
+            rdb_dict_bands[colname] = rdb_dict[colname]
+            for key in inst.params['RESPROJ_TABLES']:
+                if colname != 's' + key:
+                    continue
+                for bandname, _ in resproj_bands:
+                    bandkey = '{0}_{1}'.format(key, bandname)
+                    rdb_dict_bands[bandkey] = np.full(len(lblrvfiles), np.nan)
+                    rdb_dict_bands['s' + bandkey] = np.full(len(lblrvfiles),
+                                                            np.nan)
+        rdb_dict = rdb_dict_bands
+        # print the bands used
+        msg = 'Residual projections per band: {0}'
+        log.general(msg.format(', '.join([band[0] for band in resproj_bands])))
     ref_good_pix = np.array(good)  # if a calibration, we'll need this later
     # get columns of rvtable0
     dv0 = np.array(rvtable0['dv'])
@@ -2334,6 +2374,21 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 # push into the rdb dictioanry
                 rdb_dict[key][row] = val_guess
                 rdb_dict['s' + key][row] = val_bulk_error
+                # -------------------------------------------------------------
+                # the same, with the lines of each photometric band
+                for bandname, bandmask in resproj_bands:
+                    # we need a fraction of the lines of the band to be valid
+                    bandvalid = np.isfinite(arr[bandmask])
+                    bandvalid &= np.isfinite(sarr[bandmask])
+                    bandmin = RESPROJ_BAND_MIN_FRAC * np.sum(bandmask)
+                    if np.sum(bandvalid) < bandmin:
+                        continue
+                    # the odd ratio mean of the lines of this band
+                    bandout = mp.odd_ratio_mean(arr[bandmask], sarr[bandmask])
+                    # push into the rdb dictionary
+                    bandkey = '{0}_{1}'.format(key, bandname)
+                    rdb_dict[bandkey][row] = bandout[0]
+                    rdb_dict['s' + bandkey][row] = bandout[1]
         # get the d2v, sd2v, d3v and sd3v values from table
         wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
         contrast = np.array(rvtable[good]['contrast'], dtype=float)
