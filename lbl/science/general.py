@@ -1058,7 +1058,7 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
 
 
 def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
-                         mean_rms: np.ndarray) -> Tuple[float, float]:
+                         mean_rms: float |np.ndarray) -> Tuple[float, float]:
     """
     Apply the Bouchy 2001 equation to a vector for the diff
 
@@ -1701,8 +1701,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if not np.isfinite(sum_rms):
                 continue
 
-            # work out the mean rms
-            mean_rms = sum_rms / sum_weight_mask
+            # work out the mean rms of a line (float)
+            mean_rms = float(sum_rms / sum_weight_mask)
 
             # -----------------------------------------------------------------
             # work out the 1st derivative
@@ -1745,7 +1745,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         # value.
                         # Same for error
                         frac_diff_seg = np.array(diff_seg)
-                        frac_mean_rms = np.array(mean_rms)
+                        # mean_rms is a float but we apply a weighting across
+                        # pixels in the line - so we force this into a vector
+                        frac_mean_rms = np.full_like(diff_seg, mean_rms)
                         # performed on the unblazed, pseudo-continuum normalised
                         # spectra
                         frac_diff_seg /= (b_ratio_seg * norm_seg)
