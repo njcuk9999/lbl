@@ -81,7 +81,7 @@ zband = Band('z', minimum=796.470, maximum=1087.333, mean=899.226,
              ref='/SDSS')
 yband = Band('y', minimum=938.600, maximum=1113.400, mean=1025.880,
              ref='CFHT/Wircam')
-jband = Band('j', minimum=1148.178, maximum=13494.41, mean=1248.414,
+jband = Band('j', minimum=1148.178, maximum=1349.441, mean=1248.414,
              ref='MKO/NSFCam')
 hband = Band('h', minimum=1450.980, maximum=1809.105, mean=1629.826,
              ref='MKO/NSFCam')

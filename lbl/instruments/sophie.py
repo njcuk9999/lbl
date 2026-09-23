@@ -103,7 +103,7 @@ class Sophie(Instrument):
         # define the compil maximum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MAX', 694.3, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
-        self.param_set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
+        self.param_set('COMPIL_MAX_PIXEL_WIDTH', 500, source=func_name)
         # define min likelihood of correlation with BERV
         self.param_set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # define the CCF e-width to use for FP files

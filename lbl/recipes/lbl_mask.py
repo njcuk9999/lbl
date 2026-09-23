@@ -151,9 +151,27 @@ def __main__(inst: InstrumentsType, **kwargs):
         m_wavemap, m_spectrum = None, None
 
     # -------------------------------------------------------------------------
-    # Step 5: Find the lines (regions of sign change in the derivative)
+    # Step 5: Find the lines
     # -------------------------------------------------------------------------
-    line_table = general.find_mask_lines(inst, template_table)
+    # the lines are at the significant extrema of the template: an extremum
+    #   is kept only where the derivative of the template is significant on
+    #   both sides of it (MASK_EDGE_NSIG sigma). Without this, a line edge is
+    #   put at every sign change of the derivative, and where the template is
+    #   noisy most of them are noise
+    significant_edges = inst.params['MASK_SIGNIFICANT_EDGES']
+    # the savgol derivatives of the template are needed for this
+    if significant_edges and not inst.params['USE_SAVGOL_TEMPLATE']:
+        wmsg = ('MASK_SIGNIFICANT_EDGES needs the savgol derivatives of the '
+                'template (USE_SAVGOL_TEMPLATE): using every sign change of '
+                'the derivative instead')
+        log.warning(wmsg)
+        significant_edges = False
+    # find the lines
+    if significant_edges:
+        line_table = general.find_mask_lines_significant(inst, template_table,
+                                                         template_hdr)
+    else:
+        line_table = general.find_mask_lines(inst, template_table)
 
     # -------------------------------------------------------------------------
     # Step 6: Work out systemic velocity for the template
@@ -171,10 +189,14 @@ def __main__(inst: InstrumentsType, **kwargs):
         sys_vel = 0.0
     # -------------------------------------------------------------------------
     # remove lines that have a weight that is suscpiciously large
-    med_weight = np.nanmedian(np.abs(line_table['w_mask']))
-    weight_nsig = np.abs(line_table['w_mask']) < 10 * med_weight
-    # cut down the line table
-    line_table = line_table[weight_nsig]
+    #   (not for the significant extrema: they are already significant, and
+    #   this cut removes the strongest lines of the star, whose second
+    #   derivative is the largest of all)
+    if not significant_edges:
+        med_weight = np.nanmedian(np.abs(line_table['w_mask']))
+        weight_nsig = np.abs(line_table['w_mask']) < 10 * med_weight
+        # cut down the line table
+        line_table = line_table[weight_nsig]
     # -------------------------------------------------------------------------
     # Step 7: Write masks to file
     # -------------------------------------------------------------------------

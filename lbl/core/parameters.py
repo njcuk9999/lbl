@@ -254,6 +254,26 @@ params.set(key='APPROX_RESOLUTION', value=None, source=__NAME__,
               desc='The approximate mean resolution in lambda/dlambda',
               not_none=True)
 
+# build the mask lines at the significant extrema of the template instead of
+#   at every sign change of its derivative
+params.set(key='MASK_SIGNIFICANT_EDGES', value=True, source=__NAME__,
+           desc='Put the mask lines at the significant extrema of the '
+                'template (instead of every sign change of its derivative)',
+           arg='--significant_edges', dtype=bool)
+
+# how significant the derivative of the template must be on both sides of an
+#   extremum for it to be a mask line, in units of its propagated uncertainty
+params.set(key='MASK_EDGE_NSIG', value=3.0, source=__NAME__,
+           desc='Significance required on the derivative of the template on '
+                'both sides of a mask line [sigma]', dtype=float)
+
+# multiplies the propagated uncertainty of the derivative of the template:
+#   the points of a template are correlated (its grid oversamples the pixels
+#   of the spectrograph) so the propagation underestimates the noise
+params.set(key='MASK_EDGE_NOISE_FACTOR', value=1.0, source=__NAME__,
+           desc='Multiplies the propagated uncertainty of the derivative of '
+                'the template (correlated noise)', dtype=float)
+
 # whether to generate and use savgol template
 params.set(key='USE_SAVGOL_TEMPLATE', value=True, source=__NAME__,
            desc='Whether to generate and use savgol template')
