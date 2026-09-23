@@ -1744,8 +1744,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         # Express as a fraction of the model rather than a 'raw'
                         # value.
                         # Same for error
-                        frac_diff_seg = diff_seg
-                        frac_mean_rms = mean_rms
+                        frac_diff_seg = np.array(diff_seg)
+                        frac_mean_rms = np.array(mean_rms)
                         # performed on the unblazed, pseudo-continuum normalised
                         # spectra
                         frac_diff_seg /= (b_ratio_seg * norm_seg)
