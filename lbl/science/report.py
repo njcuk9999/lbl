@@ -61,6 +61,13 @@ REF_LS = ('N. R. Lomb, Ap\\&SS 39, 447 (1976); J. D. Scargle, ApJ 263, 835 '
           '(1982); M. Zechmeister and M. Kurster, A\\&A 496, 577 (2009) '
           '(the floating mean periodogram used here)')
 URL_EXOPLANET_EU = 'https://exoplanet.eu/catalog/'
+URL_SIMBAD_TAP = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync'
+# how close a star of exoplanet.eu must be to the target [arcsec]
+MATCH_RADIUS = 30.0
+# the periods marked on every periodogram [days]: a day and the year and its
+#   first harmonics, which the sampling and the Earth put in the data
+MARKED_PERIODS = [(1.0, 'day'), (365.25 / 3, 'year/3'), (365.25 / 2, 'year/2'),
+                  (365.25, 'year')]
 # -----------------------------------------------------------------------------
 # the columns of the rdb that get a time series, a periodogram and a FIP.
 #   name, error column, long name, unit (the per-band velocities and the
@@ -81,6 +88,10 @@ INDICATORS = [('vrad', 'svrad', 'Radial velocity', 'm/s'),
 # how many indicators are plotted on their own page at most (the rest are in
 #   the summary table only)
 MAX_INDICATOR_PLOTS = 24
+# the velocities of a slice of the domain (vrad_1673nm) or of a part of the
+#   detector (vrad_h_0-2044) stay in the summary table but get no figure:
+#   there are dozens of them and they say the same thing as the bands
+NO_FIGURE_PATTERNS = ['nm', '-']
 
 
 # =============================================================================
@@ -136,19 +147,25 @@ def get_report_data(inst: InstrumentsType, dparams: Dict[str, str]
         bervkey = inst.params['KW_BERV']
         if bervkey not in [None, 'None'] and bervkey in rvhdr:
             try:
-                header_berv[row] = rvhdr.get_hkey(bervkey, dtype=float)
+                # the header key is in km/s, get_berv gives m/s: the report
+                #   keeps everything in m/s, as LBL does
+                header_berv[row] = rvhdr.get_hkey(bervkey, dtype=float) * 1000
             except Exception as _:
                 pass
-    # the berv of the report: the one LBL used, unless it does not move (the
-    #   wave solution was already barycentric), in which case the one of the
-    #   header, which does
+    # the BERV LBL used is the one that puts a spectrum in the rest frame of
+    #   the star (the river plots): it is zero for the modes whose wave
+    #   solution is already barycentric
+    rdata['berv_lbl'] = berv
+    # the BERV of the figures: the one LBL used, unless it does not move, in
+    #   which case the motion of the Earth comes from the header
     rdata['berv_source'] = 'the BERV used by LBL (get_berv)'
     if np.nanmax(berv) - np.nanmin(berv) < 1.0e-6:
         if np.nanmax(header_berv) - np.nanmin(header_berv) > 1.0e-6:
             berv = header_berv
             rdata['berv_source'] = ('the {0} key of the headers: this mode '
                                     'has a barycentric wave solution, so the '
-                                    'BERV of LBL is zero'
+                                    'BERV of LBL is zero and the wavelengths '
+                                    'are already corrected'
                                     ''.format(inst.params['KW_BERV']))
         else:
             rdata['berv_source'] = 'no BERV found (it does not move)'
@@ -236,6 +253,33 @@ def time_series(rdb: Table, name: str, ename: str
     good = np.isfinite(time) & np.isfinite(value) & np.isfinite(error)
     good &= error > 0
     return time[good], value[good], error[good]
+
+
+def remove_drift(time: np.ndarray, value: np.ndarray, error: np.ndarray
+                 ) -> Tuple[np.ndarray, float, float]:
+    """
+    Take a long term drift out of a time series
+
+    A straight line in time is fitted with the error bars as weights and
+    subtracted, so that a drift (a companion of a long period, an instrument
+    that moves) does not spread its power over the whole periodogram.
+
+    :param time: np.ndarray, the time [days]
+    :param value: np.ndarray, the value
+    :param error: np.ndarray, the error
+
+    :return: tuple, 1. the value without the drift, 2. the drift [value/day],
+             3. its uncertainty
+    """
+    if len(value) < 5:
+        return value, np.nan, np.nan
+    # a straight line in time, with the error bars as weights
+    with warnings.catch_warnings(record=True) as _:
+        coeffs, cov = np.polyfit(time - np.mean(time), value, 1,
+                                 w=1 / error, cov=True)
+    drift, sdrift = float(coeffs[0]), float(np.sqrt(cov[0, 0]))
+    # the value without it
+    return value - np.polyval(coeffs, time - np.mean(time)), drift, sdrift
 
 
 def basic_stats(time: np.ndarray, value: np.ndarray,
@@ -502,8 +546,83 @@ def correlation(xvalue: np.ndarray, yvalue: np.ndarray) -> Tuple[float, float]:
 # =============================================================================
 # Define the known planets (exoplanet.eu)
 # =============================================================================
+def simbad_target(objname: str) -> Optional[Dict[str, Any]]:
+    """
+    The target in SIMBAD: its main name, its coordinates and its identifiers
+
+    The coordinates are what the planets of exoplanet.eu are matched on, which
+    is safer than a name.
+
+    :param objname: str, the name of the object
+
+    :return: dict or None, main_id, ra, dec, sp_type and ids
+    """
+    import urllib.parse
+    import urllib.request
+    # the names to try: the object, and the object without the suffixes LBL
+    #   adds to it
+    for name in [objname, simple_name(objname)]:
+        query = ("SELECT TOP 1 b.main_id, b.ra, b.dec, b.sp_type FROM basic "
+                 "AS b JOIN ident AS i ON b.oid = i.oidref WHERE "
+                 "i.id = '{0}'".format(name.replace("'", "")))
+        params = dict(request='doQuery', lang='adql', format='csv',
+                      query=query)
+        url = URL_SIMBAD_TAP + '?' + urllib.parse.urlencode(params)
+        try:
+            with urllib.request.urlopen(url, timeout=30) as handle:
+                lines = handle.read().decode('utf-8').splitlines()
+        except Exception as e:
+            log.warning('SIMBAD could not be reached: {0}'.format(str(e)))
+            return None
+        # the header and one row
+        if len(lines) < 2:
+            continue
+        values = lines[1].replace('"', '').split(',')
+        if len(values) < 4:
+            continue
+        try:
+            target = dict(main_id=values[0], ra=float(values[1]),
+                          dec=float(values[2]), sp_type=values[3],
+                          name=name)
+        except ValueError:
+            continue
+        # every identifier of this star, to match a catalogue by name too
+        target['ids'] = simbad_identifiers(name)
+        msg = 'SIMBAD: {0} is {1} at ({2:.5f}, {3:.5f}), {4}'
+        log.general(msg.format(objname, target['main_id'], target['ra'],
+                               target['dec'], target['sp_type']))
+        return target
+    log.warning('SIMBAD does not know {0}'.format(objname))
+    return None
+
+
+def simbad_identifiers(name: str) -> List[str]:
+    """
+    Every identifier SIMBAD has for a star
+
+    :param name: str, the name of the star
+
+    :return: list of str, the identifiers
+    """
+    import urllib.parse
+    import urllib.request
+    query = ("SELECT i2.id FROM ident AS i1 JOIN ident AS i2 ON "
+             "i1.oidref = i2.oidref WHERE i1.id = '{0}'"
+             "".format(name.replace("'", "")))
+    params = dict(request='doQuery', lang='adql', format='csv', query=query)
+    url = URL_SIMBAD_TAP + '?' + urllib.parse.urlencode(params)
+    try:
+        with urllib.request.urlopen(url, timeout=30) as handle:
+            lines = handle.read().decode('utf-8').splitlines()
+    except Exception as _:
+        return []
+    return [line.replace('"', '').strip() for line in lines[1:]]
+
+
 def exoplanet_eu_planets(inst: InstrumentsType, objname: str,
-                         directory: str) -> Optional[Table]:
+                         directory: str,
+                         target: Optional[Dict[str, Any]] = None
+                         ) -> Optional[Table]:
     """
     The planets of this star in the catalogue of exoplanet.eu
 
@@ -515,6 +634,8 @@ def exoplanet_eu_planets(inst: InstrumentsType, objname: str,
     :param inst: Instrument instance
     :param objname: str, the name of the object
     :param directory: str, where the catalogue is kept
+    :param target: dict or None, the target in SIMBAD (its coordinates are
+                   what the rows are matched on first)
 
     :return: astropy Table or None, the planets of this star
     """
@@ -537,18 +658,33 @@ def exoplanet_eu_planets(inst: InstrumentsType, objname: str,
     except Exception as e:
         log.warning('Could not read {0}: {1}'.format(catalogue, str(e)))
         return None
-    # the names this star could be under
-    targets = name_variants(objname)
-    if len(targets) == 0:
-        return None
-    # the rows of this star: its name or any of its alternate names
+    # the names this star could be under: its own, and every identifier
+    #   SIMBAD has for it
+    targets = set(name_variants(objname))
+    if target is not None:
+        for identifier in [target['main_id']] + target.get('ids', []):
+            targets |= set(name_variants(identifier))
+    # the rows of this star, by position first (safer than a name)
     keep = np.zeros(len(table), dtype=bool)
+    if target is not None and 'ra' in table.colnames:
+        with warnings.catch_warnings(record=True) as _:
+            ra = np.array(table['ra'], dtype=float)
+            dec = np.array(table['dec'], dtype=float)
+        # the angular distance to the target [arcsec]
+        cosdec = np.cos(np.radians(target['dec']))
+        dra = (ra - target['ra']) * cosdec
+        ddec = dec - target['dec']
+        distance = np.sqrt(dra ** 2 + ddec ** 2) * 3600
+        keep |= np.isfinite(distance) & (distance < MATCH_RADIUS)
+    # and by name, for the rows without a position
     for row in range(len(table)):
+        if keep[row]:
+            continue
         names = set(name_variants(str(table['star_name'][row])))
         if 'star_alternate_names' in table.colnames:
             for alternate in str(table['star_alternate_names'][row]).split(','):
                 names |= set(name_variants(alternate))
-        if len(names & set(targets)) > 0:
+        if len(names & targets) > 0:
             keep[row] = True
     if np.sum(keep) == 0:
         return None
@@ -645,8 +781,8 @@ def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
         # the science data and its wave solution, the LBL way
         sci_image, sci_hdr = inst.load_science_file(filename)
         wavegrid = inst.get_wave_solution(filename, sci_image, sci_hdr)
-        # the rest frame of the star, as in compute_rv
-        sys_rv = berv[it] * 1000 + velocity[it]
+        # the rest frame of the star, as in compute_rv (everything in m/s)
+        sys_rv = berv[it] + velocity[it]
         restwave = mp.doppler_shift(wavegrid, -sys_rv)
         # the order that holds the centre with the most margin around it
         order_num = best_order(restwave, wave_centre)
@@ -743,6 +879,25 @@ def save_figure(fig: Any, figdir: str, name: str) -> str:
     return filename
 
 
+def mark_periods(frame: Any, planets: Optional[Table]):
+    """
+    Mark on a periodogram the periods that are not the star: a day, and the
+    year and its first two harmonics, which the sampling and the motion of
+    the Earth put in the data. The known planets are marked as well.
+
+    :param frame: the matplotlib axis
+    :param planets: astropy Table or None, the planets of exoplanet.eu
+
+    :return: None, draws on the axis
+    """
+    for period, label in MARKED_PERIODS:
+        frame.axvline(period, color='0.4', ls='--', lw=0.8, alpha=0.8)
+        frame.text(period, 0.02, ' {0}'.format(label),
+                   transform=frame.get_xaxis_transform(), color='0.3',
+                   fontsize=6, va='bottom', rotation=90)
+    mark_planets(frame, planets)
+
+
 def mark_planets(frame: Any, planets: Optional[Table]):
     """
     Mark the periods of the known planets on a periodogram
@@ -765,9 +920,31 @@ def mark_planets(frame: Any, planets: Optional[Table]):
                    fontsize=7, va='top', rotation=90)
 
 
+def wants_figure(name: str) -> bool:
+    """
+    Whether an indicator gets a figure of its own
+
+    The velocities of a slice of the domain (vrad_1673nm) and of a part of
+    the detector (vrad_h_0-2044) stay in the summary table: there are dozens
+    of them and they say what the bands already say.
+
+    :param name: str, the name of the indicator
+
+    :return: bool, True if it gets a figure
+    """
+    if not name.startswith('vrad_'):
+        return True
+    suffix = name[5:]
+    # a slice of the domain, in nm, or a range of pixels of the detector
+    if suffix.endswith('nm') or '-' in suffix:
+        return False
+    return True
+
+
 def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
                    periods: np.ndarray, figdir: str,
-                   planets: Optional[Table], prior: float) -> Dict[str, Any]:
+                   planets: Optional[Table], prior: float,
+                   figure: bool = True) -> Dict[str, Any]:
     """
     The figure of one indicator: its time series, its periodogram and its FIP
 
@@ -777,6 +954,7 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
     :param figdir: str, the directory of the figures
     :param planets: astropy Table or None, the known planets
     :param prior: float, the prior probability of a signal (FIP)
+    :param figure: bool, whether this indicator gets a figure of its own
 
     :return: dict, the numbers of this indicator
     """
@@ -789,10 +967,15 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
         out['figure'] = None
         out['best_period'] = np.nan
         out['min_fip'] = np.nan
+        out['drift'] = np.nan
         return out
-    # the periodogram and the FIP
-    power = lomb_scargle(time, value, error, periods)
-    fip_periods, fip = fip_periodogram(time, value, error, periods, prior)
+    # the long term drift, taken out before the periodogram so that it does
+    #   not spread its power over every period
+    detrended, drift, sdrift = remove_drift(time, value, error)
+    out['drift'], out['sdrift'] = drift, sdrift
+    # the periodogram and the FIP, without the drift
+    power = lomb_scargle(time, detrended, error, periods)
+    fip_periods, fip = fip_periodogram(time, detrended, error, periods, prior)
     out['best_period'] = float(periods[np.argmax(power)])
     out['max_power'] = float(np.max(power))
     if len(fip) > 0:
@@ -810,10 +993,20 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
     # -------------------------------------------------------------------------
     # the figure
     # -------------------------------------------------------------------------
+    if not figure:
+        out['figure'] = None
+        return out
     fig, frames = plt.subplots(2, 1, figsize=(9, 6))
-    # the time series
+    # the time series, with the drift that was taken out
     frames[0].errorbar(time, value, yerr=error, fmt='.', ms=3, color='k',
                        elinewidth=0.5, capsize=0, alpha=0.7)
+    if np.isfinite(drift):
+        trend = value - detrended
+        order = np.argsort(time)
+        frames[0].plot(time[order], trend[order], '-', color='tab:red',
+                       lw=1.0, label='drift {0:.3g} per day ({1:.1f} sigma)'
+                                     ''.format(drift, abs(drift / sdrift)))
+        frames[0].legend(fontsize=8)
     frames[0].set(xlabel='rjd [days]',
                   ylabel='{0} [{1}]'.format(name, unit),
                   title='{0}: {1} points, rms {2:.4g}, median error '
@@ -821,8 +1014,9 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
                                          out['error']))
     # the periodogram, with the FIP on the right axis
     frames[1].semilogx(periods, power, '-', color='tab:blue', lw=0.8)
-    frames[1].set(xlabel='period [days]', ylabel='periodogram power')
-    mark_planets(frames[1], planets)
+    frames[1].set(xlabel='period [days]',
+                  ylabel='periodogram power (drift removed)')
+    mark_periods(frames[1], planets)
     if len(fip) > 0:
         twin = frames[1].twinx()
         twin.semilogx(fip_periods, -np.log10(np.maximum(fip, 1e-20)), '-',
@@ -849,6 +1043,8 @@ def plot_rv_vs_berv(rdata: Dict[str, Any], figdir: str) -> Dict[str, Any]:
     vrad = np.array(rdb['vrad'], dtype=float)
     svrad = np.array(rdb['svrad'], dtype=float)
     out = dict()
+    # the berv is in m/s everywhere in LBL, and in km/s on the figure
+    berv = berv / 1000.0
     good = np.isfinite(berv) & np.isfinite(vrad)
     out['n'] = int(np.sum(good))
     if out['n'] < 5:
@@ -862,15 +1058,25 @@ def plot_rv_vs_berv(rdata: Dict[str, Any], figdir: str) -> Dict[str, Any]:
     if out['berv_max'] - out['berv_min'] < 1.0e-6:
         out['figure'], out['slope'] = None, np.nan
         return out
-    coeffs = np.polyfit(berv[good], vrad[good], 1)
+    with warnings.catch_warnings(record=True) as _:
+        coeffs, cov = np.polyfit(berv[good], vrad[good], 1, cov=True)
     out['slope'] = float(coeffs[0])
+    out['sslope'] = float(np.sqrt(cov[0, 0]))
     # the figure
     fig, frame = plt.subplots(figsize=(7, 5))
     frame.errorbar(berv[good], vrad[good], yerr=svrad[good], fmt='.', ms=4,
                    color='k', elinewidth=0.5, capsize=0, alpha=0.7)
-    xvec = np.linspace(np.nanmin(berv), np.nanmax(berv), 10)
+    xvec = np.linspace(np.nanmin(berv), np.nanmax(berv), 100)
     frame.plot(xvec, np.polyval(coeffs, xvec), '-', color='tab:red', lw=1.0,
-               label='slope {0:.3f} m/s per km/s'.format(out['slope']))
+               label='slope {0:.3f} +- {1:.3f} m/s per km/s'
+                     ''.format(out['slope'], out['sslope']))
+    # the one sigma envelope of the straight line, from the covariance of
+    #   its two parameters
+    design = np.array([xvec, np.ones(len(xvec))])
+    envelope = np.sqrt(np.sum(design * (cov @ design), axis=0))
+    frame.fill_between(xvec, np.polyval(coeffs, xvec) - envelope,
+                       np.polyval(coeffs, xvec) + envelope, color='tab:red',
+                       alpha=0.2, lw=0, label='1 sigma of the fit')
     frame.set(xlabel='BERV [km/s]', ylabel='radial velocity [m/s]',
               title='Radial velocity against the BERV (correlation '
                     '{0:.3f})'.format(out['corr']))
@@ -919,11 +1125,11 @@ def plot_window(rdata: Dict[str, Any], periods: np.ndarray,
     frames[0].set(ylabel='window power',
                   title='Spectral window of the {0} observations'.format(
                       len(time)))
-    mark_planets(frames[0], planets)
+    mark_periods(frames[0], planets)
     frames[1].semilogx(periods, bpower, '-', color='tab:green', lw=0.8)
     frames[1].set(xlabel='period [days]', ylabel='periodogram power',
                   title='BERV sampled at the times of the observations')
-    mark_planets(frames[1], planets)
+    mark_periods(frames[1], planets)
     fig.tight_layout()
     out['figure'] = save_figure(fig, figdir, 'window_and_berv')
     return out
@@ -945,23 +1151,38 @@ def plot_river(river: Dict[str, np.ndarray], bandname: str,
     # the spectra are sorted in time
     order = np.argsort(rjd)
     image, rjd = image[order], rjd[order]
-    # the scale of the plot: the bulk of the values
+    # the median spectrum, and what each spectrum has that it does not
     with warnings.catch_warnings(record=True) as _:
+        median = np.nanmedian(image, axis=0)
+        residual = image - median
         vmin, vmax = np.nanpercentile(image, [2, 98])
-    fig, frames = plt.subplots(2, 1, figsize=(9, 7), sharex=True,
-                               height_ratios=[3, 1])
+        rmin, rmax = np.nanpercentile(residual, [5, 95])
+    # the residuals are shown around zero, in units of the median spectrum
+    rlimit = max(abs(rmin), abs(rmax))
+    # three panels: the spectra, their residuals and the median
+    fig, frames = plt.subplots(3, 1, figsize=(9, 9), sharex=True,
+                               height_ratios=[3, 3, 1])
+    extent = [grid[0], grid[-1], 0, len(rjd)]
     frames[0].imshow(image, aspect='auto', origin='lower', cmap='inferno',
                      vmin=vmin, vmax=vmax, interpolation='nearest',
-                     extent=[grid[0], grid[-1], 0, len(rjd)])
+                     extent=extent)
     frames[0].set(ylabel='spectrum (sorted in time)',
                   title='{0} band, {1:.2f} nm, rest frame of the star, '
                         '{2} spectra'.format(bandname, river['wave_centre'],
                                              len(rjd)))
-    # the mean spectrum below
+    resimage = frames[1].imshow(residual, aspect='auto', origin='lower',
+                                cmap='RdBu_r', vmin=-rlimit, vmax=rlimit,
+                                interpolation='nearest', extent=extent)
+    frames[1].set(ylabel='spectrum (sorted in time)',
+                  title='the same, with the median spectrum subtracted '
+                        '(5 to 95 percentile of the residuals)')
+    # the colour bar of the residuals, in units of the median spectrum
+    cbar = fig.colorbar(resimage, ax=frames[1], orientation='vertical',
+                        fraction=0.04, pad=0.01)
+    cbar.set_label('residual / median spectrum')
     with warnings.catch_warnings(record=True) as _:
-        frames[1].plot(grid, np.nanmedian(image, axis=0), '-', color='k',
-                       lw=0.8)
-    frames[1].set(xlabel='velocity [km/s]', ylabel='median flux')
+        frames[2].plot(grid, median, '-', color='k', lw=0.8)
+    frames[2].set(xlabel='velocity [km/s]', ylabel='median flux')
     fig.tight_layout()
     return save_figure(fig, figdir, 'river_{0}'.format(bandname))
 
@@ -1014,6 +1235,7 @@ def latex_header(title: str, subtitle: str) -> str:
              '\\usepackage{graphicx}',
              '\\usepackage{longtable}',
              '\\usepackage{booktabs}',
+             '\\usepackage{pdflscape}',
              '\\usepackage[colorlinks=true,urlcolor=blue]{hyperref}',
              '\\usepackage{float}',
              '\\setlength{\\parindent}{0pt}',
@@ -1029,7 +1251,8 @@ def latex_header(title: str, subtitle: str) -> str:
 
 def latex_table(caption: str, header: List[str], rows: List[List[str]],
                 align: Optional[str] = None,
-                size: Optional[str] = None) -> str:
+                size: Optional[str] = None,
+                landscape: bool = False) -> str:
     """
     A table of the report
 
@@ -1038,12 +1261,15 @@ def latex_table(caption: str, header: List[str], rows: List[List[str]],
     :param rows: list of list of str, the rows
     :param align: str or None, the alignment of the columns
     :param size: str or None, a LaTeX font size for the table (footnotesize)
+    :param landscape: bool, if True the table gets a page of its own, sideways
 
     :return: str, the LaTeX
     """
     if align is None:
         align = 'l' + 'r' * (len(header) - 1)
     lines = []
+    if landscape:
+        lines.append('\\begin{landscape}')
     if size is not None:
         lines.append('{\\%s' % size)
     lines += ['\\begin{longtable}{%s}' % align,
@@ -1057,6 +1283,8 @@ def latex_table(caption: str, header: List[str], rows: List[List[str]],
     lines += ['\\bottomrule', '\\end{longtable}']
     if size is not None:
         lines.append('}')
+    if landscape:
+        lines.append('\\end{landscape}')
     return '\n'.join(lines)
 
 
@@ -1157,10 +1385,14 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     time = np.array(rdata['rdb']['rjd'], dtype=float)
     periods = period_grid(time, params)
     prior = params['REPORT_FIP_PRIOR']
-    # the known planets of this star
+    # the target in SIMBAD (its coordinates are what the planets are matched
+    #   on) and the known planets of this star
+    target = simbad_target(rdata['object'])
+    rdata['target'] = target
     planets = None
     if params['REPORT_EXOPLANET_EU']:
-        planets = exoplanet_eu_planets(inst, rdata['object'], report_dir)
+        planets = exoplanet_eu_planets(inst, rdata['object'], report_dir,
+                                       target=target)
     # storage of the LaTeX and of the figures
     body, figures = [], []
     # -------------------------------------------------------------------------
@@ -1169,14 +1401,26 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     body.append('\\section{What was processed}')
     span = float(np.nanmax(time) - np.nanmin(time))
     nights = len(np.unique(np.floor(time)))
+    # the first and the last observation, in human dates as well
+    first = base.AstropyTime(np.nanmin(time) + 2400000, format='jd').iso[:19]
+    last = base.AstropyTime(np.nanmax(time) + 2400000, format='jd').iso[:19]
     rows = [['Object', latex_escape(rdata['object'])],
             ['Template object', latex_escape(rdata['template_object'])],
-            ['Instrument', latex_escape(rdata['instrument'])],
+            ['Instrument', latex_escape(rdata['instrument'])]]
+    # what SIMBAD knows about this star
+    if target is not None:
+        rows += [['SIMBAD name', latex_escape(target['main_id'])],
+                 ['Coordinates (ICRS)',
+                  '{0:.6f} {1:+.6f} (deg)'.format(target['ra'],
+                                                  target['dec'])],
+                 ['Spectral type', latex_escape(target['sp_type'])]]
+    rows += [
             ['Spectra', '{0}'.format(len(time))],
             ['Nights', '{0}'.format(nights)],
-            ['First and last observation',
-             '{0:.4f} to {1:.4f} (rjd)'.format(np.nanmin(time),
-                                               np.nanmax(time))],
+            ['First observation',
+             '{0} (rjd {1:.4f})'.format(first, np.nanmin(time))],
+            ['Last observation',
+             '{0} (rjd {1:.4f})'.format(last, np.nanmax(time))],
             ['Time span', '{0:.1f} days'.format(span)],
             ['Template', latex_escape(rdata['template_file'])],
             ['Mask', latex_escape(rdata['mask_file'])],
@@ -1190,9 +1434,14 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     # 2. the known planets
     # -------------------------------------------------------------------------
     body.append('\\section{Known and suspected planets}')
-    body.append('From the catalogue of exoplanet.eu, '
-                '\\url{%s}, matched on the name of the star.' %
-                URL_EXOPLANET_EU)
+    if target is None:
+        matched = 'matched on the name of the star (SIMBAD did not answer)'
+    else:
+        matched = ('matched on the position of the star from SIMBAD '
+                   '({0:.5f} {1:+.5f}, within {2:.0f} arcsec) and on its '
+                   'names'.format(target['ra'], target['dec'], MATCH_RADIUS))
+    body.append('From the catalogue of exoplanet.eu, \\url{%s}, %s.'
+                % (URL_EXOPLANET_EU, matched))
     if planets is None:
         body.append('No planet of this star is in the catalogue (which does '
                     'not mean there is none: the name may be written '
@@ -1229,11 +1478,11 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     results = []
     for indicator in rdata['indicators']:
         result = plot_indicator(rdata, indicator, periods, figdir, planets,
-                                prior)
+                                prior, figure=wants_figure(indicator[0]))
         results.append(result)
     # the summary table of every indicator
     header = ['Indicator', 'N', 'Median', 'rms', 'Robust', 'Error',
-              'Excess', 'Corr. RV', 'Period [d]', 'Min FIP']
+              'Excess', 'Drift per day', 'Corr. RV', 'Period [d]', 'Min FIP']
     rows = []
     for result in results:
         rows.append([latex_escape(result['name']), '{0}'.format(result['n']),
@@ -1241,6 +1490,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                      number(result.get('robust_rms')),
                      number(result.get('error')),
                      number(result.get('excess')),
+                     number(result.get('drift'), '{0:.3g}'),
                      number(result.get('corr_rv'), '{0:.2f}'),
                      number(result.get('best_period'), '{0:.3f}'),
                      number(result.get('min_fip'), '{0:.2e}')])
@@ -1249,8 +1499,9 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                             'Excess the dispersion the error bars do not '
                             'explain, Corr. RV the correlation with the '
                             'radial velocity, and Period the strongest period '
-                            'of the periodogram', header, rows,
-                            size='footnotesize'))
+                            'of the periodogram, which is measured after the '
+                            'drift is taken out', header, rows,
+                            size='footnotesize', landscape=True))
     # the figures, the most telling ones first (the radial velocity, then the
     #   indicators with the lowest FIP)
     def _fip_key(res):
@@ -1258,9 +1509,11 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         return 1.0 if fip is None or not np.isfinite(fip) else fip
     ordered = sorted(results, key=lambda res: (res['name'] != 'vrad',
                                                _fip_key(res)))
-    for result in ordered[:MAX_INDICATOR_PLOTS]:
-        if result.get('figure') is None:
+    nplots = 0
+    for result in ordered:
+        if result.get('figure') is None or nplots >= MAX_INDICATOR_PLOTS:
             continue
+        nplots += 1
         caption = ('{0} ({1}). Top: the time series. Bottom: the periodogram '
                    '(blue) and $-\\log_{{10}}$(FIP) (orange); the dashed line '
                    'is FIP = 0.01.'.format(latex_escape(result['longname']),
@@ -1273,7 +1526,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     body.append('\\section{Radial velocity against the BERV}')
     body.append('The BERV of each spectrum comes from %s, read from the '
                 'header of its lblrv file. A slope here means the velocities '
-                'move with the ' % rdata['berv_source'])
+                'move with the ' % latex_escape(rdata['berv_source']))
     body.append('position of the Earth, which is the signature of something '
                 'fixed in the frame of the observatory (tellurics, sky '
                 'lines, a wavelength solution).')
@@ -1472,7 +1725,8 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
         files.append(found)
         rjd.append(float(rdb['rjd'][row]))
         velocity.append(float(rdb['vrad'][row]))
-        berv.append(float(rdata['berv'][row]))
+        # the BERV LBL used: the one the wavelengths of the file still hold
+        berv.append(float(rdata['berv_lbl'][row]))
     if len(files) == 0:
         log.warning('No science file found for the river plots')
         return []
@@ -1597,40 +1851,48 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
         log.warning('No science file found for the debug plot of the lines')
         return None, None
     # -------------------------------------------------------------------------
-    # everything compute_rv needs
+    # everything compute_rv needs (a run whose mask or template is not next
+    #   to its rdb file cannot be done again: say so and move on)
     # -------------------------------------------------------------------------
-    mask_file = inst.mask_file(models_dir, mask_dir)
-    science_template_file = inst.template_file(template_dir, 'science')
-    comparison_template_file = inst.template_file(template_dir, 'comparison')
-    blaze_file = inst.blaze_file(calib_dir)
-    reftable_file, reftable_exists = inst.ref_table_file(lblrt_dir, mask_file)
-    if blaze_file is not None:
-        blaze = inst.load_blaze(blaze_file, science_file=science_files[0])
-    else:
-        blaze = None
-    ref_table = general.make_ref_dict(inst, reftable_file, reftable_exists,
-                                      science_files, mask_file, calib_dir)
-    sargs = [inst, science_template_file, mask_file]
-    science_sys_vel_props = general.get_systemic_vel_props(*sargs)
-    cargs = [inst, comparison_template_file, mask_file]
-    comparison_sys_vel_props = general.get_systemic_vel_props(*cargs)
-    splines = general.spline_template(inst, comparison_template_file,
-                                      comparison_sys_vel_props['MASK_SYS_VEL'],
-                                      models_dir)
-    # -------------------------------------------------------------------------
-    # the file itself, as lbl_compute reads it
-    # -------------------------------------------------------------------------
-    sci_data, sci_hdr = inst.load_science_file(science_file)
-    sci_wave = inst.get_wave_solution(science_file, sci_data, sci_hdr)
-    if blaze is None:
-        blazeimage, blaze_flag = inst.load_blaze_from_science(
-            science_file, sci_data, sci_hdr, calib_dir)
-    elif np.sum(blaze.ravel()) == len(blaze.ravel()):
-        blazeimage, blaze_flag = np.array(blaze), True
-    else:
-        blazeimage, blaze_flag = np.array(blaze), False
-    if blaze_flag:
-        sci_data, blazeimage = inst.no_blaze_corr(sci_data, sci_wave)
+    try:
+        mask_file = inst.mask_file(models_dir, mask_dir)
+        science_template_file = inst.template_file(template_dir, 'science')
+        comparison_template_file = inst.template_file(template_dir,
+                                                      'comparison')
+        blaze_file = inst.blaze_file(calib_dir)
+        reftable_file, reftable_exists = inst.ref_table_file(lblrt_dir,
+                                                             mask_file)
+        if blaze_file is not None:
+            blaze = inst.load_blaze(blaze_file, science_file=science_files[0])
+        else:
+            blaze = None
+        ref_table = general.make_ref_dict(inst, reftable_file,
+                                          reftable_exists, science_files,
+                                          mask_file, calib_dir)
+        sargs = [inst, science_template_file, mask_file]
+        science_sys_vel_props = general.get_systemic_vel_props(*sargs)
+        cargs = [inst, comparison_template_file, mask_file]
+        comparison_sys_vel_props = general.get_systemic_vel_props(*cargs)
+        splines = general.spline_template(
+            inst, comparison_template_file,
+            comparison_sys_vel_props['MASK_SYS_VEL'], models_dir)
+        # the file itself, as lbl_compute reads it
+        sci_data, sci_hdr = inst.load_science_file(science_file)
+        sci_wave = inst.get_wave_solution(science_file, sci_data, sci_hdr)
+        if blaze is None:
+            blazeimage, blaze_flag = inst.load_blaze_from_science(
+                science_file, sci_data, sci_hdr, calib_dir)
+        elif np.sum(blaze.ravel()) == len(blaze.ravel()):
+            blazeimage, blaze_flag = np.array(blaze), True
+        else:
+            blazeimage, blaze_flag = np.array(blaze), False
+        if blaze_flag:
+            sci_data, blazeimage = inst.no_blaze_corr(sci_data, sci_wave)
+    except Exception as e:
+        wmsg = 'The debug plot of the lines needs the mask and the template '
+        wmsg += 'of the run: {0}: {1}'
+        log.warning(wmsg.format(type(e), str(e)))
+        return None, None
     # -------------------------------------------------------------------------
     # the velocities of that file, for the vectors of the debug plot
     # -------------------------------------------------------------------------
