@@ -1343,6 +1343,10 @@ def plot_river(river: Dict[str, np.ndarray], bandname: str,
     with warnings.catch_warnings(record=True) as _:
         median = np.nanmedian(image, axis=0)
         residual = image - median
+        # each spectrum is brought back to zero as well: an epoch that sits
+        #   above or below the others (the flux calibration of that night,
+        #   say) is not what the residual river plot is about
+        residual -= np.nanmedian(residual, axis=1)[:, None]
         vmin, vmax = np.nanpercentile(image, [2, 98])
         rmin, rmax = np.nanpercentile(residual, [5, 95])
     # the residuals are shown around zero, in units of the median spectrum
@@ -1361,9 +1365,10 @@ def plot_river(river: Dict[str, np.ndarray], bandname: str,
     resimage = frames[1].imshow(residual, aspect='auto', origin='lower',
                                 cmap='RdBu_r', vmin=-rlimit, vmax=rlimit,
                                 interpolation='nearest', extent=extent)
-    frames[1].set(ylabel='spectrum (sorted in time)',
-                  title='the same, with the median spectrum subtracted '
-                        '(5 to 95 percentile of the residuals)')
+    frames[1].set(ylabel='spectrum (sorted in time)')
+    # the colour bar narrows this frame, so the title stays short
+    frames[1].set_title('median spectrum and row medians taken out '
+                        '(5 to 95 percentile)', fontsize=9)
     # the colour bar of the residuals, in units of the median spectrum
     cbar = fig.colorbar(resimage, ax=frames[1], orientation='vertical',
                         fraction=0.04, pad=0.01)
@@ -1906,7 +1911,11 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     river_outputs = river_plots(inst, dparams, rdata, figdir)
     for bandname, figure, nspectra, wave_centre in river_outputs:
         caption = ('{0} band, centred on {1:.2f} nm, {2} spectra. Top: each '
-                   'row is a spectrum, sorted in time. Bottom: their median.'
+                   'row is a spectrum, sorted in time. Middle: the same, '
+                   'with the median spectrum taken out and each row brought '
+                   'back to its own median, so that an epoch sitting above '
+                   'or below the others does not hide the residuals. '
+                   'Bottom: the median spectrum.'
                    ''.format(bandname, wave_centre, nspectra))
         body.append(latex_figure(figure, caption))
         figures.append(figure)
@@ -1924,7 +1933,8 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 'run. Each line of the mask is drawn in its own colour, so '
                 'the edges of the lines are where the colours change. One '
                 'order per photometric band is drawn, the order closest to '
-                'the middle of the band, over the central tenth of it.')
+                'the middle of the band, over the central fifth of it. The '
+                'dashed lines are the edges of the lines of the mask.')
     linefigs, linefile = line_edge_plot(inst, dparams, rdata, figdir)
     if len(linefigs) == 0:
         body.append('The plot could not be made for this run.')
@@ -1933,7 +1943,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
             where = 'order {0}'.format(order)
         else:
             where = 'the {0} band (order {1})'.format(band, order)
-        caption = ('The lines of {0} in {1}, over the central tenth of the '
+        caption = ('The lines of {0} in {1}, over the central fifth of the '
                    'order ({2:.2f} to {3:.2f} nm, {4} lines). Top: the '
                    'spectrum, line by line, over the template (grey). '
                    'Bottom: the difference between the two.'
@@ -2186,7 +2196,7 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     compute_rv. Each line is drawn in its own colour, so the edges of the
     lines are where the colours change. One order per photometric band is
     drawn, the one closest to the middle of the band, and only the central
-    tenth of it.
+    fifth of it.
 
     :param inst: Instrument instance
     :param dparams: dict, the directories of this run
@@ -2280,7 +2290,7 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     # -------------------------------------------------------------------------
     # the figures, as plot.compute_line_plot draws them: one order per
     #   photometric band (the order closest to the middle of the band), and
-    #   only the central tenth of that order, so that the lines are readable
+    #   only the central fifth of that order, so that the lines are readable
     # -------------------------------------------------------------------------
     wavegrid = plot_dict['WAVEGRID']
     model = plot_dict['MODEL']
@@ -2324,9 +2334,9 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     # -------------------------------------------------------------------------
     figures = []
     for band_name, ord_num in chosen:
-        # the central tenth of the order
+        # the central fifth of the order
         centre = omid[ord_num]
-        half = 0.05 * (omax[ord_num] - omin[ord_num])
+        half = 0.10 * (omax[ord_num] - omin[ord_num])
         wmin, wmax = centre - half, centre + half
         fig, frames = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
         # the template
@@ -2334,6 +2344,7 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
                        alpha=0.3, label='template')
         # each line in its own colour: the edges are where the colours change
         nlines, label = 0, 'line'
+        edges, fluxes = [], []
         for line_it in range(len(line_orders)):
             if line_orders[line_it] != ord_num:
                 continue
@@ -2347,15 +2358,32 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
             frames[1].plot(wwline,
                            spec_ord_line[line_it] - model_ord_line[line_it],
                            color=colour, lw=0.8)
+            # where this line starts and stops, and what it is worth
+            edges += [float(np.nanmin(wwline)), float(np.nanmax(wwline))]
+            fluxes.append(np.array(spec_ord_line[line_it], dtype=float))
             nlines, label = nlines + 1, None
         if nlines == 0:
             plt.close(fig)
             continue
+        # the edges of the lines, as dashed lines on both panels
+        for edge in np.unique(np.round(edges, 6)):
+            for frame in frames:
+                frame.axvline(edge, color='grey', ls='--', lw=0.4,
+                              alpha=0.6, zorder=0)
+        # the flux axis holds what is drawn, with a tenth of its span to
+        #   spare, the template of the window included
+        inside = (wavegrid[ord_num] > wmin) & (wavegrid[ord_num] < wmax)
+        shown = np.concatenate(fluxes + [np.array(model[ord_num])[inside]])
+        with warnings.catch_warnings(record=True) as _:
+            flow, fhigh = np.nanmin(shown), np.nanmax(shown)
+        if np.isfinite(flow) and np.isfinite(fhigh) and fhigh > flow:
+            margin = 0.05 * (fhigh - flow)
+            frames[0].set_ylim(flow - margin, fhigh + margin)
         if band_name == '':
             title = 'Lines of {0} (order {1})'
             title = title.format(os.path.basename(science_file), ord_num)
         else:
-            title = 'Lines of {0} ({1} band, order {2}, central 10 percent)'
+            title = 'Lines of {0} ({1} band, order {2}, central 20 percent)'
             title = title.format(os.path.basename(science_file), band_name,
                                  ord_num)
         frames[0].set(ylabel='flux', title=title, xlim=[wmin, wmax])
