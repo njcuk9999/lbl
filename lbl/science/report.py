@@ -1882,16 +1882,15 @@ def disclaimer() -> str:
 def papers_to_cite() -> str:
     """
     The papers to cite, as they are written in a paper: the author and the
-    year, linked to their page on ADS, and their number in the references
+    year, linked to their page on ADS
 
     :return: str, the LaTeX
     """
     items = []
-    for what, citation, key, bibcode in CITE_PAPERS:
-        items.append('{0} {1} for {2}'
+    for what, citation, _, bibcode in CITE_PAPERS:
+        items.append('{0} for {1}'
                      ''.format(latex_link(citation,
-                                          URL_ADS.format(bibcode)),
-                               cite(key), what))
+                                          URL_ADS.format(bibcode)), what))
     return '{0} and {1}'.format(', '.join(items[:-1]), items[-1])
 
 
