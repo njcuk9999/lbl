@@ -62,6 +62,8 @@ REF_LS = ('N. R. Lomb, Ap\\&SS 39, 447 (1976); J. D. Scargle, ApJ 263, 835 '
           '(the floating mean periodogram used here)')
 URL_EXOPLANET_EU = 'https://exoplanet.eu/catalog/'
 URL_SIMBAD_TAP = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync'
+# the NASA exoplanet archive, for the references of the published planets
+URL_NASA_TAP = 'https://exoplanetarchive.ipac.caltech.edu/TAP/sync'
 # how close a star of exoplanet.eu must be to the target [arcsec]
 MATCH_RADIUS = 30.0
 # the periods marked on every periodogram [days]: a day and the year and its
@@ -256,7 +258,8 @@ def time_series(rdb: Table, name: str, ename: str
 
 
 def remove_drift(time: np.ndarray, value: np.ndarray, error: np.ndarray
-                 ) -> Tuple[np.ndarray, float, float]:
+                 ) -> Tuple[np.ndarray, float, float, Optional[np.ndarray],
+                            Optional[np.ndarray], float]:
     """
     Take a long term drift out of a time series
 
@@ -269,17 +272,20 @@ def remove_drift(time: np.ndarray, value: np.ndarray, error: np.ndarray
     :param error: np.ndarray, the error
 
     :return: tuple, 1. the value without the drift, 2. the drift [value/day],
-             3. its uncertainty
+             3. its uncertainty, 4. the two coefficients of the line, 5. their
+             covariance, 6. the time the line is centred on [days]
     """
     if len(value) < 5:
-        return value, np.nan, np.nan
-    # a straight line in time, with the error bars as weights
+        return value, np.nan, np.nan, None, None, 0.0
+    # a straight line in time, with the error bars as weights, centred on the
+    #   middle of the observations so that the two parameters are independent
+    tmean = float(np.mean(time))
     with warnings.catch_warnings(record=True) as _:
-        coeffs, cov = np.polyfit(time - np.mean(time), value, 1,
-                                 w=1 / error, cov=True)
+        coeffs, cov = np.polyfit(time - tmean, value, 1, w=1 / error, cov=True)
     drift, sdrift = float(coeffs[0]), float(np.sqrt(cov[0, 0]))
     # the value without it
-    return value - np.polyval(coeffs, time - np.mean(time)), drift, sdrift
+    detrended = value - np.polyval(coeffs, time - tmean)
+    return detrended, drift, sdrift, coeffs, cov, tmean
 
 
 def basic_stats(time: np.ndarray, value: np.ndarray,
@@ -719,6 +725,110 @@ def name_variants(name: str) -> List[str]:
     return sorted(variants)
 
 
+def nasa_archive_planets(names: List[str]) -> Optional[Table]:
+    """
+    The published planets of a star in the NASA exoplanet archive, with the
+    reference of their discovery and of their parameters
+
+    exoplanet.eu says which planets are known; the archive is asked for the
+    papers behind them, which it gives with a link to ADS. The default
+    parameter set of each planet is taken (default_flag = 1).
+
+    :param names: list of str, the names the star could be under
+
+    :return: astropy Table or None, one row per planet
+    """
+    import urllib.parse
+    import urllib.request
+    # the names to ask for, without the ones that are clearly not a host name
+    hosts = []
+    for name in names:
+        name = str(name).strip()
+        if len(name) == 0 or "'" in name:
+            continue
+        if name not in hosts:
+            hosts.append(name)
+    if len(hosts) == 0:
+        return None
+    # one query for all the names
+    inlist = ', '.join(["'{0}'".format(host) for host in hosts[:40]])
+    query = ('select pl_name, hostname, disc_year, disc_refname, pl_refname, '
+             'pl_orbper, pl_bmassj, pl_rvamp, discoverymethod from ps where '
+             'default_flag = 1 and hostname in ({0})'.format(inlist))
+    params = dict(query=query, format='csv')
+    url = URL_NASA_TAP + '?' + urllib.parse.urlencode(params)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as handle:
+            text = handle.read().decode('utf-8')
+    except Exception as e:
+        log.warning('The NASA archive could not be reached: {0}'.format(str(e)))
+        return None
+    if not text.lower().startswith('pl_name'):
+        return None
+    try:
+        table = Table.read(text, format='ascii.csv', fast_reader=False)
+    except Exception as _:
+        return None
+    if len(table) == 0:
+        return None
+    msg = 'NASA archive: {0} planet(s) of {1}'
+    log.general(msg.format(len(table), ', '.join(np.unique(table['hostname']))))
+    return table
+
+
+def same_planet(name1: str, name2: str) -> bool:
+    """
+    Whether two catalogues mean the same planet
+
+    A planet is a star and a letter, and the catalogues do not write the star
+    the same way: exoplanet.eu has 'Kepler-21 Ab' (the component A of the
+    star, planet b) where the NASA archive has 'Kepler-21 b'. The letter of
+    the planet is compared, and the star with the variants of its name.
+
+    :param name1: str, the name in one catalogue
+    :param name2: str, the name in the other
+
+    :return: bool, True if they are the same planet
+    """
+    def _split(name):
+        simple = simple_name(name)
+        # the letter of the planet is the last character
+        if len(simple) < 2 or not simple[-1].isalpha():
+            return simple, ''
+        return simple[:-1], simple[-1]
+    host1, letter1 = _split(name1)
+    host2, letter2 = _split(name2)
+    if letter1 != letter2 or len(letter1) == 0:
+        return False
+    # the star, with the variants of its name (Kepler-21 A and Kepler-21)
+    return len(set(name_variants(host1)) & set(name_variants(host2))) > 0
+
+
+def reference_text(refname: str) -> Tuple[str, str]:
+    """
+    The author and year of a reference of the NASA archive, and its link
+
+    The archive gives them as a piece of html, such as
+    '<a refstr=... href=https://ui.adsabs.harvard.edu/abs/... >Howell et al.
+    2012</a>'
+
+    :param refname: str, the reference as the archive gives it
+
+    :return: tuple, 1. the author and year, 2. the url (empty if there is none)
+    """
+    text = str(refname)
+    if '<a' not in text:
+        return text.strip(), ''
+    # what is between the tags is the author and the year
+    label = text.split('>')[-2].split('<')[0] if '>' in text else text
+    # and the link is the href
+    url = ''
+    for piece in text.split():
+        if piece.startswith('href='):
+            url = piece[len('href='):].strip('">')
+    return label.strip(), url
+
+
 def simple_name(name: str) -> str:
     """
     A name without its spaces, dashes, underscores and case, and without the
@@ -971,7 +1081,8 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
         return out
     # the long term drift, taken out before the periodogram so that it does
     #   not spread its power over every period
-    detrended, drift, sdrift = remove_drift(time, value, error)
+    dout = remove_drift(time, value, error)
+    detrended, drift, sdrift, dcoeffs, dcov, tmean = dout
     out['drift'], out['sdrift'] = drift, sdrift
     # the periodogram and the FIP, without the drift
     power = lomb_scargle(time, detrended, error, periods)
@@ -1000,12 +1111,19 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
     # the time series, with the drift that was taken out
     frames[0].errorbar(time, value, yerr=error, fmt='.', ms=3, color='k',
                        elinewidth=0.5, capsize=0, alpha=0.7)
-    if np.isfinite(drift):
-        trend = value - detrended
-        order = np.argsort(time)
-        frames[0].plot(time[order], trend[order], '-', color='tab:red',
-                       lw=1.0, label='drift {0:.3g} per day ({1:.1f} sigma)'
-                                     ''.format(drift, abs(drift / sdrift)))
+    if np.isfinite(drift) and dcov is not None:
+        # the line over the whole time span, and its one sigma envelope from
+        #   the covariance of its two parameters
+        tvec = np.linspace(np.min(time), np.max(time), 100)
+        trend = np.polyval(dcoeffs, tvec - tmean)
+        design = np.array([tvec - tmean, np.ones(len(tvec))])
+        envelope = np.sqrt(np.sum(design * (dcov @ design), axis=0))
+        label = ('drift {0:.3g} +- {1:.2g} per day ({2:.1f} sigma)'
+                 ''.format(drift, sdrift, abs(drift / sdrift)))
+        frames[0].plot(tvec, trend, '-', color='tab:red', lw=1.0, label=label)
+        frames[0].fill_between(tvec, trend - envelope, trend + envelope,
+                               color='tab:red', alpha=0.2, lw=0,
+                               label='1 sigma of the drift')
         frames[0].legend(fontsize=8)
     frames[0].set(xlabel='rjd [days]',
                   ylabel='{0} [{1}]'.format(name, unit),
@@ -1202,6 +1320,23 @@ def latex_escape(text: str) -> str:
     for char in ['\\', '&', '%', '$', '#', '_', '{', '}']:
         out = out.replace(char, '\\' + char)
     return out.replace('~', '\\textasciitilde ').replace('^', '\\^{}')
+
+
+def latex_link(text: str, url: str) -> str:
+    """
+    A piece of text, as a link when there is a url
+
+    :param text: str, the text
+    :param url: str, the url (can be empty)
+
+    :return: str, the LaTeX
+    """
+    if len(text.strip()) == 0:
+        return '--'
+    if len(url.strip()) == 0:
+        return latex_escape(text)
+    return '\\href{%s}{%s}' % (url.replace('%', '\\%'),
+                              latex_escape(text))
 
 
 def number(value: Any, fmt: str = '{0:.4g}') -> str:
@@ -1447,24 +1582,59 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                     'not mean there is none: the name may be written '
                     'differently there).')
     else:
+        # the papers behind them, from the NASA exoplanet archive
+        hostnames = [str(name) for name in np.unique(planets['star_name'])]
+        if target is not None:
+            hostnames += [target['main_id']] + target.get('ids', [])
+        nasa = nasa_archive_planets(hostnames)
         header = ['Planet', 'Period [d]', 'Mass [M$_{\\rm Jup}$]',
-                  'Radius [R$_{\\rm Jup}$]', 'Detection', 'Status']
+                  'K [m/s]', 'Detection', 'Status', 'Discovery',
+                  'Parameters']
         rows = []
         for row in range(len(planets)):
             def _get(colname, fmt='{0:.4g}'):
                 if colname not in planets.colnames:
                     return '--'
                 return number(planets[colname][row], fmt)
+            # the row of this planet in the NASA archive, by name
+            nrow = None
+            if nasa is not None:
+                for it in range(len(nasa)):
+                    if same_planet(str(planets['name'][row]),
+                                   str(nasa['pl_name'][it])):
+                        nrow = it
+                        break
+            # the amplitude of its signal and the two references
+            if nrow is None:
+                amplitude, discovery, parameters = '--', '--', '--'
+                # the catalogue says at least when it was announced
+                year = _getstr(planets, 'discovered', row)
+                publication = _getstr(planets, 'publication', row)
+                if year != '--':
+                    discovery = latex_escape('{0} ({1})'.format(publication,
+                                                                year))
+            else:
+                amplitude = number(nasa['pl_rvamp'][nrow], '{0:.2f}')
+                discovery = latex_link(*reference_text(nasa['disc_refname'][nrow]))
+                parameters = latex_link(*reference_text(nasa['pl_refname'][nrow]))
             rows.append([latex_escape(planets['name'][row]),
-                         _get('orbital_period'), _get('mass'),
-                         _get('radius'),
+                         _get('orbital_period'), _get('mass'), amplitude,
                          latex_escape(_getstr(planets, 'detection_type', row)),
-                         latex_escape(_getstr(planets, 'planet_status', row))])
-        body.append(latex_table('The planets of this star in exoplanet.eu',
-                                header, rows,
-                                align='lrrrll'))
+                         latex_escape(_getstr(planets, 'planet_status', row)),
+                         discovery, parameters])
+        body.append(latex_table('The planets of this star. The periods, the '
+                                'masses and the status come from '
+                                'exoplanet.eu; K, the amplitude of the '
+                                'velocity signal, and the two references come '
+                                'from the NASA exoplanet archive (the '
+                                'reference of the discovery and the one of '
+                                'the parameters kept there). The references '
+                                'link to ADS', header, rows,
+                                align='lrrrlllll', size='footnotesize',
+                                landscape=True))
         body.append('Their periods are marked on every periodogram of this '
-                    'report.')
+                    'report. K says what the velocities of this run would '
+                    'have to reach to see them.')
     # -------------------------------------------------------------------------
     # 3. the indicators, one by one
     # -------------------------------------------------------------------------
@@ -1482,7 +1652,8 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         results.append(result)
     # the summary table of every indicator
     header = ['Indicator', 'N', 'Median', 'rms', 'Robust', 'Error',
-              'Excess', 'Drift per day', 'Corr. RV', 'Period [d]', 'Min FIP']
+              'Excess', 'Drift per day', 'Drift error', 'Drift sigma',
+              'Corr. RV', 'Period [d]', 'Min FIP']
     rows = []
     for result in results:
         rows.append([latex_escape(result['name']), '{0}'.format(result['n']),
@@ -1491,6 +1662,11 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                      number(result.get('error')),
                      number(result.get('excess')),
                      number(result.get('drift'), '{0:.3g}'),
+                     number(result.get('sdrift'), '{0:.2g}'),
+                     number(abs(result.get('drift', np.nan) /
+                                result.get('sdrift', np.nan))
+                            if result.get('sdrift') else np.nan,
+                            '{0:.1f}'),
                      number(result.get('corr_rv'), '{0:.2f}'),
                      number(result.get('best_period'), '{0:.3f}'),
                      number(result.get('min_fip'), '{0:.2e}')])
@@ -1638,9 +1814,10 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     # write the LaTeX, compile it and bundle the figures
     # -------------------------------------------------------------------------
     title = 'LBL report: {0}'.format(latex_escape(rdata['object']))
-    subtitle = '{0}, {1} spectra, {2} nights, {3}'.format(
-        latex_escape(rdata['instrument']), len(time), nights,
-        base.Time.now().iso[:19])
+    subtitle = '{0}, {1} spectra, {2} nights, from {3} to {4}'.format(
+        latex_escape(rdata['instrument']), len(time), nights, first[:10],
+        last[:10])
+    subtitle += '\\\\[2pt] written on {0}'.format(base.Time.now().iso[:19])
     texfile = os.path.join(outdir, 'lbl_report_{0}.tex'.format(objname))
     with open(texfile, 'w') as tex:
         tex.write(latex_header(title, subtitle))
