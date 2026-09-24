@@ -585,6 +585,155 @@ def correlation(xvalue: np.ndarray, yvalue: np.ndarray) -> Tuple[float, float]:
 # =============================================================================
 # Define the known planets (exoplanet.eu)
 # =============================================================================
+def to_rjd(value: float) -> float:
+    """
+    A time of a catalogue, as the rjd of the rdb files (jd - 2400000)
+
+    Catalogues write their epochs as a full jd (2455093.8), as bjd - 2450000
+    (5093.8) or as an rjd already (55093.8): the three are told apart by
+    their size.
+
+    :param value: float, the time of the catalogue
+
+    :return: float, the time [rjd], or nan
+    """
+    try:
+        time = float(value)
+    except Exception as _:
+        return np.nan
+    if not np.isfinite(time) or time <= 0:
+        return np.nan
+    # a full jd
+    if time > 2.4e6:
+        return time - 2400000.0
+    # an rjd (the rdb files of any instrument are in this range)
+    if time > 4.0e4:
+        return time
+    # bjd - 2450000
+    return time + 50000.0
+
+
+def planet_ephemerides(planets: Optional[Table]
+                       ) -> List[Dict[str, Any]]:
+    """
+    The planets that can be folded in phase: their period and, when the
+    catalogue has one, the epoch of their transit or of their conjunction
+
+    :param planets: astropy Table or None, the planets of exoplanet.eu
+
+    :return: list of dict, one per planet (name, period, t0, t0_source)
+    """
+    out = []
+    if planets is None or 'orbital_period' not in planets.colnames:
+        return out
+    for row in range(len(planets)):
+        period = planets['orbital_period'][row]
+        if not np.isfinite(period) or period <= 0:
+            continue
+        # the epoch of the fold: the transit first, then the conjunction,
+        #   then the passage at the periastron
+        t0, t0_source = np.nan, 'the first observation'
+        for column, source in [('tzero_tr', 'the transit'),
+                               ('tconj', 'the conjunction'),
+                               ('tperi', 'the periastron')]:
+            if column not in planets.colnames:
+                continue
+            t0 = to_rjd(planets[column][row])
+            if np.isfinite(t0):
+                t0_source = source
+                break
+        out.append(dict(name=str(planets['name'][row]),
+                        period=float(period), t0=t0, t0_source=t0_source))
+    # the shortest period first
+    return sorted(out, key=lambda item: item['period'])
+
+
+def fit_sinusoids(time: np.ndarray, value: np.ndarray, error: np.ndarray,
+                  periods: List[float]
+                  ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """
+    Fit one sinusoid of a known period per planet, all at once
+
+    The periods are held at the value of the catalogue, so the model is
+    linear in its parameters: an offset and, for each planet, the amplitude
+    of a cosine and of a sine. The error bars are the weights.
+
+    :param time: np.ndarray, the time [days]
+    :param value: np.ndarray, the value
+    :param error: np.ndarray, the error
+    :param periods: list of float, the period of each planet [days]
+
+    :return: tuple, 1. the parameters (offset, then cos and sin of each
+             planet), 2. their covariance
+    """
+    # the design matrix: the offset and the two terms of each period
+    columns = [np.ones(len(time))]
+    for period in periods:
+        angle = 2 * np.pi * time / period
+        columns += [np.cos(angle), np.sin(angle)]
+    design = np.array(columns).T
+    # the error bars as weights
+    weight = 1.0 / error
+    try:
+        wdesign = design * weight[:, None]
+        coeffs, _, _, _ = np.linalg.lstsq(wdesign, value * weight, rcond=None)
+        cov = np.linalg.inv(np.dot(wdesign.T, wdesign))
+    except Exception as _:
+        return None, None
+    return coeffs, cov
+
+
+def sinusoid_amplitude(coeffs: np.ndarray, cov: np.ndarray, index: int
+                       ) -> Tuple[float, float]:
+    """
+    The amplitude of one of the sinusoids of fit_sinusoids, and its error
+
+    :param coeffs: np.ndarray, the parameters of the fit
+    :param cov: np.ndarray, their covariance
+    :param index: int, the rank of the planet (its first parameter is at
+                  1 + 2 * index)
+
+    :return: tuple, the amplitude and its error
+    """
+    first = 1 + 2 * index
+    acoeff, bcoeff = coeffs[first], coeffs[first + 1]
+    amplitude = float(np.sqrt(acoeff ** 2 + bcoeff ** 2))
+    if amplitude == 0 or cov is None:
+        return amplitude, np.nan
+    # the amplitude is sqrt(a^2 + b^2): its error comes from the covariance
+    #   of a and b
+    variance = (acoeff ** 2 * cov[first, first]
+                + bcoeff ** 2 * cov[first + 1, first + 1]
+                + 2 * acoeff * bcoeff * cov[first, first + 1])
+    return amplitude, float(np.sqrt(max(variance, 0)) / amplitude)
+
+
+def phase_bins(phase: np.ndarray, value: np.ndarray, error: np.ndarray,
+               nbins: int = 12) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    The weighted mean of a phase folded series in bins of phase
+
+    :param phase: np.ndarray, the phase (0 to 1)
+    :param value: np.ndarray, the value
+    :param error: np.ndarray, the error
+    :param nbins: int, the number of bins
+
+    :return: tuple, the middle of the bins, the mean and its error
+    """
+    edges = np.linspace(0, 1, nbins + 1)
+    centres, means, errors = [], [], []
+    for it in range(nbins):
+        inside = (phase >= edges[it]) & (phase < edges[it + 1])
+        inside &= np.isfinite(value) & np.isfinite(error) & (error > 0)
+        if np.sum(inside) == 0:
+            continue
+        weight = 1.0 / error[inside] ** 2
+        centres.append(0.5 * (edges[it] + edges[it + 1]))
+        means.append(float(np.sum(value[inside] * weight) / np.sum(weight)))
+        errors.append(float(1.0 / np.sqrt(np.sum(weight))))
+    return np.array(centres), np.array(means), np.array(errors)
+
+
 def simbad_target(objname: str) -> Optional[Dict[str, Any]]:
     """
     The target in SIMBAD: its main name, its coordinates and its identifiers
@@ -923,10 +1072,17 @@ def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
     # the spectra, one by one
     # -------------------------------------------------------------------------
     river = np.full((len(science_files), len(grid)), np.nan)
+    unread = []
     for it, filename in enumerate(science_files):
-        # the science data and its wave solution, the LBL way
-        sci_image, sci_hdr = inst.load_science_file(filename)
-        wavegrid = inst.get_wave_solution(filename, sci_image, sci_hdr)
+        # the science data and its wave solution, the LBL way (a file that
+        #   is not there any more, or that cannot be read, is skipped: the
+        #   report is written after the run, sometimes long after)
+        try:
+            sci_image, sci_hdr = inst.load_science_file(filename)
+            wavegrid = inst.get_wave_solution(filename, sci_image, sci_hdr)
+        except Exception as _:
+            unread.append(os.path.basename(filename))
+            continue
         # the rest frame of the star, as in compute_rv (everything in m/s)
         sys_rv = berv[it] + velocity[it]
         restwave = mp.doppler_shift(wavegrid, -sys_rv)
@@ -949,6 +1105,10 @@ def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
         river[it] = np.interp(grid, dvelo[inside], oflux[inside] / norm,
                               left=np.nan, right=np.nan)
     # -------------------------------------------------------------------------
+    if len(unread) > 0:
+        wmsg = '{0} of the {1} spectra could not be read (the first one is '
+        wmsg += '{2})'
+        log.warning(wmsg.format(len(unread), len(science_files), unread[0]))
     # nothing read: no plot
     if not np.any(np.isfinite(river)):
         return None
@@ -1214,6 +1374,94 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
         twin.tick_params(axis='y', labelcolor='tab:orange')
     fig.tight_layout()
     out['figure'] = save_figure(fig, figdir, 'indicator_{0}'.format(name))
+    return out
+
+
+def plot_phase_folds(rdata: Dict[str, Any], planets: Optional[Table],
+                     figdir: str) -> List[Dict[str, Any]]:
+    """
+    The velocities, drift taken out, folded on the period of each planet
+
+    One sinusoid per planet is fitted at once, with the periods held at the
+    value of the catalogue. In the fold of a planet the sinusoids of the
+    other planets are taken out of the points, so that each fold shows that
+    planet alone.
+
+    :param rdata: dict, the data of the report
+    :param planets: astropy Table or None, the planets of exoplanet.eu
+    :param figdir: str, the directory of the figures
+
+    :return: list of dict, one per planet (its figure and its numbers)
+    """
+    out = []
+    ephemerides = planet_ephemerides(planets)
+    if len(ephemerides) == 0:
+        return out
+    # the velocities, without their drift (the time series of the report)
+    time, value, error = time_series(rdata['rdb'], 'vrad', 'svrad')
+    if len(time) < 10:
+        return out
+    detrended = remove_drift(time, value, error)[0]
+    # one sinusoid per planet, all at once
+    periods = [item['period'] for item in ephemerides]
+    coeffs, cov = fit_sinusoids(time, detrended, error, periods)
+    if coeffs is None:
+        return out
+    # what each planet is worth, at every time of the run
+    models = []
+    for it, period in enumerate(periods):
+        angle = 2 * np.pi * time / period
+        models.append(coeffs[1 + 2 * it] * np.cos(angle)
+                      + coeffs[2 + 2 * it] * np.sin(angle))
+    # -------------------------------------------------------------------------
+    for it, item in enumerate(ephemerides):
+        period = item['period']
+        # the other planets, out of the points of this fold
+        others = np.zeros(len(time))
+        for jt in range(len(models)):
+            if jt != it:
+                others = others + models[jt]
+        points = detrended - coeffs[0] - others
+        # the phase, from the epoch of the catalogue when there is one
+        t0 = item['t0']
+        if not np.isfinite(t0):
+            t0 = float(np.min(time))
+        phase = np.mod((time - t0) / period, 1.0)
+        # the amplitude of this planet, from the fit
+        amplitude, samplitude = sinusoid_amplitude(coeffs, cov, it)
+        # the figure
+        fig, frame = plt.subplots(figsize=(8, 4.5))
+        frame.errorbar(phase, points, yerr=error, fmt='.', ms=3, color='k',
+                       elinewidth=0.5, capsize=0, alpha=0.5,
+                       label='{0} points'.format(len(phase)))
+        # the same points, averaged in bins of phase
+        bphase, bvalue, berror = phase_bins(phase, points, error)
+        if len(bphase) > 0:
+            frame.errorbar(bphase, bvalue, yerr=berror, fmt='o', ms=5,
+                           color='tab:blue', elinewidth=1.2, capsize=2,
+                           label='binned in phase')
+        # the sinusoid of this planet
+        pgrid = np.linspace(0, 1, 200)
+        angle = 2 * np.pi * (t0 + pgrid * period) / period
+        curve = (coeffs[1 + 2 * it] * np.cos(angle)
+                 + coeffs[2 + 2 * it] * np.sin(angle))
+        frame.plot(pgrid, curve, '-', color='tab:red', lw=1.2,
+                   label='K = {0:.2f} +- {1:.2f} m/s'.format(amplitude,
+                                                             samplitude))
+        title = '{0}: P = {1:.6g} d, phase 0 at {2}'
+        frame.set(xlabel='phase', ylabel='vrad, drift removed [m/s]',
+                  xlim=[0, 1],
+                  title=title.format(item['name'], period, item['t0_source']))
+        frame.grid(color='grey', alpha=0.3, lw=0.5)
+        frame.set_axisbelow(True)
+        frame.legend(fontsize=8)
+        fig.tight_layout()
+        name = 'phase_{0}'.format(item['name'].replace(' ', '_'))
+        item['figure'] = save_figure(fig, figdir, name)
+        item['amplitude'] = amplitude
+        item['samplitude'] = samplitude
+        item['nothers'] = len(models) - 1
+        out.append(item)
     return out
 
 
@@ -1716,6 +1964,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     # 2. the known planets
     # -------------------------------------------------------------------------
     body.append('\\section{Known and suspected planets}')
+    nasa = None
     if target is None:
         matched = ('matched on the name of the star (SIMBAD {0} did not '
                    'answer)'.format(cite('simbad')))
@@ -1788,7 +2037,66 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                     'have to reach to see them. The catalogues are %s and '
                     '%s.' % (cite('exoplaneteu'), cite('nasa')))
     # -------------------------------------------------------------------------
-    # 3. the indicators, one by one
+    # 3. the phase folds of the known planets
+    # -------------------------------------------------------------------------
+    folds = plot_phase_folds(rdata, planets, figdir)
+    if len(folds) > 0:
+        body.append('\\section{The velocities folded on the planets}')
+        text = ('The velocities of the run, with their long term drift taken '
+                'out, folded on the period of each planet. The periods are '
+                'held at the value of the catalogue; the amplitude and the '
+                'phase of every planet are fitted at once, one sinusoid '
+                'each, with the error bars as weights. ')
+        if len(folds) > 1:
+            text += ('The fold of a planet has the sinusoids of the other '
+                     '{0} taken out of its points, so that each fold shows '
+                     'that planet alone. '.format(len(folds) - 1))
+        text += ('The blue points are the average of the black ones in bins '
+                 'of phase, and the red curve is the sinusoid of the fit. A '
+                 'circular orbit is all this assumes: an eccentric planet '
+                 'does not look like its curve.')
+        body.append(text)
+        # what the fit says, next to what the catalogue says
+        rows = []
+        for fold in folds:
+            catalogue = '--'
+            if nasa is not None:
+                for it in range(len(nasa)):
+                    if same_planet(fold['name'], str(nasa['pl_name'][it])):
+                        catalogue = number(nasa['pl_rvamp'][it], '{0:.2f}')
+                        break
+            if np.isfinite(fold['samplitude']) and fold['samplitude'] > 0:
+                fitted = '{0:.2f} +- {1:.2f}'.format(fold['amplitude'],
+                                                     fold['samplitude'])
+                sigma = '{0:.1f}'.format(fold['amplitude']
+                                         / fold['samplitude'])
+            else:
+                fitted, sigma = '{0:.2f}'.format(fold['amplitude']), '--'
+            rows.append([latex_escape(fold['name']),
+                         '{0:.6g}'.format(fold['period']), fitted, sigma,
+                         catalogue, latex_escape(fold['t0_source'])])
+        body.append(latex_table('What the velocities of this run say about '
+                                'each planet, with its period held at the '
+                                'value of the catalogue. K is the amplitude '
+                                'of the fitted sinusoid, and the last '
+                                'columns are the amplitude of the NASA '
+                                'archive and the epoch the fold starts from',
+                                ['Planet', 'Period [d]', 'K fitted [m/s]',
+                                 'K / error', 'K catalogue [m/s]',
+                                 'Phase 0 at'], rows,
+                                align='lrrrrl', size='footnotesize'))
+        for fold in folds:
+            caption = ('{0} folded on {1:.6g} days, the drift of the run '
+                       'taken out'.format(latex_escape(fold['name']),
+                                          fold['period']))
+            if fold['nothers'] > 0:
+                caption += ', and the other planets as well'
+            caption += ('. Black: every point. Blue: the average in bins of '
+                        'phase. Red: the fitted sinusoid.')
+            body.append(latex_figure(fold['figure'], caption))
+            figures.append(fold['figure'])
+    # -------------------------------------------------------------------------
+    # 4. the indicators, one by one
     # -------------------------------------------------------------------------
     body.append('\\section{Radial velocity and the other indicators}')
     body.append('Each indicator gets its time series, its periodogram %s '
@@ -1850,7 +2158,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         body.append(latex_figure(result['figure'], caption))
         figures.append(result['figure'])
     # -------------------------------------------------------------------------
-    # 4. the radial velocity against the berv
+    # 5. the radial velocity against the berv
     # -------------------------------------------------------------------------
     body.append('\\section{Radial velocity against the BERV}')
     body.append('The BERV of each spectrum comes from %s, read from the '
@@ -1875,7 +2183,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                              'straight line fitted to it.'))
     figures.append(bervout['figure'])
     # -------------------------------------------------------------------------
-    # 5. the window of the sampling, and the berv on that sampling
+    # 6. the window of the sampling, and the berv on that sampling
     # -------------------------------------------------------------------------
     body.append('\\section{Sampling}')
     body.append('The spectral window says which periods the sampling alone '
@@ -1898,7 +2206,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                              'observations.'))
     figures.append(windout['figure'])
     # -------------------------------------------------------------------------
-    # 6. the river plots
+    # 7. the river plots
     # -------------------------------------------------------------------------
     body.append('\\section{River plots}')
     width = params['REPORT_RIVER_WIDTH']
@@ -1923,7 +2231,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         body.append('No band of the instrument could be read for the river '
                     'plots.')
     # -------------------------------------------------------------------------
-    # 7. the lines of one file
+    # 8. the lines of one file
     # -------------------------------------------------------------------------
     body.append('\\section{The lines of one spectrum}')
     body.append('The debug plot of lbl\\_compute (PLOT\\_COMPUTE\\_LINES), '
@@ -1952,7 +2260,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         body.append(latex_figure(linefig, caption))
         figures.append(linefig)
     # -------------------------------------------------------------------------
-    # 8. how the numbers were obtained
+    # 9. how the numbers were obtained
     # -------------------------------------------------------------------------
     body.append('\\section{How the numbers were obtained}')
     body.append('\\textbf{Periodogram.} The floating mean periodogram, with '
@@ -1993,7 +2301,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 '%s, and the spectra, for SPIRou and NIRPS, from APERO %s.'
                 % (cite('lbl'), cite('dtemp'), cite('apero')))
     # -------------------------------------------------------------------------
-    # 9. the references
+    # 10. the references
     # -------------------------------------------------------------------------
     body.append(bibliography())
     # -------------------------------------------------------------------------
@@ -2084,7 +2392,9 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
             if basename.startswith(name.split('_' + rdata['object'])[0]):
                 found = basenames[basename]
                 break
-        if found is None:
+        # a file that is not on disk any more (a broken link, say) is left
+        #   out here, once, rather than for every band
+        if found is None or not os.path.exists(found):
             continue
         files.append(found)
         rjd.append(float(rdb['rjd'][row]))
@@ -2213,7 +2523,18 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     models_dir, lblrt_dir = dparams['MODEL_DIR'], dparams['LBLRT_DIR']
     # the file to draw
     science_files = inst.science_files(science_dir)
-    science_files = inst.sort_science_files(science_files)
+    # the files that are not on disk any more (a broken link, say) go first:
+    #   sorting them reads their header
+    science_files = [item for item in science_files if os.path.exists(item)]
+    if len(science_files) == 0:
+        log.warning('No science file could be read for the debug plot of '
+                    'the lines')
+        return [], None
+    try:
+        science_files = inst.sort_science_files(science_files)
+    except Exception as e:
+        wmsg = 'The science files could not be sorted: {0}: {1}'
+        log.warning(wmsg.format(type(e), str(e)))
     science_file = median_snr_file(inst, rdata, science_files)
     if science_file is None:
         log.warning('No science file found for the debug plot of the lines')
