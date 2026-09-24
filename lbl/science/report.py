@@ -1341,6 +1341,12 @@ def date_axis(frame: Any):
     twin.set_xticks(ticks)
     twin.set_xticklabels(labels, fontsize=8, rotation=30, ha='left')
     twin.set_xlabel('date')
+    # the title belongs to the top frame, which the dates now occupy: it
+    #   moves to the date axis, which keeps it clear of the labels
+    title = frame.get_title()
+    if len(title) > 0:
+        frame.set_title('')
+        twin.set_title(title)
 
 
 def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
