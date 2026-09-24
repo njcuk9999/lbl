@@ -51,12 +51,17 @@ speed_of_light_kms = mp.speed_of_light_ms / 1000.0
 # -----------------------------------------------------------------------------
 # the references of the report: each one is cited in the text with cite() and
 #   listed, numbered, at the end
-# the papers to cite when the velocities of a run are published, with the
-#   bibcode of ADS: the box at the top of the report gives them as the
-#   citation commands to paste in a paper
-CITE_BIBCODES = [('LBL', '2022AJ....164...84A'),
-                 ('DTemp', '2024AJ....168..252A'),
-                 ('APERO', '2022PASP..134k4509C')]
+# the papers to cite when the velocities of a run are published: what they
+#   are for, how they are cited, and their bibcode on ADS (the box at the
+#   top of the report links to them)
+CITE_PAPERS = [('LBL', 'Artigau et al. 2022', 'lbl', '2022AJ....164...84A'),
+               ('the temperature indicators', 'Artigau et al. 2024', 'dtemp',
+                '2024AJ....168..252A'),
+               ('APERO (SPIRou, NIRPS)', 'Cook et al. 2022', 'apero',
+                '2022PASP..134k4509C')]
+
+# where a bibcode is read on ADS
+URL_ADS = 'https://ui.adsabs.harvard.edu/abs/{0}/abstract'
 
 REFERENCES = [
     ('lbl', 'E. Artigau, C. Cadieux, N. J. Cook et al., '
@@ -1825,18 +1830,28 @@ def disclaimer() -> str:
              'planets and the drifts are what the numbers say, not what a '
              'human has vetted. Look at the spectra, at the outliers and at '
              'the systematics before believing any of it.\\\\[7pt]',
-             '\\textbf{And if you do publish it,} please cite the LBL paper '
-             '%s, the DTemp paper %s if you use the temperature indicators, '
-             'and the APERO paper %s if the spectra were reduced with APERO '
-             '(SPIRou, NIRPS):\\\\[5pt]'
-             % (cite('lbl'), cite('dtemp'), cite('apero')),
-             ', '.join(['{0}: \\texttt{{\\textbackslash citep\\{{{1}\\}}}}'
-                        ''.format(name, bibcode)
-                        for name, bibcode in CITE_BIBCODES]),
+             '\\textbf{And if you do publish it,} please cite %s.'
+             % papers_to_cite(),
              '}}',
              '\\end{center}',
              '\\vspace{6pt}']
     return '\n'.join(lines)
+
+
+def papers_to_cite() -> str:
+    """
+    The papers to cite, as they are written in a paper: the author and the
+    year, linked to their page on ADS, and their number in the references
+
+    :return: str, the LaTeX
+    """
+    items = []
+    for what, citation, key, bibcode in CITE_PAPERS:
+        items.append('{0} {1} for {2}'
+                     ''.format(latex_link(citation,
+                                          URL_ADS.format(bibcode)),
+                               cite(key), what))
+    return '{0} and {1}'.format(', '.join(items[:-1]), items[-1])
 
 
 def latex_header(title: str, subtitle: str) -> str:
