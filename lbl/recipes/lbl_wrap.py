@@ -18,6 +18,7 @@ from lbl.core import io
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_mask
+from lbl.recipes import lbl_report
 from lbl.recipes import lbl_resmap
 from lbl.recipes import lbl_telluclean
 from lbl.recipes import lbl_template
@@ -45,7 +46,7 @@ REMOVE_KEYS = [  # core
     # run keys
     'RUN_LBL_RESET',
     'RUN_LBL_TELLUCLEAN', 'RUN_LBL_TEMPLATE', 'RUN_LBL_MASK',
-    'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
+    'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE', 'RUN_LBL_REPORT',
     # skip keys
     'SKIP_LBL_TELLUCLEAN', 'SKIP_LBL_TEMPLATE', 'SKIP_LBL_MASK',
     'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
@@ -61,6 +62,7 @@ DEFAULTS['RUN_LBL_TEMPLATE'] = False
 DEFAULTS['RUN_LBL_MASK'] = False
 DEFAULTS['RUN_LBL_COMPUTE'] = False
 DEFAULTS['RUN_LBL_COMPILE'] = False
+DEFAULTS['RUN_LBL_REPORT'] = True
 DEFAULTS['SKIP_LBL_TEMPLATE'] = False
 DEFAULTS['SKIP_LBL_MASK'] = False
 DEFAULTS['SKIP_LBL_COMPUTE'] = False
@@ -254,6 +256,15 @@ def main(runparams: dict):
                              object_comparison=object_comparison,
                              skip_done=runparams['SKIP_LBL_COMPILE'],
                              **keyword_args)
+        # ---------------------------------------------------------------------
+        # run the report code (the very last step: it reads the rdb files)
+        if runparams['RUN_LBL_REPORT'] and data_type == 'SCIENCE':
+            lbl_report.main(instrument=instrument, data_dir=data_dir,
+                            data_source=data_source,
+                            data_type=data_type,
+                            object_science=object_science,
+                            object_comparison=object_comparison,
+                            **keyword_args)
 
 
 

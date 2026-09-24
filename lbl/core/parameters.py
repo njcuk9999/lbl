@@ -241,6 +241,52 @@ params.set(key='MASK_FILE', value='None', source=__NAME__,
            desc='Override the mask to be used (within mask dir or full path)',
            arg='--mask_file', dtype=str)
 
+# =============================================================================
+# Define report parameters (lbl_report)
+# =============================================================================
+# sub directory (relative to the data directory) of the reports
+params.set(key='REPORT_SUBDIR', value='lblreport', source=__NAME__,
+           desc='report sub directory (relative to data directory)',
+           arg='--reportdir', dtype=str)
+
+# shortest period of the periodograms and of the FIP [days]
+params.set(key='REPORT_PERIOD_MIN', value=1.0, source=__NAME__,
+           desc='Shortest period of the periodograms of the report [days]',
+           dtype=float)
+
+# longest period of the periodograms and of the FIP [days]: if None, twice
+#   the time span of the observations
+params.set(key='REPORT_PERIOD_MAX', value=None, source=__NAME__,
+           desc='Longest period of the periodograms of the report [days] '
+                '(None: twice the time span of the observations)',
+           dtype=float)
+
+# prior probability that a planet is present, for the FIP
+params.set(key='REPORT_FIP_PRIOR', value=0.5, source=__NAME__,
+           desc='Prior probability that a planet is present (FIP)',
+           dtype=float)
+
+# maximum number of science files read for the river plots (they are
+#   sub-sampled evenly in time above this)
+params.set(key='REPORT_MAX_RIVER_FILES', value=300, source=__NAME__,
+           desc='Maximum number of science files read for the river plots',
+           dtype=int)
+
+# width of the river plots [km/s], centred on the middle of each band
+params.set(key='REPORT_RIVER_WIDTH', value=500.0, source=__NAME__,
+           desc='Width of the river plots [km/s]', dtype=float)
+
+# whether to look for the known planets of the target in exoplanet.eu
+params.set(key='REPORT_EXOPLANET_EU', value=True, source=__NAME__,
+           desc='Look for the known planets of the target in exoplanet.eu',
+           dtype=bool)
+
+# the catalogue of exoplanet.eu (a csv of the whole catalogue)
+params.set(key='REPORT_EXOPLANET_EU_URL',
+           value='https://exoplanet.eu/catalog/csv/', source=__NAME__,
+           desc='URL of the csv catalogue of exoplanet.eu', dtype=str)
+
+
 # Define ref table format
 params.set(key='REF_TABLE_FMT', value='csv', source=__NAME__,
            desc='Ref table format (i.e. csv)')

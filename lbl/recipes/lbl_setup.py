@@ -240,6 +240,7 @@ def main(**kwargs):
     wrap_dict['RUN_LBL_MASK'] = True
     wrap_dict['RUN_LBL_COMPUTE'] = True
     wrap_dict['RUN_LBL_COMPILE'] = True
+    wrap_dict['RUN_LBL_REPORT'] = True
     wrap_dict['SKIP_LBL_TEMPLATE'] = True
     wrap_dict['SKIP_LBL_MASK'] = True
     wrap_dict['SKIP_LBL_COMPUTE'] = True

@@ -1901,6 +1901,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['HP_WIDTH'] = hp_width
     outputs['TOTAL_DURATION'] = total_time
     outputs['MODEL_VELOCITY'] = model_velocity
+    # the vectors of the debug plot of the lines (lbl_report draws them again
+    #   for one file, in the report)
+    outputs['PLOT_DICT'] = plot_dict
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs
