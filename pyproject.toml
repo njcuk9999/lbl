@@ -13,6 +13,13 @@ description = 'LBL - Line-by-line velocity measurements, an outlier-resistant me
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = 'LICENSE'}
 requires-python = ">=3.12,<3.13"
+# the python packages lbl needs: lbl_report adds nothing to them (it uses
+#   astropy.table, astropy.timeseries, scipy.stats, numpy and matplotlib,
+#   and the standard library for the rest). The pdf of lbl_report is built
+#   with pdflatex, which is not a python package: a LaTeX installation
+#   (TeX Live, MacTeX) with geometry, graphicx, longtable, booktabs,
+#   pdflscape, hyperref, float and xcolor is needed for it. Without it the
+#   report stops at its .tex file and its figures.
 dependencies = [
     "astropy==7.2.0",
     "Bottleneck==1.6.0",

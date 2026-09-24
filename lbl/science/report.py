@@ -49,17 +49,45 @@ log = io.log
 # speed of light in km/s
 speed_of_light_kms = mp.speed_of_light_ms / 1000.0
 # -----------------------------------------------------------------------------
-# references quoted in the report
-REF_FIP = ('N. C. Hara, N. Unger, J.-B. Delisle, R. F. Diaz and D. Segransan, '
-           '\\emph{Improving exoplanet detection capabilities with the false '
-           'inclusion probability}, A\\&A 663, A14 (2022), arXiv:2105.06995')
-REF_SERVAL = ('M. Zechmeister, A. Reiners, P. J. Amado et al., \\emph{Spectrum '
-              'radial velocity analyser (SERVAL)}, A\\&A 609, A12 (2018), '
-              'arXiv:1710.10114 (chromatic index CRX and differential line '
-              'width dLW)')
-REF_LS = ('N. R. Lomb, Ap\\&SS 39, 447 (1976); J. D. Scargle, ApJ 263, 835 '
-          '(1982); M. Zechmeister and M. Kurster, A\\&A 496, 577 (2009) '
-          '(the floating mean periodogram used here)')
+# the references of the report: each one is cited in the text with cite() and
+#   listed, numbered, at the end
+REFERENCES = [
+    ('lbl', 'E. Artigau, C. Cadieux, N. J. Cook et al., '
+            '\\emph{Line-by-line velocity measurements: an outlier-resistant '
+            'method for precision velocimetry}, AJ 164, 84 (2022), '
+            'arXiv:2207.13524'),
+    ('dtemp', 'E. Artigau, C. Cadieux, N. J. Cook et al., '
+              '\\emph{Measuring sub-Kelvin variations in stellar temperature '
+              'with high-resolution spectroscopy}, AJ 168, 252 (2024), '
+              'arXiv:2409.07260'),
+    ('apero', 'N. J. Cook, E. Artigau, R. Doyon et al., \\emph{APERO: a '
+               'PipelinE to Reduce Observations - demonstration with SPIRou}, '
+               'PASP 134, 114509 (2022), arXiv:2211.01358'),
+    ('lomb', 'N. R. Lomb, \\emph{Least-squares frequency analysis of '
+             'unequally spaced data}, Ap\\&SS 39, 447 (1976)'),
+    ('scargle', 'J. D. Scargle, \\emph{Studies in astronomical time series '
+                'analysis. II}, ApJ 263, 835 (1982)'),
+    ('gls', 'M. Zechmeister and M. Kurster, \\emph{The generalised '
+            'Lomb-Scargle periodogram}, A\\&A 496, 577 (2009)'),
+    ('fip', 'N. C. Hara, N. Unger, J.-B. Delisle, R. F. Diaz and '
+            'D. Segransan, \\emph{Improving exoplanet detection '
+            'capabilities with the false '
+            'inclusion probability}, A\\&A 663, A14 (2022), arXiv:2105.06995'),
+    ('serval', 'M. Zechmeister, A. Reiners, P. J. Amado et al., '
+               '\\emph{Spectrum radial velocity analyser (SERVAL)}, '
+               'A\\&A 609, A12 (2018), arXiv:1710.10114'),
+    ('exoplaneteu', 'J. Schneider, C. Dedieu, P. Le Sidaner, R. Savalle and '
+                    'I. Zolotukhin, \\emph{Defining and cataloging '
+                    'exoplanets: the exoplanet.eu database}, A\\&A 532, '
+                    'A79 (2011)'),
+    ('nasa', 'R. L. Akeson, X. Chen, D. Ciardi et al., \\emph{The NASA '
+             'Exoplanet Archive: data and tools for exoplanet research}, '
+             'PASP 125, 989 (2013)'),
+    ('simbad', 'M. Wenger, F. Ochsenbein, D. Egret et al., \\emph{The SIMBAD '
+               'astronomical database}, A\\&AS 143, 9 (2000)'),
+    ('phoenix', 'T.-O. Husser, S. Wende-von Berg, S. Dreizler et al., '
+                '\\emph{A new extensive library of PHOENIX stellar '
+                'atmospheres and synthetic spectra}, A\\&A 553, A6 (2013)')]
 URL_EXOPLANET_EU = 'https://exoplanet.eu/catalog/'
 URL_SIMBAD_TAP = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync'
 # the NASA exoplanet archive, for the references of the published planets
@@ -180,6 +208,11 @@ def get_report_data(inst: InstrumentsType, dparams: Dict[str, str]
     rdata['template_object'] = str(inst.params['OBJECT_COMPARISON'])
     rdata['instrument'] = '{0} ({1})'.format(inst.params['INSTRUMENT'],
                                              inst.params['DATA_SOURCE'])
+    # the names LBL itself uses for them, so that the table of the report and
+    #   the wrap script of the user speak of the same things
+    rdata['instrument_name'] = str(inst.params['INSTRUMENT'])
+    rdata['data_source'] = str(inst.params['DATA_SOURCE'])
+    rdata['data_type'] = str(inst.params['DATA_TYPE'])
     # the mask of the compute step (and its systemic velocity)
     try:
         mask_file = inst.mask_file(dparams['MODEL_DIR'], dparams['MASK_DIR'])
@@ -688,7 +721,8 @@ def exoplanet_eu_planets(inst: InstrumentsType, objname: str,
             continue
         names = set(name_variants(str(table['star_name'][row])))
         if 'star_alternate_names' in table.colnames:
-            for alternate in str(table['star_alternate_names'][row]).split(','):
+            alternates = str(table['star_alternate_names'][row])
+            for alternate in alternates.split(','):
                 names |= set(name_variants(alternate))
         if len(names & targets) > 0:
             keep[row] = True
@@ -761,7 +795,8 @@ def nasa_archive_planets(names: List[str]) -> Optional[Table]:
         with urllib.request.urlopen(url, timeout=60) as handle:
             text = handle.read().decode('utf-8')
     except Exception as e:
-        log.warning('The NASA archive could not be reached: {0}'.format(str(e)))
+        wmsg = 'The NASA archive could not be reached: {0}'
+        log.warning(wmsg.format(str(e)))
         return None
     if not text.lower().startswith('pl_name'):
         return None
@@ -772,7 +807,8 @@ def nasa_archive_planets(names: List[str]) -> Optional[Table]:
     if len(table) == 0:
         return None
     msg = 'NASA archive: {0} planet(s) of {1}'
-    log.general(msg.format(len(table), ', '.join(np.unique(table['hostname']))))
+    hosts = ', '.join(np.unique(table['hostname']))
+    log.general(msg.format(len(table), hosts))
     return table
 
 
@@ -962,8 +998,13 @@ def river_bands(inst: InstrumentsType, rdata: Dict[str, Any]
     wavemax = inst.params['COMPIL_WAVE_MAX']
     bands = []
     for band in astro.bands:
-        # the exact middle of the band
+        # the exact middle of the band: the mean wavelength of the band when
+        #   it is a wavelength of that band, the middle of its two edges
+        #   otherwise (a band whose mean or edge is mistyped does not send
+        #   the river plots and the line plots to the wrong place)
         middle = 0.5 * (band.minimum + band.maximum)
+        if band.minimum < band.mean < band.maximum:
+            middle = band.mean
         # only the bands whose middle the instrument covers
         if wavemin < middle < wavemax:
             bands.append((band.name, float(middle)))
@@ -1051,6 +1092,30 @@ def wants_figure(name: str) -> bool:
     return True
 
 
+def date_axis(frame: Any):
+    """
+    The calendar dates of a time series, on top of the frame, with the rjd
+    staying at the bottom
+
+    :param frame: the matplotlib frame, once its data are in
+
+    :return: None
+    """
+    low, high = frame.get_xlim()
+    # the ticks of the rjd axis that are inside the plot
+    ticks = [tick for tick in frame.get_xticks() if low <= tick <= high]
+    if len(ticks) == 0:
+        return
+    # the same instants, as dates a human reads
+    times = base.AstropyTime(np.array(ticks) + 2400000, format='jd')
+    labels = [str(item)[:10] for item in np.atleast_1d(times.iso)]
+    twin = frame.twiny()
+    twin.set_xlim(low, high)
+    twin.set_xticks(ticks)
+    twin.set_xticklabels(labels, fontsize=8, rotation=30, ha='left')
+    twin.set_xlabel('date')
+
+
 def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
                    periods: np.ndarray, figdir: str,
                    planets: Optional[Table], prior: float,
@@ -1110,7 +1175,7 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
     fig, frames = plt.subplots(2, 1, figsize=(9, 6))
     # the time series, with the drift that was taken out
     frames[0].errorbar(time, value, yerr=error, fmt='.', ms=3, color='k',
-                       elinewidth=0.5, capsize=0, alpha=0.7)
+                       elinewidth=0.5, capsize=0, alpha=0.5)
     if np.isfinite(drift) and dcov is not None:
         # the line over the whole time span, and its one sigma envelope from
         #   the covariance of its two parameters
@@ -1130,6 +1195,11 @@ def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
                   title='{0}: {1} points, rms {2:.4g}, median error '
                         '{3:.4g}'.format(longname, out['n'], out['rms'],
                                          out['error']))
+    # faint lines to guide the eye, below the points
+    frames[0].grid(color='grey', alpha=0.3, lw=0.5)
+    frames[0].set_axisbelow(True)
+    # the same axis, in dates, on top (the title moves up with it)
+    date_axis(frames[0])
     # the periodogram, with the FIP on the right axis
     frames[1].semilogx(periods, power, '-', color='tab:blue', lw=0.8)
     frames[1].set(xlabel='period [days]',
@@ -1308,6 +1378,33 @@ def plot_river(river: Dict[str, np.ndarray], bandname: str,
 # =============================================================================
 # Define the report itself
 # =============================================================================
+def cite(*keys: str) -> str:
+    """
+    The number of one or more references, as cited in the text
+
+    :param keys: str, the keys of REFERENCES
+
+    :return: str, the citation, such as [2, 3]
+    """
+    order = [key for key, _ in REFERENCES]
+    numbers = [str(order.index(key) + 1) for key in keys if key in order]
+    return '[{0}]'.format(', '.join(numbers))
+
+
+def bibliography() -> str:
+    """
+    The reference section at the end of the report
+
+    :return: str, the LaTeX
+    """
+    lines = ['\\section*{References}', '\\begin{enumerate}',
+             '\\setlength{\\itemsep}{1pt}']
+    for _, text in REFERENCES:
+        lines.append('\\item %s' % text)
+    lines.append('\\end{enumerate}')
+    return '\n'.join(lines)
+
+
 def latex_escape(text: str) -> str:
     """
     Escape the characters of a text that LaTeX would read as its own
@@ -1356,6 +1453,35 @@ def number(value: Any, fmt: str = '{0:.4g}') -> str:
         return '--'
 
 
+def disclaimer() -> str:
+    """
+    The warning at the top of the report: it is a starting point, not a result
+
+    :return: str, the LaTeX
+    """
+    lines = ['\\begin{center}',
+             '\\setlength{\\fboxrule}{1.2pt}',
+             '\\fcolorbox{red}{red!5}{\\parbox{0.93\\textwidth}{\\centering',
+             '{\\large \\textbf{This is just to get started with the '
+             'analysis.}}\\\\[5pt]',
+             '{\\large \\textbf{\\textcolor{red}{Do \\emph{not} publish these '
+             'results out of the box without checking them yourself.}}}'
+             '\\\\[7pt]',
+             'Everything here is automatic: the periodograms, the FIPs, the '
+             'planets and the drifts are what the numbers say, not what a '
+             'human has vetted. Look at the spectra, at the outliers and at '
+             'the systematics before believing any of it.\\\\[7pt]',
+             '\\textbf{And if you do publish it,} please cite the LBL paper '
+             '%s, the DTemp paper %s if you use the temperature indicators, '
+             'and the APERO paper %s if the spectra were reduced with APERO '
+             '(SPIRou, NIRPS).'
+             % (cite('lbl'), cite('dtemp'), cite('apero')),
+             '}}',
+             '\\end{center}',
+             '\\vspace{6pt}']
+    return '\n'.join(lines)
+
+
 def latex_header(title: str, subtitle: str) -> str:
     """
     The preamble and the title of the report
@@ -1373,6 +1499,7 @@ def latex_header(title: str, subtitle: str) -> str:
              '\\usepackage{pdflscape}',
              '\\usepackage[colorlinks=true,urlcolor=blue]{hyperref}',
              '\\usepackage{float}',
+             '\\usepackage{xcolor}',
              '\\setlength{\\parindent}{0pt}',
              '\\setlength{\\parskip}{4pt}',
              '\\begin{document}',
@@ -1380,7 +1507,8 @@ def latex_header(title: str, subtitle: str) -> str:
              '{\\LARGE \\textbf{%s}}\\\\[4pt]' % title,
              '{\\large %s}' % subtitle,
              '\\end{center}',
-             '\\vspace{4pt}', '\\hrule', '\\vspace{8pt}']
+             '\\vspace{4pt}', '\\hrule', '\\vspace{8pt}',
+             disclaimer()]
     return '\n'.join(lines)
 
 
@@ -1512,6 +1640,11 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                                params['OBJECT_COMPARISON'])
     outdir = io.make_dir(report_dir, objname, 'Report', verbose=False)
     figdir = io.make_dir(outdir, 'figures', 'Report figures', verbose=False)
+    # the figures of an older run are taken out, so that the directory and
+    #   the tar archive hold this report and nothing else
+    for oldfig in os.listdir(figdir):
+        if oldfig.endswith('.pdf'):
+            os.remove(os.path.join(figdir, oldfig))
     # -------------------------------------------------------------------------
     # the data, and the periods of the periodograms
     # -------------------------------------------------------------------------
@@ -1539,9 +1672,16 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     # the first and the last observation, in human dates as well
     first = base.AstropyTime(np.nanmin(time) + 2400000, format='jd').iso[:19]
     last = base.AstropyTime(np.nanmax(time) + 2400000, format='jd').iso[:19]
-    rows = [['Object', latex_escape(rdata['object'])],
-            ['Template object', latex_escape(rdata['template_object'])],
-            ['Instrument', latex_escape(rdata['instrument'])]]
+    # the first column is the name LBL gives to each thing (the keys of the
+    #   wrap script), so that the report and the run speak the same language
+    rows = [['\\texttt{OBJECT\\_SCIENCE} (the star)',
+             latex_escape(rdata['object'])],
+            ['\\texttt{OBJECT\\_COMPARISON} (the template)',
+             latex_escape(rdata['template_object'])],
+            ['\\texttt{INSTRUMENT}',
+             latex_escape(rdata['instrument_name'])],
+            ['\\texttt{DATA\\_SOURCE}', latex_escape(rdata['data_source'])],
+            ['\\texttt{DATA\\_TYPE}', latex_escape(rdata['data_type'])]]
     # what SIMBAD knows about this star
     if target is not None:
         rows += [['SIMBAD name', latex_escape(target['main_id'])],
@@ -1557,24 +1697,28 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
             ['Last observation',
              '{0} (rjd {1:.4f})'.format(last, np.nanmax(time))],
             ['Time span', '{0:.1f} days'.format(span)],
-            ['Template', latex_escape(rdata['template_file'])],
-            ['Mask', latex_escape(rdata['mask_file'])],
+            ['Template file', latex_escape(rdata['template_file'])],
+            ['Mask file', latex_escape(rdata['mask_file'])],
             ['Systemic velocity of the mask',
              '{0} m/s'.format(number(rdata['systemic_velocity']))],
             ['rdb file', latex_escape(os.path.basename(rdata['rdbfile']))],
             ['LBL version', latex_escape(base.__version__)]]
-    body.append(latex_table('What this report is about', ['Item', 'Value'],
-                            rows, align='ll'))
+    body.append(latex_table('What this report is about. The names in '
+                            'typewriter font are the LBL parameters of the '
+                            'run, the ones of the wrap script',
+                            ['Item', 'Value'], rows, align='ll'))
     # -------------------------------------------------------------------------
     # 2. the known planets
     # -------------------------------------------------------------------------
     body.append('\\section{Known and suspected planets}')
     if target is None:
-        matched = 'matched on the name of the star (SIMBAD did not answer)'
+        matched = ('matched on the name of the star (SIMBAD {0} did not '
+                   'answer)'.format(cite('simbad')))
     else:
-        matched = ('matched on the position of the star from SIMBAD '
+        matched = ('matched on the position of the star from SIMBAD {3} '
                    '({0:.5f} {1:+.5f}, within {2:.0f} arcsec) and on its '
-                   'names'.format(target['ra'], target['dec'], MATCH_RADIUS))
+                   'names'.format(target['ra'], target['dec'], MATCH_RADIUS,
+                                  cite('simbad')))
     body.append('From the catalogue of exoplanet.eu, \\url{%s}, %s.'
                 % (URL_EXOPLANET_EU, matched))
     if planets is None:
@@ -1615,8 +1759,10 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                                                                 year))
             else:
                 amplitude = number(nasa['pl_rvamp'][nrow], '{0:.2f}')
-                discovery = latex_link(*reference_text(nasa['disc_refname'][nrow]))
-                parameters = latex_link(*reference_text(nasa['pl_refname'][nrow]))
+                disc = reference_text(nasa['disc_refname'][nrow])
+                pref = reference_text(nasa['pl_refname'][nrow])
+                discovery = latex_link(*disc)
+                parameters = latex_link(*pref)
             rows.append([latex_escape(planets['name'][row]),
                          _get('orbital_period'), _get('mass'), amplitude,
                          latex_escape(_getstr(planets, 'detection_type', row)),
@@ -1634,16 +1780,18 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                                 landscape=True))
         body.append('Their periods are marked on every periodogram of this '
                     'report. K says what the velocities of this run would '
-                    'have to reach to see them.')
+                    'have to reach to see them. The catalogues are %s and '
+                    '%s.' % (cite('exoplaneteu'), cite('nasa')))
     # -------------------------------------------------------------------------
     # 3. the indicators, one by one
     # -------------------------------------------------------------------------
     body.append('\\section{Radial velocity and the other indicators}')
-    body.append('Each indicator gets its time series, its periodogram (%s) '
-                'and its false inclusion probability (FIP, %s). The FIP of a '
+    body.append('Each indicator gets its time series, its periodogram %s '
+                'and its false inclusion probability (FIP) %s. The FIP of a '
                 'period interval is one minus the probability that a signal '
                 'is in it: a FIP below 0.01, the dashed line of the figures, '
-                'is the usual threshold of a detection.' % (REF_LS, REF_FIP))
+                'is the usual threshold of a detection.'
+                % (cite('lomb', 'scargle', 'gls'), cite('fip')))
     log.general('Measuring the indicators')
     results = []
     for indicator in rdata['indicators']:
@@ -1774,15 +1922,23 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 'run. Its velocities are computed again here, with the same '
                 'mask, reference table, template splines and blaze as the '
                 'run. Each line of the mask is drawn in its own colour, so '
-                'the edges of the lines are where the colours change.')
-    linefig, linefile = line_edge_plot(inst, dparams, rdata, figdir)
-    if linefig is None:
+                'the edges of the lines are where the colours change. One '
+                'order per photometric band is drawn, the order closest to '
+                'the middle of the band, over the central tenth of it.')
+    linefigs, linefile = line_edge_plot(inst, dparams, rdata, figdir)
+    if len(linefigs) == 0:
         body.append('The plot could not be made for this run.')
-    else:
-        caption = ('The lines of {0}, the spectrum at the median signal to '
-                   'noise. Top: the spectrum, line by line, over the template '
-                   '(grey). Bottom: the difference between the two.'
-                   ''.format(latex_escape(linefile)))
+    for linefig, band, order, wmin, wmax, nlines in linefigs:
+        if band == '':
+            where = 'order {0}'.format(order)
+        else:
+            where = 'the {0} band (order {1})'.format(band, order)
+        caption = ('The lines of {0} in {1}, over the central tenth of the '
+                   'order ({2:.2f} to {3:.2f} nm, {4} lines). Top: the '
+                   'spectrum, line by line, over the template (grey). '
+                   'Bottom: the difference between the two.'
+                   ''.format(latex_escape(linefile), where, wmin, wmax,
+                             nlines))
         body.append(latex_figure(linefig, caption))
         figures.append(linefig)
     # -------------------------------------------------------------------------
@@ -1790,7 +1946,12 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     # -------------------------------------------------------------------------
     body.append('\\section{How the numbers were obtained}')
     body.append('\\textbf{Periodogram.} The floating mean periodogram, with '
-                'the error bars as weights. %s' % REF_LS)
+                'the error bars as weights %s. A straight line in time is '
+                'fitted to every indicator and taken out before it, so that '
+                'a drift does not spread its power over every period; the '
+                'drift, its uncertainty and its significance are in the '
+                'table of the indicators and on their time series.'
+                % cite('lomb', 'scargle', 'gls'))
     body.append('\\textbf{FIP.} %s The probability that a signal is present '
                 'with a period in a given interval is computed here with a '
                 'single sinusoid: at each period a model with a sine and an '
@@ -1801,15 +1962,30 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 'bars do not explain is added to them as a jitter. The bins '
                 'have the width of a peak of the periodogram. This is the '
                 'single-signal version of the framework: several signals are '
-                'not searched at once.' % REF_FIP)
+                'not searched at once.' % cite('fip'))
     body.append('\\textbf{Chromatic index and line width.} %s LBL measures '
                 'the same quantities: CRX is the slope of the velocity with '
                 'the logarithm of the wavelength, and the second derivative '
                 'of the line profile (d2v, dW) is its differential line '
-                'width.' % REF_SERVAL)
-    body.append('\\textbf{Known planets.} The catalogue of exoplanet.eu, '
-                '\\url{%s}, downloaded in full and matched on the name of the '
-                'star.' % URL_EXOPLANET_EU)
+                'width.' % cite('serval'))
+    body.append('\\textbf{Known planets.} The catalogue of exoplanet.eu %s, '
+                'downloaded in full and matched on the position of the star '
+                'and on its names; the papers behind them and the amplitude '
+                'of their signal come from the NASA exoplanet archive %s. '
+                'The position, the spectral type and the names of the star '
+                'come from SIMBAD %s, and the stellar model LBL uses for the '
+                'systemic velocity of the mask is a PHOENIX model %s. The '
+                'velocities themselves come from LBL %s.'
+                % (cite('exoplaneteu'), cite('nasa'), cite('simbad'),
+                   cite('phoenix'), cite('lbl')))
+    body.append('\\textbf{The papers to cite.} The velocities of this run '
+                'come from LBL %s, the temperatures from the DTemp method '
+                '%s, and the spectra, for SPIRou and NIRPS, from APERO %s.'
+                % (cite('lbl'), cite('dtemp'), cite('apero')))
+    # -------------------------------------------------------------------------
+    # 9. the references
+    # -------------------------------------------------------------------------
+    body.append(bibliography())
     # -------------------------------------------------------------------------
     # write the LaTeX, compile it and bundle the figures
     # -------------------------------------------------------------------------
@@ -1829,7 +2005,8 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     if pdffile is not None:
         log.info('Report: {0}'.format(pdffile))
     # bundle the figures
-    tarfilename = os.path.join(outdir, 'lbl_figures_{0}.tar.gz'.format(objname))
+    tarname = 'lbl_figures_{0}.tar.gz'.format(objname)
+    tarfilename = os.path.join(outdir, tarname)
     make_tarball(figures, tarfilename)
     log.info('Figures: {0}'.format(tarfilename))
     # return the directory of the report
@@ -1998,7 +2175,7 @@ def median_snr_file(inst: InstrumentsType, rdata: Dict[str, Any],
 
 def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
                    rdata: Dict[str, Any], figdir: str
-                   ) -> Tuple[Optional[str], Optional[str]]:
+                   ) -> Tuple[List[Tuple[Any, ...]], Optional[str]]:
     """
     The debug plot of the lines (the one of PLOT_COMPUTE_LINES) for the file
     at the median signal to noise
@@ -2007,14 +2184,18 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     lbl_compute (the same mask, reference table, template splines and blaze),
     and the vectors the debug plot uses come back in the outputs of
     compute_rv. Each line is drawn in its own colour, so the edges of the
-    lines are where the colours change.
+    lines are where the colours change. One order per photometric band is
+    drawn, the one closest to the middle of the band, and only the central
+    tenth of it.
 
     :param inst: Instrument instance
     :param dparams: dict, the directories of this run
     :param rdata: dict, the data of the report
     :param figdir: str, the directory of the figures
 
-    :return: tuple, 1. the figure, 2. the file it is of
+    :return: tuple, 1. the figures (the file, the band, the order, the first
+             and the last wavelength, the number of lines), 2. the spectrum
+             they are of
     """
     # the setup of lbl_compute, needed to compute one file
     mask_dir, template_dir = dparams['MASK_DIR'], dparams['TEMPLATE_DIR']
@@ -2026,7 +2207,7 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     science_file = median_snr_file(inst, rdata, science_files)
     if science_file is None:
         log.warning('No science file found for the debug plot of the lines')
-        return None, None
+        return [], None
     # -------------------------------------------------------------------------
     # everything compute_rv needs (a run whose mask or template is not next
     #   to its rdb file cannot be done again: say so and move on)
@@ -2069,7 +2250,7 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
         wmsg = 'The debug plot of the lines needs the mask and the template '
         wmsg += 'of the run: {0}: {1}'
         log.warning(wmsg.format(type(e), str(e)))
-        return None, None
+        return [], None
     # -------------------------------------------------------------------------
     # the velocities of that file, for the vectors of the debug plot
     # -------------------------------------------------------------------------
@@ -2091,50 +2272,99 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     except Exception as e:
         wmsg = 'The debug plot of the lines could not be made: {0}: {1}'
         log.warning(wmsg.format(type(e), str(e)))
-        return None, None
+        return [], None
     plot_dict = outputs.get('PLOT_DICT', None)
     if plot_dict is None or 'WAVEGRID' not in plot_dict:
         log.warning('No vectors for the debug plot of the lines')
-        return None, None
+        return [], None
     # -------------------------------------------------------------------------
-    # the figure, as plot.compute_line_plot draws it
+    # the figures, as plot.compute_line_plot draws them: one order per
+    #   photometric band (the order closest to the middle of the band), and
+    #   only the central tenth of that order, so that the lines are readable
     # -------------------------------------------------------------------------
     wavegrid = plot_dict['WAVEGRID']
     model = plot_dict['MODEL']
-    plot_orders = plot_dict['PLOT_ORDERS']
-    line_orders = plot_dict['LINE_ORDERS']
+    line_orders = np.array(plot_dict['LINE_ORDERS'])
     ww_ord_line = plot_dict['WW_ORD_LINE']
     spec_ord_line = plot_dict['SPEC_ORD_LINE']
     model_ord_line = plot_dict['MODEL_ORD_LINE']
-    if isinstance(plot_orders, int):
-        plot_orders = [plot_orders]
-    fig, frames = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-    labels = []
-    for ord_num in plot_orders:
+    if wavegrid.ndim == 1:
+        wavegrid = wavegrid.reshape(1, -1)
+        model = np.array(model).reshape(1, -1)
+    # the middle of each order
+    with warnings.catch_warnings(record=True) as _:
+        omin = np.nanmin(wavegrid, axis=1)
+        omax = np.nanmax(wavegrid, axis=1)
+    omid = 0.5 * (omin + omax)
+    # one order per band: the one whose middle is closest to the middle of
+    #   the band, among the orders that have lines
+    with_lines = set(np.unique(line_orders).tolist())
+    chosen = []
+    for band_name, band_middle in river_bands(inst, rdata):
+        distance, order_num = np.inf, None
+        for ord_num in range(wavegrid.shape[0]):
+            if ord_num not in with_lines or not np.isfinite(omid[ord_num]):
+                continue
+            if abs(omid[ord_num] - band_middle) < distance:
+                distance = abs(omid[ord_num] - band_middle)
+                order_num = ord_num
+        # the same bands as the river plots: the closest order to the middle
+        #   of the band, even when the middle falls between two orders
+        if order_num is None:
+            continue
+        if order_num in [item[1] for item in chosen]:
+            continue
+        chosen.append((band_name, order_num))
+    # nothing matched a band (a spectrum of a single order, say): the order
+    #   with the most lines does the job
+    if len(chosen) == 0 and len(with_lines) > 0:
+        counts = [(int(np.sum(line_orders == num)), int(num))
+                  for num in with_lines]
+        chosen = [('', sorted(counts)[-1][1])]
+    # -------------------------------------------------------------------------
+    figures = []
+    for band_name, ord_num in chosen:
+        # the central tenth of the order
+        centre = omid[ord_num]
+        half = 0.05 * (omax[ord_num] - omin[ord_num])
+        wmin, wmax = centre - half, centre + half
+        fig, frames = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
         # the template
-        label = 'template' if 'template' not in labels else None
-        if label is not None:
-            labels.append(label)
         frames[0].plot(wavegrid[ord_num], model[ord_num], color='grey', lw=3,
-                       alpha=0.3, label=label)
-        # each line in its own colour: the edges are where the colour changes
+                       alpha=0.3, label='template')
+        # each line in its own colour: the edges are where the colours change
+        nlines, label = 0, 'line'
         for line_it in range(len(line_orders)):
             if line_orders[line_it] != ord_num:
                 continue
-            colour = ['red', 'green', 'blue'][line_it % 3]
-            label = 'line' if 'line' not in labels else None
-            if label is not None:
-                labels.append(label)
-            frames[0].plot(ww_ord_line[line_it], spec_ord_line[line_it],
-                           color=colour, lw=0.8, label=label)
-            frames[1].plot(ww_ord_line[line_it],
+            wwline = ww_ord_line[line_it]
+            # only the lines of the window
+            if np.nanmax(wwline) < wmin or np.nanmin(wwline) > wmax:
+                continue
+            colour = ['red', 'green', 'blue'][nlines % 3]
+            frames[0].plot(wwline, spec_ord_line[line_it], color=colour,
+                           lw=0.8, label=label)
+            frames[1].plot(wwline,
                            spec_ord_line[line_it] - model_ord_line[line_it],
                            color=colour, lw=0.8)
-    frames[0].set(ylabel='flux', title='Lines of {0} (order {1})'.format(
-        os.path.basename(science_file), ', '.join(map(str, plot_orders))))
-    frames[0].legend()
-    frames[1].axhline(0, color='k', lw=0.5)
-    frames[1].set(xlabel='wavelength [nm]', ylabel='spectrum - template')
-    fig.tight_layout()
-    figure = save_figure(fig, figdir, 'lines_debug')
-    return figure, os.path.basename(science_file)
+            nlines, label = nlines + 1, None
+        if nlines == 0:
+            plt.close(fig)
+            continue
+        if band_name == '':
+            title = 'Lines of {0} (order {1})'
+            title = title.format(os.path.basename(science_file), ord_num)
+        else:
+            title = 'Lines of {0} ({1} band, order {2}, central 10 percent)'
+            title = title.format(os.path.basename(science_file), band_name,
+                                 ord_num)
+        frames[0].set(ylabel='flux', title=title, xlim=[wmin, wmax])
+        frames[0].legend(loc='best')
+        frames[1].axhline(0, color='k', lw=0.5)
+        frames[1].set(xlabel='wavelength [nm]', ylabel='spectrum - template',
+                      xlim=[wmin, wmax])
+        fig.tight_layout()
+        name = 'lines_debug_{0}'.format(band_name if band_name else ord_num)
+        figures.append((save_figure(fig, figdir, name), band_name, ord_num,
+                        float(wmin), float(wmax), nlines))
+    return figures, os.path.basename(science_file)
