@@ -51,6 +51,13 @@ speed_of_light_kms = mp.speed_of_light_ms / 1000.0
 # -----------------------------------------------------------------------------
 # the references of the report: each one is cited in the text with cite() and
 #   listed, numbered, at the end
+# the papers to cite when the velocities of a run are published, with the
+#   bibcode of ADS: the box at the top of the report gives them as the
+#   citation commands to paste in a paper
+CITE_BIBCODES = [('LBL', '2022AJ....164...84A'),
+                 ('DTemp', '2024AJ....168..252A'),
+                 ('APERO', '2022PASP..134k4509C')]
+
 REFERENCES = [
     ('lbl', 'E. Artigau, C. Cadieux, N. J. Cook et al., '
             '\\emph{Line-by-line velocity measurements: an outlier-resistant '
@@ -1036,6 +1043,31 @@ def simple_name(name: str) -> str:
 # =============================================================================
 # Define the river plots
 # =============================================================================
+def ratio_to_velocity(ratio: np.ndarray) -> np.ndarray:
+    """
+    The velocity of a ratio of wavelengths, relativistic
+
+    :param ratio: np.ndarray, the wavelength over the wavelength at rest
+
+    :return: np.ndarray, the velocity [km/s]
+    """
+    return speed_of_light_kms * (ratio ** 2 - 1) / (ratio ** 2 + 1)
+
+
+def velocity_to_wavelength(velocity: np.ndarray, wave_centre: float
+                           ) -> np.ndarray:
+    """
+    The wavelength a velocity puts a line at, relativistic
+
+    :param velocity: np.ndarray, the velocity [km/s]
+    :param wave_centre: float, the wavelength at rest [nm]
+
+    :return: np.ndarray, the wavelength [nm]
+    """
+    beta = np.asarray(velocity) / speed_of_light_kms
+    return wave_centre * np.sqrt((1 + beta) / (1 - beta))
+
+
 def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
                     rdata: Dict[str, Any], wave_centre: float
                     ) -> Optional[Dict[str, np.ndarray]]:
@@ -1092,7 +1124,7 @@ def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
             continue
         # the velocity of each point of that order, and its flux
         owave, oflux = restwave[order_num], sci_image[order_num]
-        dvelo = (owave / wave_centre - 1) * speed_of_light_kms
+        dvelo = ratio_to_velocity(owave / wave_centre)
         inside = np.abs(dvelo) < width
         if np.sum(inside) < 10:
             continue
@@ -1112,7 +1144,8 @@ def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
     # nothing read: no plot
     if not np.any(np.isfinite(river)):
         return None
-    return dict(grid=grid, rjd=rjd, river=river, wave_centre=wave_centre)
+    return dict(grid=grid, rjd=rjd, river=river, wave_centre=wave_centre,
+                berv=rdata['river_berv_show'])
 
 
 def best_order(wavegrid: np.ndarray, wave_centre: float) -> Optional[int]:
@@ -1169,6 +1202,40 @@ def river_bands(inst: InstrumentsType, rdata: Dict[str, Any]
         if wavemin < middle < wavemax:
             bands.append((band.name, float(middle)))
     return bands
+
+
+def river_centres(inst: InstrumentsType, rdata: Dict[str, Any]
+                  ) -> List[Tuple[str, int, float]]:
+    """
+    Three wavelengths per band, spread over the part of the band the
+    instrument covers: one river plot each
+
+    :param inst: Instrument instance
+    :param rdata: dict, the data of the report
+
+    :return: list of tuples, the band, the rank inside the band (1 to 3) and
+             the wavelength [nm]
+    """
+    wavemin = inst.params['COMPIL_WAVE_MIN']
+    wavemax = inst.params['COMPIL_WAVE_MAX']
+    centres = []
+    for bandname, _ in river_bands(inst, rdata):
+        # the part of the band the instrument has
+        band = None
+        for item in astro.bands:
+            if item.name == bandname:
+                band = item
+        if band is None:
+            continue
+        low = max(band.minimum, wavemin)
+        high = min(band.maximum, wavemax)
+        if not high > low:
+            continue
+        # a quarter, a half and three quarters of the way through it
+        for rank, fraction in enumerate([0.25, 0.5, 0.75]):
+            centres.append((bandname, rank + 1,
+                            float(low + fraction * (high - low))))
+    return centres
 
 
 # =============================================================================
@@ -1448,6 +1515,16 @@ def plot_phase_folds(rdata: Dict[str, Any], planets: Optional[Table],
         frame.plot(pgrid, curve, '-', color='tab:red', lw=1.2,
                    label='K = {0:.2f} +- {1:.2f} m/s'.format(amplitude,
                                                              samplitude))
+        # the one sigma envelope of that sinusoid, from the covariance of
+        #   its two parameters
+        if cov is not None:
+            first = 1 + 2 * it
+            design = np.array([np.cos(angle), np.sin(angle)])
+            small = cov[first:first + 2, first:first + 2]
+            envelope = np.sqrt(np.sum(design * np.dot(small, design), axis=0))
+            frame.fill_between(pgrid, curve - envelope, curve + envelope,
+                               color='tab:red', alpha=0.2, lw=0,
+                               label='1 sigma of the sinusoid')
         title = '{0}: P = {1:.6g} d, phase 0 at {2}'
         frame.set(xlabel='phase', ylabel='vrad, drift removed [m/s]',
                   xlim=[0, 1],
@@ -1571,22 +1648,31 @@ def plot_window(rdata: Dict[str, Any], periods: np.ndarray,
     return out
 
 
-def plot_river(river: Dict[str, np.ndarray], bandname: str,
+def plot_river(river: Dict[str, np.ndarray], bandname: str, index: int,
                figdir: str) -> str:
     """
-    The river plot of one band: the spectra stacked in time, in the rest frame
-    of the star
+    The river plot of one wavelength: the spectra stacked, in the rest frame
+    of the star, sorted in BERV
 
     :param river: dict, the output of river_plot_data
     :param bandname: str, the name of the band
+    :param index: int, the rank of this wavelength inside the band
     :param figdir: str, the directory of the figures
 
     :return: str, the file written
     """
     grid, rjd, image = river['grid'], river['rjd'], river['river']
-    # the spectra are sorted in time
-    order = np.argsort(rjd)
-    image, rjd = image[order], rjd[order]
+    berv = np.array(river['berv'], dtype=float)
+    # the spectra are sorted in BERV: the telluric lines of the Earth then
+    #   walk across the plot, while the lines of the star stay put
+    sorted_by = 'BERV'
+    if np.nanmax(berv) - np.nanmin(berv) < 1.0e-6 or not np.all(
+            np.isfinite(berv)):
+        # a mode whose wave solution is already barycentric, and no BERV in
+        #   the headers either: time is all there is to sort on
+        berv, sorted_by = np.array(rjd, dtype=float), 'time'
+    order = np.argsort(berv)
+    image, berv = image[order], berv[order]
     # the median spectrum, and what each spectrum has that it does not
     with warnings.catch_warnings(record=True) as _:
         median = np.nanmedian(image, axis=0)
@@ -1599,33 +1685,42 @@ def plot_river(river: Dict[str, np.ndarray], bandname: str,
         rmin, rmax = np.nanpercentile(residual, [5, 95])
     # the residuals are shown around zero, in units of the median spectrum
     rlimit = max(abs(rmin), abs(rmax))
-    # three panels: the spectra, their residuals and the median
-    fig, frames = plt.subplots(3, 1, figsize=(9, 9), sharex=True,
-                               height_ratios=[3, 3, 1])
-    extent = [grid[0], grid[-1], 0, len(rjd)]
-    frames[0].imshow(image, aspect='auto', origin='lower', cmap='inferno',
-                     vmin=vmin, vmax=vmax, interpolation='nearest',
-                     extent=extent)
-    frames[0].set(ylabel='spectrum (sorted in time)',
-                  title='{0} band, {1:.2f} nm, rest frame of the star, '
+    # three panels of the same width: the spectra, their residuals and the
+    #   median, each with a column for its colour bar (the last one empty)
+    fig, axes = plt.subplots(3, 2, figsize=(9, 9),
+                             height_ratios=[3, 3, 1], width_ratios=[40, 1])
+    frames, cframes = axes[:, 0], axes[:, 1]
+    cframes[2].axis('off')
+    extent = [grid[0], grid[-1], 0, len(berv)]
+    spcimage = frames[0].imshow(image, aspect='auto', origin='lower',
+                                cmap='inferno', vmin=vmin, vmax=vmax,
+                                interpolation='nearest', extent=extent)
+    frames[0].set(ylabel='spectrum (sorted in {0})'.format(sorted_by))
+    frames[0].set_title('{0} band, {1:.2f} nm, rest frame of the star, '
                         '{2} spectra'.format(bandname, river['wave_centre'],
-                                             len(rjd)))
+                                             len(berv)), fontsize=10)
+    cbar = fig.colorbar(spcimage, cax=cframes[0])
+    cbar.set_label('flux / continuum')
     resimage = frames[1].imshow(residual, aspect='auto', origin='lower',
                                 cmap='RdBu_r', vmin=-rlimit, vmax=rlimit,
                                 interpolation='nearest', extent=extent)
-    frames[1].set(ylabel='spectrum (sorted in time)')
-    # the colour bar narrows this frame, so the title stays short
+    frames[1].set(ylabel='spectrum (sorted in {0})'.format(sorted_by))
     frames[1].set_title('median spectrum and row medians taken out '
                         '(5 to 95 percentile)', fontsize=9)
     # the colour bar of the residuals, in units of the median spectrum
-    cbar = fig.colorbar(resimage, ax=frames[1], orientation='vertical',
-                        fraction=0.04, pad=0.01)
+    cbar = fig.colorbar(resimage, cax=cframes[1])
     cbar.set_label('residual / median spectrum')
+    # the median spectrum, in wavelength, over the same width as the images
+    wavegrid = velocity_to_wavelength(grid, river['wave_centre'])
     with warnings.catch_warnings(record=True) as _:
-        frames[2].plot(grid, median, '-', color='k', lw=0.8)
-    frames[2].set(xlabel='velocity [km/s]', ylabel='median flux')
+        frames[2].plot(wavegrid, median, '-', color='k', lw=0.8)
+    frames[2].set(xlabel='wavelength [nm]', ylabel='median flux',
+                  xlim=[wavegrid[0], wavegrid[-1]])
+    frames[0].set(xticklabels=[])
+    frames[1].set(xlabel='velocity [km/s]')
     fig.tight_layout()
-    return save_figure(fig, figdir, 'river_{0}'.format(bandname))
+    name = 'river_{0}{1}'.format(bandname, index)
+    return save_figure(fig, figdir, name)
 
 
 # =============================================================================
@@ -1727,8 +1822,11 @@ def disclaimer() -> str:
              '\\textbf{And if you do publish it,} please cite the LBL paper '
              '%s, the DTemp paper %s if you use the temperature indicators, '
              'and the APERO paper %s if the spectra were reduced with APERO '
-             '(SPIRou, NIRPS).'
+             '(SPIRou, NIRPS):\\\\[5pt]'
              % (cite('lbl'), cite('dtemp'), cite('apero')),
+             ', '.join(['{0}: \\texttt{{\\textbackslash citep\\{{{1}\\}}}}'
+                        ''.format(name, bibcode)
+                        for name, bibcode in CITE_BIBCODES]),
              '}}',
              '\\end{center}',
              '\\vspace{6pt}']
@@ -2052,7 +2150,8 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                      '{0} taken out of its points, so that each fold shows '
                      'that planet alone. '.format(len(folds) - 1))
         text += ('The blue points are the average of the black ones in bins '
-                 'of phase, and the red curve is the sinusoid of the fit. A '
+                 'of phase, and the red curve is the sinusoid of the fit, '
+                 'with the one sigma envelope of its two parameters. A '
                  'circular orbit is all this assumes: an eccentric planet '
                  'does not look like its curve.')
         body.append(text)
@@ -2092,7 +2191,8 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
             if fold['nothers'] > 0:
                 caption += ', and the other planets as well'
             caption += ('. Black: every point. Blue: the average in bins of '
-                        'phase. Red: the fitted sinusoid.')
+                        'phase. Red: the fitted sinusoid, with its one '
+                        'sigma envelope.')
             body.append(latex_figure(fold['figure'], caption))
             figures.append(fold['figure'])
     # -------------------------------------------------------------------------
@@ -2210,16 +2310,19 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     # -------------------------------------------------------------------------
     body.append('\\section{River plots}')
     width = params['REPORT_RIVER_WIDTH']
-    body.append('For each photometric band the instrument covers, the '
-                'spectra around the exact middle of the band, over %.0f km/s, '
-                'stacked in time and put in the rest frame of the star. The '
-                'spectra, their wavelength solution and their BERV are read '
-                'with the accessors of LBL, and the rest frame is the one of '
-                'the compute step.' % width)
+    body.append('For each photometric band the instrument covers, three '
+                'wavelengths of that band (a quarter, a half and three '
+                'quarters of the way through it), each over %.0f km/s, '
+                'stacked and put in the rest frame of the star. The spectra '
+                'are sorted in BERV rather than in time, so that what '
+                'belongs to the Earth walks across the plot while the lines '
+                'of the star stay put. The spectra, their wavelength '
+                'solution and their BERV are read with the accessors of LBL, '
+                'and the rest frame is the one of the compute step.' % width)
     river_outputs = river_plots(inst, dparams, rdata, figdir)
     for bandname, figure, nspectra, wave_centre in river_outputs:
         caption = ('{0} band, centred on {1:.2f} nm, {2} spectra. Top: each '
-                   'row is a spectrum, sorted in time. Middle: the same, '
+                   'row is a spectrum, sorted in BERV. Middle: the same, '
                    'with the median spectrum taken out and each row brought '
                    'back to its own median, so that an epoch sitting above '
                    'or below the others does not hide the residuals. '
@@ -2364,9 +2467,9 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
     :return: list of tuples, the band, the figure, the number of spectra and
              the central wavelength
     """
-    # the bands the instrument covers
-    bands = river_bands(inst, rdata)
-    if len(bands) == 0:
+    # three wavelengths per band the instrument covers
+    centres = river_centres(inst, rdata)
+    if len(centres) == 0:
         return []
     # -------------------------------------------------------------------------
     # the files to read: those of the rdb file, sub-sampled evenly in time
@@ -2380,6 +2483,7 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
     for filename in all_files:
         basenames[os.path.basename(filename)] = filename
     files, rjd, velocity, berv = [], [], [], []
+    bervshow = []
     for row in range(len(rdb)):
         # the lblrv file is named after the science file
         name = str(rdb['FILENAME'][row])
@@ -2401,6 +2505,8 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
         velocity.append(float(rdb['vrad'][row]))
         # the BERV LBL used: the one the wavelengths of the file still hold
         berv.append(float(rdata['berv_lbl'][row]))
+        # the BERV of the Earth, to sort the spectra on
+        bervshow.append(float(rdata['berv'][row]))
     if len(files) == 0:
         log.warning('No science file found for the river plots')
         return []
@@ -2415,11 +2521,14 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
     rdata['river_rjd'] = np.array(rjd)[keep]
     rdata['river_velocity'] = np.array(velocity)[keep]
     rdata['river_berv'] = np.array(berv)[keep]
+    # the BERV of the figures (the motion of the Earth, whether or not LBL
+    #   had to apply it): the spectra are sorted on it
+    rdata['river_berv_show'] = np.array(bervshow)[keep]
     # -------------------------------------------------------------------------
     # one river plot per band
     # -------------------------------------------------------------------------
     outputs = []
-    for bandname, wave_centre in bands:
+    for bandname, index, wave_centre in centres:
         msg = 'River plot of the {0} band ({1:.2f} nm), {2} spectra'
         log.general(msg.format(bandname, wave_centre,
                                len(rdata['science_files'])))
@@ -2428,7 +2537,7 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
             wmsg = 'No spectrum could be read around {0:.2f} nm'
             log.warning(wmsg.format(wave_centre))
             continue
-        figure = plot_river(river, bandname, figdir)
+        figure = plot_river(river, bandname, index, figdir)
         nspectra = int(np.sum(np.any(np.isfinite(river['river']), axis=1)))
         outputs.append((bandname, figure, nspectra, wave_centre))
     return outputs

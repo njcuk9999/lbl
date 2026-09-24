@@ -273,7 +273,7 @@ params.set(key='REPORT_MAX_RIVER_FILES', value=300, source=__NAME__,
            dtype=int)
 
 # width of the river plots [km/s], centred on the middle of each band
-params.set(key='REPORT_RIVER_WIDTH', value=1000.0, source=__NAME__,
+params.set(key='REPORT_RIVER_WIDTH', value=1500.0, source=__NAME__,
            desc='Width of the river plots [km/s]', dtype=float)
 
 # whether to look for the known planets of the target in exoplanet.eu
