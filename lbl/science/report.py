@@ -60,6 +60,10 @@ CITE_PAPERS = [('LBL', 'Artigau et al. 2022', 'lbl', '2022AJ....164...84A'),
                ('APERO (SPIRou, NIRPS)', 'Cook et al. 2022', 'apero',
                 '2022PASP..134k4509C')]
 
+# the width of the debug plot of the lines, in resolution elements of the
+#   instrument (its resolution is a parameter, APPROX_RESOLUTION)
+LINE_PLOT_ELEMENTS = 30.0
+
 # where a bibcode is read on ADS
 URL_ADS = 'https://ui.adsabs.harvard.edu/abs/{0}/abstract'
 
@@ -1097,6 +1101,7 @@ def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
     # the files to read, and their velocity
     # -------------------------------------------------------------------------
     science_files = rdata['science_files']
+    calib_dir = dparams['CALIB_DIR']
     rjd = rdata['river_rjd']
     velocity = rdata['river_velocity']
     berv = rdata['river_berv']
@@ -1117,6 +1122,26 @@ def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
         try:
             sci_image, sci_hdr = inst.load_science_file(filename)
             wavegrid = inst.get_wave_solution(filename, sci_image, sci_hdr)
+            # the blaze of this file, the LBL way (lbl_compute, step 6.4)
+            blaze = rdata['river_blaze']
+            if blaze is None:
+                bout = inst.load_blaze_from_science(filename, sci_image,
+                                                    sci_hdr, calib_dir)
+                blazeimage, blaze_flag = bout
+            # test for all ones (no blaze)
+            elif np.sum(blaze.ravel()) == len(blaze.ravel()):
+                blaze_flag = True
+                blazeimage = np.array(blaze)
+            else:
+                blaze_flag = False
+                blazeimage = np.array(blaze)
+            # deal with not having a blaze
+            if blaze_flag:
+                sci_image, blazeimage = inst.no_blaze_corr(sci_image,
+                                                           wavegrid)
+            # the spectrum, out of the shape of the orders
+            with warnings.catch_warnings(record=True) as _:
+                sci_image = sci_image / blazeimage
         except Exception as _:
             unread.append(os.path.basename(filename))
             continue
@@ -1347,11 +1372,27 @@ def date_axis(frame: Any):
     twin.set_xticklabels(labels, fontsize=8, rotation=30, ha='left')
     twin.set_xlabel('date')
     # the title belongs to the top frame, which the dates now occupy: it
-    #   moves to the date axis, which keeps it clear of the labels
+    #   moves to the date axis, above the labels. The room it needs is
+    #   measured on the labels themselves (in points, which do not change
+    #   when the figure is laid out again) rather than left to matplotlib,
+    #   which puts a long title through them
     title = frame.get_title()
-    if len(title) > 0:
-        frame.set_title('')
-        twin.set_title(title)
+    if len(title) == 0:
+        return
+    frame.set_title('')
+    pad = 34.0
+    try:
+        figure = frame.figure
+        renderer = figure.canvas.get_renderer()
+        height = 0.0
+        for label in twin.get_xticklabels() + [twin.xaxis.label]:
+            extent = label.get_window_extent(renderer=renderer)
+            height = max(height, extent.height)
+        # the labels and the word date, one above the other, in points
+        pad = 2.2 * height * 72.0 / figure.dpi + 6.0
+    except Exception as _:
+        pass
+    twin.set_title(title, pad=pad)
 
 
 def plot_indicator(rdata: Dict[str, Any], indicator: Tuple[str, str, str, str],
@@ -2338,8 +2379,10 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 'are sorted in BERV rather than in time, so that what '
                 'belongs to the Earth walks across the plot while the lines '
                 'of the star stay put. The spectra, their wavelength '
-                'solution and their BERV are read with the accessors of LBL, '
-                'and the rest frame is the one of the compute step.' % width)
+                'solution, their blaze and their BERV are read with the '
+                'accessors of LBL, the spectra are divided by the blaze as '
+                'lbl\\_compute loads it, and the rest frame is the one of '
+                'the compute step.' % width)
     river_outputs = river_plots(inst, dparams, rdata, figdir)
     for bandname, figure, nspectra, wave_centre in river_outputs:
         caption = ('{0} band, centred on {1:.2f} nm, {2} spectra. Top: each '
@@ -2365,8 +2408,11 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 'run. Each line of the mask is drawn in its own colour, so '
                 'the edges of the lines are where the colours change. One '
                 'order per photometric band is drawn, the order closest to '
-                'the middle of the band, over the central fifth of it. The '
-                'dashed lines are the edges of the lines of the mask.')
+                'the middle of the band, over %.0f resolution elements at '
+                'the middle of that order (the resolution of the instrument '
+                'is a parameter of the run, %.0f here). The dashed lines are '
+                'the edges of the lines of the mask.'
+                % (LINE_PLOT_ELEMENTS, params['APPROX_RESOLUTION']))
     linefigs, linefile = line_edge_plot(inst, dparams, rdata, figdir)
     if len(linefigs) == 0:
         body.append('The plot could not be made for this run.')
@@ -2375,12 +2421,12 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
             where = 'order {0}'.format(order)
         else:
             where = 'the {0} band (order {1})'.format(band, order)
-        caption = ('The lines of {0} in {1}, over the central fifth of the '
-                   'order ({2:.2f} to {3:.2f} nm, {4} lines). Top: the '
-                   'spectrum, line by line, over the template (grey). '
-                   'Bottom: the difference between the two.'
-                   ''.format(latex_escape(linefile), where, wmin, wmax,
-                             nlines))
+        caption = ('The lines of {0} in {1}, over {5:.0f} resolution '
+                   'elements at the middle of the order ({2:.2f} to '
+                   '{3:.2f} nm, {4} lines). Top: the spectrum, line by line, '
+                   'over the template (grey). Bottom: the difference between '
+                   'the two.'.format(latex_escape(linefile), where, wmin,
+                                     wmax, nlines, LINE_PLOT_ELEMENTS))
         body.append(latex_figure(linefig, caption))
         figures.append(linefig)
     # -------------------------------------------------------------------------
@@ -2545,6 +2591,18 @@ def river_plots(inst: InstrumentsType, dparams: Dict[str, str],
     # the BERV of the figures (the motion of the Earth, whether or not LBL
     #   had to apply it): the spectra are sorted on it
     rdata['river_berv_show'] = np.array(bervshow)[keep]
+    # the blaze of the run, as lbl_compute loads it (step 3 of that recipe):
+    #   the river plots divide the spectra by it, so that what is seen is
+    #   the spectrum and not the shape of the orders
+    rdata['river_blaze'] = None
+    try:
+        blaze_file = inst.blaze_file(dparams['CALIB_DIR'])
+        if blaze_file is not None:
+            rdata['river_blaze'] = inst.load_blaze(
+                blaze_file, science_file=rdata['science_files'][0])
+    except Exception as e:
+        wmsg = 'The blaze could not be loaded: {0}: {1}'
+        log.warning(wmsg.format(type(e), str(e)))
     # -------------------------------------------------------------------------
     # one river plot per band
     # -------------------------------------------------------------------------
@@ -2635,8 +2693,8 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     and the vectors the debug plot uses come back in the outputs of
     compute_rv. Each line is drawn in its own colour, so the edges of the
     lines are where the colours change. One order per photometric band is
-    drawn, the one closest to the middle of the band, and only the central
-    fifth of it.
+    drawn, the one closest to the middle of the band, over
+    LINE_PLOT_ELEMENTS resolution elements of the instrument.
 
     :param inst: Instrument instance
     :param dparams: dict, the directories of this run
@@ -2741,7 +2799,7 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     # -------------------------------------------------------------------------
     # the figures, as plot.compute_line_plot draws them: one order per
     #   photometric band (the order closest to the middle of the band), and
-    #   only the central fifth of that order, so that the lines are readable
+    #   a window of so many resolution elements at the middle of it
     # -------------------------------------------------------------------------
     wavegrid = plot_dict['WAVEGRID']
     model = plot_dict['MODEL']
@@ -2784,10 +2842,16 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
         chosen = [('', sorted(counts)[-1][1])]
     # -------------------------------------------------------------------------
     figures = []
+    # the width of the window: so many resolution elements of the
+    #   instrument, whatever the order and the instrument are
+    resolution = inst.params['APPROX_RESOLUTION']
     for band_name, ord_num in chosen:
-        # the central fifth of the order
+        # the middle of the order, over LINE_PLOT_ELEMENTS resolution
+        #   elements (one element is the wavelength over the resolution)
         centre = omid[ord_num]
-        half = 0.10 * (omax[ord_num] - omin[ord_num])
+        half = 0.5 * LINE_PLOT_ELEMENTS * centre / resolution
+        # an order shorter than that is drawn whole
+        half = min(half, 0.5 * (omax[ord_num] - omin[ord_num]))
         wmin, wmax = centre - half, centre + half
         fig, frames = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
         # the template
@@ -2834,9 +2898,10 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
             title = 'Lines of {0} (order {1})'
             title = title.format(os.path.basename(science_file), ord_num)
         else:
-            title = 'Lines of {0} ({1} band, order {2}, central 20 percent)'
+            title = 'Lines of {0} ({1} band, order {2}, {3:.0f} resolution '
+            title += 'elements)'
             title = title.format(os.path.basename(science_file), band_name,
-                                 ord_num)
+                                 ord_num, LINE_PLOT_ELEMENTS)
         frames[0].set(ylabel='flux', title=title, xlim=[wmin, wmax])
         frames[0].legend(loc='best')
         frames[1].axhline(0, color='k', lw=0.5)
