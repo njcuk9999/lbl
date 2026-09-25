@@ -30,10 +30,12 @@ from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.science import general
+from lbl.science import tellu_clean
 
 # do not require a display
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 
 # =============================================================================
 # Define variables
@@ -59,6 +61,17 @@ CITE_PAPERS = [('LBL', 'Artigau et al. 2022', 'lbl', '2022AJ....164...84A'),
                 '2024AJ....168..252A'),
                ('APERO (SPIRou, NIRPS)', 'Cook et al. 2022', 'apero',
                 '2022PASP..134k4509C')]
+
+# the colour of each telluric species of the TAPAS file of LBL (the columns
+#   of its ABSOSPEC table are ABSO_WATER and ABSO_OTHERS, the other molecules
+#   of the atmosphere together)
+TELLURIC_COLOURS = {'WATER': 'tab:blue', 'OTHERS': 'tab:red',
+                    'O2': 'tab:green', 'CO2': 'tab:orange',
+                    'CH4': 'tab:purple', 'O3': 'tab:brown',
+                    'N2O': 'tab:olive', 'CO': 'tab:pink'}
+
+# how many lines the debug plot of the lines holds, per band
+LINE_PLOT_NLINES = 20
 
 # the width of the debug plot of the lines, in resolution elements of the
 #   instrument (its resolution is a parameter, APPROX_RESOLUTION)
@@ -1077,6 +1090,126 @@ def velocity_to_wavelength(velocity: np.ndarray, wave_centre: float
     return wave_centre * np.sqrt((1 + beta) / (1 - beta))
 
 
+def line_uncertainties(inst: InstrumentsType, rdata: Dict[str, Any]
+                       ) -> Optional[Dict[str, np.ndarray]]:
+    """
+    The median uncertainty of each line of the mask, over the files of the run
+
+    The lblrv files hold one row per line, with its velocity (dv) and the
+    uncertainty of that velocity (sdv), both in m/s. The lines are the same
+    from one file to the next (the same reference table), so the median over
+    the files says what each line is worth in this run.
+
+    :param inst: Instrument instance
+    :param rdata: dict, the data of the report
+
+    :return: dict or None, the wavelength of each line, its median
+             uncertainty, its order, and how many files went in
+    """
+    files = [item for item in rdata['lblrv_files'] if os.path.exists(item)]
+    if len(files) == 0:
+        log.warning('No lblrv file to measure the uncertainty of the lines')
+        return None
+    # the files are read evenly through the run, not all of them: the median
+    #   of a couple of hundred is as good as the median of a thousand
+    maxfiles = inst.params['REPORT_MAX_LINE_FILES']
+    if maxfiles not in [None, 'None'] and len(files) > int(maxfiles):
+        keep = np.unique(np.linspace(0, len(files) - 1,
+                                     int(maxfiles)).astype(int))
+        files = [files[item] for item in keep]
+    log.general('Reading {0} lblrv files for the uncertainty of the lines'
+                ''.format(len(files)))
+    wave, order, sdvs, nread = None, None, [], 0
+    for filename in files:
+        try:
+            table, _ = inst.load_lblrv_file(filename)
+        except Exception as _:
+            continue
+        if 'sdv' not in table.colnames:
+            continue
+        if wave is None:
+            wave = 0.5 * (np.array(table['WAVE_START'], dtype=float)
+                          + np.array(table['WAVE_END'], dtype=float))
+            order = np.array(table['ORDER'])
+        # a file with another number of lines is not the same mask
+        if len(table) != len(wave):
+            continue
+        sdvs.append(np.array(table['sdv'], dtype=float))
+        nread += 1
+    if nread == 0 or wave is None:
+        log.warning('The uncertainty of the lines could not be read')
+        return None
+    with warnings.catch_warnings(record=True) as _:
+        sdv = np.nanmedian(np.array(sdvs), axis=0)
+    # a line that never gave a velocity says nothing
+    good = np.isfinite(sdv) & (sdv > 0) & np.isfinite(wave)
+    return dict(wave=wave[good], sdv=sdv[good], order=np.array(order)[good],
+                nfiles=nread, nlines=int(np.sum(good)),
+                nall=int(len(wave)))
+
+
+def bin_for_display(x: np.ndarray, y: np.ndarray, nbins: int = 3000,
+                    how: str = 'median') -> Tuple[np.ndarray, np.ndarray]:
+    """
+    A dense curve, thinned out for a figure (the pdf stays light)
+
+    :param x: np.ndarray, the abscissa (sorted)
+    :param y: np.ndarray, the ordinate
+    :param nbins: int, how many points to keep
+    :param how: str, median or min (min keeps the absorption lines)
+
+    :return: tuple, the binned x and y
+    """
+    if len(x) <= nbins:
+        return x, y
+    edges = np.linspace(np.min(x), np.max(x), nbins + 1)
+    index = np.clip(np.digitize(x, edges) - 1, 0, nbins - 1)
+    xout = 0.5 * (edges[:-1] + edges[1:])
+    yout = np.full(nbins, np.nan)
+    with warnings.catch_warnings(record=True) as _:
+        for it in range(nbins):
+            inside = index == it
+            if not np.any(inside):
+                continue
+            if how == 'min':
+                yout[it] = np.nanmin(y[inside])
+            else:
+                yout[it] = np.nanmedian(y[inside])
+    return xout, yout
+
+
+def telluric_absorption(inst: InstrumentsType, dparams: Dict[str, str]
+                        ) -> List[Tuple[str, np.ndarray, np.ndarray]]:
+    """
+    The telluric absorption of the TAPAS file of LBL, one entry per species
+
+    The file is the one lbl_compute uses for the telluric cleaning, read with
+    the accessor of LBL (tellu_clean.get_tapas_lbl).
+
+    :param inst: Instrument instance
+    :param dparams: dict, the directories of this run
+
+    :return: list of tuples, the species, its wavelengths and its
+             transmission
+    """
+    try:
+        table = tellu_clean.get_tapas_lbl(inst, dparams['MODEL_DIR'],
+                                          'ABSOSPEC')
+    except Exception as e:
+        wmsg = 'The TAPAS file could not be read: {0}: {1}'
+        log.warning(wmsg.format(type(e), str(e)))
+        return []
+    wave = np.array(table['WAVELENGTH'], dtype=float)
+    out = []
+    for colname in table.colnames:
+        if not colname.upper().startswith('ABSO_'):
+            continue
+        species = colname.upper()[len('ABSO_'):]
+        out.append((species, wave,
+                    np.array(table[colname], dtype=float)))
+    return out
+
+
 def river_plot_data(inst: InstrumentsType, dparams: Dict[str, str],
                     rdata: Dict[str, Any], wave_centre: float
                     ) -> Optional[Dict[str, np.ndarray]]:
@@ -1700,6 +1833,185 @@ def plot_window(rdata: Dict[str, Any], periods: np.ndarray,
     return out
 
 
+def plot_line_precision(inst: InstrumentsType, dparams: Dict[str, str],
+                        rdata: Dict[str, Any], lines: Dict[str, np.ndarray],
+                        figdir: str) -> Tuple[Optional[str], str]:
+    """
+    What each line of the mask is worth, against the template and against the
+    absorption of the atmosphere
+
+    :param inst: Instrument instance
+    :param dparams: dict, the directories of this run
+    :param rdata: dict, the data of the report
+    :param lines: dict, the output of line_uncertainties
+    :param figdir: str, the directory of the figures
+
+    :return: tuple, the file written and what the TAPAS file does not cover
+    """
+    wave, sdv = lines['wave'], lines['sdv']
+    # a page of its own: the lines, the template and the atmosphere
+    fig, frames = plt.subplots(3, 1, figsize=(8.5, 10.5), sharex=True,
+                               height_ratios=[3, 2, 2])
+    # -------------------------------------------------------------------------
+    # 1. the uncertainty of each line
+    # -------------------------------------------------------------------------
+    frames[0].plot(wave, np.log10(sdv), '.', ms=2, color='k', alpha=0.35,
+                   rasterized=True)
+    # the median of the run, per band, to guide the eye
+    xbin, ybin = bin_for_display(wave, np.log10(sdv), nbins=120)
+    frames[0].plot(xbin, ybin, '-', color='tab:red', lw=1.2,
+                   label='median of the lines')
+    frames[0].set(ylabel='$\\log_{10}$(median $\\sigma_{\\rm RV}$ per line '
+                         '[m/s])')
+    frames[0].set_title('{0} lines, median uncertainty over {1} spectra'
+                        ''.format(lines['nlines'], lines['nfiles']),
+                        fontsize=10)
+    frames[0].grid(color='grey', alpha=0.3, lw=0.5)
+    frames[0].set_axisbelow(True)
+    frames[0].legend(fontsize=8, loc='best')
+    # -------------------------------------------------------------------------
+    # 2. the template, normalised to its median
+    # -------------------------------------------------------------------------
+    drawn = False
+    try:
+        template_file = inst.template_file(dparams['TEMPLATE_DIR'],
+                                           'comparison')
+        template = inst.load_template(template_file)
+        twave = np.array(template['wavelength'], dtype=float)
+        tflux = np.array(template['flux'], dtype=float)
+        with warnings.catch_warnings(record=True) as _:
+            middle = np.nanmedian(tflux)
+        if np.isfinite(middle) and middle != 0:
+            tflux = tflux / middle
+        xtpl, ytpl = bin_for_display(twave, tflux, nbins=4000)
+        frames[1].plot(xtpl, ytpl, '-', color='k', lw=0.6, rasterized=True)
+        drawn = True
+    except Exception as e:
+        wmsg = 'The template could not be drawn: {0}: {1}'
+        log.warning(wmsg.format(type(e), str(e)))
+    if not drawn:
+        frames[1].text(0.5, 0.5, 'template not available',
+                       transform=frames[1].transAxes, ha='center')
+    frames[1].set(ylabel='template / its median')
+    frames[1].grid(color='grey', alpha=0.3, lw=0.5)
+    frames[1].set_axisbelow(True)
+    # -------------------------------------------------------------------------
+    # 3. the absorption of the atmosphere, species by species
+    # -------------------------------------------------------------------------
+    species = telluric_absorption(inst, dparams)
+    lowest, note, covered = 1.0, '', []
+    for name, swave, trans in species:
+        covered += [float(np.min(swave)), float(np.max(swave))]
+        inside = (swave > np.min(wave) * 0.95) & (swave < np.max(wave) * 1.05)
+        if np.sum(inside) < 10:
+            continue
+        # the lowest transmission of each bin: an absorption line that is
+        #   narrower than a pixel of the figure still shows
+        xspe, yspe = bin_for_display(swave[inside], trans[inside],
+                                     nbins=4000, how='min')
+        colour = TELLURIC_COLOURS.get(name, 'grey')
+        label = 'water' if name == 'WATER' else name.lower()
+        frames[2].plot(xspe, yspe, '-', color=colour, lw=0.6, label=label,
+                       rasterized=True)
+        with warnings.catch_warnings(record=True) as _:
+            lowest = min(lowest, float(np.nanmin(yspe)))
+    if len(species) == 0:
+        frames[2].text(0.5, 0.5, 'TAPAS not available',
+                       transform=frames[2].transAxes, ha='center')
+    else:
+        frames[2].legend(fontsize=8, ncol=len(species), loc='lower left')
+    # the TAPAS file of LBL stops before the K band: say so rather than
+    #   leaving an empty end of the panel
+    if len(covered) > 0:
+        low, high = min(covered), max(covered)
+        if high < np.max(wave) or low > np.min(wave):
+            note = (' The TAPAS file runs from {0:.0f} to {1:.0f} nm, so it '
+                    'says nothing about the rest of the domain.'
+                    ''.format(low, high))
+    frames[2].set(xlabel='wavelength [nm]', ylabel='TAPAS transmission',
+                  ylim=[max(lowest - 0.05, -0.02), 1.05])
+    frames[2].grid(color='grey', alpha=0.3, lw=0.5)
+    frames[2].set_axisbelow(True)
+    fig.tight_layout()
+    return save_figure(fig, figdir, 'line_precision'), note
+
+
+def precision_bins(lines: Dict[str, np.ndarray], step: float = 0.05
+                   ) -> Dict[str, np.ndarray]:
+    """
+    The velocity precision of each sub-domain of the spectrum
+
+    The domain is cut in bins whose width is a fixed fraction of the
+    wavelength (5 percent by default, so the bins are equal in velocity), and
+    the lines of a bin are combined as photon noise: the precision of the bin
+    is one over the square root of the sum of one over the square of the
+    uncertainty of each line.
+
+    :param lines: dict, the output of line_uncertainties
+    :param step: float, the width of a bin, as a fraction of the wavelength
+
+    :return: dict, the edges, the middle, the precision and the number of
+             lines of each bin
+    """
+    wave, sdv = lines['wave'], lines['sdv']
+    low, high = float(np.min(wave)), float(np.max(wave))
+    # the edges: each one is (1 + step) times the one before
+    nbins = int(np.ceil(np.log(high / low) / np.log(1 + step)))
+    edges = low * (1 + step) ** np.arange(max(nbins, 1) + 1)
+    middle = np.sqrt(edges[:-1] * edges[1:])
+    sigma = np.full(len(middle), np.nan)
+    counts = np.zeros(len(middle), dtype=int)
+    for it in range(len(middle)):
+        inside = (wave >= edges[it]) & (wave < edges[it + 1])
+        counts[it] = int(np.sum(inside))
+        if counts[it] == 0:
+            continue
+        sigma[it] = float(1.0 / np.sqrt(np.sum(1.0 / sdv[inside] ** 2)))
+    return dict(edges=edges, middle=middle, sigma=sigma, counts=counts,
+                step=step)
+
+
+def plot_precision_bins(lines: Dict[str, np.ndarray], bins: Dict[str,
+                        np.ndarray], figdir: str) -> str:
+    """
+    The velocity precision of each sub-domain, and how many lines it holds
+
+    :param lines: dict, the output of line_uncertainties
+    :param bins: dict, the output of precision_bins
+    :param figdir: str, the directory of the figures
+
+    :return: str, the file written
+    """
+    edges, sigma, counts = bins['edges'], bins['sigma'], bins['counts']
+    fig, frames = plt.subplots(2, 1, figsize=(9, 6), sharex=True,
+                               height_ratios=[2, 1])
+    # the precision of each bin, drawn as the bin
+    frames[0].stairs(sigma, edges, color='tab:blue', lw=1.4, fill=False)
+    # the precision of the whole domain, for comparison
+    total = float(1.0 / np.sqrt(np.nansum(1.0 / lines['sdv'] ** 2)))
+    frames[0].axhline(total, color='tab:red', ls='--', lw=1.0,
+                      label='whole domain: {0:.2f} m/s'.format(total))
+    frames[0].set(ylabel='precision of the bin [m/s]', yscale='log')
+    frames[0].set_title('Velocity precision of one spectrum, in bins of '
+                        '{0:.0f} percent in wavelength'
+                        ''.format(100 * bins['step']), fontsize=10)
+    frames[0].legend(fontsize=8)
+    frames[0].grid(color='grey', alpha=0.3, lw=0.5)
+    frames[0].set_axisbelow(True)
+    frames[1].stairs(counts, edges, color='k', lw=1.0, fill=False)
+    frames[1].set(xlabel='wavelength [nm]', ylabel='lines in the bin',
+                  xscale='log')
+    # the wavelengths as plain numbers, not as powers of ten
+    for axis in [frames[1].xaxis]:
+        axis.set_major_formatter(ScalarFormatter())
+        axis.set_minor_formatter(ScalarFormatter())
+    frames[1].tick_params(axis='x', which='minor', labelsize=7)
+    frames[1].grid(color='grey', alpha=0.3, lw=0.5)
+    frames[1].set_axisbelow(True)
+    fig.tight_layout()
+    return save_figure(fig, figdir, 'precision_bins')
+
+
 def plot_river(river: Dict[str, np.ndarray], bandname: str, index: int,
                figdir: str) -> str:
     """
@@ -1963,23 +2275,30 @@ def latex_table(caption: str, header: List[str], rows: List[List[str]],
     return '\n'.join(lines)
 
 
-def latex_figure(filename: str, caption: str, width: str = '0.95') -> str:
+def latex_figure(filename: str, caption: str, width: str = '0.95',
+                 fullpage: bool = False) -> str:
     """
     A figure of the report
 
     :param filename: str, the file of the figure
     :param caption: str, the caption
     :param width: str, the width as a fraction of the text
+    :param fullpage: bool, if True the figure gets a page of its own
 
     :return: str, the LaTeX
     """
     if filename is None:
         return ''
     name = os.path.basename(filename)
-    lines = ['\\begin{figure}[H]', '\\centering',
+    lines = []
+    if fullpage:
+        lines.append('\\clearpage')
+    lines += ['\\begin{figure}[H]', '\\centering',
              '\\includegraphics[width=%s\\textwidth]{figures/%s}' % (width,
                                                                      name),
              '\\caption{%s}' % caption, '\\end{figure}']
+    if fullpage:
+        lines.append('\\clearpage')
     return '\n'.join(lines)
 
 
@@ -2397,7 +2716,53 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         body.append('No band of the instrument could be read for the river '
                     'plots.')
     # -------------------------------------------------------------------------
-    # 8. the lines of one file
+    # 8. what each line of the mask is worth
+    # -------------------------------------------------------------------------
+    body.append('\\section{What each line is worth}')
+    lines = line_uncertainties(inst, rdata)
+    if lines is None:
+        body.append('The lblrv files of this run could not be read.')
+    else:
+        body.append('The lblrv files hold one line of the mask per row, with '
+                    'its velocity and the uncertainty of that velocity. The '
+                    'uncertainty of a line below is the median of that '
+                    'column over %d spectra of the run, so it says what the '
+                    'line is worth for this star with this instrument. %d of '
+                    'the %d lines of the mask gave a velocity.'
+                    % (lines['nfiles'], lines['nlines'], lines['nall']))
+        precfig, note = plot_line_precision(inst, dparams, rdata, lines,
+                                            figdir)
+        if precfig is not None:
+            caption = ('What each line is worth. Top: the median '
+                       'uncertainty of every line of the mask. Middle: the '
+                       'template, divided by its median. Bottom: the '
+                       'transmission of the atmosphere from the TAPAS file '
+                       'of LBL, water in blue and the other molecules '
+                       'together in red; the lowest transmission of each '
+                       'bin of the figure is drawn, so a narrow line still '
+                       'shows.' + note)
+            body.append(latex_figure(precfig, caption, width='0.98',
+                                     fullpage=True))
+            figures.append(precfig)
+        # the precision of each sub domain, in bins of 5 percent
+        bins = precision_bins(lines)
+        binfig = plot_precision_bins(lines, bins, figdir)
+        total = float(1.0 / np.sqrt(np.nansum(1.0 / lines['sdv'] ** 2)))
+        body.append('The same uncertainties, gathered in bins %.0f percent '
+                    'wide in wavelength (so of equal width in velocity). '
+                    'The lines of a bin are combined as photon noise, one '
+                    'over the square root of the sum of one over the square '
+                    'of each uncertainty: that is the velocity precision a '
+                    'single spectrum would reach with that sub-domain '
+                    'alone. Over the whole domain it comes to %.2f m/s, to '
+                    'be read next to the median uncertainty of the rdb '
+                    'file.' % (100 * bins['step'], total))
+        body.append(latex_figure(binfig, 'The velocity precision of one '
+                                 'spectrum per sub-domain (top) and the '
+                                 'number of lines of each bin (bottom).'))
+        figures.append(binfig)
+    # -------------------------------------------------------------------------
+    # 9. the lines of one file
     # -------------------------------------------------------------------------
     body.append('\\section{The lines of one spectrum}')
     body.append('The debug plot of lbl\\_compute (PLOT\\_COMPUTE\\_LINES), '
@@ -2407,11 +2772,11 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 'run. Each line of the mask is drawn in its own colour, so '
                 'the edges of the lines are where the colours change. One '
                 'order per photometric band is drawn, the order closest to '
-                'the middle of the band, over %.0f resolution elements at '
-                'the middle of that order (the resolution of the instrument '
-                'is a parameter of the run, %.0f here). The dashed lines are '
-                'the edges of the lines of the mask.'
-                % (LINE_PLOT_ELEMENTS, params['APPROX_RESOLUTION']))
+                'the middle of the band, over the %d lines of the mask '
+                'closest to the middle of that order (a fixed width in '
+                'wavelength holds three lines in one band and eighty in the '
+                'next). The dashed lines are the edges of the lines of the '
+                'mask.' % LINE_PLOT_NLINES)
     linefigs, linefile = line_edge_plot(inst, dparams, rdata, figdir)
     if len(linefigs) == 0:
         body.append('The plot could not be made for this run.')
@@ -2420,16 +2785,16 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
             where = 'order {0}'.format(order)
         else:
             where = 'the {0} band (order {1})'.format(band, order)
-        caption = ('The lines of {0} in {1}, over {5:.0f} resolution '
-                   'elements at the middle of the order ({2:.2f} to '
-                   '{3:.2f} nm, {4} lines). Top: the spectrum, line by line, '
-                   'over the template (grey). Bottom: the difference between '
-                   'the two.'.format(latex_escape(linefile), where, wmin,
-                                     wmax, nlines, LINE_PLOT_ELEMENTS))
+        caption = ('The lines of {0} in {1}, at the middle of the order '
+                   '({2:.2f} to {3:.2f} nm, {4} lines). Top: the spectrum, '
+                   'line by line, over the template (grey). Bottom: the '
+                   'difference between the two.'
+                   ''.format(latex_escape(linefile), where, wmin, wmax,
+                             nlines))
         body.append(latex_figure(linefig, caption))
         figures.append(linefig)
     # -------------------------------------------------------------------------
-    # 9. how the numbers were obtained
+    # 10. how the numbers were obtained
     # -------------------------------------------------------------------------
     body.append('\\section{How the numbers were obtained}')
     body.append('\\textbf{Periodogram.} The floating mean periodogram, with '
@@ -2470,7 +2835,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                 '%s, and the spectra, for SPIRou and NIRPS, from APERO %s.'
                 % (cite('lbl'), cite('dtemp'), cite('apero')))
     # -------------------------------------------------------------------------
-    # 10. the references
+    # 11. the references
     # -------------------------------------------------------------------------
     body.append(bibliography())
     # -------------------------------------------------------------------------
@@ -2692,8 +3057,8 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     and the vectors the debug plot uses come back in the outputs of
     compute_rv. Each line is drawn in its own colour, so the edges of the
     lines are where the colours change. One order per photometric band is
-    drawn, the one closest to the middle of the band, over
-    LINE_PLOT_ELEMENTS resolution elements of the instrument.
+    drawn, the one closest to the middle of the band, over the
+    LINE_PLOT_NLINES lines of the mask closest to the middle of that order.
 
     :param inst: Instrument instance
     :param dparams: dict, the directories of this run
@@ -2798,7 +3163,7 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
     # -------------------------------------------------------------------------
     # the figures, as plot.compute_line_plot draws them: one order per
     #   photometric band (the order closest to the middle of the band), and
-    #   a window of so many resolution elements at the middle of it
+    #   a window that holds a fixed number of lines at the middle of it
     # -------------------------------------------------------------------------
     wavegrid = plot_dict['WAVEGRID']
     model = plot_dict['MODEL']
@@ -2841,17 +3206,35 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
         chosen = [('', sorted(counts)[-1][1])]
     # -------------------------------------------------------------------------
     figures = []
-    # the width of the window: so many resolution elements of the
-    #   instrument, whatever the order and the instrument are
-    resolution = inst.params['APPROX_RESOLUTION']
+    # the wavelength of each line, to pick the ones the window holds
+    line_middle = np.array([0.5 * (np.nanmin(item) + np.nanmax(item))
+                            for item in ww_ord_line])
     for band_name, ord_num in chosen:
-        # the middle of the order, over LINE_PLOT_ELEMENTS resolution
-        #   elements (one element is the wavelength over the resolution)
+        # the window holds LINE_PLOT_NLINES lines of this order, the ones
+        #   closest to the middle of it: a fixed width in wavelength or in
+        #   resolution elements gives three lines in one band and eighty in
+        #   the next
         centre = omid[ord_num]
-        half = 0.5 * LINE_PLOT_ELEMENTS * centre / resolution
-        # an order shorter than that is drawn whole
-        half = min(half, 0.5 * (omax[ord_num] - omin[ord_num]))
-        wmin, wmax = centre - half, centre + half
+        here = np.where(line_orders == ord_num)[0]
+        here = here[np.isfinite(line_middle[here])]
+        if len(here) > 0:
+            closest = here[np.argsort(np.abs(line_middle[here] - centre))]
+            closest = closest[:int(LINE_PLOT_NLINES)]
+            # the window runs from the first line to the last one, with the
+            #   width of a line to spare on both sides
+            low = float(np.nanmin([np.nanmin(ww_ord_line[it])
+                                   for it in closest]))
+            high = float(np.nanmax([np.nanmax(ww_ord_line[it])
+                                    for it in closest]))
+            margin = 0.05 * (high - low)
+            wmin, wmax = low - margin, high + margin
+        else:
+            # no line in this order: the middle of it, as a fallback
+            half = 0.5 * LINE_PLOT_ELEMENTS * centre / resolution
+            wmin, wmax = centre - half, centre + half
+        # an order shorter than the window is drawn whole
+        wmin = max(wmin, omin[ord_num])
+        wmax = min(wmax, omax[ord_num])
         fig, frames = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
         # the template
         frames[0].plot(wavegrid[ord_num], model[ord_num], color='grey', lw=3,
@@ -2897,10 +3280,9 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
             title = 'Lines of {0} (order {1})'
             title = title.format(os.path.basename(science_file), ord_num)
         else:
-            title = 'Lines of {0} ({1} band, order {2}, {3:.0f} resolution '
-            title += 'elements)'
+            title = 'Lines of {0} ({1} band, order {2})'
             title = title.format(os.path.basename(science_file), band_name,
-                                 ord_num, LINE_PLOT_ELEMENTS)
+                                 ord_num)
         frames[0].set(ylabel='flux', title=title, xlim=[wmin, wmax])
         frames[0].legend(loc='best')
         frames[1].axhline(0, color='k', lw=0.5)

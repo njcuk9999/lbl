@@ -272,6 +272,11 @@ params.set(key='REPORT_MAX_RIVER_FILES', value=300, source=__NAME__,
            desc='Maximum number of science files read for the river plots',
            dtype=int)
 
+# how many lblrv files are read for the median uncertainty of each line
+params.set(key='REPORT_MAX_LINE_FILES', value=200, source=__NAME__,
+           desc='Maximum number of lblrv files read for the median '
+                'uncertainty of each line', dtype=int)
+
 # width of the river plots [km/s], centred on the middle of each band
 params.set(key='REPORT_RIVER_WIDTH', value=1500.0, source=__NAME__,
            desc='Width of the river plots [km/s]', dtype=float)
