@@ -2881,7 +2881,7 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         caption = ('The lines of {0} in {1}, at the middle of the order '
                    '({2:.2f} to {3:.2f} nm, {4} lines). Top: the spectrum, '
                    'line by line, over the template (grey). Bottom: the '
-                   'difference between the two.'
+                   'spectrum divided by the template, minus one.'
                    ''.format(latex_escape(linefile), where, wmin, wmax,
                              nlines))
         body.append(latex_figure(linefig, caption))
@@ -3345,9 +3345,13 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
             colour = ['red', 'green', 'blue'][nlines % 3]
             frames[0].plot(wwline, spec_ord_line[line_it], color=colour,
                            lw=0.8, label=label)
-            frames[1].plot(wwline,
-                           spec_ord_line[line_it] - model_ord_line[line_it],
-                           color=colour, lw=0.8)
+            # the residual as a fraction of the template, not as a flux:
+            #   the same number means the same thing from one order to the
+            #   next and from one band to the next
+            with warnings.catch_warnings(record=True) as _:
+                ratio = (np.array(spec_ord_line[line_it], dtype=float)
+                         / np.array(model_ord_line[line_it], dtype=float) - 1)
+            frames[1].plot(wwline, ratio, color=colour, lw=0.8)
             # where this line starts and stops, and what it is worth
             edges += [float(np.nanmin(wwline)), float(np.nanmax(wwline))]
             fluxes.append(np.array(spec_ord_line[line_it], dtype=float))
@@ -3379,8 +3383,8 @@ def line_edge_plot(inst: InstrumentsType, dparams: Dict[str, str],
         frames[0].set(ylabel='flux', title=title, xlim=[wmin, wmax])
         frames[0].legend(loc='best')
         frames[1].axhline(0, color='k', lw=0.5)
-        frames[1].set(xlabel='wavelength [nm]', ylabel='spectrum - template',
-                      xlim=[wmin, wmax])
+        frames[1].set(xlabel='wavelength [nm]',
+                      ylabel='spectrum / template - 1', xlim=[wmin, wmax])
         fig.tight_layout()
         name = 'lines_debug_{0}'.format(band_name if band_name else ord_num)
         figures.append((save_figure(fig, figdir, name), band_name, ord_num,
