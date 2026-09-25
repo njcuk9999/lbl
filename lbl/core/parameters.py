@@ -272,6 +272,12 @@ params.set(key='REPORT_MAX_RIVER_FILES', value=300, source=__NAME__,
            desc='Maximum number of science files read for the river plots',
            dtype=int)
 
+# how long an answer from SIMBAD, from the NASA archive or from exoplanet.eu
+#   is kept before being asked again [days]
+params.set(key='REPORT_CACHE_DAYS', value=30.0, source=__NAME__,
+           desc='How long the answers of the catalogues are kept before '
+                'being asked again [days]', dtype=float)
+
 # how many lblrv files are read for the median uncertainty of each line
 params.set(key='REPORT_MAX_LINE_FILES', value=200, source=__NAME__,
            desc='Maximum number of lblrv files read for the median '

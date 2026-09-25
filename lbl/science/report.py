@@ -12,10 +12,12 @@ Created on 2026-09-24
 
 @author: artigau
 """
+import hashlib
 import os
 import shutil
 import subprocess
 import tarfile
+import time
 import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -771,7 +773,92 @@ def phase_bins(phase: np.ndarray, value: np.ndarray, error: np.ndarray,
     return np.array(centres), np.array(means), np.array(errors)
 
 
-def simbad_target(objname: str) -> Optional[Dict[str, Any]]:
+def cache_read(cachedir: Optional[str], key: str, days: float
+               ) -> Optional[str]:
+    """
+    What a catalogue answered last time, if it is not too old
+
+    :param cachedir: str or None, the directory of the cache (None: no cache)
+    :param key: str, the name of the file in it
+    :param days: float, how old an answer may be [days]
+
+    :return: str or None, the answer
+    """
+    if cachedir is None:
+        return None
+    path = os.path.join(cachedir, key)
+    if not os.path.exists(path):
+        return None
+    age = (time.time() - os.path.getmtime(path)) / 86400.0
+    if age > days:
+        return None
+    try:
+        with open(path, 'r') as handle:
+            return handle.read()
+    except Exception as _:
+        return None
+
+
+def cache_write(cachedir: Optional[str], key: str, text: str):
+    """
+    Keep what a catalogue answered, for the next run on this data directory
+
+    :param cachedir: str or None, the directory of the cache (None: no cache)
+    :param key: str, the name of the file in it
+    :param text: str, the answer
+
+    :return: None
+    """
+    if cachedir is None:
+        return
+    try:
+        if not os.path.exists(cachedir):
+            os.makedirs(cachedir)
+        with open(os.path.join(cachedir, key), 'w') as handle:
+            handle.write(text)
+    except Exception as _:
+        pass
+
+
+def cache_key(prefix: str, text: str) -> str:
+    """
+    The name of a cache file: the prefix and what was asked, hashed
+
+    :param prefix: str, what the answer is about
+    :param text: str, the query
+
+    :return: str, the file name
+    """
+    digest = hashlib.md5(text.encode('utf-8')).hexdigest()[:16]
+    return '{0}_{1}.csv'.format(prefix, digest)
+
+
+def simbad_candidates(objname: str) -> List[str]:
+    """
+    The names to ask SIMBAD for, from the object of the run
+
+    An object built by a pipeline carries what it did in its name
+    (TOI2120_PCA2D_0-7, GL699_drift): the name is tried as it is, then with
+    its last underscore-separated piece dropped, and so on, so that the star
+    is found without any of those suffixes being known here.
+
+    :param objname: str, the name of the object
+
+    :return: list of str, the names to try, in order
+    """
+    names, pieces = [], str(objname).strip().split('_')
+    while len(pieces) > 0:
+        trimmed = '_'.join(pieces)
+        for candidate in [trimmed, simple_name(trimmed)]:
+            # a leftover of two characters is not a star name any more
+            if len(candidate) > 2 and candidate not in names:
+                names.append(candidate)
+        pieces = pieces[:-1]
+    return names
+
+
+def simbad_target(objname: str, cachedir: Optional[str] = None,
+                  days: float = 30.0) -> Optional[Dict[str, Any]]:
     """
     The target in SIMBAD: its main name, its coordinates and its identifiers
 
@@ -779,26 +866,32 @@ def simbad_target(objname: str) -> Optional[Dict[str, Any]]:
     is safer than a name.
 
     :param objname: str, the name of the object
+    :param cachedir: str or None, where the answers of the catalogues are kept
+    :param days: float, how old a kept answer may be [days]
 
     :return: dict or None, main_id, ra, dec, sp_type and ids
     """
     import urllib.parse
     import urllib.request
-    # the names to try: the object, and the object without the suffixes LBL
-    #   adds to it
-    for name in [objname, simple_name(objname)]:
+    for name in simbad_candidates(objname):
         query = ("SELECT TOP 1 b.main_id, b.ra, b.dec, b.sp_type FROM basic "
                  "AS b JOIN ident AS i ON b.oid = i.oidref WHERE "
                  "i.id = '{0}'".format(name.replace("'", "")))
         params = dict(request='doQuery', lang='adql', format='csv',
                       query=query)
         url = URL_SIMBAD_TAP + '?' + urllib.parse.urlencode(params)
-        try:
-            with urllib.request.urlopen(url, timeout=30) as handle:
-                lines = handle.read().decode('utf-8').splitlines()
-        except Exception as e:
-            log.warning('SIMBAD could not be reached: {0}'.format(str(e)))
-            return None
+        # what SIMBAD said about this name last time, if it is recent
+        key = cache_key('simbad', query)
+        text = cache_read(cachedir, key, days)
+        if text is None:
+            try:
+                with urllib.request.urlopen(url, timeout=30) as handle:
+                    text = handle.read().decode('utf-8')
+            except Exception as e:
+                log.warning('SIMBAD could not be reached: {0}'.format(str(e)))
+                return None
+            cache_write(cachedir, key, text)
+        lines = text.splitlines()
         # the header and one row
         if len(lines) < 2:
             continue
@@ -812,7 +905,8 @@ def simbad_target(objname: str) -> Optional[Dict[str, Any]]:
         except ValueError:
             continue
         # every identifier of this star, to match a catalogue by name too
-        target['ids'] = simbad_identifiers(name)
+        target['ids'] = simbad_identifiers(name, cachedir=cachedir,
+                                           days=days)
         msg = 'SIMBAD: {0} is {1} at ({2:.5f}, {3:.5f}), {4}'
         log.general(msg.format(objname, target['main_id'], target['ra'],
                                target['dec'], target['sp_type']))
@@ -821,11 +915,14 @@ def simbad_target(objname: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def simbad_identifiers(name: str) -> List[str]:
+def simbad_identifiers(name: str, cachedir: Optional[str] = None,
+                       days: float = 30.0) -> List[str]:
     """
     Every identifier SIMBAD has for a star
 
     :param name: str, the name of the star
+    :param cachedir: str or None, where the answers of the catalogues are kept
+    :param days: float, how old a kept answer may be [days]
 
     :return: list of str, the identifiers
     """
@@ -836,11 +933,16 @@ def simbad_identifiers(name: str) -> List[str]:
              "".format(name.replace("'", "")))
     params = dict(request='doQuery', lang='adql', format='csv', query=query)
     url = URL_SIMBAD_TAP + '?' + urllib.parse.urlencode(params)
-    try:
-        with urllib.request.urlopen(url, timeout=30) as handle:
-            lines = handle.read().decode('utf-8').splitlines()
-    except Exception as _:
-        return []
+    key = cache_key('simbad_ids', query)
+    text = cache_read(cachedir, key, days)
+    if text is None:
+        try:
+            with urllib.request.urlopen(url, timeout=30) as handle:
+                text = handle.read().decode('utf-8')
+        except Exception as _:
+            return []
+        cache_write(cachedir, key, text)
+    lines = text.splitlines()
     return [line.replace('"', '').strip() for line in lines[1:]]
 
 
@@ -868,7 +970,15 @@ def exoplanet_eu_planets(inst: InstrumentsType, objname: str,
     # the catalogue, downloaded once
     url = inst.params['REPORT_EXOPLANET_EU_URL']
     catalogue = os.path.join(directory, 'exoplanet_eu_catalog.csv')
-    if not os.path.exists(catalogue):
+    days = inst.params['REPORT_CACHE_DAYS']
+    fresh = False
+    if os.path.exists(catalogue):
+        age = (time.time() - os.path.getmtime(catalogue)) / 86400.0
+        fresh = age <= days
+        if not fresh:
+            msg = 'The catalogue of exoplanet.eu is {0:.0f} days old'
+            log.general(msg.format(age))
+    if not fresh:
         msg = 'Downloading the catalogue of exoplanet.eu \n\t{0}'
         log.general(msg.format(url))
         try:
@@ -876,7 +986,10 @@ def exoplanet_eu_planets(inst: InstrumentsType, objname: str,
         except Exception as e:
             wmsg = 'Could not download the catalogue of exoplanet.eu: {0}'
             log.warning(wmsg.format(str(e)))
-            return None
+            # an old copy still says more than nothing
+            if not os.path.exists(catalogue):
+                return None
+            log.warning('Reading the copy of the catalogue already here')
     # read it
     try:
         table = Table.read(catalogue, format='ascii.csv', fast_reader=False)
@@ -945,7 +1058,8 @@ def name_variants(name: str) -> List[str]:
     return sorted(variants)
 
 
-def nasa_archive_planets(names: List[str]) -> Optional[Table]:
+def nasa_archive_planets(names: List[str], cachedir: Optional[str] = None,
+                         days: float = 30.0) -> Optional[Table]:
     """
     The published planets of a star in the NASA exoplanet archive, with the
     reference of their discovery and of their parameters
@@ -955,6 +1069,8 @@ def nasa_archive_planets(names: List[str]) -> Optional[Table]:
     parameter set of each planet is taken (default_flag = 1).
 
     :param names: list of str, the names the star could be under
+    :param cachedir: str or None, where the answers of the catalogues are kept
+    :param days: float, how old a kept answer may be [days]
 
     :return: astropy Table or None, one row per planet
     """
@@ -973,17 +1089,22 @@ def nasa_archive_planets(names: List[str]) -> Optional[Table]:
     # one query for all the names
     inlist = ', '.join(["'{0}'".format(host) for host in hosts[:40]])
     query = ('select pl_name, hostname, disc_year, disc_refname, pl_refname, '
-             'pl_orbper, pl_bmassj, pl_rvamp, discoverymethod from ps where '
+             'pl_orbper, pl_bmassj, pl_rvamp, pl_tranmid, pl_orbtper, '
+             'discoverymethod from ps where '
              'default_flag = 1 and hostname in ({0})'.format(inlist))
     params = dict(query=query, format='csv')
     url = URL_NASA_TAP + '?' + urllib.parse.urlencode(params)
-    try:
-        with urllib.request.urlopen(url, timeout=60) as handle:
-            text = handle.read().decode('utf-8')
-    except Exception as e:
-        wmsg = 'The NASA archive could not be reached: {0}'
-        log.warning(wmsg.format(str(e)))
-        return None
+    key = cache_key('nasa', query)
+    text = cache_read(cachedir, key, days)
+    if text is None:
+        try:
+            with urllib.request.urlopen(url, timeout=60) as handle:
+                text = handle.read().decode('utf-8')
+        except Exception as e:
+            wmsg = 'The NASA archive could not be reached: {0}'
+            log.warning(wmsg.format(str(e)))
+            return None
+        cache_write(cachedir, key, text)
     if not text.lower().startswith('pl_name'):
         return None
     try:
@@ -996,6 +1117,45 @@ def nasa_archive_planets(names: List[str]) -> Optional[Table]:
     hosts = ', '.join(np.unique(table['hostname']))
     log.general(msg.format(len(table), hosts))
     return table
+
+
+def planets_from_nasa(nasa: Optional[Table]) -> Optional[Table]:
+    """
+    The planets of the NASA archive, written the way exoplanet.eu writes
+    them, so that the rest of the report does not care where they come from
+
+    :param nasa: astropy Table or None, the answer of nasa_archive_planets
+
+    :return: astropy Table or None, one row per planet
+    """
+    if nasa is None or len(nasa) == 0:
+        return None
+
+    def _floats(colname):
+        values = []
+        for row in range(len(nasa)):
+            try:
+                values.append(float(nasa[colname][row]))
+            except Exception as _:
+                values.append(np.nan)
+        return np.array(values)
+
+    def _strings(colname):
+        return [str(nasa[colname][row]) for row in range(len(nasa))]
+
+    out = Table()
+    out['name'] = _strings('pl_name')
+    out['star_name'] = _strings('hostname')
+    out['orbital_period'] = _floats('pl_orbper')
+    out['mass'] = _floats('pl_bmassj')
+    out['detection_type'] = _strings('discoverymethod')
+    out['planet_status'] = ['Confirmed'] * len(nasa)
+    out['discovered'] = _strings('disc_year')
+    out['publication'] = _strings('disc_refname')
+    # the epochs the phase folds start from
+    out['tzero_tr'] = _floats('pl_tranmid')
+    out['tperi'] = _floats('pl_orbtper')
+    return out
 
 
 def same_planet(name1: str, name2: str) -> bool:
@@ -2479,12 +2639,26 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
     prior = params['REPORT_FIP_PRIOR']
     # the target in SIMBAD (its coordinates are what the planets are matched
     #   on) and the known planets of this star
-    target = simbad_target(rdata['object'])
+    cachedir = os.path.join(report_dir, 'cache')
+    cachedays = params['REPORT_CACHE_DAYS']
+    target = simbad_target(rdata['object'], cachedir=cachedir,
+                           days=cachedays)
     rdata['target'] = target
-    planets = None
+    planets, planet_source = None, ''
     if params['REPORT_EXOPLANET_EU']:
         planets = exoplanet_eu_planets(inst, rdata['object'], report_dir,
                                        target=target)
+    # exoplanet.eu is a web site like any other: when it does not answer, the
+    #   NASA archive is asked for the planets of the star instead
+    if planets is None and target is not None:
+        names = [target['main_id']] + target.get('ids', [])
+        fallback = planets_from_nasa(nasa_archive_planets(
+            names, cachedir=cachedir, days=cachedays))
+        if fallback is not None:
+            planets = fallback
+            planet_source = 'nasa'
+            log.general('The planets come from the NASA archive '
+                        '(exoplanet.eu gave nothing)')
     # storage of the LaTeX and of the figures
     body, figures = [], []
     # -------------------------------------------------------------------------
@@ -2544,8 +2718,13 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
                    '({0:.5f} {1:+.5f}, within {2:.0f} arcsec) and on its '
                    'names'.format(target['ra'], target['dec'], MATCH_RADIUS,
                                   cite('simbad')))
-    body.append('From the catalogue of exoplanet.eu, \\url{%s}, %s.'
-                % (URL_EXOPLANET_EU, matched))
+    if planet_source == 'nasa':
+        body.append('From the NASA exoplanet archive %s, %s. The catalogue '
+                    'of exoplanet.eu did not answer for this run.'
+                    % (cite('nasa'), matched))
+    else:
+        body.append('From the catalogue of exoplanet.eu, \\url{%s}, %s.'
+                    % (URL_EXOPLANET_EU, matched))
     if planets is None:
         body.append('No planet of this star is in the catalogue (which does '
                     'not mean there is none: the name may be written '
@@ -2555,7 +2734,8 @@ def make_report(inst: InstrumentsType, dparams: Dict[str, str]) -> str:
         hostnames = [str(name) for name in np.unique(planets['star_name'])]
         if target is not None:
             hostnames += [target['main_id']] + target.get('ids', [])
-        nasa = nasa_archive_planets(hostnames)
+        nasa = nasa_archive_planets(hostnames, cachedir=cachedir,
+                                    days=cachedays)
         header = ['Planet', 'Period [d]', 'Mass [M$_{\\rm Jup}$]',
                   'K [m/s]', 'Detection', 'Status', 'Discovery',
                   'Parameters']
