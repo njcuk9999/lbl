@@ -62,6 +62,14 @@ CITE_PAPERS = [('LBL', 'Artigau et al. 2022', 'lbl', '2022AJ....164...84A'),
                ('APERO (SPIRou, NIRPS)', 'Cook et al. 2022', 'apero',
                 '2022PASP..134k4509C')]
 
+# the photometric bands, shaded behind the figures of the lines: the
+#   optical ones go from blue to red, the infrared ones from orange to
+#   garnet
+OPTICAL_BANDS = ['u', 'g', 'r', 'i']
+INFRARED_BANDS = ['z', 'y', 'j', 'h', 'k']
+OPTICAL_COLOUR_ENDS = ((0.12, 0.30, 0.85), (0.85, 0.12, 0.12))
+INFRARED_COLOUR_ENDS = ((1.00, 0.62, 0.24), (0.43, 0.04, 0.08))
+
 # the colour of each telluric species of the TAPAS file of LBL (the columns
 #   of its ABSOSPEC table are ABSO_WATER and ABSO_OTHERS, the other molecules
 #   of the atmosphere together)
@@ -1338,6 +1346,68 @@ def best_order(wavegrid: np.ndarray, wave_centre: float) -> Optional[int]:
     return best
 
 
+def band_edges(band: Any) -> Tuple[float, float]:
+    """
+    The two ends of a photometric band, guarded against a mistyped edge
+
+    :param band: the band of astro.bands
+
+    :return: tuple, the first and the last wavelength [nm]
+    """
+    low, high = float(band.minimum), float(band.maximum)
+    # an edge that is ten times the other one (the J band of some versions
+    #   of astro.py) is put back where the mean wavelength says it is
+    if high > 5 * low and low < band.mean < high:
+        high = low + 2 * (float(band.mean) - low)
+    return low, high
+
+
+def band_colours() -> Dict[str, Tuple[float, float, float]]:
+    """
+    The colour of each photometric band: blue to red through the optical,
+    orange to garnet through the infrared
+
+    :return: dict, the name of the band and its colour
+    """
+    colours = dict()
+    for names, ends in [(OPTICAL_BANDS, OPTICAL_COLOUR_ENDS),
+                        (INFRARED_BANDS, INFRARED_COLOUR_ENDS)]:
+        first, last = np.array(ends[0]), np.array(ends[1])
+        for it, name in enumerate(names):
+            weight = it / max(len(names) - 1, 1)
+            colours[name] = tuple(first + weight * (last - first))
+    return colours
+
+
+def shade_bands(frame: Any, wavemin: float, wavemax: float,
+                label: bool = False):
+    """
+    A light background for each photometric band of the domain
+
+    :param frame: the matplotlib frame
+    :param wavemin: float, the first wavelength of the figure [nm]
+    :param wavemax: float, the last wavelength of the figure [nm]
+    :param label: bool, whether to write the name of each band on top
+
+    :return: None, draws on the frame
+    """
+    colours = band_colours()
+    for band in astro.bands:
+        if band.name not in colours:
+            continue
+        low, high = band_edges(band)
+        # only the part of the band the figure shows
+        low, high = max(low, wavemin), min(high, wavemax)
+        if not high > low:
+            continue
+        frame.axvspan(low, high, color=colours[band.name], alpha=0.10,
+                      lw=0, zorder=0)
+        if label:
+            frame.text(np.sqrt(low * high), 0.985, band.name,
+                       transform=frame.get_xaxis_transform(), ha='center',
+                       va='top', fontsize=8, color=colours[band.name])
+
+
 def river_bands(inst: InstrumentsType, rdata: Dict[str, Any]
                 ) -> List[Tuple[str, float]]:
     """
@@ -1857,10 +1927,6 @@ def plot_line_precision(inst: InstrumentsType, dparams: Dict[str, str],
     # -------------------------------------------------------------------------
     frames[0].plot(wave, np.log10(sdv), '.', ms=2, color='k', alpha=0.35,
                    rasterized=True)
-    # the median of the run, per band, to guide the eye
-    xbin, ybin = bin_for_display(wave, np.log10(sdv), nbins=120)
-    frames[0].plot(xbin, ybin, '-', color='tab:red', lw=1.2,
-                   label='median of the lines')
     frames[0].set(ylabel='$\\log_{10}$(median $\\sigma_{\\rm RV}$ per line '
                          '[m/s])')
     frames[0].set_title('{0} lines, median uncertainty over {1} spectra'
@@ -1868,7 +1934,6 @@ def plot_line_precision(inst: InstrumentsType, dparams: Dict[str, str],
                         fontsize=10)
     frames[0].grid(color='grey', alpha=0.3, lw=0.5)
     frames[0].set_axisbelow(True)
-    frames[0].legend(fontsize=8, loc='best')
     # -------------------------------------------------------------------------
     # 2. the template, normalised to its median
     # -------------------------------------------------------------------------
@@ -1932,6 +1997,11 @@ def plot_line_precision(inst: InstrumentsType, dparams: Dict[str, str],
                   ylim=[max(lowest - 0.05, -0.02), 1.05])
     frames[2].grid(color='grey', alpha=0.3, lw=0.5)
     frames[2].set_axisbelow(True)
+    # the photometric bands, behind the three panels
+    for it, frame in enumerate(frames):
+        shade_bands(frame, float(np.min(wave)), float(np.max(wave)),
+                    label=(it == 0))
+    frames[0].set_xlim(float(np.min(wave)), float(np.max(wave)))
     fig.tight_layout()
     return save_figure(fig, figdir, 'line_precision'), note
 
@@ -1991,7 +2061,25 @@ def plot_precision_bins(lines: Dict[str, np.ndarray], bins: Dict[str,
     total = float(1.0 / np.sqrt(np.nansum(1.0 / lines['sdv'] ** 2)))
     frames[0].axhline(total, color='tab:red', ls='--', lw=1.0,
                       label='whole domain: {0:.2f} m/s'.format(total))
+    # the best and the worst sub-domain, named on the figure
+    if np.any(np.isfinite(sigma)):
+        best = int(np.nanargmin(sigma))
+        worst = int(np.nanargmax(sigma))
+        for index, colour, what in [(best, 'tab:green', 'best'),
+                                    (worst, 'tab:red', 'worst')]:
+            middle = bins['middle'][index]
+            frames[0].plot(middle, sigma[index], 'o', ms=5, color=colour)
+            label = '{0}: {1:.2f} m/s ({2:.0f}-{3:.0f} nm)'
+            label = label.format(what, sigma[index], edges[index],
+                                 edges[index + 1])
+            frames[0].annotate(label, (middle, sigma[index]),
+                               textcoords='offset points', xytext=(0, -14),
+                               ha='center', va='top', fontsize=8,
+                               color=colour)
     frames[0].set(ylabel='precision of the bin [m/s]', yscale='log')
+    # room above the worst bin, so its label stays inside the frame
+    low, high = frames[0].get_ylim()
+    frames[0].set_ylim(low, high * 1.3)
     frames[0].set_title('Velocity precision of one spectrum, in bins of '
                         '{0:.0f} percent in wavelength'
                         ''.format(100 * bins['step']), fontsize=10)
@@ -2006,6 +2094,11 @@ def plot_precision_bins(lines: Dict[str, np.ndarray], bins: Dict[str,
         axis.set_major_formatter(ScalarFormatter())
         axis.set_minor_formatter(ScalarFormatter())
     frames[1].tick_params(axis='x', which='minor', labelsize=7)
+    # the photometric bands, behind both panels
+    for it, frame in enumerate(frames):
+        shade_bands(frame, float(edges[0]), float(edges[-1]),
+                    label=(it == 0))
+    frames[1].set_xlim(float(edges[0]), float(edges[-1]))
     frames[1].grid(color='grey', alpha=0.3, lw=0.5)
     frames[1].set_axisbelow(True)
     fig.tight_layout()
