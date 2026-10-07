@@ -21,7 +21,7 @@ duckdb                          # Current version: 1.4.4 ✓ (upgraded from 1.2.
 dynesty                         # Current version: 3.0.0 (upgraded from 2.1.5, MAJOR VERSION)
 emcee                           # Current version: 3.1.6 (no upgrade needed)
 exotic-ld                       # Current version: 3.2.0 (no upgrade needed)
-GitPython                       # Current version: 3.1.46 ✓ (upgraded from 3.1.44)
+GitPython                       # Current version: 3.1.62 ✓ (from 3.1.46)
 gitchangelog                    # Current version: 3.0.4 (no upgrade needed)
 gspread-pandas                  # Current version: 3.3.0 (no upgrade needed)
 gspread                         # Current version: 5.12.4 (kept at 5.x, gspread-pandas requires <6)
