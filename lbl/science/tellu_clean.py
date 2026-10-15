@@ -286,6 +286,9 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     airmass = e2ds_params['AIRMASS']
     objname = e2ds_params['OBJECT']
     berv = e2ds_params['BERV']
+    # le BERV dont la TRANSMISSION doit etre decalee, qui n'est pas celui des
+    # vitesses: zero quand la grille est deja dans le repere de l'observateur
+    berv_trans = e2ds_params.get('BERV_TRANS', 0.0)
     # -------------------------------------------------------------------------
     # Load the template (if it exists and if we want to use it)
     # -------------------------------------------------------------------------
@@ -395,8 +398,27 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     ccf_others = np.zeros_like(ddvec, dtype=float)
     ccf_water = np.zeros_like(ddvec, dtype=float)
 
-    # get a wave solution for the tranmission shifted by the berv if required
+    # get a wave solution for the transmission shifted by the berv if required
+    #
+    # TAPAS DESCRIBES THE ATMOSPHERE, SO IT LIVES IN THE OBSERVER FRAME. When
+    # the wave solution handed to us is already barycentric, as it is for the
+    # ESO S2D files of HARPS, HARPS-N and ESPRESSO, the transmission has to be
+    # evaluated at the wavelengths the ground sees, not the ones the barycentre
+    # does. get_berv is zero for those classes, which is the right answer for
+    # the velocities and the reason this shift was never applied; the BERV of
+    # the header is what the atmosphere moved by.
+    #
+    # Measured on HD 10700 (HARPS, 2026-10-15), O2 B band 686-690 nm: with the
+    # barycentric grid the model correlates with the spectrum at -0.035, i.e.
+    # not at all, and the cleaning divided by at most 2.7 where the model asks
+    # for 7.5. Shifted here, the correlation is 0.973 and the residual offset
+    # against the BERV goes from a slope of -1.0003 to 0.0000.
+    #
+    # doppler_shift(wave, +berv) maps barycentric wavelengths onto the ones the
+    # observer sees: at a BERV of +23.74 km/s it moves 688 nm by -23.74 km/s.
     wave_trans = np.array(wave_vector)
+    if berv_trans:
+        wave_trans = mp.doppler_shift(wave_trans, berv_trans)
     # -------------------------------------------------------------------------
     # counter for the number of iterations (we will stop after a certain number)
     #   if it hasn't converged
@@ -636,7 +658,16 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
                          template_vector, template_flag, objname)
     # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)
+    #
+    # AND SHIFT IT THE SAME WAY, for the same reason as above: this is the
+    # transmission that is actually divided out of the science data, so a
+    # grid left in the barycentric frame here would undo the fit done in the
+    # observer frame. The loop above was corrected without this line once
+    # (2026-10-15) and nothing changed in the written files, which is how the
+    # omission showed up.
     wave_trans = np.array(wavemap)
+    if berv_trans:
+        wave_trans = mp.doppler_shift(wave_trans, berv_trans)
     # -------------------------------------------------------------------------
     # get the final absorption spectrum to be used on the science data.
     #    No trimming done on the wave grid

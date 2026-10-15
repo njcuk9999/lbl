@@ -968,6 +968,27 @@ class Instrument:
         # return data and header
         return sci_data, sci_hdr
 
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the TELLURIC TRANSMISSION must be shifted by, in m/s.
+
+        Not the same question as get_berv, which answers "what is left to
+        apply to reach the star's frame". TAPAS describes the atmosphere, so
+        it lives in the observer frame: when the wave solution we are handed
+        is already barycentric, the transmission has to be evaluated at the
+        wavelengths the ground sees.
+
+        Zero by default, which is right for every instrument whose files are
+        delivered in the observer frame (SPIRou, NIRPS): nothing moves. The
+        classes whose grid is barycentric override it with the header BERV.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s, 0.0 for no shift
+        """
+        _ = sci_hdr
+        return 0.0
+
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
         Get the systemic velocity in m/s of the mask

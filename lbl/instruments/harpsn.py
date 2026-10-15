@@ -1228,6 +1228,30 @@ class HarpsN_ESO(HarpsN):
         # return wave solution map
         return wavemap
 
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s.
+
+        This class is handed a wave solution that is ALREADY barycentric, so
+        its get_berv returns zero: nothing is left to apply to reach the
+        star's frame. But TAPAS describes the atmosphere, which sat in the
+        observer frame, and the atmosphere did move by the header's BERV.
+
+        Measured on HD 10700 (HARPS, 2026-10-15), O2 B band: without this
+        shift the model correlates with the spectrum at -0.035, i.e. not at
+        all, and the residual offset tracks the BERV with a slope of -1.0003.
+        With it, 0.973 and a slope of 0.0000.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
+        hdr_key = self.params['KW_BERV']
+        try:
+            return float(sci_hdr.get_hkey(hdr_key, dtype=float)) * 1000
+        except Exception:
+            return 0.0
+
     def get_berv(self, sci_hdr: io.LBLHeader) -> float:
         """
         Get the Barycenteric correction for the RV in m/s

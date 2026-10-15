@@ -177,6 +177,13 @@ def __main__(inst: InstrumentsType, **kwargs):
                                                 dtype=float)
         e2ds_dict['OBJECT'] = inst.params['OBJECT_SCIENCE']
         e2ds_dict['BERV'] = inst.get_berv(sci_hdr)
+        # LA TRANSMISSION SE DECALE QUAND LA GRILLE EST BARYCENTRIQUE. TAPAS
+        # decrit l'atmosphere, donc le repere du sol; get_berv rend zero pour
+        # les classes dont la grille est deja barycentrique, et c'est la bonne
+        # reponse pour les vitesses, mais l'atmosphere, elle, a bouge du BERV
+        # de l'en-tete. Les classes dont la grille est dans le repere de
+        # l'observateur rendent zero ici et rien ne bouge.
+        e2ds_dict['BERV_TRANS'] = inst.get_berv_transmission(sci_hdr)
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------
         # do the telluric correction (similar to APERO)
