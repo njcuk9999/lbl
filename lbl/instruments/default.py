@@ -978,9 +978,13 @@ class Instrument:
         is already barycentric, the transmission has to be evaluated at the
         wavelengths the ground sees.
 
-        Zero by default, which is right for every instrument whose files are
-        delivered in the observer frame (SPIRou, NIRPS): nothing moves. The
-        classes whose grid is barycentric override it with the header BERV.
+        THIS IS A CORRECTION FOR THE OPTICAL. The infrared spectrographs
+        arrive already telluric-corrected from APERO and have
+        DO_TELLUCLEAN = False (spirou.py:180, nirps.py:183), so this recipe
+        never runs on them. It is the optical classes, which clean their own
+        tellurics and are handed a barycentric grid, that need the shift.
+
+        Zero by default, so nothing moves unless a class says otherwise.
 
         :param sci_hdr: io.LBLHeader, the science header
 
