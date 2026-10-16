@@ -1,8 +1,8 @@
 """The pages of an LBL run report.
 
 Each function draws one page and returns it; none writes a file, `main`
-assembles them. The periodogram and FIP routines come from koloa when it is
-installed; without it those pages are skipped and the rest still come out.
+assembles them. The FIP is computed here (lbl.report.fip); the periodogram
+borrows koloa when it is installed, and is skipped without it.
 """
 import numpy as np
 
@@ -129,56 +129,62 @@ def page_periodogram(plt, table, title, known=None):
     return fig
 
 
+#: the floor of the log scale. A FIP below this is "certain" as far as any
+#: of this machinery can tell, and plotting it lower only stretches noise.
+LOG_FIP_FLOOR = 1e-12
+
+
+def _log_fip(values):
+    """log10 of a FIP, floored so that an exact zero still plots."""
+    return np.log10(np.clip(np.asarray(values, dtype=float),
+                            LOG_FIP_FLOOR, 1.0))
+
+
+def _fip_axis(ax):
+    """The shared axis of the two FIP pages.
+
+    LOG10 RATHER THAN THE PROBABILITY ITSELF: a FIP of 0.5 and one of 1e-8
+    are both "detected" on a linear axis, yet they differ by eight orders of
+    magnitude of confidence, and that is the whole content of the number.
+    """
+    ax.set_xlabel('Period (days)')
+    ax.set_ylabel(r'$\log_{10}$ (false inclusion probability)')
+    ax.set_ylim(np.log10(LOG_FIP_FLOOR), 0.1)
+    ax.axhline(np.log10(0.5), color='0.6', lw=0.8, ls='-.')
+    ax.annotate('FIP = 0.5', xy=(0.004, np.log10(0.5)),
+                xycoords=('axes fraction', 'data'),
+                xytext=(0, 3), textcoords='offset points', fontsize=7,
+                color='0.4')
+
+
 def page_fip(plt, table, title):
     """The FIP, in its three ways of facing the outliers."""
-    try:
-        from koloa.data import RVData
-        from koloa.fip import fip_comparison
-    except Exception:                                         # noqa: BLE001
-        return None
+    from lbl.report import fip as _fip
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
     if len(time) < 20:
         return None
-    try:
-        data = RVData(time=time, rv=vrad, err=svrad, name=title)
-        out = fip_comparison(data)
-    except Exception:                                         # noqa: BLE001
+    freq, values = _fip.fip(time, vrad, svrad)
+    if freq.size == 0:
         return None
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    drawn = 0
-    for key, colour in (('gaussian', 'C0'), ('soft', 'C1'), ('hard', 'C2')):
-        res = out.get(key)
-        if res is None or not hasattr(res, 'freq'):
-            continue
-        fip = getattr(res, 'fip', None)
-        if fip is None:
-            continue
-        ax.plot(1.0 / np.asarray(res.freq, dtype=float),
-                np.asarray(fip, dtype=float), lw=1.0, color=colour,
-                label=getattr(res, 'label', key))
-        drawn += 1
-    if not drawn:
-        plt.close(fig)
-        return None
+    ax.plot(1.0 / freq, _log_fip(values), lw=1.0, color='C0',
+            label='gaussian, one signal')
     ax.set_xscale('log')
     # A PROBABILITY IS READ ON ITS OWN SCALE: linear, 0 to 1, with the axis
     # pinned to those bounds. A FIP near 1 means the signal is almost surely
     # absent and a FIP near 0 that it is almost surely there, and the eye
     # should see where a curve sits between the two without having to decode
     # a stretched axis.
-    ax.set_ylim(0.0, 1.0)
-    ax.set_yticks(np.linspace(0.0, 1.0, 11))
-    ax.set_xlabel('Period (days)')
-    ax.set_ylabel('False inclusion probability')
+    _fip_axis(ax)
     _landmarks(ax)
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
-    fig.suptitle('False inclusion probability, with no clip and with two'
-                 ' clips\nWhat matters is the gap between the three: it says'
-                 ' what the handling of outliers does to the answer',
+    fig.suptitle('False inclusion probability, every point taken at its error'
+                 ' bar\nCompare with the outlier-aware page: where the two'
+                 ' differ, the answer depends on how outliers are treated',
                  fontsize=10)
     fig.tight_layout()
     return fig
@@ -198,6 +204,34 @@ def strongest_line(spl, wave_min, wave_max, step=0.002):
     if not good.any():
         return None
     return float(grid[good][int(np.argmax(depth[good]))])
+
+
+def _best_order(wave, low, high):
+    """Which echelle order owns a window, or None if the grid is not 2D.
+
+    The order kept is the one whose middle the window sits closest to,
+    measured in units of that order's own half-width so that orders of
+    different widths compare: 0 is dead centre, 1 is an edge.
+    """
+    wave = np.asarray(wave, dtype=float)
+    if wave.ndim != 2:
+        return None
+    centre = 0.5 * (low + high)
+    best, score = None, np.inf
+    for index in range(wave.shape[0]):
+        row = wave[index]
+        if not np.isfinite(row).any():
+            continue
+        first, last = np.nanmin(row), np.nanmax(row)
+        if first > high or last < low:
+            continue
+        half = 0.5 * (last - first)
+        if half <= 0:
+            continue
+        offset = abs(centre - 0.5 * (first + last)) / half
+        if offset < score:
+            best, score = index, offset
+    return best
 
 
 def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
@@ -255,8 +289,22 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
         # either side with a straight line, and the figure would show a
         # correction where in truth there is a hole. Keeping the NaNs makes
         # matplotlib break the curve, which is the honest picture.
+        # ONE ORDER, THE ONE WHOSE CENTRE THE WINDOW SITS CLOSEST TO.
+        # Consecutive echelle orders share their ends, so a window inside an
+        # overlap is covered twice: once near the middle of an order, where
+        # the blaze peaks and the extraction is at its best, and once at the
+        # very edge of its neighbour, where the throughput has fallen off and
+        # the same wavelengths are far noisier. Drawing both stacks a
+        # measurement on a poor copy of itself. Measured on HARPS the
+        # 2026-10-16: the water window at 647.76 nm falls in the overlap of
+        # orders 64 and 65.
+        chosen = _best_order(wave, low, high)
         band = ((wave > low) & (wave < high) & np.isfinite(before)
                 & (before > 0))
+        if chosen is not None:
+            keep_order = np.zeros(wave.shape, dtype=bool)
+            keep_order[chosen] = True
+            band &= keep_order
         if band.sum() < 30:
             continue
         order = np.argsort(wave[band])
@@ -265,8 +313,12 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
         a = after[band][order]
         scale = np.nanpercentile(b, 95)
         dead = int(np.sum(~np.isfinite(a)))
-        ax.plot(w, b / scale, 'k-', lw=0.9, label='uncorrected')
-        ax.plot(w, a / scale, '-', lw=0.9, color='tab:green',
+        # HALF OPACITY ON THE THREE CURVES: they lie on top of one another
+        # almost everywhere, and at full opacity the last one drawn simply
+        # hides the others. At one half the eye sees where they agree (the
+        # colours blend) and where they part (one colour shows through).
+        ax.plot(w, b / scale, 'k-', lw=0.9, alpha=0.5, label='uncorrected')
+        ax.plot(w, a / scale, '-', lw=0.9, color='tab:green', alpha=0.5,
                 label='corrected (gaps: absorption too deep)'
                       if dead else 'corrected')
         # THE CORRECTION ITSELF, which is what the two curves differ by: blue
@@ -278,7 +330,7 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
         with np.errstate(invalid='ignore', divide='ignore'):
             removed = np.where(np.isfinite(a) & (a != 0) & (b > 0),
                                b / a, np.nan)
-        ax.plot(w, removed, '-', lw=1.1, color=colour, alpha=0.85,
+        ax.plot(w, removed, '-', lw=1.1, color=colour, alpha=0.5,
                 label='transmission divided out (%s)'
                       % ('water' if which == 'water' else 'dry'))
         # and shade where the gaps are, so that a reader sees them as a
@@ -297,8 +349,20 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
         # blanks the corrected flux swings over several units and, left to
         # itself, the axis squashes everything else into a line. The spikes
         # are real and worth seeing, but the scale belongs to the data.
-        ax.set_ylim(-0.1, max(1.35, float(np.nanpercentile(b / scale, 99.5))
-                              * 1.15))
+        # THE FLOOR FOLLOWS THE DATA. A window whose deepest line only
+        # reaches 0.8 of the continuum wastes four fifths of the panel on
+        # empty space if the axis always starts at zero, and the lines one
+        # came to look at are squashed into the top. The floor is therefore
+        # set a little below the deepest point actually drawn, and only
+        # pinned to zero when the spectrum really does go there.
+        shown = np.concatenate([(b / scale)[np.isfinite(b)],
+                                (a / scale)[np.isfinite(a)],
+                                removed[np.isfinite(removed)]])
+        bottom = float(np.nanpercentile(shown, 0.5)) if shown.size else 0.0
+        top = float(np.nanpercentile(shown, 99.5)) if shown.size else 1.2
+        pad = 0.08 * max(top - bottom, 0.05)
+        ax.set_ylim(max(-0.05, bottom - pad) if bottom > 0.1 else -0.05,
+                    max(1.1, top + pad))
         ax.set_title('%s epoch: %s = %.4f%s'
                      % (tag, column, value,
                         ', %d pixels left uncorrected' % dead if dead else ''),
@@ -392,44 +456,34 @@ def page_oafip(plt, table, title, known=None):
     before the question is asked. The outlier-aware FIP instead MODELS the
     outliers: each point carries a latent indicator saying whether it belongs
     to the normal population or to a wider one, sampled along with everything
-    else (koloa.fip.oafip, after Hara et al. 2022).
+    else (lbl.report.fip.oafip).
 
     Reading the two together is the point. Where they agree, the answer does
     not depend on how the outliers were handled. Where they differ, it does,
     and the outlier-aware one is the one to believe.
     """
-    try:
-        from koloa.data import RVData
-        from koloa.fip import oafip
-    except Exception:                                         # noqa: BLE001
-        return None
+    from lbl.report import fip as _fip
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
     if len(time) < 20:
         return None
-    try:
-        data = RVData(time=time, rv=vrad, err=svrad, name=title)
-        # a short chain on purpose: this is a report, not a survey analysis,
-        # and the question it answers is whether the outliers change the
-        # answer, which a few hundred sweeps already settle
-        res = oafip(data, kmax=1, nsweep=400, nburn=80, nchains=2,
-                    progress=False, label='outlier-aware')
-    except Exception:                                         # noqa: BLE001
-        return None
-    if not hasattr(res, 'freq') or getattr(res, 'fip', None) is None:
+    freq, values, prob = _fip.oafip(time, vrad, svrad)
+    if freq.size == 0:
         return None
 
     fig, axes = plt.subplots(2, 1, figsize=(10, 7),
                              gridspec_kw=dict(height_ratios=[2, 1]))
-    period = 1.0 / np.asarray(res.freq, dtype=float)
-    axes[0].plot(period, np.asarray(res.fip, dtype=float), lw=1.1,
-                 color='C4', label='outlier-aware')
+    # the gaussian curve under it, so the two are read on one axis rather
+    # than by flipping pages: where they part, the answer is the outliers'
+    plain_freq, plain = _fip.fip(time, vrad, svrad, freq=freq)
+    if plain.size:
+        axes[0].plot(1.0 / plain_freq, _log_fip(plain), lw=0.9, color='C0',
+                     alpha=0.6, label='gaussian')
+    axes[0].plot(1.0 / freq, _log_fip(values), lw=1.2, color='C4',
+                 label='outlier-aware')
     axes[0].set_xscale('log')
-    axes[0].set_ylim(0.0, 1.0)
-    axes[0].set_yticks(np.linspace(0.0, 1.0, 11))
-    axes[0].set_ylabel('False inclusion probability')
-    axes[0].set_xlabel('Period (days)')
+    _fip_axis(axes[0])
     axes[0].legend(fontsize=8)
     axes[0].grid(alpha=0.3)
     _landmarks(axes[0], known=known)
@@ -437,23 +491,18 @@ def page_oafip(plt, table, title, known=None):
     # WHICH EPOCHS THE MODEL CALLS OUTLIERS, which is the other half of the
     # answer: a FIP that moved because three nights were down-weighted is a
     # different statement from one that moved because half the series was
-    prob = getattr(res, 'outlier_prob', None)
-    if prob is None:
-        axes[1].text(0.5, 0.5, 'the sampler returned no outlier probabilities',
-                     ha='center', va='center', transform=axes[1].transAxes)
-    else:
-        prob = np.asarray(prob, dtype=float)
-        axes[1].plot(time, prob, 'o', ms=4, color='C4')
-        axes[1].axhline(0.5, color='0.5', lw=0.9, ls='--')
-        axes[1].set_ylim(-0.03, 1.03)
-        axes[1].set_ylabel('P(outlier)')
-        axes[1].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
-        axes[1].set_title('%d epochs above one half, out of %d'
-                          % (int(np.sum(prob > 0.5)), prob.size), fontsize=9)
+    prob = np.asarray(prob, dtype=float)
+    axes[1].plot(time, prob, 'o', ms=4, color='C4')
+    axes[1].axhline(0.5, color='0.5', lw=0.9, ls='--')
+    axes[1].set_ylim(-0.03, 1.03)
+    axes[1].set_ylabel('P(outlier)')
+    axes[1].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
+    axes[1].set_title('%d epochs above one half, out of %d'
+                      % (int(np.sum(prob > 0.5)), prob.size), fontsize=9)
     axes[1].grid(alpha=0.3)
     fig.suptitle('Outlier-aware false inclusion probability\\n'
-                 'The outliers are modelled rather than clipped: compare with'
-                 ' the gaussian page, and believe this one where they differ',
+                 'The outliers are modelled rather than clipped: where the'
+                 ' two curves part, the answer depends on them',
                  fontsize=10)
     fig.tight_layout()
     return fig
