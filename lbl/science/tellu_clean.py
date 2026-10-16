@@ -681,16 +681,32 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     #
     # lbl.science.tellu_derivative holds it. Only water is free, per file,
     # because the water column changes too fast for a nightly model; the dry
-    # absorbers stay at the airmass (free, they come out at 0.961 of it and
-    # open a second failure mode); the velocity is not free, the model being
-    # evaluated in the ground frame as above.
+    # absorbers are free too since 2026-10-16 (fixed to the airmass they
+    # impose a systematic 4% error, La Silla sitting above part of the column
+    # TAPAS assumes); the velocity is not free, the model being evaluated in
+    # the ground frame as above.
+    #
+    # AND THE FIT SEES THE SPECTRUM DIVIDED BY THE TEMPLATE, like the loop
+    # above: that is APERO's logic, and it is where the constraint comes from.
     if inst.params.get('TELLUCLEAN_DERIVATIVE_WATER', False):
         from lbl.science import tellu_derivative as _deriv
         try:
+            # LE SPECTRE DIVISE PAR LE TEMPLATE, comme la boucle de LBL le
+            # fait ligne 441. C'est la logique d'APERO: on fabrique un
+            # template, on divise par lui, et on mesure les telluriques dans
+            # le RESIDU de la division. Sans cela l'ajustement voit le spectre
+            # stellaire entier, et sur une etoile dense en raies ce sont elles
+            # qui dominent la dispersion du gradient.
+            #
+            # template_vector vaut des 1 quand il n'y a pas de template (la
+            # premiere des trois passes de lbl_wrap), donc la division est
+            # alors sans effet et le comportement ne change pas.
+            #
             # la grille du SOL, la meme que celle de la boucle ci-dessus:
             # wave_trans y a deja ete decalee du BERV s'il le fallait
+            sp_for_fit = sp_vector / template_vector
             expo_water = _deriv.fit_exponents(
-                wave_trans, sp_vector, spl_water, spl_others,
+                wave_trans, sp_for_fit, spl_water, spl_others,
                 expo_others, resolution=inst.params['APPROX_RESOLUTION'])[0]
             log.general('\tH2O exponent by the derivative method: '
                         '{0:.4f}'.format(expo_water))
