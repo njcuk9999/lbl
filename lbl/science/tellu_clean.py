@@ -708,8 +708,16 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
             expo_water = _deriv.fit_exponents(
                 wave_trans, sp_for_fit, spl_water, spl_others,
                 expo_others, resolution=inst.params['APPROX_RESOLUTION'])[0]
-            log.general('\tH2O exponent by the derivative method: '
-                        '{0:.4f}'.format(expo_water))
+            # LE JOURNAL DOIT DIRE SI C'EST UN REPLI. A quatre decimales, la
+            # marque de 1e-7 est invisible, et une pose au repli s'affiche
+            # "0.3500" exactement comme une pose qui converge vers 0.35: j'ai
+            # compte zero repli sur un lot qui en avait treize (2026-10-16).
+            if _deriv.is_fallback(expo_water):
+                log.general('\tH2O exponent: FALLBACK {0:.4f} (the cost curve '
+                            'had nothing to go on)'.format(expo_water))
+            else:
+                log.general('\tH2O exponent by the derivative method: '
+                            '{0:.4f}'.format(expo_water))
         except Exception as exc:
             log.warning('\tderivative H2O fit failed ({0}), keeping the '
                         'loop value {1:.4f}'.format(exc, expo_water))
