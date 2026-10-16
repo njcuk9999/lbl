@@ -10,6 +10,7 @@ Created on 2021-03-19
 @author: cook
 """
 from typing import List
+import os
 import sys
 
 from lbl.core import base
@@ -50,7 +51,9 @@ REMOVE_KEYS = [  # core
     'SKIP_LBL_TELLUCLEAN', 'SKIP_LBL_TEMPLATE', 'SKIP_LBL_MASK',
     'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
     # general keys already used
-    'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE']
+    'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE',
+    # le rapport de fin de run
+    'REPORT']
 
 # Define the default values
 DEFAULTS = dict()
@@ -61,6 +64,9 @@ DEFAULTS['RUN_LBL_TEMPLATE'] = False
 DEFAULTS['RUN_LBL_MASK'] = False
 DEFAULTS['RUN_LBL_COMPUTE'] = False
 DEFAULTS['RUN_LBL_COMPILE'] = False
+#: LE RAPPORT EST FAIT PAR DEFAUT. Il coute quelques secondes a la fin d'un
+#: run qui en a pris des minutes, et c'est lui qui dit si le run a marche.
+DEFAULTS['REPORT'] = True
 DEFAULTS['SKIP_LBL_TEMPLATE'] = False
 DEFAULTS['SKIP_LBL_MASK'] = False
 DEFAULTS['SKIP_LBL_COMPUTE'] = False
@@ -254,6 +260,25 @@ def main(runparams: dict):
                              object_comparison=object_comparison,
                              skip_done=runparams['SKIP_LBL_COMPILE'],
                              **keyword_args)
+        # ---------------------------------------------------------------------
+        # LE RAPPORT, a la toute fin et jamais fatal. C'est un compte rendu du
+        # run, pas une etape de calcul: s'il ne peut pas se dessiner, le run
+        # reste bon et on le dit, on ne le perd pas.
+        if runparams.get('REPORT', True) and runparams['RUN_LBL_COMPILE']:
+            try:
+                from lbl.report import make_report
+                rdb = os.path.join(data_dir, 'lblrdb',
+                                   'lbl_%s_%s.rdb' % (object_science,
+                                                      object_comparison))
+                make_report(data_dir=data_dir, rdb_file=rdb,
+                            title='%s_%s' % (object_science,
+                                             object_comparison),
+                            science_dir=os.path.join(data_dir, 'science',
+                                                     object_science),
+                            tc_dir=os.path.join(data_dir, 'science',
+                                                object_science + '_tc'))
+            except Exception as _exc:
+                log.warning('report failed: {0}'.format(_exc))
 
 
 
