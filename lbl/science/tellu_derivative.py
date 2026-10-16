@@ -76,6 +76,18 @@ WATER_BANDS_HARPS = ((586.0, 600.0), (644.0, 664.0), (686.0, 696.0))
 #: de la moitie bleue a une mesure qu'elle ne contraint pas.
 DRY_BANDS_HARPS = ((625.0, 635.0), (685.0, 690.0))
 
+#: LA MARQUE DU REPLI. La valeur de repli (0.35) tombe exactement sur un point
+#: du balayage, donc une pose qui converge vers 0.35 et une pose qui a echoue
+#: rendraient le meme chiffre. On ajoute cet epsilon aux seules valeurs de
+#: repli: trois millionnemes de l'exposant, c'est-a-dire rien pour la
+#: physique, mais `is_fallback` les reconnait, et un journal aussi.
+FALLBACK_MARK = 1e-7
+
+
+def is_fallback(water, fallback=0.35):
+    """Cet exposant vient-il du repli plutot que d'une mesure?"""
+    return bool(abs(float(water) - (fallback + FALLBACK_MARK)) < FALLBACK_MARK / 10)
+
 
 def band_mask(wave, bands):
     """Les pixels qui tombent dans une des bandes."""
@@ -250,13 +262,23 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     dry0 = np.log(max(float(airmass), 1e-3))
     costs = np.array([cost([np.log(a), dry0]) for a in scan])
     if not np.all(np.isfinite(costs)):
-        return float(fallback), float(airmass)
+        return float(fallback) + FALLBACK_MARK, float(airmass)
     span = (costs.max() - costs.min()) / max(abs(costs.min()), 1e-30)
     jbest = int(np.argmin(costs))
     flat = span < flat_span
     on_edge = jbest in (0, len(scan) - 1)
     if flat or on_edge:
-        return float(fallback), float(airmass)
+        # LE REPLI DOIT SE RECONNAITRE. `fallback` vaut 0.35, qui est AUSSI un
+        # point du balayage: une pose qui converge vraiment vers 0.35 rend
+        # alors le meme chiffre qu'une pose qui a echoue, et ni le journal ni
+        # l'en-tete ne permettent de les separer. Vu le 2026-10-16 sur
+        # HD 69830, ou j'ai compte 18% de repli alors que plusieurs de ces
+        # poses convergeaient franchement vers 0.35 (variation 39 a 42%).
+        #
+        # On decale donc d'un epsilon invisible physiquement (0.35 contre
+        # 0.3500001, soit trois millionnemes de l'exposant) mais qui rend le
+        # repli reconnaissable a la lecture.
+        return float(fallback) + FALLBACK_MARK, float(airmass)
 
     x0 = [np.log(scan[jbest]), np.log(max(float(airmass), 1e-3))]
     out = minimize(cost, x0=x0, method="Nelder-Mead",
@@ -264,7 +286,7 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     water = float(np.exp(out.x[0]))
     dry = float(np.exp(out.x[1])) if free_dry else float(airmass)
     if not np.isfinite(water) or water < scan[0] or water > scan[-1]:
-        return float(fallback), float(airmass)
+        return float(fallback) + FALLBACK_MARK, float(airmass)
     return water, dry
 
 
