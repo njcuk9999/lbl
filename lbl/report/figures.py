@@ -134,16 +134,15 @@ def page_fip(plt, table, title):
         plt.close(fig)
         return None
     ax.set_xscale('log')
-    # L'ECHELLE DU FIP EST CELLE DE 1 - FIP, pas celle du FIP: une serie sans
-    # detection reste collee a 1, et un log sur 0.6 a 1.0 ne montre rien. On
-    # trace donc le FIP mais on gradue en 1 - FIP, qui est la probabilite
-    # qu'il y AIT un signal et qui s'etale, elle, sur plusieurs decades.
-    ax.set_yscale('function',
-                  functions=(lambda y: -np.log10(np.clip(1.0 - y, 1e-12, 1.0)),
-                             lambda z: 1.0 - 10.0 ** (-z)))
+    # A PROBABILITY IS READ ON ITS OWN SCALE: linear, 0 to 1, with the axis
+    # pinned to those bounds. A FIP near 1 means the signal is almost surely
+    # absent and a FIP near 0 that it is almost surely there, and the eye
+    # should see where a curve sits between the two without having to decode
+    # a stretched axis.
+    ax.set_ylim(0.0, 1.0)
+    ax.set_yticks(np.linspace(0.0, 1.0, 11))
     ax.set_xlabel('Period (days)')
-    ax.set_ylabel('False inclusion probability'
-                  ' (axis stretched in $1-\\mathrm{FIP}$)')
+    ax.set_ylabel('False inclusion probability')
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
     fig.suptitle('False inclusion probability, with no clip and with two'
