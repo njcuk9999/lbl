@@ -57,6 +57,34 @@ STEP_KMS = 0.25
 #: noyer par les raies stellaires
 WATER_BANDS_HARPS = ((586.0, 600.0), (644.0, 664.0), (686.0, 696.0))
 
+#: LES BANDES DU SEC: SEULEMENT LA OU IL CONTRAINT QUELQUE CHOSE.
+#:
+#: Le sec n'est pas l'eau et ne se mesure pas aux memes endroits. Releve sur
+#: TAPAS par fenetres de 5 nm le 2026-10-16, les seules fenetres du domaine
+#: HARPS ou il depasse 5% de profondeur:
+#:
+#:     575-585 nm   6%     marginal
+#:     625-635 nm   70%    O2 gamma, et l'eau n'y fait que 9%
+#:     685-690 nm   100%   bande B, saturee, et l'eau n'y fait que 2.6%
+#:     690-695 nm   100%   ECARTEE: l'eau y monte a 77%, les deux especes
+#:                         s'y confondent et l'ajustement ne peut plus les
+#:                         separer
+#:
+#: Sous 450 nm il tombe a 0.2% de profondeur maximale, c'est-a-dire rien.
+#: L'ajuster sur tout le domaine coute environ cinquante fois plus cher en
+#: calcul pour une information qui ne vient que du rouge, et ajoute le bruit
+#: de la moitie bleue a une mesure qu'elle ne contraint pas.
+DRY_BANDS_HARPS = ((625.0, 635.0), (685.0, 690.0))
+
+
+def band_mask(wave, bands):
+    """Les pixels qui tombent dans une des bandes."""
+    wave = np.asarray(wave, dtype=float)
+    out = np.zeros(wave.shape, dtype=bool)
+    for low, high in bands:
+        out |= (wave > low) & (wave < high)
+    return out
+
 
 def water_mask(wave, bands=WATER_BANDS_HARPS):
     """Les pixels des bandes d'eau, ou l'exposant H2O s'ajuste."""
@@ -141,7 +169,7 @@ def objective(sp, trans):
 
 
 def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
-                  resolution=115000.0, free_dry=False, fallback=0.35,
+                  resolution=115000.0, free_dry=True, fallback=0.35,
                   flat_span=0.05):
     """(exposant H2O, exposant sec) de CE fichier, par la derivee.
 
@@ -157,11 +185,18 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     tombait exactement a zero et neuf restaient sous 0.05; en logarithme,
     aucune.
 
-    `free_dry` est faux par defaut: le sec suit la masse d'air par
-    construction (O2 et CO2 sont bien melanges), et le laisser libre ouvre un
-    second mode d'echec, ou l'ajustement sort un sec de 0.19 pour une masse
-    d'air de 1.2. Ajuste librement sur les poses qui convergent, il vaut
-    0.961 fois la masse d'air, donc il n'y a rien a y gagner.
+    `free_dry` est VRAI par defaut depuis le 2026-10-16. Le sec suit bien la
+    masse d'air, mais pas avec le coefficient 1 que TAPAS suppose: mesure sur
+    les 92 poses du mode HAM de HD 10700, ajuste librement sur les bandes
+    seches, il vaut 0.961 fois la masse d'air avec un MAD de 0.026. Ces 4% de
+    colonne en moins sont ce qu'une altitude de 2400 m donne, TAPAS etant
+    calcule pour une colonne de reference qui n'est pas celle de La Silla.
+
+    Le fixer revenait donc a imposer une erreur systematique de 4% sur toute
+    l'absorption seche. Libre, l'ajustement est stable: le residu contre la
+    droite ajustee a un MAD de 0.031, et pente et ordonnee se lisent
+    separement (0.980 et -0.019 en moindres carres), ce qui est exactement la
+    forme attendue d'un offset d'altitude.
 
     `fallback` et `flat_span` portent le garde-fou sur les poses sans signal,
     decrit au balayage ci-dessous. Il est ICI et non seulement dans
@@ -208,7 +243,12 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     # faciles (2.7) et que le bord du balayage tombait du mauvais cote.
     scan = np.array([0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.35, 0.6,
                      1.0, 1.6, 2.5])
-    costs = np.array([cost([np.log(a)]) for a in scan])
+    # le balayage ne bouge que l'eau; le sec reste a sa valeur de depart, ce
+    # qui suffit pour localiser le creux en eau. Les DEUX parametres sont
+    # passes quand le sec est libre, sinon cost() lit un p[1] absent (bug vu
+    # le 2026-10-16: free_dry=True levait IndexError des le balayage).
+    dry0 = np.log(max(float(airmass), 1e-3))
+    costs = np.array([cost([np.log(a), dry0]) for a in scan])
     if not np.all(np.isfinite(costs)):
         return float(fallback), float(airmass)
     span = (costs.max() - costs.min()) / max(abs(costs.min()), 1e-30)
