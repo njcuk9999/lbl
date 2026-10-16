@@ -141,7 +141,8 @@ def objective(sp, trans):
 
 
 def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
-                  resolution=115000.0, free_dry=False):
+                  resolution=115000.0, free_dry=False, fallback=0.35,
+                  flat_span=0.05):
     """(exposant H2O, exposant sec) de CE fichier, par la derivee.
 
     L'AJUSTEMENT SE FAIT EN LOGARITHME, et c'est ce qui empeche d'atteindre
@@ -161,6 +162,11 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     second mode d'echec, ou l'ajustement sort un sec de 0.19 pour une masse
     d'air de 1.2. Ajuste librement sur les poses qui convergent, il vaut
     0.961 fois la masse d'air, donc il n'y a rien a y gagner.
+
+    `fallback` et `flat_span` portent le garde-fou sur les poses sans signal,
+    decrit au balayage ci-dessous. Il est ICI et non seulement dans
+    fit_campaign parce que LBL appelle cette fonction une pose a la fois et
+    n'a donc aucune mediane de campagne sous la main.
     """
     from scipy.optimize import minimize
 
@@ -178,11 +184,35 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
             return np.inf
         return objective(sp, transmission(model, wave_ground, water, dry))
 
-    x0 = [np.log(0.3), np.log(max(float(airmass), 1e-3))]
+    # LE BALAYAGE D'ABORD, pour savoir si la pose a de quoi trancher. Mesure
+    # le 2026-10-15 sur deux poses de HD 10700 prises la meme nuit:
+    #
+    #                        alpha=0.005   alpha=2.0   variation   minimum
+    #     pose qui marche        340.1       408.0       41%       interieur
+    #     pose qui s'effondre     17.76       18.23      2.6%      monotone
+    #
+    # La seconde n'a pas de minimum du tout: son cout MONTE des la plus
+    # petite valeur, donc le simplexe la pousse a zero. Comme il y a toujours
+    # de l'eau, c'est un echec d'ajustement, et on rend `fallback` plutot
+    # qu'une valeur inventee.
+    scan = np.array([0.02, 0.05, 0.1, 0.2, 0.35, 0.6, 1.0, 1.6, 2.5])
+    costs = np.array([cost([np.log(a)]) for a in scan])
+    if not np.all(np.isfinite(costs)):
+        return float(fallback), float(airmass)
+    span = (costs.max() - costs.min()) / max(abs(costs.min()), 1e-30)
+    jbest = int(np.argmin(costs))
+    flat = span < flat_span
+    on_edge = jbest in (0, len(scan) - 1)
+    if flat or on_edge:
+        return float(fallback), float(airmass)
+
+    x0 = [np.log(scan[jbest]), np.log(max(float(airmass), 1e-3))]
     out = minimize(cost, x0=x0, method="Nelder-Mead",
                    options=dict(xatol=1e-4, fatol=1e-10, maxiter=300))
     water = float(np.exp(out.x[0]))
     dry = float(np.exp(out.x[1])) if free_dry else float(airmass)
+    if not np.isfinite(water) or water < scan[0] or water > scan[-1]:
+        return float(fallback), float(airmass)
     return water, dry
 
 
