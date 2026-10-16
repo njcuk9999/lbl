@@ -96,16 +96,27 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
          lambda: figures.page_berv(plt, table, title)),
         ('Periodogram and spectral window',
          lambda: figures.page_periodogram(plt, table, title, known_periods)),
-        ('False inclusion probability', lambda: figures.page_fip(plt, table, title))]
+        ('False inclusion probability, gaussian',
+         lambda: figures.page_fip(plt, table, title)),
+        ('False inclusion probability, outlier-aware',
+         lambda: figures.page_oafip(plt, table, title, known_periods)),
+        ('Indicators and temperature projections',
+         lambda: figures.page_indicators(plt, table, title))]
+    # THE TAPAS SPLINES, so that the telluric pages centre themselves on the
+    # strongest line of the species they are about rather than on a window
+    # written down once for HARPS.
+    spl_water, spl_dry = _tapas(data_dir)
     if series.has_telluric(table) and science_dir and tc_dir:
         wanted.append(('Telluric correction, water column',
                        lambda: figures.page_telluric(plt, table, title,
                                                      science_dir, tc_dir,
-                                                     'water')))
+                                                     'water', spl_water,
+                                                     spl_dry)))
         wanted.append(('Telluric correction, dry column',
                        lambda: figures.page_telluric(plt, table, title,
                                                      science_dir, tc_dir,
-                                                     'dry')))
+                                                     'dry', spl_water,
+                                                     spl_dry)))
 
     work = tempfile.mkdtemp(prefix='lbl_report_')
     try:
@@ -133,6 +144,31 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
         return built
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def _tapas(data_dir):
+    """The TAPAS splines of this run, or (None, None).
+
+    Only used to find where the deepest line of each species sits; a report
+    without them falls back to the HARPS values and says so in nothing,
+    because the window is then simply the usual one.
+    """
+    path = os.path.join(data_dir, 'other', 'tapas_lbl.fits')
+    if not os.path.exists(path):
+        return None, None
+    try:
+        import numpy as np
+        from astropy.io import fits
+        from scipy.interpolate import InterpolatedUnivariateSpline as spline
+        table = fits.getdata(path)
+        wave = np.array(table['WAVELENGTH'], dtype=float)
+        water = spline(wave, np.array(table['ABSO_WATER'], dtype=float),
+                       k=1, ext=3)
+        dry = spline(wave, np.array(table['ABSO_OTHERS'], dtype=float),
+                     k=1, ext=3)
+        return water, dry
+    except Exception:                                         # noqa: BLE001
+        return None, None
 
 
 def _build(work, out, title, rdb_file, rows, drawn, missing):
