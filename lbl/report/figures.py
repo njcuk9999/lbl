@@ -189,8 +189,16 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water'):
             after = fits.getdata(clean, 1).astype(float)
         except Exception:                                     # noqa: BLE001
             continue
+        # THE SELECTION DOES NOT REQUIRE THE CORRECTED FLUX TO BE FINITE.
+        # LBL sets to NaN every pixel whose modelled absorption is deeper
+        # than exp(-1), about 63% absorbed, because nothing there can be
+        # divided back out (tellu_clean, TELLUCLEAN_TRANSMISSION_THRESHOLD).
+        # Dropping those pixels from the selection would join the points on
+        # either side with a straight line, and the figure would show a
+        # correction where in truth there is a hole. Keeping the NaNs makes
+        # matplotlib break the curve, which is the honest picture.
         band = ((wave > 688.0) & (wave < 690.5) & np.isfinite(before)
-                & (before > 0) & np.isfinite(after))
+                & (before > 0))
         if band.sum() < 30:
             continue
         order = np.argsort(wave[band])
@@ -198,10 +206,21 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water'):
         b = before[band][order]
         a = after[band][order]
         scale = np.nanpercentile(b, 95)
+        dead = int(np.sum(~np.isfinite(a)))
         ax.plot(w, b / scale, 'k-', lw=0.8, label='before')
-        ax.plot(w, a / scale, '-', lw=0.8, color='C3', label='after')
+        ax.plot(w, a / scale, '-', lw=0.8, color='C3',
+                label='after (gaps: absorption too deep to correct)'
+                      if dead else 'after')
+        # and shade where the gaps are, so that a reader sees them as a
+        # choice rather than as a plotting accident
+        if dead:
+            ax.fill_between(w, 0, 1, where=~np.isfinite(a), color='0.85',
+                            transform=ax.get_xaxis_transform(), zorder=0)
         ax.axhline(1.0, color='0.6', lw=0.8, ls=':')
-        ax.set_title('%s: %s = %.4f' % (tag, column, value), fontsize=9)
+        ax.set_title('%s epoch: %s = %.4f%s'
+                     % (tag, column, value,
+                        ', %d pixels left uncorrected' % dead if dead else ''),
+                     fontsize=9)
         ax.set_ylabel('Flux / continuum')
         ax.legend(fontsize=7)
         ax.grid(alpha=0.3)
