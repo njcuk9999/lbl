@@ -18,6 +18,22 @@ WATER = 'TLPEH2O'
 DRY = 'TLPEOTR'
 #: le nom du fichier d'origine, pour retrouver le spectre
 FILENAME = 'FILENAME'
+#: les quantites d'en-tete que LBL recopie et dont le rapport se sert. Une
+#: cle absente est simplement sautee: les instruments ne les ecrivent pas
+#: tous, et un rapport ampute vaut mieux qu'un rapport qui refuse de sortir.
+BERV = 'HIERARCH ESO QC BERV'
+AIRMASS = 'HIERARCH ESO TEL AIRM START'
+
+
+def column(table, name, default=None):
+    """Une colonne du .rdb en flottants, ou `default` si elle n'y est pas."""
+    if name not in table:
+        return default
+    values = np.asarray(table[name])
+    try:
+        return values.astype(float)
+    except (TypeError, ValueError):
+        return default
 
 
 def read_rdb(path):

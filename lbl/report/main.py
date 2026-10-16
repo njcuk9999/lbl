@@ -1,42 +1,77 @@
-"""Assembler le rapport d'un run, une page par etape.
+"""Assemble the report of one run: a summary table, then one page per step.
 
-Appele a la toute fin, apres `compile`, et pilote par le parametre REPORT du
-wrapper (vrai par defaut). Rien de ce qui se passe ici ne doit faire echouer
-un run: le rapport est un compte rendu, pas une etape de calcul, donc chaque
-page qui ne peut pas se dessiner est sautee et dite dans la derniere page.
+Called at the very end, after `compile`, and driven by the wrapper's REPORT
+parameter (true by default).
+
+Nothing here may make a run fail. The report is an account of what happened,
+not a step of the calculation, so every page that cannot be drawn is skipped
+and named on a last page, and a missing LaTeX leaves the figures behind as a
+plain PDF.
 """
 import os
+import shutil
+import subprocess
+import tempfile
 import traceback
 
 from lbl.core import logger
 
 log = logger.Log(filename='')
 
-#: le dossier du rapport, sous DATA_DIR
+#: where the reports go, under DATA_DIR
 FOLDER = 'reports'
+
+#: the LaTeX frame. Deliberately plain: article, no package that a minimal
+#: TeX would not have, so that the report builds on a bare machine.
+PREAMBLE = r"""\documentclass[a4paper,11pt]{article}
+\usepackage[margin=18mm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\setlength{\parindent}{0pt}
+\begin{document}
+"""
+
+
+def _escape(text):
+    """Make a string safe for LaTeX. Object names carry underscores."""
+    out = str(text)
+    for char in ('\\', '&', '%', '$', '#', '_', '{', '}'):
+        out = out.replace(char, '\\' + char)
+    return out.replace('~', '\\textasciitilde{}')
+
+
+def _table(rows):
+    """The summary table, as LaTeX."""
+    lines = [r'\begin{center}', r'\begin{tabular}{lrl}', r'\toprule',
+             r'Quantity & Value & Unit \\', r'\midrule']
+    for label, value, unit in rows:
+        lines.append('%s & %s & %s \\\\'
+                     % (_escape(label), _escape(value), _escape(unit)))
+    lines += [r'\bottomrule', r'\end{tabular}', r'\end{center}']
+    return '\n'.join(lines)
 
 
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                 known_periods=None):
-    """Ecrire le rapport d'un run. Rend le chemin du PDF, ou None.
+    """Write the report of one run. Returns the path of the PDF, or None.
 
-    :param data_dir: str, le DATA_DIR du run
-    :param rdb_file: str, le .rdb que `compile` vient d'ecrire
-    :param title: str, le nom du run, qui titre les pages
-    :param science_dir: str, les spectres livres, pour la page tellurique
-    :param tc_dir: str, les spectres nettoyes, pour la meme page
-    :param known_periods: liste de periodes a marquer sur le periodogramme
+    :param data_dir: str, the run's DATA_DIR
+    :param rdb_file: str, the .rdb that `compile` has just written
+    :param title: str, the name of the run, which titles the pages
+    :param science_dir: str, the delivered spectra, for the telluric page
+    :param tc_dir: str, the cleaned spectra, for the same page
+    :param known_periods: periods to mark on the periodogram
     """
     try:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-        from matplotlib.backends.backend_pdf import PdfPages
     except Exception as exc:                                  # noqa: BLE001
         log.warning('no report: matplotlib is not available ({0})'.format(exc))
         return None
 
-    from lbl.report import figures, series
+    from lbl.report import figures, series, stats
 
     if not os.path.exists(rdb_file):
         log.warning('no report: {0} is not there'.format(rdb_file))
@@ -51,27 +86,31 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     os.makedirs(folder, exist_ok=True)
     out = os.path.join(folder, '%s.pdf' % title)
 
-    # CE QUE LE RAPPORT ESSAIE DE DESSINER, dans l'ordre. Une page qui echoue
-    # est notee et le rapport continue: mieux vaut un rapport ampute qu'un run
-    # qui s'arrete sur une figure.
-    wanted = [('la sequence', lambda: figures.page_sequence(plt, table, title)),
-              ('les periodogrammes',
-               lambda: figures.page_periodogram(plt, table, title,
-                                                known_periods)),
-              ('le FIP', lambda: figures.page_fip(plt, table, title))]
+    # WHAT THE REPORT TRIES TO DRAW, in order. A page that fails is noted and
+    # the report goes on: better an incomplete report than a run that stops
+    # on a figure.
+    wanted = [
+        ('The velocity series',
+         lambda: figures.page_sequence(plt, table, title)),
+        ('Velocity against BERV',
+         lambda: figures.page_berv(plt, table, title)),
+        ('Periodogram and spectral window',
+         lambda: figures.page_periodogram(plt, table, title, known_periods)),
+        ('False inclusion probability', lambda: figures.page_fip(plt, table, title))]
     if series.has_telluric(table) and science_dir and tc_dir:
-        wanted.append(('la correction tellurique, eau',
+        wanted.append(('Telluric correction, water column',
                        lambda: figures.page_telluric(plt, table, title,
                                                      science_dir, tc_dir,
                                                      'water')))
-        wanted.append(('la correction tellurique, sec',
+        wanted.append(('Telluric correction, dry column',
                        lambda: figures.page_telluric(plt, table, title,
                                                      science_dir, tc_dir,
                                                      'dry')))
 
-    missing = []
-    with PdfPages(out) as pdf:
-        for name, draw in wanted:
+    work = tempfile.mkdtemp(prefix='lbl_report_')
+    try:
+        drawn, missing = [], []
+        for index, (name, draw) in enumerate(wanted):
             try:
                 fig = draw()
             except Exception as exc:                          # noqa: BLE001
@@ -80,17 +119,85 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                 log.warning(traceback.format_exc(limit=2))
                 continue
             if fig is None:
-                missing.append('%s: rien a tracer, ou koloa absent' % name)
+                missing.append('%s: nothing to draw, or koloa not installed'
+                               % name)
                 continue
-            pdf.savefig(fig)
+            path = os.path.join(work, 'page%02d.pdf' % index)
+            fig.savefig(path, bbox_inches='tight')
             plt.close(fig)
-        if missing:
-            fig = plt.figure(figsize=(10, 4))
-            fig.text(0.05, 0.9, 'Ce que ce rapport ne montre pas',
-                     fontsize=12, va='top')
-            fig.text(0.05, 0.78, '\n'.join('  - %s' % one for one in missing),
-                     fontsize=9, va='top', family='monospace')
-            pdf.savefig(fig)
-            plt.close(fig)
+            drawn.append((name, path))
+        built = _build(work, out, title, rdb_file, stats.summarise(table),
+                       drawn, missing)
+        if built is None:
+            built = _fallback(out, drawn, missing)
+        return built
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _build(work, out, title, rdb_file, rows, drawn, missing):
+    """Run pdflatex on the assembled document. None if LaTeX is not there."""
+    if shutil.which('pdflatex') is None:
+        log.warning('pdflatex not found: the report falls back to plain pages')
+        return None
+    body = [PREAMBLE,
+            r'\section*{LBL report: %s}' % _escape(title),
+            r'\textit{From %s}' % _escape(os.path.basename(rdb_file)),
+            r'\vspace{4mm}', _table(rows)]
+    for name, path in drawn:
+        body.append(r'\clearpage')
+        body.append(r'\subsection*{%s}'
+                    % _escape(name[:1].upper() + name[1:]))
+        body.append(r'\begin{center}\includegraphics[width=\linewidth,'
+                    r'height=0.62\textheight,keepaspectratio]{%s}\end{center}'
+                    % os.path.basename(path))
+    if missing:
+        body.append(r'\clearpage')
+        body.append(r'\subsection*{What this report does not show}')
+        body.append(r'\begin{itemize}')
+        for one in missing:
+            body.append(r'\item %s' % _escape(one))
+        body.append(r'\end{itemize}')
+    body.append(r'\end{document}')
+
+    source = os.path.join(work, 'report.tex')
+    with open(source, 'w') as handle:
+        handle.write('\n'.join(body))
+    for _ in range(2):          # twice, so the page numbers settle
+        done = subprocess.run(
+            ['pdflatex', '-interaction=nonstopmode', '-halt-on-error',
+             'report.tex'], cwd=work, capture_output=True, text=True)
+    made = os.path.join(work, 'report.pdf')
+    if done.returncode != 0 or not os.path.exists(made):
+        log.warning('pdflatex failed; the report falls back to plain pages')
+        tail = (done.stdout or '').strip().split('\n')[-6:]
+        for line in tail:
+            log.warning('    {0}'.format(line))
+        return None
+    shutil.copyfile(made, out)
     log.general('Report written: {0}'.format(out))
+    return out
+
+
+def _fallback(out, drawn, missing):
+    """No LaTeX: bind the figures as they are, so nothing is lost."""
+    try:
+        from pypdf import PdfWriter
+    except Exception:                                         # noqa: BLE001
+        try:
+            from PyPDF2 import PdfMerger as PdfWriter
+        except Exception:                                     # noqa: BLE001
+            log.warning('no report: neither pdflatex nor pypdf is available')
+            return None
+    writer = PdfWriter()
+    for _, path in drawn:
+        writer.append(path)
+    if not drawn:
+        return None
+    with open(out, 'wb') as handle:
+        writer.write(handle)
+    log.general('Report written without LaTeX: {0}'.format(out))
+    if missing:
+        for one in missing:
+            log.warning('    not shown: {0}'.format(one))
     return out
