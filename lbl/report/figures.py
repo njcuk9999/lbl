@@ -132,6 +132,8 @@ def page_periodogram(plt, table, title, known=None):
 #: the floor of the log scale. A FIP below this is "certain" as far as any
 #: of this machinery can tell, and plotting it lower only stretches noise.
 LOG_FIP_FLOOR = 1e-12
+#: where the log axis stops when nothing goes lower, in log10 units
+DEFAULT_FIP_BOTTOM = -2.0
 
 
 def _log_fip(values):
@@ -140,16 +142,28 @@ def _log_fip(values):
                             LOG_FIP_FLOOR, 1.0))
 
 
-def _fip_axis(ax):
+def _fip_axis(ax, curves=()):
     """The shared axis of the two FIP pages.
 
     LOG10 RATHER THAN THE PROBABILITY ITSELF: a FIP of 0.5 and one of 1e-8
     are both "detected" on a linear axis, yet they differ by eight orders of
     magnitude of confidence, and that is the whole content of the number.
+
+    THE AXIS STOPS AT -2 UNLESS SOMETHING GOES LOWER. A series with no
+    detection sits between -0.3 and 0, and an axis running down to the
+    floor of the scale would squash all of it into the top centimetre. Two
+    decades is enough to see the shape; when a real dip goes deeper, the
+    axis follows it and the dip is what the page is about.
     """
+    bottom = DEFAULT_FIP_BOTTOM
+    for values in curves:
+        values = np.asarray(values, dtype=float)
+        values = values[np.isfinite(values)]
+        if values.size:
+            bottom = min(bottom, float(np.min(values)))
     ax.set_xlabel('Period (days)')
     ax.set_ylabel(r'$\log_{10}$ (false inclusion probability)')
-    ax.set_ylim(np.log10(LOG_FIP_FLOOR), 0.1)
+    ax.set_ylim(bottom - 0.1 * abs(bottom), 0.1)
     ax.axhline(np.log10(0.5), color='0.6', lw=0.8, ls='-.')
     ax.annotate('FIP = 0.5', xy=(0.004, np.log10(0.5)),
                 xycoords=('axes fraction', 'data'),
@@ -178,7 +192,7 @@ def page_fip(plt, table, title):
     # absent and a FIP near 0 that it is almost surely there, and the eye
     # should see where a curve sits between the two without having to decode
     # a stretched axis.
-    _fip_axis(ax)
+    _fip_axis(ax, curves=[_log_fip(values)])
     _landmarks(ax)
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
@@ -483,7 +497,8 @@ def page_oafip(plt, table, title, known=None):
     axes[0].plot(1.0 / freq, _log_fip(values), lw=1.2, color='C4',
                  label='outlier-aware')
     axes[0].set_xscale('log')
-    _fip_axis(axes[0])
+    _fip_axis(axes[0], curves=[_log_fip(values)]
+              + ([_log_fip(plain)] if plain.size else []))
     axes[0].legend(fontsize=8)
     axes[0].grid(alpha=0.3)
     _landmarks(axes[0], known=known)
