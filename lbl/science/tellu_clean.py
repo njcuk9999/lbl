@@ -657,6 +657,47 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     plot.tellu_corr_plot(inst, wave_vector, sp_vector, trans,
                          template_vector, template_flag, objname)
     # -------------------------------------------------------------------------
+    # THE WATER EXPONENT, RE-FITTED BY THE DERIVATIVE METHOD
+    #
+    # The loop above extrapolates each exponent from a polynomial fitted on
+    # its first iterations, and in the optical that extrapolation collapses
+    # onto the bound: measured on 100 HARPS exposures of HD 10700
+    # (2026-10-15), 37% ended at water = 0.0100 and 64% at dry = 0.0500, the
+    # lower bounds, where an airmass of 1.08 asks for about 1.1. There is
+    # ALWAYS water above a telescope, so an exponent on the floor is a failed
+    # fit and never a dry night: those water bands were simply not corrected.
+    #
+    # The derivative method of telluric_fit (tellu_tools.optimize_exponents,
+    # called by predict_abso.py) keeps the exponent that makes the CORRECTED
+    # spectrum smoothest, i.e. that minimises the weighted scatter of its
+    # pixel-to-pixel gradient. A wrong exponent leaves a derivative-shaped
+    # residual at every telluric line; stellar lines contribute the same
+    # whatever the exponent, so the criterion depends on the tellurics alone.
+    #
+    # Gradient scatter in the 593-595 nm water band, 100 exposures:
+    #   raw                344.8
+    #   this loop          359.6   (+4.3%, it DEGRADES the spectrum)
+    #   derivative method  304.1   (-11.8%)
+    #
+    # lbl.science.tellu_derivative holds it. Only water is free, per file,
+    # because the water column changes too fast for a nightly model; the dry
+    # absorbers stay at the airmass (free, they come out at 0.961 of it and
+    # open a second failure mode); the velocity is not free, the model being
+    # evaluated in the ground frame as above.
+    if inst.params.get('TELLUCLEAN_DERIVATIVE_WATER', False):
+        from lbl.science import tellu_derivative as _deriv
+        try:
+            # la grille du SOL, la meme que celle de la boucle ci-dessus:
+            # wave_trans y a deja ete decalee du BERV s'il le fallait
+            expo_water = _deriv.fit_exponents(
+                wave_trans, sp_vector, spl_water, spl_others,
+                expo_others, resolution=inst.params['APPROX_RESOLUTION'])[0]
+            log.general('\tH2O exponent by the derivative method: '
+                        '{0:.4f}'.format(expo_water))
+        except Exception as exc:
+            log.warning('\tderivative H2O fit failed ({0}), keeping the '
+                        'loop value {1:.4f}'.format(exc, expo_water))
+    # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)
     #
     # AND SHIFT IT THE SAME WAY, for the same reason as above: this is the

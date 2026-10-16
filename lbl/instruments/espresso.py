@@ -171,6 +171,14 @@ class Espresso(Instrument):
         # ---------------------------------------------------------------------
         # define whether to do the tellu-clean
         self.param_set('DO_TELLUCLEAN', value=True, source=func_name)
+        # L'EXPOSANT H2O PAR LA DERIVEE, pour l'optique. L'extrapolation
+        # polynomiale de la boucle de tellu_clean s'effondre sur sa borne
+        # inferieure ici: 37% des 100 poses HARPS de HD 10700 finissaient a
+        # water = 0.0100 (2026-10-15), alors qu'il y a toujours de l'eau.
+        # Dispersion du gradient dans la bande d'eau a 593-595 nm: la boucle
+        # DEGRADE le spectre de 4.3%, la derivee l'ameliore de 11.8%.
+        self.param_set('TELLUCLEAN_DERIVATIVE_WATER', value=True,
+                       source=func_name)
         # define the dv offset for tellu-cleaning in km/s
         self.param_set('TELLUCLEAN_DV0', value=0, source=func_name)
         # Define the lower wave limit for the absorber spectrum masks in nm

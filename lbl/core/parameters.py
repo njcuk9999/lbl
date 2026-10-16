@@ -708,6 +708,14 @@ params.set(key='TELLUCLEAN_MASK_DOMAIN_UPPER', value=None, source=__NAME__,
 params.set(key='TELLUCLEAN_FORCE_AIRMASS', value=None, source=__NAME__,
            desc='whether to force using airmass from header', not_none=True)
 
+# Fit the H2O exponent by the derivative method rather than by the loop's
+# polynomial extrapolation. For the OPTICAL: that extrapolation collapses onto
+# its lower bound there (37% of 100 HARPS exposures of HD 10700 ended at
+# water = 0.0100, where there is always water above a telescope), and the loop
+# then degrades the spectrum. See lbl.science.tellu_derivative.
+params.set(key='TELLUCLEAN_DERIVATIVE_WATER', value=False, source=__NAME__,
+           desc='fit the H2O exponent by the derivative method (optical)')
+
 # Define the CCF scan range in km/s
 params.set(key='TELLUCLEAN_CCF_SCAN_RANGE', value=None, source=__NAME__,
            desc='the CCF scan range in km/s', not_none=True)
