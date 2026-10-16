@@ -184,8 +184,10 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
             return np.inf
         return objective(sp, transmission(model, wave_ground, water, dry))
 
-    # LE BALAYAGE D'ABORD, pour savoir si la pose a de quoi trancher. Mesure
-    # le 2026-10-15 sur deux poses de HD 10700 prises la meme nuit:
+    # LE BALAYAGE D'ABORD, et il sert DEUX fois: il dit si la pose a de quoi
+    # trancher, et il donne au simplexe un point de depart du bon cote.
+    #
+    # Mesure le 2026-10-15 sur deux poses de HD 10700 prises la meme nuit:
     #
     #                        alpha=0.005   alpha=2.0   variation   minimum
     #     pose qui marche        340.1       408.0       41%       interieur
@@ -195,7 +197,17 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     # petite valeur, donc le simplexe la pousse a zero. Comme il y a toujours
     # de l'eau, c'est un echec d'ajustement, et on rend `fallback` plutot
     # qu'une valeur inventee.
-    scan = np.array([0.02, 0.05, 0.1, 0.2, 0.35, 0.6, 1.0, 1.6, 2.5])
+    #
+    # LE BALAYAGE DESCEND A 0.002, et ce detail compte. Une version qui
+    # s'arretait a 0.02 mettait au repli 19 poses sur 100: les 8 du mode EGGS
+    # (un autre repere, voir plus bas), une a SNR 6.6, et ONZE poses
+    # parfaitement saines. Ces onze, balayees jusqu'a 0.002, montrent un
+    # minimum franc et INTERIEUR, de 0.2 a 1.0, avec 25 a 45% de variation:
+    # le garde-fou les cassait au lieu de les mesurer, parce que leur
+    # contraste de cout (1.6 a 2.2) est plus faible que celui des poses
+    # faciles (2.7) et que le bord du balayage tombait du mauvais cote.
+    scan = np.array([0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.35, 0.6,
+                     1.0, 1.6, 2.5])
     costs = np.array([cost([np.log(a)]) for a in scan])
     if not np.all(np.isfinite(costs)):
         return float(fallback), float(airmass)
