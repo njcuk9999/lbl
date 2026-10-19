@@ -33,7 +33,13 @@ lbl_wrap.main(rparams)
 ```
 
 Without `PCA2D`, nothing of `lbl.pca2d` is imported and LBL runs exactly as
-before.
+before. This is all it takes: no other package, no window. LBL from its
+`lbl-pca2d` branch has everything.
+
+```
+git clone -b lbl-pca2d https://github.com/njcuk9999/lbl.git
+pip install -e ./lbl
+```
 
 ## What it does to the tree
 
@@ -94,8 +100,16 @@ templates, masks, plots) to `pca2d/<object>/superseded/<date>/`, so that
 `SKIP_LBL_*` never measures a correction against a template made from
 another one. Nothing is deleted; the folder and its size are printed.
 
+## The command line
+
+`lbl_pca2d` is pca2d's own command line (`lbl.pca2d.cli`), for research runs
+kept side by side under their own names, variants and joint fits, outside an
+LBL tree: `lbl_pca2d --object TOI2120 --n-star 1 --n-earth 3`. Its
+configuration is a `config.yaml` in the format of `lbl/pca2d/nominal.yaml`.
+
 ## The pca2d window
 
-`pca2d-gui`, from pca2d-preclean, is a front end to this: it writes an
-ordinary wrap file with a `PCA2D` dict (`DATA_DIR/run_<object>_pca2d.py`)
-and runs it with this LBL. The file can be edited and run again by hand.
+`pca2d-gui`, from pca2d-preclean (branch `lbl-wrapper`), is only a front end
+to this: it writes an ordinary wrap file with a `PCA2D` dict
+(`DATA_DIR/run_<object>_pca2d.py`) and runs it with this LBL. The file can be
+edited and run again by hand. None of the computation is in it.
