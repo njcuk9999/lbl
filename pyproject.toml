@@ -28,6 +28,7 @@ dependencies = [
     "tables==3.11.0",
     "tqdm==4.67.3",
     "PyYAML==6.0.3",
+    "pypdf==6.19.0",
     "wget==3.2",
 ]
 

@@ -18,6 +18,9 @@ Compatible with:
 - ESSP (EXPRES, NEID, HARPS, HARPS-N)
 - Generic instruments
 
+Optional: the two-frame PCA precleaning (pca2d) of the spectra before the
+velocities, with one `PCA2D` key in the wrap: see [lbl/doc/PCA2D.md](lbl/doc/PCA2D.md).
+
 ---
 
 Please see our website for documentation: [lbl.exoplanets.ca](https://lbl.exoplanets.ca/)

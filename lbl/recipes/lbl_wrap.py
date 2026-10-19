@@ -52,6 +52,8 @@ REMOVE_KEYS = [  # core
     'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
     # general keys already used
     'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE',
+    # the pca2d precleaning, lbl_pca2d's and no other recipe's
+    'PCA2D',
     # le rapport de fin de run
     'REPORT']
 
@@ -119,6 +121,8 @@ def main(runparams: dict):
     # -------------------------------------------------------------------------
     # mark the expected length if a list
     olen = len(object_sciences)
+    # the joint pca2d correction, once made: {object: (corrected, comparison)}
+    pca2d_joint = None
     # loop around all files
     for num in range(olen):
         # get the science target
@@ -191,6 +195,35 @@ def main(runparams: dict):
             # update object name
             if not object_science.endswith('_tc'):
                 object_science = object_science + '_tc'
+        # ---------------------------------------------------------------------
+        # THE PCA2D PRECLEANING, on the object as it now is: after the
+        # telluric cleaning when there was one, so an optical instrument gets
+        # <object>_tc_pca2d. Its corrected spectra are a science object of
+        # their own, <object>_pca2d, and every step below measures that one.
+        # Without a PCA2D key nothing of it is even imported.
+        if runparams.get('PCA2D') not in (None, False) and \
+                data_type == 'SCIENCE':
+            from lbl.recipes import lbl_pca2d
+            pca2d_args = dict(instrument=instrument, data_dir=data_dir,
+                              data_source=data_source,
+                              pca2d=runparams['PCA2D'],
+                              input_file=runparams.get('INPUT_FILE'),
+                              science_subdir=runparams.get('SCIENCE_SUBDIR',
+                                                           'science'))
+            if isinstance(runparams['PCA2D'], dict) and \
+                    runparams['PCA2D'].get('joint'):
+                # every science object against ONE observer basis, done once,
+                # at the first of them
+                if pca2d_joint is None:
+                    pca2d_joint = _pca2d_joint(runparams, object_sciences,
+                                               data_types, object_comparisons,
+                                               pca2d_args)
+                object_science, object_comparison = \
+                    pca2d_joint[object_science]
+            else:
+                object_science, object_comparison = lbl_pca2d.main(
+                    object_science=object_science,
+                    object_comparison=object_comparison, **pca2d_args)
         # ---------------------------------------------------------------------
         # if runparams['RUN_LBL_RESMAP']:
         #     lbl_resmap.main(instrument=instrument, data_dir=data_dir,
@@ -280,6 +313,37 @@ def main(runparams: dict):
             except Exception as _exc:
                 log.warning('report failed: {0}'.format(_exc))
 
+
+
+def _pca2d_joint(runparams: dict, object_sciences, data_types,
+                 object_comparisons, pca2d_args: dict) -> dict:
+    """The joint pca2d correction of every science object of this wrap.
+
+    Not after the telluric cleaning: that is done one object at a time inside
+    the loop, so the other objects would not be cleaned yet when the joint
+    fit needs them all. Clean them first, in a wrap without PCA2D."""
+    from lbl.recipes import lbl_pca2d
+    if runparams['RUN_LBL_TELLUCLEAN']:
+        emsg = ('LBL_WRAP ERROR: PCA2D joint=True cannot follow '
+                'RUN_LBL_TELLUCLEAN in the same wrap. Run the telluric '
+                'cleaning first, then the joint correction on the _tc objects')
+        raise base_classes.LblException(emsg)
+    olen = len(object_sciences)
+    objects, comparisons = [], dict()
+    for num in range(olen):
+        wkargs = dict(iteration=num, length=olen)
+        if lbl_misc.wraplistcheck(data_types, 'DATA_TYPES',
+                                  **wkargs) != 'SCIENCE':
+            continue
+        objects.append(object_sciences[num])
+        comparisons[object_sciences[num]] = lbl_misc.wraplistcheck(
+            object_comparisons, 'OBJECT_COMPARISON', **wkargs)
+    if len(objects) < 2:
+        emsg = ('LBL_WRAP ERROR: PCA2D joint=True needs two science objects '
+                'or more, there is {0}')
+        raise base_classes.LblException(emsg.format(', '.join(objects)))
+    return lbl_pca2d.joint(objects=objects, comparisons=comparisons,
+                           **pca2d_args)
 
 
 def custom(runparams: dict, func, required_kwargs: List[str]):

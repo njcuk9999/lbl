@@ -1,3 +1,5 @@
 include lbl/resources/*.md
 include doc/*
-include lbl/version.txt
+include lbl/version.txtinclude lbl/pca2d/nominal.yaml
+include lbl/pca2d/templates/*
+include lbl/pca2d/assets/*
