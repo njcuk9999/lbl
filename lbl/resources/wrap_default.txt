@@ -84,6 +84,20 @@ if __name__ == "__main__":
     rparams['SKIP_LBL_COMPUTE'] = {SKIP_LBL_COMPUTE}
     rparams['SKIP_LBL_COMPILE'] = {SKIP_LBL_COMPILE}
     # -------------------------------------------------------------------------
+    # PCA2D precleaning (optional, off unless uncommented)
+    # -------------------------------------------------------------------------
+    # Fits every exposure as the star in its own frame plus a few components
+    #   in the star's frame (n_star) and in the observer's frame (n_earth),
+    #   and divides the observer's part (residual tellurics, airglow,
+    #   detector) out of the spectra before the velocities. LBL measures the
+    #   delivered object, writes the corrected one to science/<object>_pca2d,
+    #   and measures that; the report then holds both series, the river plots
+    #   of the correction and LBL's own pages. With RUN_LBL_TELLUCLEAN it
+    #   comes after the telluric cleaning (<object>_tc_pca2d).
+    #   Every key, and a worked example: lbl/doc/PCA2D.md and
+    #   lbl/doc/example_wrap_pca2d.py
+    # rparams['PCA2D'] = dict(n_star=1, n_earth=3)
+    # -------------------------------------------------------------------------
     # LBL settings
     # -------------------------------------------------------------------------
     # You can change any setting in parameters (or override those changed

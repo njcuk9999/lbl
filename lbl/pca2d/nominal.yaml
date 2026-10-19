@@ -617,6 +617,14 @@ instruments:
       nightly_stack: true   # NIRPS takes three or four exposures a visit and
                             # the campaign cubes were built this way; kept
                             # explicit so those cache keys still pin.
+    output:
+      windows:              # the general list less its two K-band windows,
+        - "1200.3:2"        # 2196.2 and 2450 nm, which NIRPS does not reach
+        - "1220:4"          # (965 to 1950 nm): drawn for SPIRou, they were
+        - "1267:2"          # "not drawn" on every NIRPS report. Figures only,
+        - "1593.6:2"        # nothing a corrected spectrum depends on.
+        - "1669.5:5"
+        - "1700.5:3"
 
   # -------------------------------------------------------------------------
   # LES SPECTROGRAPHES DU VISIBLE. Ajoutes le 2026-10-14: « tout ce qui passe

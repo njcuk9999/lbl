@@ -22,6 +22,17 @@ def test_true_is_the_nominal_set():
     assert (switches["n_star"], switches["n_earth"]) == (1, 3)
 
 
+def test_the_figures_follow_the_report_unless_asked():
+    assert lbl_pca2d.settings(True, report=False)[0]["figures"] is False
+    assert lbl_pca2d.settings(True, report=True)[0]["figures"] is True
+    assert lbl_pca2d.settings(dict(figures=True), report=False)[0]["figures"]
+
+
+def test_the_delivered_object_is_measured_too_by_default():
+    assert lbl_pca2d.compare(True) and lbl_pca2d.compare(dict(n_star=1))
+    assert not lbl_pca2d.compare(dict(compare=False))
+
+
 def test_short_dotted_and_nested_keys_land_in_their_sections():
     switches, overrides = lbl_pca2d.settings(dict(
         n_star=2, nsig_cut=0, correct=dict(mask_share=0.5),

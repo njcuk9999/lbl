@@ -43,6 +43,13 @@ pip install -e ./lbl
 
 ## What it does to the tree
 
+A commented example, with what the precleaning does and what it gave on two
+stars: [example_wrap_pca2d.py](example_wrap_pca2d.py).
+
+In order: LBL measures the delivered object (`compare=True`), PCA2D corrects
+it, LBL measures the corrected object, and the report is one PDF, pca2d's
+report followed by LBL's.
+
 | path | what |
 |---|---|
 | `science/<object>/` | read, never written |
@@ -50,6 +57,15 @@ pip install -e ./lbl
 | `pca2d/<object>/request.yaml` | the configuration that ran |
 | `pca2d/<object>/<M>-<N>/` | the fit, the figures, the report (PDF) |
 | `pca2d/cache/` | the registered cubes, rebuildable |
+| `reports/<object>_pca2d_<object>_pca2d.pdf` | THE report: pca2d's, then LBL's |
+
+The report, when `REPORT` is on: the star as SIMBAD describes it, the
+delivered and corrected velocities on the exposures they share with what got
+better and what got worse, the river plots of the correction step by step in
+each window, the components and their share of the variance, their
+coefficients in time, against BERV, airmass and the rest, and their
+periodograms, the weight spectrum, every setting that ran; then LBL's pages
+for the corrected object.
 
 Every step after it (template, mask, compute, compile, report) runs on
 `<object>_pca2d`, and the comparison follows when it was the object itself.
@@ -65,7 +81,8 @@ optical spectrographs.
 |---|---|---|
 | `n_star` | 1 | star-frame components fitted |
 | `n_earth` | 3 | observer-frame components fitted and divided out |
-| `figures` | True | the run's figures and its report |
+| `compare` | True | LBL measures the delivered object too, first, for the report |
+| `figures` | as `REPORT` | the river plots and the other figures of the correction |
 | `overwrite` | False | redo even when the same correction is on disk |
 | `name` | None | `<object>_pca2d_<name>`, to keep variants side by side |
 | `joint` | False | every science object against one observer basis |

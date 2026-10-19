@@ -29,7 +29,10 @@ not given is the nominal set, the one every comparison of the project ran on.
 
     n_star       star-frame components fitted (1)
     n_earth      observer-frame components fitted and divided out (3)
-    figures      the run's figures and its report (True)
+    compare      LBL measures the delivered object too, first, so that the
+                 report sets the two series side by side (True)
+    figures      the river plots and the other figures of the correction
+                 (as REPORT, True unless the wrap turns the report off)
     overwrite    redo the correction even when the same one is on disk (False)
     name         a label: <object>_pca2d_<name>, for keeping several
                  corrections of one object side by side (None)
@@ -68,7 +71,7 @@ LblException = base_classes.LblException
 SUFFIX = '_pca2d'
 #: the switches of this recipe, and what they are when not given
 DEFAULTS = dict(n_star=1, n_earth=3, figures=True, overwrite=False,
-                name=None, joint=False)
+                name=None, joint=False, compare=True)
 #: the short names, as the pca2d window spells them, and the key of the
 #: pca2d configuration each one is
 ALIASES = {
@@ -98,6 +101,8 @@ MANAGED = ('input.directory', 'input.object', 'output.directory',
            'output.fits_directory')
 #: LBL's NIRPS modes, and the DRS mode the files of each one carry
 NIRPS_MODES = {'NIRPS_HE': 'HE', 'NIRPS_HA': 'HA'}
+#: {corrected object: its pca2d run folder}, for the report after LBL
+RUNS = dict()
 
 
 # =============================================================================
@@ -130,7 +135,13 @@ def known_keys(nominal: dict) -> dict:
     return known
 
 
-def settings(pca2d) -> tuple:
+def compare(pca2d) -> bool:
+    """Whether LBL measures the delivered object as well (PCA2D compare)."""
+    return bool(pca2d.get('compare', True)) if isinstance(pca2d, dict) \
+        else bool(pca2d)
+
+
+def settings(pca2d, report=True) -> tuple:
     """(switches, overrides): the recipe's own switches, and the pca2d
     configuration keys asked for as {section: {key: value}}.
 
@@ -146,7 +157,7 @@ def settings(pca2d) -> tuple:
                            ' set), not {0!r}'.format(pca2d))
     nominal = read_nominal()
     known = known_keys(nominal)
-    switches = dict(DEFAULTS)
+    switches = dict(DEFAULTS, figures=bool(report))
     overrides = dict()
     unknown = []
 
@@ -270,6 +281,13 @@ def supersede(data_dir: str, corr_dir: str, name: str, work: str, log,
         % (name, len(going), total / 1e9, aside), 'warn')
 
 
+def run_folder(work: str):
+    """The run's own folder, <work>/<M>-<N>: the one whose configuration was
+    written last."""
+    made = glob.glob(os.path.join(work, '*', 'resolved_config.yaml'))
+    return os.path.dirname(max(made, key=os.path.getmtime)) if made else None
+
+
 def request_block(overrides: dict, instrument: str, data_source,
                   input_file) -> dict:
     """An object's block of the request: what PCA2D changed, and what LBL
@@ -288,7 +306,7 @@ def request_block(overrides: dict, instrument: str, data_source,
 
 
 def write_request(path: str, objects: list, block: dict, cache_dir: str,
-                  model_dir: str) -> None:
+                  model_dir: str, suffix: str = SUFFIX) -> None:
     """The request as a pca2d configuration file: the nominal one, with one
     block per object holding the same settings."""
     nominal = read_nominal()
@@ -296,8 +314,11 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
     output['cache_directory'] = cache_dir
     output['model_directory'] = model_dir
     # pca2d's own LBL stage is never run from here: LBL is the caller
+    # and the corrected object's name, which is how the report finds its
+    # velocities in LBL's tree (lbl.pca2d.lbl.object_names)
     nominal['general'].setdefault('lbl', dict()).update(prepare=False,
-                                                        run=False)
+                                                        run=False,
+                                                        suffix=suffix)
     nominal['objects'] = {name: copy.deepcopy(block) for name in objects}
     with open(path, 'w') as handle:
         handle.write('# what lbl_pca2d asked of pca2d for %s: the nominal'
@@ -310,29 +331,30 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
 def main(instrument: str, data_dir: str, object_science: str,
          object_comparison: str = None, data_source: str = None,
          pca2d=None, input_file: str = None, science_subdir: str = 'science',
-         **kwargs) -> tuple:
+         report: bool = True, **kwargs) -> tuple:
     """Correct one object, and return the names LBL goes on with:
     (object_science, object_comparison)."""
     _ = kwargs
     names = correct(instrument, data_dir, [object_science],
                     {object_science: object_comparison}, data_source, pca2d,
-                    input_file, science_subdir)
+                    input_file, science_subdir, report)
     return names[object_science]
 
 
 def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
           data_source: str = None, pca2d=None, input_file: str = None,
-          science_subdir: str = 'science', **kwargs) -> dict:
+          science_subdir: str = 'science', report: bool = True,
+          **kwargs) -> dict:
     """Correct several objects against one observer basis (pca2d.joint), each
     with its own star spectrum. {object: (object_science, object_comparison)}.
     """
     _ = kwargs
     return correct(instrument, data_dir, list(objects), dict(comparisons),
-                   data_source, pca2d, input_file, science_subdir)
+                   data_source, pca2d, input_file, science_subdir, report)
 
 
 def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
-            input_file, science_subdir) -> dict:
+            input_file, science_subdir, report=True) -> dict:
     """The correction of one object, or of several together. Returns
     {object: (corrected object, its comparison)}.
 
@@ -342,7 +364,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     """
     from lbl.pca2d.logger import log
 
-    switches, overrides = settings(pca2d)
+    switches, overrides = settings(pca2d, report)
     data_dir = os.path.abspath(data_dir)
     science_root = os.path.join(data_dir, science_subdir)
     label = re.sub(r'[^0-9A-Za-z._+-]', '_', str(switches['name'] or ''))
@@ -373,7 +395,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     request_file = os.path.join(work, 'request.yaml')
     write_request(request_file, objects, block,
                   os.path.join(pca2d_root, 'cache'),
-                  os.path.join(data_dir, 'models'))
+                  os.path.join(data_dir, 'models'), suffix)
 
     files = {name: input_files(os.path.join(science_root, name), input_file)
              for name in objects}
@@ -392,6 +414,8 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         log('PCA2D: this correction (%s) is already in %s, kept as it is.'
             ' overwrite=True makes it again'
             % (stamp, ', '.join(names[n][0] for n in objects)), 'info')
+        for name in objects:
+            RUNS[names[name][0]] = state.get('run_dir') or run_folder(work)
         return names
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
@@ -437,8 +461,12 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         raise LblException('PCA2D wrote no corrected spectrum into '
                            '{0}'.format(', '.join(empty)))
     from lbl.pca2d.provenance import stamp as code_stamp
+    run_dir = run_folder(work)
+    for name in objects:
+        RUNS[names[name][0]] = run_dir
     with open(state_file, 'w') as handle:
         json.dump(dict(stamp=stamp, objects=[names[n][0] for n in objects],
+                       run_dir=run_dir,
                        n_files={n: len(w) for n, w in written.items()},
                        code=code_stamp(), when=datetime.datetime.now(
                        ).isoformat(timespec='seconds'),
@@ -450,6 +478,65 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                os.path.join(science_root, names[name][0]), names[name][0]),
             'value')
     return names
+
+def report(data_dir: str, delivered: str, corrected: str,
+           lbl_report: str = None) -> str:
+    """The report of a PCA2D run, after LBL: one PDF. Returns its path.
+
+    pca2d's own report first, written again now that LBL has measured both
+    objects: the star, the delivered and corrected velocities side by side
+    and what changed, the river plots of the correction step by step, the
+    components, their coefficients in time and their periodograms, the
+    telluric and airglow residuals. Then LBL's own report of the corrected
+    object. The whole goes where LBL put its report, so that the report of
+    the run is one file. Never fatal: a report is an account of the run, and
+    the velocities are already in lblrdb.
+    """
+    from lbl.pca2d.logger import log
+    try:
+        run_dir = RUNS.get(corrected)
+        if not run_dir or not os.path.isdir(run_dir):
+            log('no pca2d run folder for %s, so the report is LBL\'s alone'
+                % corrected, 'warn')
+            return lbl_report
+        from lbl.pca2d import texreport
+        # THE NAMES LBL USED, whatever the run's own configuration says: a
+        # run made before the request carried lbl.suffix names the corrected
+        # object <star>_PCA2D_<tag>, and its velocities would not be found
+        with open(os.path.join(run_dir, 'resolved_config.yaml')) as handle:
+            config = yaml.safe_load(handle)
+        if corrected.startswith(delivered):
+            config.setdefault('lbl', dict())['suffix'] = \
+                corrected[len(delivered):]
+        pdf = texreport.render(run_dir, config=config, lbl_dir=data_dir)
+        if pdf is None:
+            # no pdflatex: the figures bound in one PDF are the report
+            found = [p for p in glob.glob(os.path.join(run_dir, '*.pdf'))
+                     if not os.path.basename(p).startswith('components')]
+            pdf = max(found, key=os.path.getmtime) if found else None
+        if pdf is None:
+            log('no pca2d report in %s' % run_dir, 'warn')
+            return lbl_report
+        if not lbl_report or not os.path.exists(lbl_report):
+            log('the report of %s: %s' % (corrected, pdf), 'value')
+            return pdf
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        writer.append(pdf)
+        writer.append(lbl_report)
+        whole = lbl_report + '.part'
+        with open(whole, 'wb') as handle:
+            writer.write(handle)
+        os.replace(whole, lbl_report)
+        log('the report of %s, pca2d\'s (the velocities of %s beside them,'
+            ' the river plots, the components) and then LBL\'s, in one file:'
+            ' %s' % (corrected, delivered, lbl_report), 'value')
+        return lbl_report
+    except Exception as exc:                                  # noqa: BLE001
+        log('the pca2d pages could not be added to the report (%s: %s)'
+            % (type(exc).__name__, exc), 'warn')
+        return lbl_report
+
 
 # =============================================================================
 # End of code
