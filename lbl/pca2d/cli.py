@@ -280,7 +280,14 @@ def parse_args(argv=None):
     p.add_argument("--any-object", action="store_true",
                    help="read every file of the object's folder, whatever"
                         " its OBJECT and DRSOBJN say")
-    return p.parse_args(argv)
+    args = p.parse_args(argv)
+    # NO config.yaml HERE, which is the case of anyone who installed LBL alone:
+    # the nominal configuration that ships with it, rather than a stop
+    if args.config == "config.yaml" and not os.path.exists(args.config):
+        args.config = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "nominal.yaml")
+        log("no config.yaml here, so the nominal one: %s" % args.config, "warn")
+    return args
 
 
 def load_variant(config_path, name):

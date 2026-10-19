@@ -104,8 +104,9 @@ another one. Nothing is deleted; the folder and its size are printed.
 
 `lbl_pca2d` is pca2d's own command line (`lbl.pca2d.cli`), for research runs
 kept side by side under their own names, variants and joint fits, outside an
-LBL tree: `lbl_pca2d --object TOI2120 --n-star 1 --n-earth 3`. Its
-configuration is a `config.yaml` in the format of `lbl/pca2d/nominal.yaml`.
+LBL tree: `lbl_pca2d --object TOI2120 --n-star 1 --n-earth 3`. It reads
+`config.yaml` in the working directory, in the format of
+`lbl/pca2d/nominal.yaml`, and that nominal file itself when there is none.
 
 ## The pca2d window
 
