@@ -389,9 +389,9 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     if (not switches['overwrite'] and state.get('stamp') == stamp
             and all(present.values())
             and {n: len(p) for n, p in present.items()} == state.get('n_files')):
-        log('PCA2D: %s already hold this correction (%s), kept as they are.'
-            ' overwrite=True does it again'
-            % (', '.join(names[n][0] for n in objects), stamp), 'info')
+        log('PCA2D: this correction (%s) is already in %s, kept as it is.'
+            ' overwrite=True makes it again'
+            % (stamp, ', '.join(names[n][0] for n in objects)), 'info')
         return names
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
