@@ -299,6 +299,9 @@ def run_template(inst, objname: str, objkind: str):
         berv = np.zeros_like(science_files, dtype=float)
         # loop around files
         for it, filename in enumerate(science_files):
+            # on a terminal, the previous file's lines stay on screen while
+            #   this one runs, and the ones before are erased
+            log.transient()
             # print progress
             msg = 'Processing E2DS->S1D for file {0} of {1}'
             margs = [it + 1, len(science_files)]
@@ -421,6 +424,8 @@ def run_template(inst, objname: str, objkind: str):
             # push into arrays (right)
             even_cube[:, ibin[it]] += s1d_flux_even
             even_weight_cube[:, ibin[it]] += s1d_weight_even
+        # the last file's lines stay
+        log.transient(start=False)
 
         # -------------------------------------------------------------------------
         # Step 6. Creation of the template
@@ -560,9 +565,10 @@ def run_template(inst, objname: str, objkind: str):
 
     # -------------------------------------------------------------------------
     # TODO: Andd local SNR part from EA
-    # Local SNR
-    snr_odd = p50_odd / rms_odd
-    snr_even = p50_even / rms_even
+    # Local SNR (infinite where the rms is zero)
+    with warnings.catch_warnings(record=True) as _:
+        snr_odd = p50_odd / rms_odd
+        snr_even = p50_even / rms_even
     # Perform a low pass filter on the SNR
     snr_odd = mp.lowpassfilter(snr_odd, hp_width)
     snr_even = mp.lowpassfilter(snr_even, hp_width)

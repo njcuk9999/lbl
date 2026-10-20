@@ -1415,12 +1415,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # starting values for condition on the last_iteration = True/False
     rv_mean = np.inf
     bulk_error = 1.0
+    # the messages of the current iteration: only the last iteration's are
+    #   printed, after the loop, the others scroll past too fast to be read
+    iter_msgs = []
     # loop around iterations
     for iteration in range(compute_rv_n_iters):
         # log iteration
-        log.general('\t' + '-' * 50)
-        log.general('\tIteration {0}'.format(iteration + 1))
-        log.general('\t' + '-' * 50)
+        iter_msgs = ['\t' + '-' * 50]
+        iter_msgs += ['\tIteration {0}'.format(iteration + 1)]
+        iter_msgs += ['\t' + '-' * 50]
         # add to the number of iterations used to converge
         num_to_converge += 1
         # get start time
@@ -1482,7 +1485,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     lp_wid = int(width[order_num])
                     ratio[order_num] = mp.lowpassfilter(ratio_full, lp_wid, k=3)
                 if order_num == 0:
-                    log.general('\t\tLow-pass match of model to science ratio')
+                    iter_msgs += ['\t\tLow-pass match of model to science '
+                                  'ratio']
 
             model[order_num] *= ratio[order_num]
 
@@ -1714,7 +1718,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # log the value
         msg = '\t\tstdev_meas/stdev_pred = {0:.2f}'
         margs = [stddev_nsig]
-        log.general(msg.format(*margs))
+        iter_msgs += [msg.format(*margs)]
         # ---------------------------------------------------------------------
         # get final rv value
         rv_final = np.array(dv + sys_rv - berv + model_offset)
@@ -1731,9 +1735,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         msgs += ['RV = {4:.2f} m/s, sigma = {1:.2f} m/s']
         margs = [iteration, bulk_error, -sys_rv, duration, rv_mean,
                  bulk_error]
-        # loop around messages and add to log
+        # loop around messages and add to the iteration's messages
         for msg in msgs:
-            log.general('\t\t' + msg.format(*margs))
+            iter_msgs += ['\t\t' + msg.format(*margs)]
         # ---------------------------------------------------------------------
         if flag_last_iter:
             # break here
@@ -1742,10 +1746,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         if np.abs(rv_mean) < (converge_thres * bulk_error):
             msg = '\t\tConverged RV = {0:.2f} m/s, sigma = {1:.2f} m/s'
             margs = [rv_mean, bulk_error]
-            log.general(msg.format(*margs))
+            iter_msgs += [msg.format(*margs)]
 
             # One more iteration
             flag_last_iter = True
+    # print the last iteration's messages only
+    for msg in iter_msgs:
+        log.general(msg)
 
     # -------------------------------------------------------------------------
     # line plot
@@ -3501,7 +3508,9 @@ def significant_extrema(wavegrid: np.ndarray, flux: np.ndarray,
              crossing of the derivative), 2. its wavelength [nm], 3. its kind
              (+1 maximum, -1 minimum)
     """
-    zvalues = dflux / sigma_dflux
+    # infinite or NaN where sigma_dflux is zero, a hole as below
+    with warnings.catch_warnings(record=True) as _:
+        zvalues = dflux / sigma_dflux
     # the template has holes (NaN): an extremum is never declared across one
     valid = np.isfinite(zvalues) & np.isfinite(flux)
     # storage for the outputs

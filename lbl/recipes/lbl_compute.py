@@ -268,6 +268,8 @@ def __main__(inst: InstrumentsType, **kwargs):
             # loop through each science file
             for it, science_file in enumerate(science_files):
                 compute_file(inst, ctx, run, it, science_file)
+    # the last file's lines stay
+    log.transient(start=False)
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------
@@ -298,6 +300,9 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
     # ---------------------------------------------------------------------
     # number left
     nleft = run.nfiles - (it + 1)
+    # on a terminal, the previous file's lines stay on screen while this one
+    #   runs, and the ones before are erased
+    log.transient()
     # standard loop message
     log.info('*' * 79)
     msg = 'Processing file {0} / {1}   ({2} left)'
@@ -505,6 +510,8 @@ def compute_parallel(inst: InstrumentsType, ctx: Dict[str, Any],
             compute_file(inst, ctx, run, int(jt), science_files[jt])
         return
     blocks = np.array_split(remaining, nproc)
+    # the workers' lines stay on screen
+    log.transient(start=False)
     # start the workers on blocks 1 to nproc - 1
     workdir = tempfile.mkdtemp(prefix='lbl_compute_')
     workers = []

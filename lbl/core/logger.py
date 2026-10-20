@@ -10,6 +10,8 @@ Created on 2021-03-15
 @author: cook
 """
 import logging
+import re
+import shutil
 from typing import List, Union
 
 from astropy.time import Time
@@ -29,6 +31,8 @@ NO_THEME = [False, 'False', 'OFF', 'off', 'Off', 'None']
 GENERAL = 15
 # CACHE for all messages
 CACHE = []
+# the colour codes of a console line, which take no room on screen
+ANSI_CODES = re.compile(r'\x1b\[[0-9;]*m')
 
 
 # =============================================================================
@@ -72,7 +76,7 @@ class Log:
         for _ in range(len(self.logger.handlers)):
             self.logger.handlers.pop()
         # start the console log for debugging
-        consolehandler = logging.StreamHandler()
+        consolehandler = ConsoleHandler()
         # set the name (so we can access it later)
         consolehandler.set_name('console')
         # set the format from console format
@@ -155,6 +159,31 @@ class Log:
                     record = getattr(logging, level)
                     # update handler level
                     handler.setLevel(record)
+
+    def transient(self, start: bool = True):
+        """
+        Start a transient block, or end them (start=False) so that what they
+        printed stays on screen.
+
+        For progress that scrolls past too fast to be read (one block per
+        file): on a terminal, the console lines of a block are held back
+        until it ends, and then replace the block printed before, in one
+        write. The screen holds one block, the last one finished, and nothing
+        is printed only to be erased. A warning or an error is printed at
+        once and never erased, nor anything printed before it. Not on a
+        terminal (output redirected to a file) every line is printed as it
+        comes, and the log file gets every line regardless.
+
+        :param start: bool, True starts a block, False ends them
+
+        :return: None, updates the console handler
+        """
+        for handler in self.logger.handlers:
+            if isinstance(handler, ConsoleHandler):
+                if start:
+                    handler.new_block()
+                else:
+                    handler.end_blocks()
 
     def general(self, message: str, *args, **kwargs):
         self.update_console(self.console_verbosity, self.program)
@@ -263,6 +292,117 @@ def cache_logger(message: str, levelnum: int, program: Union[str, None] = None):
     # -------------------------------------------------------------------------
     # push to cache
     CACHE.append(record)
+
+
+# Console handler
+class ConsoleHandler(logging.StreamHandler):
+    """
+    The console, which holds back the lines of a transient block
+    (Log.transient) and prints them in place of the block printed before
+    """
+
+    def __init__(self):
+        super().__init__()
+        # the lines of the transient block being logged, held back, None
+        #   outside transient blocks
+        self.current = None
+        # the lines of the last block printed, which the next one replaces
+        self.shown = []
+
+    def isatty(self) -> bool:
+        try:
+            return self.stream.isatty()
+        except (AttributeError, ValueError):
+            return False
+
+    @staticmethod
+    def rows(lines: List[str]) -> int:
+        """
+        The rows lines take on screen, wrapped at the terminal's width
+
+        :param lines: list of str, the lines as printed
+
+        :return: int, the number of rows
+        """
+        width = shutil.get_terminal_size().columns
+        rows = 0
+        for msg in lines:
+            for line in ANSI_CODES.sub('', msg).split('\n'):
+                rows += max(1, -(-len(line.expandtabs()) // width))
+        return rows
+
+    def write(self, lines: List[str]):
+        """
+        Print lines to the console
+
+        :param lines: list of str, the lines as formatted
+
+        :return: None, writes to the console
+        """
+        for msg in lines:
+            self.stream.write(msg + self.terminator)
+        self.flush()
+
+    def show(self):
+        """
+        Print the block held back in place of the last block printed
+
+        :return: None, writes to the console
+        """
+        if self.current:
+            if self.shown:
+                # up to the first row of the last block printed, and clear to
+                #   the end of screen
+                nrows = self.rows(self.shown)
+                self.stream.write('\033[{0}F\033[J'.format(nrows))
+            self.write(self.current)
+            self.shown = self.current
+        self.current = []
+
+    def new_block(self):
+        """
+        Start a transient block: the one held back so far is printed
+
+        :return: None, writes to the console
+        """
+        if self.current is None:
+            self.current, self.shown = [], []
+        else:
+            self.show()
+
+    def end_blocks(self):
+        """
+        End the transient blocks: the last one is printed, and stays
+
+        :return: None, writes to the console
+        """
+        if self.current is not None:
+            self.show()
+        self.current, self.shown = None, []
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            msg = self.format(record)
+            # outside transient blocks, or not on a terminal: as it comes
+            if self.current is None or not self.isatty():
+                self.write([msg])
+            # a warning or an error is printed at once and stays on screen,
+            #   with what was held back before it
+            elif record.levelno >= logging.WARNING:
+                self.write(self.current + [msg])
+                self.current, self.shown = [], []
+            else:
+                self.current.append(msg)
+        except Exception:
+            self.handleError(record)
+
+    def close(self):
+        # what is held back is printed before the program ends, on an
+        #   exception for instance
+        if self.current:
+            self.write(self.current)
+            self.current = []
+        super().close()
 
 
 # Custom formatter
