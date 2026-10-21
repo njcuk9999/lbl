@@ -83,7 +83,7 @@ optical spectrographs.
 | `n_earth` | 3 | observer-frame components fitted and divided out |
 | `compare` | True | LBL measures the delivered object too, first, for the report |
 | `figures` | as `REPORT` | the river plots and the other figures of the correction |
-| `overwrite` | False | redo even when the same correction is on disk |
+| `overwrite` | False | redo even when the same correction is on disk (as `SKIP_LBL_PCA2D=False`, below) |
 | `name` | None | `<object>_pca2d_<name>`, to keep variants side by side |
 | `joint` | False | every science object against one observer basis |
 
@@ -147,6 +147,19 @@ files, is kept and not made again. A different one moves the previous
 templates, masks, plots) to `pca2d/<object>/superseded/<date>/`, so that
 `SKIP_LBL_*` never measures a correction against a template made from
 another one. Nothing is deleted; the folder and its size are printed.
+
+`SKIP_LBL_PCA2D`, beside LBL's other `SKIP_LBL_*` in the wrap, overrides
+that choice:
+
+| `SKIP_LBL_PCA2D` | the correction on disk |
+|---|---|
+| `None` (or not given) | kept if the settings, the input files and `nominal.yaml` are those it was made with, made again otherwise |
+| `True` | kept even if they changed, which a warning says |
+| `False` | made again in every case, as `overwrite=True` |
+
+A correction with no `done.json` beside it was interrupted and is made again
+in every case. `SKIP_LBL_PCA2D=True` with `overwrite=True` stops the run:
+they ask opposite things.
 
 ## The command line
 

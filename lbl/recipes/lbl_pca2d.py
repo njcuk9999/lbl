@@ -45,6 +45,17 @@ product made from it (lblrv, lblrdb, templates, masks...) aside, under
 DATA_DIR/pca2d/<object>/superseded/, so that LBL's SKIP_DONE never mixes
 velocities measured on one correction with a template made from another.
 
+The wrap's SKIP_LBL_PCA2D overrides that choice:
+
+    None     (or not given) the above: made again only if the settings, the
+             input files or nominal.yaml changed
+    True     the correction on disk is kept even if they changed, which a
+             warning says
+    False    made again whatever is on disk, as overwrite=True
+
+A correction with no done.json beside it was interrupted, and is made again
+in every case.
+
 Created on 2026-10-19
 """
 import copy
@@ -353,32 +364,39 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
 def main(instrument: str, data_dir: str, object_science: str,
          object_comparison: str = None, data_source: str = None,
          pca2d=None, input_file: str = None, science_subdir: str = 'science',
-         report: bool = True, **kwargs) -> tuple:
+         report: bool = True, skip=None, **kwargs) -> tuple:
     """Correct one object, and return the names LBL goes on with:
-    (object_science, object_comparison)."""
+    (object_science, object_comparison). skip is the wrap's
+    SKIP_LBL_PCA2D."""
     _ = kwargs
     names = correct(instrument, data_dir, [object_science],
                     {object_science: object_comparison}, data_source, pca2d,
-                    input_file, science_subdir, report)
+                    input_file, science_subdir, report, skip)
     return names[object_science]
 
 
 def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
           data_source: str = None, pca2d=None, input_file: str = None,
-          science_subdir: str = 'science', report: bool = True,
+          science_subdir: str = 'science', report: bool = True, skip=None,
           **kwargs) -> dict:
     """Correct several objects against one observer basis (pca2d.joint), each
     with its own star spectrum. {object: (object_science, object_comparison)}.
+    skip is the wrap's SKIP_LBL_PCA2D.
     """
     _ = kwargs
     return correct(instrument, data_dir, list(objects), dict(comparisons),
-                   data_source, pca2d, input_file, science_subdir, report)
+                   data_source, pca2d, input_file, science_subdir, report,
+                   skip)
 
 
 def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
-            input_file, science_subdir, report=True) -> dict:
+            input_file, science_subdir, report=True, skip=None) -> dict:
     """The correction of one object, or of several together. Returns
     {object: (corrected object, its comparison)}.
+
+    skip is the wrap's SKIP_LBL_PCA2D: None makes the correction again only
+    if the request changed, True keeps the one on disk even then, False makes
+    it again in every case (as overwrite=True).
 
     The comparison follows the science object when it was the science object
     (the usual case, each object its own template); another star's template
@@ -416,12 +434,15 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                 ' is used as it is, uncorrected' % (name, comparison), 'warn')
         names[name] = (name + suffix, comparison)
 
+    if skip not in (None, True, False):
+        raise LblException('SKIP_LBL_PCA2D is True, False or None (not given),'
+                           ' not {0!r}'.format(skip))
+    if skip is True and switches['overwrite']:
+        raise LblException('SKIP_LBL_PCA2D=True keeps the correction on disk'
+                           ' and PCA2D overwrite=True makes it again: one or'
+                           ' the other')
     block = request_block(overrides, instrument, data_source, input_file)
     os.makedirs(work, exist_ok=True)
-    request_file = os.path.join(work, 'request.yaml')
-    write_request(request_file, objects, block,
-                  os.path.join(pca2d_root, 'cache'),
-                  os.path.join(data_dir, 'models'), suffix)
 
     files = {name: input_files(os.path.join(science_root, name), input_file)
              for name in objects}
@@ -434,15 +455,36 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
             state = json.load(handle)
     present = {name: glob.glob(os.path.join(science_root, names[name][0],
                                             '*.fits')) for name in objects}
-    if (not switches['overwrite'] and state.get('stamp') == stamp
-            and all(present.values())
-            and {n: len(p) for n, p in present.items()} == state.get('n_files')):
-        log('PCA2D: this correction (%s) is already in %s, kept as it is.'
-            ' overwrite=True makes it again'
-            % (stamp, ', '.join(names[n][0] for n in objects)), 'info')
+    # a correction that finished: its done.json counts its files, and they
+    #   are all there (one that was interrupted has no done.json)
+    on_disk = (all(present.values()) and {n: len(p) for n, p in
+                                          present.items()} == state.get(
+        'n_files'))
+    same = state.get('stamp') == stamp
+    corrected = ', '.join(names[n][0] for n in objects)
+    if on_disk and not switches['overwrite'] and skip is not False and (
+            same or skip is True):
+        if same:
+            log('PCA2D: this correction (%s) is already in %s, kept as it'
+                ' is. SKIP_LBL_PCA2D=False makes it again'
+                % (stamp, corrected), 'info')
+        else:
+            log('PCA2D: SKIP_LBL_PCA2D=True, so the correction in %s (%s,'
+                ' made %s) is kept, although the settings, the input files'
+                ' or nominal.yaml changed since (%s now). Without'
+                ' SKIP_LBL_PCA2D, or with False, it is made again'
+                % (corrected, state.get('stamp'), state.get('when', '?'),
+                   stamp), 'warn')
         for name in objects:
             RUNS[names[name][0]] = state.get('run_dir') or run_folder(work)
         return names
+    if skip is True and not on_disk:
+        log('PCA2D: SKIP_LBL_PCA2D=True, but no finished correction in %s:'
+            ' it is made' % corrected, 'info')
+    request_file = os.path.join(work, 'request.yaml')
+    write_request(request_file, objects, block,
+                  os.path.join(pca2d_root, 'cache'),
+                  os.path.join(data_dir, 'models'), suffix)
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
                   names[name][0], work, log, science_subdir)

@@ -24,6 +24,7 @@ from lbl.instruments import select
 from lbl.resources import lbl_misc
 from lbl.science import apero
 from lbl.science import general
+from lbl.science import planets
 
 # =============================================================================
 # Define variables
@@ -266,9 +267,40 @@ def run_template(inst, objname: str, objkind: str):
     drv0 = np.zeros_like(science_files, dtype=float)
 
     berv = np.zeros_like(science_files, dtype=float)
+    # the time of each spectrum [BJD], for the companions' velocities
+    bjd = np.zeros_like(science_files, dtype=float)
+    use_planets = (bool(inst.params['PLANETS'])
+                   and inst.params['DATA_TYPE'] == 'SCIENCE')
     for sci_it in range(len(science_files)):
         sci_hdr = _load_template_header(inst, science_files[sci_it])
         berv[sci_it] = inst.get_berv(sci_hdr)
+        if use_planets:
+            # RJD = JD - 2400000
+            try:
+                bjd[sci_it] = inst.get_rjd_value(sci_hdr) + 2400000.0
+            except Exception as exc:
+                msg = ('PLANETS: no time for {0} ({1}): the template '
+                       'iterates on the velocities')
+                log.warning(msg.format(science_files[sci_it], exc))
+                use_planets = False
+    # -------------------------------------------------------------------------
+    # PLANETS: the known companions of the star. If the catalogs have their
+    #   orbits, every spectrum is registered with its BERV and their velocity
+    #   at its time, and the template is made in one pass; if not (None), the
+    #   velocities are iterated on as below
+    planets_used = None
+    if use_planets:
+        header_names = [refhdr.get(inst.params.get('KW_OBJNAME', 'OBJECT')),
+                        refhdr.get('DRSOBJN')]
+        planets_used = planets.orbits_for(
+            planets.star_names(objname, header_names),
+            inst.params['DATA_DIR'])
+    if planets_used is not None:
+        rv0 = planets.star_velocity(bjd, planets_used['orbits'])
+        planets_used['velocity'] = np.array(rv0)
+        msg = ('PLANETS: velocity of the star from {0:.1f} to {1:.1f} m/s '
+               'over the {2} spectra')
+        log.info(msg.format(np.min(rv0), np.max(rv0), len(rv0)))
     # storage of the science table
     med_spec_hp = 1
     # we distribute the files in bins of equal size ordered by berv
@@ -333,9 +365,11 @@ def run_template(inst, objname: str, objkind: str):
             sci_table = inst.populate_sci_table(filename, sci_table, sci_hdr,
                                                 berv=berv[it])
 
-            # apply berv if required
-            if berv[it] != 0.0:
-                sci_wave = mp.doppler_shift(sci_wave, -berv[it] + rv0[it])
+            # apply berv if required, with the star's velocity, the two
+            #   composed relativistically
+            if berv[it] != 0.0 or planets_used is not None:
+                sci_wave = mp.doppler_shift(
+                    sci_wave, mp.add_velocities(-berv[it], rv0[it]))
             # set exactly zeros to NaNs
             sci_image[sci_image == 0] = np.nan
             # compute s1d from e2ds (all orders, odd orders, even orders)
@@ -402,7 +436,8 @@ def run_template(inst, objname: str, objkind: str):
                 rv0[it] -= drv0[it]
                 # get wave solution for reference file.
                 sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
-                sci_wave = mp.doppler_shift(sci_wave, -berv[it] + rv0[it])
+                sci_wave = mp.doppler_shift(
+                    sci_wave, mp.add_velocities(-berv[it], rv0[it]))
 
                 # compute s1d from e2ds (all, odd and even orders)
                 # with an updated wavelength grid
@@ -531,8 +566,17 @@ def run_template(inst, objname: str, objkind: str):
             # , we are happy, we exit the loop on relative RV shifts
             if sig < inst.params['MAX_CONVERGENCE_TEMPLATE_RV']:
                 break
+        # with the companions' velocities the spectra are already where they
+        #   belong: one pass, no iteration on the velocities
+        if planets_used is not None:
+            log.general('PLANETS: template made in one pass, on BERV + the '
+                        'Keplerian velocity of each spectrum')
+            break
 
     sci_table['VSYS'] = rv0
+    if planets_used is not None:
+        # the Keplerian velocity of each spectrum, for the record
+        sci_table['VKEP'] = np.array(planets_used['velocity'])
 
     # -------------------------------------------------------------------------
     # bin cube by BERV (to give equal weighting to epochs)
@@ -665,7 +709,8 @@ def run_template(inst, objname: str, objkind: str):
                  eflux_even=rms_even, rms_odd=rms_odd,
                  rms_even=rms_even, template_coverage=template_coverage,
                  total_nobs_berv=total_nobs_berv, template_nobs=nfiles,
-                 savgol_fluxes=savgol_fluxes, template_type=template_type)
+                 savgol_fluxes=savgol_fluxes, template_type=template_type,
+                 planets=planets_used)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
 

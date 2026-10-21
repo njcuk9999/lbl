@@ -80,6 +80,73 @@ def page_sequence(plt, table, title):
     return fig
 
 
+def subtract_orbits(table, planets):
+    """A copy of the table whose velocities have the known orbits taken out
+    (PLANETS), for the periodogram and the FIP after them"""
+    from lbl.science import planets as kepler
+
+    out = dict(table)
+    time = np.asarray(table[S.TIME], dtype=float) + 2400000.0
+    out[S.VELOCITY] = (np.asarray(table[S.VELOCITY], dtype=float)
+                       - kepler.star_velocity(time, planets['orbits']))
+    return out
+
+
+def page_phase(plt, table, title, planets):
+    """The velocities folded on each orbit the template was made on
+    (PLANETS), with its Keplerian. For each orbit, the others and one
+    constant (their weighted mean residual) are taken out first."""
+    if planets is None:
+        return None
+    from lbl.science import planets as kepler
+
+    time = np.asarray(table[S.TIME], dtype=float) + 2400000.0
+    vrad = np.asarray(table[S.VELOCITY], dtype=float)
+    svrad = np.asarray(table[S.ERROR], dtype=float)
+    good = np.isfinite(time) & np.isfinite(vrad) & np.isfinite(svrad)
+    time, vrad, svrad = time[good], vrad[good], svrad[good]
+    orbits = planets['orbits']
+    models = [kepler.orbit_velocity(time, orbit) for orbit in orbits]
+    total = np.sum(models, axis=0)
+    weights = 1.0 / np.maximum(svrad, 1e-3) ** 2
+    offset = np.sum(weights * (vrad - total)) / np.sum(weights)
+    residual = vrad - offset - total
+
+    fig, axes = plt.subplots(len(orbits), 1, squeeze=False,
+                             figsize=(10, 2.0 + 3.2 * len(orbits)))
+    for ax, orbit, model in zip(axes[:, 0], orbits, models):
+        # phase 0 at the conjunction (the transit) when the orbit gives it,
+        #   at periastron otherwise
+        at_conj = orbit.get('t0') is not None
+        ref = orbit['t0'] if at_conj else kepler.periastron_time(orbit)
+        period = float(orbit['period'])
+        phase = np.mod((time - ref) / period + 0.5, 1.0) - 0.5
+        folded = vrad - offset - (total - model)
+        ax.errorbar(phase, folded, yerr=svrad, fmt='o', ms=3, lw=0.8,
+                    capsize=0, alpha=0.8, label='LBL velocities')
+        grid = np.linspace(-0.5, 0.5, 600)
+        ax.plot(grid, kepler.orbit_velocity(ref + grid * period, orbit),
+                color='C3', lw=1.2, label='Keplerian of the catalog')
+        ax.axhline(0.0, color='k', lw=0.6, ls=':')
+        ax.set_xlim(-0.5, 0.5)
+        ax.set_xlabel('Phase (0 = %s)' % ('inferior conjunction' if at_conj
+                                           else 'periastron'))
+        ax.set_ylabel('Radial velocity (m s$^{-1}$)')
+        ax.set_title('%s: P = %.6g d, K = %.2f m s$^{-1}$, e = %.3f;'
+                     ' rms about the model %.2f m s$^{-1}$'
+                     % (orbit.get('name', '?'), period, orbit['k'],
+                        orbit['e'], np.std(residual, ddof=1)
+                        if len(residual) > 1 else np.nan), fontsize=9)
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=8, loc='best')
+    fig.suptitle('%s: the velocities folded on the orbits the template was '
+                 'made on (%s), other companions and a constant of %.1f '
+                 'm s$^{-1}$ taken out' % (title, planets['catalog'], offset),
+                 fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
 def page_periodogram(plt, table, title, known=None):
     """The periodogram of the series, and the spectral window below it."""
     try:

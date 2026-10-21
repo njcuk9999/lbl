@@ -52,8 +52,66 @@ def _table(rows):
     return '\n'.join(lines)
 
 
+def _planets(template_file):
+    """The companions whose Keplerian velocities registered the spectra of
+    the template (its PLANETS extension, lbl/science/planets.py), or None"""
+    if not template_file or not os.path.exists(template_file):
+        return None
+    try:
+        from astropy.io import fits
+        with fits.open(template_file) as hdul:
+            if 'PLANETS' not in hdul:
+                return None
+            header = hdul[0].header
+            table = hdul['PLANETS'].data
+            orbits = []
+            for row in table:
+                # an epoch not given is NaN in the table, None here
+                t0 = float(row['t0']) if row['t0'] == row['t0'] else None
+                tp = float(row['tp']) if row['tp'] == row['tp'] else None
+                epoch = ('t0 %.5f' % t0 if t0 is not None
+                         else 'tp %.5f' % tp)
+                orbits.append(dict(name=str(row['name']),
+                                   period=float(row['period']),
+                                   k=float(row['k']), e=float(row['e']),
+                                   omega=float(row['omega']), t0=t0, tp=tp,
+                                   epoch=epoch,
+                                   reference=str(row['reference'])))
+        return dict(star=header.get('PLNSTAR', '?'),
+                    catalog=header.get('PLNCAT', '?'), orbits=orbits)
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('report: cannot read the orbits of {0} ({1})'.format(
+            template_file, exc))
+        return None
+
+
+def _planet_section(planets):
+    """The page that says which orbits the template was made on, as LaTeX"""
+    lines = [r'\subsection*{Template made on known orbits}',
+             'The spectra were registered with their BERV plus the Keplerian '
+             'velocity of the star at their time (PLANETS = True), and the '
+             'template made in one pass instead of iterating on the '
+             'velocities. The velocities reported stay corrected for the '
+             'BERV only. Star \\texttt{%s}, orbits from \\texttt{%s}:'
+             % (_escape(planets['star']), _escape(planets['catalog'])),
+             r'\begin{center}\small', r'\begin{tabular}{lrrrrl}', r'\toprule',
+             r'Companion & $P$ (d) & $K$ (m/s) & $e$ & $\omega$ (deg) & '
+             r'Epoch (BJD) \\', r'\midrule']
+    for orbit in planets['orbits']:
+        lines.append('%s & %.6g & %.2f & %.4f & %.1f & %s \\\\'
+                     % (_escape(orbit['name']), orbit['period'], orbit['k'],
+                        orbit['e'], orbit['omega'], _escape(orbit['epoch'])))
+    lines += [r'\bottomrule', r'\end{tabular}', r'\end{center}',
+              r'\begin{itemize}']
+    for orbit in planets['orbits']:
+        lines.append(r'\item %s: %s' % (_escape(orbit['name']),
+                                         _escape(orbit['reference'] or '?')))
+    lines.append(r'\end{itemize}')
+    return '\n'.join(lines)
+
+
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
-                known_periods=None):
+                known_periods=None, template_file=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
     :param data_dir: str, the run's DATA_DIR
@@ -61,7 +119,10 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     :param title: str, the name of the run, which titles the pages
     :param science_dir: str, the delivered spectra, for the telluric page
     :param tc_dir: str, the cleaned spectra, for the same page
-    :param known_periods: periods to mark on the periodogram
+    :param known_periods: periods to mark on the periodogram (by default
+                          those of the orbits the template was made on)
+    :param template_file: str, the template of the comparison object, to say
+                          whether it was made on known orbits (PLANETS)
     """
     try:
         import matplotlib
@@ -82,6 +143,11 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
         log.warning('no report: cannot read {0} ({1})'.format(rdb_file, exc))
         return None
 
+    # THE ORBITS the template was made on, if it was (PLANETS)
+    planets = _planets(template_file)
+    if planets is not None and known_periods is None:
+        known_periods = [orbit['period'] for orbit in planets['orbits']]
+
     folder = os.path.join(data_dir, FOLDER)
     os.makedirs(folder, exist_ok=True)
     out = os.path.join(folder, '%s.pdf' % title)
@@ -93,15 +159,42 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
         ('The velocity series',
          lambda: figures.page_sequence(plt, table, title)),
         ('Velocity against BERV',
-         lambda: figures.page_berv(plt, table, title)),
-        ('Periodogram and spectral window',
-         lambda: figures.page_periodogram(plt, table, title, known_periods)),
-        ('False inclusion probability, gaussian',
-         lambda: figures.page_fip(plt, table, title)),
-        ('False inclusion probability, outlier-aware',
-         lambda: figures.page_oafip(plt, table, title, known_periods)),
-        ('Indicators and temperature projections',
-         lambda: figures.page_indicators(plt, table, title))]
+         lambda: figures.page_berv(plt, table, title))]
+    if planets is None:
+        wanted += [
+            ('Periodogram and spectral window',
+             lambda: figures.page_periodogram(plt, table, title,
+                                              known_periods)),
+            ('False inclusion probability, gaussian',
+             lambda: figures.page_fip(plt, table, title)),
+            ('False inclusion probability, outlier-aware',
+             lambda: figures.page_oafip(plt, table, title, known_periods))]
+    else:
+        # WITH KNOWN ORBITS (PLANETS): the velocities folded on them, then the
+        # periodogram and the FIPs twice, as measured and with the orbits
+        # taken out, side by side
+        residual = figures.subtract_orbits(table, planets)
+        after = ', known orbits subtracted'
+        wanted += [
+            ('Velocities folded on the known orbits',
+             lambda: figures.page_phase(plt, table, title, planets)),
+            ('Periodogram and spectral window, as measured',
+             lambda: figures.page_periodogram(plt, table, title,
+                                              known_periods)),
+            ('Periodogram and spectral window' + after,
+             lambda: figures.page_periodogram(plt, residual, title + after,
+                                              known_periods)),
+            ('False inclusion probability, gaussian, as measured',
+             lambda: figures.page_fip(plt, table, title)),
+            ('False inclusion probability, gaussian' + after,
+             lambda: figures.page_fip(plt, residual, title + after)),
+            ('False inclusion probability, outlier-aware, as measured',
+             lambda: figures.page_oafip(plt, table, title, known_periods)),
+            ('False inclusion probability, outlier-aware' + after,
+             lambda: figures.page_oafip(plt, residual, title + after,
+                                        known_periods))]
+    wanted.append(('Indicators and temperature projections',
+                   lambda: figures.page_indicators(plt, table, title)))
     # THE TAPAS SPLINES, so that the telluric pages centre themselves on the
     # strongest line of the species they are about rather than on a window
     # written down once for HARPS.
@@ -137,8 +230,14 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
             fig.savefig(path, bbox_inches='tight')
             plt.close(fig)
             drawn.append((name, path))
-        built = _build(work, out, title, rdb_file, stats.summarise(table),
-                       drawn, missing)
+        rows = list(stats.summarise(table))
+        rows.append(('Template frame',
+                     'BERV + Keplerian, %d orbit(s) of %s'
+                     % (len(planets['orbits']), planets['star'])
+                     if planets is not None else 'BERV, velocities iterated',
+                     ''))
+        built = _build(work, out, title, rdb_file, rows, drawn, missing,
+                       planets)
         if built is None:
             built = _fallback(out, drawn, missing)
         return built
@@ -171,7 +270,7 @@ def _tapas(data_dir):
         return None, None
 
 
-def _build(work, out, title, rdb_file, rows, drawn, missing):
+def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None):
     """Run pdflatex on the assembled document. None if LaTeX is not there."""
     if shutil.which('pdflatex') is None:
         log.warning('pdflatex not found: the report falls back to plain pages')
@@ -180,6 +279,8 @@ def _build(work, out, title, rdb_file, rows, drawn, missing):
             r'\section*{LBL report: %s}' % _escape(title),
             r'\textit{From %s}' % _escape(os.path.basename(rdb_file)),
             r'\vspace{4mm}', _table(rows)]
+    if planets is not None:
+        body.append(_planet_section(planets))
     for name, path in drawn:
         body.append(r'\clearpage')
         body.append(r'\subsection*{%s}'

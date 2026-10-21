@@ -811,6 +811,16 @@ params.set('TEMPLATE_MEDBINMAX', 19, source=__NAME__)
 params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=__NAME__)
 # ignore weights below this value for the template construction
 params.set('TEMPLATE_WEIGHT_MIN', 0.1, source=__NAME__)
+# the known companions of the star: if True the template looks the object up
+#   in the planet catalogs (lbl/resources/planets, and
+#   DATA_DIR/personal_planet_catalog.yaml) and, if it finds Keplerian orbits,
+#   registers each spectrum with BERV + their velocity, in one pass, instead
+#   of iterating on the velocities. Reported velocities stay BERV-corrected
+#   only (lbl/science/planets.py)
+params.set(key='PLANETS', value=False, source=__NAME__,
+           desc='template on BERV + the Keplerian velocity of the known '
+                'companions of the star, if the planet catalogs have them',
+           dtype=bool)
 
 # define the mnimal SNR required for a pixel to be considered valid in
 # the template

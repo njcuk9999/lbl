@@ -1445,7 +1445,9 @@ class SpirouCADC(Spirou):
         populate_sci_table (keep in line with these two methods)
         """
         drs_keys = ['KW_BERV', 'KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
-                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR']
+                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR',
+                    # get_rjd_value, for the companions' velocities (PLANETS)
+                    'KW_BJD']
         keys = []
         for drs_key in drs_keys:
             if drs_key in self.params:

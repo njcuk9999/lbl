@@ -811,6 +811,22 @@ def doppler_shift(wavegrid: np.ndarray, velocity: float) -> np.ndarray:
     return wavegrid * np.sqrt(part1 / part2)
 
 
+def add_velocities(velocity1: Union[float, np.ndarray],
+                   velocity2: Union[float, np.ndarray]
+                   ) -> Union[float, np.ndarray]:
+    """
+    Relativistic sum of two velocities along the line of sight: the velocity
+    whose Doppler shift is the product of theirs, (v1 + v2) / (1 + v1 v2 / c2)
+
+    :param velocity1: float or np.ndarray, velocity in m/s
+    :param velocity2: float or np.ndarray, velocity in m/s
+
+    :return: float or np.ndarray, the combined velocity in m/s
+    """
+    return ((velocity1 + velocity2)
+            / (1 + velocity1 * velocity2 / speed_of_light_ms ** 2))
+
+
 def gauss_function(x: Union[float, np.ndarray], a: float, x0: float,
                    sigma: float, dc: float) -> Union[float, np.ndarray]:
     """

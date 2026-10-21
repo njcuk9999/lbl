@@ -97,6 +97,17 @@ if __name__ == "__main__":
     rparams['SKIP_LBL_MASK'] = True
     rparams['SKIP_LBL_COMPUTE'] = True
     rparams['SKIP_LBL_COMPILE'] = True
+    # the PCA2D correction on disk: None (or not given) makes it again only if
+    #   its settings or its input files changed, True keeps it even then,
+    #   False makes it again in every case
+    rparams['SKIP_LBL_PCA2D'] = None
+    # the known companions of the star: the template is made on BERV + their
+    #   Keplerian velocity if lbl/resources/planets/*.yaml (or
+    #   DATA_DIR/personal_planet_catalog.yaml) have their orbits, by
+    #   iterating on the velocities otherwise. The report then folds the
+    #   velocities on the orbits and shows the periodogram and the FIP with
+    #   the orbits subtracted
+    rparams['PLANETS'] = False
     # the report: with PCA2D, pca2d's pages and LBL's in one PDF
     rparams['REPORT'] = True
     # -------------------------------------------------------------------------
@@ -137,6 +148,7 @@ if __name__ == "__main__":
         #     all the objects of OBJECT_SCIENCE (they need shared nights)
         # joint=True,
         # --- redo the correction even if the same one is already on disk
+        #     (as SKIP_LBL_PCA2D=False above)
         # overwrite=True,
     )
     # -------------------------------------------------------------------------

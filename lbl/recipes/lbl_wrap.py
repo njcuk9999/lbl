@@ -11,6 +11,7 @@ Created on 2021-03-19
 """
 from typing import List
 import os
+import re
 import sys
 
 from lbl.core import base
@@ -49,7 +50,7 @@ REMOVE_KEYS = [  # core
     'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
     # skip keys
     'SKIP_LBL_TELLUCLEAN', 'SKIP_LBL_TEMPLATE', 'SKIP_LBL_MASK',
-    'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
+    'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE', 'SKIP_LBL_PCA2D',
     # general keys already used
     'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE',
     # the pca2d precleaning, lbl_pca2d's and no other recipe's
@@ -73,6 +74,10 @@ DEFAULTS['SKIP_LBL_TEMPLATE'] = False
 DEFAULTS['SKIP_LBL_MASK'] = False
 DEFAULTS['SKIP_LBL_COMPUTE'] = False
 DEFAULTS['SKIP_LBL_COMPILE'] = False
+#: NI VRAI NI FAUX PAR DEFAUT: la correction PCA2D n'est refaite que si les
+#: reglages, les fichiers d'entree ou nominal.yaml ont change. True garde
+#: celle sur disque meme alors, False la refait toujours (lbl_pca2d.correct)
+DEFAULTS['SKIP_LBL_PCA2D'] = None
 
 
 # =============================================================================
@@ -224,7 +229,8 @@ def main(runparams: dict):
                               input_file=runparams.get('INPUT_FILE'),
                               science_subdir=runparams.get('SCIENCE_SUBDIR',
                                                            'science'),
-                              report=runparams.get('REPORT', True))
+                              report=runparams.get('REPORT', True),
+                              skip=runparams['SKIP_LBL_PCA2D'])
             if isinstance(pca2d, dict) and pca2d.get('joint'):
                 # every science object against ONE observer basis, done once,
                 # at the first of them
@@ -348,10 +354,35 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                                          data_dir, 'science', object_science),
                                      tc_dir=os.path.join(
                                          data_dir, 'science',
-                                         object_science + '_tc'))
+                                         object_science + '_tc'),
+                                     template_file=_template_of(
+                                         data_dir, object_comparison,
+                                         instrument))
         except Exception as _exc:
             log.warning('report failed: {0}'.format(_exc))
     return lbl_report
+
+
+def _template_of(data_dir: str, objname: str, instrument: str):
+    """The template LBL made of an object, for the report to say whether it
+    was made on known orbits (PLANETS). Its name depends on the instrument
+    (LBL_Template_<object>_nirps_he.fits, Template_<object>_HARPS_ESO.fits...)
+    so it is looked for; the templates of the objects made from this one
+    (<object>_pca2d..., <object>_tc) are not it. None if there is none."""
+    folder = os.path.join(data_dir, 'templates')
+    pattern = re.compile(r'^(LBL_)?Template_{0}_(.+)\.fits$'.format(
+        re.escape(str(objname))))
+    found = []
+    for name in (os.listdir(folder) if os.path.isdir(folder) else []):
+        match = pattern.match(name)
+        if match and not match.group(2).startswith(('pca2d', 'tc_', 'tc.')):
+            found.append(os.path.join(folder, name))
+    if not found:
+        return None
+    # the instrument's own, else the most recent
+    mine = [path for path in found
+            if str(instrument).lower() in os.path.basename(path).lower()]
+    return max(mine or found, key=os.path.getmtime)
 
 
 def _pca2d_joint(runparams: dict, object_sciences, data_types,

@@ -700,14 +700,35 @@ class Instrument:
         for key in sci_table:
             table2[key] = sci_table[key]
         # ---------------------------------------------------------------------
+        # the companions whose Keplerian velocities registered the spectra
+        #   (PLANETS), as a third table, for the report
+        data, names = [None, table1, table2], [None, 'TEMPLATE', 'SCI_TABLE']
+        found = props.get('planets')
+        header['PLANETS'] = (found is not None,
+                             'template on BERV + Keplerian velocities')
+        if found is not None:
+            header['PLNSTAR'] = (str(found['star']), 'star in the catalog')
+            header['PLNCAT'] = (os.path.basename(found['catalog']),
+                                'planet catalog used')
+            table3 = Table()
+            orbits = found['orbits']
+            table3['name'] = [str(o.get('name', '?')) for o in orbits]
+            for key in ('period', 'k', 'e', 'omega', 'tp', 't0'):
+                table3[key] = [float(o[key]) if o.get(key) is not None
+                               else np.nan for o in orbits]
+            table3['reference'] = [str(o.get('reference', ''))
+                                   for o in orbits]
+            data.append(table3)
+            names.append('PLANETS')
+        # ---------------------------------------------------------------------
         # Save template to disk
         log.general('Saving template to file: {0}'.format(template_file))
         # ---------------------------------------------------------------------
         # write to file
-        io.write_fits(template_file, data=[None, table1, table2],
-                      header=[header, None, None],
-                      dtype=[None, 'table', 'table'],
-                      names=[None, 'TEMPLATE', 'SCI_TABLE'])
+        io.write_fits(template_file, data=data,
+                      header=[header] + [None] * (len(data) - 1),
+                      dtype=[None] + ['table'] * (len(data) - 1),
+                      names=names)
 
     def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
                             sci_hdict: io.LBLHeader,
