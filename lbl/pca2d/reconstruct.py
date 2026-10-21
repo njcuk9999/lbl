@@ -827,8 +827,9 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
         head["PCA2SKYN"] = (masked, "samples removed as sky-dominated")
     head["PCA2REF"] = (True, "two-frame PCA correction applied")
     head["PCA2BERV"] = (float(row["berv"]), "km/s used to carry the star basis")
-    if "vstar" in row.colnames:
-        # the companions' part of it (registration.orbits)
+    if "vstar" in getattr(row, "colnames", row):
+        # the companions' part of it (registration.orbits); row is a Table
+        #   Row or, after a refit, a plain dict
         head["PCA2VKEP"] = (float(row["vstar"]), "km/s, Keplerian of the star")
     head["PCA2NPIX"] = (touched, "samples corrected")
     head["PCA2MEAN"] = (mean_divided(model, j),
@@ -1264,6 +1265,8 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
     for j in range(model["n_earth"]):
         row["b%d" % (j + 1)] = float(b[0, j])
     row["berv"] = berv
+    if "vstar" in payload["meta"]:
+        row["vstar"] = float(payload["meta"]["vstar"])
     return row, alive
 
 
