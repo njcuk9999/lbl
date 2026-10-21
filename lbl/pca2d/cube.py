@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import warnings
 
 import numpy as np
 from astropy.table import Table
@@ -860,7 +861,10 @@ def _highpass_against_template(coadd, held, grid, config):
                 mask_threshold=reg["mask_threshold"])
             moved[parity] = np.where(shifted_good, shifted, np.nan)
         rows.append(moved)
-    with np.errstate(invalid="ignore"):
+    # a sample no exposure covers is NaN in the template, as it should be:
+    #   numpy says so with a warning of its own, which errstate does not reach
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
         template = np.nanmedian(np.array(rows), axis=0)
     covered = int(np.sum(np.isfinite(template)))
     log("high pass against a median template built in the star's frame:"
