@@ -215,23 +215,31 @@ def request_stamp(request: dict, switches: dict, files: list) -> str:
     return hashlib.sha1(text).hexdigest()[:12]
 
 
-def lbl_products(data_dir: str, name: str, science_subdir: str = 'science',
-                 skip=('pca2d',)) -> list:
-    """Everything LBL made from the object `name`, anywhere in its tree: a
-    file or folder whose name holds `name` between separators.
+#: the folders of DATA_DIR that LBL writes its products into, by object name
+PRODUCT_FOLDERS = ('lblrv', 'lblrdb', 'lblreftable', 'templates', 'masks',
+                   'plots', 'reports')
 
-    Not what it made from a longer name that starts with this one: the
-    labelled corrections of the same star, <object>_pca2d_<label>, are other
-    objects, and are taken out of each name before it is matched."""
+
+def lbl_products(data_dir: str, name: str, science_subdir: str = 'science',
+                 folders=PRODUCT_FOLDERS) -> list:
+    """Everything LBL made from the object `name`: a file or folder of one of
+    LBL's product folders whose name holds `name` between separators.
+
+    Only LBL's folders, never another one a person keeps in DATA_DIR: on
+    2026-10-21 a comparison/ folder holding copies named after the object was
+    swept up with the products. And not what LBL made from a longer name that
+    starts with this one: the labelled corrections of the same star,
+    <object>_pca2d_<label>, are other objects, and are taken out of each name
+    before it is matched."""
     token = re.compile(r'(^|[_.\-]){0}([_.\-]|$)'.format(re.escape(name)))
     science = os.path.join(data_dir, science_subdir)
     longer = sorted((d for d in (os.listdir(science)
                                  if os.path.isdir(science) else [])
                      if d.startswith(name + '_')), key=len, reverse=True)
     found = []
-    for sub in sorted(os.listdir(data_dir)):
+    for sub in folders:
         folder = os.path.join(data_dir, sub)
-        if sub in skip or sub == science_subdir or not os.path.isdir(folder):
+        if not os.path.isdir(folder):
             continue
         for entry in sorted(os.listdir(folder)):
             bare = entry
@@ -279,6 +287,17 @@ def supersede(data_dir: str, corr_dir: str, name: str, work: str, log,
     log('the previous %s and what LBL made from it (%d items, %.1f GB) moved'
         ' to %s: another correction, so none of it may be reused'
         % (name, len(going), total / 1e9, aside), 'warn')
+
+
+def pdf_binder() -> bool:
+    """Whether pypdf is there to bind PDFs. LBL lists it as a dependency since
+    pca2d joined it, but an environment installed before that has none, and
+    nothing of a run may stop for want of a binder."""
+    try:
+        import pypdf                                          # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def run_folder(work: str):
@@ -365,6 +384,10 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     from lbl.pca2d.logger import log
 
     switches, overrides = settings(pca2d, report)
+    if switches['figures'] and not pdf_binder():
+        log('pypdf is not installed (pip install pypdf): the figures and the'
+            ' report are made, but pca2d\'s report and LBL\'s stay two files'
+            ' and the figures are not bound into one PDF', 'warn')
     data_dir = os.path.abspath(data_dir)
     science_root = os.path.join(data_dir, science_subdir)
     label = re.sub(r'[^0-9A-Za-z._+-]', '_', str(switches['name'] or ''))
@@ -520,6 +543,11 @@ def report(data_dir: str, delivered: str, corrected: str,
         if not lbl_report or not os.path.exists(lbl_report):
             log('the report of %s: %s' % (corrected, pdf), 'value')
             return pdf
+        if not pdf_binder():
+            log('pypdf is not installed (pip install pypdf), so the report is'
+                ' two files: pca2d\'s %s and LBL\'s %s' % (pdf, lbl_report),
+                'warn')
+            return lbl_report
         from pypdf import PdfWriter
         writer = PdfWriter()
         writer.append(pdf)

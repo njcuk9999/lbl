@@ -34,7 +34,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from matplotlib.backends.backend_pdf import PdfPages
-from pypdf import PdfReader, PdfWriter
+try:
+    from pypdf import PdfReader, PdfWriter
+except ImportError:                                           # pragma: no cover
+    # PYPDF ONLY BINDS. Without it every figure is still drawn and the LaTeX
+    # report (texreport) still holds them all; only the bound copy is missing.
+    # LBL installed before pypdf was one of its dependencies has none, and
+    # the figures stage stopped on this import (2026-10-21).
+    PdfReader = PdfWriter = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # No sys.path edit here. There was one, pointing at the pca2d/ directory rather
@@ -397,48 +404,55 @@ def main(argv=None):
     # flux panel shows exposures before and after, in every window
     order.extend(per_window)
 
-    writer = PdfWriter()
     page = 0
     bound = 0
-    for title, path in order:
-        if not os.path.exists(path):
-            continue
-        try:
-            reader = PdfReader(path)
-        except Exception as exc:                              # noqa: BLE001
-            failures.append((path, str(exc)))
-            continue
-        writer.add_outline_item(title, page)
-        for p in reader.pages:
-            writer.add_page(p)
-            page += 1
-        bound += 1
     broke = [f for f in failures if not (len(f) > 2 and f[2])]
     skipped = [f for f in failures if len(f) > 2 and f[2]]
-    if failures:
-        note = os.path.join(tmp, "_failures.pdf")
-        body = []
-        if broke:
-            body.append("FAILED\n" + "\n\n".join("%s\n    %s" % (c, e)
-                                                  for c, e, *_ in broke))
-        if skipped:
-            # not errors: a figure deciding it had nothing to draw there. Said
-            # out loud all the same, because a page that is not in the report is
-            # not something anybody notices missing.
-            body.append("NOT DRAWN, AND WHY\n"
-                        + "\n\n".join("%s\n    %s" % (c, e)
-                                       for c, e, *_ in skipped))
-        with PdfPages(note) as pdf:
-            text_pages(pdf, "What did not build", "\n\n".join(body))
-        reader = PdfReader(note)
-        writer.add_outline_item("What did not build", page)
-        for p in reader.pages:
-            writer.add_page(p)
-            page += 1
+    if PdfWriter is None:
+        log("pypdf is not installed (pip install pypdf): the figures are"
+            " not bound into %s, and the report written by LaTeX holds"
+            " them all" % out, "warn")
+    else:
+        writer = PdfWriter()
+        for title, path in order:
+            if not os.path.exists(path):
+                continue
+            try:
+                reader = PdfReader(path)
+            except Exception as exc:                              # noqa: BLE001
+                failures.append((path, str(exc)))
+                continue
+            writer.add_outline_item(title, page)
+            for p in reader.pages:
+                writer.add_page(p)
+                page += 1
+            bound += 1
+        broke = [f for f in failures if not (len(f) > 2 and f[2])]
+        skipped = [f for f in failures if len(f) > 2 and f[2]]
+        if failures:
+            note = os.path.join(tmp, "_failures.pdf")
+            body = []
+            if broke:
+                body.append("FAILED\n" + "\n\n".join("%s\n    %s" % (c, e)
+                                                      for c, e, *_ in broke))
+            if skipped:
+                # not errors: a figure deciding it had nothing to draw there. Said
+                # out loud all the same, because a page that is not in the report is
+                # not something anybody notices missing.
+                body.append("NOT DRAWN, AND WHY\n"
+                            + "\n\n".join("%s\n    %s" % (c, e)
+                                           for c, e, *_ in skipped))
+            with PdfPages(note) as pdf:
+                text_pages(pdf, "What did not build", "\n\n".join(body))
+            reader = PdfReader(note)
+            writer.add_outline_item("What did not build", page)
+            for p in reader.pages:
+                writer.add_page(p)
+                page += 1
 
-    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-    with open(out, "wb") as fh:
-        writer.write(fh)
+        os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+        with open(out, "wb") as fh:
+            writer.write(fh)
 
     # The report's own copy of every figure, and what it needs to be written
     # again after LBL, when the velocities exist (texreport). Taken before the
@@ -481,6 +495,10 @@ def main(argv=None):
         shutil.copytree(tmp, keep)
         log("  individual figures kept in %s" % keep)
     shutil.rmtree(tmp, ignore_errors=True)
+    if PdfWriter is None:
+        log("figures drawn and kept for the report in %s, not bound (no pypdf)"
+            % folder)
+        return None
     log("wrote %s: %d pages from %d figures%s%s"
           % (out, page, bound,
              ", %d failed" % len(broke) if broke else "",

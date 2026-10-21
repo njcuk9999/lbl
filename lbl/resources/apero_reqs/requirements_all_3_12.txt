@@ -120,3 +120,4 @@ Astraeus @ git+https://github.com/kevin218/Astraeus.git
 #    astroplan, astroquery, barycorrpy, batman-package, corner, dynesty, emcee,
 #    exotic-ld, gspread, gspread-pandas, gitchangelog, jaxoplanet, kepmodel,
 #    pandastable, pandasql, pastasoss, spleaf, starry, tinygp, wget, wpca, xlrd, yagmail
+pypdf==6.19.0

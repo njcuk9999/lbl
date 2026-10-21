@@ -78,6 +78,8 @@ def _tree(root):
         "templates/Template_s1d_OBJ_pca2d_sc1d_v_file_A.fits",
         "masks/OBJ_pca2d_pos.fits",
         "pca2d/OBJ/request.yaml",
+        # a folder of the person's own, with copies named after the object
+        "comparison/OBJ_pca2d_report.pdf",
     ]
     for entry in entries:
         path = os.path.join(root, entry)
@@ -105,6 +107,7 @@ def test_a_new_correction_moves_the_old_one_aside_and_deletes_nothing(tmp_path):
     assert not os.path.exists(os.path.join(root, "lblrv", "OBJ_pca2d_OBJ_pca2d"))
     # the delivered object and the labelled correction are untouched
     for kept in ("science/OBJ/a.fits", "science/OBJ_pca2d_test/a.fits",
+                 "comparison/OBJ_pca2d_report.pdf",
                  "lblrv/OBJ_OBJ/a_lbl.fits", "lblrdb/lbl_OBJ_OBJ.rdb",
                  "lblrdb/lbl_OBJ_pca2d_test_OBJ_pca2d_test.rdb"):
         assert os.path.exists(os.path.join(root, kept)), kept

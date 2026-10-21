@@ -212,7 +212,17 @@ def wrap_lines(text, width=96):
 
 # ============================================================ the figures ===
 def pdf_pages(path) -> int:
-    from pypdf import PdfReader
+    """How many pages a figure's PDF has: by pypdf, or, without it, by
+    counting its page objects, which is exact for what matplotlib writes."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        try:
+            with open(path, "rb") as handle:
+                return len(re.findall(rb"/Type\s*/Page(?![a-zA-Z])",
+                                      handle.read()))
+        except OSError:
+            return 0
     try:
         return len(PdfReader(path).pages)
     except Exception:                                          # noqa: BLE001
