@@ -34,13 +34,15 @@ import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import patheffects
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
 
 from lbl.pca2d.logger import log  # noqa: E402
 from lbl.pca2d.nights import row_unit  # noqa: E402
-from lbl.pca2d.grids import parse_window, pixel_shift, window_block  # noqa: E402
+from lbl.pca2d.grids import (log_shift, parse_window,  # noqa: E402
+                             pixel_shift, window_block)
 from lbl.pca2d.plotting import (rows_of,  # noqa: F401
                             live_mask, nan_cmap, raw_log_flux_window,  # noqa: E402
                             sample_source_file, window_parity)
@@ -111,8 +113,34 @@ def _filled(block, ok):
     return np.where(ok, block, np.broadcast_to(fill, block.shape))
 
 
+#: +1 or -1: which way a feature fixed in the observer's frame runs in the
+#: star's frame as the BERV grows, checked on WASP-76's telluric lines
+BERV_SIGN = 1.0
+#: the BERV line's colour, in no palette of these panels: not the red-blue of
+#: the images, not the gold of the samples left out, not the blue and orange
+#: of the flux panel. A thin black edge keeps it on pale and saturated alike
+BERV_LINE = "#00c853"
+#: the images are rasterised at this resolution in the PDF: a 5 nm window is
+#: about 2500 samples at 0.5 km/s, and the panels are 6.8 inches wide, so at
+#: the default 100 dpi most samples would be dropped by the nearest-neighbour
+#: resampling rather than drawn
+RIVER_DPI = 400
+
+
+def berv_track(centre, berv):
+    """The star-frame wavelength, row by row, of a feature fixed in the
+    observer's frame at `centre` for the median row: relativistic Doppler,
+    the shift being atanh(v/c) on a log-wavelength grid."""
+    b = np.asarray(berv, dtype=float)
+    return float(centre) * np.exp(BERV_SIGN * (log_shift(b)
+                                               - log_shift(np.median(b))))
+
+
 def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True):
+    # NOT INTERPOLATED (asked 2026-10-21): every row and every sample is a
+    # block of its own, and a row of ten nights is not smeared into the next
     im = ax.imshow(image, aspect="auto", cmap=cmap or nan_cmap("RdBu_r"),
+                   interpolation="nearest",
                    vmin=-scale, vmax=scale, origin="upper",
                    extent=[x[0], x[-1], image.shape[0] - 0.5, -0.5])
     ax.set_title(title, fontsize=8.5)
@@ -406,6 +434,28 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
             im = panel(axes[r], block[name], x, scale, title + extra, unit=unit,
                        ylabel=r == middle)
 
+    # THE BERV, as a thick black line through the middle of every image
+    # (asked 2026-10-21): where a feature that stands still in the OBSERVER'S
+    # frame, at the window's centre in the median row, falls in each row.
+    # Whatever runs parallel to it moves with the BERV, which is what the
+    # observer block is for; what stands vertical is the star's.
+    # from edge to edge of the image: half a row past the first and the last
+    # row's centre, carried on along the line's own end segments
+    track = berv_track(centre, berv[rows])
+    ys = np.arange(rows.size, dtype=float)
+    if rows.size > 1:
+        track = np.concatenate([[1.5 * track[0] - 0.5 * track[1]], track,
+                                [1.5 * track[-1] - 0.5 * track[-2]]])
+        ys = np.concatenate([[-0.5], ys, [rows.size - 0.5]])
+    for r in range(n_img):
+        axes[r].plot(track, ys, color=BERV_LINE, lw=2.8,
+                     solid_capstyle="butt", zorder=5,
+                     path_effects=[patheffects.Stroke(linewidth=4.6,
+                                                      foreground="black"),
+                                   patheffects.Normal()])
+        axes[r].set_xlim(x[0], x[-1])
+        axes[r].set_ylim(rows.size - 0.5, -0.5)
+
     # the same rows in flux, before and after, from the raw flux the
     # cube build kept around this window (see cache.py)
     ax = axes[-1]
@@ -515,7 +565,7 @@ def main(argv=None):
                              " were corrected with amplitudes refitted on"
                              " (dF/dv)\u00b2 (correct.weight: %s)" % args.weight,
                              fontsize=7, color="#b26a00", ha="left")
-                pdf.savefig(fig)
+                pdf.savefig(fig, dpi=RIVER_DPI)
                 plt.close(fig)
     log("wrote %s" % args.out)
     return None

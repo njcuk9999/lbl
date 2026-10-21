@@ -337,6 +337,16 @@ def main(argv=None):
          "--out", os.path.join(tmp, "sequence.pdf"), *shrink_args(config)], failures)
     run([py, d("weight_spectrum.py"), "--cube", args.cube, "--fit", fit_path,
          "--out", os.path.join(tmp, "weights.pdf")], failures)
+    # which exposures each row of the fit holds: the nights, and the BERV
+    # bundles a night was cut into (input.bundle_*)
+    inp = config.get("input") or {}
+    limits = []
+    for flag, key in (("--berv", "bundle_berv"), ("--minutes", "bundle_minutes"),
+                      ("--max", "bundle_max")):
+        if inp.get(key) not in (None, "", False):
+            limits += [flag, str(inp[key])]
+    run([py, d("berv_bundles.py"), "--cube", args.cube, "--title", str(obj),
+         "--out", os.path.join(tmp, "bundles.pdf"), *limits], failures)
     src = args.source_dir or spectra_dir(config)
     if has_oh_model(src):
         run([py, d("oh_residual.py"), "--cube", args.cube, "--fit", fit_path,
@@ -389,6 +399,8 @@ def main(argv=None):
     order.append(("Parameters", params))
     # the whole chain first, one page per window: it is the overview every
     # other figure is a detail of
+    order.append(("The rows of the fit: nights and BERV bundles",
+                  os.path.join(tmp, "bundles.pdf")))
     order.append(("The sequence, step by step", os.path.join(tmp, "sequence.pdf")))
     order.append(("Variance", os.path.join(args.outdir, "variance.pdf")))
     # not the basis vectors: nine curves over half a million samples is a page

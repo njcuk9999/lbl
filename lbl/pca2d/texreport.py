@@ -87,9 +87,18 @@ CAPTIONS = {
     "Every quantity of the correlations, against time":
         "Every quantity the correlations are measured against, over the"
         " campaign: the conditions the observer components are compared with.",
+    "The rows of the fit: nights and BERV bundles":
+        "Which exposures each row of the fit holds. Top: every night, each"
+        " exposure at its BERV less the night's median; consecutive bundles of"
+        " a night alternate in colour, and the dashed lines are the widest"
+        " range the bundle limit allows. Bottom: the nights that were cut,"
+        " BERV against time, a vertical line at each cut.",
     "The sequence, step by step":
         "The whole chain in one window: the spectra as read, the fitted"
-        " observer model, what was divided out, and what is left.",
+        " observer model, what was divided out, and what is left. The thick"
+        " black line is where a feature fixed in the observer's frame falls in"
+        " each row: the residuals of the observer's frame run parallel to it,"
+        " the star's lines stand vertical.",
     "Variance":
         "The weighted variance each component removes, star and observer"
         " blocks apart.",

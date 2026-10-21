@@ -81,14 +81,14 @@ def _config(**inp):
             "twoframe": {"dtype": "float32"}}
 
 
-def test_bundles_turn_stacking_on_unless_it_is_refused():
-    stack, _ = spcube.resolve_stacking(_config(), 100, 1000)
-    assert stack is False                      # auto, and it fits in memory
-    stack, why = spcube.resolve_stacking(_config(bundle_minutes=30), 100, 1000)
-    assert stack is True and "bundles" in why
-    stack, _ = spcube.resolve_stacking(
-        _config(nightly_stack=False, bundle_minutes=30), 100, 1000)
-    assert stack is False
+def test_the_bundles_never_decide_the_stacking():
+    """They cut stacked nights; with a default of 100 m/s on every
+    configuration, letting them turn stacking on would stack every
+    spectrograph."""
+    for stacking, expected in (("auto", False), (True, True), (False, False)):
+        stack, _ = spcube.resolve_stacking(
+            _config(nightly_stack=stacking, bundle_berv=0.1), 100, 1000)
+        assert stack is expected, stacking
 
 
 def test_the_cube_records_which_exposure_went_into_which_row(tmp_path):
@@ -174,13 +174,73 @@ def test_whole_nights_match_as_they_always_did(tmp_path, monkeypatch):
         [float(r["b1"]) for _, r in by_night] == [0.2, 0.2, 0.4]
 
 
-def test_unset_bundles_do_not_rekey_the_cubes():
+def _nominal(instrument):
     from lbl.pca2d import config as spconfig
     path = os.path.join(os.path.dirname(spconfig.__file__), "nominal.yaml")
-    cfg = spconfig.load_config(path, instrument="NIRPS")
+    return spconfig, spconfig.load_config(path, instrument=instrument)
+
+
+def test_the_default_is_100_m_per_s_of_berv():
+    _, cfg = _nominal("NIRPS")
+    assert cfg["input"]["bundle_berv"] == 0.1
+    assert cfg["input"]["bundle_minutes"] is None
+    assert cfg["input"]["bundle_max"] is None
+
+
+def test_unset_bundles_do_not_rekey_the_cubes():
+    spconfig, cfg = _nominal("NIRPS")
+    for name in ("bundle_minutes", "bundle_berv", "bundle_max"):
+        cfg["input"][name] = None
     key = spconfig.cache_key(cfg)
     for name in ("bundle_minutes", "bundle_berv", "bundle_max"):
-        cfg["input"].pop(name, None)
+        cfg["input"].pop(name)
     assert spconfig.cache_key(cfg) == key
-    cfg["input"]["bundle_minutes"] = 30
+    cfg["input"]["bundle_berv"] = 0.1
     assert spconfig.cache_key(cfg) != key
+
+
+def test_bundles_do_not_rekey_a_cube_of_single_exposures():
+    spconfig, cfg = _nominal("NIRPS")
+    cfg["input"]["nightly_stack"] = False
+    key = spconfig.cache_key(cfg)
+    cfg["input"]["bundle_berv"] = 0.05
+    assert spconfig.cache_key(cfg) == key
+
+
+def test_the_berv_line_runs_where_the_observer_frame_goes():
+    """A feature fixed in the observer's frame sits at +BERV in the star's
+    (the barycentric correction adds it), relativistically: the line of the
+    river plots, checked against WASP-76's telluric residuals."""
+    from lbl.pca2d.figures.sequence import berv_track
+    c = 299792.458
+    berv = np.array([-10.0, 0.0, 10.0])
+    track = berv_track(1000.0, berv)
+    assert track[1] == pytest.approx(1000.0)
+    assert np.all(np.diff(track) > 0)
+    beta = 10.0 / c
+    assert track[2] == pytest.approx(1000.0 * np.sqrt((1 + beta) / (1 - beta)),
+                                     rel=1e-12)
+
+
+def test_the_report_page_of_the_bundles(tmp_path):
+    from lbl.pca2d.figures import berv_bundles
+    cube = tmp_path / "cube"
+    cube.mkdir()
+    rows = []
+    for k in range(12):                     # one night, 12 exposures, 2 bundles
+        rows.append(("e%02dt.fits" % k, "e00t.fits" if k < 6 else "e06t.fits",
+                     "2024-10-11#%02d" % (k // 6), 2460600.6 + k / 288.0,
+                     5.0 - 0.02 * k))
+    rows.append(("f00t.fits", "f00t.fits", "2024-10-12", 2460601.6, 4.0))
+    Table(rows=rows, names=("filename", "row", "group", "bjd", "berv")).write(
+        str(cube / "members.csv"), format="ascii.csv")
+    out = tmp_path / "bundles.pdf"
+    assert berv_bundles.main(["--cube", str(cube), "--out", str(out),
+                              "--berv", "0.1"]) == 0
+    assert out.stat().st_size > 1000
+    # a cube without the list still gives a page, which says why
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    assert berv_bundles.main(["--cube", str(bare), "--out",
+                              str(tmp_path / "note.pdf")]) == 0
+    assert (tmp_path / "note.pdf").exists()

@@ -156,7 +156,8 @@ def _save_cache(path: str, grid, data, sigma, trans, meta):
     if _PENDING_MEMBERS is not None:
         # which exposure went into which row: what `correct` matches an
         # exposure to its row by, once a night is cut into bundles
-        Table(rows=_PENDING_MEMBERS, names=("filename", "row", "group")
+        Table(rows=_PENDING_MEMBERS,
+              names=("filename", "row", "group", "bjd", "berv")
               ).write(os.path.join(tmp, MEMBERS_FILE), format="ascii.csv",
                       overwrite=True)
     shutil.rmtree(path, ignore_errors=True)
@@ -231,14 +232,7 @@ def resolve_stacking(config, n_files, n_pixels):
     if asked is True or str(asked).lower() == "true":
         return True, "asked for"
     if asked is False or str(asked).lower() == "false":
-        if spnights.bundle_settings(inp):
-            log("input.bundle_* are set and nightly_stack is false: every"
-                " exposure is fitted on its own, and the bundles are not"
-                " used", "warn")
         return False, "asked for; the fit needs about %.1f GB" % need
-    if spnights.bundle_settings(inp):
-        # a bundle IS a coadd: asking for bundles is asking for stacking
-        return True, "bundles within the nights asked for"
     if not budget:
         return False, "auto, and no output.max_memory_gb to weigh it against"
     if need <= budget:
@@ -333,7 +327,9 @@ class _Coadder:
         for meta in self._meta:
             self.members.append((os.path.basename(str(meta["filename"])),
                                  os.path.basename(str(merged["filename"])),
-                                 str(self._label)))
+                                 str(self._label),
+                                 float(meta.get("bjd", np.nan)),
+                                 float(meta.get("berv", np.nan))))
         for parity in range(self.n_parity):
             slot = self.n_groups * self.n_parity + parity
             # UN POIDS NON NUL N'EST PAS UN POIDS UTILISABLE. sigma vaut
