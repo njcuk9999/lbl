@@ -129,6 +129,18 @@ general:
     target_berv: 0.0
     spline_order: 3
     mask_threshold: 0.999
+    orbits: []              # THE STAR'S FRAME FOLLOWS ITS COMPANIONS when this
+                            # holds their Keplerian orbits (period [d], k [m/s],
+                            # e, omega [deg], tp or t0 [BJD], the format of
+                            # lbl/resources/planets/*.yaml): every shift into the
+                            # star's frame is then the BERV composed
+                            # relativistically with their velocity at the
+                            # exposure's BJD, so a planet's reflex motion is not
+                            # left for the observer components to follow (on
+                            # WASP-76 they took a third of K). LBL's PLANETS
+                            # option fills it per object; the BERV itself is
+                            # kept as berv_bary, the velocity as vstar [km/s].
+                            # Empty: the BERV alone
 
   highpass:
     method: savgol

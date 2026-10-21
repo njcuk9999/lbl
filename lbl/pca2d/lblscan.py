@@ -204,7 +204,9 @@ def load_run(obj, tag, suffix, outputs, lbl_dir):
         if "vrad_fit" in c.columns.names:
             keep = ~np.asarray(c["rejected"], bool) & np.isfinite(np.asarray(c["vrad_fit"], float))
             run["vrad_fit"] = np.asarray(c["vrad_fit"], float)[keep]
-            run["berv"] = np.asarray(c["berv"], float)[keep]
+            # the BERV itself: with orbits, berv is the star's frame
+            column = "berv_bary" if "berv_bary" in c.columns.names else "berv"
+            run["berv"] = np.asarray(c[column], float)[keep]
     return run
 
 

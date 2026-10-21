@@ -569,13 +569,47 @@ def reads_natively(config):
     return instrument in NATIVE and source in ("", "APERO", "CADC")
 
 
+def star_frame(payload, config):
+    """The star's frame of one exposure: its BERV composed with the Keplerian
+    velocity of the star's companions at its BJD (registration.orbits).
+
+    `berv` is what every shift into the star's frame reads (the cube's rows,
+    the template, the fit, the correction), so it becomes the velocity of that
+    frame, (berv - vstar) / (1 - berv vstar / c2): the star at +vstar is
+    where a star at rest would be under that BERV. The BERV itself is kept as
+    `berv_bary`, for what is about the barycentre (the diagnostics of a bias
+    with BERV), and the companions' velocity as `vstar` [km/s]. Without
+    orbits nothing changes. Applied once: a payload that has berv_bary is
+    left as it is.
+    """
+    orbits = ((config or {}).get("registration") or {}).get("orbits") or []
+    meta = payload.get("meta")
+    if not orbits or meta is None or "berv_bary" in meta:
+        return payload
+    from lbl.science import planets
+    from .grids import C_KMS
+    berv = float(meta.get("berv", np.nan))
+    bjd = float(meta.get("bjd", np.nan))
+    vstar = float(planets.star_velocity([bjd], orbits)[0]) / 1000.0
+    meta["berv_bary"] = berv
+    meta["vstar"] = vstar
+    meta["berv"] = (berv - vstar) / (1.0 - berv * vstar / C_KMS ** 2)
+    return payload
+
+
 def read_any(path, config, inst=None):
-    """Un spectre, par le lecteur que la configuration designe.
+    """Un spectre, par le lecteur que la configuration designe, dans le
+    repere de l'etoile que la configuration designe (star_frame).
 
     C'est le seul point ou pca2d decide comment lire: cube, reconstruct et
     plotting passent par ici, donc ajouter un instrument ne touche qu'a
     `reads_natively`.
     """
+    return star_frame(_read_any(path, config, inst), config)
+
+
+def _read_any(path, config, inst=None):
+    """read_any, without the star's frame"""
     if reads_natively(config):
         from . import tfits as sptf
         return sptf.read_tfits(path)

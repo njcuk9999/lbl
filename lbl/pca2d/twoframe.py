@@ -3534,6 +3534,11 @@ def main(argv=None):
     table["filename"] = meta["filename"]
     table["bjd"] = bjd
     table["berv"] = np.asarray(meta["berv"], dtype=float)
+    # with orbits, berv is the star's frame; the BERV itself and the
+    #   companions' velocity beside it (readers.star_frame)
+    for key in ("berv_bary", "vstar"):
+        if key in getattr(meta, "colnames", meta):
+            table[key] = np.asarray(meta[key], dtype=float)
     table["airmass"] = np.asarray(meta["airmass"], dtype=float)
     table["snr_band"] = np.asarray(meta["snr_band"], dtype=float)
     table["chi2_red"] = chi2_red

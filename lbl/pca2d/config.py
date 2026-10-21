@@ -180,6 +180,12 @@ DEFAULTS = {
         # spline: it bends toward the straight line a gap is filled with, and
         # beside an OH core that leaves sky in samples that read as valid
         "edge_pixels": 1,
+        # the Keplerian orbits of the star's companions (period, k, e, omega,
+        # tp or t0, as lbl/resources/planets/*.yaml): the star's frame is then
+        # the BERV composed with their velocity at each exposure, not the BERV
+        # alone (readers.star_frame). Set per object by LBL's PLANETS option.
+        # Empty: the BERV alone
+        "orbits": [],
     },
     "highpass": {
         "method": "savgol",          # 'savgol' or 'none'
@@ -1221,7 +1227,10 @@ def cache_key(config: dict) -> str:
         # domain.bands only chooses which columns the *fit* sees, so it must not
         # invalidate a cube that took twenty minutes to build
         "domain": {k: v for k, v in config["domain"].items() if k != "bands"},
-        "registration": config["registration"],
+        # orbits omitted when there are none, so that the key's appearance does
+        # not orphan the cubes built before it (the same as against_template)
+        "registration": {k: v for k, v in config["registration"].items()
+                         if not (k == "orbits" and not v)},
         # the window the width resolved to, not the width: dv is hashed with
         # the domain, and a config in samples from before width_kms has to
         # keep the key its cube was built under

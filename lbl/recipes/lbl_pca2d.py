@@ -338,10 +338,46 @@ def request_block(overrides: dict, instrument: str, data_source,
     return block
 
 
+#: what an orbit carries into pca2d's configuration
+ORBIT_KEYS = ('name', 'period', 'k', 'e', 'omega', 'tp', 't0', 'reference')
+
+
+def object_orbits(name: str, files: list, data_dir: str, log) -> list:
+    """The Keplerian orbits of an object's companions, from LBL's planet
+    catalogs (lbl.science.planets), for pca2d's star frame
+    (registration.orbits): looked up by the object's name and the OBJECT
+    and DRSOBJN of its first file. [] when there is none."""
+    from astropy.io import fits as _fits
+    from lbl.science import planets
+    header_names = []
+    if files:
+        for ext in (0, 1):
+            try:
+                header = _fits.getheader(files[0], ext)
+            except Exception:                                 # noqa: BLE001
+                continue
+            header_names += [header.get('OBJECT'), header.get('DRSOBJN')]
+    found = planets.orbits_for(planets.star_names(name, header_names),
+                               data_dir)
+    if found is None:
+        return []
+    orbits = []
+    for orbit in found['orbits']:
+        orbits.append({key: (float(orbit[key]) if key not in ('name',
+                                                              'reference')
+                             else str(orbit[key]))
+                       for key in ORBIT_KEYS if orbit.get(key) is not None})
+    log('PCA2D: the star frame of %s follows its %d known orbit(s) (%s), '
+        'not the BERV alone' % (name, len(orbits), found['catalog']), 'info')
+    return orbits
+
+
 def write_request(path: str, objects: list, block: dict, cache_dir: str,
-                  model_dir: str, suffix: str = SUFFIX) -> None:
+                  model_dir: str, suffix: str = SUFFIX,
+                  orbits: dict = None) -> None:
     """The request as a pca2d configuration file: the nominal one, with one
-    block per object holding the same settings."""
+    block per object holding the same settings, and each object's orbits
+    (registration.orbits) when PLANETS found some."""
     nominal = read_nominal()
     output = nominal.setdefault('general', dict()).setdefault('output', dict())
     output['cache_directory'] = cache_dir
@@ -353,6 +389,10 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
                                                         run=False,
                                                         suffix=suffix)
     nominal['objects'] = {name: copy.deepcopy(block) for name in objects}
+    for name, found in (orbits or dict()).items():
+        if found:
+            nominal['objects'][name].setdefault('registration', dict())[
+                'orbits'] = found
     with open(path, 'w') as handle:
         handle.write('# what lbl_pca2d asked of pca2d for %s: the nominal'
                      ' configuration\n# of lbl/pca2d, with each object\'s'
@@ -364,21 +404,22 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
 def main(instrument: str, data_dir: str, object_science: str,
          object_comparison: str = None, data_source: str = None,
          pca2d=None, input_file: str = None, science_subdir: str = 'science',
-         report: bool = True, skip=None, **kwargs) -> tuple:
+         report: bool = True, skip=None, planets: bool = False,
+         **kwargs) -> tuple:
     """Correct one object, and return the names LBL goes on with:
     (object_science, object_comparison). skip is the wrap's
-    SKIP_LBL_PCA2D."""
+    SKIP_LBL_PCA2D, planets its PLANETS."""
     _ = kwargs
     names = correct(instrument, data_dir, [object_science],
                     {object_science: object_comparison}, data_source, pca2d,
-                    input_file, science_subdir, report, skip)
+                    input_file, science_subdir, report, skip, planets)
     return names[object_science]
 
 
 def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
           data_source: str = None, pca2d=None, input_file: str = None,
           science_subdir: str = 'science', report: bool = True, skip=None,
-          **kwargs) -> dict:
+          planets: bool = False, **kwargs) -> dict:
     """Correct several objects against one observer basis (pca2d.joint), each
     with its own star spectrum. {object: (object_science, object_comparison)}.
     skip is the wrap's SKIP_LBL_PCA2D.
@@ -386,17 +427,19 @@ def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
     _ = kwargs
     return correct(instrument, data_dir, list(objects), dict(comparisons),
                    data_source, pca2d, input_file, science_subdir, report,
-                   skip)
+                   skip, planets)
 
 
 def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
-            input_file, science_subdir, report=True, skip=None) -> dict:
+            input_file, science_subdir, report=True, skip=None,
+            planets=False) -> dict:
     """The correction of one object, or of several together. Returns
     {object: (corrected object, its comparison)}.
 
     skip is the wrap's SKIP_LBL_PCA2D: None makes the correction again only
     if the request changed, True keeps the one on disk even then, False makes
-    it again in every case (as overwrite=True).
+    it again in every case (as overwrite=True). planets is the wrap's
+    PLANETS: each object's star frame then follows its known orbits.
 
     The comparison follows the science object when it was the science object
     (the usual case, each object its own template); another star's template
@@ -446,7 +489,14 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
 
     files = {name: input_files(os.path.join(science_root, name), input_file)
              for name in objects}
-    stamp = request_stamp(dict(block, objects=list(objects)), switches,
+    orbits = {name: object_orbits(name, files[name], data_dir, log)
+              for name in objects} if planets else dict()
+    request = dict(block, objects=list(objects))
+    # the orbits are part of the request only when there are some, so that a
+    #   correction made before PLANETS existed keeps its stamp
+    if any(orbits.values()):
+        request['orbits'] = orbits
+    stamp = request_stamp(request, switches,
                           [f for name in objects for f in files[name]])
     state_file = os.path.join(work, 'done.json')
     state = dict()
@@ -484,7 +534,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     request_file = os.path.join(work, 'request.yaml')
     write_request(request_file, objects, block,
                   os.path.join(pca2d_root, 'cache'),
-                  os.path.join(data_dir, 'models'), suffix)
+                  os.path.join(data_dir, 'models'), suffix, orbits)
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
                   names[name][0], work, log, science_subdir)

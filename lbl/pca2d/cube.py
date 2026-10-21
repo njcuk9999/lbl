@@ -371,7 +371,8 @@ class _Coadder:
         return self.data[:n_rows], self.sigma[:n_rows], trans, Table(self.rows)
 
 
-_MEAN_KEYS = ("bjd", "mjdmid", "berv", "bervmax", "airmass", "airmass_start",
+_MEAN_KEYS = ("bjd", "mjdmid", "berv", "berv_bary", "vstar", "bervmax",
+              "airmass", "airmass_start",
               "airmass_end", "seeing", "humidity", "sun_elevation",
               "median_flux", "nan_fraction")
 
@@ -388,6 +389,10 @@ def _merge_meta(rows):
         return dict(rows[0])
     merged = dict(rows[0])
     for key in _MEAN_KEYS:
+        # only the keys the rows have: berv_bary and vstar exist only with
+        #   orbits, and NaN columns would appear in every other cube
+        if key not in rows[0]:
+            continue
         values = np.array([row.get(key, np.nan) for row in rows], dtype=float)
         with np.errstate(invalid="ignore"):
             merged[key] = float(np.nanmean(values)) if np.any(np.isfinite(values)) \
@@ -502,7 +507,8 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     log("nightly stacking: %s (%s)" % ("on" if stack else "off", why), "value")
     files, labels = spnights.group_files(
         files, stack, extension=1,
-        bundle=spnights.bundle_settings(inp) if stack else None)
+        bundle=spnights.bundle_settings(inp) if stack else None,
+        orbits=config["registration"].get("orbits"))
     n_groups = len(set(labels))
     _check_memory(config, 2 * n_groups, n_pixels)
 
@@ -633,7 +639,8 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
     log("nightly stacking: %s (%s)" % ("on" if stack else "off", why), "value")
     files, labels = spnights.group_files(
         files, stack, extension=0,
-        bundle=spnights.bundle_settings(config["input"]) if stack else None)
+        bundle=spnights.bundle_settings(config["input"]) if stack else None,
+        orbits=config["registration"].get("orbits"))
     n_groups = len(set(labels))
     n_pixels = grid.size
     _check_memory(config, n_groups, n_pixels)

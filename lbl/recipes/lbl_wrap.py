@@ -230,7 +230,8 @@ def main(runparams: dict):
                               science_subdir=runparams.get('SCIENCE_SUBDIR',
                                                            'science'),
                               report=runparams.get('REPORT', True),
-                              skip=runparams['SKIP_LBL_PCA2D'])
+                              skip=runparams['SKIP_LBL_PCA2D'],
+                              planets=bool(runparams.get('PLANETS', False)))
             if isinstance(pca2d, dict) and pca2d.get('joint'):
                 # every science object against ONE observer basis, done once,
                 # at the first of them

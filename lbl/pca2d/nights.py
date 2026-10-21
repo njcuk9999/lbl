@@ -96,6 +96,43 @@ def header_berv(path: str):
     return None
 
 
+def header_bjd(path: str):
+    """The exposure's BJD, from its headers, or None."""
+    try:
+        with fits.open(path) as hdulist:
+            for hdu in hdulist[:2]:
+                value = hdu.header.get("BJD")
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if np.isfinite(value):
+                    return value
+    except Exception:                                   # noqa: BLE001
+        return None
+    return None
+
+
+def frame_bervs(files, bervs, orbits):
+    """The BERVs as the star's frame sees them: composed with the Keplerian
+    velocity of its companions (registration.orbits), as readers.star_frame
+    does for the cube. A bundle is a span of the star's frame, so with a
+    planet it is cut by that and not by the BERV alone."""
+    if not orbits:
+        return bervs
+    from lbl.science import planets
+    from .grids import C_KMS
+    out = []
+    for path, berv in zip(files, bervs):
+        bjd = header_bjd(path)
+        if berv is None or bjd is None:
+            out.append(berv)
+            continue
+        vstar = float(planets.star_velocity([bjd], orbits)[0]) / 1000.0
+        out.append((berv - vstar) / (1.0 - berv * vstar / C_KMS ** 2))
+    return out
+
+
 def bundle_settings(inp: dict):
     """input.bundle_minutes, bundle_berv and bundle_max, or None when none is
     set: the limits a night is cut by, within a night, into bundles."""
@@ -174,12 +211,13 @@ def row_unit(source) -> str:
 
 
 def group_files(files: list[str], stack: bool, extension: int = 0,
-                bundle=None):
+                bundle=None, orbits=None):
     """Sort files chronologically and label each with its output group.
 
     Returns (files, labels). With stack = False every file is its own group, so
     the rest of the pipeline needs no special case. With `bundle`
-    (bundle_settings), each night is cut into bundles (split_nights).
+    (bundle_settings), each night is cut into bundles (split_nights), by
+    the star's frame when the star has `orbits` (frame_bervs).
     """
     stamps = [timestamp_from_name(path) for path in files]
     missing = [i for i, s in enumerate(stamps) if s is None]
@@ -218,6 +256,7 @@ def group_files(files: list[str], stack: bool, extension: int = 0,
                         sum(b is None for b in bervs),
                         files[[b is None for b in bervs].index(True)],
                         ", ".join(BERV_KEYS)))
+            bervs = frame_bervs(files, bervs, orbits)
         labels = split_nights(stamps, labels, bundle, bervs)
         n_groups = len(set(labels))
         log("bundles within the nights (%s): %d exposures in %d bundles over"

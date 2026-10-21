@@ -827,6 +827,9 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
         head["PCA2SKYN"] = (masked, "samples removed as sky-dominated")
     head["PCA2REF"] = (True, "two-frame PCA correction applied")
     head["PCA2BERV"] = (float(row["berv"]), "km/s used to carry the star basis")
+    if "vstar" in row.colnames:
+        # the companions' part of it (registration.orbits)
+        head["PCA2VKEP"] = (float(row["vstar"]), "km/s, Keplerian of the star")
     head["PCA2NPIX"] = (touched, "samples corrected")
     head["PCA2MEAN"] = (mean_divided(model, j),
                         "observer-frame parity mean divided out")
@@ -1014,13 +1017,15 @@ def cut_key(path, row, names_by_night, members=None):
     return names_by_night.get(night, own)
 
 
-def rows_by_night(model, args):
+def rows_by_night(model, args, config=None):
     """One (path, row) pair per t.fits in --source-dir, matched on its night.
 
     The row's coefficients are the night's; the BERV is the exposure's own,
     read from its header, because the star basis has to be placed where that
     exposure actually saw the star and exposures within a night differ by a
-    fraction of a km/s.
+    fraction of a km/s. With orbits in the configuration it is the star's
+    frame of that exposure, the BERV composed with the companions' velocity
+    (readers.star_frame), as everywhere else.
     """
     import glob
     coeffs = model["coeffs"]
@@ -1035,7 +1040,7 @@ def rows_by_night(model, args):
     out, missing = [], 0
     for path in sorted(glob.glob(os.path.join(args.source_dir, "*t.fits"))):
         try:
-            payload = sptf.read_tfits(path)
+            payload = _readers.star_frame(sptf.read_tfits(path), config)
         except Exception:                                     # noqa: BLE001
             missing += 1
             continue
@@ -1047,6 +1052,8 @@ def rows_by_night(model, args):
                 continue
             row = Table(coeffs)[by_row[name]]
             row["berv"] = float(meta["berv"])  # this exposure, not the row
+            if "vstar" in row.colnames:
+                row["vstar"] = float(meta["vstar"])
             out.append((path, row))
             continue
         night = int(np.floor(float(meta["bjd"]) - 0.5))
@@ -1055,6 +1062,8 @@ def rows_by_night(model, args):
             continue
         row = Table(coeffs)[index[night]]
         row["berv"] = float(meta["berv"])      # this exposure, not the night
+        if "vstar" in row.colnames:
+            row["vstar"] = float(meta["vstar"])
         out.append((path, row))
     return out, missing
 
@@ -1303,8 +1312,14 @@ def correct_many(model, args):
     if (args.all or args.by_night) and not args.source_dir:
         raise SystemExit("--source-dir is required with --all or --by-night:"
                          " where the delivered t.fits are")
+    # the configuration first: rows_by_night places each exposure in the
+    #   star's frame it describes (its orbits)
+    config = None
+    if args.config:
+        from .config import load_config
+        config = load_config(args.config)
     if args.by_night:
-        pairs, missing = rows_by_night(model, args)
+        pairs, missing = rows_by_night(model, args, config)
         log("  %d exposures matched to a fitted row, %d skipped"
               % (len(pairs), missing))
     elif args.all:
@@ -1313,16 +1328,13 @@ def correct_many(model, args):
     else:
         pairs = [(args.file, None)]
     covered = []
-    shifter = config = None
+    shifter = None
     # LA CONFIGURATION SERT AUSSI A ECRIRE, PAS SEULEMENT A REAJUSTER. Elle dit
     # par quel lecteur le spectre a ete lu, donc quelle extension porte le flux
     # a remplacer et dans quel repere sont ses longueurs d'onde. Elle n'etait
     # chargee que sous --refit, si bien qu'une correction sans reajustement
     # (correct.weight: flux) retombait sur la table d'extensions d'APERO et
     # s'arretait sur « unsupported INSTRUME 'HARPS' » (2026-10-14).
-    if args.config:
-        from .config import load_config
-        config = load_config(args.config)
     if getattr(args, "weight", "flux") == "velocity":
         # measuring b in another metric means measuring it again
         args.refit = True

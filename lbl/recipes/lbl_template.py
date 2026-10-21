@@ -296,6 +296,8 @@ def run_template(inst, objname: str, objkind: str):
             planets.star_names(objname, header_names),
             inst.params['DATA_DIR'])
     if planets_used is not None:
+        log.info('PLANETS: the template is made on BERV + the Keplerian '
+                 'velocity of each spectrum, in one pass')
         rv0 = planets.star_velocity(bjd, planets_used['orbits'])
         planets_used['velocity'] = np.array(rv0)
         msg = ('PLANETS: velocity of the star from {0:.1f} to {1:.1f} m/s '

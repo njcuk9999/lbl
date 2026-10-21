@@ -286,9 +286,8 @@ def orbits_for(names: List[str], data_dir: Optional[str] = None
                     'template iterates on the velocities'.format(
                         found['star'], found['catalog']))
         return None
-    log.info('PLANETS: {0} found in {1}, {2} orbit(s); the template is made '
-             'on BERV + their velocities, in one pass'.format(
-                 found['star'], found['catalog'], len(orbits)))
+    log.info('PLANETS: {0} found in {1}, {2} orbit(s)'.format(
+        found['star'], found['catalog'], len(orbits)))
     for orbit in orbits:
         log.general('\t{0}: P = {1} d, K = {2} m/s, e = {3}, omega = {4} deg'
                     ' ({5})'.format(orbit.get('name', '?'), orbit['period'],
