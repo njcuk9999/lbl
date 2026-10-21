@@ -35,6 +35,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import patheffects
+from matplotlib.lines import Line2D
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -120,6 +121,8 @@ BERV_SIGN = 1.0
 #: the images, not the gold of the samples left out, not the blue and orange
 #: of the flux panel. A thin black edge keeps it on pale and saturated alike
 BERV_LINE = "#00c853"
+BERV_EDGE = [patheffects.Stroke(linewidth=4.6, foreground="black"),
+             patheffects.Normal()]
 #: the images are rasterised at this resolution in the PDF: a 5 nm window is
 #: about 2500 samples at 0.5 km/s, and the panels are 6.8 inches wide, so at
 #: the default 100 dpi most samples would be dropped by the nearest-neighbour
@@ -134,6 +137,24 @@ def berv_track(centre, berv):
     b = np.asarray(berv, dtype=float)
     return float(centre) * np.exp(BERV_SIGN * (log_shift(b)
                                                - log_shift(np.median(b))))
+
+
+def berv_steps(track, x):
+    """The BERV line as a staircase on the image's pixels: (xs, ys).
+
+    Each row's position snapped to the nearest column centre of `x`, held
+    from the row's top edge (i - 0.5) to its bottom one (i + 0.5); the line
+    then steps sideways at the edge to the next row's column."""
+    x = np.asarray(x, dtype=float)
+    track = np.asarray(track, dtype=float)
+    column = np.clip(np.searchsorted(x, track), 1, x.size - 1)
+    nearer = np.where(np.abs(x[column - 1] - track) <= np.abs(x[column] - track),
+                      column - 1, column)
+    snapped = x[nearer]
+    rows = np.arange(track.size, dtype=float)
+    xs = np.repeat(snapped, 2)
+    ys = np.ravel(np.column_stack([rows - 0.5, rows + 0.5]))
+    return xs, ys
 
 
 def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True):
@@ -439,22 +460,25 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     # frame, at the window's centre in the median row, falls in each row.
     # Whatever runs parallel to it moves with the BERV, which is what the
     # observer block is for; what stands vertical is the star's.
-    # from edge to edge of the image: half a row past the first and the last
-    # row's centre, carried on along the line's own end segments
-    track = berv_track(centre, berv[rows])
-    ys = np.arange(rows.size, dtype=float)
-    if rows.size > 1:
-        track = np.concatenate([[1.5 * track[0] - 0.5 * track[1]], track,
-                                [1.5 * track[-1] - 0.5 * track[-2]]])
-        ys = np.concatenate([[-0.5], ys, [rows.size - 0.5]])
+    # ON THE PIXELS, NOT BETWEEN THEM (asked 2026-10-21): in each row the
+    # line stands on the column nearest the track, from the row's top edge to
+    # its bottom one, and steps sideways at the edge between two rows. Drawn
+    # from row centre to row centre, a few rows made long diagonals that cut
+    # across pixels the feature is not in
+    xs, ys = berv_steps(berv_track(centre, berv[rows]), x)
     for r in range(n_img):
-        axes[r].plot(track, ys, color=BERV_LINE, lw=2.8,
-                     solid_capstyle="butt", zorder=5,
-                     path_effects=[patheffects.Stroke(linewidth=4.6,
-                                                      foreground="black"),
-                                   patheffects.Normal()])
+        axes[r].plot(xs, ys, color=BERV_LINE, lw=2.8, solid_capstyle="butt",
+                     solid_joinstyle="miter", zorder=5,
+                     path_effects=BERV_EDGE)
         axes[r].set_xlim(x[0], x[-1])
         axes[r].set_ylim(rows.size - 0.5, -0.5)
+    # what the line is, once, above the top image on the right
+    axes[0].legend(handles=[Line2D([], [], color=BERV_LINE, lw=2.8,
+                                   path_effects=BERV_EDGE,
+                                   label="Fixed in observer's frame")],
+                   loc="lower right", bbox_to_anchor=(1.0, 1.0),
+                   frameon=False, fontsize=8, handlelength=2.6,
+                   borderaxespad=0.15)
 
     # the same rows in flux, before and after, from the raw flux the
     # cube build kept around this window (see cache.py)
