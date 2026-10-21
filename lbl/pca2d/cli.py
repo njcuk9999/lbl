@@ -102,7 +102,7 @@ SETTING_FLAGS = (
      "coadd each night: true, false, or auto"),
     ("--bundle-minutes", "input.bundle_minutes", float,
      "cut each night into bundles of at most this many minutes, each its own"
-     " row of the fit; turns stacking on unless --nightly-stack false"),
+     " row of the fit (only with stacking)"),
     ("--bundle-berv", "input.bundle_berv", float,
      "or of at most this BERV range, in km/s"),
     ("--bundle-max", "input.bundle_max", int,

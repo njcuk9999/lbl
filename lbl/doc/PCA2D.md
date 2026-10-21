@@ -102,7 +102,8 @@ The short names: `velocity_term`, `iters`, `shrink`, `nsig_cut`,
 `bias_nsig`, `column_frac`, `column_chi2`, `weight`, `mask`, `mask_share`,
 `width_kms` (or `high_pass`), `dv`, `nightly_stack`, `bundle_minutes`,
 `bundle_berv`, `bundle_max`, `min_rjd`, `max_rjd`, `drs_modes`,
-`min_pixel_snr`, `windows`, `cache_directory`.
+`min_pixel_snr`, `windows`, `cache_directory`. An unknown key stops the run
+before anything is read, with the list of what is accepted.
 
 ## What a row of the fit is
 
@@ -112,19 +113,27 @@ Each row of the fit is one exposure, a whole night, or a bundle of a night:
 |---|---|
 | `nightly_stack=False` | every exposure on its own: the most information, the most memory |
 | `nightly_stack=True` (nominal for NIRPS) | every night coadded: NIRPS's three or four exposures of a visit become one row |
-| `bundle_minutes=20` | each night cut into bundles of at most 20 minutes |
-| `bundle_berv=0.1` | or of at most 0.1 km/s of BERV |
+| `bundle_berv=0.1` (the default) | with stacking, each night cut into bundles of at most 0.1 km/s of BERV |
+| `bundle_minutes=20` | or of at most 20 minutes |
 | `bundle_max=6` | or of at most six exposures |
 
-A long sequence, a transit night of sixty exposures over five hours, is not
-one sky: the airmass, so the water column, and the airglow change within it.
-The bundles keep that and still coadd what does not change. Any `bundle_*`
-turns the stacking on unless `nightly_stack=False`; the limits can be
-combined, and a bundle closes as soon as one of them is reached. A night that
-fits in one bundle stays one row. Every exposure is then corrected with its
-own amplitudes, solved against the fitted basis, and matched to the row it
-went into by the list the cube keeps of them (`members.csv` in the cube). An unknown key
-stops the run before anything is read, with the list of what is accepted.
+The cube is in the observer's frame, so a coadd smears the star by the BERV
+range of what it holds, and a long sequence is not one sky either: over a
+five-hour WASP-76 transit night the BERV moves by 600 m/s and the airmass, so
+the water column, and the airglow change. The bundles keep that apart and
+still coadd what does not change. With the default 100 m/s, an ordinary NIRPS
+visit stays one row: over twenty targets, the median BERV range of a night is
+4 to 35 m/s. The limits can be combined, and a bundle closes as soon as one of
+them is reached; `bundle_berv=None` gives whole nights again. They only cut
+stacked nights: the stacking itself is `nightly_stack`'s. Every exposure is
+then corrected with its own amplitudes, solved against the fitted basis, and
+matched to the row it went into by the list the cube keeps of them
+(`members.csv` in the cube). The report shows the rows: every night, its
+exposures by BERV and the bundles it was cut into, before the river plots.
+
+In the river plots, the thick green line is where a feature fixed in the
+observer's frame falls in each row: the observer's residuals run parallel to
+it, and the star's lines stand vertical.
 
 For NIRPS, the DRS mode follows the LBL instrument (`NIRPS_HE` keeps the HE
 files). The folder is the object: the OBJECT keyword of the files is not

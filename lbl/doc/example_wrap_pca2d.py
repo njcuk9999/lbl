@@ -115,10 +115,13 @@ if __name__ == "__main__":
         # the figures of the correction (river plots, components...): they
         #   follow REPORT unless set here
         # figures=True,
-        # --- what a row of the fit is. For NIRPS, by default, a whole night
-        #     coadded. A long sequence (a transit night) is better cut:
-        # bundle_minutes=20,                # bundles of at most 20 minutes
-        # bundle_berv=0.1,                  # or of 0.1 km/s of BERV
+        # --- what a row of the fit is. For NIRPS, by default, a night
+        #     coadded, cut into bundles of at most 0.1 km/s of BERV (a visit
+        #     of three or four exposures stays one row, a transit night is
+        #     cut into several):
+        # bundle_berv=0.05,                 # bundles of at most 50 m/s
+        # bundle_minutes=20,                # or of at most 20 minutes
+        # bundle_berv=None,                 # whole nights
         # nightly_stack=False,              # or every exposure on its own
         # --- anything else is a key of lbl/pca2d/nominal.yaml, which says
         #     what each one does and why it has the value it has. Examples:
