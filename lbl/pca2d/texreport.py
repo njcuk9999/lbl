@@ -2469,6 +2469,7 @@ def run_rows(outdir, cube=None):
 
 #: figures of the figures stage whose every page names its star already
 NAMES_ITSELF = ("The sequence, step by step",
+                "The rows of the fit: nights and BERV bundles",
                 "Every quantity of the correlations, against time")
 
 
