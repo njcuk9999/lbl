@@ -31,6 +31,14 @@ general:
                             # information. `auto` weighs the fit's footprint
                             # against output.max_memory_gb and coadds only if it
                             # would not otherwise fit.
+    bundle_minutes: null    # WITH STACKING, EACH NIGHT CUT INTO BUNDLES of at
+    bundle_berv: null       # most this many minutes, this BERV range (km/s)
+    bundle_max: null        # or this many exposures, each bundle one row of
+                            # the fit. A transit sequence is sixty exposures
+                            # over five hours, and its night's mean is not one
+                            # sky: airmass, water and airglow change within
+                            # it. null: whole nights. Setting one of them turns
+                            # stacking on unless nightly_stack is false.
 
   output:
     directory: outputs      # the output ROOT. Everything a run produces lands

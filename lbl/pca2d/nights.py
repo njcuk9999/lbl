@@ -72,11 +72,114 @@ def _stamp_from_header(path: str, extension: int) -> _dt.datetime | None:
         return None
 
 
-def group_files(files: list[str], stack: bool, extension: int = 0):
+#: where a BERV is written, in km/s: APERO's t.fits (extension 1), the ESO
+#: archive's S2D and the TNG's (primary header)
+BERV_KEYS = ("BERV", "HIERARCH ESO QC BERV", "ESO QC BERV",
+             "HIERARCH TNG QC BERV", "TNG QC BERV")
+
+
+def header_berv(path: str):
+    """The exposure's BERV in km/s, from its headers, or None."""
+    try:
+        with fits.open(path) as hdulist:
+            for hdu in hdulist[:2]:
+                for key in BERV_KEYS:
+                    value = hdu.header.get(key)
+                    try:
+                        value = float(value)
+                    except (TypeError, ValueError):
+                        continue
+                    if np.isfinite(value):
+                        return value
+    except Exception:                                   # noqa: BLE001
+        return None
+    return None
+
+
+def bundle_settings(inp: dict):
+    """input.bundle_minutes, bundle_berv and bundle_max, or None when none is
+    set: the limits a night is cut by, within a night, into bundles."""
+    out = {}
+    for key, name in (("bundle_minutes", "minutes"), ("bundle_berv", "berv"),
+                      ("bundle_max", "max")):
+        value = (inp or {}).get(key)
+        if value in (None, "", False):
+            continue
+        value = float(value)
+        if value <= 0:
+            raise ValueError("input.%s must be positive, not %r" % (key, value))
+        out[name] = value
+    return out or None
+
+
+def split_nights(stamps, labels, bundle, bervs=None):
+    """Cut each night into bundles, in time order. Returns the new labels.
+
+    A bundle opens at an exposure and takes the next ones of the same night
+    while none of the limits is passed: the time from its first exposure's
+    start (bundle_minutes), the range of its BERVs (bundle_berv, km/s), its
+    number of exposures (bundle_max). A night that fits in one bundle keeps
+    its plain label; one that does not gets <night>#00, <night>#01...
+
+    WHY. Coadding a night is what lets NIRPS's three or four exposures of a
+    visit be fitted as one row. A transit sequence is sixty of them over five
+    hours, and its night's mean is not any one sky: the airmass, so the water
+    column, and the airglow change within it. Bundles keep what changes and
+    still coadd what does not (asked for on 2026-10-21, on WASP-76).
+    """
+    if not bundle:
+        return list(labels)
+    minutes = bundle.get("minutes")
+    berv_span = bundle.get("berv")
+    most = bundle.get("max")
+    out = []
+    index = {}
+    open_ = None                       # (night, start stamp, bervs, count)
+    for i, (stamp, night) in enumerate(zip(stamps, labels)):
+        berv = bervs[i] if bervs is not None else None
+        fits_in = open_ is not None and open_[0] == night
+        if fits_in and minutes is not None:
+            fits_in = (stamp - open_[1]).total_seconds() <= 60.0 * minutes
+        if fits_in and berv_span is not None:
+            values = open_[2] + [berv]
+            fits_in = max(values) - min(values) <= berv_span
+        if fits_in and most is not None:
+            fits_in = open_[3] + 1 <= most
+        if fits_in:
+            open_ = (night, open_[1], open_[2] + [berv], open_[3] + 1)
+        else:
+            index[night] = index.get(night, -1) + 1
+            open_ = (night, stamp, [berv], 1)
+        out.append((night, index[night]))
+    split = {night for night, k in out if k > 0}
+    return [("%s#%02d" % (night, k)) if night in split else night
+            for night, k in out]
+
+
+def row_unit(source) -> str:
+    """What a coadded row of a cube is, in words: "bundles" when its nights
+    were cut (their labels carry a #), "nights" otherwise. `source` is the
+    cube's meta table, or its folder."""
+    meta = source
+    if isinstance(source, str):
+        path = os.path.join(source, "meta.fits")
+        if not os.path.exists(path):
+            return "nights"
+        from astropy.table import Table
+        meta = Table.read(path)
+    names = getattr(meta, "colnames", None) or []
+    if meta is None or "night" not in names:
+        return "nights"
+    return "bundles" if any("#" in str(v) for v in meta["night"]) else "nights"
+
+
+def group_files(files: list[str], stack: bool, extension: int = 0,
+                bundle=None):
     """Sort files chronologically and label each with its output group.
 
     Returns (files, labels). With stack = False every file is its own group, so
-    the rest of the pipeline needs no special case.
+    the rest of the pipeline needs no special case. With `bundle`
+    (bundle_settings), each night is cut into bundles (split_nights).
     """
     stamps = [timestamp_from_name(path) for path in files]
     missing = [i for i, s in enumerate(stamps) if s is None]
@@ -104,4 +207,22 @@ def group_files(files: list[str], stack: bool, extension: int = 0):
     n_nights = len(set(labels))
     log("nightly stacking: %d exposures over %d nights (%.1f per night)"
         % (len(files), n_nights, len(files) / max(n_nights, 1)), "value")
+    if bundle:
+        bervs = None
+        if bundle.get("berv") is not None:
+            bervs = [header_berv(path) for path in files]
+            if any(b is None for b in bervs):
+                raise RuntimeError(
+                    "input.bundle_berv: no BERV in the headers of %d file(s),"
+                    " first %s (looked for %s)" % (
+                        sum(b is None for b in bervs),
+                        files[[b is None for b in bervs].index(True)],
+                        ", ".join(BERV_KEYS)))
+        labels = split_nights(stamps, labels, bundle, bervs)
+        n_groups = len(set(labels))
+        log("bundles within the nights (%s): %d exposures in %d bundles over"
+            " %d nights (%.1f exposures per bundle)" % (
+                ", ".join("%s %g" % (k, v) for k, v in sorted(bundle.items())),
+                len(files), n_groups, n_nights, len(files) / max(n_groups, 1)),
+            "value")
     return files, labels

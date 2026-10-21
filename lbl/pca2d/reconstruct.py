@@ -977,7 +977,24 @@ def night_row_names(cube):
     return names
 
 
-def cut_key(path, row, names_by_night):
+def member_row_names(cube):
+    """{exposure: the name of its cube row}, from the cube's members.csv, or
+    None for a cube written before there was one.
+
+    The exact membership, as the coadder recorded it: what an exposure is
+    matched by once a night is cut into bundles (nights.split_nights), where
+    its night alone no longer says which row it went into. On a cube of whole
+    nights it says what night_row_names says.
+    """
+    from .cube import MEMBERS_FILE
+    path = os.path.join(cube, MEMBERS_FILE) if cube else None
+    if not path or not os.path.exists(path):
+        return None
+    members = Table.read(path, format="ascii.csv")
+    return {str(f): str(r) for f, r in zip(members["filename"], members["row"])}
+
+
+def cut_key(path, row, names_by_night, members=None):
     """Sous quel nom chercher les coupures d'une pose.
 
     Sans cube empile (names_by_night None), le nom du fichier lui-meme: chaque
@@ -989,6 +1006,8 @@ def cut_key(path, row, names_by_night):
     7790 contre 0).
     """
     own = os.path.basename(path)
+    if members:
+        return members.get(own, own)
     if not names_by_night:
         return own
     night = int(np.floor(float(row["bjd"]) - 0.5))
@@ -1006,6 +1025,13 @@ def rows_by_night(model, args):
     import glob
     coeffs = model["coeffs"]
     index = night_index(coeffs)
+    # BY MEMBERSHIP when the cube says which row each exposure went into:
+    # with bundles a night has several rows, and its night is not enough
+    members = member_row_names(getattr(args, "cube", None))
+    by_row = {}
+    if members:
+        for i, name in enumerate(coeffs["filename"]):
+            by_row[os.path.basename(str(name))] = i
     out, missing = [], 0
     for path in sorted(glob.glob(os.path.join(args.source_dir, "*t.fits"))):
         try:
@@ -1014,6 +1040,15 @@ def rows_by_night(model, args):
             missing += 1
             continue
         meta = payload["meta"]
+        if members:
+            name = members.get(os.path.basename(path))
+            if name is None or name not in by_row:
+                missing += 1
+                continue
+            row = Table(coeffs)[by_row[name]]
+            row["berv"] = float(meta["berv"])  # this exposure, not the row
+            out.append((path, row))
+            continue
         night = int(np.floor(float(meta["bjd"]) - 0.5))
         if night not in index:
             missing += 1
@@ -1270,7 +1305,7 @@ def correct_many(model, args):
                          " where the delivered t.fits are")
     if args.by_night:
         pairs, missing = rows_by_night(model, args)
-        log("  %d exposures matched to a fitted night, %d skipped"
+        log("  %d exposures matched to a fitted row, %d skipped"
               % (len(pairs), missing))
     elif args.all:
         names = [os.path.basename(str(v)) for v in model["coeffs"]["filename"]]
@@ -1545,11 +1580,18 @@ def correct_many(model, args):
                float(getattr(args, "velocity_floor", VELOCITY_FLOOR))), "info")
     # sur un cube empile par nuit, les coupures sont rangees par nuit
     names_by_night = None
+    members = None
     if args.by_night and getattr(args, "cube", None) and (
             clipped_by_file is not None or floored_by_file is not None):
-        names_by_night = night_row_names(args.cube)
-        log("  the cube's rows are nights: each exposure gets the cuts of its"
-            " night's row, %d nights" % len(names_by_night), "info")
+        members = member_row_names(args.cube)
+        if members:
+            log("  the cube's rows are coadds: each exposure gets the cuts of"
+                " the row it went into, %d rows for %d exposures"
+                % (len(set(members.values())), len(members)), "info")
+        else:
+            names_by_night = night_row_names(args.cube)
+            log("  the cube's rows are nights: each exposure gets the cuts of"
+                " its night's row, %d nights" % len(names_by_night), "info")
     written = skipped = refitted = 0
     permute = getattr(args, "permute_b", None)
     prepared = []
@@ -1579,7 +1621,7 @@ def correct_many(model, args):
                          os.path.basename(path))
         # LES COUPURES DE LA NUIT, PAS CELLES DU FICHIER: sur un cube empile
         # elles sont rangees sous le nom de la ligne de la nuit (cut_key)
-        key = cut_key(path, row, names_by_night)
+        key = cut_key(path, row, names_by_night, members)
         clipped = (clipped_by_file.get(key)
                    if clipped_by_file is not None else None)
         if floored_by_file is not None:

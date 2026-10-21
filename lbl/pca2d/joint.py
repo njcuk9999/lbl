@@ -156,6 +156,14 @@ def build(cubes, objects, path, config_file=None, chunk=64):
         stacked.append(meta)
     vstack(stacked, join_type="outer").write(os.path.join(tmp, "meta.fits"),
                                              overwrite=True)
+    # which exposure went into which row, every member's: a joint fit of
+    # bundled nights is corrected by membership like a solo one
+    from .cube import MEMBERS_FILE
+    lists = [os.path.join(c, MEMBERS_FILE) for c in cubes]
+    if all(os.path.exists(p) for p in lists):
+        vstack([Table.read(p, format="ascii.csv") for p in lists]).write(
+            os.path.join(tmp, MEMBERS_FILE), format="ascii.csv",
+            overwrite=True)
     if config_file and os.path.exists(config_file):
         shutil.copy(config_file, os.path.join(tmp, "cube_config.yaml"))
     merge_snippets(cubes, tmp)

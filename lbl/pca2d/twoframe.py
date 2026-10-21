@@ -32,6 +32,7 @@ from .logger import log
 from .progress import bar as _bar
 from .progress import set_label as _set_label
 from .grids import pixel_shift, shift_velocity
+from .nights import row_unit
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
@@ -1501,7 +1502,7 @@ def count_exposures(meta, rows=None):
     return len({str(n).strip() for n in names})
 
 
-def exposures_label(names, keep, per_row=None):
+def exposures_label(names, keep, per_row=None, unit="nights"):
     """'316 exposures' for the rows `keep` selects, counted as exposures.
 
     What a figure says about how many points went into it. The correlation
@@ -1534,7 +1535,7 @@ def exposures_label(names, keep, per_row=None):
             spectra += n
     if not np.isfinite(spectra) or spectra <= count:
         return "%d exposures" % count
-    return "%d nights of %d spectra" % (count, int(round(spectra)))
+    return "%d %s of %d spectra" % (count, unit, int(round(spectra)))
 
 
 def cube_shape(path):
@@ -2824,7 +2825,9 @@ def replot(outdir, cube=None):
                            fit["anc_values"][:, keep],
                            title=exposures_label(fit["filename"] if "filename"
                                                  in fit.files else None, keep,
-                                                 _per_row(fit)))
+                                                 _per_row(fit),
+                                                 row_unit(cube) if cube
+                                                 else "nights"))
     elif cube and "filename" in fit.files:
         # an archive written before the ancillary table was stored: rebuild it
         # from the cube, matching on filename so a rejected row cannot shift the
@@ -2849,7 +2852,8 @@ def replot(outdir, cube=None):
             per_row = np.array([by_name.get(str(n).strip(), 1.0) for n in names])
         correlate_and_plot(outdir, fit["a"][keep], fit["b"][keep], labels,
                            values[:, keep] if len(labels) else values,
-                           title=exposures_label(names, keep, per_row))
+                           title=exposures_label(names, keep, per_row,
+                                                 row_unit(meta)))
     else:
         log("  no ancillary quantities in the archive and no --cube given,"
               " skipping correlations.pdf")
@@ -3631,7 +3635,7 @@ def main(argv=None):
     correlate_and_plot(args.outdir, a[keep], b[keep], anc_labels,
                        anc_values[:, keep] if len(anc_labels) else anc_values,
                        title=exposures_label(table["filename"], keep,
-                                             _per_row(table)))
+                                             _per_row(table), row_unit(meta)))
     write_components_fits(os.path.join(args.outdir, "twoframe_components.fits"),
                           grid, P, Q, template, means, power_star, power_earth,
                           chi2_null, chi2, table, dv, tied=bool(args.tie_parities),

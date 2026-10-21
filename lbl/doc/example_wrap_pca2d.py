@@ -115,6 +115,11 @@ if __name__ == "__main__":
         # the figures of the correction (river plots, components...): they
         #   follow REPORT unless set here
         # figures=True,
+        # --- what a row of the fit is. For NIRPS, by default, a whole night
+        #     coadded. A long sequence (a transit night) is better cut:
+        # bundle_minutes=20,                # bundles of at most 20 minutes
+        # bundle_berv=0.1,                  # or of 0.1 km/s of BERV
+        # nightly_stack=False,              # or every exposure on its own
         # --- anything else is a key of lbl/pca2d/nominal.yaml, which says
         #     what each one does and why it has the value it has. Examples:
         # keep the residual outliers rather than setting them to NaN

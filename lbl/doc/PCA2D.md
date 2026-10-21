@@ -100,8 +100,30 @@ rparams['PCA2D'] = dict(n_star=1, n_earth=3,
 
 The short names: `velocity_term`, `iters`, `shrink`, `nsig_cut`,
 `bias_nsig`, `column_frac`, `column_chi2`, `weight`, `mask`, `mask_share`,
-`width_kms` (or `high_pass`), `dv`, `nightly_stack`, `min_rjd`, `max_rjd`,
-`drs_modes`, `min_pixel_snr`, `windows`, `cache_directory`. An unknown key
+`width_kms` (or `high_pass`), `dv`, `nightly_stack`, `bundle_minutes`,
+`bundle_berv`, `bundle_max`, `min_rjd`, `max_rjd`, `drs_modes`,
+`min_pixel_snr`, `windows`, `cache_directory`.
+
+## What a row of the fit is
+
+Each row of the fit is one exposure, a whole night, or a bundle of a night:
+
+| setting | rows |
+|---|---|
+| `nightly_stack=False` | every exposure on its own: the most information, the most memory |
+| `nightly_stack=True` (nominal for NIRPS) | every night coadded: NIRPS's three or four exposures of a visit become one row |
+| `bundle_minutes=20` | each night cut into bundles of at most 20 minutes |
+| `bundle_berv=0.1` | or of at most 0.1 km/s of BERV |
+| `bundle_max=6` | or of at most six exposures |
+
+A long sequence, a transit night of sixty exposures over five hours, is not
+one sky: the airmass, so the water column, and the airglow change within it.
+The bundles keep that and still coadd what does not change. Any `bundle_*`
+turns the stacking on unless `nightly_stack=False`; the limits can be
+combined, and a bundle closes as soon as one of them is reached. A night that
+fits in one bundle stays one row. Every exposure is then corrected with its
+own amplitudes, solved against the fitted basis, and matched to the row it
+went into by the list the cube keeps of them (`members.csv` in the cube). An unknown key
 stops the run before anything is read, with the list of what is accepted.
 
 For NIRPS, the DRS mode follows the LBL instrument (`NIRPS_HE` keeps the HE

@@ -25,6 +25,7 @@ from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
 
 from lbl.pca2d.logger import log  # noqa: E402
 from lbl.pca2d.plotting import ANCILLARY  # noqa: E402
+from lbl.pca2d.nights import row_unit  # noqa: E402
 
 #: panels per page: nine stacked time series still read on a portrait page
 PER_PAGE = 9
@@ -184,15 +185,15 @@ def main(argv=None):
     rjd, values, status, objects = exposure_table(meta, fit)
     stacked = ("n_exposures" in meta.colnames
                and int(np.nanmax(_column(meta, "n_exposures"))) > 1)
-    figs = draw(rjd, values, status, args.title,
-                "nights" if stacked else "exposures", objects)
+    unit = row_unit(meta) if stacked else "exposures"
+    figs = draw(rjd, values, status, args.title, unit, objects)
     with PdfPages(args.out) as pdf:
         for fig in figs:
             pdf.savefig(fig)
             plt.close(fig)
     stars = [n for n in dict.fromkeys(objects) if n]
     log("wrote %s: %d quantities over %d %s%s"
-        % (args.out, len(values), len(rjd), "nights" if stacked else "exposures",
+        % (args.out, len(values), len(rjd), unit,
            ", one colour per star (%s)" % ", ".join(stars) if len(stars) > 1
            else ""))
     return None

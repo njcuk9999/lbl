@@ -153,6 +153,12 @@ def _save_cache(path: str, grid, data, sigma, trans, meta):
         # le template du passe-haut voyage avec le cube: `correct` doit
         # filtrer les spectres exactement comme le fit l'a fait
         np.save(os.path.join(tmp, TEMPLATE_FILE), _PENDING_TEMPLATE)
+    if _PENDING_MEMBERS is not None:
+        # which exposure went into which row: what `correct` matches an
+        # exposure to its row by, once a night is cut into bundles
+        Table(rows=_PENDING_MEMBERS, names=("filename", "row", "group")
+              ).write(os.path.join(tmp, MEMBERS_FILE), format="ascii.csv",
+                      overwrite=True)
     shutil.rmtree(path, ignore_errors=True)
     os.rename(tmp, path)
     log("cached cube -> %s" % path)
@@ -225,7 +231,14 @@ def resolve_stacking(config, n_files, n_pixels):
     if asked is True or str(asked).lower() == "true":
         return True, "asked for"
     if asked is False or str(asked).lower() == "false":
+        if spnights.bundle_settings(inp):
+            log("input.bundle_* are set and nightly_stack is false: every"
+                " exposure is fitted on its own, and the bundles are not"
+                " used", "warn")
         return False, "asked for; the fit needs about %.1f GB" % need
+    if spnights.bundle_settings(inp):
+        # a bundle IS a coadd: asking for bundles is asking for stacking
+        return True, "bundles within the nights asked for"
     if not budget:
         return False, "auto, and no output.max_memory_gb to weigh it against"
     if need <= budget:
@@ -290,6 +303,9 @@ class _Coadder:
         self._swy = np.zeros((n_parity, n_pixels))
         self._swt = np.zeros((n_parity, n_pixels))
         self._meta = []
+        #: (exposure, the name of the rows it went into, the group's label):
+        #: which row an exposure is, once several are coadded into one
+        self.members = []
 
     def add(self, label, values, sigma, trans, good, meta):
         if self._label is not None and label != self._label:
@@ -314,6 +330,10 @@ class _Coadder:
         merged = _merge_meta(self._meta)
         merged["night"] = self._label
         merged["n_exposures"] = len(self._meta)
+        for meta in self._meta:
+            self.members.append((os.path.basename(str(meta["filename"])),
+                                 os.path.basename(str(merged["filename"])),
+                                 str(self._label)))
         for parity in range(self.n_parity):
             slot = self.n_groups * self.n_parity + parity
             # UN POIDS NON NUL N'EST PAS UN POIDS UTILISABLE. sigma vaut
@@ -349,6 +369,7 @@ class _Coadder:
 
     def result(self):
         self.flush()
+        set_pending_members(self.members)
         n_rows = self.n_groups * self.n_parity
         trans = self.trans[:n_rows] if self.trans is not None else None
         return self.data[:n_rows], self.sigma[:n_rows], trans, Table(self.rows)
@@ -483,7 +504,9 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
 
     stack, why = resolve_stacking(config, len(files), n_pixels)
     log("nightly stacking: %s (%s)" % ("on" if stack else "off", why), "value")
-    files, labels = spnights.group_files(files, stack, extension=1)
+    files, labels = spnights.group_files(
+        files, stack, extension=1,
+        bundle=spnights.bundle_settings(inp) if stack else None)
     n_groups = len(set(labels))
     _check_memory(config, 2 * n_groups, n_pixels)
 
@@ -612,7 +635,9 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
     spio.check_common_grid(files)
     stack, why = resolve_stacking(config, len(files), grid.size)
     log("nightly stacking: %s (%s)" % ("on" if stack else "off", why), "value")
-    files, labels = spnights.group_files(files, stack, extension=0)
+    files, labels = spnights.group_files(
+        files, stack, extension=0,
+        bundle=spnights.bundle_settings(config["input"]) if stack else None)
     n_groups = len(set(labels))
     n_pixels = grid.size
     _check_memory(config, n_groups, n_pixels)
@@ -756,6 +781,15 @@ def template_path(config):
 #: 2026-10-16: le template etait construit, annonce dans le journal, et
 #: absent du disque).
 _PENDING_TEMPLATE = None
+#: the coadder's members, [(exposure, row name, group)], saved with the cube
+_PENDING_MEMBERS = None
+#: where they are saved, in the cube's folder
+MEMBERS_FILE = "members.csv"
+
+
+def set_pending_members(members):
+    global _PENDING_MEMBERS
+    _PENDING_MEMBERS = list(members) if members else None
 
 
 def _stash_template(config, template):

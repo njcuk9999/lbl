@@ -115,6 +115,12 @@ DEFAULTS = {
                                      # exposures a visit, so this makes the cube
                                      # (and the decomposition) 3-4 times smaller
         # --- 'tfits' only -------------------------------------------------
+        # with stacking, each night cut into bundles of at most this many
+        # minutes, this BERV range (km/s) or this many exposures: a transit
+        # sequence is not one sky (nights.split_nights). None: whole nights
+        "bundle_minutes": None,
+        "bundle_berv": None,
+        "bundle_max": None,
         "orders": None,              # None = every order; or an explicit list
         "min_order_finite_fraction": 0.05,   # skip an order with fewer usable
                                      # pixels than this. NIRPS loses orders
@@ -1243,7 +1249,9 @@ def cache_key(config: dict) -> str:
     # hashed when it is set; unset it describes nothing and must not re-key
     # every cube already built
     relevant["input"] = {k: v for k, v in relevant["input"].items()
-                         if not (k == "object_header" and v is None)}
+                         if not (k in ("object_header", "bundle_minutes",
+                                       "bundle_berv", "bundle_max")
+                                 and v is None)}
     relevant["quality"] = {k: v for k, v in relevant["quality"].items()
                            if not (k in ("min_rjd", "max_rjd", "max_sky_ratio",
                                          "isolated_window", "nights",

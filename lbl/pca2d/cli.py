@@ -100,6 +100,13 @@ SETTING_FLAGS = (
     ("--dv", "domain.dv", float, "the grid step, in km/s"),
     ("--nightly-stack", "input.nightly_stack", str,
      "coadd each night: true, false, or auto"),
+    ("--bundle-minutes", "input.bundle_minutes", float,
+     "cut each night into bundles of at most this many minutes, each its own"
+     " row of the fit; turns stacking on unless --nightly-stack false"),
+    ("--bundle-berv", "input.bundle_berv", float,
+     "or of at most this BERV range, in km/s"),
+    ("--bundle-max", "input.bundle_max", int,
+     "or of at most this many exposures"),
     # The LBL page of the window, which travelled under no flag at all: a copy
     # asked for there, or another LBL folder, reached nothing, and the run
     # linked into the configuration's own tree (2026-09-16).

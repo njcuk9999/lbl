@@ -39,6 +39,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 
 from lbl.pca2d.logger import log  # noqa: E402
+from lbl.pca2d.nights import row_unit  # noqa: E402
 from lbl.pca2d.grids import parse_window, pixel_shift, window_block  # noqa: E402
 from lbl.pca2d.plotting import (rows_of,  # noqa: F401
                             live_mask, nan_cmap, raw_log_flux_window,  # noqa: E402
@@ -290,6 +291,7 @@ def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=Fa
             "names": [os.path.basename(str(v)) for v in meta["filename"]],
             "objects": (np.asarray([str(v) for v in meta["object"]])
                         if "object" in getattr(meta, "colnames", []) else None),
+            "unit": row_unit(meta),
             "per_row": (np.asarray(meta["n_exposures"], dtype=float)
                         if "n_exposures" in getattr(meta, "colnames", [])
                         else np.ones(n)),
@@ -371,7 +373,7 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     per_row = np.asarray(ctx.get("per_row", np.ones(len(berv))), dtype=float)
     spectra = int(np.nansum(per_row[rows]))
     stacked = spectra > rows.size
-    unit = "nights" if stacked else "exposures"
+    unit = ctx.get("unit", "nights") if stacked else "exposures"
     count = ("%d %s of %d spectra" % (rows.size, unit, spectra) if stacked
              else "%d exposures" % rows.size)
     jw = np.where(win)[0]
