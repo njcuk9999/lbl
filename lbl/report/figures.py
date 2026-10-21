@@ -147,6 +147,54 @@ def page_phase(plt, table, title, planets):
     return fig
 
 
+#: the rdb column of the number of iterations compute took (KW_NITERATIONS)
+ITERATIONS = 'ITE_RV'
+
+
+def page_iterations(plt, table, title):
+    """How many iterations compute took to converge, epoch by epoch"""
+    iterations = S.column(table, ITERATIONS)
+    if iterations is None:
+        return None
+    time = np.asarray(table[S.TIME], dtype=float)
+    good = np.isfinite(iterations) & np.isfinite(time)
+    time, iterations = time[good], iterations[good].astype(int)
+    if len(iterations) == 0:
+        return None
+    median = np.median(iterations)
+    fig, axes = plt.subplots(2, 1, figsize=(10, 7),
+                             gridspec_kw=dict(height_ratios=[2, 1]))
+    axes[0].plot(time, iterations, 'o', ms=3, alpha=0.8)
+    axes[0].axhline(median, color='k', lw=0.8, ls='--',
+                    label='median %g' % median)
+    axes[0].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
+    axes[0].set_ylabel('Iterations to converge')
+    axes[0].legend(fontsize=8, loc='best')
+    axes[0].set_title('%d epochs: %d to %d iterations, median %g, mean %.2f'
+                      % (len(iterations), iterations.min(), iterations.max(),
+                         median, np.mean(iterations)), fontsize=10)
+    from matplotlib.ticker import MaxNLocator
+    axes[0].yaxis.set_major_locator(MaxNLocator(integer=True))
+    bins = np.arange(iterations.min() - 0.5, iterations.max() + 1.5)
+    counts, _, _ = axes[1].hist(iterations, bins=bins, color='C0', alpha=0.75,
+                                rwidth=0.85)
+    # the count on each bar: a few epochs beside hundreds draw no bar at all
+    for value, count in zip(bins[:-1] + 0.5, counts):
+        if count > 0:
+            axes[1].annotate('%d' % count, xy=(value, count),
+                             xytext=(0, 2), textcoords='offset points',
+                             ha='center', va='bottom', fontsize=8)
+    axes[1].set_ylim(0, 1.15 * max(counts))
+    axes[1].set_xlabel('Iterations to converge')
+    axes[1].set_ylabel('Number of epochs')
+    axes[1].set_xticks(np.arange(iterations.min(), iterations.max() + 1))
+    for ax in axes:
+        ax.grid(alpha=0.3)
+    fig.suptitle('How fast compute converged: iterations per epoch', fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
 def page_periodogram(plt, table, title, known=None):
     """The periodogram of the series, and the spectral window below it."""
     try:

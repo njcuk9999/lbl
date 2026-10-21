@@ -14,6 +14,8 @@ import subprocess
 import tempfile
 import traceback
 
+import numpy as np
+
 from lbl.core import logger
 
 log = logger.Log(filename='')
@@ -158,6 +160,8 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     wanted = [
         ('The velocity series',
          lambda: figures.page_sequence(plt, table, title)),
+        ('Iterations to converge',
+         lambda: figures.page_iterations(plt, table, title)),
         ('Velocity against BERV',
          lambda: figures.page_berv(plt, table, title))]
     if planets is None:
@@ -231,6 +235,13 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
             plt.close(fig)
             drawn.append((name, path))
         rows = list(stats.summarise(table))
+        iterations = series.column(table, figures.ITERATIONS)
+        if iterations is not None and np.isfinite(iterations).any():
+            iterations = iterations[np.isfinite(iterations)]
+            rows.append(('Iterations to converge',
+                         'median %g (%d to %d)'
+                         % (np.median(iterations), np.min(iterations),
+                            np.max(iterations)), ''))
         rows.append(('Template frame',
                      'BERV + Keplerian, %d orbit(s) of %s'
                      % (len(planets['orbits']), planets['star'])
