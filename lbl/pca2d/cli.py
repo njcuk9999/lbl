@@ -470,10 +470,16 @@ def without_object(config):
     is named otherwise than its headers (GL699_SPIROU for OBJECT = Gl699) is
     built the same way as one whose folder is not. Left in, it gave that target
     a different shared key and a joint run refused the whole set.
+
+    And the star's orbits (registration.orbits): they place ITS star's frame,
+    one star at a time, and change nothing of the grid the rows share. Left
+    in, the one member with a known planet (GJ_1028 among TOI-904's
+    companions, 2026-10-21) refused the whole set.
     """
     other = copy.deepcopy(config)
     other["input"]["object"] = ""
     other["input"]["object_header"] = None
+    other.setdefault("registration", {})["orbits"] = []
     return other
 
 
@@ -1182,13 +1188,28 @@ def run_correct(plan):
                                        "corrdir": plan["corrdir"],
                                        "files": plan["files"], "star_group": 0}]
     for target in targets:
+        target_mode = list(mode)
+        if target.get("config") is not None and "--config" in target_mode:
+            # A JOINT MEMBER IS RE-READ WITH ITS OWN CONFIGURATION, the one its
+            # cube was built from, not the joint copy of the first member's:
+            # its star's orbits (registration.orbits) are its own, and with
+            # the first member's its exposures would be put back in the star's
+            # frame by the BERV alone after a fit made in theirs
+            import yaml
+            path = os.path.join(plan["outdir"],
+                                "cube_config_%s.yaml" % target["object"])
+            if not os.path.exists(path):
+                with open(path, "w") as handle:
+                    yaml.safe_dump(target["config"], handle, sort_keys=False,
+                                   default_flow_style=False)
+            target_mode[target_mode.index("--config") + 1] = path
         log("writing %d corrected spectra to %s%s"
             % (len(target["files"]), target["corrdir"],
                " (star spectra %d and %d of the joint fit)"
                % (target["star_group"], target["star_group"] + 1)
                if len(targets) > 1 else ""), "info")
         apply_main([
-            "--correct", *mode,
+            "--correct", *target_mode,
             "--fits", os.path.join(plan.get("fitdir") or plan["outdir"],
                                    "twoframe_components.fits"),
             "--n-star", str(n_star), "--n-earth", str(n_earth),

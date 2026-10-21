@@ -393,6 +393,12 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
         if found:
             nominal['objects'][name].setdefault('registration', dict())[
                 'orbits'] = found
+            # their periods, which pca2d marks on its diagnostics
+            #   (target.planets)
+            target = nominal['objects'][name].setdefault('target', dict())
+            target['planets'] = sorted(set(
+                list(target.get('planets') or [])
+                + [float(orbit['period']) for orbit in found]))
     with open(path, 'w') as handle:
         handle.write('# what lbl_pca2d asked of pca2d for %s: the nominal'
                      ' configuration\n# of lbl/pca2d, with each object\'s'
