@@ -548,7 +548,10 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     #   2026-10-22: shrunk by this star's own significance before, which
     #   dropped it): another basis, or a correction made before, is made again
     if frozen is not None:
-        request['earth_basis'] = dict(id=frozen.ident, shrink=False)
+        request['earth_basis'] = dict(
+            id=frozen.ident, shrink=False,
+            observer_first=bool(overrides.get('twoframe', dict()).get(
+                'observer_first', True)))
     stamp = request_stamp(request, switches,
                           [f for name in objects for f in files[name]])
     state_file = os.path.join(work, 'done.json')

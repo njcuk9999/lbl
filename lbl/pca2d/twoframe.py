@@ -70,6 +70,11 @@ def parse_args(argv=None):
                    help="M, components in the STELLAR rest frame")
     p.add_argument("-j", "--n-earth", type=int, default=None,
                    help="N, components in the OBSERVER frame")
+    p.add_argument("--no-observer-first", dest="observer_first",
+                   action="store_false", default=None,
+                   help="with --earth-basis: estimate the star's spectrum from"
+                        " the data as they are, as without a frozen basis,"
+                        " instead of after taking the basis out")
     p.add_argument("--earth-basis", default=None,
                    help="a saved observer basis (pca2d.basis): its components"
                         " are taken as they are and never updated; only the"
@@ -193,7 +198,8 @@ CONFIGURABLE = ("n_star", "n_earth", "iters", "order", "tie_parities", "max_mad"
                 "kernel_halfwidth", "gap_guard", "leakage", "chunk", "dtype",
                 "velocity_term", "velocity_min_transmission", "mean",
                 "patience", "keep", "star_resolution", "star_basis",
-                "resolution", "star_smooth", "holdout", "earth_basis")
+                "resolution", "star_smooth", "holdout", "earth_basis",
+                "observer_first")
 
 
 def _resolve(args):
@@ -3054,6 +3060,25 @@ def main(argv=None):
             " %d samples of %.2f km/s FWHM, LBL's template filter; the observer"
             " components are not smoothed"
             % (float(fraction), float(resolution), star_fwhm, dv), "value")
+    # A FROZEN OBSERVER BASIS (pca2d.basis): the components a fit learned on
+    # stars whose two frames separate, taken as they are and never updated,
+    # for a star whose BERV barely moves and cannot separate them itself.
+    # Only the star's block and the amplitudes are fitted. Read here, before
+    # the star's spectrum, so that it can come first (observer_first)
+    frozen = None
+    if getattr(args, "earth_basis", None):
+        from .basis import Basis
+        frozen = Basis(args.earth_basis)
+        Q_frozen = frozen.on_grid(grid, args.n_earth)
+        log("observer basis FROZEN, %d components of %s"
+            % (Q_frozen.shape[0], frozen.describe()), "info")
+        outside = frozen.check_dates(
+            np.asarray(meta["bjd"], dtype=float) - 2400000.5)
+        if outside:
+            log("%d of %d rows are more than 60 days outside the dates the"
+                " basis was trained on" % (outside, n_spectra), "warn")
+    observer_first = frozen is not None and bool(
+        getattr(args, "observer_first", True))
     templates = np.zeros_like(means)
     star_mean = None
     if args.mean == "star":
@@ -3070,6 +3095,31 @@ def main(argv=None):
         # every row and taken out. Nothing is re-estimated afterwards.
         berv_rows = np.asarray(meta["berv"], dtype=float)
         names = group_names(templates.shape[0])
+        if observer_first:
+            # THE OBSERVER FIRST (2026-10-22). With little BERV, what is
+            # fixed on the detector is nearly fixed on the star too, and a
+            # star spectrum estimated from the data as they are takes its
+            # MEAN in: the components then describe only the variations
+            # around it, the mean is never divided out, and LBL finds it in
+            # its template (TOI-904: 11% of the BERV in the velocities;
+            # KIC 12060710, the OH left by the sky: 78%). With the observer
+            # components known beforehand, their amplitudes are fitted on the
+            # data as they are, the star's lines being noise to components
+            # that never saw them at this velocity, taken out, and the star's
+            # spectrum estimated only then; they are put back for the sweeps
+            tick = time.time()
+            _, b_first, _, _ = joint_coeffs(
+                data, w, np.zeros((0, n_pixels)), Q_frozen, shifter, delta,
+                chunk=chunk, exposure=tie, desc="observer first, amplitudes")
+            for s0 in range(0, n_spectra, chunk):
+                s1 = min(s0 + chunk, n_spectra)
+                data[s0:s1] -= (b_first[s0:s1] @ Q_frozen).astype(data.dtype)
+            log("the OBSERVER FIRST: the %d frozen components fitted on the"
+                " data as they are and taken out (amplitudes %s rms) before"
+                " the star's spectrum is estimated, in %.1f s"
+                % (Q_frozen.shape[0], np.array2string(
+                    np.std(b_first, axis=0), precision=3),
+                   time.time() - tick), "info")
         for g in range(templates.shape[0]):
             rows_g = group == g
             tick = time.time()
@@ -3090,6 +3140,13 @@ def main(argv=None):
             log("  %s rows done in %.1f s, %d columns defined"
                 % (names[g], time.time() - tick,
                    int(np.count_nonzero(templates[g]))), "value")
+        if observer_first:
+            # the observer components back in: the sweeps fit them with the
+            #   star's spectrum, which no longer holds their mean
+            for s0 in range(0, n_spectra, chunk):
+                s1 = min(s0 + chunk, n_spectra)
+                data[s0:s1] += (b_first[s0:s1] @ Q_frozen).astype(data.dtype)
+            zero_unweighted(data, w)
         tick = time.time()
         log("carrying the %d star spectra to each of the %d rows and"
             " subtracting them" % (templates.shape[0], n_spectra))
@@ -3183,22 +3240,8 @@ def main(argv=None):
     Q = np.linalg.qr(rng.normal(size=(n_pixels, args.n_earth)))[0].T.copy()
     log("starting from a random orthonormal basis, seed fixed so a rerun on the"
         " same cube reproduces it")
-    # A FROZEN OBSERVER BASIS (pca2d.basis): the components a fit learned on
-    # stars whose two frames separate, taken as they are and never updated,
-    # for a star whose BERV barely moves and cannot separate them itself.
-    # Only the star's block and the amplitudes are fitted.
-    frozen = None
-    if getattr(args, "earth_basis", None):
-        from .basis import Basis
-        frozen = Basis(args.earth_basis)
-        Q = frozen.on_grid(grid, args.n_earth)
-        log("observer basis FROZEN, %d components of %s"
-            % (Q.shape[0], frozen.describe()), "info")
-        outside = frozen.check_dates(
-            np.asarray(meta["bjd"], dtype=float) - 2400000.5)
-        if outside:
-            log("%d of %d rows are more than 60 days outside the dates the"
-                " basis was trained on" % (outside, n_spectra), "warn")
+    if frozen is not None:
+        Q = Q_frozen
 
     # The velocity column of joint_coeffs. `a_lin` is the star model it is
     # linearised around, so there is none to build on the very first solve and

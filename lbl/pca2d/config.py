@@ -445,6 +445,11 @@ DEFAULTS = {
         # the nominal: the observer components are fitted. Here and not in
         # nominal.yaml, whose hash stamps every correction on disk.
         "earth_basis": None,
+        # with earth_basis: its amplitudes fitted and taken out FIRST, then
+        # the star's spectrum estimated, so that it does not take the mean of
+        # what the basis describes (a narrow BERV range). False: the star's
+        # spectrum from the data as they are, as without a frozen basis
+        "observer_first": True,
         # The older spelling of the two above: smooth to one resolution element
         # of this R. Still read, so the runs made with it reproduce.
         "star_resolution": None,
