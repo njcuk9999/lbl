@@ -71,7 +71,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import yaml
 
-from lbl.science.planets import normalise, PUBLISHED
+from lbl.science.planets import normalise, PUBLISHED, CANDIDATES
 
 # =============================================================================
 # Define variables
@@ -383,6 +383,14 @@ def best_solution(solutions: List[dict]) -> Optional[dict]:
     return orbit_
 
 
+def propagated(t0, dt0, period, dper, today):
+    """How well the phase of an ephemeris is known today [d]. An error of
+    zero is an error not given."""
+    dt0 = abs(dt0) if np.isfinite(dt0) and dt0 != 0 else 1.0
+    dper = abs(dper) if np.isfinite(dper) and dper != 0 else period * 1e-4
+    return math.hypot(dt0, (today - t0) / period * dper)
+
+
 def best_ephemerides(rows: List[Dict[str, str]]) -> Dict[str, dict]:
     """
     Per planet, the NASA transit ephemeris (t0 and P of ONE reference) whose
@@ -390,6 +398,11 @@ def best_ephemerides(rows: List[Dict[str, str]]) -> Dict[str, dict]:
     number of periods since t0. A default solution can have no t0 at all
     (HD 189733 b's is a stellar study), and the most precise t0 can come with
     a period that has long since lost it.
+
+    An error of zero is an error not given, not a perfect ephemeris; and the
+    ExoFOP rows (TESS's own numbers) come after any published reference:
+    TOI-6478 b's ExoFOP row has P = 1462.2 d with no error, the alias of two
+    single transits, where Scott et al. 2025 measured 34.005 d.
 
     :param rows: NASA ps rows with pl_tranmid
 
@@ -401,15 +414,14 @@ def best_ephemerides(rows: List[Dict[str, str]]) -> Dict[str, dict]:
         t0, period = num(row['pl_tranmid']), num(row['pl_orbper'])
         if not (t0 > MIN_JD and period > 0):
             continue
-        dt0 = abs(num(row['pl_tranmiderr1']))
-        dper = abs(num(row['pl_orbpererr1']))
-        dt0 = dt0 if np.isfinite(dt0) else 1.0
-        dper = dper if np.isfinite(dper) else period * 1e-4
-        sigma = math.hypot(dt0, (today - t0) / period * dper)
+        sigma = propagated(t0, num(row['pl_tranmiderr1']), period,
+                           num(row['pl_orbpererr1']), today)
+        reference = strip_tags(row['pl_refname'])
+        rank = (reference.upper().startswith('EXOFOP'), sigma)
         key = normalise(row['pl_name'])
-        if key not in best or sigma < best[key]['sigma']:
-            best[key] = dict(t0=t0, period=period, sigma=sigma,
-                             reference=strip_tags(row['pl_refname']))
+        if key not in best or rank < best[key]['rank']:
+            best[key] = dict(t0=t0, period=period, sigma=sigma, rank=rank,
+                             reference=reference)
     return best
 
 
@@ -670,8 +682,182 @@ HEADER = """\
 # =============================================================================
 # Start of code
 # =============================================================================
+#: the TESS dispositions kept as candidates: planet candidate, ambiguous,
+#: confirmed and known planet; not the false positives (FP, FA)
+CANDIDATE_DISPOSITIONS = ('PC', 'APC', 'CP', 'KP')
+
+
+def on_ephemeris(t0, cand, tolerance=0.05):
+    """Whether a transit at t0 falls on a candidate's ephemeris, within
+    `tolerance` days or three of its sigmas: the same planet, whatever
+    period the other source gives it"""
+    phase = (t0 - cand['t0']) / cand['period']
+    off = abs(phase - round(phase)) * cand['period']
+    return off < max(tolerance, 3 * cand.get('sigma', 0.0))
+
+
+def build_candidates(path: str = CANDIDATES):
+    """candidates.yaml: every transiting planet (NASA Exoplanet Archive, any
+    reference with a transit epoch) and every TESS candidate that is not a
+    false positive (table toi), with its ephemeris, its K known or not. The
+    LBL report fits their K jointly on the velocities (lbl.report.kepfit);
+    a candidate whose period is that of a complete orbit of the star is
+    left out when it is read (planets.candidates_for)."""
+    today = 2440587.5 + datetime.datetime.now().timestamp() / 86400
+    log('NASA Exoplanet Archive: the transit epochs of every reference, and'
+        ' the TOIs')
+    rows = list(csv.DictReader(io.StringIO(fetch(
+        NASA_TAP + '?' + urllib.parse.urlencode(dict(
+            query='select pl_name, hostname, tic_id, hd_name, hip_name, '
+                  'gaia_dr3_id, pl_refname, pl_orbper, pl_orbpererr1, '
+                  'pl_tranmid, pl_tranmiderr1, ra, dec from ps where '
+                  'pl_tranmid is not null', format='csv'))))))
+    tois = list(csv.DictReader(io.StringIO(fetch(
+        NASA_TAP + '?' + urllib.parse.urlencode(dict(
+            query='select toi, tid, tfopwg_disp, pl_orbper, pl_orbpererr1, '
+                  'pl_tranmid, pl_tranmiderr1, pl_trandep, pl_rade, ra, dec '
+                  'from toi', format='csv'))))))
+    log('NASA Exoplanet Archive: %d references with a transit epoch, %d TOIs'
+        % (len(rows), len(tois)))
+    ephemerides = best_ephemerides(rows)
+    # --- the stars, by TIC when there is one, else by host name
+    stars = dict()
+    seen = set()
+    for row in rows:
+        key = normalise(row['pl_name'])
+        if key in seen or key not in ephemerides:
+            continue
+        seen.add(key)
+        best = ephemerides[key]
+        star = stars.setdefault(row['tic_id'] or row['hostname'], dict(
+            names=set(), ra=num(row['ra']), dec=num(row['dec']), cands=[],
+            label=row['hostname']))
+        star['names'].update(v for v in (row['hostname'], row['hd_name'],
+                                         row['hip_name'], row['tic_id'],
+                                         row['gaia_dr3_id']) if v)
+        star['cands'].append(dict(name=row['pl_name'], period=best['period'],
+                                  t0=best['t0'], sigma=best['sigma'],
+                                  source='NASA Exoplanet Archive',
+                                  reference=best['reference']))
+    n_toi = 0
+    for row in tois:
+        disposition = (row['tfopwg_disp'] or '').strip()
+        period, t0 = num(row['pl_orbper']), num(row['pl_tranmid'])
+        if (disposition not in CANDIDATE_DISPOSITIONS or not period > 0
+                or not t0 > MIN_JD):
+            continue
+        n_toi += 1
+        tic = 'TIC %s' % row['tid']
+        name = 'TOI-%s' % row['toi']
+        host = 'TOI-%d' % int(float(row['toi']))
+        star = stars.setdefault(tic, dict(names=set(), ra=num(row['ra']),
+                                          dec=num(row['dec']), cands=[],
+                                          label=host))
+        star['names'].update((tic, host))
+        sigma = propagated(t0, num(row['pl_tranmiderr1']), period,
+                           num(row['pl_orbpererr1']), today)
+        extra = dict(toi=name, disposition=disposition)
+        if np.isfinite(num(row['pl_trandep'])):
+            extra['depth_ppm'] = round(num(row['pl_trandep']), 1)
+        if np.isfinite(num(row['pl_rade'])):
+            extra['radius'] = round(num(row['pl_rade']), 3)
+        # the same planet, published: one candidate. Same period, the better
+        # ephemeris of the two; a transit on its ephemeris but another period
+        # (an alias: TOI-6478.01 at 1462 d is Scott et al.'s 34.005 d
+        # planet), the published one
+        same = [c for c in star['cands'] if abs(c['period'] / period - 1)
+                < 1e-3]
+        alias = [c for c in star['cands'] if c not in same
+                 and on_ephemeris(t0, c)]
+        if same:
+            same[0].update(extra)
+            if sigma < same[0]['sigma']:
+                same[0].update(period=period, t0=t0, sigma=sigma,
+                               source='TESS TOI', reference='ExoFOP')
+            continue
+        if alias:
+            alias[0].update(extra)
+            alias[0]['toi_period'] = period
+            continue
+        star['cands'].append(dict(name=name, period=period, t0=t0,
+                                  sigma=sigma, source='TESS TOI',
+                                  reference='ExoFOP', **extra))
+    # --- the APERO name of each star
+    objects = apero_objects()
+    index, where = apero_index(objects)
+    by_name = {row['OBJNAME']: row for row in objects}
+    claimed = set()
+    out = dict()
+    n_apero = 0
+    for key in sorted(stars, key=lambda k: stars[k]['label']):
+        star = stars[key]
+        found = set()
+        for name in star['names']:
+            found |= index.get(normalise(name), set())
+        if not found and np.isfinite(star['ra']):
+            found = {name for name, (ra, dec) in where.items()
+                     if separation(star['ra'], star['dec'], ra, dec)
+                     < MATCH_RADIUS}
+        apero = found.pop() if len(found) == 1 else None
+        if apero in claimed:
+            apero = None
+        names = set(star['names'])
+        if apero:
+            claimed.add(apero)
+            n_apero += 1
+            row = by_name[apero]
+            names.update([row.get('ORIGINAL_NAME', '')]
+                         + (row.get('ALIASES') or '').split('|'))
+        label = apero or star['label']
+        while label in out:
+            label = label + '_'
+        names = sorted({n.strip() for n in names if n.strip()} - {label})
+        cands = sorted(star['cands'], key=lambda c: c['period'])
+        for cand in cands:
+            cand['period'] = float(cand['period'])
+            cand['t0'] = round(float(cand['t0']), 6)
+            cand['sigma'] = round(float(cand['sigma']), 6)
+        out[label] = dict(apero=apero,
+                          names=([apero] if apero else []) + names,
+                          candidates=cands)
+    header = CANDIDATES_HEADER.format(
+        date=datetime.date.today().isoformat(), nstars=len(out),
+        ncands=sum(len(v['candidates']) for v in out.values()),
+        napero=n_apero, ntoi=n_toi)
+    with open(path, 'w') as handle:
+        handle.write(header)
+        yaml.safe_dump(dict(stars=out), handle, sort_keys=False,
+                       default_flow_style=None, width=100, allow_unicode=True)
+    log('%s: %d stars, %d candidates (%d TOIs kept), %d stars with an APERO'
+        ' name' % (path, len(out), sum(len(v['candidates'])
+                                       for v in out.values()), n_toi, n_apero))
+
+
+CANDIDATES_HEADER = """\
+# =============================================================================
+# candidates.yaml: transiting planets and TESS candidates, with their
+# ephemerides, for the joint Keplerian fit of LBL's report (PLANETS = True)
+# =============================================================================
+# MADE BY lbl/resources/planets/build_known_planets.py ON {date}: do not edit
+# it. Your own candidates go under `candidates` in personal_planet_catalog.yaml.
+#
+# {nstars} stars, {ncands} candidates ({ntoi} TOIs that are not false
+# positives, merged with the published planet when there is one); {napero}
+# stars carry their APERO name.
+#
+# Per candidate: period [d] and t0 [BJD, mid-transit], from the reference
+# whose ephemeris is best known today (`sigma` [d], the phase uncertainty
+# propagated to the day this file was made), and no K: the report fits it,
+# circular, on the velocities, all candidates of the star together. A
+# candidate with the period of a complete orbit of known_planets.yaml (or of
+# a personal catalog) is that orbit, and is left out of the fit.
+# =============================================================================
+"""
+
+
 if __name__ == '__main__':
     build(sys.argv[1] if len(sys.argv) > 1 else PUBLISHED)
+    build_candidates()
 
 # =============================================================================
 # End of code

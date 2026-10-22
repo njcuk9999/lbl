@@ -113,7 +113,7 @@ def _planet_section(planets):
 
 
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
-                known_periods=None, template_file=None):
+                known_periods=None, template_file=None, candidates_of=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
     :param data_dir: str, the run's DATA_DIR
@@ -125,6 +125,9 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                           those of the orbits the template was made on)
     :param template_file: str, the template of the comparison object, to say
                           whether it was made on known orbits (PLANETS)
+    :param candidates_of: str, the object whose transiting planets and TESS
+                          candidates (candidates.yaml) have their K fitted
+                          together (PLANETS), or None for no such fit
     """
     try:
         import matplotlib
@@ -164,7 +167,34 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
          lambda: figures.page_iterations(plt, table, title)),
         ('Velocity against BERV',
          lambda: figures.page_berv(plt, table, title))]
-    if planets is None:
+    # THE TRANSITING PLANETS AND CANDIDATES of the star (candidates.yaml,
+    #   PLANETS): their K fitted together, the known orbits held fixed
+    fit = _fit_candidates(candidates_of, table, planets)
+    if fit is not None:
+        known_periods = list(known_periods or []) + [
+            float(cand['period']) for cand in fit['candidates']]
+    if planets is not None:
+        wanted.append(('Velocities folded on the known orbits',
+                       lambda: figures.page_phase(plt, table, title, planets)))
+    if fit is not None:
+        wanted += [
+            ('Joint Keplerian fit of the transiting candidates',
+             lambda: figures.page_candidate_fit(plt, table, title, fit)),
+            ('Velocities folded on the transiting candidates',
+             lambda: figures.page_candidate_phase(plt, table, title, fit))]
+    # WHAT IS TAKEN OUT for the periodogram and the FIPs: the known orbits
+    #   and the fitted candidates, when there are; they are then drawn twice,
+    #   as measured and without them, side by side
+    if fit is not None:
+        residual = figures.subtract_fit(table, fit)
+        after = (', known orbits and fitted candidates subtracted'
+                 if planets is not None else ', fitted candidates subtracted')
+    elif planets is not None:
+        residual = figures.subtract_orbits(table, planets)
+        after = ', known orbits subtracted'
+    else:
+        residual, after = None, ''
+    if residual is None:
         wanted += [
             ('Periodogram and spectral window',
              lambda: figures.page_periodogram(plt, table, title,
@@ -174,14 +204,7 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
             ('False inclusion probability, outlier-aware',
              lambda: figures.page_oafip(plt, table, title, known_periods))]
     else:
-        # WITH KNOWN ORBITS (PLANETS): the velocities folded on them, then the
-        # periodogram and the FIPs twice, as measured and with the orbits
-        # taken out, side by side
-        residual = figures.subtract_orbits(table, planets)
-        after = ', known orbits subtracted'
         wanted += [
-            ('Velocities folded on the known orbits',
-             lambda: figures.page_phase(plt, table, title, planets)),
             ('Periodogram and spectral window, as measured',
              lambda: figures.page_periodogram(plt, table, title,
                                               known_periods)),
@@ -259,6 +282,13 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                      % (len(planets['orbits']), planets['star'])
                      if planets is not None else 'BERV, velocities iterated',
                      ''))
+        if fit is not None:
+            for cand, k, sk in zip(fit['candidates'], fit['k'], fit['sk']):
+                rows.append(('K of %s' % cand.get('name', '?'),
+                             '%.2f +- %.2f (%.1f sigma)'
+                             % (k, sk, abs(k) / sk if sk > 0 else 0), 'm/s'))
+            rows.append(('Jitter of the candidate fit', '%.2f' % fit['jitter'],
+                         'm/s'))
         if lines:
             chi2 = [figures.activity_stats(table, key)[2]
                     for key, _, _ in lines]
@@ -267,12 +297,78 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                          '%d measured, most variable %s (chi2_r %.2g)'
                          % (len(lines), lines[top][1], chi2[top]), ''))
         built = _build(work, out, title, rdb_file, rows, drawn, missing,
-                       planets)
+                       planets, fit)
         if built is None:
             built = _fallback(out, drawn, missing)
         return built
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def _fit_candidates(object_name, table, planets):
+    """The joint fit of the star's transiting planets and TESS candidates
+    (candidates.yaml, lbl.report.kepfit), the known orbits of the template
+    held fixed; None without object, candidates or velocities to fit"""
+    if not object_name:
+        return None
+    try:
+        from lbl.report import kepfit, series
+        from lbl.science import planets as kepler
+        found = kepler.candidates_for(kepler.star_names(object_name))
+        if found is None:
+            return None
+        known = planets['orbits'] if planets is not None else []
+        # a planet whose orbit is known is not fitted again
+        taken = {kepler.normalise(orbit.get('name', '')) for orbit in known}
+        candidates = [cand for cand in found['candidates']
+                      if kepler.normalise(cand.get('name', '')) not in taken]
+        if not candidates:
+            return None
+        result = kepfit.fit(series.column(table, series.TIME) + 2400000.0,
+                            series.column(table, series.VELOCITY),
+                            series.column(table, series.ERROR),
+                            candidates, known)
+        result.update(star=found['star'], catalog=found['catalog'])
+        for cand, k, sk in zip(candidates, result['k'], result['sk']):
+            log.general('report: {0}, P = {1:.6g} d: K = {2:.2f} +- {3:.2f} '
+                        'm/s'.format(cand.get('name', '?'),
+                                     float(cand['period']), k, sk))
+        return result
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('report: no fit of the candidates ({0})'.format(exc))
+        return None
+
+
+def _candidate_section(fit):
+    """The page that says which candidates were fitted and what K they got,
+    as LaTeX"""
+    lines = [r'\subsection*{Transiting planets and candidates fitted}',
+             'Their K fitted together on the velocities (circular orbits, '
+             'period and transit epoch of \\texttt{%s} fixed, one offset, a '
+             'jitter of %.2f m/s added to the error bars%s), %d velocities. '
+             'Star \\texttt{%s}:'
+             % (_escape(os.path.basename(fit['catalog'])), fit['jitter'],
+                ', the known orbits held fixed' if fit['known'] else '',
+                fit['nfit'], _escape(fit['star'])),
+             r'\begin{center}\small', r'\begin{tabular}{llrrrr}',
+             r'\toprule',
+             r'Name & Status & $P$ (d) & $T_0$ (BJD) & $K$ (m/s) & '
+             r'$K/\sigma_K$ \\', r'\midrule']
+    for cand, k, sk in zip(fit['candidates'], fit['k'], fit['sk']):
+        lines.append('%s & %s & %.6g & %.5f & %.2f $\\pm$ %.2f & %.1f \\\\'
+                     % (_escape(cand.get('name', '?')),
+                        _escape(cand.get('disposition') or ''),
+                        float(cand['period']), float(cand['t0']), k, sk,
+                        abs(k) / sk if sk > 0 else 0))
+    lines += [r'\bottomrule', r'\end{tabular}', r'\end{center}',
+              r'\begin{itemize}']
+    for cand in fit['candidates']:
+        lines.append(r'\item %s: ephemeris from %s'
+                     % (_escape(cand.get('name', '?')),
+                        _escape(cand.get('reference') or
+                                cand.get('source') or '?')))
+    lines.append(r'\end{itemize}')
+    return '\n'.join(lines)
 
 
 def _activity_labels():
@@ -311,7 +407,8 @@ def _tapas(data_dir):
         return None, None
 
 
-def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None):
+def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
+           fit=None):
     """Run pdflatex on the assembled document. None if LaTeX is not there."""
     if shutil.which('pdflatex') is None:
         log.warning('pdflatex not found: the report falls back to plain pages')
@@ -322,6 +419,8 @@ def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None):
             r'\vspace{4mm}', _table(rows)]
     if planets is not None:
         body.append(_planet_section(planets))
+    if fit is not None:
+        body.append(_candidate_section(fit))
     for name, path in drawn:
         body.append(r'\clearpage')
         body.append(r'\subsection*{%s}'

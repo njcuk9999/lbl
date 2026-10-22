@@ -53,6 +53,8 @@ PLANET_DIR = os.path.join(os.path.dirname(os.path.dirname(
 PUBLISHED = os.path.join(PLANET_DIR, 'known_planets.yaml')
 #: the name of a personal catalog, in DATA_DIR or beside the published one
 PERSONAL = 'personal_planet_catalog.yaml'
+#: the transiting planets and TESS candidates with an ephemeris, K or not
+CANDIDATES = os.path.join(PLANET_DIR, 'candidates.yaml')
 #: what LBL appends to an object's name (telluric cleaning, PCA2D): the star
 #:  is what is left once they are taken off
 SUFFIXES = re.compile(r'(_tc|_pca2d[0-9A-Za-z._+-]*)+$')
@@ -133,20 +135,36 @@ def find_star(names: List[str], data_dir: Optional[str] = None
 
     :return: dict (star, catalog, entry), or None
     """
-    wanted = [normalise(name) for name in names]
     for path in catalog_files(data_dir):
-        stars = _yaml_load(path).get('stars') or dict()
-        index = dict()
-        for key, entry in stars.items():
-            entry = entry or dict()
-            aliases = [key, entry.get('apero')] + list(entry.get('names') or [])
-            for alias in aliases:
-                if alias not in (None, ''):
-                    index.setdefault(normalise(alias), key)
-        for name in wanted:
-            if name in index:
-                key = index[name]
-                return dict(star=key, catalog=path, entry=stars[key] or dict())
+        found = _find_in(path, names)
+        if found is not None:
+            return found
+    return None
+
+
+def _find_in(path: str, names: List[str]) -> Optional[Dict]:
+    """
+    The entry of one catalog that knows one of these names, by its key, its
+    APERO name or one of its synonyms
+
+    :param path: str, the catalog
+    :param names: list of str, the names of the object
+
+    :return: dict (star, catalog, entry), or None
+    """
+    wanted = [normalise(name) for name in names]
+    stars = _yaml_load(path).get('stars') or dict()
+    index = dict()
+    for key, entry in stars.items():
+        entry = entry or dict()
+        aliases = [key, entry.get('apero')] + list(entry.get('names') or [])
+        for alias in aliases:
+            if alias not in (None, ''):
+                index.setdefault(normalise(alias), key)
+    for name in wanted:
+        if name in index:
+            key = index[name]
+            return dict(star=key, catalog=path, entry=stars[key] or dict())
     return None
 
 
@@ -296,6 +314,33 @@ def orbits_for(names: List[str], data_dir: Optional[str] = None
                                     orbit.get('reference', 'no reference')))
     return dict(star=found['star'], catalog=found['catalog'], orbits=orbits,
                 skipped=skipped)
+
+
+def candidates_for(names: List[str]) -> Optional[Dict]:
+    """
+    The transiting planets and TESS candidates of the object that have an
+    ephemeris (period and transit epoch), from candidates.yaml, for the
+    report's fit of their K. None if the catalog does not know the object or
+    gives it none.
+
+    :param names: list of str, the names of the object
+
+    :return: dict (star, catalog, candidates), or None
+    """
+    if not os.path.exists(CANDIDATES):
+        return None
+    found = _find_in(CANDIDATES, names)
+    if found is None:
+        return None
+    candidates = []
+    for candidate in found['entry'].get('candidates') or []:
+        values = [candidate.get(key) for key in ('period', 't0')]
+        if all(value is not None and np.isfinite(float(value))
+               for value in values) and float(candidate['period']) > 0:
+            candidates.append(candidate)
+    if not candidates:
+        return None
+    return dict(star=found['star'], catalog=CANDIDATES, candidates=candidates)
 
 
 # =============================================================================

@@ -826,3 +826,133 @@ def page_activity(plt, table, lines, title):
                  ' weighted mean' % (title, ACTIVITY_NSIG), fontsize=10)
     fig.tight_layout()
     return fig
+
+
+def subtract_fit(table, result):
+    """A copy of the table whose velocities have the fitted candidates and
+    the known orbits taken out (lbl.report.kepfit), for the periodogram and
+    the FIP after them"""
+    from lbl.report import kepfit
+
+    out = dict(table)
+    time = np.asarray(table[S.TIME], dtype=float) + 2400000.0
+    out[S.VELOCITY] = (np.asarray(table[S.VELOCITY], dtype=float)
+                       - kepfit.model(result, time, offset=False))
+    return out
+
+
+def _candidate_label(cand, k, sk):
+    """'TOI-904 b (CP): P = 10.877 d, K = 1.2 +- 0.4 m/s (3.0 sigma)'"""
+    status = cand.get('disposition')
+    return ('%s%s: P = %.6g d, K = %.2f $\\pm$ %.2f m s$^{-1}$ (%.1f$\\sigma$)'
+            % (cand.get('name', '?'), ' (%s)' % status if status else '',
+               float(cand['period']), k, sk, abs(k) / sk if sk > 0 else 0))
+
+
+def page_candidate_fit(plt, table, title, result):
+    """The velocities in time with the joint Keplerian fit of the transiting
+    planets and candidates (lbl.report.kepfit), and the residuals below."""
+    from lbl.report import kepfit
+
+    rjd = np.asarray(table[S.TIME], dtype=float)
+    vrad = np.asarray(table[S.VELOCITY], dtype=float)
+    svrad = np.asarray(table[S.ERROR], dtype=float)
+    good = np.isfinite(rjd) & np.isfinite(vrad) & np.isfinite(svrad)
+    rjd, vrad, svrad = rjd[good], vrad[good], svrad[good]
+    offset = result['offset']
+    resid = vrad - kepfit.model(result, rjd + 2400000.0)
+    # the model finely enough for the shortest period, across the span
+    step = min(float(c['period']) for c in result['candidates']) / 40.0
+    npoint = int(min(200000, (rjd.max() - rjd.min()) / step + 2))
+    grid = np.linspace(rjd.min(), rjd.max(), max(npoint, 2))
+    curve = kepfit.model(result, grid + 2400000.0) - offset
+
+    fig, axes = plt.subplots(2, 1, figsize=(10, 7), sharex=True,
+                             gridspec_kw=dict(height_ratios=[2, 1]))
+    axes[0].plot(grid, curve, color='C3', lw=0.6, alpha=0.8,
+                 label='joint Keplerian fit', zorder=3)
+    axes[0].errorbar(rjd, vrad - offset, yerr=svrad, fmt='o', ms=3, lw=0.7,
+                     capsize=0, alpha=0.75, label='LBL velocities', zorder=2)
+    axes[0].axhline(0.0, color='k', lw=0.6, ls=':')
+    axes[0].set_ylabel('Radial velocity, offset removed (m s$^{-1}$)')
+    axes[0].legend(fontsize=8, loc='best')
+    axes[0].set_title('\n'.join(_candidate_label(c, k, sk) for c, k, sk in
+                                zip(result['candidates'], result['k'],
+                                    result['sk'])), fontsize=9)
+    axes[1].errorbar(rjd, resid, yerr=np.sqrt(svrad ** 2 +
+                                              result['jitter'] ** 2),
+                     fmt='o', ms=3, lw=0.7, capsize=0, alpha=0.75)
+    axes[1].axhline(0.0, color='k', lw=0.6, ls=':')
+    axes[1].set_ylabel('Residual (m s$^{-1}$)')
+    axes[1].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
+    axes[1].set_title('rms %.2f m s$^{-1}$ before the candidates, %.2f after;'
+                      ' jitter %.2f m s$^{-1}$ (added to the error bars)'
+                      % (result['rms_before'], result['rms_after'],
+                         result['jitter']), fontsize=9)
+    for ax in axes:
+        ax.grid(alpha=0.3)
+    known = (', %d known orbit(s) held fixed' % len(result['known'])
+             if result['known'] else '')
+    fig.suptitle('%s: joint fit of the transiting planets and candidates,'
+                 ' circular, P and T0 of the catalog fixed%s'
+                 % (title, known), fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
+def page_candidate_phase(plt, table, title, result, nbins=12):
+    """The velocities folded on each transiting planet or candidate (phase 0
+    at the transit), the offset, the known orbits and the other candidates
+    taken out, with the fitted Keplerian and the velocities binned in
+    phase."""
+    from lbl.report import kepfit
+
+    rjd = np.asarray(table[S.TIME], dtype=float)
+    vrad = np.asarray(table[S.VELOCITY], dtype=float)
+    svrad = np.asarray(table[S.ERROR], dtype=float)
+    good = np.isfinite(rjd) & np.isfinite(vrad) & np.isfinite(svrad)
+    bjd = rjd[good] + 2400000.0
+    vrad, svrad = vrad[good], svrad[good]
+    error = np.sqrt(svrad ** 2 + result['jitter'] ** 2)
+    ncand = len(result['candidates'])
+    fig, axes = plt.subplots(ncand, 1, squeeze=False,
+                             figsize=(10, 2.0 + 3.0 * ncand))
+    for index, cand in enumerate(result['candidates']):
+        ax = axes[index, 0]
+        period, t0 = float(cand['period']), float(cand['t0'])
+        phase = np.mod((bjd - t0) / period + 0.5, 1.0) - 0.5
+        folded = vrad - kepfit.model(result, bjd, skip=index)
+        ax.errorbar(phase, folded, yerr=error, fmt='o', ms=2.5, lw=0.6,
+                    capsize=0, alpha=0.35, color='C0',
+                    label='LBL velocities (error bars with the jitter)')
+        # the velocities binned in phase, weighted
+        edges = np.linspace(-0.5, 0.5, nbins + 1)
+        which = np.clip(np.digitize(phase, edges) - 1, 0, nbins - 1)
+        for ibin in range(nbins):
+            sel = which == ibin
+            if np.sum(sel) < 2:
+                continue
+            weights = 1.0 / error[sel] ** 2
+            mean = np.sum(weights * folded[sel]) / np.sum(weights)
+            ax.errorbar(0.5 * (edges[ibin] + edges[ibin + 1]), mean,
+                        yerr=1.0 / np.sqrt(np.sum(weights)), fmt='s', ms=5,
+                        color='k', capsize=2, lw=1.0, zorder=5,
+                        label='binned' if ibin == 0 else None)
+        grid = np.linspace(-0.5, 0.5, 400)
+        ax.plot(grid, result['k'][index] * kepfit.basis(t0 + grid * period,
+                                                        cand),
+                color='C3', lw=1.4, label='fitted Keplerian', zorder=6)
+        ax.axhline(0.0, color='k', lw=0.6, ls=':')
+        ax.axvline(0.0, color='0.5', lw=0.6, ls='--')
+        ax.set_xlim(-0.5, 0.5)
+        ax.set_xlabel('Phase (0 = transit, T0 = %.5f BJD)' % t0)
+        ax.set_ylabel('Radial velocity (m s$^{-1}$)')
+        ax.set_title(_candidate_label(cand, result['k'][index],
+                                      result['sk'][index]), fontsize=9)
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=7, loc='best')
+    fig.suptitle('%s: the velocities folded on each candidate, the offset,'
+                 ' the known orbits and the other candidates taken out'
+                 % title, fontsize=10)
+    fig.tight_layout()
+    return fig
