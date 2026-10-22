@@ -78,3 +78,31 @@ def test_a_gaussian_window_weights_the_line():
     # two gaussians: sigma_w / sqrt(sigma_w^2 + sigma_line^2)
     expected = 30.0 * 0.03 / np.sqrt(0.03 ** 2 + 0.02 ** 2)
     assert out['EW_DIFF'] == pytest.approx(expected, rel=0.01)
+
+
+def test_the_report_page_finds_and_draws_the_lines():
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from lbl.report import figures
+
+    rng = np.random.default_rng(2)
+    nspec = 30
+    activity = {'rjd': np.linspace(60000, 60300, nspec)}
+    for prefix in ['He_1.08333_', 'H_1.28216_', 'H_2.16612_']:
+        activity[prefix + 'EW_DIFF'] = rng.normal(0, 2, nspec)
+        activity[prefix + 'SIG_EW_DIFF'] = np.full(nspec, 2.0)
+        activity[prefix + 'ORDER'] = np.full(nspec, 9.0)
+    # a flare, and a line never measured
+    activity['He_1.08333_EW_DIFF'][5] = -40
+    activity['H_2.16612_EW_DIFF'][:] = np.nan
+    summary = dict(NAME=np.array(['He 1.08333', 'H 1.28216']),
+                   LABEL=np.array(['He I 10830', 'Pa beta']))
+    lines = figures.activity_lines(activity, summary)
+    assert [line[1:] for line in lines] == [('He 1.08333', 'He I 10830'),
+                                            ('H 1.28216', 'Pa beta')]
+    good, mean, chi2 = figures.activity_stats(activity, 'He_1.08333_')
+    assert good.sum() == nspec and chi2 > 10
+    fig = figures.page_activity(plt, activity, lines, 'test')
+    assert fig is not None
+    plt.close(fig)

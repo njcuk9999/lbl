@@ -199,6 +199,19 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                                         known_periods))]
     wanted.append(('Indicators and temperature projections',
                    lambda: figures.page_indicators(plt, table, title)))
+    # THE ACTIVITY LINES, from the table compile wrote beside the rdb
+    #   (lbl.science.activity_lines): their time series, a page per
+    #   ACTIVITY_PER_PAGE lines
+    activity, lines = _activity(rdb_file)
+    per_page = figures.ACTIVITY_PER_PAGE
+    for first in range(0, len(lines), per_page):
+        chunk = lines[first:first + per_page]
+        name = 'Activity lines'
+        if len(lines) > per_page:
+            name += ', %d to %d of %d' % (first + 1, first + len(chunk),
+                                          len(lines))
+        wanted.append((name, lambda chunk=chunk: figures.page_activity(
+            plt, activity, chunk, title)))
     # THE TAPAS SPLINES, so that the telluric pages centre themselves on the
     # strongest line of the species they are about rather than on a window
     # written down once for HARPS.
@@ -247,6 +260,13 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                      % (len(planets['orbits']), planets['star'])
                      if planets is not None else 'BERV, velocities iterated',
                      ''))
+        if lines:
+            chi2 = [figures.activity_stats(activity, prefix)[2]
+                    for prefix, _, _ in lines]
+            top = int(np.nanargmax(chi2)) if np.isfinite(chi2).any() else 0
+            rows.append(('Activity lines',
+                         '%d measured, most variable %s (chi2_r %.2g)'
+                         % (len(lines), lines[top][1], chi2[top]), ''))
         built = _build(work, out, title, rdb_file, rows, drawn, missing,
                        planets)
         if built is None:
@@ -254,6 +274,26 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
         return built
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def _activity(rdb_file):
+    """The activity table beside the rdb (lbl_compile) and its lines, or
+    (None, []) when there is none (a run computed before the activity lines,
+    or calibration data)"""
+    from lbl.report import figures, series
+
+    path = rdb_file.replace('.rdb', '_activity.csv')
+    if not os.path.exists(path):
+        return None, []
+    try:
+        activity = series.read_csv(path)
+        summary_path = rdb_file.replace('.rdb', '_activity_lines.csv')
+        summary = (series.read_csv(summary_path)
+                   if os.path.exists(summary_path) else None)
+        return activity, figures.activity_lines(activity, summary)
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('report: cannot read {0} ({1})'.format(path, exc))
+        return None, []
 
 
 def _tapas(data_dir):

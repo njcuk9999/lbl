@@ -54,6 +54,7 @@ Created on 2026-10-22
 @author: artigau
 """
 import os
+import warnings
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -416,20 +417,32 @@ def compile_tables(inst, lblrv_files: List[str], rdbfile: str):
     activity_file = rdbfile.replace('.rdb', '_activity.csv')
     lines_file = rdbfile.replace('.rdb', '_activity_lines.csv')
     mid_exp_key = inst.params['KW_MID_EXP_TIME']
+    # the header keys LBL's parameters name: all that the date and the BERV
+    #   need, without converting the ~1500 cards of the science header
+    #   (that took 20 times as long as the rest)
+    keys = sorted({value for key, value in inst.params.items()
+                   if key.startswith('KW_') and isinstance(value, str)})
     rows, tables, missing = [], [], 0
     for lblrv_file in lblrv_files:
-        table = io.load_table(lblrv_file, kind='lblrv activity table',
-                              extname=EXTNAME, required=False)
-        if table is None:
-            missing += 1
-            continue
-        header = inst.fix_lblrv_header(inst.load_header(lblrv_file))
-        hdr_act = fits.getheader(lblrv_file, extname=EXTNAME)
+        with fits.open(lblrv_file) as hdulist:
+            if EXTNAME not in hdulist:
+                missing += 1
+                continue
+            table = Table.read(hdulist, hdu=EXTNAME)
+            science_file = hdulist[EXTNAME].header.get('SCIFILE', '')
+            primary = hdulist[0].header
+            small = fits.Header()
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                for key in keys:
+                    if key in primary:
+                        small[key] = (primary[key], primary.comments[key])
+        header = io.LBLHeader.from_fits(small, lblrv_file)
         mjd = header.get_hkey(mid_exp_key, dtype=float)
         rows.append(dict(rjd=inst.get_rjd_value(header),
                          date=Time(mjd, format='mjd').isot,
                          FILENAME=os.path.basename(lblrv_file),
-                         SCIENCE_FILE=hdr_act.get('SCIFILE', ''),
+                         SCIENCE_FILE=science_file,
                          BERV=inst.get_berv(header)))
         tables.append(table)
     if missing > 0:

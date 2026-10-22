@@ -719,3 +719,114 @@ def page_indicators(plt, table, title):
                  ' shape changing, not a Doppler shift', fontsize=10)
     fig.tight_layout()
     return fig
+
+
+#: activity lines drawn on one page, in two columns
+ACTIVITY_PER_PAGE = 8
+#: a spectrum this many error bars from the weighted mean of a line is red
+ACTIVITY_NSIG = 4.0
+
+
+def activity_lines(activity, summary=None):
+    """The activity lines measured in at least one spectrum of an activity
+    table (lbl_compile, lbl.science.activity_lines), in the catalog's order,
+    as (prefix of their columns, name, label).
+
+    The columns of a line are <name>_<column>, the space of the name as an
+    underscore: He 1.08333 -> He_1.08333_EW_DIFF.
+    """
+    labels = dict()
+    if summary is not None and 'NAME' in summary and 'LABEL' in summary:
+        labels = dict(zip(summary['NAME'], summary['LABEL']))
+    out = []
+    for column in activity:
+        if not column.endswith('_EW_DIFF') or column.endswith('_SIG_EW_DIFF'):
+            continue
+        if not np.isfinite(np.asarray(activity[column], dtype=float)).any():
+            continue
+        prefix = column[:-len('EW_DIFF')]
+        name = prefix[:-1].replace('_', ' ', 1)
+        out.append((prefix, name, labels.get(name, name)))
+    return out
+
+
+def activity_stats(activity, prefix):
+    """The measures of one activity line: (good, weighted mean, reduced
+    chi2 about it), the last two NaN with fewer than two measures."""
+    ew = np.asarray(activity[prefix + 'EW_DIFF'], dtype=float)
+    sig = np.asarray(activity[prefix + 'SIG_EW_DIFF'], dtype=float)
+    good = np.isfinite(ew) & np.isfinite(sig) & (sig > 0)
+    if np.sum(good) < 2:
+        return good, float('nan'), float('nan')
+    weights = 1 / sig[good] ** 2
+    mean = float(np.sum(weights * ew[good]) / np.sum(weights))
+    chi2 = float(np.sum(((ew[good] - mean) / sig[good]) ** 2)
+                 / (np.sum(good) - 1))
+    return good, mean, chi2
+
+
+def page_activity(plt, activity, lines, title):
+    """The differential equivalent width of each activity line, in time.
+
+    WHAT IS PLOTTED. For each line of lbl/resources/activity_lines.yaml that
+    the spectra cover, what the line absorbs more than in the template (in
+    mA, lbl.science.activity_lines): 0 is the template, a line filling in
+    with chromospheric emission goes negative. The spectra further than
+    ACTIVITY_NSIG error bars from the weighted mean are red: a flare lights
+    He I and the Paschen lines together, an artefact usually one line only.
+
+    :param activity: dict of columns, the activity table of lbl_compile
+    :param lines: (prefix, name, label) of the lines on this page
+    :param title: str, the name of the run
+    """
+    if not lines:
+        return None
+    time = np.asarray(activity[S.TIME], dtype=float)
+    ncol = 2 if len(lines) > 1 else 1
+    nrow = int(np.ceil(len(lines) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(11, 1.2 + 2.4 * nrow),
+                             sharex=True, squeeze=False)
+    for index, (prefix, name, label) in enumerate(lines):
+        ax = axes[index // ncol, index % ncol]
+        ew = np.asarray(activity[prefix + 'EW_DIFF'], dtype=float)
+        sig = np.asarray(activity[prefix + 'SIG_EW_DIFF'], dtype=float)
+        good, mean, chi2 = activity_stats(activity, prefix)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            far = good & (np.abs(ew - mean) / sig > ACTIVITY_NSIG)
+        near = good & ~far
+        ax.errorbar(time[near], ew[near], yerr=sig[near], fmt='o', ms=3,
+                    lw=0.7, capsize=0, alpha=0.85, color='C0')
+        if far.any():
+            ax.errorbar(time[far], ew[far], yerr=sig[far], fmt='o', ms=3.5,
+                        lw=0.7, capsize=0, color='C3')
+        ax.axhline(0.0, color='k', lw=0.8, ls=':')
+        orders = np.asarray(activity.get(prefix + 'ORDER',
+                                         np.full(len(time), np.nan)),
+                            dtype=float)[good]
+        used = ', '.join('%d' % o for o in np.unique(orders[np.isfinite(
+            orders)]))
+        ax.set_title('%s (%s), order %s: %d spectra\nrms %.2g, median error'
+                     ' %.2g m$\\AA$, $\\chi^2_r$ %.2g, %d beyond %g$\\sigma$'
+                     % (label, name, used or '?', np.sum(good),
+                        np.std(ew[good]) if good.any() else np.nan,
+                        np.median(sig[good]) if good.any() else np.nan,
+                        chi2, np.sum(far), ACTIVITY_NSIG), fontsize=8)
+        ax.set_ylabel('$\\Delta$EW (m$\\AA$)', fontsize=8)
+        ax.tick_params(labelsize=8)
+        ax.grid(alpha=0.3)
+    for index in range(len(lines), nrow * ncol):
+        axes[index // ncol, index % ncol].set_visible(False)
+    for col in range(ncol):
+        # the lowest panel drawn in each column carries the time axis
+        last = max(i for i in range(len(lines)) if i % ncol == col) \
+            if any(i % ncol == col for i in range(len(lines))) else None
+        if last is not None:
+            axes[last // ncol, col].set_xlabel(
+                'Reduced Julian date (RJD = BJD - 2400000, days)', fontsize=8)
+            axes[last // ncol, col].xaxis.set_tick_params(labelbottom=True)
+    fig.suptitle('Activity lines: differential equivalent width against the'
+                 ' template, %s\n0 is the template, negative is a line'
+                 ' filling in (emission); red: beyond %g error bars from the'
+                 ' weighted mean' % (title, ACTIVITY_NSIG), fontsize=10)
+    fig.tight_layout()
+    return fig
