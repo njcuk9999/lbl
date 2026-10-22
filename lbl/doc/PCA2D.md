@@ -161,6 +161,21 @@ A correction with no `done.json` beside it was interrupted and is made again
 in every case. `SKIP_LBL_PCA2D=True` with `overwrite=True` stops the run:
 they ask opposite things.
 
+## Speed
+
+Two stages work on several exposures at once, with results identical to the
+bit to one at a time:
+
+| key | default | |
+|---|---|---|
+| `input.workers` | 4 | the cube: exposures read, resampled and high-passed in processes, coadded here in the files' order |
+| `correct.workers` | 4 | the correction: exposures refitted and written in threads |
+
+`workers=1` in the PCA2D dict's `input` or `correct` section gives one at a
+time. Memory grows with them: on a 17 GB machine, run one wrap at a time. A
+script read from standard input (`python - <<EOF`) builds its cube one
+exposure at a time, since spawned processes cannot re-read it.
+
 ## The command line
 
 `lbl_pca2d` is pca2d's own command line (`lbl.pca2d.cli`), for research runs

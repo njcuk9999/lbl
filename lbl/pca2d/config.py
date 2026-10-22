@@ -84,6 +84,11 @@ def check_windows(windows, domain):
 # Every tunable lives here; config.yaml only needs to override what differs.
 DEFAULTS = {
     "input": {
+        # exposures read, resampled and high-passed at once, in processes,
+        # when the cube is built (cube._parallel_map): the same cube to the
+        # bit, and left out of the cache key, since it says nothing about
+        # what the cube holds
+        "workers": 4,
         "format": "tfits",           # 'tfits' = APERO order-by-order spectra
                                      #           (the nominal input)
                                      # 's1d'   = the resampled s1d_v products
@@ -447,6 +452,11 @@ DEFAULTS = {
     # What comes out of a corrected file. The star components are never
     # divided out: with no template the first of them IS the star.
     "correct": {
+        # exposures corrected at once, in threads (reconstruct --workers): the
+        # same files as one at a time, each read, refitted and written on its
+        # own; 7.5 min for 420 SPIRou files one at a time. Here and not in
+        # nominal.yaml, whose hash is in every correction's stamp
+        "workers": 4,
         "n_star": 0,
         "n_earth": None,             # None = every observer component the fit has
         # THE UNIT IS AN EXCURSION, not a sample: one sample beyond 3 sigma is
@@ -1222,7 +1232,8 @@ def cache_key(config: dict) -> str:
     out so that re-running with a different n_components reuses the cache.
     """
     relevant = {
-        "input": config["input"],
+        # input.workers is how fast, not what: out of the key
+        "input": {k: v for k, v in config["input"].items() if k != "workers"},
         "quality": config["quality"],
         # domain.bands only chooses which columns the *fit* sees, so it must not
         # invalidate a cube that took twenty minutes to build

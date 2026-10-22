@@ -231,6 +231,10 @@ def parse_args(argv=None):
                         " transmission tellurique du cube descend sous T sur au"
                         " moins une pose (pca2d.diagnostics). Demande --cube")
     p.add_argument("--overwrite", action="store_true")
+    p.add_argument("--workers", type=int, default=1,
+                   help="exposures corrected at once, in threads (1: one after"
+                        " the other). The same files either way: each one is"
+                        " read, refitted and written on its own")
     p.add_argument("--cube", default=None,
                    help="the cube the fit was made from. With it, every sample"
                         " the fit gave no weight to is NaN in the corrected"
@@ -1613,6 +1617,19 @@ def correct_many(model, args):
     written = skipped = refitted = 0
     permute = getattr(args, "permute_b", None)
     prepared = []
+    workers = int(getattr(args, "workers", 1) or 1)
+    if workers > 1 and permute is None:
+        # IN THREADS, NOT PROCESSES: every exposure reads the same model and
+        # the same per-file masks (half a gigabyte for 420 SPIRou files),
+        # which threads share and processes would each copy; the reading,
+        # the resampling and the solving are numpy, scipy and FITS, which
+        # let go of the interpreter. Nothing shared is written: each exposure
+        # gets its own row, its own arrays and its own output file
+        written, skipped, refitted = _correct_threaded(
+            model, args, config, pairs, shifter, mask_mode, alive_by_file,
+            names_by_night, members, clipped_by_file, floored_by_file,
+            column_cards, velocity_fwhm, covered, workers)
+        pairs = []
     progress = _bar(pairs, desc="correcting", unit="file")
     for path, preset in progress:
         if not os.path.exists(path):
@@ -1701,6 +1718,81 @@ def correct_many(model, args):
              ", %d missing" % skipped if skipped else "",
              ", %d refitted individually" % refitted if refitted else ""))
     return written
+
+
+def _correct_threaded(model, args, config, pairs, shifter, mask_mode,
+                      alive_by_file, names_by_night, members, clipped_by_file,
+                      floored_by_file, column_cards, velocity_fwhm, covered,
+                      workers):
+    """correct_many's loop over exposures, `workers` at a time, in threads.
+
+    Each exposure is what the sequential loop does to it, in the same order
+    of results: refit (with --refit), its masks and cuts, then correct_file.
+    Returns (written, skipped, refitted) and appends to `covered`.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(pair):
+        path, preset = pair
+        if not os.path.exists(path):
+            return "missing", path, None
+        row = (preset if preset is not None
+               else exposure_row(model["coeffs"], path))
+        own_alive = None
+        refit = False
+        if args.refit:
+            fresh, own_alive = refit_row(
+                model, path, config, shifter, row,
+                weight=getattr(args, "weight", "flux"),
+                floor=getattr(args, "velocity_floor", VELOCITY_FLOOR),
+                fwhm=velocity_fwhm)
+            if fresh is None:
+                return "unresampled", path, None
+            row = fresh
+            refit = True
+        alive = mask_for(mask_mode, own_alive, alive_by_file,
+                         os.path.basename(path))
+        key = cut_key(path, row, names_by_night, members)
+        clipped = (clipped_by_file.get(key)
+                   if clipped_by_file is not None else None)
+        if floored_by_file is not None:
+            floored = floored_by_file.get(key)
+            if floored is not None:
+                clipped = floored if clipped is None else (clipped | floored)
+        new, touched, total = correct_file(
+            model, row, path, args.corrected_dir, args.n_star, args.n_earth,
+            args.kernel_halfwidth, args.overwrite, max_sky=args.max_sky_ratio,
+            alive=alive, clipped=clipped,
+            clip_nsig=getattr(args, "nsig_cut", None),
+            refit=bool(args.refit), weight=getattr(args, "weight", "flux"),
+            clip_columns=column_cards, config=config,
+            keep_name=getattr(args, "keep_name", False))
+        return "written", path, (new, touched, total, refit)
+
+    written = skipped = refitted = 0
+    log("  correcting %d exposures, %d at a time" % (len(pairs), workers))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = pool.map(one, pairs)
+        progress = _bar(results, desc="correcting", unit="file",
+                        total=len(pairs))
+        for status, path, out in progress:
+            if status == "missing":
+                log("  missing, skipped: %s" % path)
+                skipped += 1
+                continue
+            if status == "unresampled":
+                log("  could not resample, skipped: %s"
+                    % os.path.basename(path))
+                skipped += 1
+                continue
+            new, touched, total, refit = out
+            written += 1
+            refitted += int(refit)
+            covered.append(100.0 * touched / max(total, 1))
+            if hasattr(progress, "set_postfix_str"):
+                progress.set_postfix_str("%s  %.0f%% covered"
+                                         % (os.path.basename(new), covered[-1]))
+    return written, skipped, refitted
 
 
 def main(argv=None):

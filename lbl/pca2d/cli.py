@@ -1218,6 +1218,8 @@ def run_correct(plan):
             "--corrected-dir", target["corrdir"], "--overwrite",
             *(["--keep-name"] if plan.get("keep_names") else []),
             "--star-group", str(target.get("star_group", 0)),
+            "--workers", str(int((cfg.get("correct") or {}).get("workers")
+                                 or 1)),
             *clip_args(cfg), *shrink_args(cfg), *diagnostic_args(cfg)])
 
 

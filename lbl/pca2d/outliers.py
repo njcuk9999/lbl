@@ -286,6 +286,19 @@ def excursions(z, widths, rho, nsig):
     return out
 
 
+def _nanmedian_rows(boxes):
+    """np.nanmedian(boxes, axis=1), by bottleneck when it is there: the same
+    values to the bit (NaN where a row has none, the mean of the two middle
+    values for an even count), without the masked-array sort numpy takes for
+    small arrays. running_stats calls it thousands of times per correction,
+    which was 25 of the 36 s of residual_outliers on Welopoai's cube."""
+    try:
+        import bottleneck
+    except ImportError:                                       # pragma: no cover
+        return np.nanmedian(boxes, axis=1)
+    return bottleneck.nanmedian(boxes, axis=1)
+
+
 def running_stats(values, window, step=None, min_valid=0.5, origin=0):
     """(local median, robust sigma) of `values` along its last axis.
 
@@ -314,8 +327,8 @@ def running_stats(values, window, step=None, min_valid=0.5, origin=0):
         count = np.isfinite(boxes).sum(axis=1)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            mc = np.nanmedian(boxes, axis=1)
-            sc = 1.4826 * np.nanmedian(np.abs(boxes - mc[:, None]), axis=1)
+            mc = _nanmedian_rows(boxes)
+            sc = 1.4826 * _nanmedian_rows(np.abs(boxes - mc[:, None]))
         ok = (count >= min_valid * window) & np.isfinite(sc) & (sc > 0)
         if ok.sum() < 2:
             continue

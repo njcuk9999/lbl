@@ -498,6 +498,146 @@ def _write_snippets(cube_dir: str, snippets: dict) -> None:
 # --------------------------------------------------------------------------
 # t.fits path
 # --------------------------------------------------------------------------
+#: what every process of a pool holds, set once by _pool_init
+_POOL_STATE = {}
+
+
+def _pool_init(state):
+    _POOL_STATE.clear()
+    _POOL_STATE.update(state)
+
+
+def _pool_ping():
+    return True
+
+
+def _pool_prepare(path):
+    """_prepare_exposure in a process, and, when the high pass waits for the
+    template, the exposure already in the star's frame (_star_frame_row)."""
+    state = _POOL_STATE
+    out = _prepare_exposure(path, state["config"], state["grid"],
+                            state["blocks"])
+    if out["status"] == "ok" and state["deferred"]:
+        out["meta"]["_moved"] = _star_frame_row(
+            out["values"], out["good"], float(out["meta"]["berv"]),
+            state["grid"], state["config"])
+    return out
+
+
+def _pool_highpass(item):
+    state = _POOL_STATE
+    return _highpass_one(*item, state["template"], state["grid"],
+                         state["config"])
+
+
+def _parallel_map(function, items, workers, state, sequential, ahead=None):
+    """function(item) for every item, in order, in `workers` processes, with
+    at most `ahead` items in flight (twice the workers by default) so that a
+    slow consumer never holds every result. Each process gets `state` once.
+    `sequential(item)` is the same thing in this process: what runs with one
+    worker, or when a pool cannot be started.
+
+    PROCESSES, NOT THREADS: reading and resampling an exposure is mostly the
+    construction of FITPACK splines, which keep the interpreter's lock, and
+    four threads did it no faster than one. The processes are spawned (macOS'
+    default and the only safe start there), so they import lbl afresh and
+    get everything else through `state`."""
+    import sys
+    main = getattr(sys.modules.get("__main__"), "__file__", None)
+    if workers > 1 and main is not None and not os.path.isfile(main):
+        # a script read from standard input (python - <<EOF): spawned
+        # processes re-import the main script by its path, there is none, and
+        # the pool never starts. One at a time instead
+        workers = 1
+    if workers <= 1:
+        for item in items:
+            yield sequential(item)
+        return
+    import multiprocessing
+    from collections import deque
+    from concurrent.futures import ProcessPoolExecutor
+    try:
+        pool = ProcessPoolExecutor(
+            max_workers=workers, initializer=_pool_init, initargs=(state,),
+            mp_context=multiprocessing.get_context("spawn"))
+        pool.submit(_pool_ping).result(timeout=300)
+    except Exception as exc:                                  # noqa: BLE001
+        log("no pool of %d processes (%s): one exposure at a time"
+            % (workers, exc), "warn")
+        for item in items:
+            yield sequential(item)
+        return
+    ahead = int(ahead or 2 * workers)
+    with pool:
+        pending = deque()
+        for item in items:
+            pending.append(pool.submit(function, item))
+            if len(pending) >= ahead:
+                yield pending.popleft().result()
+        while pending:
+            yield pending.popleft().result()
+
+
+def _prepare_exposure(path, config, grid, blocks):
+    """Everything _build_tfits does to one exposure before the coadd: read it,
+    check it is the object and passes the quality cuts, resample it, keep the
+    figure snippets. Nothing logged here: the messages come back in "log", for
+    the caller to say in the files' order. status is "ok", "rejected"
+    (counted as such), or "skipped" (another object, unreadable)."""
+    dom = config["domain"]
+    inp = config["input"]
+    out = dict(status="skipped", log=[])
+    try:
+        payload = _readers.read_any(path, config)
+    except Exception as exc:                        # noqa: BLE001
+        out["log"].append(("skipping %s (%s)" % (os.path.basename(path), exc),
+                           "warn"))
+        return out
+
+    meta = dict(payload["meta"])
+    if inp["object"] is not None and not same_object(
+            meta, inp.get("object_header") or inp["object"]):
+        out["log"].append(("skipping %s (OBJECT=%s, DRSOBJN=%s, not %s)"
+                           % (meta["filename"], meta["object"],
+                              meta.get("drsobjn"),
+                              inp.get("object_header") or inp["object"]),
+                           "warn"))
+        return out
+    meta = one_object(meta, inp)
+    meta["snr_band"] = sptf.band_snr(payload, dom["wave_min"], dom["wave_max"])
+    usable = np.isfinite(payload["flux"]) & (payload["flux"] > 0)
+    meta["median_flux"] = (float(np.median(payload["flux"][usable]))
+                           if usable.any() else np.nan)
+    meta["nan_fraction"] = float(1.0 - usable.mean())
+
+    # LES LONGUEURS D'ONDE DE LA POSE, et non la grille: c'est la seule
+    # branche qui en dispose, et le critere qui rejette une solution qui
+    # recule a besoin de les voir ordre par ordre.
+    reason = _quality_reason(meta, payload["wave"], config["quality"])
+    if reason is not None:
+        out["log"].append(("rejecting %s: %s" % (meta["filename"], reason),
+                           "warn"))
+        out["status"] = "rejected"
+        return out
+
+    # each exposure is registered with its OWN BERV before it is coadded:
+    # within a night the BERV moves by up to 0.5 km/s, a whole destination
+    # pixel, and stacking first would smear every stellar line by that much
+    values, sig, tr, good, n_orders, segments = sptf.resample_exposure(
+        payload, grid, config)
+    if n_orders == 0 or not good.any():
+        out["log"].append(("rejecting %s: no order survived in the domain"
+                           % meta["filename"], "warn"))
+        out["status"] = "rejected"
+        return out
+    out.update(status="ok", meta=meta, values=values, sigma=sig, trans=tr,
+               good=good, segments=segments,
+               snippets={(a0, b0): sptf.raw_block(payload, grid, a0, b0, config)
+                         for a0, b0 in blocks},
+               ratio=_parity_agreement(values, sig, good))
+    return out
+
+
 def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
                  snippets=None):
     dom = config["domain"]
@@ -523,59 +663,36 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     parity_ratio = []
     blocks = _figure_blocks(config, grid) if snippets is not None else []
 
-    for i, (path, label) in enumerate(_bar(zip(files, labels), total=len(files),
-                                          desc="reading spectra", unit="file")):
-        try:
-            payload = _readers.read_any(path, config)
-        except Exception as exc:                        # noqa: BLE001
-            log("skipping %s (%s)" % (os.path.basename(path), exc), "warn")
-            continue
-
-        meta = dict(payload["meta"])
-        if inp["object"] is not None and not same_object(
-                meta, inp.get("object_header") or inp["object"]):
-            log("skipping %s (OBJECT=%s, DRSOBJN=%s, not %s)"
-                % (meta["filename"], meta["object"], meta.get("drsobjn"),
-                   inp.get("object_header") or inp["object"]), "warn")
-            continue
-        meta = one_object(meta, inp)
-        meta["snr_band"] = sptf.band_snr(payload, dom["wave_min"], dom["wave_max"])
-        usable = np.isfinite(payload["flux"]) & (payload["flux"] > 0)
-        meta["median_flux"] = (float(np.median(payload["flux"][usable]))
-                               if usable.any() else np.nan)
-        meta["nan_fraction"] = float(1.0 - usable.mean())
-
-        # LES LONGUEURS D'ONDE DE LA POSE, et non la grille: c'est la seule
-        # branche qui en dispose, et le critere qui rejette une solution qui
-        # recule a besoin de les voir ordre par ordre.
-        reason = _quality_reason(meta, payload["wave"], config["quality"])
-        if reason is not None:
-            log("rejecting %s: %s" % (meta["filename"], reason), "warn")
+    # IN PROCESSES, A FEW EXPOSURES AHEAD (input.workers): reading and
+    # resampling an exposure needs nothing from the others. The coadd itself
+    # stays here, in the files' order, so the sums are made in the same order
+    # and the cube is the same to the bit.
+    deferred_hp = bool(config["highpass"].get("against_template"))
+    jobs = list(zip(files, labels))
+    prepared = _parallel_map(
+        _pool_prepare, files, int(inp.get("workers") or 1),
+        dict(config=config, grid=grid, blocks=blocks, deferred=deferred_hp),
+        sequential=lambda path: _prepare_exposure(path, config, grid, blocks))
+    for (path, label), out in _bar(zip(jobs, prepared), total=len(files),
+                                   desc="reading spectra", unit="file"):
+        for message, level in out["log"]:
+            log(message, level)
+        if out["status"] == "rejected":
             n_rejected += 1
+        if out["status"] != "ok":
             continue
-
-        # each exposure is registered with its OWN BERV before it is coadded:
-        # within a night the BERV moves by up to 0.5 km/s, a whole destination
-        # pixel, and stacking first would smear every stellar line by that much
-        values, sig, tr, good, n_orders, segments = sptf.resample_exposure(
-            payload, grid, config)
-        deferred_hp = bool(config["highpass"].get("against_template"))
-        if n_orders == 0 or not good.any():
-            log("rejecting %s: no order survived in the domain" % meta["filename"],
-                "warn")
-            n_rejected += 1
-            continue
-
+        meta = out["meta"]
+        values, sig, tr, good, segments = (out["values"], out["sigma"],
+                                           out["trans"], out["good"],
+                                           out["segments"])
         # The raw flux around every figure window, from the spectrum already in
         # memory, so that drawing the figures never reopens the files. A few
         # thousand samples per exposure; see cache.py.
-        for a0, b0 in blocks:
-            snippets.setdefault((a0, b0), {})[meta["filename"]] = sptf.raw_block(
-                payload, grid, a0, b0, config)
+        for key, block in out["snippets"].items():
+            snippets.setdefault(key, {})[meta["filename"]] = block
 
-        ratio = _parity_agreement(values, sig, good)
-        if np.isfinite(ratio):
-            parity_ratio.append(ratio)
+        if np.isfinite(out["ratio"]):
+            parity_ratio.append(out["ratio"])
 
         if deferred_hp:
             held.append((label, values, sig, tr if use_recon else None,
@@ -838,28 +955,16 @@ def _highpass_against_template(coadd, held, grid, config):
     LE FILTRE RESTE PAR SEGMENT D'ORDRE, jamais a travers le trou qui separe
     deux ordres de meme parite, exactement comme la premiere passe.
     """
-    from . import preprocess as prep
-
-    reg = config["registration"]
-    hip = config["highpass"]
     bervs = np.array([float(m["berv"]) for _, _, _, _, _, m, _ in held])
+    workers = int(config["input"].get("workers") or 1)
 
-    # le template: la mediane des poses ramenees dans le repere de l'etoile
+    # le template: la mediane des poses ramenees dans le repere de l'etoile,
+    # deja faites par les processus qui les ont lues (moved), sinon ici
     rows = []
-    for (_, values, _, _, good, _, _), berv in zip(held, bervs):
-        row = np.where(good, values, np.nan)
-        # chaque parite normalisee par sa mediane, pour qu'une pose brillante
-        # ne pese pas plus qu'une pose faible
-        with np.errstate(invalid="ignore"):
-            row = row - np.nanmedian(row, axis=1, keepdims=True)
-        moved = np.empty_like(row)
-        for parity in range(row.shape[0]):
-            finite = np.isfinite(row[parity])
-            shifted, shifted_good = prep.register(
-                grid, np.where(finite, row[parity], 0.0), finite, berv, 0.0,
-                grid, spline_order=reg["spline_order"],
-                mask_threshold=reg["mask_threshold"])
-            moved[parity] = np.where(shifted_good, shifted, np.nan)
+    for (_, values, _, _, good, meta, _), berv in zip(held, bervs):
+        moved = meta.pop("_moved", None)
+        if moved is None:
+            moved = _star_frame_row(values, good, berv, grid, config)
         rows.append(moved)
     # a sample no exposure covers is NaN in the template, as it should be:
     #   numpy says so with a warning of its own, which errstate does not reach
@@ -879,30 +984,66 @@ def _highpass_against_template(coadd, held, grid, config):
     _stash_template(config, template)
 
     n_used = 0
-    for (label, values, sig, tr, good, meta, segments), berv in zip(held,
-                                                                   bervs):
-        here = np.empty_like(template)
-        for parity in range(template.shape[0]):
-            finite = np.isfinite(template[parity])
-            shifted, shifted_good = prep.register(
-                grid, np.where(finite, template[parity], 0.0), finite, 0.0,
-                berv, grid, spline_order=reg["spline_order"],
-                mask_threshold=reg["mask_threshold"])
-            here[parity] = np.where(shifted_good, shifted, np.nan)
-
-        out = np.zeros_like(values)
-        keep = np.zeros(good.shape, dtype=bool)
-        for parity, start, stop in segments:
-            seg, seg_good = prep.highpass_against_template(
-                values[parity, start:stop], good[parity, start:stop],
-                here[parity, start:stop], hip["window"], hip["polyorder"],
-                already_log=True)
-            out[parity, start:stop] = seg
-            keep[parity, start:stop] = seg_good
-        keep &= np.isfinite(sig) & (sig > 0)
-        coadd.add(label, np.where(keep, out, 0.0), sig, tr, keep, meta)
+    items = [(values, sig, good, segments, berv)
+             for (_, values, sig, _, good, _, segments), berv in zip(held,
+                                                                    bervs)]
+    passed = _parallel_map(
+        _pool_highpass, items, workers,
+        dict(template=template, grid=grid, config=config),
+        sequential=lambda item: _highpass_one(*item, template, grid, config))
+    for (label, _, sig, tr, _, meta, _), (out, keep) in zip(held, passed):
+        coadd.add(label, out, sig, tr, keep, meta)
         n_used += 1
     return n_used
+
+
+def _star_frame_row(values, good, berv, grid, config):
+    """One exposure in the star's frame, each parity less its median: what the
+    template of _highpass_against_template is the median of."""
+    from . import preprocess as prep
+    reg = config["registration"]
+    row = np.where(good, values, np.nan)
+    # chaque parite normalisee par sa mediane, pour qu'une pose brillante
+    # ne pese pas plus qu'une pose faible
+    with np.errstate(invalid="ignore"):
+        row = row - np.nanmedian(row, axis=1, keepdims=True)
+    moved = np.empty_like(row)
+    for parity in range(row.shape[0]):
+        finite = np.isfinite(row[parity])
+        shifted, shifted_good = prep.register(
+            grid, np.where(finite, row[parity], 0.0), finite, berv, 0.0,
+            grid, spline_order=reg["spline_order"],
+            mask_threshold=reg["mask_threshold"])
+        moved[parity] = np.where(shifted_good, shifted, np.nan)
+    return moved
+
+
+def _highpass_one(values, sig, good, segments, berv, template, grid, config):
+    """One exposure high-passed against the template carried into its frame:
+    (the values to coadd, zero where not kept; what is kept)."""
+    from . import preprocess as prep
+    reg = config["registration"]
+    hip = config["highpass"]
+    here = np.empty_like(template)
+    for parity in range(template.shape[0]):
+        finite = np.isfinite(template[parity])
+        shifted, shifted_good = prep.register(
+            grid, np.where(finite, template[parity], 0.0), finite, 0.0,
+            berv, grid, spline_order=reg["spline_order"],
+            mask_threshold=reg["mask_threshold"])
+        here[parity] = np.where(shifted_good, shifted, np.nan)
+
+    out = np.zeros_like(values)
+    keep = np.zeros(good.shape, dtype=bool)
+    for parity, start, stop in segments:
+        seg, seg_good = prep.highpass_against_template(
+            values[parity, start:stop], good[parity, start:stop],
+            here[parity, start:stop], hip["window"], hip["polyorder"],
+            already_log=True)
+        out[parity, start:stop] = seg
+        keep[parity, start:stop] = seg_good
+    keep &= np.isfinite(sig) & (sig > 0)
+    return np.where(keep, out, 0.0), keep
 
 
 def _quality_reason(meta, wave, quality):
