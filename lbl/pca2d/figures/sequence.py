@@ -21,8 +21,9 @@ per parity included, and nothing else: the star block, its own per-parity mean
 and components, is the spectrum LBL is about to measure.
 
 Everything is in the STAR'S rest frame with the rows ordered by barycentric
-velocity, so a stellar feature is vertical and anything anchored to the Earth
-slants.
+velocity (plus the star's known Keplerian velocity, when it has orbits:
+registration.orbits), so a stellar feature is vertical and anything anchored
+to the Earth slants.
 """
 
 from __future__ import annotations
@@ -157,7 +158,19 @@ def berv_steps(track, x):
     return xs, ys
 
 
-def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True):
+def order_label(meta):
+    """What the rows are ordered by, said on the river plots: the BERV, or,
+    when the star's frame follows known orbits (a vstar that is not zero),
+    the BERV and the Keplerian velocity together."""
+    if "vstar" in getattr(meta, "colnames", []):
+        vstar = np.asarray(meta["vstar"], dtype=float)
+        if np.any(np.isfinite(vstar) & (vstar != 0)):
+            return "BERV + known Keplerian velocity"
+    return "BERV"
+
+
+def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True,
+          by="BERV"):
     # NOT INTERPOLATED (asked 2026-10-21): every row and every sample is a
     # block of its own, and a row of ten nights is not smeared into the next
     im = ax.imshow(image, aspect="auto", cmap=cmap or nan_cmap("RdBu_r"),
@@ -172,7 +185,7 @@ def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True):
     # so five of them written down the same axis overlap each other and the
     # panels between them. The caller labels the middle image.
     if ylabel:
-        ax.set_ylabel("%s, ordered by BERV" % unit, fontsize=8)
+        ax.set_ylabel("%s, ordered by %s" % (unit, by), fontsize=8)
     ax.tick_params(labelsize=7)
     return im
 
@@ -335,6 +348,9 @@ def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=Fa
             "delta": -pixel_shift(np.asarray(fit["berv"], dtype=float), dv),
             "parity": row_parity(meta, n),
             "berv": np.asarray(meta["berv"], dtype=float),
+            # what the rows are ordered by: with orbits, berv is the star's
+            #   frame, the BERV and the companions' velocity together
+            "order_by": order_label(meta),
             "means": means, "group": group, "select": select,
             "templates": fit_templates(fit, meta, n, grid.size),
             "names": [os.path.basename(str(v)) for v in meta["filename"]],
@@ -450,10 +466,11 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
                  else "   scatter %.4f" % np.nanstd(block[name]))
         if name in RESIDUAL_PANELS:
             im_resid = panel(axes[r], block[name], x, resid_scale, title + extra,
-                             unit=unit, ylabel=r == middle)
+                             unit=unit, ylabel=r == middle,
+                             by=ctx.get("order_by", "BERV"))
         else:
             im = panel(axes[r], block[name], x, scale, title + extra, unit=unit,
-                       ylabel=r == middle)
+                       ylabel=r == middle, by=ctx.get("order_by", "BERV"))
 
     # THE BERV, as a thick black line through the middle of every image
     # (asked 2026-10-21): where a feature that stands still in the OBSERVER'S
@@ -515,9 +532,10 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     if drawn:
         ax.set_ylabel("flux / its own median", fontsize=8.5)
         ax.legend(fontsize=8, loc="lower right", framealpha=0.9)
-        ax.set_title("%d of those rows in FLUX, spread over BERV %+.1f to"
-                     " %+.1f km/s" % (drawn, berv[spread].min(),
-                                      berv[spread].max()), fontsize=8.5)
+        ax.set_title("%d of those rows in FLUX, spread over %s %+.1f to"
+                     " %+.1f km/s" % (drawn, ctx.get("order_by", "BERV"),
+                                      berv[spread].min(), berv[spread].max()),
+                     fontsize=8.5)
         ax.grid(alpha=0.15)
         ax.tick_params(labelsize=8)
     else:

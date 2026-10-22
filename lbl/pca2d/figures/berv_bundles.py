@@ -77,6 +77,17 @@ def read_members(cube):
     return table
 
 
+def frame_label(cube):
+    """What the BERVs of this page are: the BERV, or, when the cube's star
+    frame follows known orbits, the BERV and the Keplerian velocity
+    together (sequence.order_label, from the cube's meta.fits)."""
+    try:
+        from .sequence import order_label
+        return order_label(Table.read(os.path.join(cube, "meta.fits")))
+    except Exception:                                         # noqa: BLE001
+        return "BERV"
+
+
 def note_page(pdf_path, title, text):
     with plt.rc_context(STYLE):
         fig = plt.figure(figsize=(8.5, 3.0))
@@ -93,6 +104,8 @@ def draw(members, args):
     nights = np.array([night_of(g) for g in groups])
     berv = np.asarray(members["berv"], dtype=float)
     bjd = np.asarray(members["bjd"], dtype=float)
+    # with orbits the members' "berv" is the star's frame
+    by = frame_label(args.cube)
     order = np.argsort(bjd)
     groups, nights, berv, bjd = groups[order], nights[order], berv[order], bjd[order]
     names = sorted(set(nights), key=lambda n: bjd[nights == n].min())
@@ -125,7 +138,7 @@ def draw(members, args):
         top.set_xticks(range(0, len(names), step))
         top.set_xticklabels([names[i] for i in range(0, len(names), step)],
                             rotation=35, ha="right", fontsize=7, color=MUTED)
-        top.set_ylabel("BERV - night median (m/s)", fontsize=9, color=INK)
+        top.set_ylabel("%s - night median (m/s)" % by, fontsize=9, color=INK)
         top.tick_params(labelsize=8, colors=MUTED)
         top.grid(axis="y", color=GRID, lw=0.6)
         for spine in ("top", "right"):
@@ -158,7 +171,7 @@ def draw(members, args):
                          fontsize=8.5, color=INK, loc="left")
             ax.set_xlabel("hours since the first exposure", fontsize=8,
                           color=INK)
-            ax.set_ylabel("BERV (km/s)", fontsize=8, color=INK)
+            ax.set_ylabel("%s (km/s)" % by, fontsize=8, color=INK)
             ax.tick_params(labelsize=7, colors=MUTED)
             ax.grid(color=GRID, lw=0.6)
             for spine in ("top", "right"):
