@@ -128,6 +128,8 @@ def main(runparams: dict):
     olen = len(object_sciences)
     # the joint pca2d correction, once made: {object: (corrected, comparison)}
     pca2d_joint = None
+    # the objects LBL has measured as delivered (PCA2D compare)
+    measured = set()
     # loop around all files
     for num in range(olen):
         # get the science target
@@ -221,9 +223,37 @@ def main(runparams: dict):
             delivered = object_science
             # the delivered object measured first, so that the report can set
             # its velocities beside the corrected ones (PCA2D compare=True)
-            if lbl_pca2d.compare(pca2d):
+            if lbl_pca2d.compare(pca2d) and object_science not in measured:
                 _lbl_steps(object_science=object_science,
                            object_comparison=object_comparison, **steps)
+                measured.add(object_science)
+            # A JOINT FIT: every other star measured as delivered too, BEFORE
+            #   it, since a star whose OBJECT_COMPARISON is another star needs
+            #   its velocity against that template to place it (lbl_pca2d
+            #   star_template); their own iterations then skip that pass
+            joint = isinstance(pca2d, dict) and pca2d.get('joint')
+            if joint and pca2d_joint is None and lbl_pca2d.compare(pca2d) \
+                    and not runparams['RUN_LBL_TELLUCLEAN']:
+                for other in range(olen):
+                    if object_sciences[other] in measured:
+                        continue
+                    kw_other = dict(iteration=other, length=olen)
+                    if lbl_misc.wraplistcheck(data_types, 'DATA_TYPES',
+                                              **kw_other) != 'SCIENCE':
+                        continue
+                    steps_other = dict(
+                        steps,
+                        object_teff=lbl_misc.wraplistcheck(
+                            object_teffs, 'OBJECT_TEFF', **kw_other),
+                        blaze_corr=lbl_misc.wraplistcheck(
+                            blaze_corrs, 'BLAZE_CORRECTED', **kw_other),
+                        blaze_file=lbl_misc.wraplistcheck(
+                            blaze_files, 'BLAZE_FILE', **kw_other))
+                    _lbl_steps(object_science=object_sciences[other],
+                               object_comparison=lbl_misc.wraplistcheck(
+                                   object_comparisons, 'OBJECT_COMPARISON',
+                                   **kw_other), **steps_other)
+                    measured.add(object_sciences[other])
             pca2d_args = dict(instrument=instrument, data_dir=data_dir,
                               data_source=data_source, pca2d=pca2d,
                               input_file=runparams.get('INPUT_FILE'),

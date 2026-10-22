@@ -46,6 +46,7 @@ Created on 2026-10-22
 @author: artigau
 """
 import datetime
+import glob
 import hashlib
 import os
 
@@ -258,6 +259,72 @@ class Basis:
                     self.grid[0]))
         return self.components[:n_earth].copy()
 
+    def check_compatible(self, instrument: str, data_source: str,
+                         others: str = ''):
+        """
+        Stop, with everything needed to understand why and what to do, when
+        the basis was made with another instrument's spectra or from
+        another DATA_SOURCE's (its INSTRUME and DATASRC cards), or does not
+        say which. The same instrument reduced by two pipelines is two
+        different things in the observer's frame: each one corrects the
+        tellurics, subtracts the OH, divides the blaze and solves the
+        wavelengths its own way, and a basis learned on one describes what
+        the other leaves wrongly, without anything failing (the grid would
+        match). No option to pass anyway: being careful.
+
+        :param instrument: str, LBL's INSTRUMENT of the run
+        :param data_source: str, LBL's DATA_SOURCE of the run
+        :param others: str, the bases that would do, as a text to add (the
+                       caller knows where to look)
+        """
+        made_inst = str(self.header.get('INSTRUME', '') or '').strip()
+        made_src = str(self.header.get('DATASRC', '') or '').strip()
+        run_inst = str(instrument or '').strip()
+        run_src = str(data_source or '').strip()
+        problems = []
+        if not made_inst:
+            problems.append('the basis does not say which INSTRUMENT it was'
+                            ' made with (no INSTRUME card)')
+        elif made_inst.upper() != run_inst.upper():
+            problems.append('INSTRUMENT differs: the basis was made with %s'
+                            ' spectra, this run is %s' % (made_inst,
+                                                          run_inst))
+        if not made_src:
+            problems.append('the basis does not say which DATA_SOURCE it was'
+                            ' made from (no DATASRC card)')
+        elif made_src.upper() != run_src.upper():
+            problems.append('DATA_SOURCE differs: the basis was made from %s'
+                            ' spectra, this run reads %s spectra'
+                            % (made_src, run_src))
+        if not problems:
+            return
+        training = ', '.join(str(o) for o in self.training['object'])
+        lines = ['observer basis %s cannot be used for this run:' % self.name]
+        lines += ['  - %s' % problem for problem in problems]
+        lines += ['',
+                  '  basis   %s' % self.path,
+                  '          INSTRUMENT %s, DATA_SOURCE %s; trained on %s'
+                  ' (MJD %.0f to %.0f), %s observer components, BASISID %s'
+                  % (made_inst or '?', made_src or '?', training or '?',
+                     float(self.header.get('MJDMIN', np.nan)),
+                     float(self.header.get('MJDMAX', np.nan)),
+                     self.n_earth, self.ident),
+                  '  run     INSTRUMENT %s, DATA_SOURCE %s'
+                  % (run_inst or '?', run_src or '?'),
+                  '',
+                  '  Why: each instrument and each pipeline leaves its own'
+                  ' residuals in the observer\'s frame (telluric correction,'
+                  ' OH subtraction, blaze, wavelength solution); a basis'
+                  ' learned on one describes the other wrongly, and nothing'
+                  ' would fail to say so.',
+                  '  What to do: train a basis on %s %s spectra (PCA2D'
+                  ' output_name=..., stars whose BERV sweeps), or give'
+                  ' input_name a basis made from them.' % (run_inst or '?',
+                                                           run_src or '?')]
+        if others:
+            lines += ['  ' + others]
+        raise ValueError('\n'.join(lines))
+
     def check_dates(self, mjd: np.ndarray, margin: float = 60.0) -> int:
         """How many of these dates fall more than margin days outside the
         training's"""
@@ -265,6 +332,28 @@ class Basis:
         low = self.header.get('MJDMIN', -np.inf) - margin
         high = self.header.get('MJDMAX', np.inf) + margin
         return int(np.sum((mjd < low) | (mjd > high)))
+
+
+def compatible_bases(data_dir: str, instrument: str, data_source: str) -> str:
+    """The observer bases of DATA_DIR/pca2d/components made with this
+    instrument from this DATA_SOURCE, as a sentence (for check_compatible)"""
+    folder = os.path.join(data_dir, FOLDER)
+    names = []
+    for path in sorted(glob.glob(os.path.join(folder,
+                                              'PCA2D_Observer_*.fits'))):
+        try:
+            head = fits.getheader(path)
+        except Exception:                                 # noqa: BLE001
+            continue
+        if str(head.get('INSTRUME', '')).upper() == str(instrument).upper() \
+                and str(head.get('DATASRC', '')).upper() == \
+                str(data_source).upper():
+            names.append(str(head.get('BASISNAM', os.path.basename(path))))
+    if not names:
+        return ('There is no %s %s basis in %s yet.'
+                % (instrument, data_source, folder))
+    return ('%s %s bases in %s: %s.' % (instrument, data_source, folder,
+                                        ', '.join(names)))
 
 
 def load(name: str, data_dir: str = None, instrument: str = '') -> Basis:

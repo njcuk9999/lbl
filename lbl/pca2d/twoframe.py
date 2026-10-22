@@ -199,7 +199,7 @@ CONFIGURABLE = ("n_star", "n_earth", "iters", "order", "tie_parities", "max_mad"
                 "velocity_term", "velocity_min_transmission", "mean",
                 "patience", "keep", "star_resolution", "star_basis",
                 "resolution", "star_smooth", "holdout", "earth_basis",
-                "observer_first")
+                "observer_first", "star_templates")
 
 
 def _resolve(args):
@@ -2238,6 +2238,71 @@ def _hierarchical_median(home, berv, bin_kms, min_entries, desc=None):
         out[first:last] = _nanmedian_over_rows(per_bin, step=last - first)
     return out
 
+#: the speed of light [m/s]
+C_MS = 299792458.0
+
+
+def _live_segments(live):
+    """(start, stop) of each run of True in a boolean vector: the order
+    segments a parity's rows cover on the grid"""
+    edges = np.diff(np.concatenate([[0], live.astype(np.int8), [0]]))
+    return list(zip(np.where(edges == 1)[0], np.where(edges == -1)[0]))
+
+
+def external_star_template(spec, grid, parity, live, window, polyorder,
+                           mode="log_sub"):
+    """
+    The star's spectrum for one order parity from another star's template
+    (an LBL template, or APERO's s1d one), in the cube's space: shifted
+    from the template's velocity to the object's, put on the grid, and
+    high-passed as the cube is (pca2d.preprocess.highpass), segment by
+    segment of the columns this parity's rows cover.
+
+    :param spec: dict, file (the template, a FITS table: wavelength [nm],
+                 flux, and flux_even / flux_odd when it has them) and
+                 velocity (m/s: the object's velocity minus the template's,
+                 composed relativistically; positive moves the lines red)
+    :param grid: np.ndarray, the cube's grid [nm]
+    :param parity: int, 0 for the even orders, 1 for the odd ones
+    :param live: np.ndarray of bool, the columns this parity's rows cover
+    :param window: int, the high-pass window in samples
+    :param polyorder: int, the high-pass polynomial order
+    :param mode: str, the high-pass mode of the cube
+
+    :return: (template on the grid, 0 where undefined; the column used)
+    """
+    from . import preprocess as prep
+
+    table = Table.read(spec["file"])
+    column = ("flux_even", "flux_odd")[int(parity)]
+    used = column if column in table.colnames else "flux"
+    wave = np.asarray(table["wavelength"], dtype=float)
+    flux = np.asarray(table[used], dtype=float)
+    beta = float(spec.get("velocity", 0.0)) / C_MS
+    wave = wave * np.sqrt((1 + beta) / (1 - beta))
+    finite = np.isfinite(wave)
+    wave, flux = wave[finite], flux[finite]
+    order = np.argsort(wave)
+    wave, flux = wave[order], flux[order]
+    good = np.isfinite(flux) & (flux > 0)
+    # ON THE CUBE'S GRID FIRST, filtered there after: the window is in
+    #   samples of this grid (highpass.window, width_kms at domain.dv), and
+    #   the template's own sampling is another one
+    on_grid = np.interp(grid, wave[good], flux[good], left=np.nan,
+                        right=np.nan)
+    # no interpolation across the template's holes
+    covered = np.interp(grid, wave, good.astype(float), left=0.0, right=0.0)
+    on_grid[covered < 0.999] = np.nan
+    out = np.zeros_like(grid)
+    for s0, s1 in _live_segments(np.asarray(live, dtype=bool)):
+        segment = on_grid[s0:s1]
+        if np.sum(np.isfinite(segment)) < max(int(window), 8):
+            continue
+        values, ok = prep.highpass(segment, window, polyorder, mode)
+        out[s0:s1] = np.where(ok & np.isfinite(segment), values, 0.0)
+    return out, used
+
+
 def star_frame_template(data, w, shifter, delta, min_spectra=20, berv=None,
                         berv_bin=None, berv_min_entries=3, rows=None,
                         spill=None, desc=None):
@@ -3120,8 +3185,62 @@ def main(argv=None):
                 % (Q_frozen.shape[0], np.array2string(
                     np.std(b_first, axis=0), precision=3),
                    time.time() - tick), "info")
+        # ANOTHER STAR'S TEMPLATE for a member whose OBJECT_COMPARISON is
+        #   another star (twoframe.star_templates, one entry per member of
+        #   the fit, None for the members estimated from their own data)
+        external = list(getattr(args, "star_templates", None) or [])
+        hp_window = hp_order = hp_mode = None
+        if any(external):
+            from .config import highpass_samples, load_config
+            hp_cfg = (load_config(args.config).get("highpass")
+                      if args.config else None) or {}
+            hp_order = int(hp_cfg.get("polyorder", 2))
+            hp_mode = str(hp_cfg.get("mode", "log_sub"))
+            # THE SAME FILTER IN VELOCITY as the cube's: width_kms at this
+            #   grid's own step, measured on the grid, not a number of samples
+            #   carried over from elsewhere
+            width = hp_cfg.get("width_kms")
+            hp_window = (highpass_samples(float(width), dv, hp_order) if width
+                         else int(hp_cfg.get("window") or 201))
+            log("another star's template high-passed as the cube: %d samples"
+                " of %.3f km/s, %.1f km/s" % (hp_window, dv, hp_window * dv),
+                "value")
         for g in range(templates.shape[0]):
             rows_g = group == g
+            value = int(parity_groups[g])
+            member, parity_index = (value // 2, value % 2) if \
+                templates.shape[0] > 2 else (0, value % 2)
+            spec = external[member] if member < len(external) else None
+            if spec:
+                tick = time.time()
+                live = np.asarray(w[rows_g].sum(axis=0) > 0)
+                templates[g], used = external_star_template(
+                    spec, grid, parity_index, live, hp_window, hp_order,
+                    hp_mode)
+                # how well it matches this star's own star-frame median, as a
+                #   check of the velocity it was placed at (not applied)
+                own = star_frame_template(
+                    data, w, shifter, delta, rows=rows_g,
+                    berv=berv_rows, berv_bin=args.template_berv_bin,
+                    berv_min_entries=args.template_berv_min_entries,
+                    spill=spill, desc="check, %s rows" % names[g])
+                both = (templates[g] != 0) & (own != 0)
+                lags = np.arange(-20, 21)
+                corr = [np.corrcoef(np.roll(templates[g], k)[both],
+                                    own[both])[0, 1] if both.sum() > 100
+                        else np.nan for k in lags]
+                best = int(lags[int(np.nanargmax(corr))]) if np.isfinite(
+                    corr).any() else 0
+                log("star spectrum of the %s rows from ANOTHER STAR'S TEMPLATE"
+                    " %s (column %s), moved by %+.0f m/s to this star's"
+                    " velocity; correlation with this star's own star-frame"
+                    " median %.3f, best %.3f at %+.0f m/s more (not applied),"
+                    " in %.1f s"
+                    % (names[g], os.path.basename(spec["file"]), used,
+                       float(spec.get("velocity", 0.0)), corr[20],
+                       np.nanmax(corr), best * dv * 1000.0,
+                       time.time() - tick), "value")
+                continue
             tick = time.time()
             log("star spectrum of the %s rows (%d of %d): %d rows carried into"
                 " the star's frame, then %s"

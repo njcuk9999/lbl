@@ -71,6 +71,7 @@ import re
 import shutil
 import sys
 
+import numpy as np
 import yaml
 
 from lbl.core import base_classes
@@ -223,6 +224,51 @@ def settings(pca2d, report=True) -> tuple:
                            ' spectra with the template (1: the template'
                            ' alone), not twoframe.n_star')
     return switches, overrides
+
+
+def star_template(data_dir: str, name: str, comparison: str,
+                  instrument: str) -> dict:
+    """
+    Another star's template as this star's spectrum in PCA2D: the template
+    LBL uses for OBJECT_COMPARISON (templates/, made by LBL or put there, an
+    APERO one under LBL's name included), and the velocity that moves it
+    onto this star: the star's velocity from an LBL pass on its delivered
+    spectra against that template (lblrdb/lbl_<name>_<comparison>.rdb, the
+    median; PCA2D compare=True makes it first) minus the template's own, the
+    SYSTVELO of its LBL mask, composed relativistically.
+
+    :return: dict(file, velocity, v_object, v_template), velocities in m/s
+    """
+    from lbl.recipes.lbl_wrap import _template_of
+    from lbl.report import series
+
+    template = _template_of(data_dir, comparison, instrument)
+    if template is None:
+        raise LblException(
+            'PCA2D: OBJECT_COMPARISON of {0} is {1}, and there is no template'
+            ' of {1} in {2}: make it, or put one there under LBL\'s name'
+            .format(name, comparison, os.path.join(data_dir, 'templates')))
+    masks = sorted(glob.glob(os.path.join(
+        data_dir, 'masks', 'LBL_Mask_{0}_full_*.fits'.format(comparison))))
+    masks = [m for m in masks if str(instrument).lower() in
+             os.path.basename(m).lower()] or masks
+    rdb = os.path.join(data_dir, 'lblrdb',
+                       'lbl_{0}_{1}.rdb'.format(name, comparison))
+    if not masks or not os.path.exists(rdb):
+        raise LblException(
+            'PCA2D: {0} against the template of {1} needs an LBL pass on the'
+            ' delivered spectra first, for the velocities ({2}{3}): PCA2D'
+            ' compare=True makes it'.format(
+                name, comparison, rdb if not os.path.exists(rdb) else '',
+                '' if masks else ' and the mask of {0}'.format(comparison)))
+    from astropy.io import fits as _fits
+    v_template = float(_fits.getheader(masks[0])['SYSTVELO'])
+    v_object = float(np.nanmedian(series.read_rdb(rdb)['vrad']))
+    c_ms = 299792458.0
+    velocity = (v_object - v_template) / (1 - v_object * v_template
+                                          / c_ms ** 2)
+    return dict(file=template, velocity=float(velocity),
+                v_object=v_object, v_template=v_template)
 
 
 def input_files(science_dir: str, pattern: str) -> list:
@@ -491,6 +537,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     else:
         work = os.path.join(work_root, objects[0])
     names = dict()
+    star_templates = []
     for name in objects:
         if not os.path.isdir(os.path.join(science_root, name)):
             raise LblException('PCA2D: no folder {0}'.format(
@@ -498,10 +545,27 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         comparison = comparisons.get(name)
         if comparison in (None, '', name):
             comparison = name + suffix
+            star_templates.append(None)
         else:
-            log('OBJECT_COMPARISON of %s is %s, another object: its template'
-                ' is used as it is, uncorrected' % (name, comparison), 'warn')
+            # ANOTHER STAR'S TEMPLATE: LBL measures the corrected spectra
+            #   against it as it is, and PCA2D takes it as the star's
+            #   spectrum, at this star's velocity
+            spec = star_template(data_dir, name, comparison, instrument)
+            star_templates.append(spec)
+            log('OBJECT_COMPARISON of %s is %s, another star: its template'
+                ' %s is the star\'s spectrum in PCA2D, moved by %+.0f m/s'
+                ' (%s at %+.0f m/s in LBL, the template at %+.0f m/s, its'
+                ' mask\'s SYSTVELO), and LBL measures the corrected spectra'
+                ' against it' % (name, comparison,
+                                 os.path.basename(spec['file']),
+                                 spec['velocity'], name, spec['v_object'],
+                                 spec['v_template']), 'info')
         names[name] = (name + suffix, comparison)
+    if any(star_templates):
+        overrides.setdefault('twoframe', dict())['star_templates'] = [
+            None if spec is None else dict(file=spec['file'],
+                                           velocity=spec['velocity'])
+            for spec in star_templates]
 
     if skip not in (None, True, False):
         raise LblException('SKIP_LBL_PCA2D is True, False or None (not given),'
@@ -521,12 +585,13 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                                  instrument)
         except FileNotFoundError as exc:
             raise LblException('PCA2D input_name: {0}'.format(exc))
-        source = frozen.header.get('DATASRC', '')
-        if source and data_source and str(source) != str(data_source):
-            raise LblException(
-                'PCA2D input_name: {0} was made from {1} spectra and these'
-                ' are {2}: two pipelines leave different residuals'.format(
-                    frozen.path, source, data_source))
+        # the same instrument and the same DATA_SOURCE, or nothing
+        try:
+            frozen.check_compatible(instrument, data_source,
+                                    others=pbasis.compatible_bases(
+                                        data_dir, instrument, data_source))
+        except ValueError as exc:
+            raise LblException('PCA2D input_name: {0}'.format(exc))
         overrides.setdefault('twoframe', dict())['earth_basis'] = frozen.path
         if not (isinstance(pca2d, dict) and 'n_earth' in pca2d):
             switches['n_earth'] = frozen.n_earth

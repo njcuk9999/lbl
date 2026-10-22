@@ -450,6 +450,11 @@ DEFAULTS = {
         # what the basis describes (a narrow BERV range). False: the star's
         # spectrum from the data as they are, as without a frozen basis
         "observer_first": True,
+        # ANOTHER STAR'S TEMPLATE as the star's spectrum, one entry per member
+        # of the fit, {file, velocity} or None (estimated from the member's
+        # own data): set by lbl_pca2d when OBJECT_COMPARISON is another star,
+        # velocity the object's minus the template's (an LBL pass upstream)
+        "star_templates": None,
         # The older spelling of the two above: smooth to one resolution element
         # of this R. Still read, so the runs made with it reproduce.
         "star_resolution": None,

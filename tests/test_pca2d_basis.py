@@ -68,6 +68,41 @@ def test_a_cube_on_another_grid_or_too_many_components_is_refused(tmp_path):
     with pytest.raises(ValueError, match='has 3'):
         loaded.on_grid(grid, 4)
     assert loaded.check_dates(np.array([61000.0, 70000.0])) == 1
+    # saved without an instrument or a DATA_SOURCE: it cannot be checked,
+    #   and stops
+    with pytest.raises(ValueError, match='does not say which INSTRUMENT'):
+        loaded.check_compatible('SPIROU', 'CADC')
+
+
+def test_a_basis_of_another_instrument_is_refused(tmp_path):
+    run = tmp_path / 'run'
+    run.mkdir()
+    _fake_run(str(run))
+    loaded = basis.Basis(basis.save(str(run), 'b', str(tmp_path), ['A', 'B'],
+                                    instrument='NIRPS_HE'))
+    with pytest.raises(ValueError, match='made with NIRPS_HE spectra, this'
+                                         ' run is SPIROU'):
+        loaded.check_compatible('SPIROU', 'CADC')
+    # no DATA_SOURCE given when saved: refused
+    with pytest.raises(ValueError, match='does not say which DATA_SOURCE'):
+        loaded.check_compatible('NIRPS_HE', 'CADC')
+
+
+def test_a_basis_of_another_data_source_is_refused(tmp_path):
+    run = tmp_path / 'run'
+    run.mkdir()
+    _fake_run(str(run))
+    loaded = basis.Basis(basis.save(str(run), 'b', str(tmp_path), ['A', 'B'],
+                                    instrument='NIRPS_HE',
+                                    data_source='CADC'))
+    loaded.check_compatible('nirps_he', 'cadc')
+    with pytest.raises(ValueError) as err:
+        loaded.check_compatible('NIRPS_HE', 'ESO', others='none here')
+    text = str(err.value)
+    # both sources, the file, why and what to do
+    assert 'made from CADC spectra, this run reads ESO spectra' in text
+    assert loaded.path in text and 'Why:' in text and 'What to do:' in text
+    assert 'none here' in text
 
 
 def test_each_star_of_a_joint_fit_gets_its_own_file(tmp_path):
