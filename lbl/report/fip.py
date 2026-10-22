@@ -16,10 +16,15 @@ exactly. There is no sampling in the gaussian case.
 THE OUTLIER-AWARE CASE. The gaussian FIP assumes every point is drawn from
 its error bar, so one bad night can either invent a signal or bury one. Here
 each point instead carries a probability of belonging to a wider population,
-and the error bars are inflated accordingly; the two are iterated until they
-settle. That is a deterministic approximation of the mixture that koloa
-samples, and it answers the question the report asks: does the answer depend
-on how the outliers are treated?
+and counts for less in proportion. That is a deterministic approximation of
+the mixture that koloa samples, and it answers the question the report asks:
+does the answer depend on how the outliers are treated?
+
+SPEED. Every frequency of the grid (20 000 for six years of SPIRou) and every
+prior width of the ladder is one small linear system. They are built and
+solved together, a block of frequencies at a time, with batched Cholesky
+factorisations: the same algebra as one at a time, in a few hundredths of a
+second rather than seconds.
 """
 import numpy as np
 
@@ -92,6 +97,80 @@ def _log_evidence(design, value, weight, tau, nsignal=2):
     return -0.5 * (chi2 + logdet) - float(np.sum(np.log(prior[:nsignal])))
 
 
+#: frequencies solved together: bounds the (block, points) arrays
+BLOCK = 2048
+
+
+def _evidence_grid(time, value, weight, freq, taus, trend=1):
+    """log of the marginal likelihood at every frequency, averaged over the
+    prior ladder `taus`: what _log_evidence gives one frequency and one tau
+    at a time, for all of them together.
+
+    The normal matrix of the model [cos, sin, trend] is assembled from
+    weighted sums (one matrix product per block of frequencies), the priors
+    added to its diagonal for each tau, and the whole stack factorised at
+    once. A block whose stack is not positive definite falls back to the
+    one-at-a-time path, which then answers -inf where it fails, as before.
+    """
+    centred = time - np.mean(time)
+    poly = np.vstack([centred ** power for power in range(trend + 1)]).T
+    n_poly = poly.shape[1]
+    npar = 2 + n_poly
+    wpoly = poly * weight[:, None]
+    # the trend's own block, the same for every frequency
+    pp = poly.T @ wpoly
+    pv = wpoly.T @ value
+    wv = weight * value
+    chi0 = float(np.sum(wv * value))
+    # the priors: tau on the sinusoid, flat (1e8) on the trend
+    inv_prior = np.zeros((len(taus), npar))
+    inv_prior[:, :2] = 1.0 / np.asarray(taus, dtype=float)[:, None] ** 2
+    inv_prior[:, 2:] = 1.0 / 1e8 ** 2
+    log_prior = 2.0 * np.log(np.asarray(taus, dtype=float))
+    out = np.empty(freq.size)
+    for start in range(0, freq.size, BLOCK):
+        block = freq[start:start + BLOCK]
+        phase = 2 * np.pi * block[:, None] * centred[None, :]
+        cos, sin = np.cos(phase), np.sin(phase)
+        k = block.size
+        normal = np.empty((k, npar, npar))
+        normal[:, 0, 0] = (cos * cos) @ weight
+        normal[:, 1, 1] = (sin * sin) @ weight
+        normal[:, 0, 1] = normal[:, 1, 0] = (cos * sin) @ weight
+        normal[:, 0, 2:] = normal[:, 2:, 0] = cos @ wpoly
+        normal[:, 1, 2:] = normal[:, 2:, 1] = sin @ wpoly
+        normal[:, 2:, 2:] = pp
+        target = np.empty((k, npar))
+        target[:, 0] = cos @ wv
+        target[:, 1] = sin @ wv
+        target[:, 2:] = pv
+        # one system per frequency and per tau
+        stack = normal[:, None, :, :] + np.einsum(
+            'tp,pq->tpq', inv_prior, np.eye(npar))[None, :, :, :]
+        rhs = np.broadcast_to(target[:, None, :, None],
+                              (k, len(taus), npar, 1))
+        try:
+            chol = np.linalg.cholesky(stack)
+            solved = np.linalg.solve(stack, rhs)[..., 0]
+        except np.linalg.LinAlgError:
+            for j, one in enumerate(block):
+                design = _design(time, one, trend)
+                terms = [_log_evidence(design, value, weight, tau)
+                         for tau in taus]
+                top = np.max(terms)
+                out[start + j] = top + np.log(np.mean(np.exp(
+                    np.array(terms) - top)))
+            continue
+        chi2 = chi0 - np.einsum('fp,ftp->ft', target, solved)
+        logdet = 2.0 * np.sum(np.log(np.diagonal(chol, axis1=-2, axis2=-1)),
+                              axis=-1)
+        terms = -0.5 * (chi2 + logdet) - log_prior[None, :]
+        top = np.max(terms, axis=1)
+        out[start:start + k] = top + np.log(np.mean(np.exp(
+            terms - top[:, None]), axis=1))
+    return out
+
+
 def fip(time, value, err, freq=None, trend=1, prior_signal=0.5,
         jitter=None, weights=None):
     """The gaussian FIP over a grid of periods.
@@ -128,12 +207,8 @@ def fip(time, value, err, freq=None, trend=1, prior_signal=0.5,
     flat = _design(time, 0.0, trend)[:, 2:]
     null = _log_evidence(flat, value, weight, 1.0, nsignal=0)
 
-    evidence = np.empty(freq.size)
-    for index, one in enumerate(freq):
-        design = _design(time, one, trend)
-        terms = [_log_evidence(design, value, weight, tau) for tau in taus]
-        top = np.max(terms)
-        evidence[index] = top + np.log(np.mean(np.exp(np.array(terms) - top)))
+    evidence = _evidence_grid(time, value, weight, np.asarray(freq, float),
+                              taus, trend)
 
     # FIP = P(no signal at this period | data), with the prior split evenly
     # over the grid: each frequency carries prior_signal / N of the prior
@@ -166,10 +241,14 @@ def outlier_probability(value, err, jitter=0.0, width=OUTLIER_WIDTH,
 def oafip(time, value, err, freq=None, trend=1, rounds=5):
     """The outlier-aware FIP. Returns (freq, fip, outlier probability).
 
-    The outlier probabilities and the FIP are iterated until they settle: a
-    point that looks like an outlier is down-weighted, which changes the fit,
-    which changes which points look like outliers. Five rounds are enough in
-    practice; the probabilities move by less than a percent after three.
+    Each point counts for its probability of being a normal point. That
+    probability is read off its distance to the median, against its error bar
+    and the jitter, and NOT off the fit, so it is the same at every round:
+    the second round is already the fixed point, and the FIP is computed once,
+    with it. The five rounds this used to make gave the same values to the bit
+    (checked on Welopoai and WASP-76, 2026-10-21) in five times the time.
+    `rounds` is kept for the callers: 1 is the plain FIP with the
+    probabilities beside it, any other value the outlier-aware one.
     """
     time = np.asarray(time, dtype=float)
     value = np.asarray(value, dtype=float)
@@ -183,14 +262,12 @@ def oafip(time, value, err, freq=None, trend=1, rounds=5):
     jitter = float(np.sqrt(excess)) if excess > 0 else 0.0
 
     prob = np.zeros(value.size)
-    out_freq, out_fip = np.array([]), np.array([])
-    for _ in range(rounds):
-        # a point that is probably an outlier counts for less, in the exact
-        # proportion of its probability of being a normal point
-        weights = np.ones(value.size)
+    prob[good] = outlier_probability(centred[good], err[good], jitter)
+    # a point that is probably an outlier counts for less, in the exact
+    # proportion of its probability of being a normal point
+    weights = np.ones(value.size)
+    if rounds > 1:
         weights[good] = 1.0 - prob[good]
-        out_freq, out_fip = fip(time, value, err, freq=freq, trend=trend,
-                                jitter=jitter, weights=weights)
-        prob = np.zeros(value.size)
-        prob[good] = outlier_probability(centred[good], err[good], jitter)
+    out_freq, out_fip = fip(time, value, err, freq=freq, trend=trend,
+                            jitter=jitter, weights=weights)
     return out_freq, out_fip, prob
