@@ -27,6 +27,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
 from lbl.resources import lbl_misc
+from lbl.science import activity_lines
 from lbl.science import general
 
 # =============================================================================
@@ -339,8 +340,13 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
                                         required=False)
         # check hash of science file
         hash_identical = io.check_hash(science_file, lblrv_hash)
+        # a science lblrv file from before the activity lines is made again
+        if (hash_identical and inst.params['DATA_TYPE'] == 'SCIENCE'
+                and not activity_lines.has_activity(lblrv_file)):
+            log.general('\t\tLBL.fits file has no activity lines, '
+                        'computing again.')
         # skip if the hash is identical
-        if hash_identical:
+        elif hash_identical:
             # log message about skipping
             log.general('\t\tLBL.fits file exists and skipping activated. '
                         'Skipping file.')

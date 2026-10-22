@@ -16,6 +16,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
 from lbl.resources import lbl_misc
+from lbl.science import activity_lines
 from lbl.science import general
 from lbl.science import plot
 
@@ -164,6 +165,12 @@ def __main__(inst: InstrumentsType, **kwargs):
         else:
             rdbfitsfile = rdbfile1.replace('.rdb', '.fits')
             log.general('Skipping {0}'.format(rdbfitsfile))
+
+    # -------------------------------------------------------------------------
+    # Step 3b: Produce the activity tables (lbl.science.activity_lines)
+    # -------------------------------------------------------------------------
+    if inst.params['DATA_TYPE'] == 'SCIENCE':
+        activity_lines.compile_tables(inst, lblrv_files, rdbfile1)
 
     # -------------------------------------------------------------------------
     # Step 4: Produce binned (per-epoch) RDB file

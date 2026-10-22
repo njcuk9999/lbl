@@ -28,6 +28,7 @@ from lbl.core import fastmath
 from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
+from lbl.science import activity_lines
 from lbl.science import plot
 
 # =============================================================================
@@ -1436,6 +1437,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             model_offset = float(model_velocity)
         else:
             model_offset = 0
+        # the shift of the model in this iteration (the activity lines are
+        #   measured in its frame)
+        model_shift = -sys_rv - model_offset
         # loop around each order and update model, dmodel, d2model, d3model
         for order_num in range(sci_data.shape[0]):
             # flag whether an order is even or odd
@@ -1445,8 +1449,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if width[order_num] == 0:
                 continue
             # doppler shifted wave grid for this order
-            shift = -sys_rv - model_offset
-            wave_ord = mp.doppler_shift(wavegrid[order_num], shift)
+            wave_ord = mp.doppler_shift(wavegrid[order_num], model_shift)
             # get the blaze for this order
             blaze_ord = blaze[order_num]
             # template spline and derivatives at these wavelengths (d2 and
@@ -1759,6 +1762,21 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     plot.compute_line_plot(inst, plot_dict)
     # -------------------------------------------------------------------------
+    # differential equivalent widths of the activity lines, against the
+    #   template at the converged velocity (lbl.science.activity_lines)
+    # -------------------------------------------------------------------------
+    if inst.params['DATA_TYPE'] == 'SCIENCE':
+        # the template of the last iteration, without the blaze
+        with warnings.catch_warnings(record=True):
+            template_now = model / b_ratio
+        activity = activity_lines.measure(wavegrid, sci_data0, sci_data,
+                                          template_now, blaze, rms,
+                                          model_shift, berv)
+        activity_lines.log_measured(activity)
+        activity_header = activity_lines.extension_header(science_file)
+    else:
+        activity, activity_header = None, None
+    # -------------------------------------------------------------------------
     # update reference table
     # -------------------------------------------------------------------------
     # express to have sign fine relative to convention
@@ -1831,6 +1849,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['MODEL_VELOCITY'] = model_velocity
     outputs['LINES_XPIX_SET'] = lines_xpix_set
     outputs['LINES_STATS_SET'] = lines_stats_set
+    outputs['ACTIVITY'] = activity
+    outputs['ACTIVITY_HEADER'] = activity_header
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs

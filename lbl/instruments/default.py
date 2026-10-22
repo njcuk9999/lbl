@@ -21,6 +21,7 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
+from lbl.science import activity_lines
 
 
 # =============================================================================
@@ -383,9 +384,18 @@ class Instrument:
         msg = 'Writing reference table to: {0}'
         margs = [ref_filename]
         log.general(msg.format(*margs))
+        # the activity lines, in their own extension (science files only)
+        if outputs.get('ACTIVITY') is not None:
+            data = [None, table, outputs['ACTIVITY']]
+            headers = [header, None, outputs['ACTIVITY_HEADER']]
+            dtypes = [None, 'table', 'table']
+            names = [None, None, activity_lines.EXTNAME]
+        else:
+            data, headers = [None, table], [header, None]
+            dtypes, names = [None, 'table'], None
         # write to disk
-        io.write_fits(ref_filename, data=[None, table],
-                      header=[header, None], dtype=[None, 'table'])
+        io.write_fits(ref_filename, data=data, header=headers, dtype=dtypes,
+                      names=names)
 
     def get_lblrv_files(self, directory: str) -> np.ndarray:
         """

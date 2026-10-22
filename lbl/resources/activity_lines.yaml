@@ -1,0 +1,291 @@
+# =============================================================================
+# activity_lines.yaml: the lines of the literature's activity indicators, from
+# u to K, whose differential equivalent widths LBL measures in every spectrum
+# (lbl/science/activity_lines.py)
+# =============================================================================
+# One entry per line, named by its element and its VACUUM wavelength in
+# microns, five decimals (He 1.08333). Per line:
+#
+#   label        the usual name
+#   species      element and ionisation stage
+#   wave         centre [nm], IN VACUUM like every wavelength here: NIST ASD
+#                (Ritz, from the energy levels), the gA-weighted mean of the
+#                components within the line (H I fine structure, the He I
+#                triplets); read 2026-10-22
+#   width        width of the measuring window [nm]: the full width of a boxcar,
+#                the FWHM of a gaussian
+#   function     boxcar or gaussian
+#   band         photometric band it falls in
+#   kind         chromospheric, or flare (lines seen mostly in flares)
+#   width_ref    where the width comes from, or "proposed" (to be discussed)
+#   width_url    the paper it comes from
+#   note         alternatives and remarks
+#
+# Checked: the vacuum centres agree with Schofer et al. 2019 (Table 1) to
+# 0.01 A for Na D, H alpha, Ca IRT and Pa beta, and to 0.04 A for He I D3 and
+# He I 10830 (their weighting of the components differs); Ca II H and K,
+# brought to air (Morton 2000) for the comparison only, agree with the air
+# centres of Gomes da Silva et al. 2011 to 0.003 A.
+#
+# References:
+#   NIST Atomic Spectra Database (Kramida, Ralchenko, Reader and the NIST ASD
+#     Team), https://doi.org/10.18434/T4W30F, queried through
+#     https://physics.nist.gov/PhysRefData/ASD/lines_form.html
+#   Gomes da Silva et al. 2011, A&A 534, A30,
+#     https://doi.org/10.1051/0004-6361/201116971 (https://arxiv.org/abs/1109.0321)
+#   Schofer et al. 2019, A&A 623, A44,
+#     https://doi.org/10.1051/0004-6361/201834114 (https://arxiv.org/abs/1901.08861)
+#   Morton 2000, ApJS 130, 403, https://doi.org/10.1086/317349 (vacuum to air,
+#     for the check only)
+# =============================================================================
+lines:
+  Ca 0.39348:
+    label: Ca II K
+    species: Ca II
+    wave: 393.4777
+    width: 0.06
+    function: boxcar
+    band: u
+    kind: chromospheric
+    width_ref: Gomes da Silva et al. 2011, A&A 534, A30
+    width_url: https://doi.org/10.1051/0004-6361/201116971
+    note: 0.6 A rectangular band; the Mt Wilson S index uses a 1.09 A FWHM triangular band
+  Ca 0.39696:
+    label: Ca II H
+    species: Ca II
+    wave: 396.9591
+    width: 0.06
+    function: boxcar
+    band: u
+    kind: chromospheric
+    width_ref: Gomes da Silva et al. 2011, A&A 534, A30
+    width_url: https://doi.org/10.1051/0004-6361/201116971
+    note: '0.6 A rectangular band; Mt Wilson: 1.09 A FWHM triangular'
+  H 0.39712:
+    label: H epsilon
+    species: H I
+    wave: 397.1191
+    width: 0.06
+    function: boxcar
+    band: u
+    kind: chromospheric
+    width_ref: proposed
+    note: as Ca II H, 0.16 nm away from it
+  H 0.41029:
+    label: H delta
+    species: H I
+    wave: 410.2885
+    width: 0.16
+    function: boxcar
+    band: B
+    kind: chromospheric
+    width_ref: proposed
+    note: as H alpha in Gomes da Silva et al. 2011
+  H 0.43417:
+    label: H gamma
+    species: H I
+    wave: 434.1679
+    width: 0.16
+    function: boxcar
+    band: B
+    kind: chromospheric
+    width_ref: proposed
+    note: as H alpha in Gomes da Silva et al. 2011
+  He 0.44728:
+    label: He I 4471
+    species: He I
+    wave: 447.2757
+    width: 0.05
+    function: boxcar
+    band: B
+    kind: flare
+    width_ref: proposed
+    note: flare line
+  H 0.48627:
+    label: H beta
+    species: H I
+    wave: 486.2675
+    width: 0.16
+    function: boxcar
+    band: B
+    kind: chromospheric
+    width_ref: proposed
+    note: as H alpha in Gomes da Silva et al. 2011
+  He 0.58773:
+    label: He I D3
+    species: He I
+    wave: 587.7289
+    width: 0.04
+    function: boxcar
+    band: V
+    kind: chromospheric
+    width_ref: Gomes da Silva et al. 2011, A&A 534, A30
+    width_url: https://doi.org/10.1051/0004-6361/201116971
+    note: '0.4 A band; Schofer et al. 2019: 2.50 A'
+  Na 0.58916:
+    label: Na I D2
+    species: Na I
+    wave: 589.1583
+    width: 0.05
+    function: boxcar
+    band: V
+    kind: chromospheric
+    width_ref: Gomes da Silva et al. 2011, A&A 534, A30
+    width_url: https://doi.org/10.1051/0004-6361/201116971
+    note: '0.5 A band; Schofer et al. 2019: 2.99 A'
+  Na 0.58976:
+    label: Na I D1
+    species: Na I
+    wave: 589.7558
+    width: 0.05
+    function: boxcar
+    band: V
+    kind: chromospheric
+    width_ref: Gomes da Silva et al. 2011, A&A 534, A30
+    width_url: https://doi.org/10.1051/0004-6361/201116971
+    note: '0.5 A band; Schofer et al. 2019: 2.99 A'
+  H 0.65646:
+    label: H alpha
+    species: H I
+    wave: 656.461
+    width: 0.16
+    function: boxcar
+    band: R
+    kind: chromospheric
+    width_ref: Gomes da Silva et al. 2011, A&A 534, A30
+    width_url: https://doi.org/10.1051/0004-6361/201116971
+    note: '1.6 A band; Schofer et al. 2019: 5.00 A'
+  He 0.66800:
+    label: He I 6678
+    species: He I
+    wave: 667.9996
+    width: 0.05
+    function: boxcar
+    band: R
+    kind: flare
+    width_ref: proposed
+    note: flare line
+  K 0.76670:
+    label: K I 7665
+    species: K I
+    wave: 766.7009
+    width: 0.05
+    function: boxcar
+    band: I
+    kind: chromospheric
+    width_ref: proposed
+  K 0.77011:
+    label: K I 7699
+    species: K I
+    wave: 770.1084
+    width: 0.05
+    function: boxcar
+    band: I
+    kind: chromospheric
+    width_ref: proposed
+  Ca 0.85004:
+    label: Ca II IRT a
+    species: Ca II
+    wave: 850.0358
+    width: 0.28
+    function: boxcar
+    band: I
+    kind: chromospheric
+    width_ref: Schofer et al. 2019, A&A 623, A44, Table 1
+    width_url: https://doi.org/10.1051/0004-6361/201834114
+    note: 2.80 A
+  Ca 0.85444:
+    label: Ca II IRT b
+    species: Ca II
+    wave: 854.4438
+    width: 0.28
+    function: boxcar
+    band: I
+    kind: chromospheric
+    width_ref: Schofer et al. 2019, A&A 623, A44, Table 1
+    width_url: https://doi.org/10.1051/0004-6361/201834114
+    note: 2.80 A
+  Ca 0.86645:
+    label: Ca II IRT c
+    species: Ca II
+    wave: 866.452
+    width: 0.24
+    function: boxcar
+    band: I
+    kind: chromospheric
+    width_ref: Schofer et al. 2019, A&A 623, A44, Table 1
+    width_url: https://doi.org/10.1051/0004-6361/201834114
+    note: 2.40 A
+  H 1.00521:
+    label: Pa delta
+    species: H I
+    wave: 1005.2123
+    width: 0.05
+    function: boxcar
+    band: Y
+    kind: chromospheric
+    width_ref: proposed
+  He 1.08321:
+    label: He I 10830 weak
+    species: He I
+    wave: 1083.2057
+    width: 0.025
+    function: boxcar
+    band: Y
+    kind: chromospheric
+    width_ref: proposed
+    note: the weak (J=0) component of the triplet, 0.12 nm blueward of the main blend
+  He 1.08333:
+    label: He I 10830
+    species: He I
+    wave: 1083.3273
+    width: 0.025
+    function: boxcar
+    band: Y
+    kind: chromospheric
+    width_ref: Schofer et al. 2019, A&A 623, A44, Table 1
+    width_url: https://doi.org/10.1051/0004-6361/201834114
+    note: 0.25 A, the core only; the main blend of the J=1 and J=2 components, 0.009 nm apart; a wider
+      window takes the wings
+  H 1.09411:
+    label: Pa gamma
+    species: H I
+    wave: 1094.1082
+    width: 0.05
+    function: boxcar
+    band: Y
+    kind: chromospheric
+    width_ref: proposed
+  H 1.28216:
+    label: Pa beta
+    species: H I
+    wave: 1282.1578
+    width: 0.025
+    function: boxcar
+    band: J
+    kind: chromospheric
+    width_ref: Schofer et al. 2019, A&A 623, A44, Table 1
+    width_url: https://doi.org/10.1051/0004-6361/201834114
+    note: 0.25 A
+  He 2.05869:
+    label: He I 2.058 um
+    species: He I
+    wave: 2058.6905
+    width: 0.05
+    function: boxcar
+    band: K
+    kind: chromospheric
+    width_ref: proposed
+    note: the 2s 1S - 2p 1P singlet, one component; studied in young stars and H II regions, no
+      M-dwarf activity study found; a deep telluric line sits on its rest wavelength in the
+      observer's frame (2058.65 to 2058.73 nm masked by APERO in all
+      420 SPIRou spectra of Welopoai), so it is measured only when the star's velocity moves it out
+  H 2.16612:
+    label: Br gamma
+    species: H I
+    wave: 2166.1212
+    width: 0.05
+    function: boxcar
+    band: K
+    kind: chromospheric
+    width_ref: proposed
