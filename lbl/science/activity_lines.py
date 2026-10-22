@@ -81,7 +81,7 @@ EXTNAME = 'ACTIVITY'
 CATALOG_COLUMNS = ['NAME', 'LABEL', 'SPECIES', 'KIND', 'BAND', 'FUNCTION',
                    'WAVE', 'WIDTH']
 #: the columns measured on each line, and their units
-MEASURED = dict(ORDER='', XPIX='pix', WAVE_OBS='nm', EW_DIFF='mAngstrom',
+MEASURED = dict(ORDER='', EW_DIFF='mAngstrom',
                 SIG_EW_DIFF='mAngstrom', FRAC_VALID='', NPIX='', NCLIP='',
                 SNR='', CHI2='')
 #: nm to mA
@@ -180,17 +180,16 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
     lam0, width = line['WAVE'], line['WIDTH']
     gaussian = line['FUNCTION'] == 'gaussian'
     half = 1.5 * width if gaussian else 0.5 * width
-    xpix = np.arange(len(wave), dtype=float)
     # the finite part of the order, increasing
     finite = np.where(np.isfinite(wave))[0]
     if len(finite) < 10:
         return None
     sel = slice(finite[0], finite[-1] + 1)
-    wave, xpix = wave[sel], xpix[sel]
+    wave = wave[sel]
     spectrum, clipped = spectrum[sel], clipped[sel]
     template, blaze, rms = template[sel], blaze[sel], rms[sel]
     if wave[-1] < wave[0]:
-        wave, xpix = wave[::-1], xpix[::-1]
+        wave = wave[::-1]
         spectrum, clipped = spectrum[::-1], clipped[::-1]
         template, blaze, rms = template[::-1], blaze[::-1], rms[::-1]
     edges = _pixel_edges(wave)
@@ -237,9 +236,7 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
     valid = window & np.isfinite(spectrum) & np.isfinite(model)
     valid &= np.isfinite(rms) & (model > 0) & (blaze > 0) & (qlevel > 0)
     frac_valid = np.sum(length[valid]) / np.sum(length[window])
-    # where the line is in the order, in the observer's frame
-    xline = np.interp(lam0, wave, xpix)
-    out = dict(XPIX=float(xline), FRAC_VALID=float(frac_valid),
+    out = dict(FRAC_VALID=float(frac_valid),
                NPIX=int(np.sum(window)),
                NCLIP=int(np.sum(window & np.isfinite(spectrum) &
                                 ~np.isfinite(clipped))),
@@ -298,7 +295,7 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray, clipped: np.ndarray,
     rows = []
     for line in lines:
         row = {col: line[col] for col in CATALOG_COLUMNS}
-        row.update(ORDER=-1, XPIX=np.nan, WAVE_OBS=np.nan, EW_DIFF=np.nan,
+        row.update(ORDER=-1, EW_DIFF=np.nan,
                    SIG_EW_DIFF=np.nan, FRAC_VALID=np.nan, NPIX=0, NCLIP=0,
                    SNR=np.nan, CHI2=np.nan)
         # orders holding the line, the closest to their centre first
@@ -320,8 +317,6 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray, clipped: np.ndarray,
             if out is None:
                 continue
             out['ORDER'] = int(order_num)
-            out['WAVE_OBS'] = float(np.interp(out['XPIX'], xpix,
-                                              wavegrid[order_num]))
             if first is None:
                 first = out
             if np.isfinite(out['EW_DIFF']):
