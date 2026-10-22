@@ -544,9 +544,11 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     #   correction made before PLANETS existed keeps its stamp
     if any(orbits.values()):
         request['orbits'] = orbits
-    # the basis by its content: another basis makes the correction again
+    # the basis by its content, and how it is divided out (in full, since
+    #   2026-10-22: shrunk by this star's own significance before, which
+    #   dropped it): another basis, or a correction made before, is made again
     if frozen is not None:
-        request['earth_basis_id'] = frozen.ident
+        request['earth_basis'] = dict(id=frozen.ident, shrink=False)
     stamp = request_stamp(request, switches,
                           [f for name in objects for f in files[name]])
     state_file = os.path.join(work, 'done.json')

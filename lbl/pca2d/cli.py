@@ -1393,7 +1393,18 @@ def shrink_args(cfg):
                    " carries the same set of lines" if mask == "common"
                    else "nothing: an unweighted sample keeps its delivered flux"),
                 "info")
-    if corr.get("shrink"):
+    # A FROZEN OBSERVER BASIS is divided out in full: the shrinkage weighs
+    #   each component by its significance in THIS star's data, which is
+    #   what makes sense for a basis fitted on them; a basis learned on other
+    #   stars was established there, and this star's spectra cannot judge
+    #   it (on TOI-904, 51 spectra, it dropped all seven components at
+    #   99.9% of the columns: nothing was divided out). Its MASK keeps each
+    #   component where the training constrained it.
+    frozen = bool((cfg.get("twoframe") or {}).get("earth_basis"))
+    if corr.get("shrink") and frozen:
+        log("observer components FROZEN from another fit: divided out in full,"
+            " not shrunk by their significance in this star's data", "info")
+    elif corr.get("shrink"):
         out.append("--shrink")
         if corr.get("shrink_smooth"):
             out.append("--shrink-smooth")
