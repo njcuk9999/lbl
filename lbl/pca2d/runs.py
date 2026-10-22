@@ -104,8 +104,11 @@ def one(folder):
             "command": provenance.get("command") or "",
             "commit": provenance.get("commit"),
             "dirty": bool(provenance.get("dirty")),
-            "components": "%s + %s" % (twoframe.get("n_star", "?"),
-                                       twoframe.get("n_earth", "?")),
+            # n_star counts the star's spectra with the template; the
+            #   configuration counts the free components
+            "components": "n_star %s + %s observer" % (
+                int(twoframe["n_star"]) + 1 if "n_star" in twoframe else "?",
+                twoframe.get("n_earth", "?")),
             "report": report_pdf(folder, config)}
 
 

@@ -44,7 +44,11 @@ from .logger import log
 #: categorical palette the report's flux traces use (figures.sequence)
 BEFORE, AFTER = "#2a78d6", "#eb6834"
 #: a run's tag: star components, observer components, v for the velocity term
-TAG = re.compile(r"^(\d+)-(\d+)(v?)$")
+#: a run's tag: s<M>-o<N>[v] since 2026-10-22, M the star's spectra with
+#: the template (n_star), N the observer components; <K>-<N>[v] before, K the
+#: free star components alone (M - 1)
+TAG = re.compile(r"^s(\d+)-o(\d+)(v?)$")
+OLD_TAG = re.compile(r"^(\d+)-(\d+)(v?)$")
 #: the numbers every run is summarised by, in the order they are shown
 METRICS = (("rms", "rms"), ("robust", "robust sigma"),
            ("nightly_rms", "nightly rms"), ("median_error", "median error"))
@@ -154,11 +158,15 @@ def signal_stats(t, v, e, periods=(), degree=2):
 
 # -------------------------------------------------------------------- the runs
 def parse_tag(tag):
-    """(star components, observer components) of a run's tag, 2-3v -> (2, 3)."""
+    """(n_star, observer components) of a run's tag, n_star the star's spectra
+    with the template: s1-o7 -> (1, 7), and the older 0-7 -> (1, 7)."""
     m = TAG.match(str(tag))
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    m = OLD_TAG.match(str(tag))
     if not m:
-        raise SystemExit("%r is not a run tag like 2-3v" % tag)
-    return int(m.group(1)), int(m.group(2))
+        raise SystemExit("%r is not a run tag like s1-o7" % tag)
+    return int(m.group(1)) + 1, int(m.group(2))
 
 
 def scan_groups(tags):

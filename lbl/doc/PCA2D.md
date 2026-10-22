@@ -55,7 +55,7 @@ report followed by LBL's.
 | `science/<object>/` | read, never written |
 | `science/<object>_pca2d/` | the corrected spectra, same names, same format |
 | `pca2d/<object>/request.yaml` | the configuration that ran |
-| `pca2d/<object>/<M>-<N>/` | the fit, the figures, the report (PDF) |
+| `pca2d/<object>/s<M>-o<N>/` | the fit, the figures, the report (PDF): M = n_star, N = n_earth (`<K>-<N>` before 2026-10-22, K = n_star - 1) |
 | `pca2d/cache/` | the registered cubes, rebuildable |
 | `pca2d/components/` | the components of every fit, observer and star (below) |
 | `reports/<object>_pca2d_<object>_pca2d.pdf` | THE report: pca2d's, then LBL's |
@@ -80,7 +80,7 @@ optical spectrographs.
 
 | key | default | |
 |---|---|---|
-| `n_star` | 1 | star-frame components fitted |
+| `n_star` | 1 | the star's spectra, the template included: 1 is the template alone, not adjusted in depth; 2 adds one star-frame component with a free amplitude (never divided out); 0 is refused |
 | `n_earth` | 3 | observer-frame components fitted and divided out |
 | `compare` | True | LBL measures the delivered object too, first, for the report |
 | `figures` | as `REPORT` | the river plots and the other figures of the correction |

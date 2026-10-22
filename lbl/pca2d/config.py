@@ -351,6 +351,10 @@ DEFAULTS = {
         # 2 was chosen over 5 back when there were star components at all, and
         # is kept because raising this to look at variability still has to
         # choose a number.
+        # THIS KEY COUNTS THE FREE COMPONENTS ONLY. What a user sets, the
+        # PCA2D dict's n_star and --n-star, counts the star's spectra with the
+        # template: n_star 1 is this 0, the template alone (star_spectra and
+        # free_star_components below convert)
         "n_star": 0,
         "n_earth": 7,
         "iters": 16,
@@ -974,7 +978,9 @@ VARIANT_META = ("reuse_fit", "note")
 #: this tuple to gui.ALL_OPTIONS in both directions, so a setting cannot be
 #: added to the window without appearing on the page.
 WINDOW_SETTINGS = (
-    ("twoframe.n_star", "star components in the basis"),
+    ("twoframe.n_star", "star-frame components with a free amplitude,"
+                        " besides the star's spectrum (not adjusted in"
+                        " depth): n_star minus 1"),
     ("twoframe.n_earth", "observer components in the basis"),
     ("twoframe.velocity_term", "one velocity per exposure fitted beside them"),
     ("twoframe.iters", "sweeps at most"),
@@ -1230,6 +1236,39 @@ def update_file(path, values):
     with open(path, "w") as handle:
         handle.write(body)
     return written
+
+
+def free_star_components(n_star) -> int:
+    """
+    The star-frame components a fit leaves free, from n_star as a user sets
+    it (the PCA2D dict, --n-star): the star's spectra, the template
+    included. 1 is the template alone, not adjusted in depth; 2 adds one
+    star-frame component with a free amplitude; 0 is not a fit.
+    """
+    count = int(n_star)
+    if count < 1:
+        raise ValueError(
+            "n_star = %d: it counts the star's spectra, the template"
+            " included. 1 is the template alone, not adjusted in depth; 2"
+            " adds one star-frame component with a free amplitude" % count)
+    return count - 1
+
+
+def star_spectra(free: int) -> int:
+    """n_star as a user sets it, from the free components of a fit"""
+    return int(free) + 1
+
+
+def describe_star(free: int) -> str:
+    """The star side of a fit, spelled: 'n_star 1: the star's spectrum, not
+    adjusted in depth' or with its free components"""
+    free = int(free)
+    text = ("n_star %d: the star's spectrum, not adjusted in depth"
+            % star_spectra(free))
+    if free:
+        text += (", and %d star-frame component%s with a free amplitude"
+                 " (never divided out)" % (free, "s" if free > 1 else ""))
+    return text
 
 
 def cache_key(config: dict) -> str:

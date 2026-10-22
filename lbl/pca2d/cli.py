@@ -228,7 +228,11 @@ def parse_args(argv=None):
                    help="override the INSTRUME keyword. Almost never right:"
                         " reading the wrong extensions raises no error, it"
                         " returns different photons")
-    p.add_argument("--n-star", type=int, default=None)
+    p.add_argument("--n-star", type=int, default=None,
+                   help="the star's spectra, the template included: 1 is the"
+                        " template alone, not adjusted in depth; 2 adds one"
+                        " star-frame component with a free amplitude, never"
+                        " divided out. 0 is not a fit")
     p.add_argument("--n-earth", type=int, default=None)
     p.add_argument("--min-rjd", type=float, default=None, metavar="RJD",
                    help="keep only exposures from this date on (reduced Julian"
@@ -456,9 +460,15 @@ def check_reused_fit(plan):
 
 
 def run_tag(config):
-    """<M>-<N>, and `v` when the velocity term is on: the name of a run."""
-    return "%d-%d%s" % (config["twoframe"]["n_star"], config["twoframe"]["n_earth"],
-                        "v" if config["twoframe"].get("velocity_term", False) else "")
+    """s<M>-o<N>, and `v` when the velocity term is on: the name of a run,
+    M the star's spectra with the template (n_star), N the observer
+    components. Before 2026-10-22 runs were <K>-<N>, K the free star
+    components alone (M - 1): the letters keep the two apart."""
+    from .config import star_spectra
+    return "s%d-o%d%s" % (star_spectra(config["twoframe"]["n_star"]),
+                          config["twoframe"]["n_earth"],
+                          "v" if config["twoframe"].get("velocity_term", False)
+                          else "")
 
 
 def without_object(config):
@@ -546,7 +556,14 @@ def joint_plan(args, variant):
     apply_setting_flags(config, args)
     config["lbl"]["directory"] = lbl_directory(config)
     if args.n_star is not None:
-        config["twoframe"]["n_star"] = args.n_star
+        # the star's spectra with the template, as the user counts them;
+        #   the configuration counts the free components
+        from .config import free_star_components
+        try:
+            config["twoframe"]["n_star"] = free_star_components(args.n_star)
+        except ValueError as exc:
+            log(str(exc), "error")
+            raise SystemExit(2)
     if args.n_earth is not None:
         config["twoframe"]["n_earth"] = args.n_earth
     if args.windows:
@@ -655,7 +672,14 @@ def resolve(args):
     apply_setting_flags(config, args)
     config["lbl"]["directory"] = lbl_directory(config, out_root)
     if args.n_star is not None:
-        config["twoframe"]["n_star"] = args.n_star
+        # the star's spectra with the template, as the user counts them;
+        #   the configuration counts the free components
+        from .config import free_star_components
+        try:
+            config["twoframe"]["n_star"] = free_star_components(args.n_star)
+        except ValueError as exc:
+            log(str(exc), "error")
+            raise SystemExit(2)
     if args.n_earth is not None:
         config["twoframe"]["n_earth"] = args.n_earth
     for key in ("min_rjd", "max_rjd"):
@@ -680,9 +704,7 @@ def resolve(args):
     # `v` when the velocity term is on, so a run with it and a run without it
     # do not write into the same folder, and their LBL objects do not either.
     # Comparing the two is the reason the knob exists at all.
-    tag = "%d-%d%s" % (config["twoframe"]["n_star"],
-                       config["twoframe"]["n_earth"],
-                       "v" if config["twoframe"].get("velocity_term", False) else "")
+    tag = run_tag(config)
     # Everything this run writes hangs off one root, the corrected spectra
     # included: they used to land in a subfolder of the input directory, which
     # made the input tree both read and written and meant a shared or
@@ -748,8 +770,12 @@ def announce(args, plan):
     log("domain      %.1f to %.1f nm at %.2f km/s per sample   (%s)"
         % (cfg["domain"]["wave_min"], cfg["domain"]["wave_max"],
            cfg["domain"]["dv"], source), "value")
-    log("components  %d in the star's frame, %d in the observer's"
-        % (cfg["twoframe"]["n_star"], cfg["twoframe"]["n_earth"]), "value")
+    from .config import describe_star
+    log("star        %s" % describe_star(cfg["twoframe"]["n_star"]), "value")
+    log("observer    %d components, divided out of the spectra%s"
+        % (cfg["twoframe"]["n_earth"],
+           ", FROZEN from %s" % cfg["twoframe"]["earth_basis"]
+           if cfg["twoframe"].get("earth_basis") else ""), "value")
     log("cube        %s" % plan["cube"], "value")
     log("outputs     %s" % plan["outdir"], "value")
     log("corrected   %s" % plan["corrdir"], "value")
@@ -1101,10 +1127,12 @@ def run_fit(plan):
     from .twoframe import main as fit_main
 
     cfg = plan["config"]
-    log("fitting %d star and %d observer components by block coordinate"
-        " descent, at most %d sweeps"
-        % (cfg["twoframe"]["n_star"], cfg["twoframe"]["n_earth"],
-           cfg["twoframe"]["iters"]), "info")
+    from .config import describe_star
+    log("fitting %s; %d observer components%s; by block coordinate descent,"
+        " at most %d sweeps"
+        % (describe_star(cfg["twoframe"]["n_star"]), cfg["twoframe"]["n_earth"],
+           " FROZEN (only their amplitudes)" if cfg["twoframe"].get(
+               "earth_basis") else "", cfg["twoframe"]["iters"]), "info")
     log("this is the long one: it prints an R2 after every sweep, and stops"
         " when chi2 has clearly turned over", "info")
     fit_main(["--config", plan["written_config"], "--cube", plan["cube"],

@@ -323,7 +323,9 @@ def run_wizard(config, path):
     print()
     log("  Two component counts, one per reference frame. They need not be equal.")
     config["twoframe"]["n_star"] = _ask(
-        "M, components in the STELLAR rest frame", config["twoframe"].get("n_star", 5),
+        "M, star-frame components with a FREE amplitude, besides the"
+        " star's spectrum (which is always there, not adjusted in depth;"
+        " n_star = M + 1)", config["twoframe"].get("n_star", 0),
         int, comp_check)
     config["twoframe"]["n_earth"] = _ask(
         "N, components in the OBSERVER frame", config["twoframe"].get("n_earth", 5),

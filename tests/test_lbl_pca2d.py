@@ -150,3 +150,21 @@ def test_a_wrap_without_pca2d_never_imports_it(tmp_path):
                          text=True, cwd=str(tmp_path))
     assert out.returncode == 0, out.stderr[-2000:]
     assert out.stdout.strip().splitlines()[-1] == "[]"
+
+
+def test_n_star_counts_the_star_spectra_with_the_template():
+    from lbl.pca2d.config import describe_star, free_star_components
+    from lbl.pca2d.lblscan import parse_tag
+    # 1: the template alone, not adjusted in depth; 2: one free component
+    assert free_star_components(1) == 0 and free_star_components(2) == 1
+    with pytest.raises(ValueError, match='template'):
+        free_star_components(0)
+    with pytest.raises(LblException, match='n_star = 0'):
+        lbl_pca2d.settings(dict(n_star=0))
+    with pytest.raises(LblException, match='give n_star'):
+        lbl_pca2d.settings({'twoframe.n_star': 1})
+    assert 'not adjusted in depth' in describe_star(0)
+    assert 'free amplitude' in describe_star(1)
+    # run folders: s<n_star>-o<n_earth>, and the older <n_star - 1>-<n_earth>
+    assert parse_tag('s1-o7') == (1, 7) and parse_tag('0-7') == (1, 7)
+    assert parse_tag('s2-o3v') == (2, 3) and parse_tag('1-3') == (2, 3)

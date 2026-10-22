@@ -212,6 +212,8 @@ def _resolve(args):
         log("options from %s: %s" % (args.config, ", ".join(
             "%s=%s" % (k, section[k]) for k in ("n_star", "n_earth", "iters",
                                                 "tie_parities", "max_mad"))))
+        from .config import describe_star
+        log("star side: %s" % describe_star(section["n_star"]))
     for name in CONFIGURABLE:
         if getattr(args, name, None) is None:
             setattr(args, name, section[name])

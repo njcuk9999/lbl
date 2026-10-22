@@ -2742,9 +2742,17 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
     body.append(parameters_appendix(config, folder))
 
     tw = config.get("twoframe") or {}
-    what = ("%d star and %d observer components, %s"
-            % (tw.get("n_star", 0), tw.get("n_earth", 0),
-               "one observer basis for %s" % ", ".join(stars)
+    from .config import describe_star
+    frozen = ""
+    if tw.get("earth_basis"):
+        try:
+            from .basis import Basis
+            frozen = ", FROZEN: those of %s" % Basis(tw["earth_basis"]).describe()
+        except Exception:                                 # noqa: BLE001
+            frozen = ", FROZEN: those of %s" % tw["earth_basis"]
+    what = ("%s; %d observer components divided out of the spectra%s; %s"
+            % (describe_star(tw.get("n_star", 0)), tw.get("n_earth", 0),
+               frozen, "one observer basis for %s" % ", ".join(stars)
                if len(stars) > 1 else "on %s alone" % stars[0]))
     named = ["%s (%s)" % (star, star_label(facts[star]))
              if star_label(facts[star]) else star for star in stars]

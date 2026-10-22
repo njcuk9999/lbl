@@ -27,7 +27,10 @@ pca2d configuration (lbl/pca2d/nominal.yaml): by the short names of the
 pca2d window, as 'section.key', or as a nested dict per section. Everything
 not given is the nominal set, the one every comparison of the project ran on.
 
-    n_star       star-frame components fitted (1)
+    n_star       the star's spectra, the template included (1): 1 is the
+                 template alone, not adjusted in depth; 2 adds one
+                 star-frame component with a free amplitude, never divided
+                 out; 0 is not a fit
     n_earth      observer-frame components fitted and divided out (3)
     compare      LBL measures the delivered object too, first, so that the
                  report sets the two series side by side (True)
@@ -208,6 +211,17 @@ def settings(pca2d, report=True) -> tuple:
                 ', '.join(sorted(ALIASES)), ', '.join(sorted(known))))
     for name in ('n_star', 'n_earth'):
         switches[name] = int(switches[name])
+    # n_star counts the star's spectra with the template; the fit's own
+    #   twoframe.n_star counts the free components, and is not set directly
+    from lbl.pca2d.config import free_star_components
+    try:
+        free_star_components(switches['n_star'])
+    except ValueError as exc:
+        raise LblException('PCA2D {0}'.format(exc))
+    if 'n_star' in overrides.get('twoframe', dict()):
+        raise LblException('PCA2D: give n_star, which counts the star\'s'
+                           ' spectra with the template (1: the template'
+                           ' alone), not twoframe.n_star')
     return switches, overrides
 
 
@@ -220,8 +234,13 @@ def request_stamp(request: dict, switches: dict, files: list) -> str:
     """What makes a correction this one: the settings, the input files (name,
     size, date) and the nominal file they sit on. Not the figures, which
     change nothing in the spectra."""
+    # the FREE star components: n_star counts the template since
+    #   2026-10-22, and a correction made before then keeps its stamp when it
+    #   is the same fit
+    from lbl.pca2d.config import free_star_components
     blob = dict(request=request,
-                counts=[switches['n_star'], switches['n_earth']],
+                counts=[free_star_components(switches['n_star']),
+                        switches['n_earth']],
                 files=[(os.path.basename(f), os.path.getsize(f),
                         int(os.path.getmtime(f))) for f in files])
     with open(nominal_path(), 'rb') as handle:
@@ -583,10 +602,16 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
              '--corrected-dir', os.path.join(science_root,
                                              '{object}' + suffix),
              '--keep-names', '--any-object']
-    log('PCA2D on %s%s: %d star and %d observer components -> %s'
-        % (', '.join(objects), ' together' if together else '',
-           switches['n_star'], switches['n_earth'],
-           ', '.join(names[n][0] for n in objects)), 'info')
+    from lbl.pca2d.config import describe_star, free_star_components
+    log('PCA2D on %s%s -> %s' % (', '.join(objects),
+                                 ' together' if together else '',
+                                 ', '.join(names[n][0] for n in objects)),
+        'info')
+    log('PCA2D star: %s' % describe_star(
+        free_star_components(switches['n_star'])), 'info')
+    log('PCA2D observer: %d components, divided out of the spectra%s'
+        % (switches['n_earth'], ', FROZEN from %s' % frozen.describe()
+           if frozen is not None else ', fitted'), 'info')
     if overrides:
         log('PCA2D asks %s' % ', '.join(
             '%s.%s = %r' % (s, k, v) for s, kv in sorted(overrides.items())
@@ -645,7 +670,9 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                        n_files={n: len(w) for n, w in written.items()},
                        code=code_stamp(), when=datetime.datetime.now(
                        ).isoformat(timespec='seconds'),
-                       counts=[switches['n_star'], switches['n_earth']]),
+                       n_star=switches['n_star'],
+                       counts=[free_star_components(switches['n_star']),
+                               switches['n_earth']]),
                   handle, indent=1)
     for name in objects:
         log('PCA2D: %d corrected spectra of %d in %s; LBL goes on with %s'
