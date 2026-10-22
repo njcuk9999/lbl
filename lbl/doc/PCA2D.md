@@ -57,6 +57,7 @@ report followed by LBL's.
 | `pca2d/<object>/request.yaml` | the configuration that ran |
 | `pca2d/<object>/<M>-<N>/` | the fit, the figures, the report (PDF) |
 | `pca2d/cache/` | the registered cubes, rebuildable |
+| `pca2d/components/` | the components of every fit, observer and star (below) |
 | `reports/<object>_pca2d_<object>_pca2d.pdf` | THE report: pca2d's, then LBL's |
 
 The report, when `REPORT` is on: the star as SIMBAD describes it, the
@@ -86,6 +87,8 @@ optical spectrographs.
 | `overwrite` | False | redo even when the same correction is on disk (as `SKIP_LBL_PCA2D=False`, below) |
 | `name` | None | `<object>_pca2d_<name>`, to keep variants side by side |
 | `joint` | False | every science object against one observer basis |
+| `output_name` | the object(s) | the name this fit's components are saved under (below) |
+| `input_name` | None | the output name of another fit, whose observer components are taken frozen (below) |
 
 Anything else is a key of the pca2d configuration,
 `lbl/pca2d/nominal.yaml`, which holds the nominal settings and their
@@ -160,6 +163,36 @@ that choice:
 A correction with no `done.json` beside it was interrupted and is made again
 in every case. `SKIP_LBL_PCA2D=True` with `overwrite=True` stops the run:
 they ask opposite things.
+
+## Components: saved, and read back
+
+Every fit writes its components to `DATA_DIR/pca2d/components/`, named as
+LBL names its templates, the instrument last, under the fit's `output_name`
+(the object, or the joint fit's objects, when it has none):
+
+| file | what |
+|---|---|
+| `PCA2D_Observer_<output_name>_<instrument>.fits` | the observer basis: grid, components, mask, their power, the training stars, every row's amplitudes |
+| `PCA2D_Star_<object>_<output_name>_<instrument>.fits` | each star of the fit: its spectrum per order parity, its star-frame components and their amplitudes |
+
+Another star takes those observer components frozen with `input_name`: the
+output name (this instrument's file), the file name, or a path. Only its own
+star block and the amplitudes are fitted; `n_earth` is all of them unless
+given. A basis made from spectra of another DATA_SOURCE (another pipeline)
+stops the run.
+
+```python
+# the basis: a joint fit of stars whose BERV sweeps, under its own name
+rparams['PCA2D'] = dict(n_star=1, n_earth=7, joint=True, output_name='2026a')
+# PCA2D_Observer_2026a_nirps_he.fits, read by a star that cannot separate
+#   the two frames itself (a narrow BERV range)
+rparams['PCA2D'] = dict(n_star=1, input_name='2026a', name='basis')
+```
+
+The cube must be on the basis' grid (same instrument and domain settings),
+or the fit stops; rows more than 60 days outside the basis' dates are
+counted in a warning. The basis enters the correction's stamp by its
+content (`BASISID`), so another basis makes the correction again.
 
 ## Speed
 

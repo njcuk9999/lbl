@@ -82,7 +82,8 @@ LblException = base_classes.LblException
 SUFFIX = '_pca2d'
 #: the switches of this recipe, and what they are when not given
 DEFAULTS = dict(n_star=1, n_earth=3, figures=True, overwrite=False,
-                name=None, joint=False, compare=True)
+                name=None, joint=False, compare=True, output_name=None,
+                input_name=None)
 #: the short names, as the pca2d window spells them, and the key of the
 #: pca2d configuration each one is
 ALIASES = {
@@ -490,6 +491,28 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         raise LblException('SKIP_LBL_PCA2D=True keeps the correction on disk'
                            ' and PCA2D overwrite=True makes it again: one or'
                            ' the other')
+    # THE OBSERVER COMPONENTS OF ANOTHER FIT (input_name, pca2d.basis): taken
+    #   frozen, the star's own block and the amplitudes fitted. All of them
+    #   unless n_earth is given
+    frozen = None
+    if switches['input_name']:
+        from lbl.pca2d import basis as pbasis
+        try:
+            frozen = pbasis.load(str(switches['input_name']), data_dir,
+                                 instrument)
+        except FileNotFoundError as exc:
+            raise LblException('PCA2D input_name: {0}'.format(exc))
+        source = frozen.header.get('DATASRC', '')
+        if source and data_source and str(source) != str(data_source):
+            raise LblException(
+                'PCA2D input_name: {0} was made from {1} spectra and these'
+                ' are {2}: two pipelines leave different residuals'.format(
+                    frozen.path, source, data_source))
+        overrides.setdefault('twoframe', dict())['earth_basis'] = frozen.path
+        if not (isinstance(pca2d, dict) and 'n_earth' in pca2d):
+            switches['n_earth'] = frozen.n_earth
+        log('PCA2D: the observer basis is %s, frozen' % frozen.describe(),
+            'info')
     block = request_block(overrides, instrument, data_source, input_file)
     os.makedirs(work, exist_ok=True)
 
@@ -502,6 +525,9 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     #   correction made before PLANETS existed keeps its stamp
     if any(orbits.values()):
         request['orbits'] = orbits
+    # the basis by its content: another basis makes the correction again
+    if frozen is not None:
+        request['earth_basis_id'] = frozen.ident
     stamp = request_stamp(request, switches,
                           [f for name in objects for f in files[name]])
     state_file = os.path.join(work, 'done.json')
@@ -586,6 +612,31 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                            '{0}'.format(', '.join(empty)))
     from lbl.pca2d.provenance import stamp as code_stamp
     run_dir = run_folder(work)
+    # THE COMPONENTS OF THIS FIT, in DATA_DIR/pca2d/components (pca2d.basis):
+    #   the observer basis, named by the PCA2D output_name or the object(s),
+    #   for other stars to read frozen with input_name (unless it was itself
+    #   read so), and each star's own part
+    from lbl.pca2d import basis as pbasis
+    from lbl.pca2d.config import read_yaml
+    resolved = os.path.join(run_dir, 'resolved_config.yaml')
+    config = None
+    if os.path.exists(resolved):
+        with open(resolved) as handle:
+            config = read_yaml(handle)
+    output = re.sub(r'[^0-9A-Za-z._+-]', '_',
+                    str(switches['output_name'] or ''))
+    if frozen is None:
+        observer_label = output or '+'.join(objects) + (
+            '_' + label if label else '')
+        saved = pbasis.save(run_dir, observer_label, data_dir, list(objects),
+                            instrument=instrument, config=config,
+                            data_source=str(data_source or ''))
+        log('PCA2D: observer components saved, %s; another star reads them'
+            ' with PCA2D input_name=%r' % (saved, observer_label), 'value')
+    for saved in pbasis.save_stars(run_dir, data_dir, list(objects),
+                                   instrument=instrument,
+                                   name=output or label or None):
+        log('PCA2D: star components saved, %s' % saved, 'value')
     for name in objects:
         RUNS[names[name][0]] = run_dir
     with open(state_file, 'w') as handle:

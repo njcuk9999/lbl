@@ -70,6 +70,10 @@ def parse_args(argv=None):
                    help="M, components in the STELLAR rest frame")
     p.add_argument("-j", "--n-earth", type=int, default=None,
                    help="N, components in the OBSERVER frame")
+    p.add_argument("--earth-basis", default=None,
+                   help="a saved observer basis (pca2d.basis): its components"
+                        " are taken as they are and never updated; only the"
+                        " star's block and the amplitudes are fitted")
     p.add_argument("--leakage", action="store_true", default=None,
                    help="report the cross-block leakage matrix at the end (slow)")
     p.add_argument("--velocity-min-transmission", type=float, default=None,
@@ -189,7 +193,7 @@ CONFIGURABLE = ("n_star", "n_earth", "iters", "order", "tie_parities", "max_mad"
                 "kernel_halfwidth", "gap_guard", "leakage", "chunk", "dtype",
                 "velocity_term", "velocity_min_transmission", "mean",
                 "patience", "keep", "star_resolution", "star_basis",
-                "resolution", "star_smooth", "holdout")
+                "resolution", "star_smooth", "holdout", "earth_basis")
 
 
 def _resolve(args):
@@ -3177,6 +3181,22 @@ def main(argv=None):
     Q = np.linalg.qr(rng.normal(size=(n_pixels, args.n_earth)))[0].T.copy()
     log("starting from a random orthonormal basis, seed fixed so a rerun on the"
         " same cube reproduces it")
+    # A FROZEN OBSERVER BASIS (pca2d.basis): the components a fit learned on
+    # stars whose two frames separate, taken as they are and never updated,
+    # for a star whose BERV barely moves and cannot separate them itself.
+    # Only the star's block and the amplitudes are fitted.
+    frozen = None
+    if getattr(args, "earth_basis", None):
+        from .basis import Basis
+        frozen = Basis(args.earth_basis)
+        Q = frozen.on_grid(grid, args.n_earth)
+        log("observer basis FROZEN, %d components of %s"
+            % (Q.shape[0], frozen.describe()), "info")
+        outside = frozen.check_dates(
+            np.asarray(meta["bjd"], dtype=float) - 2400000.5)
+        if outside:
+            log("%d of %d rows are more than 60 days outside the dates the"
+                " basis was trained on" % (outside, n_spectra), "warn")
 
     # The velocity column of joint_coeffs. `a_lin` is the star model it is
     # linearised around, so there is none to build on the very first solve and
@@ -3329,15 +3349,17 @@ def main(argv=None):
                                              velocity_mask=velocity_mask, star_mean=star_mean,
                                              desc="coefficients")
                 a_lin = a if velocity_term else None
-                Q = update_earth(data, w, P, Q, a, b, shifter, delta, chunk,
-                                 work=work,
-                                 alpha=alpha, velocity_mask=velocity_mask,
-                                star_mean=star_mean)
+                if frozen is None:
+                    Q = update_earth(data, w, P, Q, a, b, shifter, delta,
+                                     chunk, work=work, alpha=alpha,
+                                     velocity_mask=velocity_mask,
+                                     star_mean=star_mean)
             else:
-                Q = update_earth(data, w, P, Q, a, b, shifter, delta, chunk,
-                                 work=work,
-                                 alpha=alpha, velocity_mask=velocity_mask,
-                                star_mean=star_mean)
+                if frozen is None:
+                    Q = update_earth(data, w, P, Q, a, b, shifter, delta,
+                                     chunk, work=work, alpha=alpha,
+                                     velocity_mask=velocity_mask,
+                                     star_mean=star_mean)
                 a, b, alpha, _ = joint_coeffs(data, w, P, Q, shifter, delta,
                                               chunk=chunk, exposure=tie,
                                               velocity_from=a_lin,
@@ -3509,7 +3531,10 @@ def main(argv=None):
     power_star = block_power(w, a, lambda s0, s1: shifter.carry(Pf, delta[s0:s1]))
     power_earth = block_power(w, b, lambda s0, s1: Q)
     P, a, power_star = tidy_block(P, a, power_star)
-    Q, b, power_earth = tidy_block(Q, b, power_earth)
+    # a frozen basis keeps its order and signs: its amplitudes are then
+    #   those of the basis' components, comparable to the training's
+    if frozen is None:
+        Q, b, power_earth = tidy_block(Q, b, power_earth)
 
     sig_formal, sig_scaled, chi2_red, sig_vel = coefficient_errors(
         data, w0, P, Q, shifter, delta, a, b, chunk, exposure=tie,
@@ -3619,6 +3644,9 @@ def main(argv=None):
                                        or "spline"),
                         # the pca2d commit that made the fit, + if modified
                         pca2d_code=code_stamp(),
+                        # the frozen observer basis, if there was one
+                        earth_basis=str(frozen.name if frozen else ""),
+                        earth_basis_id=str(frozen.ident if frozen else ""),
                         # the star-frame spectra per parity, from --mean iterate
                         # or --mean star; every reader takes them from here
                         **({"templates": templates} if star_mean is not None else {}))

@@ -434,6 +434,13 @@ DEFAULTS = {
         # VALIDATION CROISEE (pca2d.diagnostics.holdout_rows): "even" ou "odd",
         # les nuits tenues hors du fit. None, le nominal: toutes les nuits.
         "holdout": None,
+        # A SAVED OBSERVER BASIS (pca2d.basis, the PCA2D dict's basis=):
+        # its components are taken frozen and never updated, and only the
+        # star's block and the amplitudes are fitted, for a star whose BERV
+        # barely moves and cannot tell its frame from the observer's. None,
+        # the nominal: the observer components are fitted. Here and not in
+        # nominal.yaml, whose hash stamps every correction on disk.
+        "earth_basis": None,
         # The older spelling of the two above: smooth to one resolution element
         # of this R. Still read, so the runs made with it reproduce.
         "star_resolution": None,
