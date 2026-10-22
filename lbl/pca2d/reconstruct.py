@@ -1054,7 +1054,9 @@ def rows_by_night(model, args, config=None):
             row = Table(coeffs)[by_row[name]]
             row["berv"] = float(meta["berv"])  # this exposure, not the row
             if "vstar" in row.colnames:
-                row["vstar"] = float(meta["vstar"])
+                # 0 for a star with no orbits: a joint member beside one that
+                #   has some (TOI904 beside GJ_1028, 2026-10-21)
+                row["vstar"] = float(meta.get("vstar", 0.0))
             out.append((path, row))
             continue
         night = int(np.floor(float(meta["bjd"]) - 0.5))
@@ -1064,7 +1066,7 @@ def rows_by_night(model, args, config=None):
         row = Table(coeffs)[index[night]]
         row["berv"] = float(meta["berv"])      # this exposure, not the night
         if "vstar" in row.colnames:
-            row["vstar"] = float(meta["vstar"])
+            row["vstar"] = float(meta.get("vstar", 0.0))
         out.append((path, row))
     return out, missing
 
@@ -1265,8 +1267,9 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
     for j in range(model["n_earth"]):
         row["b%d" % (j + 1)] = float(b[0, j])
     row["berv"] = berv
-    if "vstar" in payload["meta"]:
-        row["vstar"] = float(payload["meta"]["vstar"])
+    if "vstar" in payload["meta"] or "vstar" in row:
+        # 0 for a star with no orbits, whatever a joint table holds there
+        row["vstar"] = float(payload["meta"].get("vstar", 0.0))
     return row, alive
 
 

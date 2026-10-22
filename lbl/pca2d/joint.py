@@ -116,6 +116,15 @@ def build(cubes, objects, path, config_file=None, chunk=64):
                              " one domain, one step and one high pass for every"
                              " object" % name)
     metas = [Table.read(os.path.join(c, "meta.fits")) for c in cubes]
+    # with orbits for some members only (registration.orbits), the others'
+    #   star frame is their BERV and their Keplerian zero: said so, rather than
+    #   left masked by the outer join, where a masked BERV reads as anything
+    if any("berv_bary" in meta.colnames for meta in metas):
+        for meta in metas:
+            if "berv_bary" not in meta.colnames:
+                meta["berv_bary"] = np.asarray(meta["berv"], dtype=float)
+            if "vstar" not in meta.colnames:
+                meta["vstar"] = np.zeros(len(meta))
     rows = [len(m) for m in metas]
     total = int(sum(rows))
     has_trans = all(os.path.exists(os.path.join(c, "trans.npy")) for c in cubes)
