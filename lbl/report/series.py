@@ -59,27 +59,6 @@ def read_rdb(path):
     return out
 
 
-def read_csv(path):
-    """Un .csv (les tables d'activite de lbl_compile), en dictionnaire de
-    colonnes, comme read_rdb: flottants quand c'est possible, chaines sinon.
-    """
-    import csv
-
-    with open(path, 'r', newline='') as handle:
-        rows = list(csv.reader(handle))
-    if len(rows) < 2:
-        raise ValueError('%s holds no rows' % path)
-    out = dict()
-    for index, name in enumerate(rows[0]):
-        values = [row[index] if index < len(row) else '' for row in rows[1:]]
-        try:
-            out[name] = np.array([v if v != '' else 'nan' for v in values],
-                                 dtype=float)
-        except ValueError:
-            out[name] = np.array(values, dtype=str)
-    return out
-
-
 def has_telluric(table):
     """La correction tellurique a-t-elle tourne sur cette serie?"""
     return WATER in table and np.isfinite(np.asarray(

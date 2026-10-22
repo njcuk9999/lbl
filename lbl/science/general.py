@@ -1769,9 +1769,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # the template of the last iteration, without the blaze
         with warnings.catch_warnings(record=True):
             template_now = model / b_ratio
-        activity = activity_lines.measure(wavegrid, sci_data0, sci_data,
-                                          template_now, blaze, rms,
-                                          model_shift, berv)
+        activity = activity_lines.measure(wavegrid, sci_data0, template_now,
+                                          blaze, rms, model_shift, berv)
         activity_lines.log_measured(activity)
         activity_header = activity_lines.extension_header(science_file)
     else:

@@ -727,34 +727,35 @@ ACTIVITY_PER_PAGE = 8
 ACTIVITY_NSIG = 4.0
 
 
-def activity_lines(activity, summary=None):
-    """The activity lines measured in at least one spectrum of an activity
-    table (lbl_compile, lbl.science.activity_lines), in the catalog's order,
-    as (prefix of their columns, name, label).
+def activity_lines(table, labels=None):
+    """The activity lines of the rdb measured in at least one spectrum
+    (lbl_compile, lbl.science.activity_lines), in the rdb's order, as (key,
+    name, label).
 
-    The columns of a line are <name>_<column>, the space of the name as an
-    underscore: He 1.08333 -> He_1.08333_EW_DIFF.
+    The columns of a line are <column>_<key>, the key being its name with
+    the space as an underscore: dEW_He_1.08333 and sdEW_He_1.08333 for
+    He 1.08333.
     """
-    labels = dict()
-    if summary is not None and 'NAME' in summary and 'LABEL' in summary:
-        labels = dict(zip(summary['NAME'], summary['LABEL']))
+    labels = labels or dict()
     out = []
-    for column in activity:
-        if not column.endswith('_EW_DIFF') or column.endswith('_SIG_EW_DIFF'):
+    for column in table:
+        if not column.startswith('dEW_'):
             continue
-        if not np.isfinite(np.asarray(activity[column], dtype=float)).any():
+        if 'sdEW_' + column[4:] not in table:
             continue
-        prefix = column[:-len('EW_DIFF')]
-        name = prefix[:-1].replace('_', ' ', 1)
-        out.append((prefix, name, labels.get(name, name)))
+        if not np.isfinite(np.asarray(table[column], dtype=float)).any():
+            continue
+        key = column[4:]
+        name = key.replace('_', ' ', 1)
+        out.append((key, name, labels.get(name, name)))
     return out
 
 
-def activity_stats(activity, prefix):
+def activity_stats(table, key):
     """The measures of one activity line: (good, weighted mean, reduced
     chi2 about it), the last two NaN with fewer than two measures."""
-    ew = np.asarray(activity[prefix + 'EW_DIFF'], dtype=float)
-    sig = np.asarray(activity[prefix + 'SIG_EW_DIFF'], dtype=float)
+    ew = np.asarray(table['dEW_' + key], dtype=float)
+    sig = np.asarray(table['sdEW_' + key], dtype=float)
     good = np.isfinite(ew) & np.isfinite(sig) & (sig > 0)
     if np.sum(good) < 2:
         return good, float('nan'), float('nan')
@@ -765,7 +766,7 @@ def activity_stats(activity, prefix):
     return good, mean, chi2
 
 
-def page_activity(plt, activity, lines, title):
+def page_activity(plt, table, lines, title):
     """The differential equivalent width of each activity line, in time.
 
     WHAT IS PLOTTED. For each line of lbl/resources/activity_lines.yaml that
@@ -775,22 +776,22 @@ def page_activity(plt, activity, lines, title):
     ACTIVITY_NSIG error bars from the weighted mean are red: a flare lights
     He I and the Paschen lines together, an artefact usually one line only.
 
-    :param activity: dict of columns, the activity table of lbl_compile
-    :param lines: (prefix, name, label) of the lines on this page
+    :param table: dict of columns, the rdb
+    :param lines: (key, name, label) of the lines on this page
     :param title: str, the name of the run
     """
     if not lines:
         return None
-    time = np.asarray(activity[S.TIME], dtype=float)
+    time = np.asarray(table[S.TIME], dtype=float)
     ncol = 2 if len(lines) > 1 else 1
     nrow = int(np.ceil(len(lines) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(11, 1.2 + 2.4 * nrow),
                              sharex=True, squeeze=False)
-    for index, (prefix, name, label) in enumerate(lines):
+    for index, (key, name, label) in enumerate(lines):
         ax = axes[index // ncol, index % ncol]
-        ew = np.asarray(activity[prefix + 'EW_DIFF'], dtype=float)
-        sig = np.asarray(activity[prefix + 'SIG_EW_DIFF'], dtype=float)
-        good, mean, chi2 = activity_stats(activity, prefix)
+        ew = np.asarray(table['dEW_' + key], dtype=float)
+        sig = np.asarray(table['sdEW_' + key], dtype=float)
+        good, mean, chi2 = activity_stats(table, key)
         with np.errstate(invalid='ignore', divide='ignore'):
             far = good & (np.abs(ew - mean) / sig > ACTIVITY_NSIG)
         near = good & ~far
@@ -800,14 +801,9 @@ def page_activity(plt, activity, lines, title):
             ax.errorbar(time[far], ew[far], yerr=sig[far], fmt='o', ms=3.5,
                         lw=0.7, capsize=0, color='C3')
         ax.axhline(0.0, color='k', lw=0.8, ls=':')
-        orders = np.asarray(activity.get(prefix + 'ORDER',
-                                         np.full(len(time), np.nan)),
-                            dtype=float)[good]
-        used = ', '.join('%d' % o for o in np.unique(orders[np.isfinite(
-            orders)]))
-        ax.set_title('%s (%s), order %s: %d spectra\nrms %.2g, median error'
-                     ' %.2g m$\\AA$, $\\chi^2_r$ %.2g, %d beyond %g$\\sigma$'
-                     % (label, name, used or '?', np.sum(good),
+        ax.set_title('%s (%s): %d spectra\nrms %.2g, median error %.2g'
+                     ' m$\\AA$, $\\chi^2_r$ %.2g, %d beyond %g$\\sigma$'
+                     % (label, name, np.sum(good),
                         np.std(ew[good]) if good.any() else np.nan,
                         np.median(sig[good]) if good.any() else np.nan,
                         chi2, np.sum(far), ACTIVITY_NSIG), fontsize=8)

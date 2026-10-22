@@ -7,17 +7,18 @@ The lines are those of lbl/resources/activity_lines.yaml: the literature's
 activity indicators from u to K, at their vacuum wavelengths. Every science
 spectrum gets them, with no option to set:
 
-    measure()         lbl_compute, once the velocity has converged: for each
-                      line, in the order where it falls closest to the
-                      centre, the change of its equivalent width against the
-                      template. Written to the ACTIVITY extension of the
-                      lblrv file, one row per line of the catalog
-    compile_tables()  lbl_compile, in the lblrdb directory:
-                      lbl_<object>_<template>_activity.csv, one row per
-                      spectrum (its date, its files, all that was measured on
-                      each line), and lbl_<object>_<template>_activity_lines
-                      .csv, one row per line (the catalog, how often the line
-                      was measured, how much it varies)
+    measure()     lbl_compute, once the velocity has converged: for each
+                  line, in the order where it falls closest to the centre,
+                  the change of its equivalent width against the template.
+                  Written to the ACTIVITY extension of the lblrv file, one row
+                  per line of the catalog: the catalog's columns and
+                  MEASURED
+    add_to_rdb()  lbl_compile: the same, as columns of the rdb (one row per
+                  spectrum), <column>_<line> for the lines measured at least
+                  once, the line's space as an underscore: dEW_He_1.08333,
+                  sdEW_He_1.08333, FRACVALID_He_1.08333, CHI2_He_1.08333.
+                  sdEW is dEW's error, so the rdb per night (lbl2) bins dEW
+                  weighted by it
 
 THE MEASUREMENT
 ---------------
@@ -36,13 +37,16 @@ the blaze and T the template:
     r        (q T B - S) / (q B C): what the spectrum lacks against the
              template, in units of the continuum
 
-    EW_DIFF = sum over the pixels of a_i r_i
+    dEW = sum over the pixels of a_i r_i
 
 with a_i the length of pixel i inside the window: its overlap with the
 window for a boxcar (h = w / 2), its width times a gaussian of FWHM w and
 peak 1 for a gaussian (h = 1.5 w). In mA, positive when the line absorbs
 more than in the template: a line filling in with emission gives a negative
-EW_DIFF. Its error carries the noise of LBL's model (rms) and that of q.
+dEW. Its error, sdEW, carries the noise of LBL's model (rms) and that of q.
+FRACVALID is the fraction of the window with valid pixels; the pixels LBL's
+sigma clipping rejected are kept (a flare would be cut out otherwise), CHI2
+(the residuals of the window against rms, per pixel) shows them.
 
 The order is the one where the line, without the BERV, falls closest to the
 centre: the same order for every spectrum, as long as the window and some
@@ -54,14 +58,12 @@ Created on 2026-10-22
 @author: artigau
 """
 import os
-import warnings
 from typing import Dict, List, Optional
 
 import numpy as np
 import yaml
 from astropy.io import fits
 from astropy.table import Table
-from astropy.time import Time
 
 from lbl.core import io
 from lbl.core import math as mp
@@ -81,9 +83,7 @@ EXTNAME = 'ACTIVITY'
 CATALOG_COLUMNS = ['NAME', 'LABEL', 'SPECIES', 'KIND', 'BAND', 'FUNCTION',
                    'WAVE', 'WIDTH']
 #: the columns measured on each line, and their units
-MEASURED = dict(ORDER='', EW_DIFF='mAngstrom',
-                SIG_EW_DIFF='mAngstrom', FRAC_VALID='', NPIX='', NCLIP='',
-                SNR='', CHI2='')
+MEASURED = dict(dEW='mAngstrom', sdEW='mAngstrom', FRACVALID='', CHI2='')
 #: nm to mA
 NM_TO_MA = 1e4
 #: half width [nm] of the region where the continuum of the template is taken
@@ -159,8 +159,8 @@ def _side_level(wave: np.ndarray, ratio: np.ndarray, noise: np.ndarray,
 
 
 def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
-                  clipped: np.ndarray, template: np.ndarray,
-                  blaze: np.ndarray, rms: np.ndarray) -> Optional[Dict]:
+                  template: np.ndarray, blaze: np.ndarray,
+                  rms: np.ndarray) -> Optional[Dict]:
     """
     The differential equivalent width of one line in one order
 
@@ -168,14 +168,13 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
     :param wave: np.ndarray, the wavelengths of the order in the template's
                  frame [nm]
     :param spectrum: np.ndarray, the spectrum of the order (not clipped)
-    :param clipped: np.ndarray, the spectrum after LBL's sigma clipping
     :param template: np.ndarray, the template, without the blaze
     :param blaze: np.ndarray, the blaze of the order
     :param rms: np.ndarray, LBL's noise model of the order
 
     :return: None if the window or its side bands are not in the order, else
-             the measured columns (EW_DIFF NaN if less than MIN_FRAC_VALID of
-             the window is valid)
+             the measured columns (dEW NaN if less than MIN_FRAC_VALID of the
+             window is valid)
     """
     lam0, width = line['WAVE'], line['WIDTH']
     gaussian = line['FUNCTION'] == 'gaussian'
@@ -186,11 +185,11 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
         return None
     sel = slice(finite[0], finite[-1] + 1)
     wave = wave[sel]
-    spectrum, clipped = spectrum[sel], clipped[sel]
+    spectrum = spectrum[sel]
     template, blaze, rms = template[sel], blaze[sel], rms[sel]
     if wave[-1] < wave[0]:
         wave = wave[::-1]
-        spectrum, clipped = spectrum[::-1], clipped[::-1]
+        spectrum = spectrum[::-1]
         template, blaze, rms = template[::-1], blaze[::-1], rms[::-1]
     edges = _pixel_edges(wave)
     # the window must be inside the order
@@ -236,11 +235,8 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
     valid = window & np.isfinite(spectrum) & np.isfinite(model)
     valid &= np.isfinite(rms) & (model > 0) & (blaze > 0) & (qlevel > 0)
     frac_valid = np.sum(length[valid]) / np.sum(length[window])
-    out = dict(FRAC_VALID=float(frac_valid),
-               NPIX=int(np.sum(window)),
-               NCLIP=int(np.sum(window & np.isfinite(spectrum) &
-                                ~np.isfinite(clipped))),
-               EW_DIFF=np.nan, SIG_EW_DIFF=np.nan, SNR=np.nan, CHI2=np.nan)
+    out = dict(dEW=np.nan, sdEW=np.nan, FRACVALID=float(frac_valid),
+               CHI2=np.nan)
     if frac_valid < MIN_FRAC_VALID or not np.isfinite(cont) or cont <= 0:
         return out
     # what the spectrum lacks against the template, in continuum units
@@ -250,14 +246,13 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
     var = np.sum((length[valid] * rms[valid] / continuum) ** 2)
     var += ((level_err / level) *
             np.sum(length[valid] * template[valid] / cont)) ** 2
-    out['EW_DIFF'] = float(ew * NM_TO_MA)
-    out['SIG_EW_DIFF'] = float(np.sqrt(var) * NM_TO_MA)
-    out['SNR'] = float(np.median(continuum / rms[valid]))
+    out['dEW'] = float(ew * NM_TO_MA)
+    out['sdEW'] = float(np.sqrt(var) * NM_TO_MA)
     out['CHI2'] = float(np.mean((resid / rms[valid]) ** 2))
     return out
 
 
-def measure(wavegrid: np.ndarray, spectrum: np.ndarray, clipped: np.ndarray,
+def measure(wavegrid: np.ndarray, spectrum: np.ndarray,
             template: np.ndarray, blaze: np.ndarray, rms: np.ndarray,
             velocity: float, berv: float) -> Table:
     """
@@ -267,8 +262,6 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray, clipped: np.ndarray,
     :param wavegrid: np.ndarray, the wavelengths of the spectrum in the
                      observer's frame [nm], (orders, pixels)
     :param spectrum: np.ndarray, the spectrum, before LBL's sigma clipping
-    :param clipped: np.ndarray, the spectrum after LBL's sigma clipping (NaN
-                    where it rejected pixels)
     :param template: np.ndarray, the template at the converged velocity,
                      without the blaze
     :param blaze: np.ndarray, the blaze
@@ -279,7 +272,7 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray, clipped: np.ndarray,
     :param berv: float, the BERV [m/s] (the order is chosen without it)
 
     :return: Table, one row per line of the catalog: the catalog's columns
-             and the measured ones (ORDER = -1 when no order holds the line)
+             and the measured ones (NaN when no order holds the line)
     """
     lines = load_lines()
     npix = wavegrid.shape[1]
@@ -295,9 +288,7 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray, clipped: np.ndarray,
     rows = []
     for line in lines:
         row = {col: line[col] for col in CATALOG_COLUMNS}
-        row.update(ORDER=-1, EW_DIFF=np.nan,
-                   SIG_EW_DIFF=np.nan, FRAC_VALID=np.nan, NPIX=0, NCLIP=0,
-                   SNR=np.nan, CHI2=np.nan)
+        row.update({col: np.nan for col in MEASURED})
         # orders holding the line, the closest to their centre first
         candidates = []
         for order_num in np.where((wmin < line['WAVE']) &
@@ -312,14 +303,13 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray, clipped: np.ndarray,
         first = None
         for _, order_num in sorted(candidates):
             out = _measure_line(line, wave_t[order_num], spectrum[order_num],
-                                clipped[order_num], template[order_num],
-                                blaze[order_num], rms[order_num])
+                                template[order_num], blaze[order_num],
+                                rms[order_num])
             if out is None:
                 continue
-            out['ORDER'] = int(order_num)
             if first is None:
                 first = out
-            if np.isfinite(out['EW_DIFF']):
+            if np.isfinite(out['dEW']):
                 first = out
                 break
         # no order valid enough: the closest one says why
@@ -342,8 +332,8 @@ def log_measured(table: Table):
 
     :param table: Table, from measure
     """
-    ew = np.array(table['EW_DIFF'], dtype=float)
-    sig = np.array(table['SIG_EW_DIFF'], dtype=float)
+    ew = np.array(table['dEW'], dtype=float)
+    sig = np.array(table['sdEW'], dtype=float)
     good = np.isfinite(ew) & np.isfinite(sig) & (sig > 0)
     msg = '\tActivity lines: {0} of {1} measured'.format(np.sum(good),
                                                           len(table))
@@ -366,14 +356,14 @@ def extension_header(science_file: str) -> fits.Header:
     header = fits.Header()
     header['SCIFILE'] = (os.path.basename(science_file), 'science file')
     header['ACTCAT'] = (os.path.basename(CATALOG), 'catalog of lines')
-    header['ACTUNIT'] = ('mAngstrom', 'unit of EW_DIFF and SIG_EW_DIFF')
+    header['ACTUNIT'] = ('mAngstrom', 'unit of dEW and sdEW')
     return header
 
 
 def has_activity(lblrv_file: str) -> bool:
     """
-    Whether an lblrv file has the ACTIVITY extension (files written before
-    it existed do not)
+    Whether an lblrv file has the ACTIVITY extension with the columns of
+    MEASURED (files written before do not)
 
     :param lblrv_file: str, the lblrv file
 
@@ -381,131 +371,89 @@ def has_activity(lblrv_file: str) -> bool:
     """
     try:
         with fits.open(lblrv_file) as hdulist:
-            return EXTNAME in hdulist
+            if EXTNAME not in hdulist:
+                return False
+            names = hdulist[EXTNAME].columns.names
+            return all(col in names for col in MEASURED)
     except Exception as _:
         return False
 
 
-def compile_tables(inst, lblrv_files: List[str], rdbfile: str):
+def rdb_column(col: str, name: str) -> str:
     """
-    The activity tables of lbl_compile, beside the rdb file:
+    The rdb column of a measured column of a line: <column>_<line>, the
+    line's space as an underscore (dEW, He 1.08333 -> dEW_He_1.08333)
+    """
+    return '{0}_{1}'.format(col, name.replace(' ', '_'))
 
-        <rdb name>_activity.csv        one row per spectrum, by date: rjd (as
-                                       in the rdb), date (UTC, mid-exposure),
-                                       FILENAME (the lblrv file, as in the
-                                       rdb), SCIENCE_FILE, BERV [m/s], then
-                                       for each line measured at least once
-                                       <name>_<column> for every measured
-                                       column (the name's space as _)
-        <rdb name>_activity_lines.csv  one row per line measured at least
-                                       once: the catalog's columns, the order
-                                       used most often, NMEAS (spectra with a
-                                       measure), EW_MEAN (weighted mean),
-                                       EW_RMS, EW_MED_SIG and EW_CHI2 (the
-                                       reduced chi2 about the weighted mean:
-                                       well above 1 for a line that varies)
 
-    :param inst: Instrument instance
+def rdb_has_activity(rdbfile: str) -> bool:
+    """
+    Whether an rdb file has the activity columns (one compiled before them
+    does not, and is compiled again)
+
+    :param rdbfile: str, the rdb file
+
+    :return: bool
+    """
+    try:
+        with open(rdbfile, 'r') as rfile:
+            names = rfile.readline().rstrip('\n').split('\t')
+    except Exception as _:
+        return False
+    return any(name.startswith('dEW_') for name in names)
+
+
+def add_to_rdb(rdb_table: Table, lblrv_files: List[str]) -> int:
+    """
+    Add the activity lines to the rdb table of lbl_compile, as columns
+    <column>_<line> (rdb_column) for every column of MEASURED and every line
+    measured in at least one spectrum. Each row is matched to its lblrv file
+    by FILENAME; the date, the files and the BERV are already in the rdb.
+
+    :param rdb_table: Table, the rdb table (one row per lblrv file), changed
+                      in place
     :param lblrv_files: list of str, the lblrv files
-    :param rdbfile: str, the rdb file (lbl_<object>_<template>.rdb)
+
+    :return: int, the number of lines added
     """
-    activity_file = rdbfile.replace('.rdb', '_activity.csv')
-    lines_file = rdbfile.replace('.rdb', '_activity_lines.csv')
-    mid_exp_key = inst.params['KW_MID_EXP_TIME']
-    # the header keys LBL's parameters name: all that the date and the BERV
-    #   need, without converting the ~1500 cards of the science header
-    #   (that took 20 times as long as the rest)
-    keys = sorted({value for key, value in inst.params.items()
-                   if key.startswith('KW_') and isinstance(value, str)})
-    rows, tables, missing = [], [], 0
+    # the measures of each lblrv file: {basename: {line: row}}
+    measures, missing = dict(), 0
     for lblrv_file in lblrv_files:
         with fits.open(lblrv_file) as hdulist:
             if EXTNAME not in hdulist:
                 missing += 1
                 continue
-            table = Table.read(hdulist, hdu=EXTNAME)
-            science_file = hdulist[EXTNAME].header.get('SCIFILE', '')
-            primary = hdulist[0].header
-            small = fits.Header()
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                for key in keys:
-                    if key in primary:
-                        small[key] = (primary[key], primary.comments[key])
-        header = io.LBLHeader.from_fits(small, lblrv_file)
-        mjd = header.get_hkey(mid_exp_key, dtype=float)
-        rows.append(dict(rjd=inst.get_rjd_value(header),
-                         date=Time(mjd, format='mjd').isot,
-                         FILENAME=os.path.basename(lblrv_file),
-                         SCIENCE_FILE=science_file,
-                         BERV=inst.get_berv(header)))
-        tables.append(table)
+            data = hdulist[EXTNAME].data
+            names = np.array(data['NAME']).astype(str)
+            if not all(col in data.columns.names for col in MEASURED):
+                missing += 1
+                continue
+            measures[os.path.basename(lblrv_file)] = {
+                name: {col: float(data[col][row]) for col in MEASURED}
+                for row, name in enumerate(names)}
     if missing > 0:
-        msg = ('{0} of {1} lblrv files have no {2} extension (computed before '
-               'the activity lines): rerun lbl_compute on them')
-        log.warning(msg.format(missing, len(lblrv_files), EXTNAME))
-    if len(tables) == 0:
-        log.general('No activity lines to compile')
-        return
-    # the lines measured at least once
-    lines = [line for line in load_lines()
-             if any(np.isfinite(_value(tab, line['NAME'], 'EW_DIFF'))
-                    for tab in tables)]
-    # one row per spectrum
-    order = np.argsort([row['rjd'] for row in rows])
-    out = Table()
-    for col in ['rjd', 'date', 'FILENAME', 'SCIENCE_FILE', 'BERV']:
-        out[col] = [rows[it][col] for it in order]
-    for line in lines:
-        prefix = line['NAME'].replace(' ', '_') + '_'
-        for col in MEASURED:
-            out[prefix + col] = [_value(tables[it], line['NAME'], col)
-                                 for it in order]
-    msg = 'Writing activity table ({0} spectra, {1} lines): {2}'
-    log.info(msg.format(len(out), len(lines), activity_file))
-    io.write_table(activity_file, out, fmt='csv')
-    # one row per line
-    summary = Table()
-    for col in CATALOG_COLUMNS:
-        summary[col] = [line[col] for line in lines]
-    stats = dict(ORDER=[], NMEAS=[], EW_MEAN=[], EW_RMS=[], EW_MED_SIG=[],
-                 EW_CHI2=[])
-    for line in lines:
-        prefix = line['NAME'].replace(' ', '_') + '_'
-        ew = np.array(out[prefix + 'EW_DIFF'], dtype=float)
-        sig = np.array(out[prefix + 'SIG_EW_DIFF'], dtype=float)
-        orders = np.array(out[prefix + 'ORDER'], dtype=int)
-        good = np.isfinite(ew) & np.isfinite(sig) & (sig > 0)
-        used, counts = np.unique(orders[good], return_counts=True)
-        stats['ORDER'].append(int(used[np.argmax(counts)]) if len(used) else -1)
-        stats['NMEAS'].append(int(np.sum(good)))
-        if np.sum(good) < 2:
-            for key in ['EW_MEAN', 'EW_RMS', 'EW_MED_SIG', 'EW_CHI2']:
-                stats[key].append(np.nan)
+        msg = ('{0} of {1} lblrv files have no activity lines (computed '
+               'before them): rerun lbl_compute on them')
+        log.warning(msg.format(missing, len(lblrv_files)))
+    filenames = np.array(rdb_table['FILENAME']).astype(str)
+    added = 0
+    for line in load_lines():
+        values = {col: np.full(len(filenames), np.nan) for col in MEASURED}
+        for row, filename in enumerate(filenames):
+            measure_row = measures.get(filename, dict()).get(line['NAME'])
+            if measure_row is None:
+                continue
+            for col in MEASURED:
+                values[col][row] = measure_row[col]
+        if not np.isfinite(values['dEW']).any():
             continue
-        weights = 1 / sig[good] ** 2
-        mean = np.sum(weights * ew[good]) / np.sum(weights)
-        stats['EW_MEAN'].append(mean)
-        stats['EW_RMS'].append(np.std(ew[good]))
-        stats['EW_MED_SIG'].append(np.median(sig[good]))
-        stats['EW_CHI2'].append(np.sum(((ew[good] - mean) / sig[good]) ** 2)
-                                / (np.sum(good) - 1))
-    for key, values in stats.items():
-        summary[key] = values
-    msg = 'Writing activity lines table: {0}'
-    log.info(msg.format(lines_file))
-    io.write_table(lines_file, summary, fmt='csv')
-
-
-def _value(table: Table, name: str, col: str):
-    """
-    The value of a column for one line in an ACTIVITY table (NaN, or -1 for
-    ORDER, if the line is not in it)
-    """
-    rows = np.where(np.array(table['NAME']).astype(str) == name)[0]
-    if len(rows) == 0:
-        return -1 if col == 'ORDER' else np.nan
-    return table[col][rows[0]]
+        for col in MEASURED:
+            rdb_table[rdb_column(col, line['NAME'])] = values[col]
+        added += 1
+    msg = 'Activity lines: {0} of {1} measured, added to the rdb'
+    log.general(msg.format(added, len(load_lines())))
+    return added
 
 # =============================================================================
 # End of code
