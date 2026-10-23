@@ -37,13 +37,17 @@ files of 2005 and 2019, 2026-10-23):
   hundreds of m/s, which Libre-ESpRIT's own correction from the telluric
   lines leaves in place: on 39 spectra of AD Leo (2005-2022) the O2 lines
   sat between -540 and +780 m/s of their rest wavelengths, and LBL's
-  velocities followed them with a slope of -0.92 (r = -0.98, 204 m/s of rms,
-  41 m/s once that is taken out). The class measures where the tellurics
-  are, by correlation with TAPAS at the instrument's resolution in five
-  bands (O2 B and A, water at 820, 900 and 940 nm; each good to about
-  80 m/s, the orders not moving quite together), and moves the whole
-  spectrum by their mean so that they sit at rest (relativistic Doppler).
-  The velocity is in the header, TELLDV [m/s], and in the rdb.
+  velocities followed them with a slope of -0.92 (r = -0.98, 204 m/s of
+  rms). The class measures the velocity of the tellurics by least squares
+  (fit_tellurics): the star's template divided out (LBL's, made by a
+  previous run, moved by the BERV), the depths of the dry and wet absorbers
+  of TAPAS fitted first with no velocity, then one velocity for both,
+  iterated, with a continuum per order. It moves the whole spectrum by that
+  velocity so that the tellurics sit at rest (relativistic Doppler), and
+  writes it in the header: TELLDV, the RV correction from the tellurics
+  [m/s], TELLDVE its error, TELLTPL the template divided out ('none' on a
+  first run, which measures with the star's lines in and is then run
+  again). TELLDV and TELLDVE go into the rdb; telluric_figure draws a fit.
 
 * BLAZE. The UnNormalized intensity is already divided by the flat, and has
   no blaze left in it. The class gives LBL the blaze back, measured from the
@@ -114,21 +118,25 @@ KEY_BERV = 'BERV'
 KEY_BJD = 'BJD'
 KEY_HELIO = 'HELIOVEL'
 KEY_SNR = 'SNR{0}'.format(SNR_ORDER)
+#: the zero point from the tellurics: the RV correction they gave [m/s], its
+#:    error [m/s], and the template divided out to measure it (or 'none')
 KEY_TELLDV = 'TELLDV'
-#: where the telluric lines are measured: (name, from, to [nm], TAPAS
-#:    column), the bands where the correlation with TAPAS is strong on an
-#:    M dwarf (AD Leo: 0.64 to 0.89; the O2 gamma band and the water at 650
-#:    and 720 nm are too weak or too blended)
-TELLURIC_BANDS = (('O2 B', 686.6, 694.0, 'ABSO_OTHERS'),
-                  ('O2 A', 759.5, 770.0, 'ABSO_OTHERS'),
-                  ('H2O 820', 813.0, 835.0, 'ABSO_WATER'),
-                  ('H2O 900', 895.0, 925.0, 'ABSO_WATER'),
-                  ('H2O 940', 930.0, 970.0, 'ABSO_WATER'))
-#: the velocities searched [km/s]
-TELLURIC_SCAN = np.arange(-2.0, 2.0001, 0.02)
-#: the TAPAS file (models/ of DATA_DIR), set by the class when it starts
+KEY_TELLDVE = 'TELLDVE'
+KEY_TELLTPL = 'TELLTPL'
+#: the telluric fit (fit_tellurics): where [nm], the degree of each order's
+#:    continuum, the least absorption that makes an order take part, the
+#:    transmission under which a sample is saturated and left out, the
+#:    iterations and the clipping [sigmas]
+TELLURIC_RANGE = (580.0, 1050.0)
+TELLURIC_DEGREE = 3
+TELLURIC_MIN_DEPTH = 0.03
+TELLURIC_MIN_TRANS = 0.15
+TELLURIC_ITERATIONS = 20
+TELLURIC_CLIP = 5.0
+#: the TAPAS file (models/ of DATA_DIR) and the star's templates, in the
+#:    order they are looked for, set by the class when it starts
 TAPAS_FILE = None
-
+TEMPLATE_FILES = ()
 
 # =============================================================================
 # Define functions
@@ -202,9 +210,12 @@ def barycentric(ra: str, dec: str, mjdmid: float) -> Tuple[float, float]:
     return float(berv.to(uu.km / uu.s).value), float(bjd.jd)
 
 
-def order_blaze(flux: np.ndarray, error: np.ndarray) -> np.ndarray:
+def order_blaze(flux: np.ndarray, error: np.ndarray
+                ) -> Tuple[np.ndarray, float]:
     """
-    The blaze of one order from its error bars, normalised to 1 at its peak.
+    The blaze of one order from its error bars, normalised to 1 at its peak,
+    and that peak: the photons per unit of the delivered flux (N = F^2 /
+    sigma^2 = F b g, so g = F / (sigma^2 b)), NaN without error bars.
 
     In the photon-noise limit sigma^2 = F / b for a flux F already divided
     by the blaze b, so F / sigma^2 = b whatever the depth of a line; where
@@ -215,80 +226,250 @@ def order_blaze(flux: np.ndarray, error: np.ndarray) -> np.ndarray:
     good = (np.isfinite(flux) & np.isfinite(error) & (error > 0)
             & (flux > 0))
     if np.sum(good) < 100:
-        return np.ones(npts)
+        return np.ones(npts), np.nan
     raw = np.full(npts, np.nan)
     raw[good] = flux[good] / error[good] ** 2
     xpix = np.arange(npts, dtype=float) / npts
     try:
         coeffs, _ = mp.robust_polyfit(xpix[good], raw[good], 6, 4)
     except Exception:                                        # noqa: BLE001
-        return np.ones(npts)
+        return np.ones(npts), np.nan
     blaze = np.polyval(coeffs, xpix)
     peak = np.nanmax(blaze)
     if not np.isfinite(peak) or peak <= 0:
-        return np.ones(npts)
+        return np.ones(npts), np.nan
     blaze = blaze / peak
     # the polynomial can dip at the very ends: no weight below 1%
-    return np.clip(blaze, 0.01, None)
+    return np.clip(blaze, 0.01, None), float(peak)
 
 
 @functools.lru_cache(maxsize=2)
 def tapas(path: str, resolution: float = 65000.0) -> Dict[str, np.ndarray]:
-    """TAPAS's transmissions over the telluric bands, at the instrument's
-    resolution (a gaussian of FWHM c / R in velocity)"""
+    """TAPAS over TELLURIC_RANGE at the instrument's resolution (a gaussian of
+    FWHM c / R in velocity): the log of the transmission of each absorber
+    and its derivative against ln(lambda)"""
     from astropy.table import Table
     from scipy.ndimage import gaussian_filter1d
     table = Table.read(path, hdu=1)
     wave = np.asarray(table['WAVELENGTH'], dtype=float)
-    keep = (wave > 680.0) & (wave < 975.0)
-    wave = wave[keep]
-    step = np.median(np.diff(np.log(wave))) * C_KMS
+    keep = ((wave > TELLURIC_RANGE[0] - 5.0)
+            & (wave < TELLURIC_RANGE[1] + 5.0))
+    lnw = np.log(wave[keep])
+    step = np.median(np.diff(lnw)) * C_KMS
     sigma = (C_KMS / resolution / (2 * np.sqrt(2 * np.log(2)))) / step
-    out = dict(wavelength=wave)
-    for name in ('ABSO_OTHERS', 'ABSO_WATER'):
-        out[name] = gaussian_filter1d(np.asarray(table[name],
-                                                 dtype=float)[keep], sigma)
+    out = dict(lnw=lnw)
+    for name, key in (('ABSO_OTHERS', 'others'), ('ABSO_WATER', 'water')):
+        trans = gaussian_filter1d(np.asarray(table[name],
+                                             dtype=float)[keep], sigma)
+        out[key] = np.log(np.clip(trans, 1e-4, None))
+        out['d' + key] = np.gradient(out[key], lnw)
     return out
 
 
-def telluric_velocity(wave: np.ndarray, flux: np.ndarray, blaze: np.ndarray,
-                      model: Dict[str, np.ndarray]
-                      ) -> Tuple[float, List[float]]:
+@functools.lru_cache(maxsize=4)
+def stellar_template(path: str, mtime: float
+                     ) -> Tuple[np.ndarray, np.ndarray]:
+    """An LBL template (barycentric frame): (ln wavelength, ln flux) where
+    the flux is positive; `mtime` only makes a rewritten file read again"""
+    from astropy.table import Table
+    _ = mtime
+    table = Table.read(path, 'TEMPLATE')
+    wave = np.asarray(table['wavelength'], dtype=float)
+    flux = np.asarray(table['flux'], dtype=float)
+    good = np.isfinite(wave) & np.isfinite(flux) & (flux > 0) & (wave > 0)
+    return np.log(wave[good]), np.log(flux[good])
+
+
+def fit_tellurics(wave: np.ndarray, flux: np.ndarray, blaze: np.ndarray,
+                  model: Dict[str, np.ndarray],
+                  template: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+                  berv: float = 0.0, details: bool = False,
+                  gain: Optional[np.ndarray] = None) -> Dict[str, Any]:
     """
-    Where the telluric lines of a spectrum are against TAPAS [km/s]: the
-    mean over TELLURIC_BANDS of the velocity that best correlates each band
-    with the transmission (to a parabola through the peak), and the band's
-    own values (NaN where the correlation is under 0.3 or peaks at the edge
-    of the scan). Positive: the spectrum's wavelengths are short, and must be
-    multiplied by the Doppler factor of that velocity.
+    The velocity of the telluric lines of a spectrum [km/s], by least
+    squares, one velocity for every absorber:
+
+        ln(F / blaze) = continuum_o(x) + ln S(lambda D(v) D(BERV))
+                        + a ln T_others(lambda D(v)) + b ln T_water(lambda D(v))
+
+    with F the flux (the blaze in it), S the star's template when there is
+    one (LBL's, barycentric; left out otherwise), T TAPAS at the instrument's
+    resolution, a and b the depths of the two absorbers, a polynomial
+    continuum per order in its own pixel coordinate, and D(v) the
+    relativistic Doppler factor, so that the spectrum's wavelengths times
+    D(v) put the tellurics at rest.
+
+    First the depths alone, at v = 0 (the wavelengths as they are). Then v
+    is added and iterated until it moves by less than 1 cm/s: each step is
+    Gauss-Newton's on the tellurics (their derivative in v), with the star
+    moved to v but taking no part in measuring it, so that its own velocity
+    cannot leak into the zero point. Left out of the derivative, the star
+    makes that iteration converge only linearly (on AD Leo, 639, 530, 480...
+    m/s, still moving after ten steps), so the velocity where the step
+    vanishes is found by the secant method on the steps. Weights are the
+    photon counts (the variance of ln F is 1 / counts; the flux times
+    `gain`, photons per unit of flux, per row, so that the chi2 is one for
+    photon noise), those the model PREDICTS after the first step: weighted by
+    the counts measured, the noise weighs itself, and the velocity came out
+    7 to 11 m/s off on a synthetic spectrum at 1% noise (10 to 16 sigmas),
+    the bias going as 1 / SNR^2. The velocity is found twice: with nothing
+    clipped, then with the samples beyond TELLURIC_CLIP robust sigmas of
+    that aligned model left out, held for the second search (see the code
+    for why neither the clipping at v = 0 nor at every step will do).
+    Saturated
+    ones (transmission under TELLURIC_MIN_TRANS at the depths of the first
+    step), are left out. The error is the covariance's, scaled by the
+    reduced chi2.
+
+    :return: dict(dv, sdv [km/s], depths (a, b) at v = 0 and fitted, chi2,
+             nsamples, norders, history [km/s, per step], template: bool;
+             with details, the samples for the figure)
     """
-    values = []
-    for _, low, high, column in TELLURIC_BANDS:
-        keep = ((wave > low) & (wave < high) & np.isfinite(flux)
-                & (blaze > 0.3))
-        if np.sum(keep) < 500:
-            values.append(np.nan)
+    low, high = TELLURIC_RANGE
+    lnw_all, y_all, w_all, x_all, o_all = [], [], [], [], []
+    for row in range(wave.shape[0]):
+        good = (np.isfinite(flux[row]) & (flux[row] > 0) & (blaze[row] > 0.2)
+                & (wave[row] > low) & (wave[row] < high))
+        if np.sum(good) < 200:
             continue
-        bwave, bflux = wave[keep], flux[keep] / blaze[keep]
-        order = np.argsort(bwave)
-        bwave, bflux = bwave[order], bflux[order]
-        bflux = bflux / np.nanpercentile(bflux, 95)
-        corr = np.array([np.corrcoef(bflux, np.interp(
-            bwave * np.exp(np.arctanh(vel / C_KMS)), model['wavelength'],
-            model[column]))[0, 1] for vel in TELLURIC_SCAN])
-        peak = int(np.nanargmax(corr))
-        if (corr[peak] < 0.3 or peak == 0
-                or peak == len(TELLURIC_SCAN) - 1):
-            values.append(np.nan)
+        lnw = np.log(wave[row][good])
+        trans = np.exp(np.interp(lnw, model['lnw'], model['others'])
+                       + np.interp(lnw, model['lnw'], model['water']))
+        if 1.0 - np.min(trans) < TELLURIC_MIN_DEPTH:
             continue
-        left, mid, right = corr[peak - 1], corr[peak], corr[peak + 1]
-        step = TELLURIC_SCAN[1] - TELLURIC_SCAN[0]
-        values.append(float(TELLURIC_SCAN[peak] + 0.5 * step * (left - right)
-                            / (left - 2 * mid + right)))
-    finite = np.isfinite(values)
-    mean = float(np.mean(np.array(values)[finite])) if finite.any() \
-        else np.nan
-    return mean, values
+        pix = np.where(good)[0].astype(float)
+        scale = 1.0
+        if gain is not None and np.isfinite(gain[row]) and gain[row] > 0:
+            scale = float(gain[row])
+        lnw_all.append(lnw)
+        y_all.append(np.log(flux[row][good] / blaze[row][good]))
+        w_all.append(flux[row][good] * scale)
+        x_all.append(2 * (pix - pix.min()) / max(np.ptp(pix), 1.0) - 1)
+        o_all.append(np.full(len(pix), len(lnw_all) - 1))
+    if not lnw_all:
+        return dict(dv=np.nan, sdv=np.nan, depths=(np.nan, np.nan),
+                    depths0=(np.nan, np.nan), chi2=np.nan, nsamples=0,
+                    norders=0, history=[], template=template is not None)
+    lnw, y_raw = np.concatenate(lnw_all), np.concatenate(y_all)
+    counts = np.concatenate(w_all)
+    weight = np.array(counts)
+    xpix, order = np.concatenate(x_all), np.concatenate(o_all)
+    norders = len(lnw_all)
+    ncont = norders * (TELLURIC_DEGREE + 1)
+    # the continua: a block of powers of x per order
+    cont = np.zeros((len(lnw), ncont))
+    for deg in range(TELLURIC_DEGREE + 1):
+        cont[np.arange(len(lnw)), order * (TELLURIC_DEGREE + 1) + deg] = \
+            xpix ** deg
+    shift_berv = np.arctanh(berv / C_KMS)
+
+    def data(vel):
+        """ln(F / blaze), the star divided out at the wavelengths of `vel`,
+        and where the star is known"""
+        if template is None:
+            return y_raw, np.ones(len(y_raw), dtype=bool)
+        at = lnw + np.arctanh(vel / C_KMS) + shift_berv
+        star = np.interp(at, template[0], template[1], left=np.nan,
+                         right=np.nan)
+        return y_raw - star, np.isfinite(star)
+
+    def tellurics(vel):
+        at = lnw + np.arctanh(vel / C_KMS)
+        return [np.interp(at, model['lnw'], model[key])
+                for key in ('others', 'water', 'dothers', 'dwater')]
+
+    def solve(design, yy, use, wgt):
+        """Weighted least squares; by pseudo-inverse, since an absorber
+        absent from the orders used leaves its column empty"""
+        sw = np.sqrt(wgt[use])
+        aa = design[use] * sw[:, None]
+        params = np.linalg.lstsq(aa, yy[use] * sw, rcond=None)[0]
+        return params, np.linalg.pinv(aa.T @ aa)
+
+    def design(vel, params=None):
+        """The columns at `vel`: the continua, the two absorbers and, given
+        the parameters of a previous solution, the derivative of the
+        tellurics in v at its depths (d ln T / d ln lambda times
+        d ln(lambda D(v)) / dv = 1 / (c (1 - v^2 / c^2)))"""
+        lno, lnh, dlno, dlnh = tellurics(vel)
+        cols = [cont, lno[:, None], lnh[:, None]]
+        if params is not None:
+            cols.append(((params[ncont] * dlno + params[ncont + 1] * dlnh)
+                         / (C_KMS * (1 - (vel / C_KMS) ** 2)))[:, None])
+        return np.hstack(cols), lno, lnh
+
+    def predicted(yy, mat, params):
+        """The counts the model predicts, the next step's weights"""
+        out = counts * np.exp(-(yy - mat @ params))
+        out[~np.isfinite(out)] = 0.0
+        return out
+
+    def converge(vel, mask, params, wgt):
+        """The velocity where Gauss-Newton's step vanishes, by the secant
+        method on the steps, the samples `mask` held fixed"""
+        previous, path = None, []
+        for _ in range(TELLURIC_ITERATIONS):
+            yy, known = data(vel)
+            mat, _, _ = design(vel, params)
+            use = mask & known
+            params, cov = solve(mat, yy, use, wgt)
+            wgt = predicted(yy, mat, params)
+            step = float(params[-1])
+            move = step
+            if previous is not None and step != previous[1]:
+                move = -step * (vel - previous[0]) / (step - previous[1])
+            previous = (vel, step)
+            vel += move
+            path.append(vel)
+            if abs(move) < 1e-5:
+                break
+        return vel, params, cov, wgt, mat, yy, use, path
+
+    # 0. the depths alone, at v = 0, weighted by the counts measured
+    yy, known = data(0.0)
+    mat, lno, lnh = design(0.0)
+    params, cov = solve(mat, yy, known, counts)
+    depths0 = (float(params[ncont]), float(params[ncont + 1]))
+    # saturated at these depths: out for good
+    keep = known & (params[ncont] * lno + params[ncont + 1] * lnh
+                    >= np.log(TELLURIC_MIN_TRANS))
+    weight = predicted(yy, mat, params)
+    # A. the velocity, nothing clipped: a clipping made on a model still off
+    #   by the velocity sought keeps the samples whose noise went against
+    #   that offset, and pulls the velocity back towards zero (7 to 11 m/s
+    #   on a synthetic spectrum at 1% noise, the same for every seed)
+    vel, params, cov, weight, mat, yy, use, path_a = converge(
+        0.0, keep, params, weight)
+    # B. clipped once, on the residuals of that aligned model, and held:
+    #   clipped again at every step, the samples coming in and out made the
+    #   steps jump and the velocity wander by +-20 m/s for a 5 m/s error
+    resid = (yy - mat @ params) * np.sqrt(weight)
+    sigma = 1.4826 * np.nanmedian(np.abs(resid[use]
+                                         - np.nanmedian(resid[use])))
+    clip = np.abs(resid) < TELLURIC_CLIP * sigma
+    vel, params, cov, weight, mat, yy, use, path_b = converge(
+        vel, keep & clip, params, weight)
+    history = [0.0] + path_a + path_b
+    nsamp = int(np.sum(use))
+    resid = (yy - mat @ params) * np.sqrt(weight)
+    chi2 = float(np.sum(resid[use] ** 2) / max(nsamp - len(params), 1))
+    out = dict(dv=vel, sdv=float(np.sqrt(cov[-1, -1] * chi2)),
+               depths=(float(params[ncont]), float(params[ncont + 1])),
+               depths0=depths0, chi2=chi2, nsamples=nsamp, norders=norders,
+               history=history, clipped_from=1 + len(path_a),
+               template=template is not None)
+    if details:
+        # the observed transmission (the star and the continuum divided
+        #   out) and the two models, at v = 0 and at v, sample by sample
+        yy, _ = data(vel)
+        lno, lnh, _, _ = tellurics(vel)
+        lno0, lnh0, _, _ = tellurics(0.0)
+        continuum = cont @ params[:ncont]
+        out.update(wave=np.exp(lnw), observed=np.exp(yy - continuum),
+                   model0=np.exp(depths0[0] * lno0 + depths0[1] * lnh0),
+                   model=np.exp(params[ncont] * lno + params[ncont + 1] * lnh),
+                   used=use)
+    return out
 
 
 @functools.lru_cache(maxsize=8)
@@ -297,10 +478,16 @@ def read_espadons(filename: str
     """
     One ESPaDOnS i.fits as LBL wants it: (wave, flux, blaze), each
     (len(ORDERS), NPIX), the wavelengths in nm, vacuum, observer's frame,
-    the flux with its blaze put back (flux = blaze x the delivered
-    UnNormalized intensity), the blaze normalised per order. See the
-    module's docstring.
+    their zero point set on the tellurics (zero_point), the flux with its
+    blaze put back (flux = blaze x the delivered UnNormalized intensity),
+    the blaze normalised per order. See the module's docstring.
     """
+    return _read(filename, zero=True)
+
+
+def _read(filename: str, zero: bool = True):
+    """read_espadons, or with zero=False the rows before the zero point and
+    the header: (wave, flux, blaze, header)"""
     with fits.open(filename) as hdul:
         names = [hdu.name for hdu in hdul]
         # a file LBL wrote (the telluric-cleaned spectra, write_tellu_cleaned)
@@ -343,6 +530,8 @@ def read_espadons(filename: str
     out_wave = np.exp(anchors[:, None] + index[None, :] * DLNL)
     out_flux = np.full((len(ORDERS), NPIX), np.nan)
     out_blaze = np.ones((len(ORDERS), NPIX))
+    # photons per unit of flux, order by order (order_blaze)
+    gain = np.full(len(ORDERS), np.nan)
     filled = np.zeros(len(ORDERS), dtype=bool)
     for seg in np.split(np.arange(len(wave)), breaks):
         seg = seg[np.isfinite(lnw[seg])]
@@ -371,40 +560,161 @@ def read_espadons(filename: str
         out_wave[row, stop:] = np.exp(lseg[-1]
                                       + (index[stop:] - (stop - 1)) * dl)
         out_flux[row, start:stop] = flux[seg]
-        blaze = order_blaze(flux[seg], error[seg])
+        blaze, gain[row] = order_blaze(flux[seg], error[seg])
         out_blaze[row, start:stop] = blaze
         out_flux[row, start:stop] *= blaze
         filled[row] = True
     if not np.any(filled):
         raise LblException('{0}: no ESPaDOnS order found'.format(filename))
+    GAINS[filename] = gain
+    if not zero:
+        return out_wave, out_flux, out_blaze, header
     # the zero point: the tellurics put at rest (see the module)
-    dv = telluric_shift(filename, out_wave, out_flux, out_blaze)
-    if np.isfinite(dv):
-        out_wave = out_wave * np.exp(np.arctanh(dv / C_KMS))
+    fit = zero_point(filename, out_wave, out_flux, out_blaze, header)
+    if np.isfinite(fit['dv']):
+        out_wave = out_wave * np.exp(np.arctanh(fit['dv'] / C_KMS))
     return out_wave, out_flux, out_blaze
 
 
-#: the telluric velocity of each file read [km/s], for its header
-TELLURIC_DV = dict()
+#: the zero point of each file read (fit_tellurics), for its header
+TELLURIC_FITS = dict()
+#: the photons per unit of flux of each file read, order by order
+GAINS = dict()
 
 
-def telluric_shift(filename: str, wave: np.ndarray, flux: np.ndarray,
-                   blaze: np.ndarray) -> float:
-    """The velocity the tellurics of a file sit at [km/s] (telluric_velocity),
-    kept for its header; NaN, and said, without TAPAS"""
-    if TAPAS_FILE is None or not os.path.exists(TAPAS_FILE):
+def template_file() -> Optional[str]:
+    """The first of TEMPLATE_FILES on disk, or None"""
+    for path in TEMPLATE_FILES:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
+def zero_point(filename: str, wave: np.ndarray, flux: np.ndarray,
+               blaze: np.ndarray, header: fits.Header,
+               template: Optional[str] = None, tapas_file: Optional[str] = None,
+               details: bool = False) -> Dict[str, Any]:
+    """
+    The zero point of a file from its tellurics (fit_tellurics), with the
+    star's template divided out when there is one (TEMPLATE_FILES, else said:
+    a first run makes the template, and the next measures against it), kept
+    for its header. dv is NaN, and said, without TAPAS.
+    """
+    tapas_file = tapas_file or TAPAS_FILE
+    if tapas_file is None or not os.path.exists(tapas_file):
         log.warning('ESPaDOnS: no TAPAS file ({0}), so the zero point of {1}'
                     ' is not measured on its tellurics: expect hundreds of'
-                    ' m/s of scatter'.format(TAPAS_FILE, filename))
-        TELLURIC_DV[filename] = np.nan
-        return np.nan
-    dv, bands = telluric_velocity(wave, flux, blaze, tapas(TAPAS_FILE))
-    TELLURIC_DV[filename] = dv
-    log.general('ESPaDOnS {0}: tellurics at {1:+.1f} m/s ({2})'.format(
-        os.path.basename(filename), 1000 * dv,
-        ', '.join('{0} {1:+.0f}'.format(name, 1000 * val)
-                  for (name, _, _, _), val in zip(TELLURIC_BANDS, bands))))
-    return dv
+                    ' m/s of scatter'.format(tapas_file, filename))
+        fit = dict(dv=np.nan, sdv=np.nan, template='none')
+        TELLURIC_FITS[filename] = fit
+        return fit
+    template = template or template_file()
+    star = None
+    if template is not None:
+        star = stellar_template(template, os.path.getmtime(template))
+    else:
+        log.warning('ESPaDOnS {0}: no template of the star yet, so its'
+                    ' tellurics are measured with its lines in: run again'
+                    ' once the template is made, for the zero point to'
+                    ' tens of m/s'.format(os.path.basename(filename)))
+    berv, _ = barycentric(str(header['RA']), str(header['DEC']),
+                          round(mid_exposure(header), 8))
+    fit = fit_tellurics(wave, flux, blaze, tapas(tapas_file), star, berv,
+                        details=details, gain=GAINS.get(filename))
+    fit['template'] = (os.path.basename(template) if template is not None
+                       else 'none')
+    TELLURIC_FITS[filename] = fit
+    log.general('ESPaDOnS {0}: tellurics at {1:+.1f} +- {2:.1f} m/s, depths'
+                ' {3:.2f} (dry) and {4:.2f} (water), {5} samples in {6}'
+                ' orders, chi2 {7:.2f}, {8} iterations, template {9}'.format(
+                    os.path.basename(filename), 1000 * fit['dv'],
+                    1000 * fit['sdv'], fit['depths'][0], fit['depths'][1],
+                    fit['nsamples'], fit['norders'], fit['chi2'],
+                    len(fit['history']) - 1, fit['template']))
+    return fit
+
+
+#: the windows the figure shows: (name, from, to [nm])
+FIGURE_WINDOWS = (('O2 B', 687.2, 688.6), ('O2 A', 762.2, 763.6),
+                  ('H2O', 822.6, 824.4))
+#: before and after (the colour-blind safe pair of lbl.pca2d's figures)
+BEFORE, AFTER = '#2a78d6', '#eb6834'
+
+
+def telluric_figure(plt, filename: str, template: Optional[str] = None,
+                    tapas_file: Optional[str] = None, title: str = ''):
+    """
+    The zero point of one file, drawn: in three windows, the observed
+    transmission (the spectrum divided by the star's template and the
+    continuum) with the tellurics at the fitted depths and v = 0, and at the
+    fitted velocity; their residuals; and the velocity along the iterations.
+
+    :return: the figure
+    """
+    wave, flux, blaze, header = _read(os.path.abspath(filename), zero=False)
+    fit = zero_point(os.path.abspath(filename), wave, flux, blaze, header,
+                     template=template, tapas_file=tapas_file, details=True)
+    if 'wave' not in fit:
+        return None
+    fig = plt.figure(figsize=(10, 7.5))
+    grid = fig.add_gridspec(3, len(FIGURE_WINDOWS), height_ratios=[2, 1, 1.3],
+                            hspace=0.45, wspace=0.25)
+    for col, (name, low, high) in enumerate(FIGURE_WINDOWS):
+        inside = (fit['wave'] > low) & (fit['wave'] < high)
+        order = np.argsort(fit['wave'][inside])
+        wave_w = fit['wave'][inside][order]
+        used = fit['used'][inside][order]
+        top = fig.add_subplot(grid[0, col])
+        bottom = fig.add_subplot(grid[1, col], sharex=top)
+        for key, colour, label in (('model0', BEFORE, 'v = 0'),
+                                   ('model', AFTER, 'v = {0:+.0f} m/s'.format(
+                                       1000 * fit['dv']))):
+            top.plot(wave_w, fit[key][inside][order], color=colour, lw=1.0,
+                     label=label)
+            bottom.plot(wave_w[used], (fit['observed'][inside][order]
+                                       - fit[key][inside][order])[used],
+                        '.', ms=2, color=colour)
+        top.plot(wave_w[used], fit['observed'][inside][order][used], '.',
+                 ms=2.5, color='#1f1f1f', label='observed')
+        top.plot(wave_w[~used], fit['observed'][inside][order][~used], '.',
+                 ms=2.5, color='#b0b0b0', label='left out')
+        top.set_title(name, fontsize=10)
+        bottom.axhline(0, color='#5f6368', lw=0.6)
+        bottom.set_xlabel('wavelength (nm), observer frame', fontsize=8)
+        if col == 0:
+            top.set_ylabel('spectrum / star / continuum', fontsize=8)
+            bottom.set_ylabel('observed - model', fontsize=8)
+            top.legend(fontsize=7, loc='lower left')
+        for ax in (top, bottom):
+            ax.tick_params(labelsize=7)
+            ax.grid(alpha=0.15)
+    ax = fig.add_subplot(grid[2, :2])
+    steps = np.arange(len(fit['history']))
+    ax.plot(steps, 1000 * np.array(fit['history']), 'o-', color=AFTER)
+    ax.axhspan(1000 * (fit['dv'] - fit['sdv']), 1000 * (fit['dv'] + fit['sdv']),
+               color=AFTER, alpha=0.15)
+    ax.axvline(fit['clipped_from'] - 0.5, color='#5f6368', lw=0.8, ls=':')
+    ax.text(fit['clipped_from'] - 0.4, ax.get_ylim()[1], ' outliers clipped',
+            va='top', fontsize=7, color='#5f6368')
+    ax.set_xlabel('step (0: the depths alone, at v = 0)', fontsize=8)
+    ax.set_ylabel('velocity of the tellurics (m/s)', fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.grid(alpha=0.15)
+    text = fig.add_subplot(grid[2, 2])
+    text.axis('off')
+    text.text(0, 1, '\n'.join([
+        'TELLDV = {0:+.1f} +- {1:.1f} m/s'.format(1000 * fit['dv'],
+                                                1000 * fit['sdv']),
+        'depths: dry {0:.2f}, water {1:.2f}'.format(*fit['depths']),
+        '  (at v = 0: {0:.2f}, {1:.2f})'.format(*fit['depths0']),
+        '{0} samples, {1} orders'.format(fit['nsamples'], fit['norders']),
+        'reduced chi2 {0:.2f}'.format(fit['chi2']),
+        'star divided out: {0}'.format(fit['template'])]),
+        va='top', fontsize=8, family='monospace')
+    fig.suptitle('{0}{1}, {2}: the zero point from the tellurics'.format(
+        title + ' ' if title else '', os.path.basename(filename),
+        header.get('DATE-OBS', '')), fontsize=11)
+    return fig
 
 
 # =============================================================================
@@ -429,10 +739,25 @@ class Espadons(Instrument):
         # update from args
         self.update_from_args(args)
         # the transmission the zero point is measured against
-        global TAPAS_FILE
+        global TAPAS_FILE, TEMPLATE_FILES
         if self.params['DATA_DIR'] not in (None, '', 'None'):
-            TAPAS_FILE = os.path.join(str(self.params['DATA_DIR']), 'models',
+            data_dir = str(self.params['DATA_DIR'])
+            TAPAS_FILE = os.path.join(data_dir, 'models',
                                       self.params['TELLUCLEAN_TAPAS_FILE'])
+            # the star's template to divide out: the cleaned object's (made
+            #   by a previous run), else the delivered one's
+            names = []
+            for key in ('OBJECT_COMPARISON', 'OBJECT_SCIENCE'):
+                value = self.params[key]
+                if value in (None, '', 'None'):
+                    continue
+                base_name = str(value)
+                if base_name.endswith('_tc'):
+                    base_name = base_name[:-3]
+                names += [base_name + '_tc', base_name]
+            TEMPLATE_FILES = tuple(os.path.join(
+                data_dir, 'templates', self.default_template_name.format(name))
+                for name in dict.fromkeys(names))
 
     # -------------------------------------------------------------------------
     # ESPADONS SPECIFIC PARAMETERS
@@ -684,11 +1009,17 @@ class Espadons(Instrument):
                               '[km/s] undone heliocentric shift, LBL')
             # the zero point measured on the tellurics (read_espadons)
             path = os.path.abspath(filename)
-            if path not in TELLURIC_DV:
+            if path not in TELLURIC_FITS:
                 read_espadons(path)
-            dv = TELLURIC_DV.get(path, np.nan)
-            hdr[KEY_TELLDV] = (1000 * dv if np.isfinite(dv) else 0.0,
-                               '[m/s] wavelengths moved to tellurics, LBL')
+            fit = TELLURIC_FITS.get(path, dict(dv=np.nan, sdv=np.nan,
+                                               template='none'))
+            finite = np.isfinite(fit['dv'])
+            hdr[KEY_TELLDV] = (1000 * fit['dv'] if finite else 0.0,
+                               '[m/s] RV correction from the tellurics, LBL')
+            hdr[KEY_TELLDVE] = (1000 * fit['sdv'] if finite else 0.0,
+                                '[m/s] its error, LBL')
+            hdr[KEY_TELLTPL] = (str(fit.get('template', 'none'))[:60],
+                                'star divided out to measure it, LBL')
             snr = order_snr(hdr)
             hdr[KEY_SNR] = (0.0 if not np.isfinite(snr) else snr,
                             'SNR at {0} (order #{1}), LBL'.format(
@@ -996,7 +1327,8 @@ class Espadons(Instrument):
                     'KW_TAU_H2O', 'KW_TAU_OTHERS', 'KW_NITERATIONS',
                     'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_WAVEFILE', 'KW_OBJNAME',
-                    'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW', KEY_TELLDV]
+                    'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW', KEY_TELLDV,
+                    KEY_TELLDVE]
         # convert to actual keys (not references to keys)
         keys = []
         fp_flags = []

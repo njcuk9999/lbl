@@ -513,6 +513,77 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
     return fig
 
 
+#: the zero point measured on the tellurics, for instruments without a
+#:    simultaneous reference (lbl.instruments.espadons): the RV correction
+#:    they gave and its error [m/s]
+TELLDV, TELLDVE = 'TELLDV', 'TELLDVE'
+
+
+def page_telluric_zero_point(plt, table, title):
+    """The zero point each exposure got from its tellurics (TELLDV), against
+    time and against the BERV, and the velocities against it.
+
+    WHY THIS PAGE. Without a simultaneous reference the wavelengths of an
+    exposure are put where its telluric lines sit at rest, and that velocity
+    is applied to the whole spectrum. Its scatter is how far the instrument
+    drifts; what it follows (the BERV, the season) is what the measurement
+    of the tellurics may have picked up from the star; and the velocities
+    must not follow it once it is applied: a slope of -1 there means it was
+    not applied, a slope of +1 that it was applied twice.
+    """
+    zero = S.column(table, TELLDV)
+    if zero is None or not np.isfinite(zero).any() or not np.any(zero != 0):
+        return None
+    error = S.column(table, TELLDVE, np.zeros_like(zero))
+    time = np.asarray(table[S.TIME], dtype=float)
+    berv = S.column(table, S.BERV, np.full_like(zero, np.nan))
+    vrad = np.asarray(table[S.VELOCITY], dtype=float)
+    svrad = np.asarray(table[S.ERROR], dtype=float)
+    centred = vrad - np.median(vrad)
+    fig, axes = plt.subplots(3, 1, figsize=(10, 9.5))
+    axes[0].errorbar(time, zero, yerr=error, fmt='o', ms=3, lw=0.7,
+                     capsize=0)
+    axes[0].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
+    axes[0].set_ylabel('TELLDV (m s$^{-1}$)')
+    axes[0].set_title('The RV correction each exposure got from its'
+                      ' tellurics: rms %.1f m s$^{-1}$, median error %.1f'
+                      ' m s$^{-1}$' % (np.nanstd(zero), np.nanmedian(error)),
+                      fontsize=9)
+    good = np.isfinite(berv) & np.isfinite(zero)
+    axes[1].errorbar(berv[good], zero[good], yerr=error[good], fmt='o',
+                     ms=3, lw=0.7, capsize=0)
+    note = 'Too few epochs to fit a line'
+    if good.sum() > 5:
+        slope, _ = np.polyfit(berv[good], zero[good], 1)
+        note = ('TELLDV against the BERV: %.2f m s$^{-1}$ per km s$^{-1}$,'
+                ' r = %.2f (the star seen through the tellurics would'
+                ' follow it)' % (slope, np.corrcoef(berv[good],
+                                                    zero[good])[0, 1]))
+    axes[1].set_xlabel('Barycentric Earth radial velocity (km s$^{-1}$)')
+    axes[1].set_ylabel('TELLDV (m s$^{-1}$)')
+    axes[1].set_title(note, fontsize=9)
+    good = np.isfinite(zero) & np.isfinite(centred)
+    axes[2].errorbar(zero[good], centred[good], yerr=svrad[good], fmt='o',
+                     ms=3, lw=0.7, capsize=0)
+    axes[2].axhline(0.0, color='k', lw=0.8, ls=':')
+    note = 'Too few epochs to fit a line'
+    if good.sum() > 5:
+        slope, _ = np.polyfit(zero[good], centred[good], 1)
+        note = ('The velocities against it: slope %.3f, r = %.2f (0 once'
+                ' applied; -1 had it not been)'
+                % (slope, np.corrcoef(zero[good], centred[good])[0, 1]))
+    axes[2].set_xlabel('TELLDV (m s$^{-1}$)')
+    axes[2].set_ylabel('Radial velocity, median removed (m s$^{-1}$)')
+    axes[2].set_title(note, fontsize=9)
+    for ax in axes:
+        ax.grid(alpha=0.3)
+    fig.suptitle('%s: the zero point from the tellurics\n'
+                 'no simultaneous reference: each exposure is moved so that'
+                 ' its telluric lines sit at rest' % title, fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
 def page_berv(plt, table, title):
     """Velocity against time, coloured by BERV, and against BERV itself.
 

@@ -167,6 +167,18 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
          lambda: figures.page_iterations(plt, table, title)),
         ('Velocity against BERV',
          lambda: figures.page_berv(plt, table, title))]
+    # THE ZERO POINT FROM THE TELLURICS, for an instrument without a
+    #   simultaneous reference (TELLDV in the rdb): its series, and the fit
+    #   of the exposure of median SNR drawn
+    if series.column(table, figures.TELLDV) is not None:
+        wanted.append(('Zero point from the tellurics',
+                       lambda: figures.page_telluric_zero_point(plt, table,
+                                                                title)))
+        example = _zero_point_example(table, data_dir, science_dir)
+        if example is not None:
+            wanted.append(('Zero point from the tellurics, one exposure',
+                           lambda: _zero_point_figure(plt, example, data_dir,
+                                                      title)))
     # THE TRANSITING PLANETS AND CANDIDATES of the star (candidates.yaml,
     #   PLANETS): their K fitted together, the known orbits held fixed
     fit = _fit_candidates(candidates_of, table, planets)
@@ -369,6 +381,42 @@ def _candidate_section(fit):
                                 cand.get('source') or '?')))
     lines.append(r'\end{itemize}')
     return '\n'.join(lines)
+
+
+def _zero_point_example(table, data_dir, science_dir):
+    """The delivered file of the exposure of median SNR, whose telluric fit
+    the report draws, or None (the science folder may be the cleaned one,
+    <object>_tc, whose files hold no tellurics to fit)"""
+    from lbl.report import series
+    names = table.get('FILENAME') if hasattr(table, 'get') else None
+    if names is None or not science_dir:
+        return None
+    snr = None
+    for key in ('SNR31', 'EXTSN060'):
+        snr = series.column(table, key)
+        if snr is not None:
+            break
+    names = [str(name).strip() for name in names]
+    pick = (int(np.argsort(snr)[len(snr) // 2]) if snr is not None
+            else len(names) // 2)
+    name = os.path.basename(names[pick])
+    folders = [science_dir]
+    if science_dir.rstrip('/').endswith('_tc'):
+        folders.insert(0, science_dir.rstrip('/')[:-3])
+    for folder in folders:
+        for candidate in (name, name + '.fits'):
+            path = os.path.join(folder, candidate)
+            if os.path.exists(path):
+                return path
+    return None
+
+
+def _zero_point_figure(plt, path, data_dir, title):
+    """The telluric fit of one exposure (the instrument's own figure)"""
+    from lbl.instruments import espadons
+    return espadons.telluric_figure(
+        plt, path, tapas_file=os.path.join(data_dir, 'models',
+                                           'tapas_lbl.fits'), title=title)
 
 
 def _activity_labels():

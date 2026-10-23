@@ -99,19 +99,34 @@ def test_the_header_gets_the_snr_and_the_heliocentric_velocity(tmp_path):
 
 
 def test_the_tellurics_give_the_zero_point_back():
-    """A spectrum whose telluric lines are 300 m/s off: the correlation with
-    the transmission finds them there, band by band"""
+    """A spectrum whose telluric lines are 300 m/s off, a star in front of
+    them: with the star's template divided out, the least squares find the
+    velocity and the depths of the two absorbers"""
     rng = np.random.default_rng(3)
-    grid = np.exp(np.arange(np.log(680.0), np.log(975.0), 2e-6))
-    lines = np.ones_like(grid)
-    for centre in rng.uniform(680.0, 975.0, 3000):
-        lines *= 1 - 0.5 * np.exp(-0.5 * ((grid - centre) / 0.004) ** 2)
-    model = dict(wavelength=grid, ABSO_OTHERS=lines, ABSO_WATER=lines)
-    wave = np.exp(np.arange(np.log(680.0), np.log(975.0), es.DLNL))
-    shift = 0.3
-    # the spectrum's wavelengths are short by the Doppler factor of 300 m/s
-    flux = np.interp(wave * np.exp(np.arctanh(shift / C_KMS)), grid, lines)
-    flux = flux + rng.normal(0, 0.005, flux.size)
-    found, bands = es.telluric_velocity(wave, flux, np.ones_like(flux), model)
-    assert abs(found - shift) < 0.01
-    assert all(abs(val - shift) < 0.03 for val in bands)
+    lnw = np.arange(np.log(600.0), np.log(1000.0), 2e-6)
+    def lines(number, depth, width):
+        out = np.zeros_like(lnw)
+        for centre in rng.uniform(lnw[0], lnw[-1], number):
+            out += np.log(1 - depth * np.exp(-0.5 * ((lnw - centre)
+                                                    / width) ** 2))
+        return out
+    others, water = lines(800, 0.5, 6e-6), lines(1500, 0.3, 6e-6)
+    model = dict(lnw=lnw, others=others, water=water,
+                 dothers=np.gradient(others, lnw),
+                 dwater=np.gradient(water, lnw))
+    star = lines(4000, 0.4, 1e-5)
+    berv, shift, depths = 12.0, 0.3, (1.3, 0.7)
+    # 3 orders of the observed spectrum, its wavelengths short by D(300 m/s)
+    wave = np.exp(np.linspace(np.log(610.0), np.log(990.0), 3 * 60000)
+                  ).reshape(3, 60000)
+    true = np.log(wave) + np.arctanh(shift / C_KMS)
+    lnflux = (np.interp(true + np.arctanh(berv / C_KMS), lnw, star)
+              + depths[0] * np.interp(true, lnw, others)
+              + depths[1] * np.interp(true, lnw, water))
+    flux = 1e4 * np.exp(lnflux) * (1 + rng.normal(0, 0.01, wave.shape))
+    fit = es.fit_tellurics(wave, flux, np.ones_like(flux), model,
+                           template=(lnw, star), berv=berv)
+    assert abs(fit['dv'] - shift) < 3 * fit['sdv'] + 0.002
+    assert fit['sdv'] < 0.01
+    assert np.allclose(fit['depths'], depths, atol=0.02)
+    assert fit['history'][0] == 0.0
