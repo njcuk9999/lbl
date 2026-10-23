@@ -692,6 +692,11 @@ def run_template(inst, objname: str, objkind: str):
 
         n_valid = np.sum(np.isfinite(p50[wavemask]))
         n_total = np.sum(wavemask)
+        # an order outside the template's grid: no samples, no fraction
+        if not n_total:
+            frac_valid[ordernum] = np.nan
+            frac_valid_odd_even[ordernum] = np.nan
+            continue
         frac_valid[ordernum] = n_valid / n_total
 
         # For odd/even we add the number of odd + even

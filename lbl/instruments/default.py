@@ -559,10 +559,13 @@ class Instrument:
                 n_valid += np.sum(np.isfinite(vector[wavemask]))
 
             n_total = np.sum(wavemask)
-            frac_valid[ordernum] = n_valid / n_total
+            # an order outside the template's grid has no sample to judge:
+            #   no verdict (it was 0/0, a warning, and a NaN mean that let
+            #   any template through)
+            frac_valid[ordernum] = n_valid / n_total if n_total else np.nan
 
         # we check that at least 50% of the data is valid (not NaN) in the template
-        if np.mean(frac_valid) < 0.5:
+        if not np.isfinite(frac_valid).any() or np.nanmean(frac_valid) < 0.5:
             emsg = ('Less than 50% of the data in "{0}" valid in the template.')
             emsg = emsg.format(vectorname)
             for order_num in np.where(frac_valid > 0.5)[0]:
