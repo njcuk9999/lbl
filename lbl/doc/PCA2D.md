@@ -217,9 +217,9 @@ LBL tree: `lbl_pca2d --object TOI2120 --n-star 1 --n-earth 3`. It reads
 `config.yaml` in the working directory, in the format of
 `lbl/pca2d/nominal.yaml`, and that nominal file itself when there is none.
 
-## The pca2d window
+## The LBL window
 
-`pca2d-gui`, from pca2d-preclean (branch `lbl-wrapper`), is only a front end
-to this: it writes an ordinary wrap file with a `PCA2D` dict
-(`DATA_DIR/run_<object>_pca2d.py`) and runs it with this LBL. The file can be
-edited and run again by hand. None of the computation is in it.
+`lbl-gui`, from the lbl-pca2d-gui package, is only a front end to this: it
+writes an ordinary wrap file, with a `PCA2D` dict when the precleaning is on
+(`DATA_DIR/gui/runs/<run>/wrap.py`), and runs it with this LBL. The file can
+be edited and run again by hand. None of the computation is in it.
