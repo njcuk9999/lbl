@@ -690,7 +690,9 @@ instruments:
       # relance avec drs_modes: [EGGS] et un nom d'objet a lui: il aura alors
       # son template, son masque et sa vitesse systemique, et les deux series
       # se comparent ensuite en DIFFERENTIEL, chacune autour de sa mediane.
-      drs_modes: [HARPS]    # UN SEUL MODE PAR LOT. Mesure le 2026-10-15
+      drs_modes: [HARPS, HARPS+NIRPS]  # UN SEUL MODE PAR LOT (HARPS+NIRPS
+                            # est HARPS, observe en meme temps que NIRPS depuis
+                            # 2023: le meme mode). Mesure le 2026-10-15
                             # sur les 100 poses de HD 10700: 8 sont en mode
                             # EGGS, la fibre de 1.4" a haute efficacite, et ce
                             # sont EXACTEMENT les 8 dont l'ajustement

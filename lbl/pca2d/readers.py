@@ -345,6 +345,52 @@ def flux_extension(path, flux):
     return None
 
 
+#: the instruments already told that their blaze is taken as 1
+_NO_BLAZE = set()
+
+
+def _blaze(inst, path, flux, header, model_dir):
+    """The blaze of a spectrum, as LBL reads it: corrected spectra need none,
+    the others the file their header names, in DATA_DIR/calib where LBL
+    keeps it (models/ as well, where an older campaign put it). Without one,
+    the blaze is taken as 1, and said once per instrument and plainly, since
+    LBL's own reader would log a red error for a file that is simply not
+    there: PCA2D high-passes every spectrum, which takes the blaze's shape
+    out; only the weights do without it."""
+    if inst.params.get("BLAZE_CORRECTED"):
+        return np.ones_like(flux)
+    name = None
+    try:
+        name = header.get_hkey(inst.params["KW_BLAZE_FILE"])
+    except Exception:                                           # noqa: BLE001
+        pass
+    folders = []
+    if model_dir:
+        folders.append(os.path.join(os.path.dirname(os.path.abspath(
+            model_dir)), "calib"))
+        folders.append(model_dir)
+    for folder in folders:
+        if name and os.path.exists(os.path.join(folder, os.path.basename(
+                str(name)))):
+            try:
+                blaze, _ = inst.load_blaze_from_science(
+                    path, flux, header, calib_directory=folder,
+                    normalize=True)
+                return np.atleast_2d(np.asarray(blaze, dtype=float))
+            except Exception:                                   # noqa: BLE001
+                break
+    instrument = str(inst.params.get("INSTRUMENT"))
+    if instrument not in _NO_BLAZE:
+        _NO_BLAZE.add(instrument)
+        from .logger import log
+        log("no blaze file for %s (%s, looked for in calib/ and models/): the"
+            " blaze is taken as 1. That is fine for PCA2D: its high pass takes"
+            " the blaze's shape out of every spectrum, and only the weights do"
+            " without it" % (instrument, os.path.basename(str(name))
+                             if name else "none named"), "info")
+    return np.ones_like(flux)
+
+
 def read(path, instrument_name, data_source, config_file=None,
          model_dir=None, inst=None, to_observer=False):
     """Un spectre, dans la forme que pca2d attend, quel que soit l'instrument.
@@ -361,13 +407,7 @@ def read(path, instrument_name, data_source, config_file=None,
     to_observer = bool(to_observer)
     wave = np.atleast_2d(np.asarray(
         inst.get_wave_solution(path, flux, header), dtype=float))
-    try:
-        blaze, _ = inst.load_blaze_from_science(path, flux, header,
-                                                calib_directory=model_dir,
-                                                normalize=True)
-        blaze = np.atleast_2d(np.asarray(blaze, dtype=float))
-    except Exception:                                           # noqa: BLE001
-        blaze = np.ones_like(flux)
+    blaze = _blaze(inst, path, flux, header, model_dir)
 
     def key(name, default=None):
         """Un mot-clé par son nom LBL, que chaque classe traduit pour son

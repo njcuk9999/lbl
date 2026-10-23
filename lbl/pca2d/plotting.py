@@ -21,6 +21,17 @@ import numpy as np
 NAN_COLOUR = "#ffd400"      # banana
 
 
+
+def _as_float(value):
+    """A table value as a float: masked, empty or not a number is NaN
+    (float() of a masked element warns, and the figure does not need it)"""
+    if np.ma.is_masked(value):
+        return np.nan
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return np.nan
+
 def nan_cmap(name="RdBu_r", under=None, over=None):
     """A colour map that paints NaN yellow.
 
@@ -282,8 +293,8 @@ def ancillary_table(meta, filenames, source_dir=None):
         for key, label in ANCILLARY:
             if key not in getattr(meta, "colnames", []):
                 continue
-            col = np.array([float(by_name[n][key]) if n in by_name else np.nan
-                            for n in filenames])
+            col = np.array([_as_float(by_name[n][key]) if n in by_name
+                            else np.nan for n in filenames])
             if np.isfinite(col).sum() > 10 and np.nanstd(col) > 0:
                 labels.append(label)
                 values.append(col)
