@@ -86,15 +86,24 @@ general:
                             # somewhere new must not orphan it.
     use_cache: true
     max_memory_gb: 16.0
-    windows:                # centre:width in nm, the regions each run draws
-      - "1200.3:2"          # quoted, as text: YAML 1.1 reads an unquoted
-      - "1220:4"            # 1220:4 as the base-60 number 73204, and any
-      - "1267:2"            # reader but pca2d's own drops the window
-      - "1593.6:2"
-      - "1669.5:5"
-      - "1700.5:3"
-      - "2196.2:2"
-      - "2450:5"
+    windows:                # centre:width in nm, the regions each run draws.
+                            # Quoted, as text: YAML 1.1 reads an unquoted
+                            # 1220:4 as the base-60 number 73204, and any
+                            # reader but pca2d's own drops the window.
+                            # PLACED IN THE ORDERS on 2026-10-23
+                            # (lbl/doc/windows/order_windows.py, SPIRou's
+                            # wavelength solution and LBL's TAPAS model):
+                            # deep tellurics as close to the centre of an
+                            # order as can be, centrality 1 at the centre
+                            # and 0 at the edge (was, now):
+      - "1204.3:2"          # 0.89 -> 0.67, absorbed 44 -> 75%, deepest 0.004
+      - "1213:4"            # 0.80 -> 0.62, absorbed 35 -> 58%, deepest 0.045
+      - "1264.25:2"         # 0.50 -> 0.64, O2 at 1267, 100%, deepest 0.002
+      - "1601.6:2"          # 0.72 -> 0.88, absorbed 3 -> 43% (CO2)
+      - "1667.75:5"         # 0.89 -> 0.85, absorbed 10 -> 27% (CH4)
+      - "1707.5:3"          # 0.73 -> 0.90, absorbed 20 -> 51%
+      - "2196.2:2"          # 0.91, kept
+      - "2465:5"            # 0.22 -> 0.61 (was 2450, at an edge)
 
   domain:
     grid_source: magic      # lambda_i = wave0 * exp(i * dv / c). On a
@@ -641,13 +650,16 @@ instruments:
                             # the campaign cubes were built this way; kept
                             # explicit so those cache keys still pin.
     output:
-      windows:              # the general list less its two K-band windows,
-        - "1200.3:2"        # 2196.2 and 2450 nm, which NIRPS does not reach
-        - "1220:4"          # (965 to 1950 nm): drawn for SPIRou, they were
-        - "1267:2"          # "not drawn" on every NIRPS report. Figures only,
-        - "1593.6:2"        # nothing a corrected spectrum depends on.
-        - "1669.5:5"
-        - "1700.5:3"
+      windows:              # NIRPS's own, inside 965 to 1950 nm (the general
+                            # list's K band is out of reach), placed in ITS
+                            # orders on 2026-10-23 (order_windows.py, NIRPS
+                            # HE's wavelength solution), centrality was, now:
+        - "1187.8:2"        # 0.56 -> 0.88, absorbed 44 -> 92%, deepest 0.000
+        - "1208.25:4"       # 0.50 -> 0.69, absorbed 35 -> 49%, deepest 0.020
+        - "1269.75:2"       # 0.41 -> 0.72, O2 at 1267, 100%, deepest 0.000
+        - "1608.6:2"        # 0.81 -> 0.76, absorbed 3 -> 33% (CO2)
+        - "1667.5:5"        # 0.44 -> 0.62, absorbed 10 -> 27% (CH4)
+        - "1707.5:3"        # 0.49 -> 0.64, absorbed 20 -> 51%
 
   # -------------------------------------------------------------------------
   # LES SPECTROGRAPHES DU VISIBLE. Ajoutes le 2026-10-14: « tout ce qui passe
@@ -875,20 +887,23 @@ instruments:
                                 # evaluant le modele TAPAS sur une pose de tau
                                 # Ceti et en classant les tranches de 2 nm par
                                 # transmission au 2e centile.
-        - "688.0:5"             #   688.0  bande B de O2, transmission 0.000:
-                                #          le cas extreme, 60% des pixels sous
-                                #          0.98 sur 5 nm
-        - "628.0:4"             #   628.0  bande gamma de O2, 0.725, et 100%
-                                #          des pixels absorbes
-        - "594.0:3"             #   594.0  eau, 0.772, 100% absorbe
-        - "649.0:5"             #   649.0  eau, 0.793, 100% absorbe
-        - "589.3:1.5"           #   589.3  doublet D du sodium: une raie
-                                #          STELLAIRE forte dans une region
-                                #          tellurique, pour montrer que la
-                                #          correction ne la touche pas
-        - "517.5:2"             #   517.5  triplet b du magnesium, temoin:
-                                #          presque pas de tellurique, la
-                                #          correction ne doit rien y faire
+                                # PLACEES DANS LES ORDRES le 2026-10-23
+                                # (lbl/doc/windows/order_windows.py, solution
+                                # en longueur d'onde de HARPS): 628 et 649
+                                # chevauchaient deux ordres, et un ordre de
+                                # HARPS fait 5 a 8 nm, d'ou des fenetres plus
+                                # etroites. Centralite (1 au centre, 0 au bord):
+        - "687.75:2.5"          #   bande B de O2, 0.25 -> 0.64, 65% absorbe
+        - "630.75:2"            #   bande gamma de O2, deux ordres -> 0.66,
+                                #          100% absorbe
+        - "594.25:2.25"         #   eau, 0.49 -> 0.65, 100% absorbe
+        - "651.0:2.5"           #   eau, deux ordres -> 0.64, 52% absorbe
+        - "589.0:1.5"           #   doublet D du sodium: une raie STELLAIRE
+                                #          forte dans une region tellurique,
+                                #          pour montrer que la correction ne la
+                                #          touche pas; 0.53 -> 0.62
+        - "518.0:2"             #   triplet b du magnesium, temoin presque
+                                #          sans tellurique; 0.25 -> 0.42
 
   HARPN:
     lbl:
@@ -919,6 +934,19 @@ instruments:
         R: [600.0, 693.0]
     twoframe:
       resolution: 115000
+    output:
+      windows:                  # HARPS-N N'EN AVAIT PAS: il prenait la liste
+                                # generale, celle du proche infrarouge, hors de
+                                # sa portee, et ses rapports n'en dessinaient
+                                # aucune. Celles de HARPS placees dans SES
+                                # ordres le 2026-10-23 (order_windows.py,
+                                # solution de HARPS-N), centralite:
+        - "687.5:2.5"           #   bande B de O2, 0.61
+        - "630.5:2"             #   bande gamma de O2, 0.69
+        - "594.0:2.25"          #   eau, 0.63
+        - "650.75:2.5"          #   eau, 0.65
+        - "589.0:1.5"           #   doublet D du sodium, stellaire, 0.52
+        - "518.0:2"             #   triplet b du magnesium, temoin, 0.51
 
   ESPRESSO:
     lbl:
@@ -966,17 +994,20 @@ instruments:
                                 # telluriques. Mesure le 2026-10-15 sur une
                                 # pose de HD 10700, modele TAPAS, transmission
                                 # au 2e centile par tranches de 2 nm.
-        - "762.0:8"             #   762.0 bande A de O2, transmission 0.000 sur
-                                #         HUIT nm: la plus profonde du visible,
-                                #         et ESPRESSO est le seul des quatre a
-                                #         l'atteindre
-        - "688.0:5"             #   688.0 bande B de O2, 0.000 aussi
-        - "719.0:4"             #   719.0 eau, 0.064
-        - "628.0:4"             #   628.0 bande gamma de O2, 0.725
-        - "589.3:1.5"           #   589.3 doublet D du sodium: une raie
-                                #         STELLAIRE forte en zone tellurique
-        - "517.5:2"             #   517.5 triplet b du magnesium, temoin sans
-                                #         tellurique
+                                # PLACEES DANS LES ORDRES le 2026-10-23
+                                # (order_windows.py, solution d'ESPRESSO):
+                                # 762 et 628 chevauchaient deux ordres.
+                                # Centralite (1 au centre, 0 au bord):
+        - "765.25:4"            #   bande A de O2, deux ordres -> 0.61, la
+                                #         plus profonde du visible, et
+                                #         ESPRESSO le seul a l'atteindre
+        - "688.25:2.5"          #   bande B de O2, 0.50 -> 0.71
+        - "720.0:3"             #   eau, 0.35 -> 0.64
+        - "631.25:3"            #   bande gamma de O2, deux ordres -> 0.67
+        - "589.0:1.5"           #   doublet D du sodium, STELLAIRE en zone
+                                #         tellurique; 0.71 -> 0.78
+        - "518.0:2"             #   triplet b du magnesium, temoin sans
+                                #         tellurique; 0.42 -> 0.54
 
   SOPHIE:
     lbl:
@@ -998,6 +1029,19 @@ instruments:
         R: [600.0, 695.0]
     twoframe:
       resolution: 75000
+    output:
+      windows:                  # SOPHIE N'EN AVAIT PAS (la liste generale, du
+                                # proche infrarouge, hors de sa portee): celles
+                                # de HARPS, PAS ENCORE PLACEES dans les ordres
+                                # de SOPHIE (l'archive de l'OHP ne repondait
+                                # pas le 2026-10-23). A refaire avec
+                                # lbl/doc/windows/order_windows.py sur un e2ds.
+        - "687.75:2.5"
+        - "630.75:2"
+        - "594.25:2.25"
+        - "651.0:2.5"
+        - "589.0:1.5"
+        - "518.0:2"
 
 # ---------------------------------------------------------------------------
 # Anything one target needs and the others do not. Keys here are OBJECT names

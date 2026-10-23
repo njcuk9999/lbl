@@ -66,6 +66,7 @@ import datetime
 import glob
 import hashlib
 import json
+from typing import Optional
 import os
 import re
 import shutil
@@ -279,10 +280,37 @@ def input_files(science_dir: str, pattern: str) -> list:
     return sorted(glob.glob(os.path.join(science_dir, pattern or '*.fits')))
 
 
-def request_stamp(request: dict, switches: dict, files: list) -> str:
+def nominal_digest(instrument: Optional[str] = None) -> str:
+    """The nominal configuration as a correction depends on it: PARSED (its
+    comments are not in it), the general block and the instrument's own
+    (all of them when none is named), WITHOUT their output sections (the
+    windows and figures, which change nothing in the spectra). Until
+    2026-10-23 the stamp hashed the file's bytes: a comment, a window or
+    another instrument's setting made every correction of every instrument
+    again."""
+    nominal = read_nominal()
+    general = dict(nominal.get('general') or {})
+    general.pop('output', None)
+    blocks = dict(general=general)
+    wanted = {str(instrument).upper(), str(instrument).upper().split('_')[0]}
+    for name, block in (nominal.get('instruments') or {}).items():
+        block = dict(block or {})
+        lbl_name = str((block.get('lbl') or {}).get('instrument') or name)
+        if instrument and name.upper() not in wanted \
+                and lbl_name.upper() not in wanted:
+            continue
+        block.pop('output', None)
+        blocks[name] = block
+    text = json.dumps(blocks, sort_keys=True, default=str).encode()
+    return hashlib.sha1(text).hexdigest()
+
+
+def request_stamp(request: dict, switches: dict, files: list,
+                  instrument: Optional[str] = None) -> str:
     """What makes a correction this one: the settings, the input files (name,
-    size, date) and the nominal file they sit on. Not the figures, which
-    change nothing in the spectra."""
+    size, date) and the nominal configuration they sit on (nominal_digest:
+    the instrument's, parsed). Not the figures, which change nothing in the
+    spectra."""
     # the FREE star components: n_star counts the template since
     #   2026-10-22, and a correction made before then keeps its stamp when it
     #   is the same fit
@@ -292,8 +320,7 @@ def request_stamp(request: dict, switches: dict, files: list) -> str:
                         switches['n_earth']],
                 files=[(os.path.basename(f), os.path.getsize(f),
                         int(os.path.getmtime(f))) for f in files])
-    with open(nominal_path(), 'rb') as handle:
-        blob['nominal'] = hashlib.sha1(handle.read()).hexdigest()
+    blob['nominal'] = nominal_digest(instrument)
     text = json.dumps(blob, sort_keys=True, default=str).encode()
     return hashlib.sha1(text).hexdigest()[:12]
 
@@ -621,7 +648,8 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
             observer_first=bool(overrides.get('twoframe', dict()).get(
                 'observer_first', True)))
     stamp = request_stamp(request, switches,
-                          [f for name in objects for f in files[name]])
+                          [f for name in objects for f in files[name]],
+                          instrument)
     state_file = os.path.join(work, 'done.json')
     state = dict()
     if os.path.exists(state_file):

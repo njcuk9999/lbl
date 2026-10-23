@@ -156,7 +156,7 @@ that choice:
 
 | `SKIP_LBL_PCA2D` | the correction on disk |
 |---|---|
-| `None` (or not given) | kept if the settings, the input files and `nominal.yaml` are those it was made with, made again otherwise |
+| `None` (or not given) | kept if the settings, the input files and the instrument's nominal settings (`nominal.yaml`, its general block and the instrument's own, read without comments, windows or figures) are those it was made with, made again otherwise |
 | `True` | kept even if they changed, which a warning says |
 | `False` | made again in every case, as `overwrite=True` |
 
