@@ -38,6 +38,7 @@ if __name__ == "__main__":
 	#		HARPSN
 	#		MAROONX
 	#		SOPHIE
+	#		ESPADONS
     rparams['INSTRUMENT'] = '{INSTRUMENT}'
     #   Data source must be as follows: 
 	#		SPIROU: APERO or CADC
@@ -49,6 +50,7 @@ if __name__ == "__main__":
 	#		HARPSN: ORIG or ESO
 	#		MAROONX: RED or BLUE
 	#		SOPHIE: None
+	#		ESPADONS: CADC
     rparams['DATA_SOURCE'] = '{DATA_SOURCE}}'
     # The data directory where all data is stored under - this should be an
     #    absolute path

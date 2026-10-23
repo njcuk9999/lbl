@@ -29,6 +29,7 @@ from lbl.instruments import espresso
 from lbl.instruments import harps
 from lbl.instruments import harpsn
 from lbl.instruments import sophie
+from lbl.instruments import espadons
 from lbl.instruments import nirps
 from lbl.instruments import spirou
 from lbl.instruments import maroonx
@@ -62,6 +63,7 @@ InstrumentsType = Union[default.Instrument,
                         coralie.Coralie,
                         expres.Expres, expres.Expres_ESSP,
                         neid.Neid_ESSP,
+                        espadons.Espadons,
                         generic.Generic]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
@@ -76,6 +78,7 @@ InstrumentsList = (default.Instrument,
                    coralie.Coralie,
                    expres.Expres, expres.Expres_ESSP,
                    neid.Neid_ESSP,
+                   espadons.Espadons,
                    generic.Generic)
 
 # Add all the instrument + source combinations and link them to instrument
@@ -117,6 +120,8 @@ InstDict['EXPRES']['ORIG'] = expres.Expres
 InstDict['EXPRES']['ESSP'] = expres.Expres_ESSP
 InstDict['NEID'] = dict()
 InstDict['NEID']['ESSP'] = neid.Neid_ESSP
+InstDict['ESPADONS'] = dict()
+InstDict['ESPADONS']['CADC'] = espadons.Espadons
 InstDict['Generic'] = dict()
 InstDict['Generic']['None'] = generic.Generic
 

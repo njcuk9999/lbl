@@ -29,7 +29,7 @@ __package__: str = 'lbl'
 # currently supported instruments
 INSTRUMENTS = ['SPIROU', 'HARPS', 'ESPRESSO', 'CARMENES', 'NIRPS_HA',
                'NIRPS_HE', 'HARPSN', 'MAROONX', 'SOPHIE', 'CORALIE',
-               'EXPRES', 'NEID']
+               'EXPRES', 'NEID', 'ESPADONS']
 
 # add generic instrument last
 INSTRUMENTS += ['Generic']

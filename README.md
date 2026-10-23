@@ -15,6 +15,7 @@ Compatible with:
 - Maroon-X (Blue and Red)
 - SOPHIE
 - CORALIE
+- ESPaDOnS (CADC: the i.fits of Upena/Libre-ESpRIT)
 - ESSP (EXPRES, NEID, HARPS, HARPS-N)
 - Generic instruments
 
