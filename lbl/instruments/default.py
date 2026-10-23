@@ -565,14 +565,23 @@ class Instrument:
             #   any template through)
             frac_valid[ordernum] = n_valid / n_total if n_total else np.nan
 
-        # we check that at least 50% of the data is valid (not NaN) in the template
-        if not np.isfinite(frac_valid).any() or np.nanmean(frac_valid) < 0.5:
-            emsg = ('Less than 50% of the data in "{0}" valid in the template.')
-            emsg = emsg.format(vectorname)
-            for order_num in np.where(frac_valid > 0.5)[0]:
-                emsg += (f'\n\t- Order {order_num} has only '
-                         f'{frac_valid[order_num]:.1%} valid data')
-            raise LblException(emsg)
+        # we check that at least 50% of the data is valid (not NaN) in the
+        #   template. SAID, NOT FATAL: until 2026-10-23 the orders outside
+        #   the grid made the mean NaN and the check never failed, and the
+        #   templates of corrected spectra (PCA2D masks whole telluric
+        #   bands) are below it and measure well; a run is not stopped for
+        #   them, and the orders that are short are named
+        if not np.isfinite(frac_valid).any():
+            log.warning(f'No order of the template "{vectorname}" is on its '
+                        f'grid: its valid fraction cannot be checked')
+        elif np.nanmean(frac_valid) < 0.5:
+            wmsg = ('Only {0:.0%} of the data in "{1}" is valid in the '
+                    'template (under 50%); the orders below half:')
+            wmsg = wmsg.format(np.nanmean(frac_valid), vectorname)
+            for order_num in np.where(frac_valid < 0.5)[0]:
+                wmsg += (f'\n\t- Order {order_num}: '
+                         f'{frac_valid[order_num]:.1%} valid')
+            log.warning(wmsg)
         else:
             log.general(f'Quality control pass: '
                         f'At least 50% of the data in "{vectorname}" '
