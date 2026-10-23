@@ -1681,7 +1681,7 @@ def check_memory(rows, columns, dtype, fraction=None):
 
 def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
               dtype=np.float64, columns=None, spill=None,
-              min_pixel_snr=DEFAULT_MIN_PIXEL_SNR):
+              min_pixel_snr=DEFAULT_MIN_PIXEL_SNR, with_sigma=False):
     """The observer-frame cube plus the weights, condensed from cube.py.
 
     `min_snr_frac` drops spectra whose band SNR is below that fraction of the
@@ -1699,6 +1699,10 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
     profonde que 39%, c'est-a-dire l'endroit le plus riche en contenu de
     vitesse. Passer `ln_clip_low` et `min_pixel_snr=None` retrouve l'ancien
     comportement.
+
+    `with_sigma` returns the photon sigma of every sample too (NaN where the
+    weight is zero), fifth: (grid, data, weights, meta, sigma). The weights
+    carry the telluric ramp as well; what is noise alone is the sigma.
     """
     grid, data, sigma, trans, meta = read_cube_files(path, dtype, columns,
                                                     lazy=True)
@@ -1745,6 +1749,8 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
     # in memory, or mapped onto a file under `spill` when they will not fit
     out = workspace((n_rows, n_cols), dtype, spill, tag="data")
     w = workspace((n_rows, n_cols), dtype, spill, tag="weights")
+    noise = workspace((n_rows, n_cols), dtype, spill, tag="sigma") \
+        if with_sigma else None
     step = max(1, int(_LOAD_BLOCK_BYTES // max(1, n_rows * np.dtype(dtype).itemsize)))
     grid_size = cube_grid_size(path) if columns is not None else n_cols
     cols = np.asarray(columns) if columns is not None else None
@@ -1794,7 +1800,11 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
         d_blk[wb <= 0] = 0.0
         w[:, sl] = wb
         out[:, sl] = d_blk
+        if noise is not None:
+            noise[:, sl] = np.where(wb > 0, s_blk, np.nan)
     del sigma, trans, data
+    if noise is not None:
+        return grid, out, w, meta, noise
     return grid, out, w, meta
 
 

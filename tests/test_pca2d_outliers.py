@@ -15,6 +15,7 @@ import numpy as np
 from astropy.table import Table
 
 from lbl.pca2d.grids import pixel_shift
+from lbl.pca2d import outliers
 from lbl.pca2d.outliers import residual_outliers
 
 
@@ -67,3 +68,24 @@ def test_a_range_of_the_grid_gets_the_whole_grid_s_masks(tmp_path):
         assert part[name].shape == (2, last - first)
         assert np.array_equal(whole[name][:, 1800:2200],
                               part[name][:, 1800 - first:2200 - first])
+
+
+def test_a_deep_line_core_is_not_an_outlier_of_its_own_noise():
+    """GJ 229, Na D: the core of a deep line has fewer photons, so a larger
+    sigma of its log flux. Scaled by each sample's sigma, it is not clipped;
+    scaled by the running sigma of the continuum around it, it was."""
+    rng = np.random.default_rng(4)
+    m = 2001
+    sigma = np.full((50, m), 0.01)
+    sigma[:, 990:1010] = 0.05              # a core at 4% of the continuum
+    resid = rng.normal(0, 1, (50, m)) * sigma
+    z = outliers.scaled_z(resid, sigma, 201)
+    core = np.abs(z[:, 990:1010])
+    assert (core > 3).mean() < 0.01
+    # the old way, the running sigma alone
+    med, sig = outliers.running_stats(resid, 201)
+    old = np.abs((resid - med) / sig)[:, 990:1010]
+    assert (old > 3).mean() > 0.3
+    # a real outlier still is one
+    resid[7, 500] = 10 * sigma[7, 500]
+    assert outliers.scaled_z(resid, sigma, 201)[7, 500] > 5

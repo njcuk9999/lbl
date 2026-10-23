@@ -367,16 +367,35 @@ def _pieces(cube, fit, window):
                 margin=reach + 16 + window)
 
 
+def scaled_z(resid, sigma, window, origin=0):
+    """A residual in sigmas: each sample divided by its own photon sigma,
+    then that ratio by its local robust sigma (running_stats over `window`
+    samples), about its local median. Where the photon sigmas are right,
+    the local scale is 1 and the z is the sample's own; where they are all
+    off by a factor, the scale takes it out. A sample with no sigma is NaN."""
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ratio = np.asarray(resid, dtype=float) / np.asarray(sigma, dtype=float)
+    med, sig = running_stats(ratio, window, origin=origin)
+    with np.errstate(invalid="ignore"):
+        return (ratio - med) / sig
+
+
 def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
                columns=None):
     """Yield the residual's z, chunk by chunk: (rows, c0, c1, inner, z).
 
     The residual is panel 5's: the cube less the star block carried into each
     row's frame, the star-frame means if the fit has them, the observer block
-    and the parity offset, NaN where the fit gave no weight. It is divided by
-    the local robust sigma around it (running_stats over `window` samples), so
-    what comes out is comparable from one exposure and one wavelength to the
-    next. The cube is read `block` columns at a time, each with a margin
+    and the parity offset, NaN where the fit gave no weight. EACH SAMPLE IS
+    DIVIDED BY ITS OWN PHOTON SIGMA first, then the whole by the local robust
+    sigma of that ratio (running_stats over `window` samples), so what comes
+    out is comparable from one exposure and one wavelength to the next AND
+    within a line: the core of a deep line has fewer photons and a larger
+    sigma of its log flux. Divided by the running sigma alone, which the
+    continuum around it sets, the core of Na D (5% of the continuum) came out
+    at 4 to 5 sigmas in every exposure of GJ 229 and was masked
+    (2026-10-23). The running sigma is now a scale only: where the photon
+    sigmas are right it is 1. The cube is read `block` columns at a time, each with a margin
     covering the largest shift, the Lanczos kernel and half the window, so
     every column comes out as from the whole cube; `block=None` reads it whole,
     and `blocks` stops after that many (for a measurement rather than a pass).
@@ -401,8 +420,9 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
         done += 1
         c1 = min(c0 + step, last)
         a0, b0 = max(0, c0 - part["margin"]), min(m, c1 + part["margin"])
-        _, data, w, _ = load_cube(cube, dtype=np.float32,
-                                  columns=np.arange(a0, b0))
+        _, data, w, _, noise = load_cube(cube, dtype=np.float32,
+                                         columns=np.arange(a0, b0),
+                                         with_sigma=True)
         shifter = LanczosShifter(b0 - a0, a=8, max_shift=part["reach"])
         Tf = shifter.prepare(T[:, a0:b0]) if np.any(T[:, a0:b0]) else None
         inner = slice(c0 - a0, c1 - a0)
@@ -417,11 +437,9 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
             model += b[rows] @ Q[:, a0:b0]
             model += means[:, a0:b0][group[rows]]
             resid = np.where(w[rows] > 0, data[rows] - model, np.nan)
-            med, sig = running_stats(resid, part["window"], origin=a0)
-            with np.errstate(invalid="ignore"):
-                z = (resid - med) / sig
+            z = scaled_z(resid, noise[rows], part["window"], origin=a0)
             yield (start, stop), c0, c1, inner, z
-        del data, w
+        del data, w, noise
 
 
 def noise_correlation(cube, fit, window, lags, blocks=1, chunk=16, clip_at=5.0):
