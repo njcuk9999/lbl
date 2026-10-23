@@ -447,7 +447,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
                       excess_nsig=None, excess_chi2=None, excess_samples=None,
                       excess_clip=10.0, bias_nsig=None, bias_samples=None,
                       bias_clip=5.0, star_frac=None, star_chi2=None,
-                      star_bias_nsig=None):
+                      star_bias_nsig=None, within=None):
     """(file -> (2, grid) mask of what to NaN, a report).
 
     Row 0 of each mask is the even orders, row 1 the odd ones, as
@@ -478,10 +478,20 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     every exposure where it falls, its own shift away. The report gives the
     binomial significance of each flagged column against the flagging rate
     of the whole spectrum.
+
+    `within`, a (first, last) range of the grid, restricts the pass to it:
+    every mask and every array of the report then starts at `first`. The
+    sequence figure asks for one window and a margin, since the figures stage
+    runs before the correct stage and has to find what it will mask; with a
+    margin as wide as the largest shift and the widest test window, the
+    window's masks are the whole grid's.
     """
     part = _pieces(cube, fit, window)
     n, m, names, parity = part["n"], part["m"], part["names"], part["parity"]
-    out = {name: np.zeros((2, m), dtype=bool) for name in names}
+    first, last = ((0, m) if within is None
+                   else (max(0, int(within[0])), min(m, int(within[1]))))
+    span = last - first
+    out = {name: np.zeros((2, span), dtype=bool) for name in names}
     by_excursion = bool(excursion_nsig) and bool(excursion_samples)
     widths = (list(range(1, int(excursion_samples) + 1)) if by_excursion
               else [])
@@ -504,31 +514,33 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     # column, not only of what survived the flagging: what is being looked for
     # is the scatter itself. Beyond excess_clip a sample is a cosmic ray rather
     # than a region, and the per-sample flagging is what deals with it.
-    all_z2 = np.zeros((2, m))
-    all_n = np.zeros((2, m), dtype=np.int32)
+    all_z2 = np.zeros((2, span))
+    all_n = np.zeros((2, span), dtype=np.int32)
     # et, pour le biais coherent, la somme SIGNEE: ce qui est ancre dans le
     # referentiel de l'observateur s'y ajoute alors que l'etoile, qui bouge
     # avec le BERV, s'y moyenne
-    all_z = np.zeros((2, m))
-    bias_n = np.zeros((2, m), dtype=np.int32)
+    all_z = np.zeros((2, span))
+    bias_n = np.zeros((2, span), dtype=np.int32)
     # the same, in the STAR's frame: each row carried by its own shift
     by_star = bool(star_frac) and bool(star_chi2) and bool(nsig)
     by_star_bias = bool(star_bias_nsig) and bool(bias_samples)
     if by_star or by_star_bias:
         shift = np.rint(part["delta"]).astype(int)
-        s_seen = np.zeros((2, m), dtype=np.int32)
-        s_taken = np.zeros((2, m), dtype=np.int32)
-        s_kept = np.zeros((2, m), dtype=np.int32)
-        s_z2 = np.zeros((2, m))
-        s_sum = np.zeros((2, m))
-        s_n = np.zeros((2, m), dtype=np.int32)
-    seen = np.zeros((2, m), dtype=np.int32)
-    taken = np.zeros((2, m), dtype=np.int32)
-    kept = np.zeros((2, m), dtype=np.int32)
-    sum_z2 = np.zeros((2, m), dtype=float)
+        s_seen = np.zeros((2, span), dtype=np.int32)
+        s_taken = np.zeros((2, span), dtype=np.int32)
+        s_kept = np.zeros((2, span), dtype=np.int32)
+        s_z2 = np.zeros((2, span))
+        s_sum = np.zeros((2, span))
+        s_n = np.zeros((2, span), dtype=np.int32)
+    seen = np.zeros((2, span), dtype=np.int32)
+    taken = np.zeros((2, span), dtype=np.int32)
+    kept = np.zeros((2, span), dtype=np.int32)
+    sum_z2 = np.zeros((2, span), dtype=float)
     flagged = 0
     for (start, stop), c0, c1, inner, z in residual_z(
-            cube, fit, window, block=block, chunk=chunk):
+            cube, fit, window, block=block, chunk=chunk, columns=(first, last)):
+        # the grid's columns c0:c1 are the arrays' d0:d1
+        d0, d1 = c0 - first, c1 - first
         measured = np.isfinite(z)
         if by_excursion:
             cut = excursions(z, widths, rho, excursion_nsig)
@@ -539,7 +551,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
             # every measured sample counts towards its column's scatter
             cut = np.zeros(z.shape, dtype=bool)
         for i, r in enumerate(range(start, stop)):
-            out[names[r]][int(parity[r])][c0:c1] = cut[i, inner]
+            out[names[r]][int(parity[r])][d0:d1] = cut[i, inner]
         flagged += int(cut[:, inner].sum())
         if by_star or by_star_bias:
             # star column j is observer column j + shift: z's index
@@ -553,17 +565,17 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
                 zs = z[i, k0:k1]
                 ok = np.isfinite(zs)
                 p = int(parity[r])
-                s_seen[p, c0:c1] += ok
+                s_seen[p, d0:d1] += ok
                 if by_star:
                     gone = ok & (np.abs(zs) > float(nsig))
-                    s_taken[p, c0:c1] += gone
+                    s_taken[p, d0:d1] += gone
                     alive = ok & ~gone
-                    s_kept[p, c0:c1] += alive
-                    s_z2[p, c0:c1] += np.where(alive, zs, 0.0) ** 2
+                    s_kept[p, d0:d1] += alive
+                    s_z2[p, d0:d1] += np.where(alive, zs, 0.0) ** 2
                 if by_star_bias:
                     steady = ok & (np.abs(zs) <= float(bias_clip))
-                    s_sum[p, c0:c1] += np.where(steady, zs, 0.0)
-                    s_n[p, c0:c1] += steady
+                    s_sum[p, d0:d1] += np.where(steady, zs, 0.0)
+                    s_n[p, d0:d1] += steady
         if by_bias:
             steady = measured[:, inner] & (np.abs(z[:, inner]) <= float(bias_clip))
             signed = np.where(steady, z[:, inner], 0.0)
@@ -571,8 +583,8 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
             for p in (0, 1):
                 which = np.flatnonzero(rows_parity == p)
                 if which.size:
-                    all_z[p, c0:c1] += signed[which].sum(axis=0)
-                    bias_n[p, c0:c1] += steady[which].sum(axis=0)
+                    all_z[p, d0:d1] += signed[which].sum(axis=0)
+                    bias_n[p, d0:d1] += steady[which].sum(axis=0)
         if by_excess:
             inside = measured[:, inner] & (np.abs(z[:, inner]) <= float(excess_clip))
             square = np.where(inside, z[:, inner] ** 2, 0.0)
@@ -580,8 +592,8 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
             for p in (0, 1):
                 which = np.flatnonzero(rows_parity == p)
                 if which.size:
-                    all_z2[p, c0:c1] += square[which].sum(axis=0)
-                    all_n[p, c0:c1] += inside[which].sum(axis=0)
+                    all_z2[p, d0:d1] += square[which].sum(axis=0)
+                    all_n[p, d0:d1] += inside[which].sum(axis=0)
         if wanted:
             rows_parity = parity[start:stop]
             for p in (0, 1):
@@ -591,21 +603,21 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
                 ok = measured[which][:, inner]
                 gone = cut[which][:, inner]
                 survivor = np.where(ok & ~gone, z[which][:, inner], np.nan)
-                seen[p, c0:c1] += ok.sum(axis=0)
-                taken[p, c0:c1] += gone.sum(axis=0)
-                kept[p, c0:c1] += np.isfinite(survivor).sum(axis=0)
-                sum_z2[p, c0:c1] += np.nansum(survivor ** 2, axis=0)
+                seen[p, d0:d1] += ok.sum(axis=0)
+                taken[p, d0:d1] += gone.sum(axis=0)
+                kept[p, d0:d1] += np.isfinite(survivor).sum(axis=0)
+                sum_z2[p, d0:d1] += np.nansum(survivor ** 2, axis=0)
 
-    frac = np.divide(taken, seen, out=np.zeros((2, m)), where=seen > 0)
-    chi2 = np.divide(sum_z2, kept, out=np.zeros((2, m)), where=kept > 0)
-    columns = np.zeros((2, m), dtype=bool)
+    frac = np.divide(taken, seen, out=np.zeros((2, span)), where=seen > 0)
+    chi2 = np.divide(sum_z2, kept, out=np.zeros((2, span)), where=kept > 0)
+    columns = np.zeros((2, span), dtype=bool)
     report = dict(columns=columns, frac=frac, chi2=chi2, seen=seen,
                   n_columns=0, added=0, thresholds=None, flagged=flagged,
                   star=None,
                   rho=rho, widths=widths, excess=None, bias=None,
                   variance=[window_variance(w, rho) for w in widths])
     if by_bias:
-        mean_z = np.divide(all_z, bias_n, out=np.zeros((2, m)), where=bias_n > 0)
+        mean_z = np.divide(all_z, bias_n, out=np.zeros((2, span)), where=bias_n > 0)
         zbias = coherent_bias(mean_z, bias_n, int(bias_samples), rho,
                               min_rows=int(column_min_rows))
         regions = (zbias > float(bias_nsig)) & (bias_n >= int(column_min_rows))
@@ -624,7 +636,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
         # over the exposures is more than the noise, over a window as wide as
         # the structures the river plots show
         length = 1.0 + 2.0 * sum(rho) if rho else 1.0
-        column_chi2_all = np.divide(all_z2, all_n, out=np.zeros((2, m)),
+        column_chi2_all = np.divide(all_z2, all_n, out=np.zeros((2, span)),
                                     where=all_n > 0)
         windowed, excess = excess_rms(column_chi2_all, all_n,
                                       int(excess_samples), length,
@@ -645,12 +657,12 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
         columns = columns | regions
     if by_star or by_star_bias:
         from scipy.stats import binom
-        star_cols = np.zeros((2, m), dtype=bool)
+        star_cols = np.zeros((2, span), dtype=bool)
         star = dict(n_frac=0, n_bias=0, added=0)
         if by_star:
-            s_frac = np.divide(s_taken, s_seen, out=np.zeros((2, m)),
+            s_frac = np.divide(s_taken, s_seen, out=np.zeros((2, span)),
                                where=s_seen > 0)
-            s_chi2 = np.divide(s_z2, s_kept, out=np.zeros((2, m)),
+            s_chi2 = np.divide(s_z2, s_kept, out=np.zeros((2, span)),
                                where=s_kept > 0)
             by_frac = ((s_seen >= int(column_min_rows))
                        & (s_frac > float(star_frac))
@@ -667,7 +679,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
                         thresholds=(float(star_frac), float(star_chi2)))
             star_cols |= by_frac
         if by_star_bias:
-            s_mean = np.divide(s_sum, s_n, out=np.zeros((2, m)), where=s_n > 0)
+            s_mean = np.divide(s_sum, s_n, out=np.zeros((2, span)), where=s_n > 0)
             s_zbias = coherent_bias(s_mean, s_n, int(bias_samples), rho,
                                     min_rows=int(column_min_rows))
             by_bias = ((s_zbias > float(star_bias_nsig))
@@ -682,7 +694,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
         for r in range(n):
             p = int(parity[r])
             where = np.flatnonzero(star_cols[p]) + int(shift[r])
-            where = where[(where >= 0) & (where < m)]
+            where = where[(where >= 0) & (where < span)]
             row = out[names[r]][p]
             added += int((~row[where]).sum())
             row[where] = True

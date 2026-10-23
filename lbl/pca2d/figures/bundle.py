@@ -329,12 +329,14 @@ def main(argv=None):
     d = lambda name: os.path.join(HERE, name)                 # noqa: E731
     log("  building the figures")
     # the correct stage's own options, so panels 3 and 6 show what the files
-    # actually have divided out (imported here: cli imports this module)
-    from ..cli import shrink_args
+    # actually have divided out, and panels 3 and 5 in yellow what they will
+    # have masked (imported here: cli imports this module)
+    from ..cli import clip_args, shrink_args
     run([py, d("sequence.py"), "--cube", args.cube, "--fit", fit_path,
          "--windows", *args.windows, "--source-dir",
          args.source_dir or spectra_dir(config),
-         "--out", os.path.join(tmp, "sequence.pdf"), *shrink_args(config)], failures)
+         "--out", os.path.join(tmp, "sequence.pdf"), *shrink_args(config),
+         *clip_args(config, quiet=True)], failures)
     run([py, d("weight_spectrum.py"), "--cube", args.cube, "--fit", fit_path,
          "--out", os.path.join(tmp, "weights.pdf")], failures)
     # which exposures each row of the fit holds: the nights, and the BERV

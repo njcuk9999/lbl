@@ -20,6 +20,13 @@ Panel 3 is the product. The correction removes the observer block, its mean
 per parity included, and nothing else: the star block, its own per-parity mean
 and components, is the spectrum LBL is about to measure.
 
+Yellow is what is not there. In every panel, what the fit did not weight and
+the corrected files blank; in panels 3 and 5, also what the correct stage
+masks as outliers (correct.nsig_cut and the column and star-frame tests that
+go with it), found here on each window by the call the correct stage makes,
+since this figure is drawn before it runs. Panel 1 keeps those samples, so
+the two side by side show what was masked and panel 5 what was not.
+
 Everything is in the STAR'S rest frame with the rows ordered by barycentric
 velocity (plus the star's known Keplerian velocity, when it has orbits:
 registration.orbits), so a stellar feature is vertical and anything anchored
@@ -61,6 +68,24 @@ BEFORE, AFTER = "#2a78d6", "#eb6834"
 #: correction itself, all a few times smaller than the spectrum: they get their
 #: own stretch, twice the width of their 5-95 percentile range, centred on zero
 RESIDUAL_PANELS = ("nostar", "resid", "applied")
+#: the panels where what the correct stage masks as outliers is NaN, so yellow:
+#: what a corrected file holds, and the residual the masks are found on. The
+#: others keep those samples, so that what was masked can be seen there
+MASKED_PANELS = ("corrected", "resid")
+#: the options of the correct stage's outlier masks, as reconstruct takes them
+#: (cli.clip_args hands the same flags to both)
+CLIP_KEYS = ("clip_window", "nsig_cut", "excursion_nsig", "excursion_samples",
+             "weight_floor", "bias_nsig", "bias_samples", "excess_nsig",
+             "excess_chi2", "excess_samples", "column_frac", "column_chi2",
+             "star_column_frac", "star_column_chi2", "star_bias_nsig")
+#: the page: the report prints a figure at the text's width, A4 less two
+#: 2.2 cm margins (texreport.WIDTH), and no taller than 0.82 of the text's
+#: height, 8.2 inches (texreport.figure_block). Drawn at that width and at
+#: most that height, a page is printed at its own size, its text at the size
+#: it is written at, and the river plots run across the whole page. Drawn
+#: 9.4 by 14.1 inches it was shrunk by its height to 58%: 5.5 inches of the
+#: page's 6.5, with 8.5 point titles printed at 5 (asked 2026-10-23)
+PAGE_WIDTH, PAGE_HEIGHT = 6.6, 8.1
 
 
 def parse_args(argv=None):
@@ -97,6 +122,16 @@ def parse_args(argv=None):
                         " must have weighted a sample for it to be kept"
                         " (reconstruct --mask-share), so the panels hide"
                         " exactly what the corrected files hide")
+    # What the correct stage NaNs as outliers, reconstruct's flags as
+    # cli.clip_args builds them, so that panels 3 and 5 show it in yellow
+    p.add_argument("--clip-window", type=int, default=151)
+    for flag in ("--nsig-cut", "--excursion-nsig", "--weight-floor",
+                 "--bias-nsig", "--excess-nsig", "--excess-chi2",
+                 "--column-frac", "--column-chi2", "--star-column-frac",
+                 "--star-column-chi2", "--star-bias-nsig"):
+        p.add_argument(flag, type=float, default=None)
+    for flag in ("--excursion-samples", "--bias-samples", "--excess-samples"):
+        p.add_argument(flag, type=int, default=None)
     return p.parse_args(argv)
 
 
@@ -125,10 +160,10 @@ BERV_LINE = "#00c853"
 BERV_EDGE = [patheffects.Stroke(linewidth=4.6, foreground="black"),
              patheffects.Normal()]
 #: the images are rasterised at this resolution in the PDF: a 5 nm window is
-#: about 2500 samples at 0.5 km/s, and the panels are 6.8 inches wide, so at
+#: about 2500 samples at 0.5 km/s, and the panels are 5.5 inches wide, so at
 #: the default 100 dpi most samples would be dropped by the nearest-neighbour
 #: resampling rather than drawn
-RIVER_DPI = 400
+RIVER_DPI = 500
 
 
 def berv_track(centre, berv):
@@ -170,14 +205,18 @@ def order_label(meta):
 
 
 def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True,
-          by="BERV"):
+          by="BERV", note=""):
     # NOT INTERPOLATED (asked 2026-10-21): every row and every sample is a
     # block of its own, and a row of ten nights is not smeared into the next
     im = ax.imshow(image, aspect="auto", cmap=cmap or nan_cmap("RdBu_r"),
                    interpolation="nearest",
                    vmin=-scale, vmax=scale, origin="upper",
                    extent=[x[0], x[-1], image.shape[0] - 0.5, -0.5])
-    ax.set_title(title, fontsize=8.5)
+    # what the panel is on the left, its numbers on the right: on one line
+    # they ran past the panel's width once the page was printed at its size
+    ax.set_title(title, fontsize=8, loc="left")
+    if note:
+        ax.set_title(note, fontsize=7, loc="right", color="#5f6368")
     # WHICH rows: a cube built with nightly stacking has one row per night, and
     # a reader counting 259 of them for Proxima's 782 spectra had nothing on the
     # page to tell them why (2026-09-13)
@@ -190,8 +229,85 @@ def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True,
     return im
 
 
+def clip_tests(clip):
+    """Whether `clip` asks for any outlier mask, as reconstruct decides it."""
+    if not clip:
+        return False
+    get = clip.get
+    return bool(get("nsig_cut") or get("weight_floor")
+                or (get("excursion_nsig") and get("excursion_samples"))
+                or (get("excess_nsig") and get("excess_samples"))
+                or ((get("bias_nsig") or get("star_bias_nsig"))
+                    and get("bias_samples")))
+
+
+def masked_samples(cube, fit, clip, a0, b0, names, parity, select=None):
+    """What the correct stage will NaN as outliers on the grid's columns
+    a0:b0, row by row in the observer's frame: (rows, b0 - a0) bool, or None.
+
+    The figures stage runs before the correct stage, so these masks are not
+    on disk yet: this is reconstruct's own call (outliers.residual_outliers)
+    on the window and a margin as wide as the largest shift and the widest
+    test window, which makes the window's masks the whole grid's. The
+    residual's autocorrelation, which some tests need, is measured once, on
+    the grid's first block as there, and kept in `clip` for the next window.
+    What the fit's loop weighed below weight_floor is read from the fit.
+    """
+    if select is not None:
+        log("  the fit used some of the cube's rows only: the outlier masks"
+            " are not drawn", "warn")
+        return None
+    # one window is drawn on a page per object of a joint cube and on one of
+    # them all: its masks are found once
+    done = clip.setdefault("masks", {})
+    if (a0, b0) in done:
+        return done[(a0, b0)]
+    from lbl.pca2d.outliers import residual_outliers
+    get = clip.get
+    hidden = np.zeros((len(names), b0 - a0), dtype=bool)
+    if clip_tests({k: v for k, v in clip.items() if k != "weight_floor"}):
+        reach = int(np.ceil(np.abs(pixel_shift(
+            np.asarray(fit["berv"], dtype=float), float(fit["dv"]))).max())) + 2
+        widest = max(int(get(k) or 0) for k in
+                     ("excursion_samples", "bias_samples", "excess_samples"))
+        window = int(get("clip_window") or 151)
+        pad = reach + 2 * widest + window + 32
+        first = max(0, a0 - pad)
+        try:
+            out, report = residual_outliers(
+                cube, fit, get("nsig_cut"), window,
+                column_frac=get("column_frac"), column_chi2=get("column_chi2"),
+                excursion_nsig=get("excursion_nsig"),
+                excursion_samples=get("excursion_samples"),
+                excess_nsig=get("excess_nsig"), excess_chi2=get("excess_chi2"),
+                excess_samples=get("excess_samples"),
+                bias_nsig=get("bias_nsig"), bias_samples=get("bias_samples"),
+                star_frac=get("star_column_frac"),
+                star_chi2=get("star_column_chi2"),
+                star_bias_nsig=get("star_bias_nsig"), rho=get("rho"),
+                within=(first, b0 + pad))
+        except SystemExit as exc:
+            log("  the outlier masks could not be found (%s): they are not"
+                " drawn" % exc, "warn")
+            return None
+        if report["rho"]:
+            clip["rho"] = report["rho"]
+        for r, name in enumerate(names):
+            hidden[r] = out[name][int(parity[r]) % 2][a0 - first:b0 - first]
+    floor = get("weight_floor")
+    if floor and "clip_factor" in getattr(fit, "files", []):
+        below = np.asarray(fit["clip_factor"], dtype=float) < float(floor)
+        rows = np.asarray(fit["clip_rows"], dtype=np.int64)[below]
+        cols = np.asarray(fit["clip_cols"], dtype=np.int64)[below]
+        inside = (cols >= a0) & (cols < b0) & (rows < len(names))
+        hidden[rows[inside], cols[inside] - a0] = True
+    done[(a0, b0)] = hidden
+    return hidden
+
+
 def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
-                  templates=None, correct=None, select=None):
+                  templates=None, correct=None, select=None, clip=None,
+                  names=None, parity=None):
     """The panels of one window, on the grid block around it, in the star's frame.
 
     Everything one page needs, computed on window_block's columns alone: the
@@ -200,6 +316,9 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
     The block is wide enough for the largest shift the Earth can produce, so
     inside the window this is the full-grid computation it replaces; in the
     margin around it it is not, and nothing there is drawn.
+
+    With `clip`, the correct stage's outlier options, and the rows' `names`
+    and `parity`, panels 3 and 5 hide what it will mask (masked_samples).
 
     It used to be the whole grid for every panel: eight full (rows x samples)
     arrays for a page that shows a few thousand columns, five minutes and more
@@ -239,6 +358,27 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
             bool(correct.get("shrink")), bool(correct.get("shrink_smooth")),
             correct.get("smooth_which") or (), correct.get("fwhm"))
         applied = offset + fit["b"] @ Q_correct
+    # what the correct stage will mask as outliers, carried into the star's
+    # frame like everything else: a sample a flagged one reaches with a
+    # quarter of its weight or more is hidden, as the NaN reaches it there
+    hidden = None
+    if clip_tests(clip) and names is not None:
+        flagged = masked_samples(cube, fit, clip, a0, b0, names, parity, select)
+        if flagged is not None:
+            hidden = shifter.rows(flagged.astype(np.float64), -delta) > 0.25
+
+    # the star side spelled as n_star is (config.describe_star): with a
+    # template, the star's spectrum and its free components, if any; "0 star"
+    # said there was no star at all where the star was the template itself
+    parity_mean = bool(np.any(means[:, a0:b0]))
+    if star_mean:
+        model_parts = "the star's spectrum per parity%s + %d observer%s" % (
+            ", %d free star component%s" % (n_star, "s" if n_star > 1 else "")
+            if n_star else "", n_earth,
+            " + both frames' parity means" if parity_mean else "")
+    else:
+        model_parts = ("%d star + %d observer, and the observer parity mean"
+                       % (n_star, n_earth))
 
     # Panel 4 is panel 3's mirror: the star block taken out instead of the
     # observer one, so what is left is everything that is not the star. In the
@@ -250,11 +390,7 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
         ("given", lambda: data,
          "1. the high pass: $\\ln(f)$ minus a Savitzky-Golay of $\\ln(f)$"),
         ("model", lambda: star + offset + earth,
-         "2. the reconstruction: %d star + %d observer, and %s"
-         % (n_star, n_earth,
-            ("both frames' parity means" if np.any(means[:, a0:b0])
-             else "the star's spectrum per parity") if star_mean
-            else "the observer parity mean")),
+         "2. the reconstruction: " + model_parts),
         ("corrected", lambda: data - applied,
          "3. minus the OBSERVER block: what a corrected file holds"),
         ("nostar", lambda: data - star,
@@ -263,8 +399,7 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
          "5. minus everything: what nobody explained"),
         ("applied", lambda: applied,
          "6. what the correction divides out%s"
-         % (": shrunk where the component is not significant (all exposures)"
-            if shrunk
+         % (": shrunk where not significant" if shrunk
             else ", the observer block and its mean")),
     ]
     home = {}
@@ -304,19 +439,23 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
     for name, build, _ in steps:
         z = shifter.rows(build(), -delta)
         z[~alive] = np.nan
+        if hidden is not None and name in MASKED_PANELS:
+            z[hidden] = np.nan
         home[name] = z.astype(np.float32)
         del z
     return {"a0": a0, "b0": b0, "grid": g, "home": home, "earth": earth + offset,
-            "shifter": shifter, "titles": [(name, t) for name, _, t in steps]}
+            "shifter": shifter, "titles": [(name, t) for name, _, t in steps],
+            "hidden": hidden}
 
 
 def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=False,
                  smooth_components=None, resolution=None, mask=None,
-                 mask_share=1.0):
+                 mask_share=1.0, clip=None):
     """What every page shares: the fit, its means, the rows and their BERV, and
     how the correct stage divides the observer block out (panels 3 and 6):
     the same options reconstruct takes, the weights scaled by the fit's median
-    reduced chi2 as it scales them."""
+    reduced chi2 as it scales them. `clip`, the outlier options reconstruct
+    takes (CLIP_KEYS), for what panels 3 and 5 hide."""
     fit = np.load(fit_path)
     dv = float(fit["dv"])
     which = [int(v) - 1 for v in str(smooth_components or "").split(",") if v.strip()]
@@ -361,7 +500,8 @@ def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=Fa
                         if "n_exposures" in getattr(meta, "colnames", [])
                         else np.ones(n)),
             "sample_path": sample_source_file(cube, meta, source_dir),
-            "source_dir": source_dir, "correct": correct}
+            "source_dir": source_dir, "correct": correct,
+            "clip": dict(clip) if clip_tests(clip) else None}
 
 
 def pages_for(objects):
@@ -405,7 +545,9 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     lo, hi = centre - 0.5 * width, centre + 0.5 * width
     arrays = window_arrays(ctx["cube"], fit, ctx["means"], ctx["group"], grid, dv,
                            delta, centre, width, templates=ctx["templates"],
-                           correct=ctx.get("correct"), select=ctx.get("select"))
+                           correct=ctx.get("correct"), select=ctx.get("select"),
+                           clip=ctx.get("clip"), names=ctx.get("names"),
+                           parity=parity)
     if arrays is None:
         log("  %.1f-%.1f nm: outside the grid, skipped" % (lo, hi), "warn")
         return None
@@ -450,27 +592,44 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     resid_scale = (float(np.diff(np.percentile(pooled, [5, 95]))[0])
                    if pooled.size else scale)
 
+    # what the outlier masks take of the samples drawn, panels 3 and 5
+    shown = np.isfinite(block["given"])
+    hidden = arrays.get("hidden")
+    masked = (float((hidden[np.ix_(rows, jw)] & shown).sum())
+              / max(float(shown.sum()), 1.0) if hidden is not None else None)
+
     titles = arrays["titles"]
     if panels:
         titles = titles[:int(panels)]
     n_img = len(titles)
+    height = min(PAGE_HEIGHT, 2.4 + 0.95 * n_img)
+    # the header, in inches from the top: the star's name, two lines of what
+    # the page is and a third on what yellow is when outliers are masked
+    head = (0.3 if label else 0.06) + (0.48 if masked is not None else 0.34)
     fig, axes = plt.subplots(n_img + 1, 1,
-                             figsize=(9.4, 1.85 * n_img + 3.0),
+                             figsize=(PAGE_WIDTH, height),
                              sharex=True,
                              gridspec_kw={"height_ratios":
-                                          [1.0] * n_img + [1.7]})
+                                          [1.0] * n_img + [1.6],
+                                          "left": 0.085, "right": 0.87,
+                                          "bottom": 0.42 / height,
+                                          "top": 1 - (head + 0.3) / height,
+                                          "hspace": 0.42})
     im = im_resid = None
     middle = n_img // 2
     for r, (name, title) in enumerate(titles):
-        extra = ("" if name in ("given", "model")
-                 else "   scatter %.4f" % np.nanstd(block[name]))
+        note = ("" if name in ("given", "model")
+                else "scatter %.4f" % np.nanstd(block[name]))
+        if masked is not None and name in MASKED_PANELS:
+            note += ", %.2f%% masked" % (100 * masked)
         if name in RESIDUAL_PANELS:
-            im_resid = panel(axes[r], block[name], x, resid_scale, title + extra,
+            im_resid = panel(axes[r], block[name], x, resid_scale, title,
                              unit=unit, ylabel=r == middle,
-                             by=ctx.get("order_by", "BERV"))
+                             by=ctx.get("order_by", "BERV"), note=note)
         else:
-            im = panel(axes[r], block[name], x, scale, title + extra, unit=unit,
-                       ylabel=r == middle, by=ctx.get("order_by", "BERV"))
+            im = panel(axes[r], block[name], x, scale, title, unit=unit,
+                       ylabel=r == middle, by=ctx.get("order_by", "BERV"),
+                       note=note)
 
     # THE BERV, as a thick black line through the middle of every image
     # (asked 2026-10-21): where a feature that stands still in the OBSERVER'S
@@ -530,12 +689,12 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
                 label="observer block removed" if drawn == 0 else None)
         drawn += 1
     if drawn:
-        ax.set_ylabel("flux / its own median", fontsize=8.5)
+        ax.set_ylabel("flux / its own median", fontsize=8)
         ax.legend(fontsize=8, loc="lower right", framealpha=0.9)
         ax.set_title("%d of those rows in FLUX, spread over %s %+.1f to"
                      " %+.1f km/s" % (drawn, ctx.get("order_by", "BERV"),
                                       berv[spread].min(), berv[spread].max()),
-                     fontsize=8.5)
+                     fontsize=8, loc="left")
         ax.grid(alpha=0.15)
         ax.tick_params(labelsize=8)
     else:
@@ -567,18 +726,25 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     # per window, which star a page is about has to be readable at a glance and
     # not found inside a sentence
     if label:
-        fig.suptitle(label, fontsize=15, fontweight="bold", y=0.995)
-    fig.text(0.5, 0.968 if label else 0.985,
-             "%.2f-%.2f nm, %s: every step, in order, in the STAR'S REST FRAME\n"
+        fig.suptitle(label, fontsize=14, fontweight="bold",
+                     y=1 - 0.04 / height)
+    lines = ("%.2f-%.2f nm, %s: every step, in order, in the STAR'S REST FRAME\n"
              "vertical structure belongs to the star; anything slanted does not"
-             % (lo, hi, count), ha="center", va="top", fontsize=10)
+             % (lo, hi, count))
+    if masked is not None:
+        lines += ("\nyellow: no data, and in panels 3 and 5 the outliers the"
+                  " correct stage masks (%.2f%%)" % (100 * masked))
+    fig.text(0.5, 1 - (0.3 if label else 0.06) / height, lines,
+             ha="center", va="top", fontsize=9, linespacing=1.3)
     log("  %s%.1f-%.1f nm: given %.4f | corrected %.4f (%+.0f%%) |"
-          " residual %.4f"
+          " residual %.4f%s"
           % ("%s " % label if label else "", lo, hi, np.nanstd(block["given"]),
              np.nanstd(block["corrected"]),
              100 * (np.nanstd(block["corrected"]) /
                     max(np.nanstd(block["given"]), 1e-30) - 1),
-             np.nanstd(block["resid"])))
+             np.nanstd(block["resid"]),
+             " | %.2f%% masked as outliers" % (100 * masked)
+             if masked is not None else ""))
     return fig
 
 
@@ -586,7 +752,8 @@ def main(argv=None):
     args = parse_args(argv)
     ctx = load_context(args.cube, args.fit, args.source_dir, args.shrink,
                        args.shrink_smooth, args.smooth_components, args.resolution,
-                       args.mask, args.mask_share)
+                       args.mask, args.mask_share,
+                       clip={k: getattr(args, k) for k in CLIP_KEYS})
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     pages = pages_for(ctx.get("objects"))
     with PdfPages(args.out) as pdf:

@@ -1277,10 +1277,16 @@ def correct_mode(plan):
     return ["--all"]
 
 
-def clip_args(cfg):
+def clip_args(cfg, quiet=False):
     """The correct stage's residual clip, when correct.nsig_cut asks for one:
-    panel 5 beyond that many running robust sigmas over the high pass's window."""
+    panel 5 beyond that many running robust sigmas over the high pass's window.
+
+    The sequence figure takes them too, to show in yellow what the files will
+    have masked (figures.bundle); `quiet` keeps that second reading out of the
+    log, which says it once, for the correct stage."""
     from .outliers import element_samples
+
+    say = (lambda *a, **k: None) if quiet else log           # noqa: E731
 
     corr = cfg.get("correct") or {}
     nsig = corr.get("nsig_cut")
@@ -1295,7 +1301,7 @@ def clip_args(cfg):
     if excursion and elements:
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         samples = element_samples(resolution, cfg["domain"]["dv"], elements)
-        log("and flagging every excursion of the residual, panel 5, up to %.1f"
+        say("and flagging every excursion of the residual, panel 5, up to %.1f"
             " resolution elements wide (%d samples at R = %d and %.2f km/s),"
             " whose aggregate significance is beyond %.1f sigma"
             % (float(elements), samples, int(resolution), cfg["domain"]["dv"],
@@ -1303,7 +1309,7 @@ def clip_args(cfg):
         out += ["--excursion-nsig", str(float(excursion)),
                 "--excursion-samples", str(int(samples))]
     if floor:
-        log("et mettant a NaN ce que la boucle a deprecie sous %.2f de son"
+        say("et mettant a NaN ce que la boucle a deprecie sous %.2f de son"
             " poids nominal: le poids du fit est le masque" % float(floor),
             "info")
         out += ["--weight-floor", str(float(floor))]
@@ -1313,7 +1319,7 @@ def clip_args(cfg):
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         wide = element_samples(resolution, cfg["domain"]["dv"],
                                corr.get("bias_elements") or 2.0)
-        log("and masking in every exposure the STAR columns whose mean residual"
+        say("and masking in every exposure the STAR columns whose mean residual"
             " over the exposures, summed over %d samples, is beyond %.0f sigmas:"
             " what the star's spectrum describes wrongly" % (wide,
                                                              float(star_bias)),
@@ -1325,7 +1331,7 @@ def clip_args(cfg):
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         wide = element_samples(resolution, cfg["domain"]["dv"],
                                corr.get("bias_elements") or 2.0)
-        log("et retirant de toutes les poses les colonnes dont le residu MOYEN"
+        say("et retirant de toutes les poses les colonnes dont le residu MOYEN"
             " sur les poses, somme sur %d echantillons, depasse %.0f sigmas:"
             " ce qui est ancre dans le referentiel de l'observateur"
             % (wide, float(bias)), "info")
@@ -1336,7 +1342,7 @@ def clip_args(cfg):
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         wide = element_samples(resolution, cfg["domain"]["dv"],
                                corr.get("excess_elements") or 2.0)
-        log("and dropping from every exposure the observer columns whose scatter"
+        say("and dropping from every exposure the observer columns whose scatter"
             " over the exposures, averaged over %d samples, is %.0f sigmas above"
             " the noise and above a chi2 of %.2f: what stands still in the"
             " observer's frame"
@@ -1346,19 +1352,19 @@ def clip_args(cfg):
         if corr.get("excess_chi2"):
             out += ["--excess-chi2", str(float(corr["excess_chi2"]))]
     if nsig:
-        log("and setting to NaN every sample whose residual, panel 5, is beyond"
+        say("and setting to NaN every sample whose residual, panel 5, is beyond"
             " %.1f running robust sigmas" % float(nsig), "info")
         out += ["--nsig-cut", str(float(nsig))]
     frac, chi2 = corr.get("column_frac"), corr.get("column_chi2")
     if frac and chi2:
-        log("and dropping from every exposure each observer column where more"
+        say("and dropping from every exposure each observer column where more"
             " than %.0f%% of them is clipped and the survivors' reduced chi2 is"
             " still above %.2f" % (100 * float(frac), float(chi2)), "info")
         out += ["--column-frac", str(float(frac)),
                 "--column-chi2", str(float(chi2))]
     sfrac, schi2 = corr.get("star_column_frac"), corr.get("star_column_chi2")
     if sfrac and schi2 and nsig:
-        log("and masking in every exposure each STAR column where more than"
+        say("and masking in every exposure each STAR column where more than"
             " %.0f%% of the exposures is clipped and the survivors' reduced"
             " chi2 is still above %.2f, its shift away" % (100 * float(sfrac),
                                                             float(schi2)),
@@ -1446,7 +1452,10 @@ def shrink_args(cfg):
     resolution = tf.get("resolution") or tf.get("star_resolution")
     if out and resolution:
         out += ["--resolution", str(float(resolution))]
-    if out:
+    # said only when the shrinkage is on: `out` also holds the mask and the
+    #   weight, and a frozen basis divided out in full was announced as
+    #   shrunk right after being announced as not (KIC 7847566, 2026-10-23)
+    if "--shrink" in out or which:
         log("each observer component divided out only where it is significant,"
             " all exposures together%s%s"
             % (", its significance smoothed over a resolution element"
