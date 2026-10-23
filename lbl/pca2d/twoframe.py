@@ -2273,7 +2273,10 @@ def external_star_template(spec, grid, parity, live, window, polyorder,
     """
     from . import preprocess as prep
 
-    table = Table.read(spec["file"])
+    # the template's table is the file's first (an LBL template has the
+    #   spectra it was made of in a second, SCI_TABLE): named, so that
+    #   astropy does not warn that it chose
+    table = Table.read(spec["file"], hdu=1)
     column = ("flux_even", "flux_odd")[int(parity)]
     used = column if column in table.colnames else "flux"
     wave = np.asarray(table["wavelength"], dtype=float)
