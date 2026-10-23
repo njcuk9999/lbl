@@ -114,8 +114,6 @@ CAPTIONS = {
     "Weight spectrum":
         "The weights the fit gave each sample, which is where the model is"
         " trusted and where it is not.",
-    "OH residual":
-        "The airglow model against what the fit left, where SPIRou records it.",
 }
 
 

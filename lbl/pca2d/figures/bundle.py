@@ -262,27 +262,6 @@ def periodogram_args(py, script, fit_path, out, config):
     return argv
 
 
-def has_oh_model(source_dir):
-    """Whether the spectra carry the OHLine extension oh_residual.py draws.
-
-    SPIRou's t.fits do and NIRPS's do not. On NIRPS the figure has nothing to
-    draw, which is not a failure, and the bundle's last page listed it as one
-    (2026-09-11, PROXIMA). A folder with no spectra in it is not a reason to
-    run the figure either: it cannot draw anything from nothing, and it landed
-    on the failure page of every joint run, whose object is a name rather than
-    a folder (2026-09-12, PROXIMA+GJ1+GJ3090).
-    """
-    import glob
-    from astropy.io import fits
-    files = sorted(glob.glob(os.path.join(source_dir, "*.fits")))
-    if not files:
-        log("   no spectra in %s, so nothing to draw the airglow from"
-            % source_dir, "warn")
-        return False
-    with fits.open(files[0]) as hdulist:
-        return "OHLine" in [h.name for h in hdulist]
-
-
 def run(cmd, failures):
     """Run one diagnostic, and say so if it fails rather than dying.
 
@@ -349,13 +328,6 @@ def main(argv=None):
             limits += [flag, str(inp[key])]
     run([py, d("berv_bundles.py"), "--cube", args.cube, "--title", str(obj),
          "--out", os.path.join(tmp, "bundles.pdf"), *limits], failures)
-    src = args.source_dir or spectra_dir(config)
-    if has_oh_model(src):
-        run([py, d("oh_residual.py"), "--cube", args.cube, "--fit", fit_path,
-             "--source-dir", src, "--out", os.path.join(tmp, "oh.pdf")], failures)
-    else:
-        log("   oh_residual.py skipped: these spectra carry no OHLine"
-            " extension, which only SPIRou writes", "warn")
     run(periodogram_args(py, d("coeff_periodogram.py"), fit_path,
                          os.path.join(tmp, "periodogram.pdf"), config), failures)
     run([py, d("ancillary_time.py"), "--cube", args.cube, "--fit", fit_path,
@@ -413,7 +385,6 @@ def main(argv=None):
     order.append(("Correlations", os.path.join(args.outdir, "correlations.pdf")))
     order.append(("Coefficient periodogram", os.path.join(tmp, "periodogram.pdf")))
     order.append(("Weight spectrum", os.path.join(tmp, "weights.pdf")))
-    order.append(("OH residual", os.path.join(tmp, "oh.pdf")))
     # no "one exposure, before and after" pages any more: the sequence's own
     # flux panel shows exposures before and after, in every window
     order.extend(per_window)
