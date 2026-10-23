@@ -1864,7 +1864,7 @@ def star_table(star, facts, planets):
                      for what, a, b in rows)
     ragged = ">{\\raggedright\\arraybackslash}"
     columns = "".join(ragged + "p{%s\\linewidth}" % w
-                      for w in ("0.2", "0.43", "0.3"))
+                      for w in ("0.2", "0.41", "0.28"))
     return ("\\subsection{%s}\n\\begin{longtable}{%s}\n\\toprule\n"
             " & SIMBAD & APERO (PP\\_ keys) \\\\\n\\midrule\n"
             "%s\n\\bottomrule\n\\end{longtable}\n"
@@ -2028,11 +2028,21 @@ def summary_table(star, numbers):
                 " & & \\\\" % (number(numbers["removed"])
                                if np.isfinite(numbers["removed"])
                                else "none: the rms grew"))
-    return ("\\begin{longtable}{p{0.42\\linewidth}rrrl}\n"
+    # FIXED WIDTHS (asked 2026-10-23): with `rrr` a cell such as "726.5
+    #   $\\pm$ 141.9 (3.3$\\sigma$)" set its column's width, and TOI-904's
+    #   table ran 73 pt past the margin. Each column now has its share of the
+    #   line and its cells wrap: 0.86 of \\linewidth, plus 12 pt of padding
+    #   per column, is less than the line
+    left = ">{\\raggedright\\arraybackslash}p{%s\\linewidth}"
+    right = ">{\\raggedleft\\arraybackslash}p{%s\\linewidth}"
+    columns = (left % "0.33" + right % "0.19" + right % "0.19"
+               + right % "0.065" + left % "0.085")
+    return ("\\begin{longtable}{%s}\n"
             "\\caption{%s: the %d exposures both series share, over %d"
             " nights.}\\\\\n\\toprule\n & delivered & corrected & gain & \\\\\n"
             "\\midrule\n\\endhead\n%s\n\\bottomrule\n\\end{longtable}\n"
-            % (tex(star), numbers["n"], numbers["nights"], "\n".join(rows)))
+            % (columns, tex(star), numbers["n"], numbers["nights"],
+               "\n".join(rows)))
 
 
 def observations_table(star, numbers):
