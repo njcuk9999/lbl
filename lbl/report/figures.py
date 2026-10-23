@@ -964,9 +964,17 @@ def page_candidate_fit(plt, table, title, result):
         ax.grid(alpha=0.3)
     known = (', %d known orbit(s) held fixed' % len(result['known'])
              if result['known'] else '')
+    # the reduced chi2, when the fit gives it (lbl.report.kepfit)
+    chi2 = ''
+    if result.get('chi2_after') is not None:
+        chi2 = ('\nreduced $\\chi^2$ on the error bars alone: %.2f before'
+                ' the candidates, %.2f after (%d velocities, %d degrees of'
+                ' freedom); %.2f with the jitter'
+                % (result['chi2_before'], result['chi2_after'],
+                   result['nfit'], result['dof'], result['chi2_jitter']))
     fig.suptitle('%s: joint fit of the transiting planets and candidates,'
-                 ' circular, P and T0 of the catalog fixed%s'
-                 % (title, known), fontsize=10)
+                 ' circular, P and T0 of the catalog fixed%s%s'
+                 % (title, known, chi2), fontsize=10)
     fig.tight_layout()
     return fig
 

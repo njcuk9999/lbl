@@ -49,3 +49,20 @@ def test_the_model_leaves_out_the_candidate_asked():
     without_b = kepfit.model(result, time, skip=0)
     assert np.allclose(full - without_b,
                        2.0 * kepfit.basis(time, CANDIDATES[0]))
+
+
+def test_the_reduced_chi2_says_how_far_the_error_bars_are():
+    rng = np.random.default_rng(5)
+    time = np.sort(rng.uniform(2460300, 2461100, 400))
+    error = np.full(400, 2.0)
+    signal = 4.0 * kepfit.basis(time, CANDIDATES[0])
+    # error bars that hold: about 1 after the candidate, more before it
+    honest = kepfit.fit(time, 7 + signal + rng.normal(0, 2.0, 400), error,
+                        CANDIDATES[:1])
+    assert honest['dof'] == 400 - 2
+    assert abs(honest['chi2_after'] - 1) < 0.2 < honest['chi2_before'] - 1
+    # a scatter twice the error bars: 4, and about 1 once the jitter is in
+    noisy = kepfit.fit(time, 7 + signal + rng.normal(0, 4.0, 400), error,
+                       CANDIDATES[:1])
+    assert abs(noisy['chi2_after'] - 4) < 0.6
+    assert abs(noisy['chi2_jitter'] - 1) < 0.1

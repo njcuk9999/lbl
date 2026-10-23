@@ -50,7 +50,10 @@ def fit(bjd, vrad, svrad, candidates, known=()):
     :return: dict: offset, soffset, k, sk (one per candidate), jitter,
              candidates, known, rms_before and rms_after (the residuals
              without and with the candidates, the known orbits taken out of
-             both), nfit (velocities used)
+             both), chi2_before and chi2_after (the same residuals as reduced
+             chi2 on the error bars alone, over nfit - 1 and dof degrees of
+             freedom), chi2_jitter (after, with the jitter added to the error
+             bars), dof, nfit (velocities used)
     """
     bjd, vrad, svrad = (np.asarray(x, dtype=float) for x in (bjd, vrad, svrad))
     good = (np.isfinite(bjd) & np.isfinite(vrad) & np.isfinite(svrad)
@@ -79,12 +82,23 @@ def fit(bjd, vrad, svrad, candidates, known=()):
     resid = values - design @ coef
     weights = 1.0 / error ** 2
     before = values - np.sum(weights * values) / np.sum(weights)
+    # REDUCED CHI2, on the error bars alone: how far the scatter is from what
+    #   the error bars promise, before the candidates (one offset) and after
+    #   them. With the jitter it is near 1 by construction, since the jitter
+    #   is the excess the likelihood finds; it is given to show that it is
+    dof = len(time) - design.shape[1]
     return dict(offset=float(coef[0]), soffset=float(np.sqrt(cov[0, 0])),
                 k=coef[1:].astype(float),
                 sk=np.sqrt(np.diag(cov)[1:]).astype(float),
                 jitter=jitter, candidates=list(candidates), known=known,
                 rms_before=float(np.std(before, ddof=1)),
-                rms_after=float(np.std(resid, ddof=1)), nfit=int(len(time)))
+                rms_after=float(np.std(resid, ddof=1)),
+                chi2_before=float(np.sum(before ** 2 * weights)
+                                  / (len(time) - 1)),
+                chi2_after=float(np.sum(resid ** 2 * weights) / dof),
+                chi2_jitter=float(np.sum(resid ** 2
+                                         / (error ** 2 + jitter ** 2)) / dof),
+                dof=int(dof), nfit=int(len(time)))
 
 
 def model(result, bjd, offset=True, known=True, skip=None):
