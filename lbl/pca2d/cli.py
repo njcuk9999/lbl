@@ -1289,7 +1289,7 @@ def clip_args(cfg):
     floor = corr.get("weight_floor")
     if (not nsig and not (excursion and elements)
             and not corr.get("excess_nsig") and not corr.get("bias_nsig")
-            and not floor):
+            and not corr.get("star_bias_nsig") and not floor):
         return []
     out = ["--clip-window", str(int(cfg["highpass"]["window"]))]
     if excursion and elements:
@@ -1308,6 +1308,19 @@ def clip_args(cfg):
             "info")
         out += ["--weight-floor", str(float(floor))]
     bias = corr.get("bias_nsig")
+    star_bias = corr.get("star_bias_nsig")
+    if star_bias:
+        resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
+        wide = element_samples(resolution, cfg["domain"]["dv"],
+                               corr.get("bias_elements") or 2.0)
+        log("and masking in every exposure the STAR columns whose mean residual"
+            " over the exposures, summed over %d samples, is beyond %.0f sigmas:"
+            " what the star's spectrum describes wrongly" % (wide,
+                                                             float(star_bias)),
+            "info")
+        out += ["--star-bias-nsig", str(float(star_bias))]
+        if not bias:
+            out += ["--bias-samples", str(int(wide))]
     if bias:
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         wide = element_samples(resolution, cfg["domain"]["dv"],
@@ -1343,6 +1356,15 @@ def clip_args(cfg):
             " still above %.2f" % (100 * float(frac), float(chi2)), "info")
         out += ["--column-frac", str(float(frac)),
                 "--column-chi2", str(float(chi2))]
+    sfrac, schi2 = corr.get("star_column_frac"), corr.get("star_column_chi2")
+    if sfrac and schi2 and nsig:
+        log("and masking in every exposure each STAR column where more than"
+            " %.0f%% of the exposures is clipped and the survivors' reduced"
+            " chi2 is still above %.2f, its shift away" % (100 * float(sfrac),
+                                                            float(schi2)),
+            "info")
+        out += ["--star-column-frac", str(float(sfrac)),
+                "--star-column-chi2", str(float(schi2))]
     return out
 
 

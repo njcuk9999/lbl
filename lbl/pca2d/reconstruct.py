@@ -171,6 +171,20 @@ def parse_args(argv=None):
                    help="the survivors' reduced chi2 above which such a column"
                         " goes; pure noise gives 0.97 after a 3 sigma clip"
                         " (outliers.expected_chi2)")
+    p.add_argument("--star-column-frac", type=float, default=None,
+                   help="with --star-column-chi2 and --nsig-cut: the same as"
+                        " --column-frac in the STAR's frame, each exposure"
+                        " carried by its shift; a star column flagged so is"
+                        " masked in every exposure where it falls")
+    p.add_argument("--star-column-chi2", type=float, default=None,
+                   help="the survivors' reduced chi2 above which such a star"
+                        " column goes")
+    p.add_argument("--star-bias-nsig", type=float, default=None,
+                   help="with --bias-samples: mask the star columns whose MEAN"
+                        " residual over the exposures is beyond this many"
+                        " sigmas, in every exposure where they fall (what the"
+                        " star's spectrum, or another star's template,"
+                        " describes wrongly)")
     p.add_argument("--shrink", action="store_true",
                    help="keep each observer component at a column only where it"
                         " is significant there, all exposures together: Q_ji"
@@ -1417,8 +1431,12 @@ def correct_many(model, args):
     wide = getattr(args, "excess_samples", None)
     bias = getattr(args, "bias_nsig", None)
     bias_wide = getattr(args, "bias_samples", None)
+    star_frac = getattr(args, "star_column_frac", None)
+    star_chi2 = getattr(args, "star_column_chi2", None)
+    star_bias = getattr(args, "star_bias_nsig", None)
     if (getattr(args, "nsig_cut", None) or (excursion and samples)
-            or (excess and wide) or (bias and bias_wide)):
+            or (excess and wide) or (bias and bias_wide)
+            or (star_bias and bias_wide)):
         if not getattr(args, "cube", None):
             raise SystemExit("--nsig-cut and --excursion-nsig need --cube: the"
                              " residual they read is the cube less the model")
@@ -1459,7 +1477,8 @@ def correct_many(model, args):
             column_frac=frac, column_chi2=chi2,
             excursion_nsig=excursion, excursion_samples=samples,
             excess_nsig=excess, excess_chi2=getattr(args, "excess_chi2", None),
-            excess_samples=wide, bias_nsig=bias, bias_samples=bias_wide)
+            excess_samples=wide, bias_nsig=bias, bias_samples=bias_wide,
+            star_frac=star_frac, star_chi2=star_chi2, star_bias_nsig=star_bias)
         if clip_report["rho"]:
             rho = clip_report["rho"]
             log("  the residual's own autocorrelation: rho_1 = %.3f, rho_2 ="
@@ -1496,6 +1515,31 @@ def correct_many(model, args):
                 % (got["n_columns"], got["measured"],
                    100.0 * got["n_columns"] / max(got["measured"], 1),
                    got["length"], got["added"], len(clipped_by_file)), "value")
+        star = clip_report.get("star")
+        if star:
+            if "by_frac" in star:
+                log("  STAR'S FRAME: %d of the %d measured star columns have"
+                    " more than %.0f%% of the exposures beyond %.1f sigma and"
+                    " survivors still above a chi2 of %.2f; the spectrum's"
+                    " own flagging rate is %.2f%%, against which their"
+                    " binomial p-values are %.1e at most and %.1e in the"
+                    " median" % (star["n_frac"], star["measured"],
+                                 100 * star["thresholds"][0], args.nsig_cut,
+                                 star["thresholds"][1], 100 * star["rate"],
+                                 star["worst_p"], star["median_p"]), "value")
+            if "by_bias" in star:
+                log("  STAR'S FRAME: %d of the %d measured star columns carry"
+                    " a mean residual over the exposures beyond %.0f sigmas,"
+                    " summed over %d samples" % (
+                        star["n_bias"], star["measured"],
+                        star["bias_threshold"], star["bias_samples"]),
+                    "value")
+            log("  masked in every exposure where they fall: %d star columns,"
+                " %.2f%% of the measured ones; %d more samples over the %d"
+                " exposures" % (star["n_columns"],
+                                100.0 * star["n_columns"]
+                                / max(star["measured"], 1), star["added"],
+                                len(clipped_by_file)), "value")
         if frac and chi2:
             seen = clip_report["seen"]
             measured = int((seen > 0).sum())

@@ -543,6 +543,17 @@ DEFAULTS = {
         # either leaves the columns alone.
         "column_frac": 0.10,
         "column_chi2": 1.5,
+        # THE SAME TESTS IN THE STAR'S FRAME (outliers.residual_outliers),
+        # each exposure carried by its shift: a star column with more than
+        # star_column_frac of the exposures clipped and survivors still above
+        # star_column_chi2, or whose mean residual over the exposures is
+        # beyond star_bias_nsig sigmas (summed over bias_elements), is masked
+        # in every exposure where it falls. Off (None) until measured on more
+        # than KIC 7847566: what another star's template, or a narrow BERV,
+        # leaves standing still on the star
+        "star_column_frac": None,
+        "star_column_chi2": None,
+        "star_bias_nsig": None,
         "column_min_rows": 10,       # fewer exposures than this: no verdict
         # The metric the amplitudes are measured in when they are refitted at
         # correction time. "flux": every sample as the fit saw it, the older

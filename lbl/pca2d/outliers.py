@@ -446,7 +446,8 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
                       excursion_nsig=None, excursion_samples=None, rho=None,
                       excess_nsig=None, excess_chi2=None, excess_samples=None,
                       excess_clip=10.0, bias_nsig=None, bias_samples=None,
-                      bias_clip=5.0):
+                      bias_clip=5.0, star_frac=None, star_chi2=None,
+                      star_bias_nsig=None):
     """(file -> (2, grid) mask of what to NaN, a report).
 
     Row 0 of each mask is the even orders, row 1 the odd ones, as
@@ -464,6 +465,19 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     columns the exposures disagree on as a body: more than `column_frac` of
     them flagged there and the survivors' reduced chi2 still above
     `column_chi2`, over at least `column_min_rows` exposures of that parity.
+
+    THE SAME IN THE STAR'S FRAME (2026-10-22). Each exposure's z carried to
+    the star's frame by its own shift (to the nearest sample), where what
+    the star's spectrum does not describe, or another star's template
+    (OBJECT_COMPARISON) describes wrongly, stands still: with `star_frac`
+    and `star_chi2`, a star column where more than `star_frac` of the
+    exposures are beyond `nsig` and the survivors' reduced chi2 is still
+    above `star_chi2`; with `star_bias_nsig` (and `bias_samples`), a star
+    column whose MEAN residual over the exposures, summed over
+    `bias_samples`, is beyond `star_bias_nsig` sigmas. Each is masked in
+    every exposure where it falls, its own shift away. The report gives the
+    binomial significance of each flagged column against the flagging rate
+    of the whole spectrum.
     """
     part = _pieces(cube, fit, window)
     n, m, names, parity = part["n"], part["m"], part["names"], part["parity"]
@@ -477,7 +491,8 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     # 1 the regions came out 15% of the spectrum instead of 6% (2026-09-25).
     by_excess = bool(excess_nsig) and bool(excess_samples)
     by_bias = bool(bias_nsig) and bool(bias_samples)
-    if (by_excursion or by_excess or by_bias) and rho is None:
+    if (by_excursion or by_excess or by_bias
+            or (bool(star_bias_nsig) and bool(bias_samples))) and rho is None:
         lags = max(len(widths) - 1, int(excess_samples or 0),
                    int(bias_samples or 0), 8)
         rho = noise_correlation(cube, fit, window, lags, blocks=1, chunk=chunk)
@@ -496,6 +511,17 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     # avec le BERV, s'y moyenne
     all_z = np.zeros((2, m))
     bias_n = np.zeros((2, m), dtype=np.int32)
+    # the same, in the STAR's frame: each row carried by its own shift
+    by_star = bool(star_frac) and bool(star_chi2) and bool(nsig)
+    by_star_bias = bool(star_bias_nsig) and bool(bias_samples)
+    if by_star or by_star_bias:
+        shift = np.rint(part["delta"]).astype(int)
+        s_seen = np.zeros((2, m), dtype=np.int32)
+        s_taken = np.zeros((2, m), dtype=np.int32)
+        s_kept = np.zeros((2, m), dtype=np.int32)
+        s_z2 = np.zeros((2, m))
+        s_sum = np.zeros((2, m))
+        s_n = np.zeros((2, m), dtype=np.int32)
     seen = np.zeros((2, m), dtype=np.int32)
     taken = np.zeros((2, m), dtype=np.int32)
     kept = np.zeros((2, m), dtype=np.int32)
@@ -515,6 +541,29 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
         for i, r in enumerate(range(start, stop)):
             out[names[r]][int(parity[r])][c0:c1] = cut[i, inner]
         flagged += int(cut[:, inner].sum())
+        if by_star or by_star_bias:
+            # star column j is observer column j + shift: z's index
+            #   j + shift - a0, inside the margin the block was read with
+            a0 = c0 - inner.start
+            for i, r in enumerate(range(start, stop)):
+                k0 = c0 + int(shift[r]) - a0
+                k1 = k0 + (c1 - c0)
+                if k0 < 0 or k1 > z.shape[1]:
+                    continue
+                zs = z[i, k0:k1]
+                ok = np.isfinite(zs)
+                p = int(parity[r])
+                s_seen[p, c0:c1] += ok
+                if by_star:
+                    gone = ok & (np.abs(zs) > float(nsig))
+                    s_taken[p, c0:c1] += gone
+                    alive = ok & ~gone
+                    s_kept[p, c0:c1] += alive
+                    s_z2[p, c0:c1] += np.where(alive, zs, 0.0) ** 2
+                if by_star_bias:
+                    steady = ok & (np.abs(zs) <= float(bias_clip))
+                    s_sum[p, c0:c1] += np.where(steady, zs, 0.0)
+                    s_n[p, c0:c1] += steady
         if by_bias:
             steady = measured[:, inner] & (np.abs(z[:, inner]) <= float(bias_clip))
             signed = np.where(steady, z[:, inner], 0.0)
@@ -552,6 +601,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     columns = np.zeros((2, m), dtype=bool)
     report = dict(columns=columns, frac=frac, chi2=chi2, seen=seen,
                   n_columns=0, added=0, thresholds=None, flagged=flagged,
+                  star=None,
                   rho=rho, widths=widths, excess=None, bias=None,
                   variance=[window_variance(w, rho) for w in widths])
     if by_bias:
@@ -593,6 +643,53 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
             thresholds=(float(excess_nsig), float(excess_chi2 or 0)),
             samples=int(excess_samples))
         columns = columns | regions
+    if by_star or by_star_bias:
+        from scipy.stats import binom
+        star_cols = np.zeros((2, m), dtype=bool)
+        star = dict(n_frac=0, n_bias=0, added=0)
+        if by_star:
+            s_frac = np.divide(s_taken, s_seen, out=np.zeros((2, m)),
+                               where=s_seen > 0)
+            s_chi2 = np.divide(s_z2, s_kept, out=np.zeros((2, m)),
+                               where=s_kept > 0)
+            by_frac = ((s_seen >= int(column_min_rows))
+                       & (s_frac > float(star_frac))
+                       & (s_chi2 > float(star_chi2)))
+            # how unlikely each one is from the spectrum's own flagging rate
+            rate = float(s_taken.sum()) / max(float(s_seen.sum()), 1.0)
+            pval = binom.sf(s_taken - 1, np.maximum(s_seen, 1), rate)
+            star.update(frac=s_frac, chi2=s_chi2, by_frac=by_frac,
+                        n_frac=int(by_frac.sum()), rate=rate,
+                        pvalue=pval, worst_p=float(np.min(pval[by_frac]))
+                        if by_frac.any() else 1.0,
+                        median_p=float(np.median(pval[by_frac]))
+                        if by_frac.any() else 1.0,
+                        thresholds=(float(star_frac), float(star_chi2)))
+            star_cols |= by_frac
+        if by_star_bias:
+            s_mean = np.divide(s_sum, s_n, out=np.zeros((2, m)), where=s_n > 0)
+            s_zbias = coherent_bias(s_mean, s_n, int(bias_samples), rho,
+                                    min_rows=int(column_min_rows))
+            by_bias = ((s_zbias > float(star_bias_nsig))
+                       & (s_n >= int(column_min_rows)))
+            star.update(mean=s_mean, z=s_zbias, by_bias=by_bias,
+                        n_bias=int(by_bias.sum()),
+                        bias_threshold=float(star_bias_nsig),
+                        bias_samples=int(bias_samples))
+            star_cols |= by_bias
+        # each flagged star column masked in every exposure, its shift away
+        added = 0
+        for r in range(n):
+            p = int(parity[r])
+            where = np.flatnonzero(star_cols[p]) + int(shift[r])
+            where = where[(where >= 0) & (where < m)]
+            row = out[names[r]][p]
+            added += int((~row[where]).sum())
+            row[where] = True
+        star.update(columns=star_cols, n_columns=int(star_cols.sum()),
+                    measured=int((s_seen >= int(column_min_rows)).sum()),
+                    added=added)
+        report["star"] = star
     if wanted:
         columns = ((seen >= int(column_min_rows)) & (frac > float(column_frac))
                    & (chi2 > float(column_chi2)))
