@@ -20,6 +20,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import fastmath
 from lbl.core import math as mp
+from lbl.core import vetted
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 from lbl.science import apero
@@ -191,6 +192,12 @@ def run_template(inst, objname: str, objkind: str):
     # -------------------------------------------------------------------------
     # template filename
     template_file = inst.template_file(template_dir, objkind, required=False)
+    # a vetted template is the depot's, never made again from spectra (it
+    #   has none here): template_file put it there
+    if vetted.is_vetted(objname):
+        log.general('{0} is a vetted template: {1}'.format(objname,
+                                                           template_file))
+        return locals()
 
     # -------------------------------------------------------------------------
     # Step 3: Check if template exists

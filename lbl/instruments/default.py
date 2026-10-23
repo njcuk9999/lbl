@@ -21,6 +21,7 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
+from lbl.core import vetted
 from lbl.science import activity_lines
 
 
@@ -951,6 +952,10 @@ class Instrument:
             basename = template_file
         # get absolute path
         abspath = os.path.join(directory, basename)
+        # a vetted template (VETTED_<object>) is downloaded and written as
+        #   an LBL template the first time it is looked for
+        if vetted.is_vetted(objname) and not os.path.exists(abspath):
+            vetted.fetch(self, objname, abspath)
         # check that this file exists
         if required:
             io.check_file_exists(abspath, '{0} template'.format(tkind))

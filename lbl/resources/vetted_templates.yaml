@@ -1,0 +1,194 @@
+# LBL's VETTED TEMPLATES: in each 100 K bin of 3000-4200 K and for each
+# instrument, the star whose APERO template holds the most spectra, among
+# slow rotators that are not young (lbl/doc/vetted_templates: choose.py and
+# its README). A wrap names one as OBJECT_COMPARISON = 'VETTED_<object>';
+# LBL downloads <file> from MODEL_REPO_URL and makes it one of its
+# templates (lbl.core.vetted). teff [K] is APERO's PP_TEFF (teff_ref its
+# source), nfiles the spectra in the template, prot [d] a published
+# rotation period (prot_ref: Shan24 = Shan+ 2024, A&A 684, A9).
+NIRPS_HE:
+- object: TEEGARDENS_STAR
+  teff: 3031
+  teff_ref: 2021A&A...656A.162M
+  nfiles: 38
+  simbad: NAME Teegarden's Star
+  prot: 97.56
+  prot_ref: Shan24
+  file: vetted_TEEGARDENS_STAR_nirps_he.fits
+- object: GL166C
+  teff: 3180
+  teff_ref: 2021A&A...656A.162M
+  nfiles: 64
+  simbad: '* omi02 Eri C'
+  prot: 8.56
+  prot_ref: Shan24
+  file: vetted_GL166C_nirps_he.fits
+- object: TOI210
+  teff: 3264
+  teff_ref: Stassun et al. 2019 (via nirps-client@maestria)
+  nfiles: 214
+  simbad: TOI-210
+  prot: null
+  prot_ref: null
+  file: vetted_TOI210_nirps_he.fits
+- object: GL699
+  teff: 3311
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 468
+  simbad: NAME Barnard's star
+  prot: 145.0
+  prot_ref: Shan24
+  file: vetted_GL699_nirps_he.fits
+- object: L_98M59
+  teff: 3400
+  teff_ref: 2020AJ....160...83S
+  nfiles: 301
+  simbad: L   98-59
+  prot: null
+  prot_ref: null
+  file: vetted_L_98M59_nirps_he.fits
+- object: TOI756
+  teff: 3533
+  teff_ref: 2019AJ....158..138S
+  nfiles: 189
+  simbad: WT 351
+  prot: null
+  prot_ref: null
+  file: vetted_TOI756_nirps_he.fits
+- object: GJ3090
+  teff: 3628
+  teff_ref: 2019ApJ...878..134K
+  nfiles: 351
+  simbad: CD-47   399
+  prot: null
+  prot_ref: null
+  file: vetted_GJ3090_nirps_he.fits
+- object: GL317
+  teff: 3744
+  teff_ref: 2021MNRAS.506..150B
+  nfiles: 44
+  simbad: L  675-81
+  prot: 57.5
+  prot_ref: Shan24
+  file: vetted_GL317_nirps_he.fits
+- object: TOI270
+  teff: 3800
+  teff_ref: 2020AJ....160...83S
+  nfiles: 239
+  simbad: L  231-32
+  prot: null
+  prot_ref: null
+  file: vetted_TOI270_nirps_he.fits
+- object: TOI442
+  teff: 3922
+  teff_ref: 2021A&A...656A.162M
+  nfiles: 18
+  simbad: G 160-62
+  prot: 33.0
+  prot_ref: Shan24
+  file: vetted_TOI442_nirps_he.fits
+- object: GJ9425
+  teff: 4060
+  teff_ref: 2016ApJ...822...97H
+  nfiles: 69
+  simbad: HD 113538
+  prot: null
+  prot_ref: null
+  file: vetted_GJ9425_nirps_he.fits
+- object: WASP43
+  teff: 4108
+  teff_ref: 2021AJ....162..210D
+  nfiles: 62
+  simbad: WASP-43
+  prot: null
+  prot_ref: null
+  file: vetted_WASP43_nirps_he.fits
+SPIROU:
+- object: GJ905
+  teff: 3069
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 1581
+  simbad: Ross  248
+  prot: 106.0
+  prot_ref: Shan24
+  file: vetted_GJ905_spirou.fits
+- object: GJ1151
+  teff: 3178
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 613
+  simbad: G 122-49
+  prot: 148.95
+  prot_ref: Shan24
+  file: vetted_GJ1151_spirou.fits
+- object: GJ1289
+  teff: 3238
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 1301
+  simbad: G 130-4
+  prot: 73.66
+  prot_ref: Shan24
+  file: vetted_GJ1289_spirou.fits
+- object: GL699
+  teff: 3311
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 1733
+  simbad: NAME Barnard's star
+  prot: 145.0
+  prot_ref: Shan24
+  file: vetted_GL699_spirou.fits
+- object: GJ4063
+  teff: 3419
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 1134
+  simbad: LP  229-17
+  prot: 40.2
+  prot_ref: Shan24
+  file: vetted_GJ4063_spirou.fits
+- object: GJ411
+  teff: 3589
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 1403
+  simbad: HD  95735
+  prot: 56.15
+  prot_ref: Shan24
+  file: vetted_GJ411_spirou.fits
+- object: GL15A
+  teff: 3611
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 1484
+  simbad: HD   1326
+  prot: 45.0
+  prot_ref: Shan24
+  file: vetted_GL15A_spirou.fits
+- object: GL880
+  teff: 3702
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 959
+  simbad: HD 216899
+  prot: 39.5
+  prot_ref: Shan24
+  file: vetted_GL880_spirou.fits
+- object: GL846
+  teff: 3833
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 1533
+  simbad: HD 209290
+  prot: 22.06
+  prot_ref: Shan24
+  file: vetted_GL846_spirou.fits
+- object: GL338B
+  teff: 3952
+  teff_ref: 2022MNRAS.516.3802C
+  nfiles: 232
+  simbad: HD  79211
+  prot: 16.88
+  prot_ref: Shan24
+  file: vetted_GL338B_spirou.fits
+- object: TOI1759
+  teff: 4001
+  teff_ref: 2021A&A...656A.162M
+  nfiles: 215
+  simbad: LSPM J2147+6245
+  prot: null
+  prot_ref: null
+  file: vetted_TOI1759_spirou.fits
