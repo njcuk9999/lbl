@@ -794,7 +794,9 @@ def page_indicators(plt, table, title):
 
 #: activity lines drawn on one page, in two columns
 ACTIVITY_PER_PAGE = 8
-#: a spectrum this many error bars from the weighted mean of a line is red
+#: a spectrum this many sigmas from the median of a line is red, a sigma
+#:    being its error bar and the line's own variability together
+#:    (activity_spread)
 ACTIVITY_NSIG = 4.0
 
 
@@ -837,6 +839,19 @@ def activity_stats(table, key):
     return good, mean, chi2
 
 
+def activity_spread(ew, sig):
+    """The variability of a line beyond its error bars: the robust scatter
+    of its measures (1.4826 MAD about their median) less their median error
+    bar in quadrature, 0 when the error bars explain it. A star whose H alpha
+    follows its rotation (GJ 229, rms 15 mA for errors of 1 mA) is then not
+    red at every epoch: what stands out is what stands out from that."""
+    ew, sig = np.asarray(ew, dtype=float), np.asarray(sig, dtype=float)
+    if ew.size < 3:
+        return 0.0
+    scatter = 1.4826 * np.median(np.abs(ew - np.median(ew)))
+    return float(np.sqrt(max(scatter ** 2 - np.median(sig) ** 2, 0.0)))
+
+
 def page_activity(plt, table, lines, title):
     """The differential equivalent width of each activity line, in time.
 
@@ -844,8 +859,11 @@ def page_activity(plt, table, lines, title):
     the spectra cover, what the line absorbs more than in the template (in
     mA, lbl.science.activity_lines): 0 is the template, a line filling in
     with chromospheric emission goes negative. The spectra further than
-    ACTIVITY_NSIG error bars from the weighted mean are red: a flare lights
-    He I and the Paschen lines together, an artefact usually one line only.
+    ACTIVITY_NSIG sigmas from the median are red, a sigma being the error
+    bar and the line's own variability together (activity_spread): a flare
+    lights He I and the Paschen lines together, an artefact usually one line
+    only. Against the error bars alone, a line that varies with the star's
+    rotation was red at every epoch.
 
     :param table: dict of columns, the rdb
     :param lines: (key, name, label) of the lines on this page
@@ -863,8 +881,11 @@ def page_activity(plt, table, lines, title):
         ew = np.asarray(table['dEW_' + key], dtype=float)
         sig = np.asarray(table['sdEW_' + key], dtype=float)
         good, mean, chi2 = activity_stats(table, key)
+        spread = activity_spread(ew[good], sig[good]) if good.any() else 0.0
+        centre = np.median(ew[good]) if good.any() else mean
         with np.errstate(invalid='ignore', divide='ignore'):
-            far = good & (np.abs(ew - mean) / sig > ACTIVITY_NSIG)
+            far = good & (np.abs(ew - centre) / np.sqrt(sig ** 2 + spread ** 2)
+                          > ACTIVITY_NSIG)
         near = good & ~far
         ax.errorbar(time[near], ew[near], yerr=sig[near], fmt='o', ms=3,
                     lw=0.7, capsize=0, alpha=0.85, color='C0')
@@ -872,12 +893,14 @@ def page_activity(plt, table, lines, title):
             ax.errorbar(time[far], ew[far], yerr=sig[far], fmt='o', ms=3.5,
                         lw=0.7, capsize=0, color='C3')
         ax.axhline(0.0, color='k', lw=0.8, ls=':')
-        ax.set_title('%s (%s): %d spectra\nrms %.2g, median error %.2g'
-                     ' m$\\AA$, $\\chi^2_r$ %.2g, %d beyond %g$\\sigma$'
+        ax.set_title('%s (%s): %d spectra\nrms %.2g, median error %.2g,'
+                     ' variability %.2g m$\\AA$, $\\chi^2_r$ %.2g, %d beyond'
+                     ' %g$\\sigma$'
                      % (label, name, np.sum(good),
                         np.std(ew[good]) if good.any() else np.nan,
                         np.median(sig[good]) if good.any() else np.nan,
-                        chi2, np.sum(far), ACTIVITY_NSIG), fontsize=8)
+                        spread, chi2, np.sum(far), ACTIVITY_NSIG),
+                     fontsize=8)
         ax.set_ylabel('$\\Delta$EW (m$\\AA$)', fontsize=8)
         ax.tick_params(labelsize=8)
         ax.grid(alpha=0.3)
@@ -893,8 +916,9 @@ def page_activity(plt, table, lines, title):
             axes[last // ncol, col].xaxis.set_tick_params(labelbottom=True)
     fig.suptitle('Activity lines: differential equivalent width against the'
                  ' template, %s\n0 is the template, negative is a line'
-                 ' filling in (emission); red: beyond %g error bars from the'
-                 ' weighted mean' % (title, ACTIVITY_NSIG), fontsize=10)
+                 ' filling in (emission); red: beyond %g sigmas of the median,'
+                 ' error bar and the line\'s own variability together'
+                 % (title, ACTIVITY_NSIG), fontsize=10)
     fig.tight_layout()
     return fig
 
