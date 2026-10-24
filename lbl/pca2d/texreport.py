@@ -316,8 +316,37 @@ def split_bundle(bundle, folder):
 
 
 # ========================================================= the velocities ===
-def rdb_file(tree, name):
-    return os.path.join(tree, "lblrdb", "lbl_%s_%s.rdb" % (name, name))
+def rdb_file(tree, name, comparison=None):
+    """LBL's velocities of `name` measured against `comparison`'s template
+    (its own when None): lblrdb/lbl_<name>_<comparison>.rdb."""
+    return os.path.join(tree, "lblrdb", "lbl_%s_%s.rdb"
+                        % (name, comparison or name))
+
+
+def comparisons(config, stars):
+    """{star: the template LBL measured it against}. Another star's when the
+    fit took one as the star's spectrum (twoframe.star_templates, one entry
+    per member in the members' order, LBL_Template_<name>_<instrument>.fits),
+    else the star's own. Read as the star's own, a star measured against a
+    vetted template had no velocities in its report: lbl_TOI3750_TOI3750.rdb
+    for lbl_TOI3750_VETTED_GL846.rdb (2026-10-24)."""
+    entries = list((config.get("twoframe") or {}).get("star_templates") or [])
+    instrument = str((config.get("input") or {}).get("instrument") or "")
+    tail = "_%s.fits" % instrument.lower()
+    out = {}
+    for i, star in enumerate(stars):
+        entry = entries[i] if i < len(entries) else None
+        name = None
+        if isinstance(entry, dict) and entry.get("file"):
+            base = os.path.basename(str(entry["file"]))
+            if base.startswith("LBL_Template_"):
+                base = base[len("LBL_Template_"):]
+                if instrument and base.endswith(tail):
+                    name = base[:-len(tail)]
+                else:
+                    name = re.sub(r"_[^_]+\.fits$", "", base)
+        out[star] = name or star
+    return out
 
 
 def column(table, *names):
@@ -370,9 +399,9 @@ def vtot_of(run):
     return bervbias.total_velocity(run["v"], run["berv"])
 
 
-def load(tree, name, label):
+def load(tree, name, label, comparison=None):
     """One LBL object as the figures take it, or None when it has no rdb."""
-    path = rdb_file(tree, name)
+    path = rdb_file(tree, name, comparison)
     if not os.path.exists(path):
         return None
     t, v, e, table = rdb_rows(path)
@@ -2234,6 +2263,40 @@ def star_sentence(star, numbers):
     return words
 
 
+def series_section(series, folder):
+    """The report's first section: each star's velocity series as LBL's
+    report draws it (lbl.report.figures.page_sequence), every epoch coloured
+    by its BERV, and how its scatter is distributed. [] when no star has
+    velocities yet."""
+    if not series:
+        return []
+    from lbl.report import figures as lbl_figures
+    from lbl.report import series as lbl_series
+    parts = ["\\section{The velocity series}\n"
+             "Every epoch coloured by its BERV: a residual that follows the"
+             " BERV is not the star's, and shows as colours that line up.\n"]
+    for star, run in series:
+        name = "series-%s.pdf" % slug(star)
+        try:
+            table = lbl_series.read_rdb(run["path"])
+            fig = lbl_figures.page_sequence(plt, table, star)
+            fig.savefig(os.path.join(folder, "figures", name))
+            plt.close(fig)
+        except Exception as exc:                          # noqa: BLE001
+            parts.append("\\muted{The velocity series of %s could not be"
+                         " drawn (%s).}\n" % (tex(star), tex(str(exc))))
+            continue
+        parts.append(figure_block(
+            "figures/" + name,
+            "The %s velocities of %s that LBL measured (%s), each epoch"
+            " coloured by its BERV; below, how their scatter is distributed,"
+            " dashed lines at plus and minus one MAD."
+            % (tex(run["label"]), tex(star),
+               tex(os.path.basename(run["path"]))),
+            short="Velocity series, %s" % tex(star)))
+    return parts
+
+
 def velocity_section(star, before, after, numbers, folder, stale):
     base = "rv-" + slug(star)
     figures = os.path.join(folder, "figures")
@@ -2668,13 +2731,24 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
     results, sections, missing = [], [], []
     facts = {star: star_facts(star, config, folder) for star in stars}
     planets = {}
+    # the template each star was measured against: the corrected object
+    #   follows the star when it was its own, else keeps the other star's
+    against = comparisons(config, stars)
+    series = []
     for star in stars:
         before_name, after_name = object_names(config, star, tag)
-        before = load(tree, before_name, "delivered")
-        after = load(tree, after_name, "corrected")
+        own = against[star] == star
+        after_against = after_name if own else against[star]
+        before = load(tree, before_name, "delivered", against[star])
+        after = load(tree, after_name, "corrected", after_against)
+        # the report opens on the velocity series, the corrected one when
+        #   LBL has measured it
+        if after is not None or before is not None:
+            series.append((star, after if after is not None else before))
         if before is None or after is None:
-            missing.append((star, rdb_file(tree, before_name if before is None
-                                           else after_name)))
+            missing.append((star, rdb_file(tree, before_name, against[star])
+                            if before is None else
+                            rdb_file(tree, after_name, after_against)))
             continue
         before, after = common(before, after)
         # whose velocities these are, for the figures' own titles
@@ -2702,7 +2776,10 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
         if star not in planets:
             planets[star] = known_planets(outdir, config, star, joint,
                                           facts[star], folder)
-    body = ["\\section{The star%s}\n" % ("s" if len(stars) > 1 else "")]
+    # THE VELOCITY SERIES FIRST, right after the contents: what one opens a
+    #   report for (2026-10-24)
+    body = series_section(series, folder)
+    body.append("\\section{The star%s}\n" % ("s" if len(stars) > 1 else ""))
     body.append("As SIMBAD describes %s, found from the names in the"
                 " spectra's headers and the folder's own.\n"
                 % ("them" if len(stars) > 1 else "it"))
