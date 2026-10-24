@@ -1679,6 +1679,10 @@ def check_memory(rows, columns, dtype, fraction=None):
     return need
 
 
+#: the cubes whose SNR cut was said already, in this process (load_cube)
+_SNR_CUT_SAID = set()
+
+
 def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
               dtype=np.float64, columns=None, spill=None,
               min_pixel_snr=DEFAULT_MIN_PIXEL_SNR, with_sigma=False):
@@ -1726,13 +1730,19 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
             thresholds[name] = float(min_snr_frac * np.nanmedian(snr[here]))
             keep &= ~here | (snr >= thresholds[name])
         if not keep.all():
-            shown = ", ".join("%.1f" % t for t in thresholds.values())
-            log("dropping %d exposures (%d rows, one per order parity) with band"
-                " SNR below %.0f%% of the median of their own object (%s): %d of"
-                " %d exposures left"
-                % (count_exposures(meta, ~keep), int((~keep).sum()),
-                   100 * min_snr_frac, shown,
-                   count_exposures(meta, keep), count_exposures(meta)))
+            # said once per cube: the fit, the figures, the masks and the
+            #   correction each read the cube again, and each read made the
+            #   same cut and said it again (four times on 2026-10-24)
+            said = (os.path.abspath(str(path)), float(min_snr_frac))
+            if said not in _SNR_CUT_SAID:
+                _SNR_CUT_SAID.add(said)
+                shown = ", ".join("%.1f" % t for t in thresholds.values())
+                log("dropping %d exposures (%d rows, one per order parity) with"
+                    " band SNR below %.0f%% of the median of their own object"
+                    " (%s): %d of %d exposures left"
+                    % (count_exposures(meta, ~keep), int((~keep).sum()),
+                       100 * min_snr_frac, shown,
+                       count_exposures(meta, keep), count_exposures(meta)))
             rows = np.flatnonzero(keep)
             meta = meta[keep]
 
