@@ -468,9 +468,47 @@ def object_orbits(name: str, files: list, data_dir: str, log) -> list:
     return orbits
 
 
+def object_velocities(name: str, comparison, data_dir: str, instrument: str,
+                      log) -> dict:
+    """The velocity of each of an object's spectra from a FREE FIT of them:
+    LBL's template of the object, when it iterated on the velocities (its
+    SCI_TABLE's VSYS, m/s; not when it was made on known orbits, VKEP),
+    relative to their median, in km/s, by file name: pca2d's star frame
+    (registration.velocities) then follows the star from one exposure to
+    the next, whatever moves it. Only the object's own template knows its
+    spectra: with another star's (OBJECT_COMPARISON), {}. {} as well when
+    there is no template yet, or it holds no velocities."""
+    if comparison not in (None, '', name):
+        return dict()
+    from lbl.recipes.lbl_wrap import _template_of
+    path = _template_of(data_dir, name, instrument)
+    if path is None:
+        return dict()
+    try:
+        from astropy.table import Table
+        table = Table.read(path, 'SCI_TABLE')
+    except Exception:                                         # noqa: BLE001
+        return dict()
+    if 'VSYS' not in table.colnames or 'VKEP' in table.colnames \
+            or 'FILENAME' not in table.colnames:
+        return dict()
+    vsys = np.asarray(table['VSYS'], dtype=float)
+    good = np.isfinite(vsys)
+    if good.sum() < 3 or not np.nanstd(vsys[good]) > 0:
+        return dict()
+    median = float(np.median(vsys[good]))
+    out = {os.path.basename(str(f)): float(v - median) / 1000.0
+           for f, v, ok in zip(table['FILENAME'], vsys, good) if ok}
+    log('PCA2D: the star frame of %s follows the velocities its template'
+        ' fitted freely (%d spectra, %.1f m/s rms, %s), not the BERV alone'
+        % (name, len(out), float(np.std(vsys[good])), os.path.basename(path)),
+        'info')
+    return out
+
+
 def write_request(path: str, objects: list, block: dict, cache_dir: str,
                   model_dir: str, suffix: str = SUFFIX,
-                  orbits: dict = None) -> None:
+                  orbits: dict = None, velocities: dict = None) -> None:
     """The request as a pca2d configuration file: the nominal one, with one
     block per object holding the same settings, and each object's orbits
     (registration.orbits) when PLANETS found some."""
@@ -485,6 +523,10 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
                                                         run=False,
                                                         suffix=suffix)
     nominal['objects'] = {name: copy.deepcopy(block) for name in objects}
+    for name, found in (velocities or dict()).items():
+        if found:
+            nominal['objects'][name].setdefault('registration', dict())[
+                'velocities'] = found
     for name, found in (orbits or dict()).items():
         if found:
             nominal['objects'][name].setdefault('registration', dict())[
@@ -634,11 +676,18 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
              for name in objects}
     orbits = {name: object_orbits(name, files[name], data_dir, log)
               for name in objects} if planets else dict()
+    # the velocities LBL's template fitted freely, when it did (its own
+    #   template, made without known orbits): the star frame follows them
+    velocities = {name: object_velocities(name, comparisons.get(name),
+                                          data_dir, instrument, log)
+                  for name in objects}
     request = dict(block, objects=list(objects))
     # the orbits are part of the request only when there are some, so that a
     #   correction made before PLANETS existed keeps its stamp
     if any(orbits.values()):
         request['orbits'] = orbits
+    if any(velocities.values()):
+        request['velocities'] = velocities
     # the basis by its content, and how it is divided out (in full, since
     #   2026-10-22: shrunk by this star's own significance before, which
     #   dropped it): another basis, or a correction made before, is made again
@@ -686,7 +735,8 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     request_file = os.path.join(work, 'request.yaml')
     write_request(request_file, objects, block,
                   os.path.join(pca2d_root, 'cache'),
-                  os.path.join(data_dir, 'models'), suffix, orbits)
+                  os.path.join(data_dir, 'models'), suffix, orbits,
+                  velocities)
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
                   names[name][0], work, log, science_subdir)

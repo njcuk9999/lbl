@@ -609,9 +609,12 @@ def reads_natively(config):
     return instrument in NATIVE and source in ("", "APERO", "CADC")
 
 
-def star_frame(payload, config):
-    """The star's frame of one exposure: its BERV composed with the Keplerian
-    velocity of the star's companions at its BJD (registration.orbits).
+def star_frame(payload, config, path=None):
+    """The star's frame of one exposure: its BERV composed with the star's
+    velocity at that exposure, from a free fit of the velocities when there
+    is one (registration.velocities, by file name: LBL's template), else the
+    Keplerian velocity of the star's companions at its BJD
+    (registration.orbits).
 
     `berv` is what every shift into the star's frame reads (the cube's rows,
     the template, the fit, the correction), so it becomes the velocity of that
@@ -622,15 +625,23 @@ def star_frame(payload, config):
     orbits nothing changes. Applied once: a payload that has berv_bary is
     left as it is.
     """
-    orbits = ((config or {}).get("registration") or {}).get("orbits") or []
+    registration = (config or {}).get("registration") or {}
+    orbits = registration.get("orbits") or []
+    velocities = registration.get("velocities") or {}
     meta = payload.get("meta")
-    if not orbits or meta is None or "berv_bary" in meta:
+    if (not orbits and not velocities) or meta is None or "berv_bary" in meta:
         return payload
-    from lbl.science import planets
     from .grids import C_KMS
     berv = float(meta.get("berv", np.nan))
-    bjd = float(meta.get("bjd", np.nan))
-    vstar = float(planets.star_velocity([bjd], orbits)[0]) / 1000.0
+    name = os.path.basename(str(path or meta.get("filename") or ""))
+    if name in velocities:
+        vstar = float(velocities[name])
+    elif orbits:
+        from lbl.science import planets
+        bjd = float(meta.get("bjd", np.nan))
+        vstar = float(planets.star_velocity([bjd], orbits)[0]) / 1000.0
+    else:
+        return payload
     meta["berv_bary"] = berv
     meta["vstar"] = vstar
     meta["berv"] = (berv - vstar) / (1.0 - berv * vstar / C_KMS ** 2)
@@ -645,7 +656,7 @@ def read_any(path, config, inst=None):
     plotting passent par ici, donc ajouter un instrument ne touche qu'a
     `reads_natively`.
     """
-    return star_frame(_read_any(path, config, inst), config)
+    return star_frame(_read_any(path, config, inst), config, path)
 
 
 def _read_any(path, config, inst=None):

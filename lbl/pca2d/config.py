@@ -191,6 +191,13 @@ DEFAULTS = {
         # alone (readers.star_frame). Set per object by LBL's PLANETS option.
         # Empty: the BERV alone
         "orbits": [],
+        # THE VELOCITY OF EACH EXPOSURE, {file name: km/s}, from a free fit of
+        # them (LBL's template, when it iterates on the velocities: its
+        # SCI_TABLE's VSYS): the star's frame is then the BERV composed with
+        # that, a planet and the star's activity followed whatever they are.
+        # Taken over the orbits for the files it names. Set per object by
+        # lbl_pca2d. Empty: the orbits, or the BERV alone
+        "velocities": {},
     },
     "highpass": {
         "method": "savgol",          # 'savgol' or 'none'
@@ -1308,7 +1315,7 @@ def cache_key(config: dict) -> str:
         # orbits omitted when there are none, so that the key's appearance does
         # not orphan the cubes built before it (the same as against_template)
         "registration": {k: v for k, v in config["registration"].items()
-                         if not (k == "orbits" and not v)},
+                         if not (k in ("orbits", "velocities") and not v)},
         # the window the width resolved to, not the width: dv is hashed with
         # the domain, and a config in samples from before width_kms has to
         # keep the key its cube was built under

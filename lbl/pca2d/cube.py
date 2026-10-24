@@ -649,7 +649,8 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     files, labels = spnights.group_files(
         files, stack, extension=1,
         bundle=spnights.bundle_settings(inp) if stack else None,
-        orbits=config["registration"].get("orbits"))
+        orbits=config["registration"].get("orbits"),
+        velocities=config["registration"].get("velocities"))
     n_groups = len(set(labels))
     _check_memory(config, 2 * n_groups, n_pixels)
 
@@ -758,7 +759,8 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
     files, labels = spnights.group_files(
         files, stack, extension=0,
         bundle=spnights.bundle_settings(config["input"]) if stack else None,
-        orbits=config["registration"].get("orbits"))
+        orbits=config["registration"].get("orbits"),
+        velocities=config["registration"].get("velocities"))
     n_groups = len(set(labels))
     n_pixels = grid.size
     _check_memory(config, n_groups, n_pixels)

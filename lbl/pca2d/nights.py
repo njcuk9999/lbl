@@ -113,22 +113,31 @@ def header_bjd(path: str):
     return None
 
 
-def frame_bervs(files, bervs, orbits):
-    """The BERVs as the star's frame sees them: composed with the Keplerian
-    velocity of its companions (registration.orbits), as readers.star_frame
-    does for the cube. A bundle is a span of the star's frame, so with a
-    planet it is cut by that and not by the BERV alone."""
-    if not orbits:
+def frame_bervs(files, bervs, orbits, velocities=None):
+    """The BERVs as the star's frame sees them: composed with the star's
+    velocity, a free fit's (registration.velocities, by file name) or that
+    of its companions (registration.orbits), as readers.star_frame does for
+    the cube. A bundle is a span of the star's frame, so with a planet it is
+    cut by that and not by the BERV alone."""
+    velocities = velocities or {}
+    if not orbits and not velocities:
         return bervs
     from lbl.science import planets
     from .grids import C_KMS
     out = []
     for path, berv in zip(files, bervs):
-        bjd = header_bjd(path)
-        if berv is None or bjd is None:
+        name = os.path.basename(str(path))
+        if berv is None:
             out.append(berv)
             continue
-        vstar = float(planets.star_velocity([bjd], orbits)[0]) / 1000.0
+        if name in velocities:
+            vstar = float(velocities[name])
+        else:
+            bjd = header_bjd(path) if orbits else None
+            if bjd is None:
+                out.append(berv)
+                continue
+            vstar = float(planets.star_velocity([bjd], orbits)[0]) / 1000.0
         out.append((berv - vstar) / (1.0 - berv * vstar / C_KMS ** 2))
     return out
 
@@ -211,7 +220,7 @@ def row_unit(source) -> str:
 
 
 def group_files(files: list[str], stack: bool, extension: int = 0,
-                bundle=None, orbits=None):
+                bundle=None, orbits=None, velocities=None):
     """Sort files chronologically and label each with its output group.
 
     Returns (files, labels). With stack = False every file is its own group, so
@@ -256,7 +265,7 @@ def group_files(files: list[str], stack: bool, extension: int = 0,
                         sum(b is None for b in bervs),
                         files[[b is None for b in bervs].index(True)],
                         ", ".join(BERV_KEYS)))
-            bervs = frame_bervs(files, bervs, orbits)
+            bervs = frame_bervs(files, bervs, orbits, velocities)
         labels = split_nights(stamps, labels, bundle, bervs)
         n_groups = len(set(labels))
         log("bundles within the nights (%s): %d exposures in %d bundles over"
