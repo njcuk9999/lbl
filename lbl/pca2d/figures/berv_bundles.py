@@ -1,5 +1,7 @@
 """The rows of the fit: which exposures were coadded, night by night, and the
-BERV bundles each night was cut into.
+BERV bundles each night was cut into. Per star and per night: a joint fit's
+stars each have their own nights, even the nights they share (each star's
+cube coadds its own exposures).
 
     python -m lbl.pca2d.figures.berv_bundles --cube <cube> --out bundles.pdf \
         [--title NAME] [--berv 0.1] [--minutes M] [--max N]
@@ -7,7 +9,7 @@ BERV bundles each night was cut into.
 Read from the cube's members.csv (filename, row, group, bjd, berv), which the
 cube build writes. One page. Top: every night of the campaign, each exposure a
 point at its BERV less the night's median, consecutive bundles of a night
-alternating in colour; the dashed lines are the widest range the limit allows
+alternating in colour, each star's nights together under its name; the dashed lines are the widest range the limit allows
 around the median. Bottom: the nights that were cut, BERV against time, a
 vertical line at each cut. A cube of single exposures says so on the page.
 """
@@ -88,6 +90,20 @@ def frame_label(cube):
         return "BERV"
 
 
+def row_objects(cube):
+    """{row name: star} of a joint cube (meta.fits names each row by its first
+    exposure, and says whose it is); {} for a cube of one star."""
+    try:
+        meta = Table.read(os.path.join(cube, "meta.fits"))
+    except Exception:                                         # noqa: BLE001
+        return {}
+    if "object" not in meta.colnames:
+        return {}
+    out = {os.path.basename(str(f)): str(o)
+           for f, o in zip(meta["filename"], meta["object"])}
+    return out if len(set(out.values())) > 1 else {}
+
+
 def note_page(pdf_path, title, text):
     with plt.rc_context(STYLE):
         fig = plt.figure(figsize=(8.5, 3.0))
@@ -100,15 +116,31 @@ def note_page(pdf_path, title, text):
 
 
 def draw(members, args):
-    groups = np.array([str(g) for g in members["group"]])
+    # PER STAR AND PER NIGHT. A joint cube's members are every star's, and two
+    #   stars observed the same night share its label: taken by the night
+    #   alone they made one "night" whose BERV median mixed both stars
+    #   (2026-10-24). Each star's own cube coadds its own exposures, so a
+    #   night here is a star's night
+    stars_of = row_objects(args.cube)
+    stars = np.array([stars_of.get(os.path.basename(str(r)), "")
+                      for r in members["row"]])
+    groups = np.array(["%s|%s" % (s, g) for s, g in zip(stars, members["group"])])
     nights = np.array([night_of(g) for g in groups])
     berv = np.asarray(members["berv"], dtype=float)
     bjd = np.asarray(members["bjd"], dtype=float)
     # with orbits the members' "berv" is the star's frame
     by = frame_label(args.cube)
     order = np.argsort(bjd)
-    groups, nights, berv, bjd = groups[order], nights[order], berv[order], bjd[order]
-    names = sorted(set(nights), key=lambda n: bjd[nights == n].min())
+    groups, nights, berv, bjd, stars = (groups[order], nights[order],
+                                        berv[order], bjd[order], stars[order])
+    # each star's nights together, the stars in the order they come
+    first = {}
+    for s in stars:
+        first.setdefault(s, len(first))
+    names = sorted(set(nights), key=lambda n: (first[n.split("|")[0]],
+                                               bjd[nights == n].min()))
+    shown = [n.split("|", 1)[1] for n in names]
+    n_stars = len(first) if stars_of else 1
     n_rows = len(set(groups))
     cut = [n for n in names if len(set(groups[nights == n])) > 1]
     widest = max((1000 * np.ptp(berv[nights == n]) for n in names), default=0.0)
@@ -133,10 +165,21 @@ def draw(members, args):
                 top.axhline(sign * 500 * args.berv, color=MUTED, lw=1.0,
                             ls="--", zorder=1)
         top.axhline(0, color=GRID, lw=1.0, zorder=0)
+        # each star's block of nights, under its name, a line between two
+        if n_stars > 1:
+            starts = [i for i, n in enumerate(names)
+                      if i == 0 or n.split("|")[0] != names[i - 1].split("|")[0]]
+            for k, i0 in enumerate(starts):
+                i1 = starts[k + 1] if k + 1 < len(starts) else len(names)
+                if k:
+                    top.axvline(i0 - 0.5, color=MUTED, lw=0.9, zorder=1)
+                top.text(0.5 * (i0 + i1 - 1), 1.0, names[i0].split("|")[0],
+                         transform=top.get_xaxis_transform(), ha="center",
+                         va="bottom", fontsize=8, color=INK, weight="bold")
         top.set_xlim(-0.8, len(names) - 0.2)
         step = max(1, len(names) // 12)
         top.set_xticks(range(0, len(names), step))
-        top.set_xticklabels([names[i] for i in range(0, len(names), step)],
+        top.set_xticklabels([shown[i] for i in range(0, len(names), step)],
                             rotation=35, ha="right", fontsize=7, color=MUTED)
         top.set_ylabel("%s - night median (m/s)" % by, fontsize=9, color=INK)
         top.tick_params(labelsize=8, colors=MUTED)
@@ -144,12 +187,14 @@ def draw(members, args):
         for spine in ("top", "right"):
             top.spines[spine].set_visible(False)
         top.set_title(
-            "%d exposures, %d nights, %d rows of the fit; bundles of at most %s"
+            "%d exposures, %s, %d rows of the fit; bundles of at most %s"
             "\nwidest night: %.0f m/s of BERV; %d night%s cut, consecutive bundles"
             " alternate in colour" % (
-                len(berv), len(names), n_rows, limits_text(args), widest,
-                len(cut), "" if len(cut) == 1 else "s"),
-            fontsize=9, color=INK, loc="left")
+                len(berv), ("%d nights of %d stars (each star's own)"
+                            % (len(names), n_stars)) if n_stars > 1
+                else "%d nights" % len(names), n_rows, limits_text(args),
+                widest, len(cut), "" if len(cut) == 1 else "s"),
+            fontsize=9, color=INK, loc="left", pad=16 if n_stars > 1 else 6)
         # the most cut nights, one by one
         detail = sorted(cut, key=lambda n: -len(set(groups[nights == n])))
         for j, night in enumerate(detail[:n_detail]):
@@ -166,8 +211,10 @@ def draw(members, args):
                     ax.axvline(hours[one].min() - 0.5 * np.diff(hours).min()
                                if len(hours) > 1 else hours[one].min(),
                                color=INK, lw=0.8, zorder=2)
-            ax.set_title("%s: %d exposures, %d bundles, %.0f m/s"
-                         % (night, sel.sum(), len(set(g)), 1000 * np.ptp(b)),
+            star, label = night.split("|", 1)
+            ax.set_title("%s%s: %d exposures, %d bundles, %.0f m/s"
+                         % ("%s, " % star if n_stars > 1 else "", label,
+                            sel.sum(), len(set(g)), 1000 * np.ptp(b)),
                          fontsize=8.5, color=INK, loc="left")
             ax.set_xlabel("hours since the first exposure", fontsize=8,
                           color=INK)
