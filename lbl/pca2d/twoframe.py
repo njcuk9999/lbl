@@ -1685,7 +1685,8 @@ _SNR_CUT_SAID = set()
 
 def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
               dtype=np.float64, columns=None, spill=None,
-              min_pixel_snr=DEFAULT_MIN_PIXEL_SNR, with_sigma=False):
+              min_pixel_snr=DEFAULT_MIN_PIXEL_SNR, with_sigma=False,
+              with_trans=False):
     """The observer-frame cube plus the weights, condensed from cube.py.
 
     `min_snr_frac` drops spectra whose band SNR is below that fraction of the
@@ -1707,6 +1708,8 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
     `with_sigma` returns the photon sigma of every sample too (NaN where the
     weight is zero), fifth: (grid, data, weights, meta, sigma). The weights
     carry the telluric ramp as well; what is noise alone is the sigma.
+    `with_trans` (with `with_sigma`) returns the telluric transmission of
+    every sample too, sixth, None for a cube that has none.
     """
     grid, data, sigma, trans, meta = read_cube_files(path, dtype, columns,
                                                     lazy=True)
@@ -1760,6 +1763,8 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
     w = workspace((n_rows, n_cols), dtype, spill, tag="weights")
     noise = workspace((n_rows, n_cols), dtype, spill, tag="sigma") \
         if with_sigma else None
+    tr_out = workspace((n_rows, n_cols), dtype, spill, tag="trans") \
+        if with_trans and trans is not None else None
     step = max(1, int(_LOAD_BLOCK_BYTES // max(1, n_rows * np.dtype(dtype).itemsize)))
     grid_size = cube_grid_size(path) if columns is not None else n_cols
     cols = np.asarray(columns) if columns is not None else None
@@ -1800,6 +1805,8 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
         if trans is not None:
             t_blk = take(trans)
             wb *= np.clip((t_blk - ramp_zero) / (1.0 - ramp_zero), 0.0, 1.0)
+            if tr_out is not None:
+                tr_out[:, sl] = t_blk
         # the EDGE columns of the GRID, not of whatever slice of it was read: a
         # window in the middle of the domain must not lose its own first and
         # last 64 columns because they happen to be the ends of the array it
@@ -1812,6 +1819,8 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
         if noise is not None:
             noise[:, sl] = np.where(wb > 0, s_blk, np.nan)
     del sigma, trans, data
+    if with_trans and noise is not None:
+        return grid, out, w, meta, noise, tr_out
     if noise is not None:
         return grid, out, w, meta, noise
     return grid, out, w, meta
@@ -3167,6 +3176,10 @@ def main(argv=None):
     observer_first = frozen is not None and bool(
         getattr(args, "observer_first", True))
     templates = np.zeros_like(means)
+    # which star spectra are ANOTHER STAR'S template: their static mismatch
+    #   to this star (metallicity) is expected, and the rejection takes it
+    #   out before testing (outliers.star_static)
+    external_templates = np.zeros(templates.shape[0], dtype=bool)
     star_mean = None
     if args.mean == "star":
         # ONE STAR SPECTRUM PER ORDER PARITY, in the star's frame, and no mean
@@ -3239,6 +3252,7 @@ def main(argv=None):
                 templates[g], used = external_star_template(
                     spec, grid, parity_index, live, hp_window, hp_order,
                     hp_mode)
+                external_templates[g] = True
                 # how well it matches this star's own star-frame median, as a
                 #   check of the velocity it was placed at (not applied)
                 own = star_frame_template(
@@ -3810,6 +3824,11 @@ def main(argv=None):
                         best_iter=best_iter, template=template, mean=mean,
                         means=means, parity=parity,
                         used_template=bool(args.template),
+                        # the parity groups (2 x member + parity) whose star
+                        #   is another star's template: the rows' own
+                        #   `parity` says which rows they are
+                        external_parities=np.asarray(
+                            parity_groups)[external_templates],
                         sigma_formal=sig_formal, sigma_scaled=sig_scaled,
                         chi2_red=chi2_red, rejected=rejected,
                         max_mad=float(args.max_mad), chi2_best=chi2, grid=grid,

@@ -367,6 +367,82 @@ def _pieces(cube, fit, window):
                 margin=reach + 16 + window)
 
 
+#: A STAR WHOSE SPECTRUM IS ANOTHER STAR'S TEMPLATE (OBJECT_COMPARISON, an
+#: appaired or vetted template) differs from it by what the two stars do
+#: not share, metallicity first: line depths off by a few percent, the same
+#: in every exposure, still in the star's frame. Expected, and not a defect:
+#: the rejection takes it out before testing (star_static), where it was
+#: clipped sample by sample and, summed over the exposures by the
+#: star-frame bias test, masked whole lines (2026-10-24). Estimated on the
+#: samples clear of tellurics only (transmission at least STATIC_CLEAR), so
+#: that a telluric residual standing still in both frames at a narrow BERV
+#: is never taken for the star's, and only where at least STATIC_SHARE of
+#: the star's exposures (and STATIC_LEAST of them) saw the column clear.
+STATIC_CLEAR = 0.95
+STATIC_SHARE = 0.3
+STATIC_LEAST = 5
+
+
+def _sample_at(values, positions):
+    """Linear interpolation of rows of `values` at `positions` (same shape),
+    NaN outside or where a neighbour is NaN."""
+    width = values.shape[-1]
+    i0 = np.floor(positions).astype(int)
+    frac = positions - i0
+    inside = (i0 >= 0) & (i0 < width - 1)
+    i0c = np.clip(i0, 0, width - 2)
+    rows = np.arange(values.shape[0])[:, None]
+    left = values[rows, i0c]
+    right = values[rows, i0c + 1]
+    out = left * (1.0 - frac) + right * frac
+    return np.where(inside, out, np.nan)
+
+
+def star_static(resid, delta, tgroup, external, trans=None):
+    """The static residual, in the star's frame, of each star spectrum that is
+    another star's template: (groups, columns), 0 where it is not known.
+
+    `resid` is every row's residual (rows, columns), `delta` each row's
+    shift (star column j is the row's column j + delta), `tgroup` each row's
+    star-spectrum group and `external` which groups are another star's
+    template. The median over the group's rows of each row's residual
+    carried to the star's frame, on its telluric-clear samples only.
+    """
+    n, width = resid.shape
+    out = np.zeros((len(external), width))
+    x = np.arange(width, dtype=float)
+    for g in np.flatnonzero(np.asarray(external, dtype=bool)):
+        rows = np.flatnonzero(np.asarray(tgroup) == g)
+        if rows.size < STATIC_LEAST:
+            continue
+        clear = np.asarray(resid[rows], dtype=float)
+        if trans is not None:
+            clear = np.where(np.asarray(trans[rows]) >= STATIC_CLEAR, clear,
+                             np.nan)
+        carried = _sample_at(clear, x[None, :] + np.asarray(delta)[rows, None])
+        count = np.isfinite(carried).sum(axis=0)
+        with np.errstate(all="ignore"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            median = np.nanmedian(carried, axis=0)
+        enough = count >= max(STATIC_LEAST, STATIC_SHARE * rows.size)
+        out[g] = np.where(enough & np.isfinite(median), median, 0.0)
+    return out
+
+
+def take_static(resid, static, delta, tgroup, external):
+    """`resid` less each row's static residual (star_static), carried back
+    to the row's frame; in place, and returned."""
+    x = np.arange(resid.shape[1], dtype=float)
+    for g in np.flatnonzero(np.asarray(external, dtype=bool)):
+        rows = np.flatnonzero(np.asarray(tgroup) == g)
+        if not rows.size or not np.any(static[g]):
+            continue
+        back = _sample_at(np.broadcast_to(static[g], (rows.size, static.shape[1])),
+                          x[None, :] - np.asarray(delta)[rows, None])
+        resid[rows] -= np.nan_to_num(back)
+    return resid
+
+
 def scaled_z(resid, sigma, window, origin=0):
     """A residual in sigmas: each sample divided by its own photon sigma,
     then that ratio by its local robust sigma (running_stats over `window`
@@ -401,6 +477,11 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
     and `blocks` stops after that many (for a measurement rather than a pass).
     `columns` restricts the pass to a (first, last) range of the grid, which is
     what a figure of one window needs.
+
+    A star whose spectrum is another star's template (the fit's
+    `external_parities`: its rows, by their `parity`, 2 x member + parity)
+    has its static mismatch to it taken out of the residual first
+    (star_static): expected, it is not tested.
     """
     from .twoframe import (LanczosShifter, carried_means, fit_means,
                            fit_templates, load_cube, star_model)
@@ -410,6 +491,18 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
     Q, b = np.asarray(fit["Q"], dtype=float), np.asarray(fit["b"], dtype=float)
     means, group = fit_means(fit, part["meta"], n, m)
     T, tgroup = fit_templates(fit, part["meta"], n, m)
+    files = list(getattr(fit, "files", []) or getattr(fit, "keys", lambda: [])())
+    # the rows whose star is another star's template, grouped by member and
+    #   parity: the star spectrum is in P (n_star = 1, a coefficient of 1),
+    #   not in the star-frame means, so the rows are found by their parity
+    sgroup, external = np.zeros(n, dtype=int), np.zeros(1, dtype=bool)
+    if "external_parities" in files and "parity" in files \
+            and len(fit["parity"]) == n:
+        parity_rows = np.asarray(fit["parity"], dtype=int)
+        kinds = np.unique(parity_rows)
+        sgroup = np.searchsorted(kinds, parity_rows)
+        external = np.isin(kinds, np.asarray(fit["external_parities"],
+                                             dtype=int))
     step = m if block is None else int(block)
     done = 0
     first, last = (0, m) if columns is None else (max(0, int(columns[0])),
@@ -420,12 +513,15 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
         done += 1
         c1 = min(c0 + step, last)
         a0, b0 = max(0, c0 - part["margin"]), min(m, c1 + part["margin"])
-        _, data, w, _, noise = load_cube(cube, dtype=np.float32,
-                                         columns=np.arange(a0, b0),
-                                         with_sigma=True)
+        _, data, w, _, noise, trans = load_cube(
+            cube, dtype=np.float32, columns=np.arange(a0, b0),
+            with_sigma=True, with_trans=True)
         shifter = LanczosShifter(b0 - a0, a=8, max_shift=part["reach"])
         Tf = shifter.prepare(T[:, a0:b0]) if np.any(T[:, a0:b0]) else None
         inner = slice(c0 - a0, c1 - a0)
+        # every row's residual first: the static mismatch of a star measured
+        #   against another star's template is a median over its rows
+        resid = np.empty((n, b0 - a0), dtype=np.float32)
         for start in range(0, n, chunk):
             stop = min(start + chunk, n)
             rows = slice(start, stop)
@@ -436,10 +532,16 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
                                        start, stop)
             model += b[rows] @ Q[:, a0:b0]
             model += means[:, a0:b0][group[rows]]
-            resid = np.where(w[rows] > 0, data[rows] - model, np.nan)
-            z = scaled_z(resid, noise[rows], part["window"], origin=a0)
+            resid[rows] = np.where(w[rows] > 0, data[rows] - model, np.nan)
+        if external.any():
+            static = star_static(resid, part["delta"], sgroup, external, trans)
+            take_static(resid, static, part["delta"], sgroup, external)
+        for start in range(0, n, chunk):
+            stop = min(start + chunk, n)
+            z = scaled_z(resid[start:stop], noise[start:stop], part["window"],
+                         origin=a0)
             yield (start, stop), c0, c1, inner, z
-        del data, w, noise
+        del data, w, noise, trans, resid
 
 
 def noise_correlation(cube, fit, window, lags, blocks=1, chunk=16, clip_at=5.0):
@@ -486,8 +588,12 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
 
     THE SAME IN THE STAR'S FRAME (2026-10-22). Each exposure's z carried to
     the star's frame by its own shift (to the nearest sample), where what
-    the star's spectrum does not describe, or another star's template
-    (OBJECT_COMPARISON) describes wrongly, stands still: with `star_frac`
+    the star's spectrum does not describe stands still. What another star's
+    template (OBJECT_COMPARISON) describes differently, its metallicity
+    first, is expected and is taken out of the residual before any test
+    (residual_z, star_static): on TOI-5579, TOI-4860 and TOI-1452 against
+    vetted templates it had 35% of 1275-1307 nm masked, 3% without it
+    (2026-10-24). Then: with `star_frac`
     and `star_chi2`, a star column where more than `star_frac` of the
     exposures are beyond `nsig` and the survivors' reduced chi2 is still
     above `star_chi2`; with `star_bias_nsig` (and `bias_samples`), a star
