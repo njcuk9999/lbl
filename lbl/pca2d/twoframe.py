@@ -3584,6 +3584,9 @@ def main(argv=None):
             else:
                 worse += 1
                 flag = "   <- worse than iter %d" % best_at
+                # the last sweep the patience allows: the fit stops on it
+                if worse >= int(args.patience):
+                    flag += ", we have converged"
             # what is kept: the iterate of lowest chi2, or, with --keep last,
             # whichever ran last; the stopping rule counts against the best
             # either way
@@ -3624,8 +3627,8 @@ def main(argv=None):
                 flat = 0
             prev_chi2 = chi2
             if flat >= 2:
-                log("  chi2 has settled, less than 0.01%% per sweep twice in a"
-                    " row; stopping at iteration %d" % iteration)
+                log("  we have converged: chi2 has settled, less than 0.01%% per"
+                    " sweep twice in a row; stopping at iteration %d" % iteration)
                 break
             if worse >= int(args.patience):
                 log("  chi2 has turned over; stopping and keeping iteration %d%s"
