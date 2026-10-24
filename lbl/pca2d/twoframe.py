@@ -1737,10 +1737,9 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
             if said not in _SNR_CUT_SAID:
                 _SNR_CUT_SAID.add(said)
                 shown = ", ".join("%.1f" % t for t in thresholds.values())
-                log("dropping %d exposures (%d rows, one per order parity) with"
-                    " band SNR below %.0f%% of the median of their own object"
-                    " (%s): %d of %d exposures left"
-                    % (count_exposures(meta, ~keep), int((~keep).sum()),
+                log("dropping %d exposures with band SNR below %.0f%% of the"
+                    " median of their own object (%s): %d of %d exposures left"
+                    % (count_exposures(meta, ~keep),
                        100 * min_snr_frac, shown,
                        count_exposures(meta, keep), count_exposures(meta)))
             rows = np.flatnonzero(keep)

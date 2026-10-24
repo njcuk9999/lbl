@@ -1355,6 +1355,15 @@ def shrink_model(model, fits_path, cube, shrink=True, shrink_smooth=False,
     return scale, fwhm, factors
 
 
+def _cube_objects(cube):
+    """The objects of a cube (several in a joint fit's)."""
+    _, _, _, meta = _bcd.load_cube(cube, dtype=np.float32,
+                                   columns=np.arange(0, 1))
+    if "object" not in getattr(meta, "colnames", []):
+        return set()
+    return {str(v) for v in meta["object"]}
+
+
 def correct_many(model, args):
     """--correct over one file or over every exposure in the fit."""
     if (args.all or args.by_night) and not args.source_dir:
@@ -1372,6 +1381,17 @@ def correct_many(model, args):
               % (len(pairs), missing))
     elif args.all:
         names = [os.path.basename(str(v)) for v in model["coeffs"]["filename"]]
+        # A JOINT FIT holds every star's exposures, and each star is corrected
+        #   from its own folder: there the others' files are not missing, they
+        #   are another star's (TOI1452's 2513613t.fits said "missing" in
+        #   TOI5579's folder, 2026-10-24). Each folder corrects what it holds
+        if getattr(args, "cube", None) and len(_cube_objects(args.cube)) > 1:
+            here = [n for n in names
+                    if os.path.exists(os.path.join(args.source_dir, n))]
+            log("  %d of the joint fit's %d exposures are this star's (%s)"
+                % (len(here), len(names), os.path.basename(
+                    os.path.normpath(args.source_dir))), "info")
+            names = here
         pairs = [(os.path.join(args.source_dir, n), None) for n in names]
     else:
         pairs = [(args.file, None)]
