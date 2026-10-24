@@ -62,7 +62,6 @@ from .progress import bar as _bar
 
 #: the same treatment twoframe.load_cube gives the cube, so a refitted
 #: coefficient is comparable with the fit's own rather than to its own scale
-LN_CLIP_LOW = -0.5
 RAMP_ZERO = 0.5
 
 
@@ -578,6 +577,39 @@ def order_correction(model, correction, n_earth, order, wave):
     nearest = np.clip(np.searchsorted(seg_g, wave) - 1, 0, seg_s.size - 2)
     live = ok & seg_s[nearest] & seg_s[nearest + 1] & np.isfinite(values)
     return values, live
+
+
+def refit_weights(values, good, sigma, trans, weights=None):
+    """The weights of an exposure refitted at correction time: those the fit
+    read from the cube (twoframe.load_cube), sample by sample. 1/sigma^2
+    where the sample is good; zero under the pixel SNR threshold
+    (weights.min_pixel_snr, 1/sigma being the SNR of the log flux), or, when
+    a configuration asks for it, under the old DEPTH threshold
+    (weights.ln_clip_low); the telluric ramp; the grid's edges.
+
+    THE DEPTH THRESHOLD WAS STILL HERE, at -0.5, after the fit had dropped it
+    on 2026-10-16: the bottom of every line deeper than 39% of its
+    continuum had no weight in the refit, and with mask: exposure, the mask
+    a refit file writes, it was NaN in every corrected file (74% of the line
+    cores near 517.35 nm on HD 189733, HARPS, 2026-10-23)."""
+    weights = weights or {}
+    sigma = np.asarray(sigma, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        w = np.where(good & np.isfinite(sigma) & (sigma > 0),
+                     1.0 / np.where(sigma > 0, sigma, 1.0) ** 2, 0.0)
+    w[~np.isfinite(values)] = 0.0
+    min_snr = weights.get("min_pixel_snr", _bcd.DEFAULT_MIN_PIXEL_SNR)
+    if min_snr is not None:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            w[~(1.0 / sigma >= float(min_snr))] = 0.0
+    elif weights.get("ln_clip_low") is not None:
+        w[values < float(weights["ln_clip_low"])] = 0.0
+    if trans is not None:
+        ramp_zero = float(weights.get("telluric_ramp_zero", RAMP_ZERO))
+        w *= np.clip((trans - ramp_zero) / (1.0 - ramp_zero), 0.0, 1.0)
+    w[:, :_bcd.EDGE] = 0.0
+    w[:, -_bcd.EDGE:] = 0.0
+    return w
 
 
 def mask_for(mode, own_alive, alive_by_file, name):
@@ -1217,15 +1249,7 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
     # opaque, which is where the observer block does most of its work. Leaving
     # it out shifted the refitted amplitude by tens of per cent against the
     # fit's own, which is a method difference masquerading as a measurement.
-    with np.errstate(divide="ignore", invalid="ignore"):
-        w = np.where(good & np.isfinite(sigma) & (sigma > 0),
-                     1.0 / np.where(sigma > 0, sigma, 1.0) ** 2, 0.0)
-    w[~np.isfinite(values)] = 0.0
-    w[values < LN_CLIP_LOW] = 0.0
-    if trans is not None:
-        w *= np.clip((trans - RAMP_ZERO) / (1.0 - RAMP_ZERO), 0.0, 1.0)
-    w[:, :_bcd.EDGE] = 0.0
-    w[:, -_bcd.EDGE:] = 0.0
+    w = refit_weights(values, good, sigma, trans, config.get("weights"))
     # and, as the fit does, nothing whose Lanczos taps reach a hole in the star
     # basis: the model there is built partly from samples the fit never
     # constrained (twoframe.gap_guard, against the support the basis has)
