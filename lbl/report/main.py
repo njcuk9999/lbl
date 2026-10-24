@@ -464,7 +464,16 @@ def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
     body = [PREAMBLE,
             r'\section*{LBL report: %s}' % _escape(title),
             r'\textit{From %s}' % _escape(os.path.basename(rdb_file)),
-            r'\vspace{4mm}', _table(rows)]
+            r'\vspace{2mm}']
+    # THE VELOCITY SERIES FIRST, before the table: it is what one opens the
+    #   report for (2026-10-24)
+    first = [one for one in drawn if one[0] == 'The velocity series']
+    if first:
+        body.append(r'\begin{center}\includegraphics[width=\linewidth,'
+                    r'height=0.55\textheight,keepaspectratio]{%s}\end{center}'
+                    % os.path.basename(first[0][1]))
+        drawn = [one for one in drawn if one is not first[0]]
+    body += [r'\vspace{2mm}', _table(rows)]
     if planets is not None:
         body.append(_planet_section(planets))
     if fit is not None:

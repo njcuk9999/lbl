@@ -44,16 +44,33 @@ def _landmarks(ax, periods=LANDMARKS, known=None):
 
 
 def page_sequence(plt, table, title):
-    """The velocity series, with its error bars."""
+    """The velocity series, with its error bars, each epoch coloured by its
+    BERV: the report's first figure (main._build puts it before the table).
+
+    WHY BY BERV. A residual that follows the BERV is not stellar (the Earth's
+    own motion: the atmosphere, the wavelength solution, a frame left
+    undone), and in the series it shows as a seasonal pattern whose colours
+    line up. page_berv measures it.
+    """
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
     centred = vrad - np.median(vrad)
+    berv = S.column(table, S.BERV)
 
     fig, axes = plt.subplots(2, 1, figsize=(10, 7),
                              gridspec_kw=dict(height_ratios=[2, 1]))
-    axes[0].errorbar(time, centred, yerr=svrad, fmt='o', ms=3, lw=0.8,
-                     capsize=0, alpha=0.85)
+    if berv is not None and np.isfinite(berv).any():
+        axes[0].errorbar(time, centred, yerr=svrad, fmt='none', ecolor='0.65',
+                         lw=0.7, zorder=2)
+        scatter = axes[0].scatter(time, centred, c=berv, cmap='coolwarm',
+                                  s=20, edgecolors='0.25', linewidths=0.3,
+                                  zorder=3)
+        bar = fig.colorbar(scatter, ax=axes[0], pad=0.01)
+        bar.set_label('BERV (km s$^{-1}$)')
+    else:
+        axes[0].errorbar(time, centred, yerr=svrad, fmt='o', ms=3, lw=0.8,
+                         capsize=0, alpha=0.85)
     axes[0].axhline(0.0, color='k', lw=0.8, ls=':')
     axes[0].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
     axes[0].set_ylabel('Radial velocity, median removed (m s$^{-1}$)')
@@ -74,8 +91,8 @@ def page_sequence(plt, table, title):
                       ' plus and minus one MAD', fontsize=9)
     for ax in axes:
         ax.grid(alpha=0.3)
-    fig.suptitle('The velocity series, and how its scatter is distributed',
-                 fontsize=10)
+    fig.suptitle('The velocity series, each epoch coloured by its BERV, and'
+                 ' how its scatter is distributed', fontsize=10)
     fig.tight_layout()
     return fig
 
@@ -585,34 +602,24 @@ def page_telluric_zero_point(plt, table, title):
 
 
 def page_berv(plt, table, title):
-    """Velocity against time, coloured by BERV, and against BERV itself.
+    """Velocity against BERV, and the slope of a line through it.
 
     WHY THIS PAGE. A residual that follows the BERV is not stellar: the BERV
     is the Earth's own motion, so anything correlated with it comes from the
     atmosphere, from the wavelength solution, or from a frame that was not
-    undone properly. Colouring the series by BERV shows it at a glance, and
-    the panel below measures it.
+    undone properly. The series coloured by BERV (page_sequence, the
+    report's first figure) shows it at a glance; this page measures it.
     """
     berv = S.column(table, S.BERV)
     if berv is None or not np.isfinite(berv).any():
         return None
-    time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
     centred = vrad - np.median(vrad)
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 7))
-    scatter = axes[0].scatter(time, centred, c=berv, cmap='coolwarm', s=22,
-                              zorder=3)
-    axes[0].errorbar(time, centred, yerr=svrad, fmt='none', ecolor='0.6',
-                     lw=0.7, zorder=2)
-    axes[0].axhline(0.0, color='k', lw=0.8, ls=':')
-    axes[0].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
-    axes[0].set_ylabel('Radial velocity, median removed (m s$^{-1}$)')
-    bar = fig.colorbar(scatter, ax=axes[0])
-    bar.set_label('Barycentric Earth radial velocity (km s$^{-1}$)')
-    axes[0].set_title('Velocity series, each epoch coloured by its BERV',
-                      fontsize=9)
+    # one panel: the series coloured by BERV is the report's first figure
+    fig, axes = plt.subplots(1, 1, figsize=(10, 4.6))
+    axes = [None, axes]
 
     good = np.isfinite(berv) & np.isfinite(centred)
     axes[1].errorbar(berv[good], centred[good], yerr=svrad[good], fmt='o',
@@ -637,8 +644,7 @@ def page_berv(plt, table, title):
     axes[1].set_xlabel('Barycentric Earth radial velocity (km s$^{-1}$)')
     axes[1].set_ylabel('Radial velocity, median removed (m s$^{-1}$)')
     axes[1].set_title(note, fontsize=9)
-    for ax in axes:
-        ax.grid(alpha=0.3)
+    axes[1].grid(alpha=0.3)
     fig.suptitle('Does anything follow the BERV?\n'
                  'A residual that tracks the barycentric velocity is not'
                  ' stellar: it comes from the atmosphere, the wavelength'
