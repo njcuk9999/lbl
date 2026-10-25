@@ -325,8 +325,13 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
     # ---------------------------------------------------------------------
     lblrv_file, lblrv_exists = inst.get_lblrv_file(science_file,
                                                    ctx['lblrv_dir'])
-    # If output file exists then get the model velocity from here
-    if lblrv_exists and not np.isfinite(run.model_velocity):
+    # If output file exists then get the model velocity from here, when the
+    #   files on disk are kept (SKIP_DONE): written again, they are made
+    #   with a model velocity of their own, not with one an earlier run may
+    #   have got wrong (a model CCF on the edge of its scan, GJ 1214,
+    #   2026-10-25: rewriting kept the -278 km/s of the files it replaced)
+    if lblrv_exists and inst.params['SKIP_DONE'] and \
+            not np.isfinite(run.model_velocity):
         lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
         run.model_velocity = lblrv_hdr.get_hkey(inst.params['KW_MODELVEL'],
                                                 dtype=float)

@@ -836,15 +836,17 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
             norder = wavegrid[order_num] < wavegrid[order_num + 1, ::-1]
             # add to mask
             mask[order_num] &= norder
-        # make sure no NaNs present
-        mask &= np.isfinite(sci_data)
+        # make sure no NaNs present, and no zeros: a model is 0 where its
+        #   template has no data (its spline's outside), and those zeros
+        #   are a gap, not a spectrum (the gaps are left out below)
+        mask &= np.isfinite(sci_data) & (sci_data != 0)
         # make the sci_data and wave grid are 1d
         wavegrid2 = wavegrid[mask]
         sci_data2 = sci_data[mask]
     # else we have a 1D array so just need to make sure no NaNs present
     else:
-        # make sure no NaNs present
-        mask = np.isfinite(sci_data)
+        # make sure no NaNs present, and no zeros (as above)
+        mask = np.isfinite(sci_data) & (sci_data != 0)
         # apply mask to wavegrid and sci data
         wavegrid2 = wavegrid[mask]
         sci_data2 = sci_data[mask]
@@ -888,6 +890,35 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # define a mask that only keeps certain index values
     keep_line = index_mask > (rv_max / grid_step) + 2
     keep_line &= index_mask < len(magic_spline) - (rv_max / grid_step) - 2
+    # GAPS IN THE DATA: the spline runs straight across them, and a line
+    #   that slides into one during the scan adds a step to the CCF. A
+    #   template made of spectra that PCA2D masked where its fit had no
+    #   weight (GJ 1214 with HARPS, 2026-10-25: nothing below ~550 nm) gave
+    #   a model CCF whose minimum sat on the scan's edge, +300 km/s, and
+    #   every line window was then placed 260 km/s away from its line: the
+    #   errors four times larger, and files that did not converge. Only the
+    #   lines that stay on data over the whole scan are kept; a hole of a
+    #   few samples (a masked column) is not a gap.
+    gap_steps = inst.params.get('ROUGH_CCF_GAP_STEPS', 20)
+    wsort = np.sort(wavegrid2)
+    if len(wsort) > 1 and np.sum(keep_line) > 0:
+        nxt = np.clip(np.searchsorted(wsort, magic_grid), 1, len(wsort) - 1)
+        span = (wsort[nxt] - wsort[nxt - 1]) / wsort[nxt - 1]
+        off_data = span * speed_of_light_ms > gap_steps * grid_step
+        # off data anywhere a line visits during the scan: from
+        #   index - max(istep) to index - min(istep)
+        off_cum = np.concatenate([[0], np.cumsum(off_data)])
+        lo = np.clip(index_mask - istep.max(), 0, len(off_data) - 1)
+        hi = np.clip(index_mask - istep.min(), 0, len(off_data) - 1)
+        on_data = (off_cum[hi + 1] - off_cum[lo]) == 0
+        # the gaps matter only when they leave lines to the CCF: a spectrum
+        #   without any keeps its lines as they were
+        if np.sum(keep_line & on_data) >= 0.1 * np.sum(keep_line):
+            dropped = int(np.sum(keep_line & ~on_data))
+            if dropped:
+                msg = '\t\tCCF ({0}): {1} of {2} lines left out, near gaps'
+                log.general(msg.format(kind, dropped, int(np.sum(keep_line))))
+            keep_line &= on_data
     # only keep the indices and weights within the keep line mask
     index_mask = index_mask[keep_line]
     weight_line = weight_line[keep_line]
@@ -928,6 +959,12 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # record the systemic velocity and the FWHM
     systemic_velocity = gcoeffs[0]
     ccf_ewidth = abs(gcoeffs[1])
+    # a peak on the scan's edge is no peak: said, as everything after it
+    #   (the model velocity places every line window) would be wrong
+    if abs(systemic_velocity) > 0.95 * max(abs(rv_min), abs(rv_max)):
+        wmsg = ('CCF ({0}) peaks at {1:.0f} m/s, on the edge of its scan '
+                '({2:.0f} to {3:.0f} m/s): not a velocity')
+        log.warning(wmsg.format(kind, -systemic_velocity, rv_min, rv_max))
     # fit ccf
     ccf_fit = mp.gauss_fit_s(dvgrid, *gcoeffs)
     # log ccf velocity
