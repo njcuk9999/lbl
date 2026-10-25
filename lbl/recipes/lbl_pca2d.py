@@ -280,6 +280,27 @@ def input_files(science_dir: str, pattern: str) -> list:
     return sorted(glob.glob(os.path.join(science_dir, pattern or '*.fits')))
 
 
+#: an INPUT_FILE that says nothing of the files: PCA2D would then take its
+#:   own pattern for the instrument (nominal.yaml)
+GENERIC_INPUT = (None, '', '*', '*.fits')
+
+
+def files_pattern(paths: list) -> Optional[str]:
+    """The pattern of spectra a wrap gives none for: '*' and the end their
+    names share, its leading digits off (a date's or a number's). HARPS read
+    as ORIG has e2ds files (*_e2ds_A.fits) where PCA2D's HARPS default is
+    the ESO archive's *_S2D_A.fits: without it, no spectrum was found.
+    None when the names share no more than .fits."""
+    names = [os.path.basename(path) for path in paths]
+    if not names:
+        return None
+    tail = os.path.commonprefix([name[::-1] for name in names])[::-1]
+    tail = tail.lstrip('0123456789')
+    if tail.lower() in ('', 'fits', '.fits', 's', 'ts', 'its'):
+        return None
+    return '*' + tail
+
+
 def nominal_digest(instrument: Optional[str] = None) -> str:
     """The nominal configuration as a correction depends on it: PARSED (its
     comments are not in it), the general block and the instrument's own
@@ -669,6 +690,18 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
             switches['n_earth'] = frozen.n_earth
         log('PCA2D: the observer basis is %s, frozen' % frozen.describe(),
             'info')
+    # NO INPUT_FILE IN THE WRAP: the files LBL read (all of the folder's)
+    #   tell PCA2D which they are, rather than its default for the
+    #   instrument, which is one data source's
+    if input_file in GENERIC_INPUT:
+        found = [f for name in objects for f in input_files(
+            os.path.join(science_root, name), input_file)]
+        guessed = files_pattern(found)
+        if guessed:
+            log('PCA2D: no INPUT_FILE given; the spectra of %s are read as'
+                ' %s, the end their names share' % (', '.join(objects),
+                                                    guessed), 'info')
+            input_file = guessed
     block = request_block(overrides, instrument, data_source, input_file)
     os.makedirs(work, exist_ok=True)
 

@@ -65,6 +65,19 @@ def test_the_nirps_mode_follows_the_lbl_instrument():
     assert "quality" not in lbl_pca2d.request_block({}, "SPIROU", "APERO", "*")
 
 
+def test_without_input_file_the_files_say_their_pattern():
+    # HARPS read as ORIG: e2ds files, not the ESO archive's S2D that PCA2D
+    #   takes for HARPS by default (the run of GJ 1214, 2026-10-25)
+    names = ["/s/HARPS.ADP.2014-09-23T11-00-52.687_e2ds_A.fits",
+             "/s/HARPS.ADP.2014-09-23T11-01-18.413_e2ds_A.fits"]
+    assert lbl_pca2d.files_pattern(names) == "*_e2ds_A.fits"
+    assert lbl_pca2d.files_pattern(["/s/2950000t.fits",
+                                    "/s/2950011t.fits"]) == "*t.fits"
+    # names that share only .fits say nothing: PCA2D's default then
+    assert lbl_pca2d.files_pattern(["/s/a.fits", "/s/b.fits"]) is None
+    assert lbl_pca2d.files_pattern([]) is None
+
+
 def _tree(root):
     entries = [
         "science/OBJ/a.fits", "science/OBJ_pca2d/a.fits",
