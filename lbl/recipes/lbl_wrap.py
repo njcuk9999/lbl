@@ -199,6 +199,20 @@ def main(runparams: dict):
                                 blaze_corrected=blaze_corr,
                                 blaze_file=blaze_file,
                                 **keyword_args)
+            # the template made again, from the second pass's spectra: LBL's
+            #   template step below keeps a template already on disk (unless
+            #   OVERWRITE), so the first pass's would have stayed, and the
+            #   mask, the velocities and PCA2D would have measured the second
+            #   pass's spectra against it (GJ 1214, 2026-10-25)
+            lbl_template.main(instrument=instrument, data_dir=data_dir,
+                              data_source=data_source,
+                              data_type=data_type,
+                              object_science=object_science + '_tc',
+                              object_comparison=object_comparison,
+                              blaze_corrected=blaze_corr,
+                              blaze_file=blaze_file,
+                              overwrite=True,
+                              **keyword_args)
             # update object name
             if not object_science.endswith('_tc'):
                 object_science = object_science + '_tc'
