@@ -238,10 +238,12 @@ conda activate lbl-pca2d
 """) + """
 <p><strong>2. LBL, branch <code>lbl-pca2d</code>.</strong> Installed in
 editable mode (<code>-e</code>), so that a <code>git pull</code> is all an
-update takes.</p>
+update takes; <code>editable_mode=compat</code> puts the clone itself on
+Python's path, so that no other folder named <code>lbl</code> can hide
+it.</p>
 """ + code("""
 git clone -b lbl-pca2d https://github.com/njcuk9999/lbl.git lbl-pca2d
-pip install -e lbl-pca2d
+pip install -e lbl-pca2d --config-settings editable_mode=compat
 """) + """
 <p>Already have a clone of LBL? Switch it to the branch instead:</p>
 """ + code("""
@@ -249,7 +251,7 @@ cd lbl
 git fetch origin
 git checkout lbl-pca2d
 git pull
-pip install -e .
+pip install -e . --config-settings editable_mode=compat
 """) + """
 <p>Check that Python finds this copy (the path printed is in your
 clone):</p>
@@ -277,10 +279,12 @@ conda activate lbl-pca2d
 """) + """
 <p><strong>2. LBL, branche <code>lbl-pca2d</code>.</strong> Installé en mode
 éditable (<code>-e</code>), pour qu'un <code>git pull</code> suffise à le
-mettre à jour.</p>
+mettre à jour ; <code>editable_mode=compat</code> met le clone lui-même dans
+le chemin de Python, pour qu'aucun autre dossier nommé <code>lbl</code> ne
+puisse le cacher.</p>
 """ + code("""
 git clone -b lbl-pca2d https://github.com/njcuk9999/lbl.git lbl-pca2d
-pip install -e lbl-pca2d
+pip install -e lbl-pca2d --config-settings editable_mode=compat
 """) + """
 <p>Vous avez déjà un clone de LBL ? Passez-le plutôt sur la branche :</p>
 """ + code("""
@@ -288,7 +292,7 @@ cd lbl
 git fetch origin
 git checkout lbl-pca2d
 git pull
-pip install -e .
+pip install -e . --config-settings editable_mode=compat
 """) + """
 <p>Vérifiez que Python trouve bien cette copie (le chemin affiché est dans
 votre clone) :</p>
@@ -902,6 +906,14 @@ réinstaller, sauf si les dépendances ou les commandes changent (alors
 
     trouble_en = """
 <ul class="feature-list">
+<li><strong><code>lbl_gui</code> stops at once, or
+<code>python -c "import lbl; print(lbl.__file__)"</code> prints
+<code>None</code>.</strong> A folder named <code>lbl</code> on Python's path
+(an old clone in your home folder, when <code>PYTHONPATH</code> lists it)
+hides the install. Reinstall with
+<code>pip install -e &lt;your clone&gt; --config-settings
+editable_mode=compat</code>, or take that folder's parent off
+<code>PYTHONPATH</code>.</li>
 <li><strong>Vetted templates are not on LBL's server yet.</strong> A run that
 asks for one (<code>VETTED_&lt;star&gt;</code>) is refused by the window
 while the file is missing. Measure each target against its own template in
@@ -928,6 +940,14 @@ page without the cache (Cmd+Shift+R or Ctrl+Shift+R).</li>
 </ul>"""
     trouble_fr = """
 <ul class="feature-list">
+<li><strong><code>lbl_gui</code> s'arrête aussitôt, ou
+<code>python -c "import lbl; print(lbl.__file__)"</code> affiche
+<code>None</code>.</strong> Un dossier nommé <code>lbl</code> dans le chemin
+de Python (un ancien clone dans votre dossier personnel, quand
+<code>PYTHONPATH</code> le contient) cache l'installation. Réinstallez avec
+<code>pip install -e &lt;votre clone&gt; --config-settings
+editable_mode=compat</code>, ou retirez le dossier parent de
+<code>PYTHONPATH</code>.</li>
 <li><strong>Les templates validés ne sont pas encore sur le serveur de
 LBL.</strong> Un run qui en demande un (<code>VETTED_&lt;étoile&gt;</code>)
 est refusé par la fenêtre tant que le fichier manque. Mesurez chaque cible

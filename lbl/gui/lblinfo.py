@@ -50,6 +50,16 @@ def _select():
 def lbl_home() -> str:
     """The folder of the lbl package the window reads."""
     import lbl
+    if getattr(lbl, "__file__", None) is None:
+        # A FOLDER NAMED lbl ON THE PYTHON PATH, without __init__.py (an old
+        #   clone in a home folder that PYTHONPATH lists): Python takes it
+        #   for a namespace package before it asks the finder of an editable
+        #   install, and LBL is hidden (2026-10-26)
+        raise SystemExit(
+            "LBL is hidden by a folder named lbl on the Python path (%s): "
+            "reinstall LBL with 'pip install -e <your clone> --config-settings"
+            " editable_mode=compat', or take that folder's parent off"
+            " PYTHONPATH" % ", ".join(list(getattr(lbl, "__path__", []))))
     return os.path.dirname(os.path.abspath(lbl.__file__))
 
 
