@@ -429,6 +429,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(dict(state=loaded["state"],
                                        notes=loaded["notes"],
                                        skipped=parsed["skipped"], path=path))
+            if route == "/api/keep_basis":
+                data_dir = ctx.allow(body.get("data_dir", ""))
+                return self._json(lblinfo.keep_basis(
+                    data_dir, body.get("name", ""),
+                    body.get("instrument", "")))
             if route == "/api/delete":
                 data_dir = ctx.allow(body.get("data_dir", ""))
                 return self._json(cleanup.delete(data_dir,

@@ -343,6 +343,25 @@ DATA_DIR/
 downloads its models (the TAPAS atmosphere, the line masks). The window adds
 <code>gui/runs/</code> and its logs, <code>gui/logs/</code>, and PCA2D
 <code>pca2d/</code>.</p>
+<p><strong>The models.</strong> <code>models/</code> holds what LBL
+downloads and what is to be kept, one subfolder per kind:</p>
+""" + code("""
+DATA_DIR/models/
+  phoenix/                    PHOENIX stellar models (for the masks)
+  tellurics/                  the TAPAS atmosphere, tapas_lbl.fits
+  resproj/                    RESPROJ tables: temperature gradients (DTEMP),
+                              PCA2D star components (STRPCA)
+  masks/                      default masks
+  template_SPIROU_APERO/      the vetted templates of an instrument and data
+                              source: the depot's file and LBL's template
+  pca2d_SPIROU_APERO/         the PCA2D observer bases you keep
+""") + """
+<p>Nothing removes <code>models/</code>: neither <code>lbl_reset</code>,
+which empties <code>templates/</code>, nor the window's cleanup. A vetted
+template is therefore kept there rather than with the templates LBL makes
+from spectra. A <code>models/</code> from before (every file at its top) is
+sorted by LBL itself, each file moved into its subfolder the first time a
+run looks for it.</p>
 <p><strong>Which files.</strong> What the instrument's pipeline delivers,
 for example APERO's or the CADC's <code>t.fits</code> for SPIRou and NIRPS,
 ESO's telluric-corrected S2D for NIRPS, the DRS <code>e2ds</code> for HARPS
@@ -369,6 +388,25 @@ DATA_DIR/
 (l'atmosphère TAPAS, les masques de raies). La fenêtre ajoute
 <code>gui/runs/</code> et ses journaux, <code>gui/logs/</code>, et PCA2D
 <code>pca2d/</code>.</p>
+<p><strong>Les modèles.</strong> <code>models/</code> contient ce que LBL
+télécharge et ce qui doit être gardé, un sous-dossier par sorte :</p>
+""" + code("""
+DATA_DIR/models/
+  phoenix/                    les modèles stellaires PHOENIX (pour les masques)
+  tellurics/                  l'atmosphère TAPAS, tapas_lbl.fits
+  resproj/                    les tables RESPROJ : gradients de température
+                              (DTEMP), composantes stellaires PCA2D (STRPCA)
+  masks/                      les masques par défaut
+  template_SPIROU_APERO/      les templates validés d'un instrument et d'une
+                              source : le fichier du dépôt et le template LBL
+  pca2d_SPIROU_APERO/         les bases de l'observateur PCA2D que vous gardez
+""") + """
+<p>Rien n'efface <code>models/</code> : ni <code>lbl_reset</code>, qui vide
+<code>templates/</code>, ni le ménage de la fenêtre. Un template validé y
+est donc gardé plutôt qu'avec les templates que LBL fait à partir des
+spectres. Un <code>models/</code> d'avant (tous les fichiers à sa racine)
+est rangé par LBL lui-même, chaque fichier déplacé dans son sous-dossier la
+première fois qu'un run le cherche.</p>
 <p><strong>Quels fichiers.</strong> Ce que livre le pipeline de
 l'instrument, par exemple les <code>t.fits</code> d'APERO ou de la CADC pour
 SPIRou et NIRPS, les S2D corrigés des telluriques d'ESO pour NIRPS, les
@@ -814,6 +852,10 @@ its figures and its configuration; <code>pca2d/joint/&lt;A+B&gt;/</code> for
 a joint fit</td></tr>
 <tr><td><code>pca2d/components/</code></td><td>the observer bases saved for
 other stars to take frozen</td></tr>
+<tr><td><code>models/pca2d_&lt;INSTRUMENT&gt;_&lt;SOURCE&gt;/</code></td><td>the
+observer bases you keep (the <em>keep</em> button beside the basis, or put
+the file there): read first, never deleted by a cleanup; a fit of the same
+name updates the basis there</td></tr>
 <tr><td><code>gui/runs/&lt;run&gt;/</code></td><td><code>wrap.py</code> as it
 ran and <code>run.json</code> (when, how it ended, the reports it
 wrote)</td></tr>
@@ -851,6 +893,10 @@ ses figures et sa configuration ; <code>pca2d/joint/&lt;A+B&gt;/</code>
 pour un fit joint</td></tr>
 <tr><td><code>pca2d/components/</code></td><td>les bases de l'observateur
 sauvegardées, que d'autres étoiles peuvent reprendre figées</td></tr>
+<tr><td><code>models/pca2d_&lt;INSTRUMENT&gt;_&lt;SOURCE&gt;/</code></td><td>les
+bases de l'observateur que vous gardez (le bouton <em>garder</em> à côté de
+la base, ou en y déposant le fichier) : lues en premier, jamais effacées par
+un ménage ; un fit du même nom met la base à jour là</td></tr>
 <tr><td><code>gui/runs/&lt;run&gt;/</code></td><td><code>wrap.py</code> tel
 qu'il a tourné et <code>run.json</code> (quand, comment il s'est terminé,
 les rapports écrits)</td></tr>

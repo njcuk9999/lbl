@@ -9,9 +9,11 @@ A wrap names one as OBJECT_COMPARISON = 'VETTED_<object>' (the objects are
 in lbl/resources/vetted_templates.yaml, with why each was chosen; the
 choice itself is in lbl/doc/vetted_templates). Nothing else changes in the
 wrap: when the template LBL looks for is not on disk, the depot file is
-downloaded from MODEL_REPO_URL into DATA_DIR/models and written as an LBL
-template, with LBL's own Savitzky-Golay columns, under the name the
-instrument gives the template of VETTED_<object>.
+downloaded from MODEL_REPO_URL and written as an LBL template, with LBL's
+own Savitzky-Golay columns, under the name the instrument gives the
+template of VETTED_<object>. Both are kept in
+DATA_DIR/models/template_<INSTRUMENT>_<DATA_SOURCE>, not with the templates
+LBL makes from spectra: lbl_reset and a cleanup of templates/ leave them.
 
 @author: artigau
 """
@@ -109,12 +111,43 @@ def best_match(instrument: str, teff: float) -> Optional[dict]:
     return min(found, key=lambda entry: abs(entry['teff'] - teff))
 
 
+def folder(inst) -> str:
+    """DATA_DIR/models/template_<INSTRUMENT>_<DATA_SOURCE>, where the run's
+    vetted templates are kept (made if needed)"""
+    path = os.path.join(inst.params['DATA_DIR'], 'models', io.model_subdir(
+        'template', inst.params['INSTRUMENT'], inst.params['DATA_SOURCE']))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def template_path(inst, basename: str, legacy_dir: str = None) -> str:
+    """
+    Where the LBL template of a vetted template is kept: BASENAME in
+    folder(inst). One still in LEGACY_DIR (the templates folder, where
+    they were written before 2026-10-26) is moved there.
+
+    :param inst: Instrument, the instrument of the run
+    :param basename: str, the template's name for this instrument
+    :param legacy_dir: str, the templates folder
+
+    :return: str, the template's path (it may not exist yet)
+    """
+    path = os.path.join(folder(inst), basename)
+    if legacy_dir and not os.path.exists(path):
+        legacy = os.path.join(legacy_dir, basename)
+        if os.path.isfile(legacy):
+            os.replace(legacy, path)
+            log.general('Moved {0} into {1}'.format(basename, folder(inst)))
+    return path
+
+
 def fetch(inst, objname: str, template_path: str):
     """
     Put the vetted template OBJNAME at TEMPLATE_PATH, as an LBL template:
-    its depot file is downloaded once into DATA_DIR/models, then written
-    with the instrument's own template writer. Nothing happens if the
-    template is there.
+    its depot file is downloaded once into the same folder
+    (models/template_<INSTRUMENT>_<DATA_SOURCE>), then written with the
+    instrument's own template writer. Nothing happens if the template is
+    there.
 
     :param inst: Instrument, the instrument of the run
     :param objname: str, VETTED_<object>
@@ -132,9 +165,10 @@ def fetch(inst, objname: str, template_path: str):
                 'lbl/resources/vetted_templates.yaml)')
         raise base_classes.LblException(emsg.format(objname, instrument,
                                                     names))
-    model_dir = os.path.join(inst.params['DATA_DIR'], 'models')
-    os.makedirs(model_dir, exist_ok=True)
-    depot_file = os.path.join(model_dir, entry['file'])
+    # the depot file beside the template; one at the top of models/ (where
+    #   it was kept before 2026-10-26) is moved there
+    depot_file = io.model_path(os.path.dirname(folder(inst)),
+                               os.path.basename(folder(inst)), entry['file'])
     url = '{0}/{1}'.format(inst.params['MODEL_REPO_URL'], entry['file'])
     io.get_urlfile(url, 'vetted template ' + entry['name'], depot_file)
     msg = ('Vetted template {0}: {1} K, {2} spectra, written as {3}')

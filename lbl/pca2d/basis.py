@@ -8,9 +8,13 @@ detector is fixed on the star as well. A basis learned on stars whose BERV
 does move, where the two frames separate, is brought in frozen: the new star
 fits only its own spectrum and components, and the amplitudes of the basis.
 
-THE FOLDER, DATA_DIR/pca2d/components/, where every fit writes and where
-a run reads (or where one puts a file to be read), named as LBL names its
-templates, the instrument last:
+THE FOLDERS. DATA_DIR/pca2d/components/, where every fit writes, and
+DATA_DIR/models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/, where one keeps the
+bases that are to stay (keep() moves one there, or put a file there): a
+cleanup of the PCA2D products leaves models/ alone. A run reads a basis
+from the kept folder first, then from components; a fit whose observer
+basis has the name of a kept one updates it there. The files are named as
+LBL names its templates, the instrument last:
 
     PCA2D_Observer_<output>_<instrument>.fits
                          the observer basis of a fit; <output> is the PCA2D
@@ -21,6 +25,8 @@ templates, the instrument last:
                          amplitudes
 
 PCA2D input_name=<output> reads the observer basis of that name, frozen.
+The kept folder holds observer bases only: the stars' files stay in
+components.
 
 THE OBSERVER FILE:
 
@@ -56,6 +62,10 @@ from astropy.table import Table
 
 #: where the components are, under DATA_DIR
 FOLDER = os.path.join('pca2d', 'components')
+#: where the kept observer bases are, under DATA_DIR: one folder per
+#:   instrument and DATA_SOURCE, pca2d_<INSTRUMENT>_<DATA_SOURCE>
+#:   (lbl.core.io.model_subdir)
+KEPT = 'models'
 
 
 def component_file(kind: str, label: str, instrument: str,
@@ -67,10 +77,47 @@ def component_file(kind: str, label: str, instrument: str,
         kind.capitalize(), label, (instrument or 'unknown').lower()))
 
 
-def basis_path(name: str, data_dir: str = None, instrument: str = '') -> str:
-    """The file of an observer basis: name may be a path, a file of the
-    components folder (PCA2D_Observer_2026a_nirps_he), or the output name
-    alone (2026a, for this instrument)"""
+def kept_folder(data_dir: str, instrument: str, data_source: str) -> str:
+    """<DATA_DIR>/models/pca2d_<INSTRUMENT>_<DATA_SOURCE>"""
+    return os.path.join(data_dir, KEPT, 'pca2d_{0}_{1}'.format(
+        str(instrument or 'UNKNOWN').upper(),
+        str(data_source or 'UNKNOWN').upper()))
+
+
+def kept_folders(data_dir: str, instrument: str = '',
+                 data_source: str = '') -> list:
+    """The kept folders of DATA_DIR: this instrument's and DATA_SOURCE's
+    alone when both are given, every source of the instrument when only it
+    is, all of them otherwise"""
+    if instrument and data_source:
+        return [kept_folder(data_dir, instrument, data_source)]
+    pattern = 'pca2d_{0}_*'.format(str(instrument).upper()) if instrument \
+        else 'pca2d_*'
+    return sorted(path for path in glob.glob(os.path.join(
+        data_dir, KEPT, pattern)) if os.path.isdir(path))
+
+
+def observer_files(data_dir: str, instrument: str = '',
+                   data_source: str = '') -> list:
+    """Every observer basis file of DATA_DIR, the kept ones first:
+    [(path, kept)]"""
+    found = []
+    for folder in kept_folders(data_dir, instrument, data_source):
+        found += [(path, True) for path in sorted(glob.glob(os.path.join(
+            folder, 'PCA2D_Observer_*.fits')))]
+    found += [(path, False) for path in sorted(glob.glob(os.path.join(
+        data_dir, FOLDER, 'PCA2D_Observer_*.fits')))]
+    return found
+
+
+def basis_path(name: str, data_dir: str = None, instrument: str = '',
+               data_source: str = '') -> str:
+    """The file of an observer basis: name may be a path, a file name
+    (PCA2D_Observer_2026a_nirps_he), or the output name alone (2026a, for
+    this instrument). A name is looked for in the kept folder (of this
+    DATA_SOURCE, or of every source of the instrument when it is not
+    given), then in components; the components path when it is in
+    neither."""
     if os.path.exists(name) or name.endswith('.fits') and os.sep in name:
         return os.path.abspath(name)
     if data_dir is None:
@@ -78,8 +125,45 @@ def basis_path(name: str, data_dir: str = None, instrument: str = '') -> str:
                          % name)
     stem = name[:-len('.fits')] if name.endswith('.fits') else name
     if stem.startswith('PCA2D_Observer_'):
-        return os.path.join(data_dir, FOLDER, stem + '.fits')
-    return component_file('observer', stem, instrument, data_dir)
+        filename = stem + '.fits'
+    else:
+        filename = os.path.basename(component_file('observer', stem,
+                                                   instrument, data_dir))
+    for folder in kept_folders(data_dir, instrument, data_source):
+        if os.path.exists(os.path.join(folder, filename)):
+            return os.path.join(folder, filename)
+    return os.path.join(data_dir, FOLDER, filename)
+
+
+def keep(name: str, data_dir: str, instrument: str = '') -> str:
+    """
+    Move an observer basis from components to the kept folder of its
+    instrument and DATA_SOURCE (its INSTRUME and DATASRC cards), where a
+    cleanup does not reach it
+
+    :param name: str, the basis (as basis_path takes it)
+    :param data_dir: str, LBL's DATA_DIR
+    :param instrument: str, LBL's instrument, when name is a label alone
+
+    :return: str, the kept file
+    """
+    path = basis_path(name, data_dir, instrument)
+    if not os.path.exists(path):
+        raise FileNotFoundError('no observer basis %s (%s)' % (name, path))
+    head = fits.getheader(path)
+    inst = str(head.get('INSTRUME', '') or '').strip()
+    source = str(head.get('DATASRC', '') or '').strip()
+    if not inst or not source:
+        raise ValueError('basis %s does not say which INSTRUMENT and'
+                         ' DATA_SOURCE it was made from (INSTRUME, DATASRC):'
+                         ' it cannot be filed' % path)
+    folder = kept_folder(data_dir, inst, source)
+    out = os.path.join(folder, os.path.basename(path))
+    if os.path.abspath(path) == os.path.abspath(out):
+        return out
+    os.makedirs(folder, exist_ok=True)
+    os.replace(path, out)
+    return out
 
 
 def basis_id(grid: np.ndarray, components: np.ndarray) -> str:
@@ -196,6 +280,11 @@ def save(run_dir: str, name: str, data_dir: str, objects: list,
         amplitudes['b%d' % (index + 1)] = b[rows, index]
 
     out = component_file('observer', name, instrument, data_dir)
+    # a kept basis of this name is updated where it is kept
+    kept = os.path.join(kept_folder(data_dir, instrument, data_source),
+                        os.path.basename(out))
+    if os.path.exists(kept):
+        out = kept
     os.makedirs(os.path.dirname(out), exist_ok=True)
     hdus = [fits.PrimaryHDU(header=primary),
             fits.ImageHDU(grid, name='WAVE'),
@@ -335,12 +424,13 @@ class Basis:
 
 
 def compatible_bases(data_dir: str, instrument: str, data_source: str) -> str:
-    """The observer bases of DATA_DIR/pca2d/components made with this
-    instrument from this DATA_SOURCE, as a sentence (for check_compatible)"""
-    folder = os.path.join(data_dir, FOLDER)
+    """The observer bases of DATA_DIR made with this instrument from this
+    DATA_SOURCE, kept or in pca2d/components, as a sentence (for
+    check_compatible)"""
+    folders = '%s or %s' % (kept_folder(data_dir, instrument, data_source),
+                            os.path.join(data_dir, FOLDER))
     names = []
-    for path in sorted(glob.glob(os.path.join(folder,
-                                              'PCA2D_Observer_*.fits'))):
+    for path, kept in observer_files(data_dir, instrument, data_source):
         try:
             head = fits.getheader(path)
         except Exception:                                 # noqa: BLE001
@@ -348,18 +438,21 @@ def compatible_bases(data_dir: str, instrument: str, data_source: str) -> str:
         if str(head.get('INSTRUME', '')).upper() == str(instrument).upper() \
                 and str(head.get('DATASRC', '')).upper() == \
                 str(data_source).upper():
-            names.append(str(head.get('BASISNAM', os.path.basename(path))))
+            name = str(head.get('BASISNAM', os.path.basename(path)))
+            names.append(name + (' (kept)' if kept else ''))
     if not names:
         return ('There is no %s %s basis in %s yet.'
-                % (instrument, data_source, folder))
-    return ('%s %s bases in %s: %s.' % (instrument, data_source, folder,
+                % (instrument, data_source, folders))
+    return ('%s %s bases in %s: %s.' % (instrument, data_source, folders,
                                         ', '.join(names)))
 
 
-def load(name: str, data_dir: str = None, instrument: str = '') -> Basis:
-    """A saved observer basis, by label (the instrument's, in DATA_DIR/pca2d/
+def load(name: str, data_dir: str = None, instrument: str = '',
+         data_source: str = '') -> Basis:
+    """A saved observer basis, by label (the instrument's, kept in
+    DATA_DIR/models/pca2d_<INSTRUMENT>_<DATA_SOURCE> or in DATA_DIR/pca2d/
     components), file name or path"""
-    path = basis_path(name, data_dir, instrument)
+    path = basis_path(name, data_dir, instrument, data_source)
     if not os.path.exists(path):
         raise FileNotFoundError('no observer basis %s (%s)' % (name, path))
     return Basis(path)

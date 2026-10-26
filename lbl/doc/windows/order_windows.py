@@ -23,9 +23,10 @@ the method gives, which misleads on its quality. A window on a stellar line
 that cannot reach BLAZE_FLOOR is now moved to the middle of its order's
 blaze, and says so.
 
-    python order_windows.py <models folder with tapas_lbl.fits> \
+    python order_windows.py <DATA_DIR/models, with tellurics/tapas_lbl.fits> \
         INSTRUMENT:SOURCE:file [INSTRUMENT:SOURCE:file ...]
 """
+import os
 import sys
 
 import numpy as np
@@ -138,7 +139,11 @@ def domain(instrument):
 
 
 def main(models, *specs):
-    with fits.open(models.rstrip('/') + '/tapas_lbl.fits') as hdul:
+    # models/tellurics/ since 2026-10-26, the top of models/ before
+    tapas = os.path.join(models, 'tellurics', 'tapas_lbl.fits')
+    if not os.path.exists(tapas):
+        tapas = os.path.join(models, 'tapas_lbl.fits')
+    with fits.open(tapas) as hdul:
         tab = hdul['ABSOSPEC'].data
         wave = np.asarray(tab['WAVELENGTH'], float)
         trans = np.asarray(tab['ABSO_OTHERS'], float) * np.asarray(

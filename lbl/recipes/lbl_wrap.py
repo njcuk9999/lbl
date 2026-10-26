@@ -10,6 +10,7 @@ Created on 2021-03-19
 @author: cook
 """
 from typing import List
+import glob
 import os
 import re
 import sys
@@ -418,15 +419,21 @@ def _template_of(data_dir: str, objname: str, instrument: str):
     was made on known orbits (PLANETS). Its name depends on the instrument
     (LBL_Template_<object>_nirps_he.fits, Template_<object>_HARPS_ESO.fits...)
     so it is looked for; the templates of the objects made from this one
-    (<object>_pca2d..., <object>_tc) are not it. None if there is none."""
-    folder = os.path.join(data_dir, 'templates')
+    (<object>_pca2d..., <object>_tc) are not it. None if there is none.
+    A vetted template's is in models/template_<INSTRUMENT>_<DATA_SOURCE>
+    (lbl.core.vetted)."""
+    folders = [os.path.join(data_dir, 'templates')] + sorted(glob.glob(
+        os.path.join(data_dir, 'models', 'template_{0}_*'.format(
+            str(instrument).upper()))))
     pattern = re.compile(r'^(LBL_)?Template_{0}_(.+)\.fits$'.format(
         re.escape(str(objname))))
     found = []
-    for name in (os.listdir(folder) if os.path.isdir(folder) else []):
-        match = pattern.match(name)
-        if match and not match.group(2).startswith(('pca2d', 'tc_', 'tc.')):
-            found.append(os.path.join(folder, name))
+    for folder in folders:
+        for name in (os.listdir(folder) if os.path.isdir(folder) else []):
+            match = pattern.match(name)
+            if match and not match.group(2).startswith(('pca2d', 'tc_',
+                                                        'tc.')):
+                found.append(os.path.join(folder, name))
     if not found:
         return None
     # the instrument's own, else the most recent

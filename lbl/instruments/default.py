@@ -881,8 +881,10 @@ class Instrument:
             #   no default mask
             if url is None or filename is None:
                 return
-            # construct path to mask file
-            model_file = os.path.join(directory, filename)
+            # its subfolder of models: the TAPAS model in tellurics, the
+            #   others are RESPROJ tables (the temperature gradients)
+            subdir = 'tellurics' if 'tapas' in key.lower() else 'resproj'
+            model_file = io.model_path(directory, subdir, filename)
             # update url to include file
             fileurl = '{0}/{1}'.format(url, filename)
             # get file from url
@@ -903,7 +905,7 @@ class Instrument:
         if filename is None:
             return
         # define input and output path
-        in_path = os.path.join(model_directory, filename)
+        in_path = io.model_path(model_directory, 'masks', filename)
         out_path = os.path.join(mask_directory, filename)
         # deal with file already existing
         if os.path.exists(out_path):
@@ -961,10 +963,13 @@ class Instrument:
             basename = template_file
         # get absolute path
         abspath = os.path.join(directory, basename)
-        # a vetted template (VETTED_<object>) is downloaded and written as
-        #   an LBL template the first time it is looked for
-        if vetted.is_vetted(objname) and not os.path.exists(abspath):
-            vetted.fetch(self, objname, abspath)
+        # a vetted template (VETTED_<object>) is kept in
+        #   models/template_<INSTRUMENT>_<DATA_SOURCE>, downloaded and
+        #   written as an LBL template the first time it is looked for
+        if vetted.is_vetted(objname):
+            abspath = vetted.template_path(self, basename, directory)
+            if not os.path.exists(abspath):
+                vetted.fetch(self, objname, abspath)
         # check that this file exists
         if required:
             io.check_file_exists(abspath, '{0} template'.format(tkind))

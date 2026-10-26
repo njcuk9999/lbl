@@ -292,8 +292,10 @@ def write_strpca(models_dir, prefix, grid, P, flux, systemic_ms, run=""):
     fit's own a_k measured line by line. `flux` is written beside it, as the
     DTEMP tables carry one. A sample the fit did not see has a gradient of
     zero, not NaN, since LBL would interpolate a NaN straight across the gap.
-    Returns RESPROJ_TABLES, name -> file name in `models_dir`.
+    Returns RESPROJ_TABLES, name -> file name in `models_dir`/resproj, where
+    LBL looks for its RESPROJ tables (lbl.core.io.model_path).
     """
+    from lbl.core.io import model_path
     rest = np.asarray(grid, dtype=float) / doppler(float(systemic_ms) / 1000.0)
     seen = np.isfinite(flux)
     tables = {}
@@ -306,7 +308,8 @@ def write_strpca(models_dir, prefix, grid, P, flux, systemic_ms, run=""):
         table["fractional_gradient"] = np.where(seen, flux * P[k], 0.0)
         table.meta.update({"PCA2COMP": k + 1, "SYSTVELO": float(systemic_ms),
                            "PCA2RUN": str(run)[:60]})
-        table.write(os.path.join(models_dir, filename), overwrite=True)
+        table.write(model_path(models_dir, "resproj", filename),
+                    overwrite=True)
         tables[name] = filename
     return tables
 

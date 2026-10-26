@@ -8,9 +8,12 @@ own noisy template.
 A wrap names one as `OBJECT_COMPARISON = 'VETTED_<object>'`; nothing else
 changes. The first time LBL looks for that template it downloads
 `vetted_<object>_<instrument>.fits` from `MODEL_REPO_URL` (where
-`tapas_lbl.fits` is) into `DATA_DIR/models` and writes it as one of its own
-templates, with its Savitzky-Golay columns (`lbl/core/vetted.py`). The list
-LBL reads is `lbl/resources/vetted_templates.yaml`.
+`tapas_lbl.fits` is) and writes it as one of its own templates, with its
+Savitzky-Golay columns (`lbl/core/vetted.py`). Both are kept in
+`DATA_DIR/models/template_<INSTRUMENT>_<DATA_SOURCE>/`
+(`models/template_SPIROU_APERO`), not in `templates/`: they are not made
+from the run's spectra, and `lbl_reset` or a cleanup of `templates/` leaves
+them. The list LBL reads is `lbl/resources/vetted_templates.yaml`.
 
 ## How they were chosen (2026-10-23)
 

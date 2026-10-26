@@ -988,14 +988,30 @@ function control(row) {
   const value = optionValue(row);
   const set = Object.prototype.hasOwnProperty.call(S.pca2d, row.key);
   if (row.key === 'input_name') {
+    // only the bases of this instrument and data source: LBL refuses the
+    //   others. The kept ones (models/pca2d_<INSTRUMENT>_<SOURCE>) first,
+    //   which LBL reads first for a name in both folders
+    const usable = BASES.filter((b) => b.compatible);
+    const option = (b) => el('option', { value: b.name, text: t('basis_label', b.name, b.n_earth ?? '?', b.objects.length) });
+    const group = (kept) => {
+      const rows = usable.filter((b) => Boolean(b.kept) === kept && (kept || !usable.some((k) => k.kept && k.name === b.name)));
+      return rows.length ? el('optgroup', { label: t(kept ? 'basis_group_kept' : 'basis_group_fits', rows[0].folder) }, ...rows.map(option)) : null;
+    };
     const select = el('select', { class: set ? 'set' : '', onchange: (event) => setOption(row, event.target.value || null) },
-      el('option', { value: '', text: t('basis_none') }),
-      // only the bases of this instrument and data source: LBL refuses the others
-      ...BASES.filter((b) => b.compatible).map((b) => el('option', {
-        value: b.name, text: t('basis_label', b.name, b.n_earth ?? '?', b.objects.length),
-      })));
+      el('option', { value: '', text: t('basis_none') }), group(true), group(false));
     select.value = value || '';
-    return select;
+    const chosen = usable.find((b) => b.name === value);
+    if (!chosen || chosen.kept || usable.some((b) => b.kept && b.name === value)) return select;
+    const keep = el('button', {
+      type: 'button', class: 'button small', text: t('basis_keep'), title: t('basis_keep_tip', S.instrument, S.source),
+      onclick: async () => {
+        const out = await api.post('/api/keep_basis', { data_dir: S.data_dir, name: chosen.file, instrument: S.instrument });
+        if (out && out.error) { $('target_notes').textContent = out.error; return; }
+        BASES = await api.get('/api/bases', { data_dir: S.data_dir, instrument: S.instrument, source: S.source });
+        drawOptions();
+      },
+    });
+    return el('span', { class: 'basis-choice' }, select, keep);
   }
   if (CHOICES[row.key]) {
     const select = el('select', { class: set ? 'set' : '', onchange: (event) => setOption(row, event.target.value) },

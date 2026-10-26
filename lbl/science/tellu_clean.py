@@ -71,7 +71,7 @@ def get_tapas_lbl(inst: InstrumentsType, modeldir: str,
     # make other directory
     tapas_path = io.make_dir(data_dir, 'other', 'Other')
     # construct tapas in/out file path
-    tapas_inpath = os.path.join(modeldir, tapas_file)
+    tapas_inpath = io.model_path(modeldir, 'tellurics', tapas_file)
     tapas_outpath = os.path.join(tapas_path, tapas_file)
     # copy tapas file to tapas
     if os.path.exists(tapas_outpath):

@@ -631,6 +631,95 @@ def make_dir(path: str, directory: str, kind: str,
             raise LblException(emsg.format(*eargs))
 
 
+#: the subfolders of DATA_DIR/models, by what they hold. The others are
+#:   named by instrument and DATA_SOURCE: template_<INSTRUMENT>_<SOURCE>
+#:   (the vetted templates, lbl.core.vetted) and pca2d_<INSTRUMENT>_<SOURCE>
+#:   (the PCA2D observer bases one keeps, lbl.pca2d.basis)
+MODEL_SUBDIRS = dict(phoenix='stellar models (PHOENIX)',
+                     tellurics='the TAPAS model (tapas_lbl.fits)',
+                     resproj='RESPROJ tables (temperature gradients, PCA2D'
+                             ' star components)',
+                     masks='default masks')
+
+
+def model_subdir(kind: str, instrument: str, data_source: str) -> str:
+    """The subfolder of DATA_DIR/models of an instrument and DATA_SOURCE,
+    kind 'template' or 'pca2d': template_SPIROU_APERO, pca2d_NIRPS_HE_CADC"""
+    return '{0}_{1}_{2}'.format(kind, str(instrument or 'UNKNOWN').upper(),
+                                str(data_source or 'UNKNOWN').upper())
+
+
+def model_path(model_dir: str, subdir: str, filename: str) -> str:
+    """
+    A file of DATA_DIR/models, in its subfolder: model_dir/subdir/filename.
+    The subfolder is made if needed, and a file of that name still at the
+    top of models/ (where LBL kept them all before 2026-10-26) is moved
+    into it. An absolute filename is returned as it is.
+
+    :param model_dir: str, the models folder (MODEL_DIR)
+    :param subdir: str, a key of MODEL_SUBDIRS or a model_subdir() name
+    :param filename: str, the file's name
+
+    :return: str, the file's path (it may not exist)
+    """
+    if os.path.isabs(filename):
+        return filename
+    folder = os.path.join(model_dir, subdir)
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, filename)
+    legacy = os.path.join(model_dir, filename)
+    if not os.path.exists(path) and os.path.isfile(legacy):
+        try:
+            os.replace(legacy, path)
+            log.general('Moved {0} into models/{1}'.format(filename, subdir))
+        except OSError:
+            # another run moved it first
+            pass
+    return path
+
+
+#: what sort_models moves from the top of models/ into a subfolder, by the
+#:   start of the file's name (lower case)
+MODEL_PREFIXES = (('lte', 'phoenix'), ('wave_phoenix', 'phoenix'),
+                  ('tapas', 'tellurics'), ('temperature_gradient', 'resproj'),
+                  ('strpca', 'resproj'))
+
+
+def sort_models(model_dir: str, instrument: str, data_source: str) -> list:
+    """
+    Move the files at the top of models/ (where LBL kept them all before
+    2026-10-26) into their subfolders: the stellar models, TAPAS, the
+    RESPROJ tables, and this instrument's vetted depot files
+    (vetted_<object>_<instrument>.fits) into template_<INSTRUMENT>_<SOURCE>.
+    Anything else (a default mask, a file someone put there) is left, and
+    moved by model_path when LBL looks for it.
+
+    :param model_dir: str, the models folder (MODEL_DIR)
+    :param instrument: str, the run's INSTRUMENT
+    :param data_source: str, the run's DATA_SOURCE
+
+    :return: list of str, the files moved
+    """
+    vetted_suffix = '_{0}.fits'.format(str(instrument).lower())
+    moved = []
+    for name in sorted(os.listdir(model_dir)):
+        lower = name.lower()
+        if not os.path.isfile(os.path.join(model_dir, name)) or \
+                not lower.endswith('.fits'):
+            continue
+        subdir = None
+        for prefix, folder in MODEL_PREFIXES:
+            if lower.startswith(prefix):
+                subdir = folder
+                break
+        if lower.startswith('vetted_') and lower.endswith(vetted_suffix):
+            subdir = model_subdir('template', instrument, data_source)
+        if subdir is not None:
+            model_path(model_dir, subdir, name)
+            moved.append(name)
+    return moved
+
+
 def find_files(path_list: List[Path],
                prefix: Optional[str] = None,
                suffix: Optional[str] = None,

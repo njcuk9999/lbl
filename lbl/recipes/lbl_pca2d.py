@@ -675,7 +675,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         from lbl.pca2d import basis as pbasis
         try:
             frozen = pbasis.load(str(switches['input_name']), data_dir,
-                                 instrument)
+                                 instrument, str(data_source or ''))
         except FileNotFoundError as exc:
             raise LblException('PCA2D input_name: {0}'.format(exc))
         # the same instrument and the same DATA_SOURCE, or nothing
@@ -824,7 +824,8 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     # THE COMPONENTS OF THIS FIT, in DATA_DIR/pca2d/components (pca2d.basis):
     #   the observer basis, named by the PCA2D output_name or the object(s),
     #   for other stars to read frozen with input_name (unless it was itself
-    #   read so), and each star's own part
+    #   read so; one of the name of a kept basis, in models/pca2d_<INSTRUMENT>
+    #   _<DATA_SOURCE>, updates it there), and each star's own part
     from lbl.pca2d import basis as pbasis
     from lbl.pca2d.config import read_yaml
     resolved = os.path.join(run_dir, 'resolved_config.yaml')

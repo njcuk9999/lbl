@@ -339,6 +339,7 @@ table.data tr.group td {
 .option .name .key { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; }
 .option .control select { width: 15em; }
 .option .control input[type=text] { width: 15em; }
+.basis-choice { display: inline-flex; gap: 6px; align-items: center; }
 .info {
   display: inline-flex;
   align-items: center;

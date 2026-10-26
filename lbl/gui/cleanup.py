@@ -8,8 +8,10 @@ Every product is put in one kind, which says what deleting it costs:
     rebuildable  remade by running again, in minutes (superseded
                  corrections, corrected and telluric-cleaned spectra, LBL's
                  per-exposure velocities, templates, masks)
-    results      what a run is for: kept (rdb tables, reports, observer
-                 bases, the fits' own folders)
+    results      what a run is for, and what is kept: never deleted here
+                 (rdb tables, reports, observer bases, the fits' own
+                 folders, models/: LBL's models, the vetted templates, the
+                 kept PCA2D bases)
     data         the spectra themselves: never touched
 
 Only scratch and rebuildable can be deleted from the window, and only inside
@@ -63,7 +65,9 @@ WHAT = dict(
     mask="an LBL mask",
     rdb="LBL's velocity tables",
     reports="the reports",
-    components="observer bases and stars' components")
+    components="observer bases and stars' components",
+    models="LBL's models: stellar models, TAPAS, vetted templates, kept"
+           " PCA2D bases")
 
 
 def _item(path: str, kind: str, code: str) -> dict:
@@ -100,7 +104,7 @@ def survey(data_dir: str) -> list:
             out.append(_item(path, "rebuildable", code))
     for folder, code in (("lblrdb", "rdb"), ("reports", "reports"),
                          (os.path.join("pca2d", "components"),
-                          "components")):
+                          "components"), ("models", "models")):
         path = os.path.join(data_dir, folder)
         if os.path.exists(path):
             out.append(_item(path, "results", code))

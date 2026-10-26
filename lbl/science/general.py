@@ -514,7 +514,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
             log.general(msg.format(key))
             # construct the path for the spline
             spline_file = inst.params['RESPROJ_TABLES'][key]
-            spline_path = os.path.join(models_dir, spline_file)
+            spline_path = io.model_path(models_dir, 'resproj', spline_file)
             # make sure file exists
             if not os.path.exists(spline_path):
                 emsg = 'RESPROJ Table {0} does not exist'
@@ -3238,11 +3238,6 @@ def get_stellar_models(inst: InstrumentsType, model_dir: str
     # get stellar model file
     modelfile = params['STELLAR_MODEL_FILE']
     # -------------------------------------------------------------------------
-    # get the output path for the wave file
-    wavefile_outdir = str(model_dir)
-    # get the outpth path for the model files
-    modelfile_outdir = str(model_dir)
-    # -------------------------------------------------------------------------
     # get instrument specific format dictionary
     fkwargs = inst.get_stellar_model_format_dict(params)
     # -------------------------------------------------------------------------
@@ -3250,12 +3245,11 @@ def get_stellar_models(inst: InstrumentsType, model_dir: str
     wavefile_url = (wave_url + wavefile).format(**fkwargs)
     modelfile_url = (model_url + modelfile).format(**fkwargs)
     # -------------------------------------------------------------------------
-    # get the full output paths (including files)
-    wavefile_outfile = os.path.join(wavefile_outdir, wavefile)
-    model_outfile = os.path.join(modelfile_outdir, modelfile)
-    # get the full wave output file and model output file
-    out_wavefile = wavefile_outfile.format(**fkwargs)
-    out_model = model_outfile.format(**fkwargs)
+    # get the full wave output file and model output file, in models/phoenix
+    out_wavefile = io.model_path(str(model_dir), 'phoenix',
+                                 wavefile.format(**fkwargs))
+    out_model = io.model_path(str(model_dir), 'phoenix',
+                              modelfile.format(**fkwargs))
     # -------------------------------------------------------------------------
     # check if we already have the wave file
     if not os.path.exists(out_wavefile):

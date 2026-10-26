@@ -58,6 +58,7 @@ report followed by LBL's.
 | `pca2d/<object>/s<M>-o<N>/` | the fit, the figures, the report (PDF): M = n_star, N = n_earth (`<K>-<N>` before 2026-10-22, K = n_star - 1) |
 | `pca2d/cache/` | the registered cubes, rebuildable |
 | `pca2d/components/` | the components of every fit, observer and star (below) |
+| `models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/` | the observer bases one keeps (below): no cleanup touches `models/` |
 | `reports/<object>_pca2d_<object>_pca2d.pdf` | THE report: pca2d's, then LBL's |
 
 The report, when `REPORT` is on: the star as SIMBAD describes it, the
@@ -180,6 +181,16 @@ output name (this instrument's file), the file name, or a path. Only its own
 star block and the amplitudes are fitted; `n_earth` is all of them unless
 given. A basis made from spectra of another DATA_SOURCE (another pipeline)
 stops the run.
+
+A basis that is to stay is KEPT in
+`DATA_DIR/models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/` (`models/pca2d_SPIROU_CADC`),
+beside LBL's other models, which nothing deletes (`lbl_reset` empties
+`templates/`, a cleanup of the PCA2D products empties `pca2d/`):
+`lbl.pca2d.basis.keep(name, DATA_DIR, instrument)` moves it there (the window
+has a *keep* button beside the basis), or put the file there yourself.
+`input_name` looks there first, then in `pca2d/components/`; a fit whose
+`output_name` is that of a kept basis updates it where it is kept. The
+stars' files stay in `pca2d/components/`.
 
 ```python
 # the basis: a joint fit of stars whose BERV sweeps, under its own name

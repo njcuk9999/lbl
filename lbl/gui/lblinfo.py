@@ -4,8 +4,9 @@ Nothing here is a copy of LBL's tables: the instruments and their data
 sources come from lbl.instruments.select, the PCA2D switches and their short
 names from lbl.recipes.lbl_pca2d, their defaults from lbl/pca2d/nominal.yaml
 merged over the code's own, their descriptions from the tables of
-lbl/doc/PCA2D.md, and the observer bases from DATA_DIR/pca2d/components. A
-new option in LBL shows up here without a line changed.
+lbl/doc/PCA2D.md, and the observer bases from DATA_DIR/pca2d/components and
+DATA_DIR/models/pca2d_<INSTRUMENT>_<SOURCE> (lbl.pca2d.basis). A new option
+in LBL shows up here without a line changed.
 """
 from __future__ import annotations
 
@@ -257,22 +258,27 @@ def lbl_switches() -> list:
 
 
 def bases(data_dir: str, instrument: str = "", source: str = "") -> list:
-    """The observer bases saved under DATA_DIR/pca2d/components, those of
-    this instrument and data source first: [dict(name, file, instrument,
-    source, n_earth, objects, compatible)]. LBL refuses a basis of another
+    """The observer bases of DATA_DIR, kept (models/pca2d_<INSTRUMENT>_
+    <SOURCE>) or saved by a fit (pca2d/components), those of this
+    instrument and data source first: [dict(name, file, instrument, source,
+    n_earth, objects, compatible, kept)]. LBL refuses a basis of another
     instrument or source (lbl.pca2d.basis.check_compatible), so the window
-    offers the compatible ones only, and says why the others are not."""
+    offers the compatible ones only, and says why the others are not. A
+    name kept and in components is LBL's kept one, which input_name reads
+    first."""
     from astropy.io import fits
-    out = []
-    folder = os.path.join(data_dir or "", BASES)
-    for path in sorted(glob.glob(os.path.join(folder,
-                                              "PCA2D_Observer_*.fits"))):
+    from lbl.pca2d import basis as pbasis
+    out, seen = [], set()
+    for path, kept in pbasis.observer_files(data_dir or ""):
         try:
             head = fits.getheader(path)
         except Exception:                                 # noqa: BLE001
             continue
         inst = str(head.get("INSTRUME", "")).upper()
         src = str(head.get("DATASRC", "")).upper()
+        if (os.path.basename(path), inst, src) in seen:
+            continue
+        seen.add((os.path.basename(path), inst, src))
         objects = []
         try:
             from astropy.table import Table
@@ -284,9 +290,24 @@ def bases(data_dir: str, instrument: str = "", source: str = "") -> list:
             file=os.path.basename(path), instrument=inst, source=src,
             n_earth=head.get("NEARTH"), objects=sorted(set(objects)),
             compatible=(inst == str(instrument).upper()
-                        and src == str(source).upper())))
+                        and src == str(source).upper()),
+            kept=kept,
+            folder=os.path.relpath(os.path.dirname(path), data_dir or "")))
     out.sort(key=lambda b: (not b["compatible"], b["name"]))
     return out
+
+
+def keep_basis(data_dir: str, name: str, instrument: str = "") -> dict:
+    """Move an observer basis of pca2d/components into the kept folder of
+    its instrument and source (lbl.pca2d.basis.keep): dict(path) or
+    dict(error)."""
+    from lbl.pca2d import basis as pbasis
+    if os.sep in str(name) or str(name).startswith("."):
+        return dict(error="%s: a basis' file name, not a path" % name)
+    try:
+        return dict(path=pbasis.keep(name, data_dir, instrument))
+    except (OSError, ValueError) as exc:
+        return dict(error=str(exc))
 
 
 #: the header keys a template's effective temperature is read from, in order
@@ -342,16 +363,21 @@ def vetted(instrument: str) -> list:
 
 def vetted_where(data_dir: str, entry: dict, timeout: float = 4.0) -> str:
     """Where a run would get a vetted template from: 'local' (its depot
-    file in DATA_DIR/models, or the template already in templates/),
+    file or its template in DATA_DIR/models/template_<INSTRUMENT>_<SOURCE>,
+    or where they were kept before: the top of models/, templates/),
     'repo' (LBL's model repository has it), 'missing' (the repository
     answers it has not) or 'unknown' (the repository does not answer)."""
     import urllib.error
     import urllib.request
-    if os.path.exists(os.path.join(data_dir, "models", entry["file"])):
-        return "local"
-    if glob.glob(os.path.join(data_dir, "templates",
-                              "LBL_Template_%s_*.fits" % entry["name"])):
-        return "local"
+    models = os.path.join(data_dir, "models")
+    for folder in [models] + glob.glob(os.path.join(models, "template_*")):
+        if os.path.exists(os.path.join(folder, entry["file"])):
+            return "local"
+    for folder in [os.path.join(data_dir, "templates")] + glob.glob(
+            os.path.join(models, "template_*")):
+        if glob.glob(os.path.join(folder, "*Template_%s_*.fits"
+                                  % entry["name"])):
+            return "local"
     try:
         from lbl.core import parameters
         url = "%s/%s" % (parameters.params["MODEL_REPO_URL"], entry["file"])
