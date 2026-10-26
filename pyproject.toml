@@ -43,3 +43,5 @@ lbl_demo = "lbl.recipes.lbl_demo:run"
 lbl_setup = "lbl.recipes.lbl_setup:run"
 # pca2d's own command line, for runs side by side outside a wrap file
 lbl_pca2d = "lbl.pca2d.cli:main"
+# the window: builds, runs and follows wraps, finds public spectra (lbl.gui)
+lbl_gui = "lbl.gui.app:main"

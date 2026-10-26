@@ -359,11 +359,8 @@ def page_periodogram(plt, table, title, known=None):
     """The periodogram of the series, the spectral window below it, and the
     false inclusion probability under both: outlier-aware and alias-aware
     (lbl.report.fip.alias_aware), the aliases of its deepest dip marked."""
-    try:
-        from koloa.periodogram import frequency_grid, gls
-    except Exception:                                         # noqa: BLE001
-        return None
     from lbl.report import fip as _fip
+    from lbl.report.periodogram import frequency_grid, gls
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)

@@ -1,0 +1,236 @@
+[
+ {
+  "first": "Charles Cadieux",
+  "year": 2022,
+  "title": "TOI-1452 b: SPIRou and TESS Reveal a Super-Earth in a Temperate Orbit Transiting an M4 Dwa",
+  "arxiv": "2208.06333",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "lbl",
+  "caption": "Chemical abundances of 12 different elements via line-by-line spectroscopy of 151 spectral features. The dashed line represents the average metallicity of the s"
+ },
+ {
+  "first": "Etienne Artigau",
+  "year": 2022,
+  "title": "Line-by-line Velocity Measurements: an Outlier-resistant Method for Precision Velocimetry",
+  "arxiv": "2207.13524",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "lbl",
+  "caption": "Sample LBL velocity spectrum for Barnard's star showing the scatter of velocity measurements over a wide velocity range (10\\,km/s of mean velocity; upper panel)"
+ },
+ {
+  "first": "Neil J. Cook",
+  "year": 2022,
+  "title": "APERO: A PipelinE to Reduce Observations—Demonstration with SPIRou",
+  "arxiv": "2211.01358",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Overall flow chart for the  reduction process for . Raw files are shown in gray, preprocessed (pp) files are shown in green, extracted products are in yellow, t"
+ },
+ {
+  "first": "P. Cortés-Zuleta",
+  "year": 2023,
+  "title": "Optical and near-infrared stellar activity characterization of the early M dwarf Gl 205 wi",
+  "arxiv": "2301.10614",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Left: Radial velocity time series of Gl~205 from SOPHIE in blue and SPIRou in red with an offset equal to the mean RV of each instrument,  RV_ SOPHIE = 8727.8\\,"
+ },
+ {
+  "first": "Tianjun Gan",
+  "year": 2023,
+  "title": "A Massive Hot Jupiter Orbiting a Metal-rich Early M Star Discovered in the TESS Full-frame",
+  "arxiv": "2307.07329",
+  "licence": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "kind": "rv",
+  "caption": " Left panel: The time-series SPIRou radial velocities of .  Right panel: The RVs phased-folded to the orbit period of  b. In both panels, the black solid lines "
+ },
+ {
+  "first": "Charles Cadieux",
+  "year": 2024,
+  "title": "New Mass and Radius Constraints on the LHS 1140 Planets: LHS 1140 b Is either a Temperate ",
+  "arxiv": "2310.15490",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "lbl",
+  "caption": "Phase-folded Keplerian signals of LHS~1140\\,b (top) and c (bottom) with ESPRESSO from RVs produced with the line-by-line (LBL) method in blue and from cross-cor"
+ },
+ {
+  "first": "Charles Cadieux",
+  "year": 2024,
+  "title": "New Mass and Radius Constraints on the LHS 1140 Planets: LHS 1140 b Is either a Temperate ",
+  "arxiv": "2310.15490",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "lbl",
+  "caption": "Validating Keplerian signals in the ESPRESSO spectral domain of LHS~1140. Left panels: Semi-amplitudes K_ obtained with model M_ 3cp from LBL radial velocities "
+ },
+ {
+  "first": "G. Lacedelli",
+  "year": 2024,
+  "title": "Characterisation of TOI-406 as a showcase of the THIRSTEE program",
+  "arxiv": "2409.11083",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "_1 periodogram of the ESPRESSO (left) and the combined NIRPS+HARPS datasets (right), computed on a grid of frequencies from 0 to 1 cycle per day. The total time"
+ },
+ {
+  "first": "G. Lacedelli",
+  "year": 2024,
+  "title": "Characterisation of TOI-406 as a showcase of the THIRSTEE program",
+  "arxiv": "2409.11083",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "ASAS-SN photometry of TOI-406 in  V and  g filters. Right panel: GLS periodogram of ASAS-SN photometry. The horizontal dashed and dotted lines represent the FAP"
+ },
+ {
+  "first": "Jose Manuel Almenara",
+  "year": 2024,
+  "title": "TOI-4860 b, a short-period giant planet transiting an M3.5 dwarf",
+  "arxiv": "2308.01454",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Phased RVs.  Top panel: SPIRou (red error bars) and ESPRESSO (blue error bars) RVs corrected for the MAP Keplerian orbit of planet~c and phase-folded to the per"
+ },
+ {
+  "first": "Jose Manuel Almenara",
+  "year": 2024,
+  "title": "TOI-4860 b, a short-period giant planet transiting an M3.5 dwarf",
+  "arxiv": "2308.01454",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Periodogram of the SPIRou data.  Top panel: Generalised LombâScargle (GLS) periodogram [][]zechmeister2009 of the nightly averaged SPIRou velocities for TOI-4"
+ },
+ {
+  "first": "P. Cortés-Zuleta",
+  "year": 2024,
+  "title": "GI 725A b: A potential super-Earth detected with SOPHIE and SPIRou in an M dwarf binary sy",
+  "arxiv": "2411.09506",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "l_1 periodogram of the SOPHIE and SPIRou RVs. The signal with the highest amplitude is located at 11.2 d with a _10(FAP)=-6.66. fig:l1periodogram "
+ },
+ {
+  "first": "P. Cortés-Zuleta",
+  "year": 2024,
+  "title": "GI 725A b: A potential super-Earth detected with SOPHIE and SPIRou in an M dwarf binary sy",
+  "arxiv": "2411.09506",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Periodograms of the original SPIRou RVs (top) and after the wapiti correction (bottom), on which the period with the highest power correspond to the planet sign"
+ },
+ {
+  "first": "Charles Cadieux",
+  "year": 2025,
+  "title": "Detailed Architecture of the L 98-59 System and Confirmation of a Fifth Planet in the Habi",
+  "arxiv": "2507.09343",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Sub-Kelvin differential temperature measurements of L~98-59 from ESPRESSO and HARPS, with only the error bars for ESPRESSO displayed for clarity. The posterior "
+ },
+ {
+  "first": "Charles Cadieux",
+  "year": 2025,
+  "title": "Detailed Architecture of the L 98-59 System and Confirmation of a Fifth Planet in the Habi",
+  "arxiv": "2507.09343",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Family portrait of the five planets in the L~98-59 system showing their transit (or absence of transit) observed by TESS in the top panels and their Doppler sig"
+ },
+ {
+  "first": "Léna Parc",
+  "year": 2025,
+  "title": "NIRPS and TESS reveal a peculiar system around the M dwarf TOI-756: A transiting sub-Neptu",
+  "arxiv": "2510.14927",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Phase-folded RVs with the resulting model and its residuals for TOI-756~b (left) and TOI-756~c (right). In red dots, binned data combining HARPS (blue dots) and"
+ },
+ {
+  "first": "Léna Parc",
+  "year": 2025,
+  "title": "NIRPS and TESS reveal a peculiar system around the M dwarf TOI-756: A transiting sub-Neptu",
+  "arxiv": "2510.14927",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "lbl",
+  "caption": "NIRPS data residuals (upper panel) and LBL indicators D2V (middle panel), along with dTemp ( T) calculated at 3500~K close to the effective temperature of TOI-7"
+ },
+ {
+  "first": "M. Ould-Elhkim",
+  "year": 2025,
+  "title": "The SPIRou Legacy Survey: Gl 725 B",
+  "arxiv": "2601.22815",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Time series (top) and Bayesian periodograms (bottom) for the longitudinal magnetic field B_ (left) and the differential effective temperature activity indicator"
+ },
+ {
+  "first": "M. Ould-Elhkim",
+  "year": 2025,
+  "title": "The SPIRou Legacy Survey: Gl 725 B",
+  "arxiv": "2601.22815",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Two-planet GP model for Gl\\,725\\,B. Top: Raw RVs with trend. Middle: Phase-folded RVs for the 38-day and 4.77-day signals with binned points (black). Bottom: Mo"
+ },
+ {
+  "first": "M. Ould-Elhkim",
+  "year": 2025,
+  "title": "The SPIRou Legacy Survey",
+  "arxiv": "2502.07086",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Final RV model for Gl\\,480. The top panel shows the raw RV data with offsets removed, plotted for SPIRou, HARPS, and CARMENES instruments (RMS = 5.92\\,m.s^-1). "
+ },
+ {
+  "first": "Madison Brady",
+  "year": 2025,
+  "title": "An Earthlike Density for the Temperate Earth-sized Planet GJ 12 b",
+  "arxiv": "2506.20561",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "The MAROON-X RVs collected on calibrator star HD\\,3651 in 2024, with the RV model for the eccentric planet from Basant2025 subtracted. It is obvious that there "
+ },
+ {
+  "first": "Léna Parc",
+  "year": 2026,
+  "title": "Densities of small planets around the M dwarfs TOI-4336 A and TOI-4342 with ESPRESSO",
+  "arxiv": "2601.22115",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Time series of the RVs, FWHM, and  T_3500\\,K of TOI-4336~A after correction for the inferred offsets. The measurements are shown as white dots with error bars t"
+ },
+ {
+  "first": "Léna Parc",
+  "year": 2026,
+  "title": "Densities of small planets around the M dwarfs TOI-4336 A and TOI-4342 with ESPRESSO",
+  "arxiv": "2601.22115",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "lbl",
+  "caption": "Radial velocity measurements of TOI-4336~A (left) and TOI-4342 (right) obtained with ESPRESSO, using the CCF method (blue points) and the LBL method (red points"
+ },
+ {
+  "first": "Pierrot Lamontagne",
+  "year": 2026,
+  "title": "NIRPS tightens the mass estimate of GJ 3090 b and detects a planet near the stellar rotati",
+  "arxiv": "2601.09330",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": " Top panel: Joint best-fit sinusoidal model to the ASAS-SN photometric data from all available cameras (bf, bj, bF, and bn). The solid lines represent the best-"
+ },
+ {
+  "first": "Pierrot Lamontagne",
+  "year": 2026,
+  "title": "NIRPS tightens the mass estimate of GJ 3090 b and detects a planet near the stellar rotati",
+  "arxiv": "2601.09330",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Chronological evolution of the false alarm probability (FAP) for the 16-day signal. As new observations are added, the FAP in the RVs decreases steadily, consis"
+ },
+ {
+  "first": "Yann Carteret",
+  "year": 2026,
+  "title": "Upside down: GJ 3090 b the first retrograde exoplanet around an M dwarf detected with NIRP",
+  "arxiv": "2609.24870",
+  "licence": "http://creativecommons.org/licenses/by/4.0/",
+  "kind": "rv",
+  "caption": "Measured residual RVs from the Keplerian. The black line denotes the predicted RM anomaly of our best-fit model. The binned NIRPS (resp. HARPS) RVs from the six"
+ }
+]

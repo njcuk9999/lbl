@@ -7,3 +7,4 @@ include lbl/pca2d/assets/*
 include lbl/resources/planets/*.yaml
 include lbl/resources/activity_lines.yaml
 include lbl/resources/vetted_templates.yaml
+include lbl/gui/static/*

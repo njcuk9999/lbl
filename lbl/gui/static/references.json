@@ -1,0 +1,566 @@
+{
+ "updated": "2026-10-25",
+ "method": {
+  "arxiv": "2207.13524",
+  "doi": "10.3847/1538-3881/ac7ce6",
+  "year": 2022,
+  "title": "Line-by-line Velocity Measurements: an Outlier-resistant Method for Precision Velocimetry",
+  "authors": "Artigau, Cadieux, Cook et al.",
+  "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2207.13524/abstract"
+ },
+ "papers": [
+  {
+   "arxiv": "2609.24870",
+   "doi": "10.1051/0004-6361/202661989",
+   "year": 2026,
+   "title": "Upside down: GJ 3090 b the first retrograde exoplanet around an M dwarf detected with NIRPS",
+   "authors": "Carteret, Bourrier, Parc et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2609.24870/abstract"
+  },
+  {
+   "arxiv": null,
+   "doi": "10.1051/0004-6361/202557666",
+   "year": 2026,
+   "title": "SPIRou detects two planets around the nearby M4.5V star GJ 4274",
+   "authors": "Charpentier, Moutou, Donati et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/10.1051/0004-6361/202557666/abstract"
+  },
+  {
+   "arxiv": "2602.24078",
+   "doi": "10.1051/0004-6361/202558694",
+   "year": 2026,
+   "title": "Monitoring the magnetospheric accretion of the classical T Tauri star DO Tau with SPIRou",
+   "authors": "Donati, Cristofari, Carmona et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2602.24078/abstract"
+  },
+  {
+   "arxiv": "2607.11674",
+   "doi": "10.1051/0004-6361/202661267",
+   "year": 2026,
+   "title": "Unstable magnetospheric accretion on the T Tauri star TW Hya",
+   "authors": "Donati, Cristofari, Moutou et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2607.11674/abstract"
+  },
+  {
+   "arxiv": "2603.00385",
+   "doi": "10.1093/mnras/stag438",
+   "year": 2026,
+   "title": "TOI-1080 b: a temperate, rocky planet orbiting a quiet M4V host",
+   "authors": "Gómez Maqueo Chew, Dransfield, Barkaoui et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2603.00385/abstract"
+  },
+  {
+   "arxiv": "2601.09330",
+   "doi": "10.1051/0004-6361/202556887",
+   "year": 2026,
+   "title": "NIRPS tightens the mass estimate of GJ 3090 b and detects a planet near the stellar rotation period",
+   "authors": "Lamontagne, Weisserman, Cadieux et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2601.09330/abstract"
+  },
+  {
+   "arxiv": "2510.11523",
+   "doi": "10.1051/0004-6361/202556146",
+   "year": 2026,
+   "title": "Characterising planetary systems with SPIRou: Questions about the magnetic cycle of 55 Cnc A and two new planets around B",
+   "authors": "Moutou, Petit, Charpentier et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2510.11523/abstract"
+  },
+  {
+   "arxiv": "2603.12345",
+   "doi": "10.1051/0004-6361/202558343",
+   "year": 2026,
+   "title": "Confirmation of the hot super-Neptune TOI-672 b with NIRPS and HARPS. Insights into the Neptunian desert around M dwarfs",
+   "authors": "Osborn, Cloutier, Bourrier et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2603.12345/abstract"
+  },
+  {
+   "arxiv": "2601.22815",
+   "doi": "10.1051/0004-6361/202555469",
+   "year": 2026,
+   "title": "The SPIRou Legacy Survey. Detection of a nearby world orbiting in the habitable zone of Gl 725B achieved by correcting strong telluric contamination in near-infrared radial velocities with wapiti",
+   "authors": "Ould-Elhkim, Moutou, Donati et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2601.22815/abstract"
+  },
+  {
+   "arxiv": "2601.22115",
+   "doi": "10.1051/0004-6361/202558308",
+   "year": 2026,
+   "title": "Densities of small planets around the M dwarfs TOI-4336 A and TOI-4342 with ESPRESSO. Three sub-Neptunes, one super-Earth, and a Neptune-mass candidate",
+   "authors": "Parc, Cadieux, Grieves et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2601.22115/abstract"
+  },
+  {
+   "arxiv": "2607.13333",
+   "doi": "10.1051/0004-6361/202659984",
+   "year": 2026,
+   "title": "Revisiting TOI-4438 and TOI-442 planetary systems with new observations from SPIRou and TESS",
+   "authors": "Serrano Bell, Hébrard, Martioli et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2607.13333/abstract"
+  },
+  {
+   "arxiv": "2603.18233",
+   "doi": "10.1051/0004-6361/202558749",
+   "year": 2026,
+   "title": "TOI-4552 b: A new ultra-short-period rocky world revealed by NIRPS and TESS",
+   "authors": "Srivastava, Doyon, Bouchy et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2603.18233/abstract"
+  },
+  {
+   "arxiv": "2604.07447",
+   "doi": "10.1051/0004-6361/202558011",
+   "year": 2026,
+   "title": "Super-Earth masses and stellar abundances from NIRPS reveal tentative evidence for water-rich formation around M dwarfs",
+   "authors": "Weisserman, Gromek, Cloutier et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2604.07447/abstract"
+  },
+  {
+   "arxiv": "2508.06626",
+   "doi": "10.1051/0004-6361/202553724",
+   "year": 2025,
+   "title": "Quantifying thermal water dissociation in the dayside photosphere of WASP-121 b using NIRPS",
+   "authors": "Bazinet, Allart, Benneke et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2508.06626/abstract"
+  },
+  {
+   "arxiv": "2510.19956",
+   "doi": "10.3847/1538-3881/ae0e20",
+   "year": 2025,
+   "title": "Discovery of a Nearby Habitable Zone Super-Earth Candidate Amenable to Direct Imaging",
+   "authors": "Beard, Robertson, Lubin et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2510.19956/abstract"
+  },
+  {
+   "arxiv": "2507.21767",
+   "doi": "10.1051/0004-6361/202453341",
+   "year": 2025,
+   "title": "NIRPS joining HARPS at ESO 3.6 m. On-sky performance and science objectives",
+   "authors": "Bouchy, Doyon, Pepe et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2507.21767/abstract"
+  },
+  {
+   "arxiv": "2506.20561",
+   "doi": "10.3847/1538-3881/ae0f98",
+   "year": 2025,
+   "title": "An Earthlike Density for the Temperate Earth-sized Planet GJ 12 b",
+   "authors": "Brady, Bean, Basant et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2506.20561/abstract"
+  },
+  {
+   "arxiv": "2506.07931",
+   "doi": "10.1038/s41550-025-02552-4",
+   "year": 2025,
+   "title": "A transiting giant planet in orbit around a 0.2-solar-mass host star",
+   "authors": "Bryant, Jordán, Hartman et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2506.07931/abstract"
+  },
+  {
+   "arxiv": "2507.09343",
+   "doi": "10.3847/1538-3881/adef59",
+   "year": 2025,
+   "title": "Detailed Architecture of the L 98-59 System and Confirmation of a Fifth Planet in the Habitable Zone",
+   "authors": "Cadieux, L’Heureux, Piaulet-Ghorayeb et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2507.09343/abstract"
+  },
+  {
+   "arxiv": "2504.03572",
+   "doi": "10.1051/0004-6361/202452513",
+   "year": 2025,
+   "title": "Characterizing planetary systems with SPIRou: Detection of a sub-Neptune in a 6-day period orbit around the M dwarf Gl 410",
+   "authors": "Carmona, Delfosse, Ould-Elhkim et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2504.03572/abstract"
+  },
+  {
+   "arxiv": "2411.09506",
+   "doi": "10.1051/0004-6361/202451646",
+   "year": 2025,
+   "title": "GI 725A b: A potential super-Earth detected with SOPHIE and SPIRou in an M dwarf binary system at 3.5 pc",
+   "authors": "Cortés-Zuleta, Boisse, Ould-Elhkim et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2411.09506/abstract"
+  },
+  {
+   "arxiv": null,
+   "doi": "10.3847/1538-3881/ada77a",
+   "year": 2025,
+   "title": "The Gl 229 System Revisited with the Line-by-line Framework: Planetary Signals Now Appear as Stellar Activity Ghosts",
+   "authors": "Deslières, Cadieux, Doyon et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/10.3847/1538-3881/ada77a/abstract"
+  },
+  {
+   "arxiv": "2511.16609",
+   "doi": "10.1051/0004-6361/202557322",
+   "year": 2025,
+   "title": "Searching for close-in planets around TWA 7 with SPIRou",
+   "authors": "Donati, Cristofari, Moutou et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2511.16609/abstract"
+  },
+  {
+   "arxiv": "2507.01746",
+   "doi": "10.1051/0004-6361/202555371",
+   "year": 2025,
+   "title": "Six-year SPIRou monitoring of the young planet-host AU Mic",
+   "authors": "Donati, Cristofari, Moutou et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2507.01746/abstract"
+  },
+  {
+   "arxiv": "2505.10564",
+   "doi": "10.1051/0004-6361/202554628",
+   "year": 2025,
+   "title": "Mass, gas, and Gauss around a T Tauri Star with SPIRou",
+   "authors": "Donati, Gaidos, Moutou et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2505.10564/abstract"
+  },
+  {
+   "arxiv": "2507.09461",
+   "doi": "10.3847/2041-8213/adef55",
+   "year": 2025,
+   "title": "A New Brown Dwarf Orbiting an M Star and an Investigation of the Eccentricity Distribution of Transiting Long-period Brown Dwarfs",
+   "authors": "Gan, Cadieux, Ida et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2507.09461/abstract"
+  },
+  {
+   "arxiv": "2509.17911",
+   "doi": "10.1051/0004-6361/202554963",
+   "year": 2025,
+   "title": "Chromaticity of stellar activity in radial velocities. Anti-correlated families of lines on the M dwarf EV Lac with SPIRou and SOPHIE",
+   "authors": "Larue, Delfosse, Carmona et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2509.17911/abstract"
+  },
+  {
+   "arxiv": "2502.07086",
+   "doi": "10.1051/0004-6361/202347814",
+   "year": 2025,
+   "title": "The SPIRou Legacy Survey. Near-infrared and optical radial velocity analysis of Gl 480 and Gl 382 using SPIRou, HARPS and CARMENES spectrographs",
+   "authors": "Ould-Elhkim, Moutou, Donati et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2502.07086/abstract"
+  },
+  {
+   "arxiv": "2510.14927",
+   "doi": "10.1051/0004-6361/202555684",
+   "year": 2025,
+   "title": "NIRPS and TESS reveal a peculiar system around the M dwarf TOI-756: A transiting sub-Neptune and a cold eccentric giant",
+   "authors": "Parc, Bouchy, Cook et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2510.14927/abstract"
+  },
+  {
+   "arxiv": "2503.08405",
+   "doi": "10.1051/0004-6361/202452630",
+   "year": 2025,
+   "title": "HADES RV Programme with HARPS-N at TNG. XVI. A super-Earth in the habitable zone of the GJ 3998 multi-planet system",
+   "authors": "Stefanov, Suárez Mascareño, González Hernández et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2503.08405/abstract"
+  },
+  {
+   "arxiv": "2507.21751",
+   "doi": "10.1051/0004-6361/202553728",
+   "year": 2025,
+   "title": "Diving into the planetary system of Proxima with NIRPS. Breaking the metre per second barrier in the infrared",
+   "authors": "Suárez Mascareño, Artigau, Mignon et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2507.21751/abstract"
+  },
+  {
+   "arxiv": "2308.01454",
+   "doi": "10.1051/0004-6361/202346999",
+   "year": 2024,
+   "title": "TOI-4860 b, a short-period giant planet transiting an M3.5 dwarf",
+   "authors": "Almenara, Bonfils, Bryant et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2308.01454/abstract"
+  },
+  {
+   "arxiv": "2310.15490",
+   "doi": "10.3847/2041-8213/ad1691",
+   "year": 2024,
+   "title": "New Mass and Radius Constraints on the LHS 1140 Planets: LHS 1140 b Is either a Temperate Mini-Neptune or a Water World",
+   "authors": "Cadieux, Plotnykov, Doyon et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2310.15490/abstract"
+  },
+  {
+   "arxiv": "2408.10629",
+   "doi": "10.1051/0004-6361/202450366",
+   "year": 2024,
+   "title": "The GAPS Programme at TNG. LIX. Characterisation study of the ∼300 Myr-old multi-planetary system orbiting the star BD+40 2790 (TOI-2076)",
+   "authors": "Damasso, Locci, Benatti et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2408.10629/abstract"
+  },
+  {
+   "arxiv": "2405.13118",
+   "doi": "10.1093/mnras/stae1152",
+   "year": 2024,
+   "title": "Gliese 12 b, a temperate Earth-sized planet at 12 parsecs discovered with\n                    TESS\n                    and\n                    CHEOPS",
+   "authors": "Dholakia, Palethorpe, Venner et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2405.13118/abstract"
+  },
+  {
+   "arxiv": "2405.04461",
+   "doi": "10.1093/mnras/stae1227",
+   "year": 2024,
+   "title": "SPIRou spectropolarimetry of the T Tauri star TW Hydrae: magnetic fields, accretion, and planets",
+   "authors": "Donati, Cristofari, Lehmann et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2405.04461/abstract"
+  },
+  {
+   "arxiv": "2410.00569",
+   "doi": "10.1051/0004-6361/202451311",
+   "year": 2024,
+   "title": "A sub-Earth-mass planet orbiting Barnard’s star",
+   "authors": "González Hernández, Suárez Mascareño, Silva et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2410.00569/abstract"
+  },
+  {
+   "arxiv": "2409.11083",
+   "doi": "10.1051/0004-6361/202452244",
+   "year": 2024,
+   "title": "Characterisation of TOI-406 as a showcase of the THIRSTEE program. A two-planet system straddling the M-dwarf density gap",
+   "authors": "Lacedelli, Pallé, Luque et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2409.11083/abstract"
+  },
+  {
+   "arxiv": "2407.16461",
+   "doi": "10.1051/0004-6361/202450047",
+   "year": 2024,
+   "title": "Revisiting the dynamical masses of the transiting planets in the young AU Mic system: Potential AU Mic b inflation at ~20 Myr",
+   "authors": "Mallorquín, Béjar, Lodieu et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2407.16461/abstract"
+  },
+  {
+   "arxiv": "2409.03704",
+   "doi": "10.1051/0004-6361/202450334",
+   "year": 2024,
+   "title": "TOI-3568 b: A super-Neptune in the sub-Jovian desert",
+   "authors": "Martioli, Petrucci, Jofré et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2409.03704/abstract"
+  },
+  {
+   "arxiv": "2406.10384",
+   "doi": "10.1051/0004-6361/202450466",
+   "year": 2024,
+   "title": "Characterising planetary systems with SPIRou: Temperate sub-Neptune exoplanet orbiting the nearby fully convective star GJ 1289 and a candidate around GJ 3378",
+   "authors": "Moutou, Ould-Elhkim, Donati et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2406.10384/abstract"
+  },
+  {
+   "arxiv": "2307.05580",
+   "doi": "10.1051/0004-6361/202245832",
+   "year": 2023,
+   "title": "Homogeneous search for helium in the atmosphere of 11 gas giant exoplanets with SPIRou",
+   "authors": "Allart, Lemée-Joliecoeur, Jaziri et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2307.05580/abstract"
+  },
+  {
+   "arxiv": "2303.16712",
+   "doi": "10.1051/0004-6361/202245660",
+   "year": 2023,
+   "title": "Near-IR and optical radial velocities of the active M dwarf star Gl 388 (AD Leo) with SPIRou at CFHT and SOPHIE at OHP. A 2.23 day rotation period and no evidence for a corotating planet",
+   "authors": "Carmona, Delfosse, Bellotti et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2303.16712/abstract"
+  },
+  {
+   "arxiv": "2310.13496",
+   "doi": "10.1093/mnras/stad3450",
+   "year": 2023,
+   "title": "Masses, revised radii, and a third planet candidate in the ‘Inverted’ planetary system around TOI-1266",
+   "authors": "Cloutier, Greklek-McKeon, Wurmser et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2310.13496/abstract"
+  },
+  {
+   "arxiv": "2301.10614",
+   "doi": "10.1051/0004-6361/202245131",
+   "year": 2023,
+   "title": "Optical and near-infrared stellar activity characterization of the early M dwarf Gl 205 with SOPHIE and SPIRou",
+   "authors": "Cortés-Zuleta, Boisse, Klein et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2301.10614/abstract"
+  },
+  {
+   "arxiv": "2304.09642",
+   "doi": "10.1093/mnras/stad1193",
+   "year": 2023,
+   "title": "The magnetic field and multiple planets of the young dwarf AU Mic",
+   "authors": "Donati, Cristofari, Finociety et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2304.09642/abstract"
+  },
+  {
+   "arxiv": "2310.02613",
+   "doi": "10.1093/mnras/stad3012",
+   "year": 2023,
+   "title": "Monitoring the young planet host V1298 Tau with SPIRou: planetary system and evolving large-scale magnetic field",
+   "authors": "Finociety, Donati, Cristofari et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2310.02613/abstract"
+  },
+  {
+   "arxiv": "2307.07329",
+   "doi": "10.3847/1538-3881/acf56d",
+   "year": 2023,
+   "title": "A Massive Hot Jupiter Orbiting a Metal-rich Early M Star Discovered in the TESS Full-frame Images",
+   "authors": "Gan, Cadieux, Jahandar et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2307.07329/abstract"
+  },
+  {
+   "arxiv": "2211.06205",
+   "doi": "10.1051/0004-6361/202245129",
+   "year": 2023,
+   "title": "A sub-Neptune planet around TOI-1695 discovered and characterized with SPIRou and TESS",
+   "authors": "Kiefer, Hébrard, Martioli et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2211.06205/abstract"
+  },
+  {
+   "arxiv": "2307.11569",
+   "doi": "10.1051/0004-6361/202346813",
+   "year": 2023,
+   "title": "Characterizing planetary systems with SPIRou: M-dwarf planet-search survey and the multiplanet systems GJ 876 and GJ 1148",
+   "authors": "Moutou, Delfosse, Petit et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2307.11569/abstract"
+  },
+  {
+   "arxiv": "2305.02123",
+   "doi": "10.1051/0004-6361/202346472",
+   "year": 2023,
+   "title": "Wapiti: A data-driven approach to correct for systematics in RV data. Application to SPIRou data of the planet-hosting M dwarf GJ 251",
+   "authors": "Ould-Elhkim, Moutou, Donati et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2305.02123/abstract"
+  },
+  {
+   "arxiv": "2208.06333",
+   "doi": "10.3847/1538-3881/ac7cea",
+   "year": 2022,
+   "title": "TOI-1452 b: SPIRou and TESS Reveal a Super-Earth in a Temperate Orbit Transiting an M4 Dwarf",
+   "authors": "Cadieux, Doyon, Plotnykov et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2208.06333/abstract"
+  },
+  {
+   "arxiv": "2211.01358",
+   "doi": "10.1088/1538-3873/ac9e74",
+   "year": 2022,
+   "title": "APERO: A PipelinE to Reduce Observations—Demonstration with SPIRou",
+   "authors": "Cook, Artigau, Doyon et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2211.01358/abstract"
+  },
+  {
+   "arxiv": "2210.08078",
+   "doi": "10.1093/mnras/stac3024",
+   "year": 2022,
+   "title": "Revisiting radial velocity measurements of the K2-18 system with the line-by-line framework",
+   "authors": "Radica, Artigau, Lafreniére et al.",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2210.08078/abstract"
+  }
+ ],
+ "credits": [
+  {
+   "authors": "Cadieux, Doyon, Plotnykov et al.",
+   "year": 2022,
+   "title": "TOI-1452 b: SPIRou and TESS Reveal a Super-Earth in a Temperate Orbit Transiting an M4 Dwarf",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2208.06333/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Artigau, Cadieux, Cook et al.",
+   "year": 2022,
+   "title": "Line-by-line Velocity Measurements: an Outlier-resistant Method for Precision Velocimetry",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2207.13524/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Cook, Artigau, Doyon et al.",
+   "year": 2022,
+   "title": "APERO: A PipelinE to Reduce Observations—Demonstration with SPIRou",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2211.01358/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Cortés-Zuleta, Boisse, Klein et al.",
+   "year": 2023,
+   "title": "Optical and near-infrared stellar activity characterization of the early M dwarf Gl 205 with SOPHIE and SPIRou",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2301.10614/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Gan, Cadieux, Jahandar et al.",
+   "year": 2023,
+   "title": "A Massive Hot Jupiter Orbiting a Metal-rich Early M Star Discovered in the TESS Full-frame Images",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2307.07329/abstract",
+   "licence": "CC0 1.0"
+  },
+  {
+   "authors": "Cadieux, Plotnykov, Doyon et al.",
+   "year": 2024,
+   "title": "New Mass and Radius Constraints on the LHS 1140 Planets: LHS 1140 b Is either a Temperate Mini-Neptune or a Water World",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2310.15490/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Lacedelli, Pallé, Luque et al.",
+   "year": 2024,
+   "title": "Characterisation of TOI-406 as a showcase of the THIRSTEE program. A two-planet system straddling the M-dwarf density gap",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2409.11083/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Almenara, Bonfils, Bryant et al.",
+   "year": 2024,
+   "title": "TOI-4860 b, a short-period giant planet transiting an M3.5 dwarf",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2308.01454/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Cortés-Zuleta, Boisse, Ould-Elhkim et al.",
+   "year": 2025,
+   "title": "GI 725A b: A potential super-Earth detected with SOPHIE and SPIRou in an M dwarf binary system at 3.5 pc",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2411.09506/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Cadieux, L’Heureux, Piaulet-Ghorayeb et al.",
+   "year": 2025,
+   "title": "Detailed Architecture of the L 98-59 System and Confirmation of a Fifth Planet in the Habitable Zone",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2507.09343/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Parc, Bouchy, Cook et al.",
+   "year": 2025,
+   "title": "NIRPS and TESS reveal a peculiar system around the M dwarf TOI-756: A transiting sub-Neptune and a cold eccentric giant",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2510.14927/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Ould-Elhkim, Moutou, Donati et al.",
+   "year": 2026,
+   "title": "The SPIRou Legacy Survey. Detection of a nearby world orbiting in the habitable zone of Gl 725B achieved by correcting strong telluric contamination in near-infrared radial velocities with wapiti",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2601.22815/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Ould-Elhkim, Moutou, Donati et al.",
+   "year": 2025,
+   "title": "The SPIRou Legacy Survey. Near-infrared and optical radial velocity analysis of Gl 480 and Gl 382 using SPIRou, HARPS and CARMENES spectrographs",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2502.07086/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Brady, Bean, Basant et al.",
+   "year": 2025,
+   "title": "An Earthlike Density for the Temperate Earth-sized Planet GJ 12 b",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2506.20561/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Parc, Cadieux, Grieves et al.",
+   "year": 2026,
+   "title": "Densities of small planets around the M dwarfs TOI-4336 A and TOI-4342 with ESPRESSO. Three sub-Neptunes, one super-Earth, and a Neptune-mass candidate",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2601.22115/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Lamontagne, Weisserman, Cadieux et al.",
+   "year": 2026,
+   "title": "NIRPS tightens the mass estimate of GJ 3090 b and detects a planet near the stellar rotation period",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2601.09330/abstract",
+   "licence": "CC BY 4.0"
+  },
+  {
+   "authors": "Carteret, Bourrier, Parc et al.",
+   "year": 2026,
+   "title": "Upside down: GJ 3090 b the first retrograde exoplanet around an M dwarf detected with NIRPS",
+   "ads": "https://ui.adsabs.harvard.edu/abs/arXiv:2609.24870/abstract",
+   "licence": "CC BY 4.0"
+  }
+ ]
+}
