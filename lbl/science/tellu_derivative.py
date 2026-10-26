@@ -84,6 +84,47 @@ DRY_BANDS_HARPS = ((625.0, 635.0), (685.0, 690.0))
 FALLBACK_MARK = 1e-7
 
 
+#: LES FENETRES QUE L'AJUSTEMENT VOIT, lues sur TAPAS plutot que codees en
+#: dur: les fenetres de 5 nm ou l'eau (exposant 1, a la resolution de
+#: l'instrument) depasse 15% de profondeur, ou le sec 25%. Releve le
+#: 2026-10-25 de 380 a 790 nm, elles redonnent sur le domaine de HARPS les
+#: bandes ci-dessus (585-600, 645-660, 625-635, 685-695 nm) et ajoutent pour
+#: ESPRESSO 695-740 (eau) et 755-770 (bande A). Sans elles, l'objectif
+#: portait sur tout le spectre: le minimum restait au meme endroit, mais sa
+#: variation tombait sous les 5% du garde-fou (0.5 a 7%, contre 7 a 54% sur
+#: les fenetres) et presque toutes les poses passaient au repli (HD 189733:
+#: 382 sur 382, Gliese 229: 385 sur 428).
+WINDOW_NM = 5.0
+WINDOW_WATER_DEPTH = 0.15
+WINDOW_DRY_DEPTH = 0.25
+#: le bord de la grille du modele, ou la convolution fabrique de fausses
+#: raies (45% de profondeur aux deux extremites): jamais une fenetre
+WINDOW_EDGE_NM = 2.0
+#: en dessous, les fenetres ne disent rien et le spectre entier est garde
+WINDOW_MIN_PIXELS = 2000
+
+
+def telluric_windows(model, wave):
+    """Les pixels de `wave` qui tombent dans une fenetre profonde en eau ou
+    en sec (WINDOW_*), lues sur le modele TAPAS a l'exposant 1."""
+    wave = np.asarray(wave, dtype=float)
+    water = 1.0 - transmission(model, wave, 1.0, 0.0)
+    dry = 1.0 - transmission(model, wave, 0.0, 1.0)
+    low, high = np.nanmin(wave), np.nanmax(wave)
+    index = np.floor((wave - low) / WINDOW_NM).astype(int)
+    keep = np.zeros(wave.size, dtype=bool)
+    for one in np.unique(index):
+        inside = index == one
+        start = low + one * WINDOW_NM
+        if start < low + WINDOW_EDGE_NM or \
+                start + WINDOW_NM > high - WINDOW_EDGE_NM:
+            continue
+        if np.nanmax(water[inside]) > WINDOW_WATER_DEPTH or \
+                np.nanmax(dry[inside]) > WINDOW_DRY_DEPTH:
+            keep[inside] = True
+    return keep
+
+
 def is_fallback(water, fallback=0.35):
     """Cet exposant vient-il du repli plutot que d'une mesure?"""
     return bool(abs(float(water) - (fallback + FALLBACK_MARK)) < FALLBACK_MARK / 10)
@@ -321,6 +362,16 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     model = model_grid(spl_water, spl_dry, wave_ground.min() * 0.999,
                        wave_ground.max() * 1.001, resolution,
                        bands=_spans_of(wave_ground))
+    # L'AJUSTEMENT NE VOIT QUE LES FENETRES TELLURIQUES (telluric_windows):
+    #   ailleurs le spectre n'apporte que des raies stellaires et du bruit,
+    #   qui ne dependent pas de l'exposant et noyaient sa variation sous le
+    #   garde-fou du balayage
+    keep = telluric_windows(model, wave_ground)
+    if keep.sum() >= WINDOW_MIN_PIXELS:
+        wave_ground, sp = wave_ground[keep], sp[keep]
+        model = model_grid(spl_water, spl_dry, wave_ground.min() * 0.999,
+                           wave_ground.max() * 1.001, resolution,
+                           bands=_spans_of(wave_ground))
 
     def cost(p):
         water = float(np.exp(p[0]))

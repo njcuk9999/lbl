@@ -705,6 +705,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
             # la grille du SOL, la meme que celle de la boucle ci-dessus:
             # wave_trans y a deja ete decalee du BERV s'il le fallait
             sp_for_fit = sp_vector / template_vector
+            loop_water = float(expo_water)
             expo_water = _deriv.fit_exponents(
                 wave_trans, sp_for_fit, spl_water, spl_others,
                 expo_others, resolution=inst.params['APPROX_RESOLUTION'])[0]
@@ -712,9 +713,26 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
             # marque de 1e-7 est invisible, et une pose au repli s'affiche
             # "0.3500" exactement comme une pose qui converge vers 0.35: j'ai
             # compte zero repli sur un lot qui en avait treize (2026-10-16).
+            #
+            # ET LE REPLI GARDE LA MESURE DE LA BOUCLE quand elle en est
+            #   une: une derivee sans minimum (une pose a faible SNR, ou
+            #   diviser par la transmission amplifie le bruit plus qu'il
+            #   n'enleve de raies: GJ 1214, 2026-10-25) ne dit rien de l'eau,
+            #   et 0.35 pour toutes les poses n'en dit pas plus. Seul un
+            #   exposant de la boucle sur l'une de ses bornes (l'echec que
+            #   la derivee devait corriger) cede la place a 0.35.
             if _deriv.is_fallback(expo_water):
-                log.general('\tH2O exponent: FALLBACK {0:.4f} (the cost curve '
-                            'had nothing to go on)'.format(expo_water))
+                on_bound = not (water_bounds_lower < loop_water
+                                < water_bounds_upper)
+                if on_bound:
+                    log.general('\tH2O exponent: FALLBACK {0:.4f} (the cost '
+                                'curve had nothing to go on, and the loop '
+                                'ended on a bound)'.format(expo_water))
+                else:
+                    expo_water = loop_water
+                    log.general('\tH2O exponent: the loop value {0:.4f} (the '
+                                'derivative cost curve had nothing to go '
+                                'on)'.format(expo_water))
             else:
                 log.general('\tH2O exponent by the derivative method: '
                             '{0:.4f}'.format(expo_water))
