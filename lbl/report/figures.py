@@ -213,11 +213,14 @@ def page_iterations(plt, table, title):
 
 
 def page_periodogram(plt, table, title, known=None):
-    """The periodogram of the series, and the spectral window below it."""
+    """The periodogram of the series, the spectral window below it, and the
+    false inclusion probability under both: outlier-aware and alias-aware
+    (lbl.report.fip.alias_aware), the aliases of its deepest dip marked."""
     try:
         from koloa.periodogram import frequency_grid, gls
     except Exception:                                         # noqa: BLE001
         return None
+    from lbl.report import fip as _fip
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
@@ -240,23 +243,75 @@ def page_periodogram(plt, table, title, known=None):
     phase = np.exp(-2j * np.pi * np.outer(np.asarray(freq, dtype=float),
                                           time - np.mean(time)))
     window = np.abs(phase @ weight)
-
-    fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+    # THE FIP ON THE SAME PERIODS, on a grid of its own: uniform in
+    #   frequency, which its prior and its intervals need
     period = 1.0 / freq
+    fip_freq = _fip.frequency_grid(time, pmin=float(np.min(period)),
+                                   pmax=float(np.max(period)))
+    robust = _fip.alias_aware(time, vrad, svrad, freq=fip_freq)
+    gauss = _fip.alias_aware(time, vrad, svrad, freq=fip_freq,
+                             outlier_aware=False)
+
+    fig, axes = plt.subplots(3, 1, figsize=(10, 8.6), sharex=True,
+                             gridspec_kw=dict(height_ratios=[1, 0.8, 1.1]))
     axes[0].plot(period, power, lw=0.9)
     axes[0].set_ylabel('GLS power (normalised, 0 to 1)')
     axes[0].set_title('the series', fontsize=9)
     axes[1].plot(period, window, lw=0.9, color='0.4')
     axes[1].set_ylabel('Window power (1 at zero frequency)')
-    axes[1].set_xlabel('Period (days)')
     axes[1].set_title('the window: a peak shared with the series above is an'
                       ' alias, not a signal', fontsize=9)
+    curves = []
+    if gauss['freq'].size:
+        curves.append(_log_fip(gauss['fip']))
+        axes[2].plot(1.0 / gauss['freq'], curves[-1], lw=0.8, color='C0',
+                     alpha=0.55, label='gaussian')
+    if robust['freq'].size:
+        curves.append(_log_fip(robust['fip']))
+        axes[2].plot(1.0 / robust['freq'], curves[-1], lw=1.2, color='C4',
+                     label='outlier-aware (%d epochs above one half)'
+                           % int(np.sum(robust['prob'] > 0.5)))
+    _fip_axis(axes[2], curves=curves)
+    axes[2].set_title('false inclusion probability over intervals 1/T wide,'
+                      ' every period competing for one posterior (Hara et'
+                      ' al. 2022): a peak and its alias share it', fontsize=9)
+    axes[2].legend(fontsize=7, loc='lower right')
     for ax in axes:
         ax.set_xscale('log')
         ax.grid(alpha=0.3)
         _landmarks(ax, known=known)
-    fig.suptitle('Periodogram of the velocities, and the spectral window'
-                 ' of the sampling', fontsize=10)
+    # THE DEEPEST DIP AND ITS ALIASES, with the day and the year, on every
+    #   panel: where one of them is the stronger peak of the series, the
+    #   period is in doubt, and the FIP says by how much
+    low, high = float(np.min(period)), float(np.max(period))
+    if robust['freq'].size and robust['best_fip'] < 0.5:
+        best = robust['best_period']
+        drawn, close = [], []
+        for alias, name in _fip.alias_periods(best, low, high):
+            k = int(np.argmin(np.abs(robust['freq'] - 1.0 / alias)))
+            # an alias within 3% of the peak is the same peak on this axis:
+            #   said in the peak's label rather than drawn on top of it
+            if abs(np.log(alias / best)) < 0.03:
+                close.append('%s alias %.5g d: FIP %.2g'
+                             % (name, alias, robust['fip'][k]))
+            else:
+                drawn.append((alias, name, k))
+        axes[2].annotate('\n'.join(['%.5g d, FIP %.2g'
+                                     % (best, robust['best_fip'])] + close),
+                         xy=(best, _log_fip(robust['best_fip'])),
+                         xytext=(4, -10), textcoords='offset points',
+                         fontsize=7, color='C4', va='top')
+        for alias, name, k in drawn:
+            for ax in axes:
+                ax.axvline(alias, color='C1', lw=0.8, ls=':', zorder=0)
+            axes[2].annotate('%s alias, FIP %.2g' % (name, robust['fip'][k]),
+                             xy=(alias, 0.0), xycoords=('data', 'data'),
+                             xytext=(2, -2), textcoords='offset points',
+                             rotation=90, va='top', ha='left', fontsize=6.5,
+                             color='C1')
+    axes[2].set_xlabel('Period (days)')
+    fig.suptitle('Periodogram of the velocities, the spectral window of the'
+                 ' sampling, and the false inclusion probability', fontsize=10)
     fig.tight_layout()
     return fig
 

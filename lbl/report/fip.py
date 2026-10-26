@@ -1,4 +1,5 @@
-"""The false inclusion probability, gaussian and outlier-aware.
+"""The false inclusion probability, gaussian and outlier-aware, per frequency
+and (alias_aware) over intervals, alias-aware.
 
 WHY HERE AND NOT BORROWED. koloa has a far more complete FIP, but it runs
 its chains in subprocesses, which fails as soon as LBL is driven from a
@@ -271,3 +272,87 @@ def oafip(time, value, err, freq=None, trend=1, rounds=5):
     out_freq, out_fip = fip(time, value, err, freq=freq, trend=trend,
                             jitter=jitter, weights=weights)
     return out_freq, out_fip, prob
+
+
+#: the aliases a peak is checked against: the sidereal day and the year,
+#: the two periods ground-based sampling imprints on every series
+ALIAS_PERIODS = ((0.99727, '1 d'), (365.25, '1 yr'))
+
+
+def alias_aware(time, value, err, freq=None, trend=1, prior_signal=0.5,
+                outlier_aware=True):
+    """The FIP of Hara et al. (2022, A&A 658, A177): over intervals one
+    resolution element wide (1/T), the probability that NO signal has its
+    frequency there, with every frequency of the grid competing for the
+    same posterior. Returns dict(freq, fip, prob, best_period, best_fip).
+
+    WHAT ALIAS-AWARE MEANS. fip() compares each frequency with the null
+    model alone, so a peak and its alias are both "detected" when the data
+    cannot tell them apart. Here the posterior of a single signal is spread
+    over the whole grid and normalised once, so the two share it: neither
+    gets below one half unless the data prefer it. The probability of an
+    interval is the sum over the grid points inside it, a peak being spread
+    over about `oversample` of them.
+
+    OUTLIER-AWARE, by default: each point counts for its probability of
+    being a normal one (outlier_probability, as oafip does).
+    """
+    time = np.asarray(time, dtype=float)
+    value = np.asarray(value, dtype=float)
+    err = np.asarray(err, dtype=float)
+    good = (np.isfinite(time) & np.isfinite(value) & np.isfinite(err)
+            & (err > 0))
+    empty = dict(freq=np.array([]), fip=np.array([]), prob=np.array([]),
+                 best_period=np.nan, best_fip=np.nan)
+    if good.sum() < 10:
+        return empty
+    time, value, err = time[good], value[good], err[good]
+    value = value - np.median(value)
+    excess = robust_sigma(value) ** 2 - np.median(err) ** 2
+    jitter = float(np.sqrt(excess)) if excess > 0 else 0.0
+    prob = outlier_probability(value, err, jitter)
+    weight = 1.0 / (err ** 2 + jitter ** 2)
+    if outlier_aware:
+        weight = weight * (1.0 - prob)
+    if freq is None:
+        freq = frequency_grid(time)
+    freq = np.asarray(freq, dtype=float)
+    if freq.size == 0:
+        return empty
+    scale = robust_sigma(value)
+    taus = np.array(TAU_LADDER) * (scale if np.isfinite(scale) and scale > 0
+                                   else 1.0)
+    null = _log_evidence(_design(time, 0.0, trend)[:, 2:], value, weight,
+                         1.0, nsignal=0)
+    evidence = _evidence_grid(time, value, weight, freq, taus, trend)
+    # one posterior for the whole grid: the null, and a signal somewhere
+    terms = np.log(prior_signal / freq.size) + evidence
+    log_null = np.log(1.0 - prior_signal) + null
+    top = max(log_null, float(np.nanmax(terms)))
+    mass = np.exp(terms - top)
+    total = np.exp(log_null - top) + np.sum(mass)
+    # each interval, [f - 1/2T, f + 1/2T], summed through a cumulative sum
+    half = 0.5 / float(np.ptp(time))
+    cum = np.concatenate([[0.0], np.cumsum(mass)])
+    low = np.searchsorted(freq, freq - half, side='left')
+    high = np.searchsorted(freq, freq + half, side='right')
+    out = np.clip(1.0 - (cum[high] - cum[low]) / total, 0.0, 1.0)
+    best = int(np.argmin(out))
+    return dict(freq=freq, fip=out, prob=prob, best_period=1.0 / freq[best],
+                best_fip=float(out[best]))
+
+
+def alias_periods(period, low=None, high=None):
+    """The aliases of a period with the day and the year: [(period, name)],
+    those within [low, high] when given."""
+    out = []
+    for window, name in ALIAS_PERIODS:
+        for sign in (1.0, -1.0):
+            nu = abs(1.0 / period + sign / window)
+            if nu <= 0:
+                continue
+            alias = 1.0 / nu
+            if (low is None or alias >= low) and (high is None
+                                                  or alias <= high):
+                out.append((alias, name))
+    return out
