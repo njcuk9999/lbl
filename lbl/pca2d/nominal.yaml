@@ -892,18 +892,33 @@ instruments:
                                 # en longueur d'onde de HARPS): 628 et 649
                                 # chevauchaient deux ordres, et un ordre de
                                 # HARPS fait 5 a 8 nm, d'ou des fenetres plus
-                                # etroites. Centralite (1 au centre, 0 au bord):
+                                # etroites. AU MILIEU DU BLAZE depuis le
+                                # 2026-10-25 (le centre geometrique d'un ordre
+                                # n'est pas le pic de son blaze): le plus bas
+                                # du blaze dans la fenetre, sur le pic de son
+                                # ordre, est d'au moins 0.8. Bande B 0.89,
+                                # gamma 0.88, eau 594 0.85, eau 651 0.91.
+                                # Centralite geometrique d'alors (1 au
+                                # centre, 0 au bord):
         - "687.75:2.5"          #   bande B de O2, 0.25 -> 0.64, 65% absorbe
         - "630.75:2"            #   bande gamma de O2, deux ordres -> 0.66,
                                 #          100% absorbe
         - "594.25:2.25"         #   eau, 0.49 -> 0.65, 100% absorbe
         - "651.0:2.5"           #   eau, deux ordres -> 0.64, 52% absorbe
-        - "589.0:1.5"           #   doublet D du sodium: une raie STELLAIRE
-                                #          forte dans une region tellurique,
-                                #          pour montrer que la correction ne la
-                                #          touche pas; 0.53 -> 0.62
-        - "518.0:2"             #   triplet b du magnesium, temoin presque
-                                #          sans tellurique; 0.25 -> 0.42
+        - "586.5:1.5"           #   eau, au milieu du blaze de l'ordre 56. Le
+                                #          doublet D du sodium (589.0:1.5) y
+                                #          etait, sur le FLANC ROUGE du blaze
+                                #          (0.75 a 0.45 du pic, a 586.6 nm):
+                                #          la riviere y montrait un spectre
+                                #          plus bruite que ce que la methode
+                                #          donne, ce qui trompait sur sa
+                                #          qualite (2026-10-25). Aucune
+                                #          fenetre qui le garde n'atteint 0.8
+                                #          du blaze; celle-ci, 0.87
+        - "519.0:2"             #   triplet b du magnesium (b1, 518.36 nm),
+                                #          temoin presque sans tellurique;
+                                #          518.0:2 descendait a 0.70 du
+                                #          blaze, celle-ci 0.86
 
   HARPN:
     lbl:
