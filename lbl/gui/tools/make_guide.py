@@ -360,8 +360,7 @@ DATA_DIR/models/
 which empties <code>templates/</code>, nor the window's cleanup. A vetted
 template is therefore kept there rather than with the templates LBL makes
 from spectra. A <code>models/</code> from before (every file at its top) is
-sorted by LBL itself, each file moved into its subfolder the first time a
-run looks for it.</p>
+sorted by LBL itself at its next run.</p>
 <p><strong>Which files.</strong> What the instrument's pipeline delivers,
 for example APERO's or the CADC's <code>t.fits</code> for SPIRou and NIRPS,
 ESO's telluric-corrected S2D for NIRPS, the DRS <code>e2ds</code> for HARPS
@@ -405,8 +404,7 @@ DATA_DIR/models/
 <code>templates/</code>, ni le ménage de la fenêtre. Un template validé y
 est donc gardé plutôt qu'avec les templates que LBL fait à partir des
 spectres. Un <code>models/</code> d'avant (tous les fichiers à sa racine)
-est rangé par LBL lui-même, chaque fichier déplacé dans son sous-dossier la
-première fois qu'un run le cherche.</p>
+est rangé par LBL lui-même à son run suivant.</p>
 <p><strong>Quels fichiers.</strong> Ce que livre le pipeline de
 l'instrument, par exemple les <code>t.fits</code> d'APERO ou de la CADC pour
 SPIRou et NIRPS, les S2D corrigés des telluriques d'ESO pour NIRPS, les
