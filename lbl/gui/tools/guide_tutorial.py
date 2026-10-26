@@ -186,17 +186,17 @@ lbl-data/
          " sur ce dossier :</p>"),
         code("""
 conda activate lbl-pca2d
-lbl-gui --data-dir ~/lbl-data
+lbl_gui --data-dir ~/lbl-data
 """),
         callout("see",
                 "<p>One line in the terminal, which then waits (leave it"
-                " open):</p>" + code("lbl-gui 0.1.0 at http://127.0.0.1:8765/"
+                " open):</p>" + code("lbl_gui 0.67.008 at http://127.0.0.1:8765/"
                                      " (LBL from .../lbl-pca2d/lbl); Ctrl+C"
                                      " to stop")
                 + "<p>and the window opens in your browser. If it does not,"
                 " open <code>http://127.0.0.1:8765/</code> yourself.</p>",
                 "<p>Une ligne dans le terminal, qui attend ensuite (laissez-le"
-                " ouvert) :</p>" + code("lbl-gui 0.1.0 at"
+                " ouvert) :</p>" + code("lbl_gui 0.67.008 at"
                                         " http://127.0.0.1:8765/ (LBL from"
                                         " .../lbl-pca2d/lbl); Ctrl+C to stop")
                 + "<p>et la fenêtre s'ouvre dans votre navigateur. Sinon,"
@@ -480,10 +480,10 @@ lbl-gui --data-dir ~/lbl-data
                 durations_fr or "<p>-</p>"),
         callout("tip",
                 "<p>You can close the browser, and even the window (Ctrl+C):"
-                " the run goes on. Start <code>lbl-gui</code> again on the"
+                " the run goes on. Start <code>lbl_gui</code> again on the"
                 " same folder and it finds the run where it is.</p>",
                 "<p>Vous pouvez fermer le navigateur, et même la fenêtre"
-                " (Ctrl+C) : le run continue. Relancez <code>lbl-gui</code>"
+                " (Ctrl+C) : le run continue. Relancez <code>lbl_gui</code>"
                 " sur le même dossier et elle retrouve le run où il en"
                 " est.</p>"),
     ]))
@@ -506,10 +506,9 @@ lbl-gui --data-dir ~/lbl-data
                          "Facultatif : récupérer des spectres publics"), [
         shot("09_archive", "The archive search, for GJ 1 with HARPS.",
              "La recherche d'archive, pour GJ 1 avec HARPS."),
-        ("<p>In the <em>Targets</em> tab, sub-tab <em>Archive search</em>"
-         " (koloa must be installed):</p>",
+        ("<p>In the <em>Targets</em> tab, sub-tab <em>Archive search</em>:</p>",
          "<p>Dans l'onglet <em>Cibles</em>, sous-onglet <em>Recherche"
-         " d'archive</em> (koloa doit être installé) :</p>"),
+         " d'archive</em> :</p>"),
         marks(["<strong>The star's name</strong>, as SIMBAD knows it (here"
                " <code>GJ 1</code>, which SIMBAD calls HD 225213).",
                "<strong>The instruments</strong> to ask (here HARPS only).",

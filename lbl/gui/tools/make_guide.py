@@ -24,7 +24,8 @@ from lbl.gui import __version__, i18n, lblinfo        # noqa: E402
 import guide_tutorial                                     # noqa: E402
 
 THEMES = os.path.expanduser("~/GitHubProjects/themes_outils")
-REPO = "https://github.com/eartigau/lbl-pca2d-gui"
+REPO = "https://github.com/njcuk9999/lbl/tree/lbl-pca2d/lbl/gui"
+ISSUES = "https://github.com/njcuk9999/lbl/issues"
 LBL_REPO = "https://github.com/njcuk9999/lbl"
 #: the instruments whose PCA2D defaults are shown, and their names
 DEFAULT_FOR = (("SPIROU", "SPIRou"), ("NIRPS_HE", "NIRPS"), ("HARPS", "HARPS"))
@@ -166,15 +167,10 @@ ordinary LBL script (a <em>wrap</em>) from what you tick, runs it in the
 environment LBL is installed in, and follows it: the steps, the log, the
 reports. Nothing it does is hidden: every run keeps its wrap, which runs by
 hand as it is.</p>
-<p>Three pieces, three repositories, one conda environment:</p>
-<ul class="feature-list">
-<li><strong>LBL</strong>, branch <code>lbl-pca2d</code>
-(github.com/njcuk9999/lbl): the measurement and the precleaning.</li>
-<li><strong>lbl-gui</strong> (github.com/eartigau/lbl-pca2d-gui): the
-window.</li>
-<li><strong>koloa</strong>, optional (github.com/eartigau/koloa): the
-search of the public archives from the window.</li>
-</ul>
+<p>One piece, one repository, one conda environment: <strong>LBL</strong>,
+branch <code>lbl-pca2d</code> (github.com/njcuk9999/lbl), holds the
+measurement, the precleaning and the window (<code>lbl/gui</code>, started
+with <code>lbl_gui</code>), with its search of the public archives.</p>
 """, """
 <p><strong>LBL</strong> (line-by-line, Artigau et al. 2022) mesure les
 vitesses radiales raie par raie contre un template de l'étoile, et combine
@@ -189,15 +185,11 @@ spectres corrigés. Le rapport montre les vitesses avant et après.</p>
 cochez, le lance dans l'environnement où LBL est installé, et le suit : les
 étapes, le journal, les rapports. Rien n'est caché : chaque run garde son
 wrap, qui se relance tel quel à la main.</p>
-<p>Trois morceaux, trois dépôts, un seul environnement conda :</p>
-<ul class="feature-list">
-<li><strong>LBL</strong>, branche <code>lbl-pca2d</code>
-(github.com/njcuk9999/lbl) : la mesure et le prénettoyage.</li>
-<li><strong>lbl-gui</strong> (github.com/eartigau/lbl-pca2d-gui) : la
-fenêtre.</li>
-<li><strong>koloa</strong>, facultatif (github.com/eartigau/koloa) : la
-recherche dans les archives publiques depuis la fenêtre.</li>
-</ul>
+<p>Un seul morceau, un seul dépôt, un seul environnement conda :
+<strong>LBL</strong>, branche <code>lbl-pca2d</code>
+(github.com/njcuk9999/lbl), contient la mesure, le prénettoyage et la
+fenêtre (<code>lbl/gui</code>, lancée avec <code>lbl_gui</code>), avec sa
+recherche dans les archives publiques.</p>
 """) + '<figure class="lecture-figure">%s' % inline(
             '<img src="workflow_en.svg" alt="what a run does">',
             '<img src="workflow_fr.svg" alt="ce que fait un run">')
@@ -264,18 +256,17 @@ clone):</p>
 """ + code("""
 python -c "import lbl; print(lbl.__file__)"
 """) + """
-<p><strong>3. The window</strong>, in the same environment:</p>
+<p><strong>3. The window comes with it</strong>, and so does its search of
+the public archives (CADC, ESO, TNG, OHP): nothing else to install. Check
+that the command is there:</p>
 """ + code("""
-git clone https://github.com/eartigau/lbl-pca2d-gui.git
-pip install -e lbl-pca2d-gui
+lbl_gui --help
 """) + """
-<p><strong>4. Optional: the archive search.</strong> koloa fetches the
-public spectra LBL reads (CADC, ESO, TNG, OHP). <code>--no-deps</code> keeps
-pip from touching the versions LBL pins. Without koloa, the window says so
-and everything else works.</p>
+<p><strong>Installed the first test version?</strong> It was a package of its
+own (lbl-pca2d-gui) with a command <code>lbl-gui</code>, and koloa for the
+archives. Remove it, so that no older window answers instead:</p>
 """ + code("""
-git clone https://github.com/eartigau/koloa.git
-pip install --no-deps -e koloa
+pip uninstall lbl-pca2d-gui
 """)
     install_fr = """
 <p><strong>1. Un environnement pour LBL.</strong> Tout va dans un seul
@@ -304,18 +295,18 @@ votre clone) :</p>
 """ + code("""
 python -c "import lbl; print(lbl.__file__)"
 """) + """
-<p><strong>3. La fenêtre</strong>, dans le même environnement :</p>
+<p><strong>3. La fenêtre vient avec</strong>, ainsi que sa recherche dans
+les archives publiques (CADC, ESO, TNG, OHP) : rien d'autre à installer.
+Vérifiez que la commande est là :</p>
 """ + code("""
-git clone https://github.com/eartigau/lbl-pca2d-gui.git
-pip install -e lbl-pca2d-gui
+lbl_gui --help
 """) + """
-<p><strong>4. Facultatif : la recherche d'archives.</strong> koloa récupère
-les spectres publics que LBL sait lire (CADC, ESO, TNG, OHP).
-<code>--no-deps</code> évite que pip touche aux versions fixées par LBL.
-Sans koloa, la fenêtre le signale et tout le reste fonctionne.</p>
+<p><strong>Vous aviez installé la première version de test ?</strong> C'était
+un paquet à part (lbl-pca2d-gui) avec une commande <code>lbl-gui</code>, et
+koloa pour les archives. Retirez-le, pour qu'aucune ancienne fenêtre ne
+réponde à la place :</p>
 """ + code("""
-git clone https://github.com/eartigau/koloa.git
-pip install --no-deps -e koloa
+pip uninstall lbl-pca2d-gui
 """)
     sections.append(card("install", "Installing", "Installation",
                          both(install_en, install_fr)))
@@ -346,7 +337,8 @@ DATA_DIR/
 (<code>templates/</code>, <code>masks/</code>, <code>lblrv/</code>,
 <code>lblrdb/</code>, <code>models/</code>, <code>reports/</code>...) and
 downloads its models (the TAPAS atmosphere, the line masks). The window adds
-<code>gui/runs/</code>, and PCA2D <code>pca2d/</code>.</p>
+<code>gui/runs/</code> and its logs, <code>gui/logs/</code>, and PCA2D
+<code>pca2d/</code>.</p>
 <p><strong>Which files.</strong> What the instrument's pipeline delivers,
 for example APERO's or the CADC's <code>t.fits</code> for SPIRou and NIRPS,
 ESO's telluric-corrected S2D for NIRPS, the DRS <code>e2ds</code> for HARPS
@@ -371,7 +363,8 @@ DATA_DIR/
 <code>masks/</code>, <code>lblrv/</code>, <code>lblrdb/</code>,
 <code>models/</code>, <code>reports/</code>...) et télécharge ses modèles
 (l'atmosphère TAPAS, les masques de raies). La fenêtre ajoute
-<code>gui/runs/</code>, et PCA2D <code>pca2d/</code>.</p>
+<code>gui/runs/</code> et ses journaux, <code>gui/logs/</code>, et PCA2D
+<code>pca2d/</code>.</p>
 <p><strong>Quels fichiers.</strong> Ce que livre le pipeline de
 l'instrument, par exemple les <code>t.fits</code> d'APERO ou de la CADC pour
 SPIRou et NIRPS, les S2D corrigés des telluriques d'ESO pour NIRPS, les
@@ -388,7 +381,7 @@ lus comme ceux d'APERO arrêtent LBL dès le premier fichier).</p>
 
     launch_en = code("""
 conda activate lbl-pca2d
-lbl-gui --data-dir /path/to/DATA_DIR
+lbl_gui --data-dir /path/to/DATA_DIR
 """) + """
 <p>The window opens in your browser at <code>http://127.0.0.1:8765</code>;
 if that port is taken it takes the next free one and prints the address.</p>
@@ -410,12 +403,15 @@ and serves files from the data folders it is given only.
 <strong>Ctrl+C</strong> in the terminal stops the window, not the runs: a
 run in progress goes on, and the window finds it again when it is opened on
 the same folder. What it remembers between sessions (the folder, the ticked
-targets, the options) is in <code>~/.lbl_pca2d_gui.json</code>, and what it
-read of the headers in <code>~/.lbl_pca2d_gui/</code>.</p>
+targets, the options) is in <code>~/.lbl_pca2d_gui.json</code>, what it
+read of the headers in <code>~/.lbl_pca2d_gui/</code>, what the archive
+search keeps in <code>~/.cache/lbl/gui/</code>, and its logs in the data
+folder, <code>gui/logs/</code>: each run's and the archive search's
+(<code>archives.log</code>).</p>
 """
     launch_fr = code("""
 conda activate lbl-pca2d
-lbl-gui --data-dir /chemin/vers/DATA_DIR
+lbl_gui --data-dir /chemin/vers/DATA_DIR
 """) + """
 <p>La fenêtre s'ouvre dans votre navigateur à l'adresse
 <code>http://127.0.0.1:8765</code> ; si ce port est pris, elle prend le
@@ -439,8 +435,11 @@ qu'on lui donne. <strong>Ctrl+C</strong> dans le terminal arrête la fenêtre,
 pas les runs : un run en cours continue, et la fenêtre le retrouve quand on
 la rouvre sur le même dossier. Ce qu'elle retient d'une session à l'autre
 (le dossier, les cibles cochées, les options) est dans
-<code>~/.lbl_pca2d_gui.json</code>, et ce qu'elle a lu des en-têtes dans
-<code>~/.lbl_pca2d_gui/</code>.</p>
+<code>~/.lbl_pca2d_gui.json</code>, ce qu'elle a lu des en-têtes dans
+<code>~/.lbl_pca2d_gui/</code>, ce que garde la recherche d'archive dans
+<code>~/.cache/lbl/gui/</code>, et ses journaux dans le dossier de données,
+<code>gui/logs/</code> : celui de chaque run et celui de la recherche
+d'archive (<code>archives.log</code>).</p>
 """
     sections.append(card("launch", "Starting the window",
                          "Lancer la fenêtre", both(launch_en, launch_fr)))
@@ -484,7 +483,7 @@ bornes peuvent limiter le fit PCA2D à une période.</p>
 """
     archive_en = """
 <h3>Archive search</h3>
-<p>With koloa installed, the second sub-tab finds a star's public spectra
+<p>The second sub-tab finds a star's public spectra
 that LBL reads and fetches them into <code>science/</code>, four files at a
 time, each folder with how far it is and its time left. It never moves or overwrites a file that is there; a folder fetched
 from an archive remembers where it came from
@@ -493,7 +492,7 @@ data source and the file pattern from it.</p>
 """
     archive_fr = """
 <h3>Recherche d'archive</h3>
-<p>Avec koloa installé, le second sous-onglet trouve les spectres publics
+<p>Le second sous-onglet trouve les spectres publics
 d'une étoile que LBL sait lire et les récupère dans <code>science/</code>,
 quatre fichiers à la fois, chaque dossier avec où il en est et le temps qui
 lui reste. Il ne déplace ni n'écrase jamais un fichier déjà là ;
@@ -812,8 +811,11 @@ a joint fit</td></tr>
 <tr><td><code>pca2d/components/</code></td><td>the observer bases saved for
 other stars to take frozen</td></tr>
 <tr><td><code>gui/runs/&lt;run&gt;/</code></td><td><code>wrap.py</code> as it
-ran, its log <code>run.log</code>, and <code>run.json</code> (when, how it
-ended, the reports it wrote)</td></tr>
+ran and <code>run.json</code> (when, how it ended, the reports it
+wrote)</td></tr>
+<tr><td><code>gui/logs/</code></td><td>the window's logs: each run's whole
+log (<code>&lt;run&gt;.log</code>) and the archive search's and fetch's
+(<code>archives.log</code>)</td></tr>
 <tr><td><code>wrap_&lt;name&gt;.py</code></td><td>the wraps you saved</td></tr>
 </tbody></table></div>
 <p><strong>The report.</strong> With PCA2D, its pages come first: after the
@@ -846,8 +848,11 @@ pour un fit joint</td></tr>
 <tr><td><code>pca2d/components/</code></td><td>les bases de l'observateur
 sauvegardées, que d'autres étoiles peuvent reprendre figées</td></tr>
 <tr><td><code>gui/runs/&lt;run&gt;/</code></td><td><code>wrap.py</code> tel
-qu'il a tourné, son journal <code>run.log</code>, et <code>run.json</code>
-(quand, comment il s'est terminé, les rapports écrits)</td></tr>
+qu'il a tourné et <code>run.json</code> (quand, comment il s'est terminé,
+les rapports écrits)</td></tr>
+<tr><td><code>gui/logs/</code></td><td>les journaux de la fenêtre : le
+journal complet de chaque run (<code>&lt;run&gt;.log</code>) et celui de la
+recherche et des téléchargements d'archive (<code>archives.log</code>)</td></tr>
 <tr><td><code>wrap_&lt;nom&gt;.py</code></td><td>les wraps que vous avez
 enregistrés</td></tr>
 </tbody></table></div>
@@ -874,9 +879,10 @@ again:</p>
 conda activate lbl-pca2d
 python DATA_DIR/gui/runs/<run>/wrap.py
 """) + """
-<p><strong>Updating.</strong> <code>git pull</code> in each clone (LBL, the
-window, koloa), then start <code>lbl-gui</code> again. The installs are
-editable: nothing to reinstall unless the dependencies change.</p>
+<p><strong>Updating.</strong> <code>git pull</code> in LBL's clone, then
+start <code>lbl_gui</code> again. The install is editable: nothing to
+reinstall unless the dependencies or the commands change (then
+<code>pip install -e .</code> in the clone).</p>
 """
     hand_fr = """
 <p>Chaque run garde son wrap, et la fenêtre n'est pas nécessaire pour le
@@ -885,10 +891,10 @@ relancer :</p>
 conda activate lbl-pca2d
 python DATA_DIR/gui/runs/<run>/wrap.py
 """) + """
-<p><strong>Mettre à jour.</strong> <code>git pull</code> dans chaque clone
-(LBL, la fenêtre, koloa), puis relancez <code>lbl-gui</code>. Les
-installations sont éditables : rien à réinstaller, sauf si les dépendances
-changent.</p>
+<p><strong>Mettre à jour.</strong> <code>git pull</code> dans le clone de LBL,
+puis relancez <code>lbl_gui</code>. L'installation est éditable : rien à
+réinstaller, sauf si les dépendances ou les commandes changent (alors
+<code>pip install -e .</code> dans le clone).</p>
 """
     sections.append(card("by-hand", "Without the window, and updating",
                          "Sans la fenêtre, et mises à jour",
@@ -954,15 +960,17 @@ Ctrl+Maj+R).</li>
 
     sections.append(card("feedback", "Your feedback", "Vos retours", both(
         '<p>This is a test version: what breaks, what is unclear, what is'
-        ' missing, all of it helps. Open an issue on <a href="%s/issues">'
-        'github.com/eartigau/lbl-pca2d-gui</a>, with the run\'s'
-        ' <code>run.log</code> and <code>wrap.py</code> when a run went'
-        ' wrong, or write to Étienne.</p>' % REPO,
+        ' missing, all of it helps. Open an issue on <a href="%s">'
+        'github.com/njcuk9999/lbl</a>, with the run\'s log'
+        ' (<code>DATA_DIR/gui/logs/&lt;run&gt;.log</code>) and its'
+        ' <code>wrap.py</code> when a run went wrong, or write to'
+        ' Étienne.</p>' % ISSUES,
         '<p>C\'est une version de test : ce qui casse, ce qui n\'est pas'
         ' clair, ce qui manque, tout aide. Ouvrez un ticket sur <a'
-        ' href="%s/issues">github.com/eartigau/lbl-pca2d-gui</a>, avec le'
-        ' <code>run.log</code> et le <code>wrap.py</code> du run quand un run'
-        ' a mal tourné, ou écrivez à Étienne.</p>' % REPO)))
+        ' href="%s">github.com/njcuk9999/lbl</a>, avec le journal du run'
+        ' (<code>DATA_DIR/gui/logs/&lt;run&gt;.log</code>) et son'
+        ' <code>wrap.py</code> quand un run a mal tourné, ou écrivez à'
+        ' Étienne.</p>' % ISSUES)))
 
     contents = "".join(
         '<li><a href="#%s">%s</a></li>' % (anchor, inline(esc(en), esc(fr)))
@@ -1060,13 +1068,13 @@ TEMPLATE = """<!doctype html>
 
   <footer class="footer">
     <p>
-      <a href="%(repo)s" target="_blank">lbl-gui on GitHub</a>
+      <a href="%(repo)s" target="_blank">the window in LBL (lbl/gui)</a>
       &middot;
       <a href="%(lbl_repo)s/tree/lbl-pca2d" target="_blank">LBL, branch lbl-pca2d</a>
       &middot;
       <a href="https://eartigau.github.io/" target="_blank">More tools</a>
     </p>
-    <p class="hint">lbl-gui %(version)s &middot; <span lang="en">guide of</span><span lang="fr">guide du</span> %(today)s</p>
+    <p class="hint">LBL %(version)s &middot; <span lang="en">guide of</span><span lang="fr">guide du</span> %(today)s</p>
   </footer>
 
   <div id="lightbox" class="lightbox" hidden>
@@ -1203,8 +1211,13 @@ def example_results(example, site_folder):
     if not runs:
         return {}
     record = json.load(open(runs[-1]))
-    lines = open(os.path.join(os.path.dirname(runs[-1]), "run.log")).read() \
-        .splitlines()
+    # the run's log, in the window's logs (or in its folder, from an older
+    #   window)
+    folder = os.path.dirname(runs[-1])
+    log = os.path.join(data, "gui", "logs", os.path.basename(folder) + ".log")
+    if not os.path.exists(log):
+        log = os.path.join(folder, "run.log")
+    lines = open(log).read().splitlines()
     marks = [(i, l) for i, l in enumerate(lines) if _stamp(l)]
     first = _stamp(marks[0][1]) if marks else None
     reports = [_stamp(l) for _, l in marks if "Report written" in l]
