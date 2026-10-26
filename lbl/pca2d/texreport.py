@@ -1434,6 +1434,12 @@ def figure_phase(before, after, planets, path, most=4):
                         label="phase bins, weighted mean")
             k, err, curve = sine_fit(x, y, run["e"])
             dbic = planet_bic(run["t"], y, run["e"], planet["period"])
+            # what the sine leaves: the rms of the residuals to it, beside
+            #   the median error bar that says what noise alone would leave
+            ok = np.isfinite(x) & np.isfinite(y)
+            resid = y[ok] - curve(x[ok])
+            rms = float(np.sqrt(np.mean(resid ** 2))) if resid.size else np.nan
+            typical = float(np.nanmedian(run["e"][ok])) if resid.size else np.nan
             ax.plot(grid, curve(grid), color=colour, lw=1.6, zorder=6,
                     label="sine at P: K = %.2f $\\pm$ %.2f m/s" % (k, err))
             if planet.get("k") and planet.get("t0"):
@@ -1444,9 +1450,10 @@ def figure_phase(before, after, planets, path, most=4):
             ax.axhline(0, color=MUTED, lw=0.6)
             ax.set_ylim(*lim)
             ax.set_xlim(-0.5, 0.5)
-            ax.set_title("%s: K = %.2f $\\pm$ %.2f m/s\n\u0394BIC %+.1f (%s)"
+            ax.set_title("%s: K = %.2f $\\pm$ %.2f m/s\n\u0394BIC %+.1f (%s)\n"
+                         "residuals: %.2f m/s rms (errors %.2f)"
                          % (run["label"], k, err, dbic,
-                            bervbias.bic_words(dbic, "sine")),
+                            bervbias.bic_words(dbic, "sine"), rms, typical),
                          fontsize=7.5, color=INK, loc="left")
             ax.legend(fontsize=6, frameon=False, loc="lower left", ncol=1)
             _style(ax)
@@ -2451,8 +2458,10 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " free jitter ($k$ = 2 against 4), positive when the data prefer the"
          " sine (above 2, 6 and 10: positive, strong, very strong);"
          " dashed, where the archive gives a transit time and a"
-         " semi-amplitude, the circular orbit they imply. A correction that"
-         " left the planet alone keeps $K$."),
+         " semi-amplitude, the circular orbit they imply. Under it, the rms"
+         " of the residuals to the sine, beside the median error bar: what"
+         " the fit leaves, against what the noise alone would. A correction"
+         " that left the planet alone keeps $K$."),
     ]
     for path, short, caption in drawn:
         if path:
