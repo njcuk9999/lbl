@@ -188,6 +188,9 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     if planets is not None:
         wanted.append(('Velocities folded on the known orbits',
                        lambda: figures.page_phase(plt, table, title, planets)))
+        wanted.append(('The known orbits and an acceleration, fitted together',
+                       lambda: figures.page_phase_trend(plt, table, title,
+                                                        planets)))
     if fit is not None:
         wanted += [
             ('Joint Keplerian fit of the transiting candidates',

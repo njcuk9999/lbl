@@ -164,6 +164,149 @@ def page_phase(plt, table, title, planets):
     return fig
 
 
+#: the jitter's search range [m/s], on a log scale
+JITTER_RANGE = (1e-3, 1e3)
+#: the acceleration's unit: m/s per year
+YEAR = 365.25
+
+
+def fit_orbits_trend(time, vrad, svrad, orbits):
+    """The known orbits and an acceleration fitted together: a constant, a
+    slope in time and each orbit's K (its shape, P, e, omega and the time of
+    conjunction or periastron, held at the catalogue's), by weighted least
+    squares, with a jitter added to the error bars and chosen by maximum
+    likelihood. Returns dict(coef, err, cov, jitter, tmid, names, model,
+    residual): coef = [constant, slope per day, K of each orbit]."""
+    from scipy.optimize import minimize_scalar
+
+    from lbl.science import planets as kepler
+
+    tmid = float(np.mean(time))
+    shapes = [kepler.orbit_velocity(time, dict(orbit, k=1.0))
+              for orbit in orbits]
+    design = np.column_stack([np.ones_like(time), time - tmid] + shapes)
+
+    def solve(jitter):
+        var = svrad ** 2 + jitter ** 2
+        root = 1.0 / np.sqrt(var)
+        normal = (design * (1.0 / var)[:, None]).T @ design
+        cov = np.linalg.inv(normal)
+        coef = cov @ ((design * (1.0 / var)[:, None]).T @ vrad)
+        resid = vrad - design @ coef
+        nll = 0.5 * float(np.sum(resid ** 2 / var + np.log(var)))
+        return coef, cov, resid, nll, root
+
+    found = minimize_scalar(lambda lj: solve(np.exp(lj))[3],
+                            bounds=np.log(JITTER_RANGE), method='bounded')
+    jitter = float(np.exp(found.x))
+    # the bounded search can miss a minimum at its lower edge (no jitter)
+    if solve(JITTER_RANGE[0])[3] <= solve(jitter)[3]:
+        jitter = JITTER_RANGE[0]
+    coef, cov, resid, _, _ = solve(jitter)
+    return dict(coef=coef, err=np.sqrt(np.diag(cov)), cov=cov,
+                jitter=jitter, tmid=tmid,
+                names=[o.get('name', '?') for o in orbits],
+                model=design @ coef, residual=resid, shapes=shapes)
+
+
+def page_phase_trend(plt, table, title, planets):
+    """The known orbits and an acceleration fitted together
+    (fit_orbits_trend): the series with the total model, its residuals, and
+    each orbit folded with the rest of the model taken out, its fitted K
+    beside the catalogue's."""
+    if planets is None or not planets.get('orbits'):
+        return None
+    from lbl.science import planets as kepler
+
+    time = np.asarray(table[S.TIME], dtype=float) + 2400000.0
+    vrad = np.asarray(table[S.VELOCITY], dtype=float)
+    svrad = np.asarray(table[S.ERROR], dtype=float)
+    good = (np.isfinite(time) & np.isfinite(vrad) & np.isfinite(svrad)
+            & (svrad > 0))
+    orbits = planets['orbits']
+    if good.sum() < len(orbits) + 4:
+        return None
+    time, vrad, svrad = time[good], vrad[good], svrad[good]
+    fit = fit_orbits_trend(time, vrad, svrad, orbits)
+    coef, err = fit['coef'], fit['err']
+    slope, slope_err = coef[1] * YEAR, err[1] * YEAR
+    total_err = np.sqrt(svrad ** 2 + fit['jitter'] ** 2)
+    rjd = time - 2400000.0
+
+    fig, axes = plt.subplots(2 + len(orbits), 1, squeeze=False,
+                             figsize=(10, 5.0 + 3.0 * len(orbits)),
+                             gridspec_kw=dict(height_ratios=[2.2, 1.0]
+                                              + [2.0] * len(orbits)))
+    axes = axes[:, 0]
+    # THE SERIES AND THE TOTAL MODEL, on a fine grid in time, and the
+    #   acceleration alone
+    grid = np.linspace(time.min(), time.max(), 20000)
+    shapes = [kepler.orbit_velocity(grid, dict(o, k=1.0)) for o in orbits]
+    trend = coef[0] + coef[1] * (grid - fit['tmid'])
+    total = trend + sum(k * f for k, f in zip(coef[2:], shapes))
+    axes[0].errorbar(rjd, vrad, yerr=total_err, fmt='o', ms=3, lw=0.7,
+                     capsize=0, alpha=0.8, label='LBL velocities (errors'
+                     ' with the jitter)')
+    # a short period over years fills a band: drawn thin, with the model's
+    #   value at each epoch, which is what the points are compared with
+    axes[0].plot(grid - 2400000.0, total, color='C3', lw=0.4, alpha=0.35,
+                 label='total model: orbits + acceleration + constant')
+    axes[0].plot(rjd, fit['model'], 's', ms=4, mfc='none', mec='C3',
+                 mew=0.9, label='total model at the epochs')
+    axes[0].plot(grid - 2400000.0, trend, color='k', lw=1.2, ls='--',
+                 label='acceleration %+.3f $\\pm$ %.3f m s$^{-1}$ yr$^{-1}$'
+                       % (slope, slope_err))
+    axes[0].set_ylabel('Radial velocity (m s$^{-1}$)')
+    axes[0].legend(fontsize=8, loc='best')
+    axes[0].set_title('jitter %.2f m s$^{-1}$, rms of the residuals %.2f'
+                      ' m s$^{-1}$, %d epochs' % (
+                          fit['jitter'], float(np.std(fit['residual'],
+                                                      ddof=len(coef))),
+                          time.size), fontsize=9)
+    axes[1].errorbar(rjd, fit['residual'], yerr=total_err, fmt='o', ms=3,
+                     lw=0.7, capsize=0, alpha=0.8, color='0.3')
+    axes[1].axhline(0.0, color='k', lw=0.6, ls=':')
+    axes[1].set_ylabel('Residual (m s$^{-1}$)')
+    axes[1].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
+    # EACH ORBIT FOLDED, the constant, the acceleration and the other
+    #   orbits taken out: the fitted K drawn, the catalogue's dashed
+    for i, (ax, orbit) in enumerate(zip(axes[2:], orbits)):
+        at_conj = orbit.get('t0') is not None
+        ref = orbit['t0'] if at_conj else kepler.periastron_time(orbit)
+        period = float(orbit['period'])
+        phase = np.mod((time - ref) / period + 0.5, 1.0) - 0.5
+        own = coef[2 + i] * fit['shapes'][i]
+        folded = fit['residual'] + own
+        ax.errorbar(phase, folded, yerr=total_err, fmt='o', ms=3, lw=0.7,
+                    capsize=0, alpha=0.8, label='LBL velocities, the rest of'
+                    ' the model taken out')
+        pgrid = np.linspace(-0.5, 0.5, 600)
+        unit = kepler.orbit_velocity(ref + pgrid * period, dict(orbit, k=1.0))
+        ax.plot(pgrid, coef[2 + i] * unit, color='C3', lw=1.4,
+                label='fitted K = %.2f $\\pm$ %.2f m s$^{-1}$'
+                      % (coef[2 + i], err[2 + i]))
+        ax.plot(pgrid, float(orbit['k']) * unit, color='0.4', lw=1.0,
+                ls='--', label='catalogue K = %.2f m s$^{-1}$'
+                               % float(orbit['k']))
+        ax.axhline(0.0, color='k', lw=0.6, ls=':')
+        ax.set_xlim(-0.5, 0.5)
+        ax.set_xlabel('Phase (0 = %s)' % ('inferior conjunction' if at_conj
+                                           else 'periastron'))
+        ax.set_ylabel('Radial velocity (m s$^{-1}$)')
+        ax.set_title('%s: P = %.6g d, e = %.3f (held); K and the acceleration'
+                     ' fitted together' % (orbit.get('name', '?'), period,
+                                           float(orbit.get('e') or 0.0)),
+                     fontsize=9)
+        ax.legend(fontsize=8, loc='best')
+    for ax in axes:
+        ax.grid(alpha=0.3)
+    fig.suptitle('%s: the known orbits (%s) and an acceleration fitted'
+                 ' together, with a free jitter' % (title, planets['catalog']),
+                 fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
 #: the rdb column of the number of iterations compute took (KW_NITERATIONS)
 ITERATIONS = 'ITE_RV'
 
