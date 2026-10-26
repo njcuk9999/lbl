@@ -197,10 +197,11 @@ def setup_compute(inst: InstrumentsType,
     # Step 5: Get the systemic velocity properties for template
     # -------------------------------------------------------------------------
     # get systemic velocity for the science template
-    sargs = [inst, science_template_file, mask_file]
+    sargs = [inst, science_template_file, mask_file, science_template_file]
     science_sys_vel_props = general.get_systemic_vel_props(*sargs)
     # get systemic velocity for the comparison template
-    cargs = [inst, comparison_template_file, mask_file]
+    cargs = [inst, comparison_template_file, mask_file,
+             science_template_file]
     comparison_sys_vel_props = general.get_systemic_vel_props(*cargs)
 
     # -------------------------------------------------------------------------

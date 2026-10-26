@@ -584,7 +584,9 @@ def spline_template(inst: InstrumentsType, template_file: str,
 
 
 def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
-                           mask_file: str) -> Dict[str, Any]:
+                           mask_file: str,
+                           sci_template_file: Optional[str] = None
+                           ) -> Dict[str, Any]:
     # set the function name
     func_name = __NAME__ + '.get_systemic_vel_props()'
     # print progress
@@ -627,8 +629,13 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     for ccf_region in inst.params['CCF_CLEAN_BANDS']:
         ccf_regions[ccf_region] = astro.ccf_regions[ccf_region]
     # ---------------------------------------------------------------------
-    # get the template file for the science object
-    sci_template_file = template_file.replace(template_objname, sci_objname)
+    # get the template file for the science object: the caller's (a vetted
+    #   comparison template is not in the templates folder, so the science
+    #   template is not where the comparison's path says), else the
+    #   comparison's path with the object's name
+    if sci_template_file is None:
+        sci_template_file = template_file.replace(template_objname,
+                                                  sci_objname)
     # load the science template
     msg = 'Loading science template file {}'
     margs = [sci_template_file]

@@ -159,3 +159,39 @@ def test_a_models_folder_from_before_is_sorted_at_once(tmp_path):
     assert (models / 'resproj' / 'temperature_gradient_3500.fits').exists()
     assert (models / 'template_SPIROU_CADC' /
             'vetted_GJ411_spirou.fits').exists()
+
+
+def test_the_science_template_is_not_looked_for_beside_a_vetted_one(
+        tmp_path):
+    # lbl_compute on 2026-10-26: the science template was taken as the
+    #   comparison's path with the object's name, which put it in
+    #   models/template_SPIROU_CADC beside the vetted template
+    from lbl.science import general
+
+    class Asked(Exception):
+        pass
+
+    class Inst:
+        params = dict(DATA_TYPE='SCIENCE', OBJECT_SCIENCE='KIC7847566',
+                      OBJECT_COMPARISON='VETTED_GJ4063',
+                      ROUGH_CCF_MIN_RV=-3e5, ROUGH_CCF_MAX_RV=3e5,
+                      ROUGH_CCF_STEP_RV=500, ROUGH_CCF_FILTER_SIZE=100,
+                      CCF_CLEAN_BANDS=[])
+
+        def get_mask_systemic_vel(self, mask_file):
+            return 0.0
+
+        def load_mask(self, mask_file):
+            return None
+
+        def load_template(self, filename):
+            raise Asked(filename)
+
+    vetted_template = str(tmp_path / 'models' / 'template_SPIROU_CADC' /
+                          'LBL_Template_VETTED_GJ4063_spirou.fits')
+    science = str(tmp_path / 'templates' /
+                  'LBL_Template_KIC7847566_spirou.fits')
+    with pytest.raises(Asked) as asked:
+        general.get_systemic_vel_props(Inst(), vetted_template, 'mask.fits',
+                                       science)
+    assert str(asked.value) == science
