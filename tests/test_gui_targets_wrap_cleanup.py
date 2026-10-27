@@ -306,3 +306,19 @@ def test_small_rv_shift_is_on_unless_unticked(data_dir):
     assert "SMALL_RV_SHIFT" in wrapgen.render(built["rparams"], "test")
     built = wrapgen.build(_state(data_dir, lbl={"SMALL_RV_SHIFT": False}))
     assert built["rparams"]["SMALL_RV_SHIFT"] is False
+
+
+def test_a_systemic_velocity_the_headers_do_not_really_give_is_none():
+    # 2026-10-27: APERO's PP_RV with PP_RVS = 'header' is SPIRou's OBJRV
+    #   copied (578 km/s for KIC 7847566), and ESO writes -99999 for none
+    from lbl.gui import targets
+    copied = fits.Header({"PP_RV": 578000.0, "PP_RVS": "header"})
+    assert targets._vsys([copied]) is None
+    cited = fits.Header({"PP_RV": -32690.0, "PP_RVS": "2018MNRAS.475.1960F"})
+    assert targets._vsys([cited]) == -32.69
+    placeholder = fits.Header()
+    placeholder["HIERARCH ESO TEL TARG RADVEL"] = -99999.0
+    assert targets._vsys([placeholder]) is None
+    typed = fits.Header()
+    typed["HIERARCH ESO TEL TARG RADVEL"] = 5.2
+    assert targets._vsys([typed]) == 5.2

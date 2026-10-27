@@ -43,6 +43,8 @@
   --series-7: #9085e9;
   --series-8: #e66767;
   --series-other: #5d6b81;
+  /* |v_tot| < 4 km/s: the star's lines on the tellurics */
+  --tellu-band: rgba(255, 196, 64, 0.14);
   --code-bg: #050b15;
   --code-text: #d3dff2;
   --good: #5fd78a;
@@ -88,6 +90,7 @@
   --series-7: #6250d6;
   --series-8: #e34948;
   --series-other: #a3afc0;
+  --tellu-band: rgba(230, 150, 0, 0.14);
   --warn-text: #9a5b00;
 }
 

@@ -82,20 +82,23 @@ def summarise(main, sptype, measured):
 def ask(name, header_object=None):
     """One target, as SIMBAD knows it: dict(state done/unknown/failed, main,
     sptype, teff, n (measurements kept), n_all, source mesFe_H/sptype,
-    asked, error)."""
+    rv (its systemic velocity, km/s, None when SIMBAD has none), asked,
+    error)."""
     names = candidates(name, header_object)
     try:
         for one in names:
             quoted = one.replace("'", "''")
-            rows = _tap("SELECT b.main_id, b.sp_type, m.teff FROM ident AS i"
-                        " JOIN basic AS b ON b.oid = i.oidref LEFT JOIN"
-                        " mesFe_h AS m ON m.oidref = b.oid WHERE i.id = '%s'"
-                        % quoted)
+            rows = _tap("SELECT b.main_id, b.sp_type, b.rvz_radvel, m.teff"
+                        " FROM ident AS i JOIN basic AS b ON b.oid ="
+                        " i.oidref LEFT JOIN mesFe_h AS m ON m.oidref = b.oid"
+                        " WHERE i.id = '%s'" % quoted)
             if rows:
                 measured = [float(r["teff"]) for r in rows if r["teff"]]
                 out = summarise(str(rows[0]["main_id"]).strip(),
                                 rows[0]["sp_type"], measured)
                 out["main"] = re.sub(r"\s+", " ", out["main"])
+                rv = rows[0].get("rvz_radvel")
+                out["rv"] = float(rv) if rv not in (None, "") else None
                 out["asked"] = one
                 return out
     except Exception as exc:                              # noqa: BLE001
@@ -119,7 +122,11 @@ def teffs(data_dir, targets, refresh=False):
     failed question is not kept, so that it is asked again."""
     with _lock:
         known = _read(data_dir)
-    todo = [t for t in targets if refresh or t["name"] not in known]
+    # an answer kept before SIMBAD's systemic velocity was asked (no rv) is
+    #   asked again, once
+    todo = [t for t in targets if refresh or t["name"] not in known
+            or (known[t["name"]].get("state") == "done"
+                and "rv" not in known[t["name"]])]
     if todo:
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             answers = list(pool.map(lambda t: ask(t["name"], t.get("object")),

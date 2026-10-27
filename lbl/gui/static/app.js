@@ -790,8 +790,11 @@ function empty(holder, message) {
   holder.replaceChildren(root);
 }
 // a target's colour is its place among the ticked ones, in every plot
+// a legend for two targets or more, and for one when the targets are split
+//   between the plots against v_tot and those against the BERV (SPLIT)
+let SPLIT = false;
 function legend(names, coloured) {
-  if (names.length < 2) return null;
+  if (names.length < 2 && !SPLIT) return null;
   const place = (n) => S.ticked.indexOf(n);
   const shown = names.filter((n) => place(n) < coloured);
   const rest = names.length - shown.length;
@@ -805,34 +808,59 @@ function inBounds(mjd) {
   return (S.min_rjd === null || S.min_rjd === '' || rjd >= S.min_rjd) && (S.max_rjd === null || S.max_rjd === '' || rjd <= S.max_rjd);
 }
 
+// a target is drawn against v_tot, the star's velocity in the telluric
+//   frame, when its systemic velocity is known (SIMBAD's, else the
+//   headers': targets.py's _vsys), against the BERV otherwise: when the
+//   ticked targets are of both kinds, each plot comes twice, one per kind
+const C_KMS = 299792.458;
+// |v_tot| under which the star's lines sit on the tellurics (km/s)
+const VTOT_CLOSE = 4;
+function vsysOf(name, i) {
+  const rv = (SIMBAD[name] || {}).rv;
+  if (typeof rv === 'number') return rv;
+  const header = (POINTS[name].vsys || [])[i];
+  return header === null || header === undefined ? null : header;
+}
+const hasVsys = (name) => POINTS[name].berv.some((_, i) => vsysOf(name, i) !== null);
+// v_sys less the BERV, composed relativistically
+const vtotOf = (vsys, berv) => (vsys - berv) / (1 - (vsys * berv) / (C_KMS * C_KMS));
+const showCard = (id, on) => { $(id).closest('.card').hidden = !on; };
+
 function drawPlots() {
   const names = S.ticked.filter((name) => POINTS[name] && POINTS[name].berv.length);
-  if (!names.length) { empty($('plot_berv')); empty($('plot_vtot')); empty($('plot_snr')); empty($('plot_time')); return; }
-  drawHistogram(names);
-  drawVtot(names);
-  drawScatter(names);
+  const withV = names.filter(hasVsys);
+  const withoutV = names.filter((n) => !hasVsys(n));
+  SPLIT = withV.length > 0 && withoutV.length > 0;
+  showCard('plot_berv', !names.length || withoutV.length > 0);
+  showCard('plot_snr', !names.length || withoutV.length > 0);
+  showCard('plot_vtot', withV.length > 0);
+  showCard('plot_snr_vtot', withV.length > 0);
+  if (!names.length) { empty($('plot_berv')); empty($('plot_snr')); empty($('plot_time')); return; }
+  if (withoutV.length) {
+    histogram($('plot_berv'), withoutV, (n) => POINTS[n].berv.map((v, i) => [v, POINTS[n].mjd[i]]), 'BERV (km/s)', 'BERV');
+    drawScatter($('plot_snr'), withoutV, (n, i) => POINTS[n].berv[i], 'BERV (km/s)', 'BERV', false);
+  }
+  if (withV.length) {
+    const vtot = (n, i) => { const v = vsysOf(n, i); return v === null ? null : vtotOf(v, POINTS[n].berv[i]); };
+    histogram($('plot_vtot'), withV, (n) => POINTS[n].berv.map((_, i) => { const v = vtot(n, i); return v === null ? null : [v, POINTS[n].mjd[i]]; }).filter(Boolean), 'v_tot = v_sys - BERV (km/s)', 'v_tot', true);
+    drawScatter($('plot_snr_vtot'), withV, vtot, 'v_tot = v_sys - BERV (km/s)', 'v_tot', true);
+  }
   drawTimeline(names);
 }
 
-function drawHistogram(names) {
-  histogram($('plot_berv'), names, (n) => POINTS[n].berv.map((v, i) => [v, POINTS[n].mjd[i]]), 'BERV (km/s)', 'BERV');
-}
-
-// v_tot = v_sys - BERV: where the star's lines fall against the tellurics,
-//   for the targets whose headers give a systemic velocity (the others are
-//   left out, not drawn at 0)
-function drawVtot(names) {
-  const withVsys = names.filter((n) => (POINTS[n].vsys || []).some((v) => v !== null && v !== undefined));
-  if (!withVsys.length) { empty($('plot_vtot'), t('no_vsys')); return; }
-  histogram($('plot_vtot'), withVsys, (n) => POINTS[n].berv.map((b, i) => {
-    const vsys = POINTS[n].vsys[i];
-    return vsys === null || vsys === undefined ? null : [vsys - b, POINTS[n].mjd[i]];
-  }).filter(Boolean), 'v_tot = v_sys - BERV (km/s)', 'v_tot');
+// the band where the star's lines sit on the tellurics, |v_tot| < 4 km/s,
+//   and the zero line, behind the marks
+function tellurics(root, inner, xscale) {
+  const x0 = Math.max(inner.x0, xscale(-VTOT_CLOSE));
+  const x1 = Math.min(inner.x1, xscale(VTOT_CLOSE));
+  if (x1 > x0) root.append(svg('rect', { x: x0, width: x1 - x0, y: inner.y0, height: inner.y1 - inner.y0, fill: css('--tellu-band') }));
+  const z = xscale(0);
+  if (z > inner.x0 && z < inner.x1) root.append(svg('line', { x1: z, x2: z, y1: inner.y0, y2: inner.y1, stroke: css('--muted'), 'stroke-dasharray': '3 3' }));
 }
 
 // a histogram stacked by target, per 3 km/s; each target keeps its colour
 //   (its place among the ticked ones), past the coloured slots one grey
-function histogram(holder, names, valuesOf, xlabel, what) {
+function histogram(holder, names, valuesOf, xlabel, what, band = false) {
   const width = 380;
   const height = 190;
   const { root, inner } = frame(width, height, { l: 30, r: 8, t: 6, b: 36 });
@@ -857,6 +885,7 @@ function histogram(holder, names, valuesOf, xlabel, what) {
   const xscale = (v) => inner.x0 + ((v - lo) / (hi - lo)) * (inner.x1 - inner.x0);
   const yscale = (v) => inner.y1 - (v / top) * (inner.y1 - inner.y0);
   axes(root, inner, ticks(lo, hi, 6), ticks(0, top, 4), xscale, yscale, xlabel);
+  if (band) tellurics(root, inner, xscale);
   const gap = 1;
   for (let i = 0; i < bins; i += 1) {
     let base = 0;
@@ -879,33 +908,38 @@ function histogram(holder, names, valuesOf, xlabel, what) {
   holder.replaceChildren(...[legend(names, HIST_COLOURED), root].filter(Boolean));
 }
 
-function drawScatter(names) {
+function drawScatter(holder, names, xOf, xlabel, what, band) {
   const width = 380;
   const height = 200;
   const { root, inner } = frame(width, height, { l: 36, r: 8, t: 6, b: 36 });
   const xs = [];
   const ys = [];
-  names.forEach((n) => POINTS[n].berv.forEach((v, i) => { if (POINTS[n].snr[i] !== null) { xs.push(v); ys.push(POINTS[n].snr[i]); } }));
-  if (!xs.length) { empty($('plot_snr')); return; }
+  names.forEach((n) => POINTS[n].berv.forEach((_, i) => { const x = xOf(n, i); if (POINTS[n].snr[i] !== null && x !== null) { xs.push(x); ys.push(POINTS[n].snr[i]); } }));
+  if (!xs.length) { empty(holder); return; }
   const xlo = Math.min(...xs) - 1;
   const xhi = Math.max(...xs) + 1;
   const yhi = Math.max(...ys) * 1.05;
   const xscale = (v) => inner.x0 + ((v - xlo) / (xhi - xlo)) * (inner.x1 - inner.x0);
   const yscale = (v) => inner.y1 - (v / yhi) * (inner.y1 - inner.y0);
-  axes(root, inner, ticks(xlo, xhi, 6), ticks(0, yhi, 4), xscale, yscale, 'BERV (km/s)');
-  // grey first, so that the coloured three sit on top
-  const order = names.map((n, i) => [n, i]).sort((a, b) => (b[1] >= SCATTER_COLOURED) - (a[1] >= SCATTER_COLOURED));
-  order.forEach(([n, s]) => {
+  axes(root, inner, ticks(xlo, xhi, 6), ticks(0, yhi, 4), xscale, yscale, xlabel);
+  if (band) tellurics(root, inner, xscale);
+  // each target keeps its colour, its place among the ticked ones (the
+  //   same in every plot); grey first, so that the coloured three sit on top
+  const place = (n) => S.ticked.indexOf(n);
+  const order = [...names].sort((a, b) => (place(b) >= SCATTER_COLOURED) - (place(a) >= SCATTER_COLOURED));
+  order.forEach((n) => {
+    const s = place(n);
     const colour = s < SCATTER_COLOURED ? css(SERIES[s]) : css('--series-other');
-    POINTS[n].berv.forEach((v, i) => {
+    POINTS[n].berv.forEach((_, i) => {
       const snr = POINTS[n].snr[i];
-      if (snr === null) return;
-      const dot = svg('circle', { cx: xscale(v), cy: yscale(snr), r: 3.6, fill: colour, stroke: css('--surface'), 'stroke-width': 1, opacity: inBounds(POINTS[n].mjd[i]) ? 1 : 0.25 });
-      dot.dataset.tip = `${esc(n)}<br><span class="mono">BERV ${fmt(v, 2)} km/s · SNR ${fmt(snr, 0)} · ${mjdDate(POINTS[n].mjd[i])}</span>`;
+      const x = xOf(n, i);
+      if (snr === null || x === null) return;
+      const dot = svg('circle', { cx: xscale(x), cy: yscale(snr), r: 3.6, fill: colour, stroke: css('--surface'), 'stroke-width': 1, opacity: inBounds(POINTS[n].mjd[i]) ? 1 : 0.25 });
+      dot.dataset.tip = `${esc(n)}<br><span class="mono">${what} ${fmt(x, 2)} km/s · SNR ${fmt(snr, 0)} · ${mjdDate(POINTS[n].mjd[i])}</span>`;
       root.append(dot);
     });
   });
-  $('plot_snr').replaceChildren(...[legend(names, SCATTER_COLOURED), root].filter(Boolean));
+  holder.replaceChildren(...[legend(names, SCATTER_COLOURED), root].filter(Boolean));
 }
 
 function drawTimeline(names) {
@@ -1179,6 +1213,8 @@ async function askSimbad(names, refresh = false) {
   names.forEach((n) => { SIMBAD[n] = data[n] || { state: 'failed' }; });
   wrapEdited = false;
   drawPerTarget();
+  // its systemic velocity puts a target against v_tot
+  drawPlots();
 }
 function simbadNote(name, target) {
   const answer = SIMBAD[name];

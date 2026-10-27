@@ -22,8 +22,11 @@ import numpy as np
 
 #: where the indexes are kept, one per data folder
 INDEX_HOME = os.path.expanduser("~/.lbl_pca2d_gui/scans")
-#: bumped when the shape of an index changes
-VERSION = 3
+#: bumped when the shape of an index changes, or what a record holds: 5
+#:    since 2026-10-27, when a PP_RV whose source is 'header' (SPIRou's
+#:    OBJRV copied: 578 km/s for KIC 7847566) and ESO's placeholders
+#:    (-99999 km/s) stopped being taken as the systemic velocity
+VERSION = 5
 #: a folder made from another by LBL or PCA2D is not a target: the corrected
 #: (<object>_pca2d, <object>_pca2d_<name>) and the cleaned (<object>_tc)
 DERIVED = re.compile(r"(_pca2d(_.*)?|_tc(_.*)?)$")
@@ -45,11 +48,19 @@ SNR_KEYS = ("SNR", "HIERARCH ESO QC ORDER60 SNR", "HIERARCH ESO DRS SPE EXT SN60
 #:    is what a wrap hands LBL as OBJECT_TEFF when the window has it
 TEFF_KEYS = ("OBJTEMP", "PP_TEFF", "TEFF", "HIERARCH ESO OCS TARG TEFF")
 #: the star's systemic velocity: APERO's PP_RV [m/s], when PP_RVS names its
-#:    source, else ESO's target velocity [km/s]; 0 there means unknown.
-#:    SPIRou's OBJRV is not read: it can be anything (280 km/s for
-#:    KIC 12060710, whose lines LBL finds at 4 km/s)
+#:    source (a reference: 2018MNRAS.475.1960F), else ESO's target velocity
+#:    [km/s], what the observer typed. SPIRou's OBJRV is not read: it can be
+#:    anything (280 km/s for KIC 12060710, whose lines LBL finds at 4
+#:    km/s), and neither is a PP_RV whose source is 'header', which is that
+#:    OBJRV copied (578 km/s for KIC 7847566, 2026-10-27). The window
+#:    prefers SIMBAD's systemic velocity to these, when SIMBAD has one
 VSYS_SOURCE_KEY, VSYS_APERO_KEY = "PP_RVS", "PP_RV"
 VSYS_ESO_KEY = "HIERARCH ESO TEL TARG RADVEL"
+#: PP_RVS that do not name where the velocity comes from
+VSYS_NO_SOURCE = ("", "none", "header", "null")
+#: a velocity [km/s] beyond this is a placeholder (ESO's -99999 for
+#:    GJ 1214), and 0 means unknown
+VSYS_MAX = 1000.0
 #: the night a spectrum belongs to: MJD shifted so that a night does not
 #: straddle midnight UTC anywhere it matters (Chile, Hawaii)
 NIGHT_SHIFT = -0.3
@@ -183,12 +194,12 @@ def _vsys(headers):
     """The star's systemic velocity [km/s] the headers give, or None."""
     for head in headers:
         source = str(head.get(VSYS_SOURCE_KEY, "") or "").strip()
-        if VSYS_APERO_KEY in head and source and source.lower() != "none":
+        if VSYS_APERO_KEY in head and source.lower() not in VSYS_NO_SOURCE:
             value = _number(head[VSYS_APERO_KEY])
-            if value is not None:
+            if value is not None and 0 < abs(value) / 1000.0 < VSYS_MAX:
                 return round(value / 1000.0, 4)
     value = _first(headers, (VSYS_ESO_KEY,))
-    return value if value else None
+    return value if value and abs(value) < VSYS_MAX else None
 
 
 def _first(headers, keys):
