@@ -246,6 +246,11 @@ def build(state: dict) -> dict:
                 errors.append(say("err_basis_other", pca2d["input_name"],
                                   found[0]["instrument"], found[0]["source"],
                                   instrument, source))
+            elif "n_earth" not in chosen and found[0]["n_earth"]:
+                # a frozen basis is divided out whole (LBL takes all of its
+                #   components unless n_earth is given): the default would
+                #   ask a basis of fewer components for more than it has
+                pca2d["n_earth"] = int(found[0]["n_earth"])
         try:
             from lbl.recipes import lbl_pca2d
             lbl_pca2d.settings(dict(pca2d), report=rparams.get("REPORT", True))

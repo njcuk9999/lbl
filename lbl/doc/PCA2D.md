@@ -27,7 +27,7 @@ rparams['RUN_LBL_MASK'] = True
 rparams['RUN_LBL_COMPUTE'] = True
 rparams['RUN_LBL_COMPILE'] = True
 # the precleaning, with the nominal settings
-rparams['PCA2D'] = dict(n_star=1, n_earth=3)
+rparams['PCA2D'] = dict(n_star=1, n_earth=7)
 
 lbl_wrap.main(rparams)
 ```
@@ -82,7 +82,7 @@ optical spectrographs.
 | key | default | |
 |---|---|---|
 | `n_star` | 1 | the star's spectra, the template included: 1 is the template alone, not adjusted in depth; 2 adds one star-frame component with a free amplitude (never divided out); 0 is refused |
-| `n_earth` | 3 | observer-frame components fitted and divided out |
+| `n_earth` | 7 | observer-frame components fitted and divided out (with `input_name`: all of the basis') |
 | `compare` | True | LBL measures the delivered object too, first, for the report |
 | `figures` | as `REPORT` | the river plots and the other figures of the correction |
 | `overwrite` | False | redo even when the same correction is on disk (as `SKIP_LBL_PCA2D=False`, below) |
@@ -96,7 +96,7 @@ Anything else is a key of the pca2d configuration,
 reasons: as `'section.key'`, as a dict per section, or by a short name.
 
 ```python
-rparams['PCA2D'] = dict(n_star=1, n_earth=3,
+rparams['PCA2D'] = dict(n_star=1, n_earth=7,
                         nsig_cut=0,                        # short name
                         correct=dict(mask_share=0.5),      # a section
                         **{'twoframe.iters': 24})          # a dotted key
@@ -191,7 +191,8 @@ has a *keep* button beside the basis), or put the file there yourself:
 a basis in any other subfolder of `models/` is found as well. `input_name`
 looks in `models/` first (the run's own `pca2d_` folder before the
 others), then in `pca2d/components/`; a fit whose `output_name` is that of
-a kept basis updates it where it is kept. The
+a kept basis updates it where it is kept. Without `n_earth`, a frozen basis
+is divided out whole. The
 stars' files stay in `pca2d/components/`.
 
 ```python

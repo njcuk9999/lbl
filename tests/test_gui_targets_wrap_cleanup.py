@@ -272,6 +272,26 @@ def test_a_wrap_loaded_and_written_again_keeps_what_it_said(data_dir, tmp_path):
     state["targets"] = state["ticked"]
     rparams = wrapgen.build(state)["rparams"]
     assert rparams["INPUT_FILE"] == "*t.fits"
-    assert rparams["PCA2D"] == {"n_star": 1, "n_earth": 3,
+    assert rparams["PCA2D"] == {"n_star": 1, "n_earth": 7,
                                 "input_name": "b", "mask_share": 0.5,
                                 "twoframe": {"iters": 4}}
+
+
+def test_a_frozen_basis_sets_n_earth_unless_it_is_chosen(data_dir):
+    # put in any subfolder of models/ (2026-10-27: one in template_...)
+    folder = data_dir / "models" / "template_NIRPS_HE_CADC"
+    folder.mkdir(parents=True)
+    head = fits.Header()
+    head["BASISNAM"] = "nirps_set"
+    head["INSTRUME"] = "NIRPS_HE"
+    head["DATASRC"] = "CADC"
+    head["NEARTH"] = 3
+    fits.PrimaryHDU(header=head).writeto(
+        folder / "PCA2D_Observer_nirps_set_nirps_he.fits")
+    # the default (7) would ask a 3-component basis for more than it has
+    built = wrapgen.build(_state(data_dir, pca2d={"input_name": "nirps_set"}))
+    assert built["errors"] == []
+    assert built["rparams"]["PCA2D"]["n_earth"] == 3
+    built = wrapgen.build(_state(data_dir, pca2d={"input_name": "nirps_set",
+                                                  "n_earth": 2}))
+    assert built["rparams"]["PCA2D"]["n_earth"] == 2

@@ -7,7 +7,7 @@ The two-frame precleaning of pca2d (lbl.pca2d), run on one science object
 before LBL measures it. lbl_wrap calls it when the run parameters carry a
 PCA2D dict, and measures the velocities on what it writes:
 
-    rparams['PCA2D'] = dict(n_star=1, n_earth=3)
+    rparams['PCA2D'] = dict(n_star=1, n_earth=7)
 
 Without that key nothing here is imported and LBL is what it was.
 
@@ -31,7 +31,7 @@ not given is the nominal set, the one every comparison of the project ran on.
                  template alone, not adjusted in depth; 2 adds one
                  star-frame component with a free amplitude, never divided
                  out; 0 is not a fit
-    n_earth      observer-frame components fitted and divided out (3)
+    n_earth      observer-frame components fitted and divided out (7)
     compare      LBL measures the delivered object too, first, so that the
                  report sets the two series side by side (True)
     figures      the river plots and the other figures of the correction
@@ -86,7 +86,7 @@ LblException = base_classes.LblException
 #: what the corrected object is called, after the object it comes from
 SUFFIX = '_pca2d'
 #: the switches of this recipe, and what they are when not given
-DEFAULTS = dict(n_star=1, n_earth=3, figures=True, overwrite=False,
+DEFAULTS = dict(n_star=1, n_earth=7, figures=True, overwrite=False,
                 name=None, joint=False, compare=True, output_name=None,
                 input_name=None)
 #: the short names, as the pca2d window spells them, and the key of the

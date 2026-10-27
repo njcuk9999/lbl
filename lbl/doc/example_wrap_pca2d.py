@@ -118,9 +118,8 @@ if __name__ == "__main__":
         #   residual of the star's own shift); none of them is divided out
         n_star=1,
         # components fitted in the observer's frame, and divided out of the
-        #   spectra: tellurics, airglow, detector. 3 for SPIRou and NIRPS,
-        #   2 for the optical spectrographs (the nominal for HARPS)
-        n_earth=3,
+        #   spectra: tellurics, airglow, detector (7 by default)
+        n_earth=7,
         # measure the delivered object too, first, for the comparison
         compare=True,
         # the figures of the correction (river plots, components...): they

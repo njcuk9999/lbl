@@ -227,7 +227,7 @@ general:
                             # to 2 or more only to LOOK at variability, and read
                             # the correlation table before believing it
                             # (docs/options.md, twoframe-nstar2-degeneracy)
-    n_earth: 3              # components anchored in the OBSERVER frame
+    n_earth: 7              # components anchored in the OBSERVER frame
     mean: star              # nominal since 2026-09-11: one star-frame spectrum
                             # per parity and no observer-frame mean (below).
                             # offset: the one-shot per-parity

@@ -113,7 +113,7 @@ _LBL_COMPILE}
     #   comes after the telluric cleaning (<object>_tc_pca2d).
     #   Every key, and a worked example: lbl/doc/PCA2D.md and
     #   lbl/doc/example_wrap_pca2d.py
-    # rparams['PCA2D'] = dict(n_star=1, n_earth=3)
+    # rparams['PCA2D'] = dict(n_star=1, n_earth=7)
     # -------------------------------------------------------------------------
     # LBL settings
     # -------------------------------------------------------------------------

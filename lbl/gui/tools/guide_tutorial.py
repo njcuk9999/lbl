@@ -410,8 +410,8 @@ lbl_gui --data-dir ~/lbl-data
         shot("07_run", "The Run tab before the run.",
              "L'onglet Lancer avant le run."),
         marks(["<strong>Run name</strong>: made from the target and the"
-               " settings (<code>Gliese229_s1-o3_demo</code>: 1 star"
-               " component, 3 observer components, variant demo). Type"
+               " settings (<code>Gliese229_s1-o7_demo</code>: 1 star"
+               " component, 7 observer components, variant demo). Type"
                " another if you like; <em>auto</em> brings it back.",
                "<strong>Run</strong>: starts the run.",
                "<strong>The wrap</strong>: the Python script that will run,"
@@ -421,8 +421,8 @@ lbl_gui --data-dir ~/lbl-data
                " <code>wrap_&lt;name&gt;.py</code> in the data folder, to run"
                " later without the window."],
               ["<strong>Nom du run</strong> : fait de la cible et des"
-               " réglages (<code>Gliese229_s1-o3_demo</code> : 1 composante de"
-               " l'étoile, 3 de l'observateur, variante demo). Tapez-en un"
+               " réglages (<code>Gliese229_s1-o7_demo</code> : 1 composante de"
+               " l'étoile, 7 de l'observateur, variante demo). Tapez-en un"
                " autre si vous voulez ; <em>auto</em> le remet.",
                "<strong>Lancer</strong> : démarre le run.",
                "<strong>Le wrap</strong> : le script Python qui va tourner,"

@@ -19,7 +19,7 @@ from lbl.recipes import lbl_pca2d
 def test_true_is_the_nominal_set():
     switches, overrides = lbl_pca2d.settings(True)
     assert switches == lbl_pca2d.DEFAULTS and overrides == {}
-    assert (switches["n_star"], switches["n_earth"]) == (1, 3)
+    assert (switches["n_star"], switches["n_earth"]) == (1, 7)
 
 
 def test_the_figures_follow_the_report_unless_asked():
