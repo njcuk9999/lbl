@@ -425,6 +425,7 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
     sbuf = np.empty(npix)
     bbuf = np.empty(npix)
     rbuf = np.empty(npix)
+    fbuf = np.empty(npix)
     for line_it in range(orders.shape[0]):
         order_num = orders[line_it]
         # skip lines flagged as bad (in all but the second iteration)
@@ -527,11 +528,14 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                 seg[i] = d3model[order_num, x_start + i] * weight_mask[i]
             d3v[line_it], sd3v[line_it] = _bouchy(seg, diff_seg, mean_rms,
                                                   tmp)
-            # residual projection tables
-            #   note: as in compute_rv, frac_diff_seg is diff_seg itself, so
-            #   diff_seg is divided in place once per table
+            # residual projection tables, on the unblazed, pseudo-continuum
+            #   normalised residual: a copy of diff_seg divided for each
+            #   table, diff_seg itself left as it is for the next table and
+            #   for the line statistics below (developer's fix of issue 71,
+            #   where compute_rv divided diff_seg in place once per table)
             bn_seg = bbuf[:nseg]
             frac_mean_rms = rbuf[:nseg]
+            frac_diff_seg = fbuf[:nseg]
             for ikey in range(nproj):
                 for i in range(nseg):
                     seg[i] = (proj_models[ikey, order_num, x_start + i] *
@@ -539,10 +543,10 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                     bn_seg[i] = (b_ratio[order_num, x_start + i] *
                                  norm[order_num, x_start + i])
                 for i in range(nseg):
-                    diff_seg[i] /= bn_seg[i]
+                    frac_diff_seg[i] = diff_seg[i] / bn_seg[i]
                     frac_mean_rms[i] = mean_rms / bn_seg[i]
-                pd_key, psd_key = _bouchy_arr(seg, diff_seg, frac_mean_rms,
-                                              tmp)
+                pd_key, psd_key = _bouchy_arr(seg, frac_diff_seg,
+                                              frac_mean_rms, tmp)
                 if np.isfinite(pd_key) and np.isfinite(psd_key):
                     proj[ikey, line_it] = pd_key
                     sproj[ikey, line_it] = psd_key
