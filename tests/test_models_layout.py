@@ -221,3 +221,29 @@ def test_a_basis_in_any_subfolder_of_models_is_found(tmp_path):
                 'other')
     first = os.path.join(data_dir, 'models', 'pca2d_NIRPS_HE_CADC')
     assert basis.kept_folders(data_dir, 'NIRPS_HE', 'CADC')[0] == first
+
+
+def test_a_missing_blaze_falls_back_to_the_default_of_the_setup(tmp_path):
+    # models/default-blaze/blaze_<INSTRUMENT>_<SOURCE>.fits (2026-10-27,
+    #   NIRPS_HE ESO's first)
+    import types
+    from lbl.core.base_classes import LblException
+    from lbl.instruments.default import Instrument
+
+    inst = types.SimpleNamespace(params=dict(
+        DATA_DIR=str(tmp_path), INSTRUMENT='NIRPS_HE', DATA_SOURCE='ESO'))
+    inst.default_blaze_file = lambda: Instrument.default_blaze_file(inst)
+    calib = tmp_path / 'calib'
+    calib.mkdir()
+    # the night's blaze, when it is there
+    (calib / 'night_BLAZE_A.fits').write_text('')
+    assert Instrument.blaze_path(inst, str(calib), 'night_BLAZE_A.fits') \
+        == str(calib / 'night_BLAZE_A.fits')
+    # no default: LBL stops, saying where one goes
+    with pytest.raises(LblException, match='default-blaze/blaze_NIRPS_HE_ESO'):
+        Instrument.blaze_path(inst, str(calib), 'other_BLAZE_A.fits')
+    default = tmp_path / 'models' / 'default-blaze' / 'blaze_NIRPS_HE_ESO.fits'
+    default.parent.mkdir(parents=True)
+    default.write_text('')
+    for named in ('other_BLAZE_A.fits', None):
+        assert Instrument.blaze_path(inst, str(calib), named) == str(default)

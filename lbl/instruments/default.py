@@ -990,6 +990,67 @@ class Instrument:
         _ = self, directory
         raise self._not_implemented('blaze_file')
 
+    #: the default blazes already said, once each per process
+    _DEFAULT_BLAZES_SAID = set()
+
+    def default_blaze_file(self) -> Optional[str]:
+        """
+        The default blaze of this instrument and DATA_SOURCE:
+        DATA_DIR/models/default-blaze/blaze_<INSTRUMENT>_<DATA_SOURCE>.fits,
+        a blaze of the setup (an ESO BLAZE_A file for NIRPS_HE ESO) put there
+        once, for the spectra whose own blaze, the one their header names,
+        is not in the calibration folder. None without a DATA_DIR.
+
+        :return: str, its path (it may not exist), or None
+        """
+        data_dir = self.params.get('DATA_DIR')
+        if not data_dir:
+            return None
+        name = 'blaze_{0}_{1}.fits'.format(
+            str(self.params['INSTRUMENT']).upper(),
+            str(self.params['DATA_SOURCE']).upper())
+        return os.path.join(str(data_dir), 'models', 'default-blaze', name)
+
+    def blaze_path(self, calib_directory: str,
+                   blaze_file: Optional[str]) -> str:
+        """
+        The blaze of a spectrum: the file its header names, in the
+        calibration folder; when it is not there, the default blaze of the
+        setup (default_blaze_file), said once. Without either, LBL stops,
+        saying where a default blaze can go.
+
+        :param calib_directory: str, the calibration folder
+        :param blaze_file: str, the file the spectrum's header names (None
+                           when it names none)
+
+        :return: str, the blaze to read
+        """
+        named = None
+        if blaze_file not in (None, '', 'None'):
+            named = os.path.join(calib_directory, blaze_file)
+            if os.path.exists(named):
+                return named
+        default = self.default_blaze_file()
+        if default is not None and os.path.exists(default):
+            if default not in Instrument._DEFAULT_BLAZES_SAID:
+                Instrument._DEFAULT_BLAZES_SAID.add(default)
+                msg = ('Blaze {0} is not in {1}: the default blaze of {2} {3}'
+                       ' is used instead ({4}), for this spectrum and every'
+                       ' other whose own blaze is missing')
+                log.warning(msg.format(blaze_file, calib_directory,
+                                       self.params['INSTRUMENT'],
+                                       self.params['DATA_SOURCE'], default))
+            return default
+        emsg = ('Blaze {0} is not in {1}, and {2} {3} has no default blaze:'
+                ' put the blaze of the night there, or a blaze of this'
+                ' setup as {4}, which is then used for every spectrum whose'
+                ' own blaze is missing')
+        raise base_classes.LblException(emsg.format(
+            blaze_file, calib_directory, self.params['INSTRUMENT'],
+            self.params['DATA_SOURCE'],
+            default or 'DATA_DIR/models/default-blaze/blaze_<INSTRUMENT>_'
+                       '<DATA_SOURCE>.fits'))
+
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
                    normalize: bool = True):
         """

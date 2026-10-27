@@ -352,11 +352,12 @@ _NO_BLAZE = set()
 def _blaze(inst, path, flux, header, model_dir):
     """The blaze of a spectrum, as LBL reads it: corrected spectra need none,
     the others the file their header names, in DATA_DIR/calib where LBL
-    keeps it (models/ as well, where an older campaign put it). Without one,
-    the blaze is taken as 1, and said once per instrument and plainly, since
-    LBL's own reader would log a red error for a file that is simply not
-    there: PCA2D high-passes every spectrum, which takes the blaze's shape
-    out; only the weights do without it."""
+    keeps it (models/ as well, where an older campaign put it), else the
+    default blaze of the setup (models/default-blaze, Instrument.blaze_path).
+    Without one, the blaze is taken as 1, and said once per instrument and
+    plainly, since LBL's own reader would log a red error for a file that is
+    simply not there: PCA2D high-passes every spectrum, which takes the
+    blaze's shape out; only the weights do without it."""
     if inst.params.get("BLAZE_CORRECTED"):
         return np.ones_like(flux)
     name = None
@@ -379,11 +380,34 @@ def _blaze(inst, path, flux, header, model_dir):
                 return np.atleast_2d(np.asarray(blaze, dtype=float))
             except Exception:                                   # noqa: BLE001
                 break
+    # the default blaze of the setup (models/default-blaze), which LBL's own
+    #   reader takes when the night's is not in calib/; DATA_DIR is the
+    #   models folder's parent for a class made outside a campaign
+    if model_dir and not inst.params.get("DATA_DIR"):
+        try:
+            inst.params.set("DATA_DIR",
+                            os.path.dirname(os.path.abspath(model_dir)))
+        except Exception:                                       # noqa: BLE001
+            pass
+    default = None
+    try:
+        default = inst.default_blaze_file()
+    except Exception:                                           # noqa: BLE001
+        pass
+    if default and os.path.exists(default) and folders:
+        try:
+            blaze, _ = inst.load_blaze_from_science(
+                path, flux, header, calib_directory=folders[0],
+                normalize=True)
+            return np.atleast_2d(np.asarray(blaze, dtype=float))
+        except Exception:                                       # noqa: BLE001
+            pass
     instrument = str(inst.params.get("INSTRUMENT"))
     if instrument not in _NO_BLAZE:
         _NO_BLAZE.add(instrument)
         from .logger import log
-        log("no blaze file for %s (%s, looked for in calib/ and models/): the"
+        log("no blaze file for %s (%s, looked for in calib/, models/ and"
+            " models/default-blaze/): the"
             " blaze is taken as 1. That is fine for PCA2D: its high pass takes"
             " the blaze's shape out of every spectrum, and only the weights do"
             " without it" % (instrument, os.path.basename(str(name))

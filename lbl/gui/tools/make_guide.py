@@ -352,6 +352,9 @@ DATA_DIR/models/
   resproj/                    RESPROJ tables: temperature gradients (DTEMP),
                               PCA2D star components (STRPCA)
   masks/                      default masks
+  default-blaze/              a blaze per setup that needs one, used when a
+                              spectrum's own is not in calib/
+                              (blaze_NIRPS_HE_ESO.fits)
   template_SPIROU_APERO/      the vetted templates of an instrument and data
                               source: the depot's file and LBL's template
   pca2d_SPIROU_APERO/         the PCA2D observer bases you keep
@@ -396,6 +399,9 @@ DATA_DIR/models/
   resproj/                    les tables RESPROJ : gradients de température
                               (DTEMP), composantes stellaires PCA2D (STRPCA)
   masks/                      les masques par défaut
+  default-blaze/              un blaze par configuration qui en demande un,
+                              pris quand celui d'un spectre n'est pas dans
+                              calib/ (blaze_NIRPS_HE_ESO.fits)
   template_SPIROU_APERO/      les templates validés d'un instrument et d'une
                               source : le fichier du dépôt et le template LBL
   pca2d_SPIROU_APERO/         les bases de l'observateur PCA2D que vous gardez

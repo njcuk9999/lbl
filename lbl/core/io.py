@@ -639,7 +639,11 @@ MODEL_SUBDIRS = dict(phoenix='stellar models (PHOENIX)',
                      tellurics='the TAPAS model (tapas_lbl.fits)',
                      resproj='RESPROJ tables (temperature gradients, PCA2D'
                              ' star components)',
-                     masks='default masks')
+                     masks='default masks',
+                     **{'default-blaze': 'the default blaze of each setup that'
+                                         ' needs one, blaze_<INSTRUMENT>_'
+                                         '<DATA_SOURCE>.fits (Instrument.'
+                                         'blaze_path)'})
 
 
 def model_subdir(kind: str, instrument: str, data_source: str) -> str:

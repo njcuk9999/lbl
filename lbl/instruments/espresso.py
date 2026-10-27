@@ -535,10 +535,9 @@ class Espresso(Instrument):
             blaze_file = sci_hdr.find_hkey(self.params['KW_BLAZE_FILE_WILDF'],
                                            self.params['KW_BLAZE_FILE_WILDM'],
                                            self.params['KW_BLAZE_FILE_WILDV'])
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
+        # construct absolute path: the blaze the header names, else the
+        #   default blaze of the setup (Instrument.blaze_path)
+        abspath = self.blaze_path(calib_directory, blaze_file)
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
