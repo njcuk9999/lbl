@@ -637,9 +637,14 @@ velocities, the rdb table and the report; with PCA2D, the precleaning works
 on these cleaned spectra too. Each pass takes about a second per spectrum
 (90 HARPS spectra of GJ 1214: 1 min 35 s).</p>
 <h3>Checking it in the log</h3>
-<p>Each iteration of a spectrum writes a line such as <code>3: water
-expo=0.4629, dry expo=1.4790, airmass=1.2130, template=False
-dexpo=0.0013</code>. The first pass says <code>template=False</code>, the
+<p>Each spectrum writes one line with the exponents applied, the ones
+written in its header (<code>TLPEH2O</code>, <code>TLPEOTR</code>), such as
+<code>telluric exponents by the derivative method: H2O 0.1538, dry 1.0410
+(airmass 1.0809), template=True</code>; <code>FALLBACK</code> (0.35) when
+the derivative's cost had nothing to go on. The derivative method is the
+only one, for every instrument, since 2026-10-27: the cross-correlation
+loop that came before it often failed. The first pass says
+<code>template=False</code>, the
 second <code>template=True</code> (its banner says
 <code>TELLUCLEAN_USE_TEMPLATE="True"</code>), with exponents that differ a
 little from the first pass's. A second pass that says
@@ -700,9 +705,14 @@ pré-nettoyage travaille lui aussi sur ces spectres nettoyés. Chaque passage
 prend environ une seconde par spectre (90 spectres HARPS de GJ 1214 :
 1 min 35 s).</p>
 <h3>Le vérifier dans le journal</h3>
-<p>Chaque itération d'un spectre écrit une ligne comme <code>3: water
-expo=0.4629, dry expo=1.4790, airmass=1.2130, template=False
-dexpo=0.0013</code>. Le premier passage dit <code>template=False</code>, le
+<p>Chaque spectre écrit une ligne avec les exposants appliqués, ceux de
+son en-tête (<code>TLPEH2O</code>, <code>TLPEOTR</code>), comme
+<code>telluric exponents by the derivative method: H2O 0.1538, dry 1.0410
+(airmass 1.0809), template=True</code> ; <code>FALLBACK</code> (0.35) quand
+le coût de la dérivée n'avait rien pour trancher. La méthode de la dérivée
+est la seule, pour tous les instruments, depuis le 2026-10-27 : la boucle
+de corrélation croisée qui la précédait échouait souvent. Le premier passage
+dit <code>template=False</code>, le
 second <code>template=True</code> (sa bannière dit
 <code>TELLUCLEAN_USE_TEMPLATE="True"</code>), avec des exposants un peu
 différents de ceux du premier passage. Un second passage qui dit

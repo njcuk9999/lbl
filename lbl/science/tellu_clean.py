@@ -69,8 +69,8 @@ def get_tapas_lbl(inst: InstrumentsType, modeldir: str,
     data_dir = inst.params['DATA_DIR']
     # get data directory
     data_dir = io.check_directory(data_dir)
-    # make other directory
-    tapas_path = io.make_dir(data_dir, 'other', 'Other')
+    # make other directory (quietly: this runs two to three times per file)
+    tapas_path = io.make_dir(data_dir, 'other', 'Other', verbose=False)
     # construct tapas in/out file path
     tapas_inpath = io.model_path(modeldir, 'tellurics', tapas_file)
     tapas_outpath = os.path.join(tapas_path, tapas_file)
@@ -390,21 +390,25 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
         expo_water = 0.35 + tellu_derivative.FALLBACK_MARK
         expo_others = float(airmass)
         log.warning('\ttelluric exponents not fitted ({0}): H2O {1:.4f}, '
-                    'dry at the airmass {2:.4f}'.format(exc, expo_water,
-                                                       expo_others))
+                    'dry at the airmass {2:.4f}, template={3}'
+                    ''.format(exc, expo_water, expo_others, template_flag))
     else:
         # LE JOURNAL DOIT DIRE SI C'EST UN REPLI. A quatre decimales, la
         # marque de 1e-7 est invisible, et une pose au repli s'affiche
         # "0.3500" exactement comme une pose qui converge vers 0.35: j'ai
         # compte zero repli sur un lot qui en avait treize (2026-10-16).
+        # ONE LINE PER SPECTRUM, with the exponents applied (its header's
+        #   KW_TAU_H2O and KW_TAU_OTHERS) and which pass it is (template)
         if tellu_derivative.is_fallback(expo_water):
             log.general('\tH2O exponent: FALLBACK {0:.4f} (the derivative '
-                        'cost curve had nothing to go on), dry {1:.4f}'
-                        ''.format(expo_water, expo_others))
+                        'cost curve had nothing to go on), dry {1:.4f}, '
+                        'template={2}'.format(expo_water, expo_others,
+                                              template_flag))
         else:
             log.general('\ttelluric exponents by the derivative method: '
-                        'H2O {0:.4f}, dry {1:.4f} (airmass {2:.4f})'
-                        ''.format(expo_water, expo_others, float(airmass)))
+                        'H2O {0:.4f}, dry {1:.4f} (airmass {2:.4f}), '
+                        'template={3}'.format(expo_water, expo_others,
+                                              float(airmass), template_flag))
     # the transmission at these exponents, for the plot
     trans = get_abso_sp(wave_trans, expo_others, expo_water,
                         spl_others, spl_water, kwidth=kwidth, ex_gau=ex_gau,
