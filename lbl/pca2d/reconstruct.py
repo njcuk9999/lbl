@@ -283,6 +283,9 @@ def load_model(path):
             "n_star": n_star, "n_earth": n_earth,
             "content": head.get("CONTENT", "?"),
             "coeffs": coeffs,
+            # the fit's MAD cut, in sigma (0: none), for what is said of the
+            #   exposures it rejected
+            "max_mad": float(head.get("MAXMAD", 0.0) or 0.0),
         }
         names = [c for c in basis.columns.names if c.startswith("mean_")]
         # ordered even, odd -- the same order parity % 2 indexes
@@ -325,8 +328,23 @@ def template_for(model, parity):
     return model["template"]
 
 
-def exposure_row(coeffs, filename):
-    """The COEFFS row for this file, matched on basename."""
+def exposure_row(coeffs, filename, max_mad=0.0, refit=False,
+                 plotted=False):
+    """The COEFFS row for this file, matched on basename.
+
+    An exposure the fit's MAD cut rejected is said BY NAME, with its date,
+    its BERV and the cut, and with what happens to it here, which depends
+    on the correction (2026-10-27: a bare "this exposure was rejected" was
+    printed once per file, and said its coefficients were zeros while the
+    nominal correction refits them):
+
+        refit      its coefficients are fitted again on its own spectrum,
+                   and its observer components divided out as for any other
+        no refit   its coefficients are the fit's zeros: nothing of the
+                   observer components is divided out of it
+        plotted    the model drawn for it (reconstruct of one file) is the
+                   template plus the means, nothing else
+    """
     want = os.path.basename(filename)
     names = [os.path.basename(str(v)) for v in coeffs["filename"]]
     if want not in names:
@@ -336,9 +354,22 @@ def exposure_row(coeffs, filename):
                          % (want, ("; nearest: %s" % ", ".join(near)) if near else ""))
     row = coeffs[names.index(want)]
     if bool(row["rejected"]):
-        log("WARNING: this exposure was rejected by the MAD cut. Its"
-              " coefficients are zeros and the model below is the template"
-              " plus the mean, nothing else.")
+        cut = (" at %.1f sigma" % max_mad) if max_mad else ""
+        who = ("%s (BJD %.5f, BERV %+.2f km/s) was rejected by the fit's MAD"
+               " cut%s and left out of its basis" % (want, float(row["bjd"]),
+                                                     float(row["berv"]), cut))
+        if refit:
+            log("  %s: its coefficients are fitted again on its own spectrum"
+                " (refit), and its observer components divided out as for"
+                " the others" % who, "info")
+        elif plotted:
+            log("%s: its coefficients are zeros, and the model drawn below is"
+                " the template plus the means, nothing else" % who, "warn")
+        else:
+            log("  %s: its coefficients are zeros, so none of the observer"
+                " components is divided out of it (its corrected file is the"
+                " delivered spectrum, less the observer-frame mean when the"
+                " fit keeps one)" % who, "warn")
     return row
 
 
@@ -1724,7 +1755,9 @@ def correct_many(model, args):
             log("  missing, skipped: %s" % path)
             skipped += 1
             continue
-        row = preset if preset is not None else exposure_row(model["coeffs"], path)
+        row = preset if preset is not None else exposure_row(
+            model["coeffs"], path, model.get("max_mad", 0.0),
+            refit=bool(args.refit))
         own_alive = None
         if args.refit:
             fresh, own_alive = refit_row(
@@ -1825,7 +1858,9 @@ def _correct_threaded(model, args, config, pairs, shifter, mask_mode,
         if not os.path.exists(path):
             return "missing", path, None
         row = (preset if preset is not None
-               else exposure_row(model["coeffs"], path))
+               else exposure_row(model["coeffs"], path,
+                                 model.get("max_mad", 0.0),
+                                 refit=bool(args.refit)))
         own_alive = None
         refit = False
         if args.refit:
@@ -1899,7 +1934,8 @@ def main(argv=None):
         # 316 corrected spectra exited 316.
         correct_many(model, args)
         return None
-    row = exposure_row(model["coeffs"], args.file)
+    row = exposure_row(model["coeffs"], args.file, model.get("max_mad", 0.0),
+                       plotted=True)
     log("  BJD %.5f   BERV %+.4f km/s   star shift %+.2f samples"
           % (row["bjd"], row["berv"], -row["berv"] / model["dv"]))
     wave, recon, parity = reconstruct(model, row, args.kernel_halfwidth, args.file)

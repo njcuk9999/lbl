@@ -30,3 +30,27 @@ def test_a_deep_line_keeps_its_weight_where_its_snr_is_enough():
     old = reconstruct.refit_weights(values, good, sigma, None,
                                     dict(min_pixel_snr=None, ln_clip_low=-0.5))
     assert np.all(old[:, 190:210] == 0)
+
+
+def test_a_rejected_exposure_is_named_with_what_happens_to_it(monkeypatch):
+    # 2026-10-27: "this exposure was rejected by the MAD cut" once per file,
+    #   without the file, and "its coefficients are zeros" with a refit on
+    from astropy.table import Table
+    from lbl.pca2d import reconstruct
+    said = []
+    monkeypatch.setattr(reconstruct, "log",
+                        lambda message, level="info": said.append((message,
+                                                                   level)))
+    coeffs = Table(dict(filename=["a_S2D_A.fits", "b_S2D_A.fits"],
+                        bjd=[2458213.45542, 2458214.1], berv=[-20.573, 3.1],
+                        rejected=[True, False]))
+    reconstruct.exposure_row(coeffs, "/x/b_S2D_A.fits", 5.0, refit=True)
+    assert said == []
+    reconstruct.exposure_row(coeffs, "/x/a_S2D_A.fits", 5.0, refit=True)
+    message, level = said[-1]
+    assert "a_S2D_A.fits (BJD 2458213.45542, BERV -20.57 km/s)" in message
+    assert "at 5.0 sigma" in message and "fitted again" in message
+    assert level == "info"
+    reconstruct.exposure_row(coeffs, "/x/a_S2D_A.fits", 5.0, refit=False)
+    message, level = said[-1]
+    assert "none of the observer components" in message and level == "warn"
