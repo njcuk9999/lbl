@@ -46,13 +46,21 @@ def _coerce(value, kind: str):
 NO_TELLUCLEAN = ("NIRPS", "SPIROU")
 
 
+#: the headers' names of an instrument that LBL spells otherwise: the TNG
+#:    writes HARPN for HARPS-N (2026-10-27: ADLeo_HARPSN_ESO was refused as
+#:    HARPN spectra run as HARPSN)
+FAMILY_ALIASES = {"HARPN": "HARPSN"}
+
+
 def _family(name) -> str:
     """An instrument's family, the headers' way or LBL's: NIRPS for NIRPS,
-    NIRPS_HE and NIRPS_HA, HARPSN for HARPS-N. Empty when unknown."""
+    NIRPS_HE and NIRPS_HA, HARPSN for HARPS-N and HARPN. Empty when
+    unknown."""
     name = str(name or "").upper()
     if not name or name == "?" or "/" in name:
         return ""
-    return re.sub(r"[^A-Z0-9]", "", name.split("_")[0])
+    family = re.sub(r"[^A-Z0-9]", "", name.split("_")[0])
+    return FAMILY_ALIASES.get(family, family)
 
 
 def build(state: dict) -> dict:

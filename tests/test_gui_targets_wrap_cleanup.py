@@ -322,3 +322,12 @@ def test_a_systemic_velocity_the_headers_do_not_really_give_is_none():
     typed = fits.Header()
     typed["HIERARCH ESO TEL TARG RADVEL"] = 5.2
     assert targets._vsys([typed]) == 5.2
+
+
+def test_harpn_spectra_run_as_harpsn(data_dir):
+    # the TNG writes INSTRUME = HARPN; LBL calls it HARPSN (2026-10-27)
+    built = wrapgen.build(_state(data_dir, instrument="HARPSN", source="ESO",
+                                 instruments={"STAR": "HARPN"}))
+    assert not any("HARPN spectra" in e for e in built["errors"])
+    assert wrapgen._family("HARPS-N") == wrapgen._family("HARPN") == "HARPSN"
+    assert wrapgen._family("HARPS") == "HARPS"
