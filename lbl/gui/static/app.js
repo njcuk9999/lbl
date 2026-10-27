@@ -828,22 +828,18 @@ const showCard = (id, on) => { $(id).closest('.card').hidden = !on; };
 
 function drawPlots() {
   const names = S.ticked.filter((name) => POINTS[name] && POINTS[name].berv.length);
+  // every target against the BERV; those whose systemic velocity is known
+  //   against v_tot as well, SNR on the y axis in both
   const withV = names.filter(hasVsys);
-  const withoutV = names.filter((n) => !hasVsys(n));
-  SPLIT = withV.length > 0 && withoutV.length > 0;
-  showCard('plot_berv', !names.length || withoutV.length > 0);
-  showCard('plot_snr', !names.length || withoutV.length > 0);
+  // a legend even for one target when not every target is on every plot
+  SPLIT = withV.length > 0 && withV.length < names.length;
   showCard('plot_vtot', withV.length > 0);
-  showCard('plot_snr_vtot', withV.length > 0);
   if (!names.length) { empty($('plot_berv')); empty($('plot_snr')); empty($('plot_time')); return; }
-  if (withoutV.length) {
-    histogram($('plot_berv'), withoutV, (n) => POINTS[n].berv.map((v, i) => [v, POINTS[n].mjd[i]]), 'BERV (km/s)', 'BERV');
-    drawScatter($('plot_snr'), withoutV, (n, i) => POINTS[n].berv[i], 'BERV (km/s)', 'BERV', false);
-  }
+  histogram($('plot_berv'), names, (n) => POINTS[n].berv.map((v, i) => [v, POINTS[n].mjd[i]]), 'BERV (km/s)', 'BERV');
+  drawScatter($('plot_snr'), names, (n, i) => POINTS[n].berv[i], 'BERV (km/s)', 'BERV', false);
   if (withV.length) {
     const vtot = (n, i) => { const v = vsysOf(n, i); return v === null ? null : vtotOf(v, POINTS[n].berv[i]); };
-    histogram($('plot_vtot'), withV, (n) => POINTS[n].berv.map((_, i) => { const v = vtot(n, i); return v === null ? null : [v, POINTS[n].mjd[i]]; }).filter(Boolean), 'v_tot = v_sys - BERV (km/s)', 'v_tot', true);
-    drawScatter($('plot_snr_vtot'), withV, vtot, 'v_tot = v_sys - BERV (km/s)', 'v_tot', true);
+    drawScatter($('plot_vtot'), withV, vtot, 'v_tot = v_sys - BERV (km/s)', 'v_tot', true);
   }
   drawTimeline(names);
 }
