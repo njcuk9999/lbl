@@ -10,10 +10,11 @@ fits only its own spectrum and components, and the amplitudes of the basis.
 
 THE FOLDERS. DATA_DIR/pca2d/components/, where every fit writes, and
 DATA_DIR/models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/, where one keeps the
-bases that are to stay (keep() moves one there, or put a file there): a
-cleanup of the PCA2D products leaves models/ alone. A run reads a basis
-from the kept folder first, then from components; a fit whose observer
-basis has the name of a kept one updates it there. The files are named as
+bases that are to stay (keep() moves one there, or put a file there; a
+basis in any other subfolder of models/ is found as well): a cleanup of
+the PCA2D products leaves models/ alone. A run reads a basis from models/
+first, then from components; a fit whose observer basis has the name of
+one in its kept folder updates it there. The files are named as
 LBL names its templates, the instrument last:
 
     PCA2D_Observer_<output>_<instrument>.fits
@@ -86,15 +87,28 @@ def kept_folder(data_dir: str, instrument: str, data_source: str) -> str:
 
 def kept_folders(data_dir: str, instrument: str = '',
                  data_source: str = '') -> list:
-    """The kept folders of DATA_DIR: this instrument's and DATA_SOURCE's
-    alone when both are given, every source of the instrument when only it
-    is, all of them otherwise"""
-    if instrument and data_source:
-        return [kept_folder(data_dir, instrument, data_source)]
-    pattern = 'pca2d_{0}_*'.format(str(instrument).upper()) if instrument \
-        else 'pca2d_*'
-    return sorted(path for path in glob.glob(os.path.join(
-        data_dir, KEPT, pattern)) if os.path.isdir(path))
+    """Every subfolder of DATA_DIR/models: a basis put in any of them is
+    kept and found (its INSTRUME and DATASRC cards say which runs it
+    fits). In the order a name is looked for: the kept folder of this
+    instrument and DATA_SOURCE, then the instrument's other pca2d_
+    folders, the other pca2d_ folders, and the rest (template_..., a
+    folder of one's own)"""
+    first = kept_folder(data_dir, instrument, data_source) \
+        if instrument and data_source else None
+    mine = 'pca2d_{0}_'.format(str(instrument).upper()) if instrument \
+        else None
+
+    def rank(path):
+        name = os.path.basename(path)
+        if path == first:
+            return 0
+        if mine and name.startswith(mine):
+            return 1
+        return 2 if name.startswith('pca2d_') else 3
+
+    found = [path for path in glob.glob(os.path.join(data_dir, KEPT, '*'))
+             if os.path.isdir(path)]
+    return sorted(found, key=lambda path: (rank(path), path))
 
 
 def observer_files(data_dir: str, instrument: str = '',
@@ -114,10 +128,9 @@ def basis_path(name: str, data_dir: str = None, instrument: str = '',
                data_source: str = '') -> str:
     """The file of an observer basis: name may be a path, a file name
     (PCA2D_Observer_2026a_nirps_he), or the output name alone (2026a, for
-    this instrument). A name is looked for in the kept folder (of this
-    DATA_SOURCE, or of every source of the instrument when it is not
-    given), then in components; the components path when it is in
-    neither."""
+    this instrument). A name is looked for in the subfolders of models/
+    (kept_folders' order: this instrument's and DATA_SOURCE's first), then
+    in components; the components path when it is in neither."""
     if os.path.exists(name) or name.endswith('.fits') and os.sep in name:
         return os.path.abspath(name)
     if data_dir is None:
@@ -427,8 +440,8 @@ def compatible_bases(data_dir: str, instrument: str, data_source: str) -> str:
     """The observer bases of DATA_DIR made with this instrument from this
     DATA_SOURCE, kept or in pca2d/components, as a sentence (for
     check_compatible)"""
-    folders = '%s or %s' % (kept_folder(data_dir, instrument, data_source),
-                            os.path.join(data_dir, FOLDER))
+    folders = 'the subfolders of %s or %s' % (os.path.join(data_dir, KEPT),
+                                            os.path.join(data_dir, FOLDER))
     names = []
     for path, kept in observer_files(data_dir, instrument, data_source):
         try:

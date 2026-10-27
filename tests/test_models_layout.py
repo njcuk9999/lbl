@@ -195,3 +195,29 @@ def test_the_science_template_is_not_looked_for_beside_a_vetted_one(
         general.get_systemic_vel_props(Inst(), vetted_template, 'mask.fits',
                                        science)
     assert str(asked.value) == science
+
+
+def test_a_basis_in_any_subfolder_of_models_is_found(tmp_path):
+    # the user put a NIRPS basis in models/template_NIRPS_HE_CADC
+    #   (2026-10-27): LBL and the window look in every subfolder
+    from lbl.gui import lblinfo
+    data_dir = str(tmp_path)
+    folder = os.path.join(data_dir, 'models', 'template_NIRPS_HE_CADC')
+    head = fits.Header()
+    head['BASISNAM'] = 'NIRPS_SNR45-90'
+    head['INSTRUME'] = 'NIRPS_HE'
+    head['DATASRC'] = 'CADC'
+    os.makedirs(folder)
+    path = os.path.join(folder, 'PCA2D_Observer_NIRPS_SNR45-90_nirps_he.fits')
+    fits.PrimaryHDU(header=head).writeto(path)
+    assert basis.basis_path('NIRPS_SNR45-90', data_dir, 'NIRPS_HE',
+                            'CADC') == path
+    rows = lblinfo.bases(data_dir, 'NIRPS_HE', 'CADC')
+    assert [(r['name'], r['kept'], r['compatible']) for r in rows] == [
+        ('NIRPS_SNR45-90', True, True)]
+    assert rows[0]['folder'] == os.path.join('models', 'template_NIRPS_HE_CADC')
+    # the instrument's own kept folder comes first for the same file
+    _basis_file(os.path.join(data_dir, 'models', 'pca2d_NIRPS_HE_CADC'),
+                'other')
+    first = os.path.join(data_dir, 'models', 'pca2d_NIRPS_HE_CADC')
+    assert basis.kept_folders(data_dir, 'NIRPS_HE', 'CADC')[0] == first

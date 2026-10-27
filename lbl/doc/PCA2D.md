@@ -187,9 +187,11 @@ A basis that is to stay is KEPT in
 beside LBL's other models, which nothing deletes (`lbl_reset` empties
 `templates/`, a cleanup of the PCA2D products empties `pca2d/`):
 `lbl.pca2d.basis.keep(name, DATA_DIR, instrument)` moves it there (the window
-has a *keep* button beside the basis), or put the file there yourself.
-`input_name` looks there first, then in `pca2d/components/`; a fit whose
-`output_name` is that of a kept basis updates it where it is kept. The
+has a *keep* button beside the basis), or put the file there yourself:
+a basis in any other subfolder of `models/` is found as well. `input_name`
+looks in `models/` first (the run's own `pca2d_` folder before the
+others), then in `pca2d/components/`; a fit whose `output_name` is that of
+a kept basis updates it where it is kept. The
 stars' files stay in `pca2d/components/`.
 
 ```python

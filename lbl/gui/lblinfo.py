@@ -269,7 +269,7 @@ def bases(data_dir: str, instrument: str = "", source: str = "") -> list:
     from astropy.io import fits
     from lbl.pca2d import basis as pbasis
     out, seen = [], set()
-    for path, kept in pbasis.observer_files(data_dir or ""):
+    for path, kept in pbasis.observer_files(data_dir or "", instrument, source):
         try:
             head = fits.getheader(path)
         except Exception:                                 # noqa: BLE001

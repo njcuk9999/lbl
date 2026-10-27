@@ -240,10 +240,7 @@ def build(state: dict) -> dict:
                      if b["name"] == pca2d["input_name"]]
             if not found:
                 errors.append(say("err_no_basis", pca2d["input_name"],
-                                  os.path.join(data_dir, "models",
-                                               "pca2d_%s_%s" % (
-                                                   instrument.upper(),
-                                                   str(source).upper())),
+                                  os.path.join(data_dir, "models"),
                                   os.path.join(data_dir, lblinfo.BASES)))
             elif not found[0]["compatible"]:
                 errors.append(say("err_basis_other", pca2d["input_name"],

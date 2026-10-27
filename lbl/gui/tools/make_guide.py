@@ -852,8 +852,9 @@ a joint fit</td></tr>
 other stars to take frozen</td></tr>
 <tr><td><code>models/pca2d_&lt;INSTRUMENT&gt;_&lt;SOURCE&gt;/</code></td><td>the
 observer bases you keep (the <em>keep</em> button beside the basis, or put
-the file there): read first, never deleted by a cleanup; a fit of the same
-name updates the basis there</td></tr>
+the file there, or in any other subfolder of <code>models/</code>): read
+first, never deleted by a cleanup; a fit of the same name updates the
+basis there</td></tr>
 <tr><td><code>gui/runs/&lt;run&gt;/</code></td><td><code>wrap.py</code> as it
 ran and <code>run.json</code> (when, how it ended, the reports it
 wrote)</td></tr>
@@ -893,8 +894,9 @@ pour un fit joint</td></tr>
 sauvegardées, que d'autres étoiles peuvent reprendre figées</td></tr>
 <tr><td><code>models/pca2d_&lt;INSTRUMENT&gt;_&lt;SOURCE&gt;/</code></td><td>les
 bases de l'observateur que vous gardez (le bouton <em>garder</em> à côté de
-la base, ou en y déposant le fichier) : lues en premier, jamais effacées par
-un ménage ; un fit du même nom met la base à jour là</td></tr>
+la base, ou en déposant le fichier là ou dans tout autre sous-dossier de
+<code>models/</code>) : lues en premier, jamais effacées par un ménage ; un
+fit du même nom met la base à jour là</td></tr>
 <tr><td><code>gui/runs/&lt;run&gt;/</code></td><td><code>wrap.py</code> tel
 qu'il a tourné et <code>run.json</code> (quand, comment il s'est terminé,
 les rapports écrits)</td></tr>
