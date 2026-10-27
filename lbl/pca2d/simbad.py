@@ -3,9 +3,12 @@
     python -m lbl.pca2d.simbad TOI756 SMETHELLS_20 GL699_SPIROU
 
 The folder a campaign lives in is a name somebody typed (SMETHELLS_20,
-GL699_SPIROU), and the headers carry another (TIC464410508, Gl699). CDS's
-Sesame resolver takes any of them, and its answer, SIMBAD's main identifier,
-is what the tables are then asked about through SIMBAD's TAP service:
+GL699_SPIROU), and the headers carry another (TIC464410508, Gl699).
+SIMBAD's ident table takes any of them (lbl.core.simbad.resolve, which
+also tries them as SIMBAD writes them: TOI_1452 as TOI-1452), and its
+answer, SIMBAD's main identifier, is what the tables are then asked about,
+all through SIMBAD's Python client (astroquery, lbl.core.simbad; CDS's
+Sesame resolver, used before, stopped answering on 2026-10-27):
 
     basic     position, spectral type, parallax, proper motion, systemic RV
     flux      B V G J H K
@@ -20,25 +23,19 @@ describes from its headers instead.
 
 from __future__ import annotations
 
-import csv
 import datetime
-import io
 import json
 import os
 import re
 import time
 import urllib.parse
-import urllib.request
 
 import numpy as np
 
-SESAME = "https://cds.unistra.fr/cgi-bin/nph-sesame/-oI/S?%s"
-TAP = "https://simbad.cds.unistra.fr/simbad/sim-tap/sync"
+from lbl.core import simbad as lbl_simbad
+
 PAGE = "https://simbad.cds.unistra.fr/simbad/sim-id?Ident=%s"
 CACHE = os.path.expanduser("~/.pca2d/simbad")
-#: long enough for CDS on a slow day, short enough that a report without a
-#: network is only a few seconds late
-TIMEOUT = 15
 MAX_AGE = 30 * 86400
 #: the identifiers quoted, in this order, the first of each kind only
 KINDS = ("TOI-", "TIC ", "Gaia DR3 ", "2MASS J", "GJ ", "HD ", "HIP ", "LHS ",
@@ -47,28 +44,18 @@ KINDS = ("TOI-", "TIC ", "Gaia DR3 ", "2MASS J", "GJ ", "HD ", "HIP ", "LHS ",
 SUFFIXES = re.compile(r"_(SPIROU|NIRPS|NIRPS_HE|NIRPS_HA|HARPS)$", re.I)
 
 
-def _get(url, data=None):
-    body = urllib.parse.urlencode(data).encode() if data else None
-    request = urllib.request.Request(url, data=body,
-                                     headers={"User-Agent": "pca2d-preclean"})
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as handle:
-        return handle.read().decode("utf-8", "replace")
-
-
 def resolve(name):
     """SIMBAD's main identifier for `name`, or None."""
-    text = _get(SESAME % urllib.parse.quote(str(name)))
-    for line in text.splitlines():
-        if line.startswith("%I.0 "):
-            return line[5:].strip()
-    return None
+    found = lbl_simbad.resolve(name)
+    return found["main"] if found else None
 
 
 def tap(query):
-    """The rows of an ADQL query, as dictionaries of strings."""
-    text = _get(TAP, {"request": "doQuery", "lang": "adql", "format": "csv",
-                      "query": query})
-    return list(csv.DictReader(io.StringIO(text)))
+    """The rows of an ADQL query, as dictionaries of strings ('' where
+    SIMBAD has nothing, as its CSV answer had them)."""
+    return [{key: "" if value is None else str(value)
+             for key, value in row.items()}
+            for row in lbl_simbad.tap(query)]
 
 
 def _quoted(text):

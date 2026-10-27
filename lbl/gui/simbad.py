@@ -6,7 +6,9 @@ question per target until asked again.
 
 A target's name is its folder's, as APERO writes it ('-' as M, ' ' as _:
 TOIM4508, GJ_1028); SIMBAD is asked that name, then the OBJECT of its
-headers, then both as SIMBAD writes them, until one is known.
+headers, then both as SIMBAD writes them (lbl.core.simbad.name_variants:
+TOI_1452 as TOI-1452), until one is known. SIMBAD is asked through its
+Python client (lbl.core.simbad), never through a web page.
 """
 from __future__ import annotations
 
@@ -16,12 +18,10 @@ import os
 import re
 import statistics
 import threading
-import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-TAP = "https://simbad.cds.unistra.fr/simbad/sim-tap/sync"
-UA = {"User-Agent": "lbl_gui (SIMBAD Teff for LBL's OBJECT_TEFF)"}
+from lbl.core.simbad import SUFFIXES, name_variants, tap as _tap
+
 #: where the answers are kept, in the data folder
 CACHE = os.path.join("gui", "simbad_teff.json")
 #: a measurement this far from its spectral type's Teff is left out (a
@@ -41,28 +41,23 @@ def candidates(name, header_object=None):
     """The names SIMBAD is asked, in order: the folder's, its headers'
     OBJECT, then both as SIMBAD writes them (APERO's M for '-' between
     characters and digits, _ for a space, Gliese as GJ)."""
+    def spell(text):
+        text = re.sub(r"(?<=[A-Za-z0-9])M(?=\d)", "-", text)
+        text = re.sub(r"_+", " ", text).strip()
+        return re.sub(r"^gliese\s*", "GJ ", text, flags=re.I)
+
     out = []
     for raw in (name, header_object):
         if not raw:
             continue
         raw = str(raw).strip()
-        spelled = re.sub(r"(?<=[A-Za-z0-9])M(?=\d)", "-", raw)
-        spelled = re.sub(r"_+", " ", spelled).strip()
-        spelled = re.sub(r"^gliese\s*", "GJ ", spelled, flags=re.I)
-        for one in (raw, spelled):
+        # then without LBL's suffixes, and as SIMBAD writes the catalogues
+        #   (lbl.core.simbad.name_variants: TOI 1452 as TOI-1452)
+        bare = spell(SUFFIXES.sub("", raw))
+        for one in [raw, spell(raw)] + name_variants(bare):
             if one and one not in out:
                 out.append(one)
     return out
-
-
-def _tap(query):
-    data = urllib.parse.urlencode(dict(request="doQuery", lang="adql",
-                                       format="json", query=query)).encode()
-    request = urllib.request.Request(TAP, data=data, headers=UA)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        table = json.load(response)
-    names = [column["name"] for column in table["metadata"]]
-    return [dict(zip(names, row)) for row in table["data"]]
 
 
 def summarise(main, sptype, measured):

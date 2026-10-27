@@ -1,9 +1,10 @@
 """
 Who the star is, and what is known of its planets.
 
-- resolve(name): the names of a star, from CDS's Sesame (SIMBAD): its main
-  identifier and aliases (GJ, HD, HIP, TIC, Gaia DR3...), whatever the
-  spelling in a file header ('Gl687' is GJ 687);
+- resolve(name): the names of a star, from SIMBAD (lbl.core.simbad,
+  through astroquery): its main identifier and aliases (GJ, HD, HIP, TIC,
+  Gaia DR3...), whatever the spelling in a file header ('Gl687' is GJ 687,
+  TOI_1452 is TOI-1452);
 - known_planets(name): its planets in the NASA Exoplanet Archive, found by
   their Gaia DR3 or TIC identifier (then by host name): the archive's
   default solution of each planet (pscomppars) and every published one
@@ -37,23 +38,22 @@ Created on 2026-09-29
 @author: artigau
 
 FROM KOLOA (github.com/eartigau/koloa, 584b4d2, module archive): only the part
-LBL's window uses to find and fetch public spectra, kept as it was there.
+LBL's window uses to find and fetch public spectra, kept as it was there,
+but for resolve, which asked CDS's Sesame resolver (it stopped answering
+on 2026-10-27) and now asks SIMBAD through astroquery.
 """
 import json
 import os
 import re
-import urllib.parse
-import urllib.request
 from typing import Any, Dict
+
+from lbl.core import simbad
 from .paths import cache
 
 
 # =============================================================================
 # Define variables
 # =============================================================================
-SESAME = 'https://cds.unistra.fr/cgi-bin/nph-sesame/-oxI/S'
-
-
 #: where the archive's tables are kept, once fetched
 CACHE = cache('archive')
 
@@ -64,20 +64,20 @@ CACHE = cache('archive')
 def resolve(name: str, timeout: float = 30.0, refresh: bool = False
             ) -> Dict[str, Any]:
     """
-    The names of a star (CDS Sesame, SIMBAD's resolver, which takes most
-    spellings: Gl687, GJ 687, HD69830, Proxima...), kept on disk once asked
-    (CACHE/sesame), since they do not change
+    The names of a star (SIMBAD, through lbl.core.simbad, which takes most
+    spellings: Gl687, GJ 687, HD69830, TOI_1452, Proxima...), kept on disk
+    once asked (CACHE/simbad), since they do not change
 
     :param name: str, a name
-    :param timeout: float [s]
-    :param refresh: bool, ask Sesame again
+    :param timeout: float [s], unused (lbl.core.simbad.TIMEOUT)
+    :param refresh: bool, ask SIMBAD again
 
     :return: dict, name (as given), main (SIMBAD's main identifier), aliases
              (every identifier), and the ones koloa uses: gaia_dr3, tic,
              hip, hd, gj (None when SIMBAD has none), ra, dec (J2000,
              degrees), sptype (SIMBAD's spectral type) and plx [mas]
     """
-    kept = os.path.join(CACHE, 'sesame', re.sub(r'[^A-Za-z0-9+\-.]+', '_',
+    kept = os.path.join(CACHE, 'simbad', re.sub(r'[^A-Za-z0-9+\-.]+', '_',
                                                 name.strip()) + '.json')
     if os.path.exists(kept) and not refresh:
         with open(kept) as handle:
@@ -89,31 +89,24 @@ def resolve(name: str, timeout: float = 30.0, refresh: bool = False
             return resolve(name, timeout=timeout, refresh=True)
         except Exception:
             return out
-    url = f'{SESAME}?{urllib.parse.quote(name)}'
-    with urllib.request.urlopen(url, timeout=timeout) as resp:
-        text = resp.read().decode('utf-8', 'replace')
-    main = re.search(r'<oname>(.*?)</oname>', text)
-    if main is None:
-        raise ValueError(f'SIMBAD does not know {name}')
-    aliases = [' '.join(alias.split())
-               for alias in re.findall(r'<alias>(.*?)</alias>', text)]
+    found = simbad.resolve(name)
+    if found is None:
+        tried = ', '.join(simbad.name_variants(name))
+        raise ValueError(f'SIMBAD does not know {name} (asked: {tried})')
+    aliases = found['ids']
 
     def first(prefix):
         return next((alias for alias in aliases
                      if alias.startswith(prefix + ' ')), None)
     # the position (J2000, degrees), for planning observations
-    radeg = re.search(r'<jradeg>(.*?)</jradeg>', text)
-    dedeg = re.search(r'<jdedeg>(.*?)</jdedeg>', text)
-    sptype = re.search(r'<spType>(.*?)</spType>', text)
-    plx = re.search(r'<plx><v>(.*?)</v>', text)
-    out = dict(name=name, main=' '.join(main.group(1).split()),
+    out = dict(name=name, main=found['main'],
                aliases=aliases, gaia_dr3=first('Gaia DR3'),
                tic=first('TIC'), hip=first('HIP'), hd=first('HD'),
                gj=first('GJ'),
-               ra=float(radeg.group(1)) if radeg else None,
-               dec=float(dedeg.group(1)) if dedeg else None,
-               sptype=sptype.group(1).strip() if sptype else None,
-               plx=float(plx.group(1)) if plx else None)
+               ra=float(found['ra']) if found['ra'] is not None else None,
+               dec=float(found['dec']) if found['dec'] is not None else None,
+               sptype=found['sptype'],
+               plx=float(found['plx']) if found['plx'] is not None else None)
     os.makedirs(os.path.dirname(kept), exist_ok=True)
     with open(kept, 'w') as handle:
         json.dump(out, handle)

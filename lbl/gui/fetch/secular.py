@@ -78,6 +78,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional
 import numpy as np
+from lbl.core import simbad
 from .log import log
 from .paths import cache
 
@@ -91,10 +92,7 @@ ASTROMETRY_CACHE = cache('gaia')
 _FAILED: Dict[str, float] = {}
 
 
-#: the services
-SIMBAD_TAP = 'https://simbad.cds.unistra.fr/simbad/sim-tap/sync'
-
-
+#: the services (SIMBAD's through its Python client, lbl.core.simbad)
 GAIA_TAP = 'https://gea.esac.esa.int/tap-server/tap/sync'
 
 
@@ -170,16 +168,14 @@ def star_astrometry(ident: Dict[str, Any], timeout: float = 60.0,
                                 else float('nan'))
         if (out is None or not np.isfinite(out['pmra'] + out['pmdec']
                                            + out['parallax'])) and name:
-            safe = name.replace("'", "''")
-            rows = _tap(SIMBAD_TAP,
-                        "SELECT pmra, pmdec, plx_value FROM basic JOIN "
-                        f"ident ON oidref = oid WHERE id = '{safe}'",
-                        timeout)
-            vals = [rows[0].get(col, '') for col in
+            rows = simbad.tap("SELECT pmra, pmdec, plx_value FROM basic "
+                              "JOIN ident ON oidref = oid WHERE id = "
+                              + simbad.quoted(name))
+            vals = [rows[0].get(col) for col in
                     ('pmra', 'pmdec', 'plx_value')] if rows else []
             out = (dict(source='SIMBAD', pmra=float(vals[0]),
                         pmdec=float(vals[1]), parallax=float(vals[2]))
-                   if vals and '' not in vals else None)
+                   if vals and None not in vals else None)
     except (OSError, ValueError) as err:
         _FAILED[key] = _time.time()
         log(f'astrometry of {name or number}: not asked ({err})', 'warn')

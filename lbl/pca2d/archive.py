@@ -34,6 +34,8 @@ import time
 import urllib.parse
 import urllib.request
 
+from lbl.core.simbad import toi_number
+
 TAP = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 CACHE = os.path.expanduser("~/.pca2d/exoplanets")
 TIMEOUT = 30
@@ -84,10 +86,12 @@ def identifiers(facts, folder=None):
         elif ident.startswith("HIP ") and out["hip"] is None:
             out["hip"] = ident
         names.append(ident)
+    # a TOI in any spelling, LBL's suffixes after it or not (TOI_1234_tc,
+    #   TOI1234, TOI 1234, TOI-1234.01: lbl.core.simbad.toi_number)
     for text in [folder] + names:
-        found = re.match(r"TOI[-_ ]?(\d+)$", str(text or ""), re.I)
-        if found and out["toi"] is None:
-            out["toi"] = found.group(1)
+        number = toi_number(text)
+        if number and out["toi"] is None:
+            out["toi"] = number
     # the archive writes GJ as Gl for some hosts, and names hosts as papers do
     spelled = set()
     for name in names:
