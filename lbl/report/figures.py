@@ -799,6 +799,100 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
 TELLDV, TELLDVE = 'TELLDV', 'TELLDVE'
 
 
+#: the water exponent of a spectrum whose derivative cost had nothing to go
+#:    on: 0.35 marked by 1e-7 (lbl.science.tellu_derivative.FALLBACK_MARK)
+WATER_FALLBACK = 0.35 + 1e-7
+
+
+def page_telluric_airmass(plt, table, title):
+    """The telluric exponents of every epoch against its airmass: the dry
+    one (O2, CO2, CH4 together) on the left, the water on the right.
+
+    WHAT THE LEFT PANEL CHECKS. The dry species are well mixed, so their
+    column follows the airmass and the points fall on a line; not
+    necessarily the line of slope 1 through zero, TAPAS being computed for a
+    reference column that an observatory at altitude does not have (La
+    Silla: 0.961 times the airmass on HD 10700). The line drawn is fitted,
+    slope and offset free, with the scatter about it; slope 1 through zero
+    is drawn beside it for the eye. A cloud off any line says the dry fit
+    failed.
+
+    THE RIGHT PANEL. The water column follows the airmass too, but also the
+    weather, which changes from night to night: the line is the median
+    column (water over airmass) times the airmass, and the spread about it
+    is the weather. An exponent at the derivative's fallback (0.35, its
+    cost had nothing to go on) is drawn apart and left out of both lines.
+    """
+    water = S.column(table, S.WATER)
+    dry = S.column(table, S.DRY)
+    airmass = S.column(table, S.AIRMASS)
+    if water is None or dry is None or airmass is None:
+        return None
+    fallback = np.isclose(water, WATER_FALLBACK, rtol=0, atol=1e-9)
+    good = np.isfinite(airmass) & np.isfinite(water) & np.isfinite(dry)
+    if good.sum() < 3:
+        return None
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.6))
+    span = np.linspace(np.nanmin(airmass[good]), np.nanmax(airmass[good]), 20)
+
+    # the dry column
+    ax = axes[0]
+    fit = good & ~fallback
+    if fit.any():
+        ax.plot(airmass[fit], dry[fit], 'o', color='C1', ms=4, alpha=0.8,
+                label='epochs (%d)' % fit.sum())
+    if np.any(good & fallback):
+        ax.plot(airmass[good & fallback], dry[good & fallback], 'o',
+                mfc='none', mec='0.5', ms=5,
+                label='water at its fallback (%d)' % np.sum(good & fallback))
+    ax.plot(span, span, ':', color='0.4', lw=1, label='slope 1 through zero')
+    note = ''
+    if fit.sum() >= 3 and np.ptp(airmass[fit]) > 0:
+        slope, offset = np.polyfit(airmass[fit], dry[fit], 1)
+        resid = dry[fit] - (slope * airmass[fit] + offset)
+        ax.plot(span, slope * span + offset, '-', color='k', lw=1,
+                label='fitted: %.3f x airmass %+.3f' % (slope, offset))
+        note = 'scatter about the fit (MAD) %.3f' % _mad(resid)
+        ratio = np.median(dry[fit] / airmass[fit])
+        note += '\nmedian dry / airmass %.3f' % ratio
+    ax.set_xlabel('Airmass')
+    ax.set_ylabel('Dry exponent (TLPEOTR)')
+    ax.set_title('Dry absorbers (O$_2$, CO$_2$, CH$_4$)', fontsize=10)
+    if note:
+        ax.text(0.03, 0.97, note, transform=ax.transAxes, va='top',
+                ha='left', fontsize=8)
+    ax.legend(fontsize=7, loc='lower right')
+
+    # the water column
+    ax = axes[1]
+    if fit.any():
+        ax.plot(airmass[fit], water[fit], 'o', color='C0', ms=4, alpha=0.8,
+                label='epochs (%d)' % fit.sum())
+    if np.any(good & fallback):
+        ax.plot(airmass[good & fallback], water[good & fallback], 'o',
+                mfc='none', mec='0.5', ms=5,
+                label='fallback 0.35 (%d)' % np.sum(good & fallback))
+    if fit.sum() >= 3:
+        column = np.median(water[fit] / airmass[fit])
+        ax.plot(span, column * span, '-', color='k', lw=1,
+                label='median column: %.3f x airmass' % column)
+        spread = water[fit] / airmass[fit] / column
+        ax.text(0.03, 0.97, 'column (water / airmass), relative to its'
+                ' median:\n16th to 84th percentile %.2f to %.2f'
+                % tuple(np.percentile(spread, [16, 84])),
+                transform=ax.transAxes, va='top', ha='left', fontsize=8)
+    ax.set_xlabel('Airmass')
+    ax.set_ylabel('Water exponent (TLPEH2O)')
+    ax.set_title('Water', fontsize=10)
+    ax.legend(fontsize=7, loc='lower right')
+    for ax in axes:
+        ax.grid(alpha=0.3)
+    fig.suptitle('%s: the telluric exponents against the airmass' % title,
+                 fontsize=10)
+    fig.tight_layout()
+    return fig
+
+
 def page_telluric_zero_point(plt, table, title):
     """The zero point each exposure got from its tellurics (TELLDV), against
     time and against the BERV, and the velocities against it.

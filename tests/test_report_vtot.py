@@ -41,3 +41,20 @@ def test_the_colours_change_hue_at_zero():
     # dark on both sides, blue below and red above
     assert below[2] > below[0] and above[0] > above[2]
     assert max(below[:3]) < 0.5 and max(above[:3]) < 0.5
+
+
+def test_the_telluric_exponents_against_the_airmass():
+    rng = np.random.default_rng(3)
+    airmass = rng.uniform(1.0, 1.9, 30)
+    water = 0.4 * airmass * rng.uniform(0.6, 1.5, 30)
+    water[:3] = figures.WATER_FALLBACK            # three at the fallback
+    table = dict(rjd=np.arange(30.0), vrad=np.zeros(30), svrad=np.ones(30),
+                 TLPEH2O=water, TLPEOTR=0.96 * airmass + 0.05, AIRMASS=airmass)
+    fig = figures.page_telluric_airmass(plt, table, 'star')
+    labels = [t.get_text() for ax in fig.axes
+              for t in ax.get_legend().get_texts()]
+    assert 'epochs (27)' in labels and 'fallback 0.35 (3)' in labels
+    assert any(label.startswith('fitted: 0.960 x airmass') for label in labels)
+    plt.close(fig)
+    # no exponents (no telluric correction): no page
+    assert figures.page_telluric_airmass(plt, dict(rjd=[1.0]), 'star') is None

@@ -258,6 +258,12 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     # strongest line of the species they are about rather than on a window
     # written down once for HARPS.
     spl_water, spl_dry = _tapas(data_dir)
+    # THE EXPONENTS AGAINST THE AIRMASS, whenever the telluric correction
+    #   ran: the dry ones should fall on a line, the water ones about one
+    if series.has_telluric(table):
+        wanted.append(('Telluric exponents against the airmass',
+                       lambda: figures.page_telluric_airmass(plt, table,
+                                                             title)))
     if series.has_telluric(table) and science_dir and tc_dir:
         wanted.append(('Telluric correction, water column',
                        lambda: figures.page_telluric(plt, table, title,
