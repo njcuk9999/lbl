@@ -195,6 +195,10 @@ input.set, select.set { border-color: var(--accent); }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
 .check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .check.locked { opacity: 0.5; cursor: not-allowed; }
+/* the wrap's name of an LBL switch (SMALL_RV_SHIFT), as the PCA2D tab
+   gives its options' */
+.check .sw-text { display: flex; flex-direction: column; min-width: 0; }
+.check .key { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 0.68rem; overflow-wrap: anywhere; }
 .switch { display: inline-flex; align-items: center; gap: 8px; }
 
 .button, .pill-button {

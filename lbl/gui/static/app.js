@@ -1147,7 +1147,7 @@ function drawSwitches() {
     return el('label', { class: `check${locked ? ' locked' : ''}`, title: locked ? t('tellu_off') : null }, el('input', {
       type: 'checkbox', checked: locked ? false : Boolean(value), disabled: locked,
       onchange: (event) => { S.lbl[row.key] = event.target.checked; wrapEdited = false; save(); drawOverwrite(); },
-    }), t(`sw_${row.key}`), info(`help_sw_${row.key}`));
+    }), el('span', { class: 'sw-text' }, t(`sw_${row.key}`), el('span', { class: 'key', text: row.key })), info(`help_sw_${row.key}`));
   }));
   drawOverwrite();
   $('resproj').checked = Boolean(S.resproj);

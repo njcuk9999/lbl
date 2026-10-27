@@ -219,7 +219,7 @@ EN = {
     "help_sw_SKIP_LBL_COMPILE": "Keep the rdb tables on disk. Off by default: compiling takes seconds and must include every new exposure.",
     "help_sw_REPORT": "Write the PDF report in reports/: the velocities, their periodograms, the indicators and, with PCA2D, its own pages first (the river plots, the components, the velocities before and after).",
     "help_sw_PLANETS": "Use the star's known planets and candidates (LBL's planet catalogs, and DATA_DIR/personal_planet_catalog.yaml): the template is built on the BERV plus their Keplerian velocity, and the report fits their K at their periods. The velocities reported stay corrected for the BERV only.",
-    "help_sw_SMALL_RV_SHIFT": "Ticked (the default): the star's velocity is taken as constant, and its template is made in one pass, every spectrum shifted by its BERV alone. Right when the velocity varies by less than about 100 m/s over the spectra (MAX_CONVERGENCE_TEMPLATE_RV): planets of a few to a few tens of m/s, activity; it saves the template's convergence passes. Unticked: each spectrum's velocity is measured against the template and the template made again, up to 5 times, until the shifts agree to 100 m/s; for a binary, a brown dwarf or a hot Jupiter (HD 189733's K is 205 m/s), whose lines would otherwise be smeared in the template. With known planets ticked and the star's orbits in the catalogs, the template follows the orbits instead.",
+    "help_sw_SMALL_RV_SHIFT": "Ticked (the default): the star's velocity is taken as constant, and its template is made in one pass, every spectrum shifted by its BERV alone. Right when the velocity varies by less than about 100 m/s over the spectra (MAX_CONVERGENCE_TEMPLATE_RV): planets of a few to a few tens of m/s, activity; it saves the template's convergence passes. Unticked: each spectrum's velocity is measured against the template and the template made again, up to 5 times, until the shifts agree to 100 m/s; for a binary, a brown dwarf or a hot Jupiter (HD 189733's K is 205 m/s), whose lines would otherwise be smeared in the template. With known planets ticked and the star's orbits in the catalogs, the template follows the orbits instead. Unticked, PCA2D's star frame follows the velocities the template measured. Not PCA2D's velocity_term, a velocity per exposure fitted inside the PCA2D fit, which changes no template.",
     "launch": "Run",
     "launch_running": "Running · %s",
     "launch_more": "A run is going: a click now starts this one when it ends",
@@ -548,7 +548,7 @@ FR = {
     "help_sw_SKIP_LBL_COMPILE": "Garder les tables rdb sur disque. Désactivé par défaut : compiler prend quelques secondes et doit inclure chaque nouvelle pose.",
     "help_sw_REPORT": "Écrire le rapport PDF dans reports/ : les vitesses, leurs périodogrammes, les indicateurs et, avec PCA2D, ses propres pages d'abord (les river plots, les composantes, les vitesses avant et après).",
     "help_sw_PLANETS": "Utiliser les planètes connues et candidates de l'étoile (les catalogues de planètes de LBL, et DATA_DIR/personal_planet_catalog.yaml) : le template est construit sur le BERV plus leur vitesse képlérienne, et le rapport ajuste leur K à leurs périodes. Les vitesses rapportées restent corrigées du seul BERV.",
-    "help_sw_SMALL_RV_SHIFT": "Coché (par défaut) : la vitesse de l'étoile est prise constante, et son template est fait en une passe, chaque spectre décalé de son seul BERV. Juste quand la vitesse varie de moins d'environ 100 m/s sur les spectres (MAX_CONVERGENCE_TEMPLATE_RV) : planètes de quelques m/s à quelques dizaines de m/s, activité ; cela évite les passes de convergence du template. Décoché : la vitesse de chaque spectre est mesurée contre le template, et le template refait, jusqu'à 5 fois, jusqu'à ce que les décalages s'accordent à 100 m/s ; pour une binaire, une naine brune ou un Jupiter chaud (le K de HD 189733 est de 205 m/s), dont les raies seraient sinon étalées dans le template. Avec les planètes connues cochées et les orbites de l'étoile dans les catalogues, le template suit plutôt les orbites.",
+    "help_sw_SMALL_RV_SHIFT": "Coché (par défaut) : la vitesse de l'étoile est prise constante, et son template est fait en une passe, chaque spectre décalé de son seul BERV. Juste quand la vitesse varie de moins d'environ 100 m/s sur les spectres (MAX_CONVERGENCE_TEMPLATE_RV) : planètes de quelques m/s à quelques dizaines de m/s, activité ; cela évite les passes de convergence du template. Décoché : la vitesse de chaque spectre est mesurée contre le template, et le template refait, jusqu'à 5 fois, jusqu'à ce que les décalages s'accordent à 100 m/s ; pour une binaire, une naine brune ou un Jupiter chaud (le K de HD 189733 est de 205 m/s), dont les raies seraient sinon étalées dans le template. Avec les planètes connues cochées et les orbites de l'étoile dans les catalogues, le template suit plutôt les orbites. Décoché, le référentiel de l'étoile de PCA2D suit les vitesses que le template a mesurées. Ce n'est pas le velocity_term de PCA2D, une vitesse par pose ajustée dans le fit PCA2D, qui ne change aucun template.",
     "launch": "Lancer",
     "launch_running": "En cours · %s",
     "launch_more": "Un run est en cours : un clic maintenant lance celui-ci à sa fin",
@@ -742,7 +742,10 @@ OPTIONS = {
          " could take that motion; dividing them out would then remove part"
          " of the very signal the run is after. The velocity term keeps it"
          " out of them. It is fitted, never divided out, and written to the"
-         " corrected files' header (PCASTR_V). Off by default.",
+         " corrected files' header (PCASTR_V). Off by default.\n\n"
+         "Not SMALL_RV_SHIFT (LBL tab), which decides whether LBL's template"
+         " measures each exposure's velocity: this one lives inside the"
+         " PCA2D fit and changes no template.",
          "Ajuster une vitesse par pose à côté des composantes, sous la forme"
          " de la dérivée du spectre de l'étoile portée à cette pose.\n\n"
          "L'étoile n'est jamais exactement là où le BERV seul la place (une"
@@ -751,7 +754,10 @@ OPTIONS = {
          " retirerait alors une partie du signal même que l'on cherche. Le"
          " terme de vitesse l'en tient à l'écart. Il est ajusté, jamais"
          " divisé, et écrit dans l'entête des fichiers corrigés (PCASTR_V)."
-         " Désactivé par défaut.")),
+         " Désactivé par défaut.\n\n"
+         "Ce n'est pas SMALL_RV_SHIFT (onglet LBL), qui décide si le template"
+         " de LBL mesure la vitesse de chaque pose : celui-ci vit dans le fit"
+         " PCA2D et ne change aucun template.")),
     "iters": (
         ("sweeps at most", "itérations au plus"),
         ("The most sweeps the fit makes, alternating the star's part and"
