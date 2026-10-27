@@ -310,6 +310,11 @@ WRAP_SECTIONS = (
         ("PLANETS", "build the template on the BERV plus the Keplerian "
          "velocity of the star's known companions, when LBL's planet "
          "catalogs have them (the velocities stay BERV-corrected only)"),
+        ("SMALL_RV_SHIFT", "True: the star's velocity is taken as constant "
+         "and the template made in one pass on BERV alone (a velocity that "
+         "varies by less than MAX_CONVERGENCE_TEMPLATE_RV, 100 m/s); False: "
+         "the template iterates on each spectrum's velocity, up to 5 passes "
+         "(a binary, a brown dwarf, a hot Jupiter)"),
     )),
 )
 #: above the PCA2D settings

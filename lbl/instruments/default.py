@@ -729,6 +729,9 @@ class Instrument:
         found = props.get('planets')
         header['PLANETS'] = (found is not None,
                              'template on BERV + Keplerian velocities')
+        # SMALL_RV_SHIFT: the star's velocity taken as constant, one pass
+        header['SMALLRV'] = (bool(props.get('small_rv_shift', False)),
+                             'template on BERV alone, constant velocity')
         if found is not None:
             header['PLNSTAR'] = (str(found['star']), 'star in the catalog')
             header['PLNCAT'] = (os.path.basename(found['catalog']),

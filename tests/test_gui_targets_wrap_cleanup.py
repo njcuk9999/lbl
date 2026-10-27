@@ -295,3 +295,14 @@ def test_a_frozen_basis_sets_n_earth_unless_it_is_chosen(data_dir):
     built = wrapgen.build(_state(data_dir, pca2d={"input_name": "nirps_set",
                                                   "n_earth": 2}))
     assert built["rparams"]["PCA2D"]["n_earth"] == 2
+
+
+def test_small_rv_shift_is_on_unless_unticked(data_dir):
+    # the template in one pass on BERV alone, by default (2026-10-27)
+    from lbl.core import parameters
+    assert parameters.params["SMALL_RV_SHIFT"] is True
+    built = wrapgen.build(_state(data_dir))
+    assert built["rparams"]["SMALL_RV_SHIFT"] is True
+    assert "SMALL_RV_SHIFT" in wrapgen.render(built["rparams"], "test")
+    built = wrapgen.build(_state(data_dir, lbl={"SMALL_RV_SHIFT": False}))
+    assert built["rparams"]["SMALL_RV_SHIFT"] is False

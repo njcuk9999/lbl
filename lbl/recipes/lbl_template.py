@@ -286,8 +286,8 @@ def run_template(inst, objname: str, objkind: str):
             try:
                 bjd[sci_it] = inst.get_rjd_value(sci_hdr) + 2400000.0
             except Exception as exc:
-                msg = ('PLANETS: no time for {0} ({1}): the template '
-                       'iterates on the velocities')
+                msg = ('PLANETS: no time for {0} ({1}): the known '
+                       'orbits are not used')
                 log.warning(msg.format(science_files[sci_it], exc))
                 use_planets = False
     # -------------------------------------------------------------------------
@@ -310,6 +310,18 @@ def run_template(inst, objname: str, objkind: str):
         msg = ('PLANETS: velocity of the star from {0:.1f} to {1:.1f} m/s '
                'over the {2} spectra')
         log.info(msg.format(np.min(rv0), np.max(rv0), len(rv0)))
+    # SMALL_RV_SHIFT: the star's velocity taken as constant, the template
+    #   made in one pass on BERV alone (unless its orbits are known above);
+    #   False iterates on the velocities below
+    flat_rv = (planets_used is None and bool(inst.params['SMALL_RV_SHIFT'])
+               and inst.params['DATA_TYPE'] == 'SCIENCE')
+    if flat_rv:
+        log.info('SMALL_RV_SHIFT: the velocity of the star is taken as '
+                 'constant: the template is made on BERV alone, in one pass '
+                 '(SMALL_RV_SHIFT = False iterates on the velocities)')
+    # the passes: one when the velocities are known (or taken as
+    #   constant), up to 5 otherwise
+    n_passes = 1 if (planets_used is not None or flat_rv) else 5
     # storage of the science table
     med_spec_hp = 1
     # we distribute the files in bins of equal size ordered by berv
@@ -332,8 +344,8 @@ def run_template(inst, objname: str, objkind: str):
         even_weight_cube = np.zeros([len(wavegrid), nbin])
 
         # print iteration loop
-        msg = 'Iteration {0} of 5'
-        log.info(msg.format(ite + 1))
+        msg = 'Iteration {0} of {1}'
+        log.info(msg.format(ite + 1, n_passes))
         # science table
         sci_table = dict()
         # all bervs
@@ -581,6 +593,11 @@ def run_template(inst, objname: str, objkind: str):
             log.general('PLANETS: template made in one pass, on BERV + the '
                         'Keplerian velocity of each spectrum')
             break
+        # with a constant velocity too (SMALL_RV_SHIFT)
+        if flat_rv:
+            log.general('SMALL_RV_SHIFT: template made in one pass, on BERV '
+                        'alone')
+            break
 
     sci_table['VSYS'] = rv0
     if planets_used is not None:
@@ -724,7 +741,7 @@ def run_template(inst, objname: str, objkind: str):
                  rms_even=rms_even, template_coverage=template_coverage,
                  total_nobs_berv=total_nobs_berv, template_nobs=nfiles,
                  savgol_fluxes=savgol_fluxes, template_type=template_type,
-                 planets=planets_used)
+                 planets=planets_used, small_rv_shift=flat_rv)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
 

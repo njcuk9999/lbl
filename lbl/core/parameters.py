@@ -821,6 +821,23 @@ params.set(key='PLANETS', value=False, source=__NAME__,
            desc='template on BERV + the Keplerian velocity of the known '
                 'companions of the star, if the planet catalogs have them',
            dtype=bool)
+# the star's velocity changes little over its spectra: True takes it as
+#   constant, and the template is made in one pass on BERV alone. Right for
+#   a star whose velocity varies by less than MAX_CONVERGENCE_TEMPLATE_RV
+#   (100 m/s): planets of a few to a few tens of m/s, activity. False
+#   measures each spectrum's velocity against the template of the pass
+#   before and makes the template again (up to 5 passes), until the shifts
+#   agree to MAX_CONVERGENCE_TEMPLATE_RV: for a binary, a brown dwarf, a hot
+#   Jupiter (HD 189733's K is 205 m/s), whose lines would otherwise be
+#   smeared in the template by the star's motion. With PLANETS and the
+#   star's orbits in the catalogs, the template follows the orbits instead,
+#   whatever this says. Science data only.
+params.set(key='SMALL_RV_SHIFT', value=True, source=__NAME__,
+           desc='the star\'s velocity is taken as constant: the template '
+                'is made in one pass on BERV alone, without iterating on '
+                'the velocities (False: iterate, for a star whose velocity '
+                'varies by more than MAX_CONVERGENCE_TEMPLATE_RV)',
+           dtype=bool)
 
 # define the mnimal SNR required for a pixel to be considered valid in
 # the template

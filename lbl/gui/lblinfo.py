@@ -34,6 +34,7 @@ LBL_SWITCHES = (
     ("SKIP_LBL_COMPILE", False),
     ("REPORT", True),
     ("PLANETS", False),
+    ("SMALL_RV_SHIFT", True),
 )
 
 #: the switch lbl_wrap reads for the PCA2D correction on disk: None (redo it
