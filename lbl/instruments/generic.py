@@ -206,10 +206,6 @@ class Generic(Instrument):
         self.generic_validate('TELLUCLEAN_MASK_DOMAIN_UPPER')
         # Define whether to force using airmass from header
         self.generic_validate('TELLUCLEAN_FORCE_AIRMASS')
-        # Define the CCF scan range in km/s
-        self.generic_validate('TELLUCLEAN_CCF_SCAN_RANGE')
-        # Define the maximum number of iterations for the tellu-cleaning loop
-        self.generic_validate('TELLUCLEAN_MAX_ITERATIONS')
         # Define the kernel width in pixels
         self.generic_validate('TELLUCLEAN_KERNEL_WID')
         # Define the gaussian shape (2=pure gaussian, >2=boxy)
@@ -221,22 +217,6 @@ class Generic(Instrument):
         # Define the transmission threshold exp(-1) at which tellurics are
         #     uncorrectable
         self.generic_validate('TELLUCLEAN_TRANSMISSION_THRESHOLD')
-        # Define the sigma cut threshold above which pixels are removed from fit
-        self.generic_validate('TELLUCLEAN_SIGMA_THRESHOLD')
-        # Define whether to recenter the CCF on the first iteration
-        self.generic_validate('TELLUCLEAN_RECENTER_CCF')
-        # Define whether to recenter the CCF of others on the first iteration
-        self.generic_validate('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS')
-        # Define the default water absorption to use
-        self.generic_validate('TELLUCLEAN_DEFAULT_WATER_ABSO')
-        # Define the lower limit on valid exponent of water absorbers
-        self.generic_validate('TELLUCLEAN_WATER_BOUNDS_LOWER')
-        # Define the upper limit on valid exponent of water absorbers
-        self.generic_validate('TELLUCLEAN_WATER_BOUNDS_UPPER')
-        # Define the lower limit on valid exponent of other absorbers
-        self.generic_validate('TELLUCLEAN_OTHERS_BOUNDS_LOWER')
-        # Define the upper limit on valid exponent of other absorbers
-        self.generic_validate('TELLUCLEAN_OTHERS_BOUNDS_UPPER')
         # ---------------------------------------------------------------------
         # Parameters for the template construction
         # ---------------------------------------------------------------------

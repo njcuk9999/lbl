@@ -298,9 +298,39 @@ def weighted_nanstd(data, weights):
     return np.sqrt(np.sum(w * (d - mean) ** 2) / denom)
 
 
-def objective(sp, trans):
-    """La dispersion ponderee du gradient du spectre corrige."""
+def gradient_noise(trans, noise=None):
+    """The noise of np.gradient(sp / trans), pixel by pixel, from the noise
+    of sp (None: the same everywhere). The noise follows the division: a
+    pixel of sp with noise sigma becomes one of sigma / T in the corrected
+    spectrum; and np.gradient takes (c[i+1] - c[i-1]) / 2 inside, c[1] - c[0]
+    and c[-1] - c[-2] at the ends."""
+    t = np.clip(np.asarray(trans, dtype=float), 1e-3, None)
+    sigma = (np.ones_like(t) if noise is None
+             else np.asarray(noise, dtype=float)) / t
+    s2 = sigma ** 2
+    var = np.empty_like(s2)
+    if s2.size < 2:
+        return np.sqrt(s2)
+    var[1:-1] = (s2[2:] + s2[:-2]) / 4.0
+    var[0] = s2[0] + s2[1]
+    var[-1] = s2[-1] + s2[-2]
+    return np.sqrt(var)
+
+
+def objective(sp, trans, noise=None):
+    """La dispersion ponderee du gradient du spectre corrige, EN UNITES DE
+    SON BRUIT (2026-10-27).
+
+    Diviser par la transmission divise aussi le bruit: un pixel de bruit
+    sigma devient sigma / T, et sans en tenir compte chaque exposant de plus
+    gonfle le bruit des raies profondes. Sur une etoile faible ce bruit
+    l'emportait sur les raies telluriques qu'on enleve: le cout montait de
+    facon monotone avec l'exposant, sans minimum, et l'eau tombait au repli
+    (les 6 poses HARPS de GJ 1214, au plus bas du balayage). Le gradient est
+    donc divise par son bruit (gradient_noise), qui suit la division par la
+    transmission et, avec `noise`, le bruit de photons de la pose."""
     grad = np.gradient(sp / np.clip(trans, 1e-3, None))
+    grad = grad / gradient_noise(trans, noise)
     w = transmission_weights(trans, **WEIGHTS)
     valid = w > 0.5
     if valid.sum() < 64:
@@ -312,9 +342,15 @@ def objective(sp, trans):
     return weighted_nanstd(grad, w)
 
 
+#: the dry exponent free within this range of the airmass: the dry column
+#:    follows it (0.961 times it on HD 10700, MAD 0.026), and an unbounded
+#:    fit sank to 1e-27 on a blind pass of Gliese 229 (2026-10-27)
+DRY_RANGE = (0.5, 1.5)
+
+
 def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
                   resolution=115000.0, free_dry=True, fallback=0.35,
-                  flat_span=0.05):
+                  flat_span=1e-3, noise=None):
     """(exposant H2O, exposant sec) de CE fichier, par la derivee.
 
     L'AJUSTEMENT SE FAIT EN LOGARITHME, et c'est ce qui empeche d'atteindre
@@ -351,8 +387,13 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
 
     wave_ground = np.asarray(wave_ground, dtype=float)
     sp = np.asarray(sp, dtype=float)
-    good = np.isfinite(sp) & (sp > 0) & np.isfinite(wave_ground)
-    wave_ground, sp = wave_ground[good], sp[good]
+    # the noise of each pixel of sp (`noise`, before the transmission is
+    #   divided out); the same everywhere when not given
+    noise = (np.ones_like(sp) if noise is None
+             else np.asarray(noise, dtype=float))
+    good = (np.isfinite(sp) & (sp > 0) & np.isfinite(wave_ground)
+            & np.isfinite(noise) & (noise > 0))
+    wave_ground, sp, noise = wave_ground[good], sp[good], noise[good]
     # LES MORCEAUX VIENNENT DES DONNEES, et non d'une liste de bandes codee en
     # dur: on ne modelise que la ou il y a des pixels a expliquer. Un trou de
     # plus de 1 nm dans les longueurs d'onde separe deux morceaux; en dessous
@@ -368,17 +409,20 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     #   garde-fou du balayage
     keep = telluric_windows(model, wave_ground)
     if keep.sum() >= WINDOW_MIN_PIXELS:
-        wave_ground, sp = wave_ground[keep], sp[keep]
+        wave_ground, sp, noise = wave_ground[keep], sp[keep], noise[keep]
         model = model_grid(spl_water, spl_dry, wave_ground.min() * 0.999,
                            wave_ground.max() * 1.001, resolution,
                            bands=_spans_of(wave_ground))
 
+    low, high = DRY_RANGE[0] * float(airmass), DRY_RANGE[1] * float(airmass)
+
     def cost(p):
         water = float(np.exp(p[0]))
         dry = float(np.exp(p[1])) if free_dry else float(airmass)
-        if not (1e-4 < water < 20) or not (0 < dry < 20):
+        if not (1e-4 < water < 20) or not (low < dry < high):
             return np.inf
-        return objective(sp, transmission(model, wave_ground, water, dry))
+        return objective(sp, transmission(model, wave_ground, water, dry),
+                         noise)
 
     # LE BALAYAGE D'ABORD, et il sert DEUX fois: il dit si la pose a de quoi
     # trancher, et il donne au simplexe un point de depart du bon cote.
@@ -412,6 +456,14 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     costs = np.array([cost([np.log(a), dry0]) for a in scan])
     if not np.all(np.isfinite(costs)):
         return float(fallback) + FALLBACK_MARK, float(airmass)
+    # WHAT "NOTHING TO GO ON" IS, since the cost is in units of the noise
+    #   (2026-10-27): a minimum on an edge of the scan, or a curve flat to
+    #   `flat_span` (0.1%), numerically. The 5% this guard asked of the
+    #   former cost sent every HARPS spectrum of GJ 1214 to the fallback
+    #   although each had an interior minimum (spans 0.5 to 1.6%); a flat
+    #   flux without tellurics, at the same noise, is no flat curve but a
+    #   minimum at the scan's first point (spans 3 to 4%, and 73 to 116% at
+    #   Gliese 229's), which the edge test catches
     span = (costs.max() - costs.min()) / max(abs(costs.min()), 1e-30)
     jbest = int(np.argmin(costs))
     flat = span < flat_span

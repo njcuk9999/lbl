@@ -174,11 +174,6 @@ class MaroonX(Instrument):
         # Define whether to force using airmass from header
         self.param_set('TELLUCLEAN_FORCE_AIRMASS', value=False,
                         source=func_name)
-        # Define the CCF scan range in km/s
-        self.param_set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
-                        source=func_name)
-        # Define the maximum number of iterations for the tellu-cleaning loop
-        self.param_set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
         # Define the kernel width in pixels
         self.param_set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
         # Define the gaussian shape (2=pure gaussian, >2=boxy)
@@ -187,30 +182,6 @@ class MaroonX(Instrument):
         # Define the transmission threshold exp(-1) at which tellurics are
         #     uncorrectable
         self.param_set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
-                        source=func_name)
-        # Define the sigma cut threshold above which pixels are removed from fit
-        self.param_set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
-                        source=func_name)
-        # Define whether to recenter the CCF on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF', value=False,
-                        source=func_name)
-        # Define whether to recenter the CCF of others on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
-                        source=func_name)
-        # Define the default water absorption to use
-        self.param_set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
-                        source=func_name)
-        # Define the lower limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
-                        source=func_name)
-        # Define the upper limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
-                        source=func_name)
-        # Define the lower limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
-                        source=func_name)
-        # Define the upper limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
         # ---------------------------------------------------------------------
         # Parameters for the template construction

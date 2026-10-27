@@ -85,21 +85,11 @@ TELLUCLEAN_DV0,None,None,0,0,0,the dv offset for tellu-cleaning in km/s
 TELLUCLEAN_MASK_DOMAIN_LOWER,None,None,500,550,600,the lower wave limit for the absorber spectrum masks in nm
 TELLUCLEAN_MASK_DOMAIN_UPPER,None,None,700,670,900,the upper wave limit for the absorber spectrum masks in nm
 TELLUCLEAN_FORCE_AIRMASS,None,None,False,True,False,whether to force using airmass from header
-TELLUCLEAN_CCF_SCAN_RANGE,None,None,50,150,25,the CCF scan range in km/s
-TELLUCLEAN_MAX_ITERATIONS,20,20,20,20,20,the maximum number of iterations for the tellu-cleaning loop
 TELLUCLEAN_KERNEL_WID,None,None,1.4,1.4,1.4,the kernel width in pixels
 TELLUCLEAN_GAUSSIAN_SHAPE,None,None,2.2,2.2,2.2,"the gaussian shape (2=pure gaussian, >2=boxy"
 TELLUCLEAN_WAVE_LOWER,None,None,350,350,520,the wave grid lower wavelength limit in nm
 TELLUCLEAN_WAVE_UPPER,None,None,750,750,1000,the wave grid upper wavelength limit in nm
 TELLUCLEAN_TRANSMISSION_THRESHOLD,-1,-1,-1,-1,-1,the transmission threshold exp(-1) at which tellurics are uncorrectable
-TELLUCLEAN_SIGMA_THRESHOLD,10,10,10,10,10,the sigma cut threshold above which pixels are removed from fit
-TELLUCLEAN_RECENTER_CCF,None,None,False,False,False,whether to recenter the CCF on the first iteration
-TELLUCLEAN_RECENTER_CCF_FIT_OTHERS,None,None,False,True,True,whether to recenter the CCF on the first iteration
-TELLUCLEAN_DEFAULT_WATER_ABSO,None,None,0.5,5.0,5.0,the default water absorption to use
-TELLUCLEAN_WATER_BOUNDS_LOWER,None,None,0.01,0.05,0.05,the lower limit on valid exponent of water absorbers
-TELLUCLEAN_WATER_BOUNDS_UPPER,None,None,15,15,15,the upper limit on valid exponent of water absorbers
-TELLUCLEAN_OTHERS_BOUNDS_LOWER,None,None,0.05,0.05,0.05,the lower limit on valid exponent of other absorbers
-TELLUCLEAN_OTHERS_BOUNDS_UPPER,None,None,15,15,15,the upper limit on valid exponent of other absorbers
 COMMAND_LINE_ARGS,None,[],[],[],[],storage of command line arguments used
 KW_WAVECOEFFS,None,WAVE{0:04d},HIERARCH ESO DRS CAL TH COEFF LL{0},NONE,NONE,Wave coefficients header key
 KW_WAVEORDN,None,WAVEORDN,HIERARCH ESO DRS CAL TH ORDER NBR,HIERARCH ESO DRS CAL TH ORDER NBR,NONE,wave num orders key in header

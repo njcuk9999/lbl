@@ -676,7 +676,6 @@ MODEL_FILES['DTemp 5000 gradient file'] = 'temperature_gradient_5000.fits'
 MODEL_FILES['DTemp 5500 gradient file'] = 'temperature_gradient_5500.fits'
 MODEL_FILES['DTemp 6000 gradient file'] = 'temperature_gradient_6000.fits'
 
-
 # define a dictionary of model files to be downloaded from the MODEL_REPO_URL
 params.set(key='MODEL_FILES', value=MODEL_FILES, source=__NAME__,
            desc='define a dictionary of model files to be downloaded from '
@@ -708,23 +707,6 @@ params.set(key='TELLUCLEAN_MASK_DOMAIN_UPPER', value=None, source=__NAME__,
 params.set(key='TELLUCLEAN_FORCE_AIRMASS', value=None, source=__NAME__,
            desc='whether to force using airmass from header', not_none=True)
 
-# Fit the H2O exponent by the derivative method rather than by the loop's
-# polynomial extrapolation. For the OPTICAL: that extrapolation collapses onto
-# its lower bound there (37% of 100 HARPS exposures of HD 10700 ended at
-# water = 0.0100, where there is always water above a telescope), and the loop
-# then degrades the spectrum. See lbl.science.tellu_derivative.
-params.set(key='TELLUCLEAN_DERIVATIVE_WATER', value=False, source=__NAME__,
-           desc='fit the H2O exponent by the derivative method (optical)')
-
-# Define the CCF scan range in km/s
-params.set(key='TELLUCLEAN_CCF_SCAN_RANGE', value=None, source=__NAME__,
-           desc='the CCF scan range in km/s', not_none=True)
-
-# Define the maximum number of iterations for the tellu-cleaning loop
-params.set(key='TELLUCLEAN_MAX_ITERATIONS', value=20, source=__NAME__,
-           desc='the maximum number of iterations for the tellu-cleaning loop',
-           not_none=True)
-
 # Define the kernel width in pixels
 params.set(key='TELLUCLEAN_KERNEL_WID', value=None, source=__NAME__,
            desc='the kernel width in pixels', not_none=True)
@@ -745,49 +727,6 @@ params.set(key='TELLUCLEAN_WAVE_UPPER', value=None, source=__NAME__,
 params.set(key='TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1, source=__NAME__,
            desc='the transmission threshold exp(-1) at which tellurics '
                 'are uncorrectable', not_none=True)
-
-# Define the sigma cut threshold above which pixels are removed from fit
-params.set(key='TELLUCLEAN_SIGMA_THRESHOLD', value=10, source=__NAME__,
-           desc='the sigma cut threshold above which pixels are removed '
-                'from fit', not_none=True)
-
-# Define whether to recenter the CCF on the first iteration
-params.set(key='TELLUCLEAN_RECENTER_CCF', value=None, source=__NAME__,
-           desc='whether to recenter the CCF on the first iteration',
-           not_none=True)
-
-# Define whether to recenter the CCF of others on the first iteration
-params.set(key='TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=None, source=__NAME__,
-           desc='whether to recenter the CCF on the first iteration',
-           not_none=True)
-
-# Define the default water absorption to use
-params.set(key='TELLUCLEAN_DEFAULT_WATER_ABSO', value=None, source=__NAME__,
-           desc='the default water absorption to use', not_none=True)
-
-# Define the lower limit on valid exponent of water absorbers
-params.set(key='TELLUCLEAN_WATER_BOUNDS_LOWER', value=None, source=__NAME__,
-           desc='the lower limit on valid exponent of water absorbers',
-           not_none=True)
-
-# Define the upper limit on valid exponent of water absorbers
-params.set(key='TELLUCLEAN_WATER_BOUNDS_UPPER', value=None, source=__NAME__,
-           desc='the upper limit on valid exponent of water absorbers',
-           not_none=True)
-
-# Define the lower limit on valid exponent of other absorbers
-params.set(key='TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=None, source=__NAME__,
-           desc='the lower limit on valid exponent of other absorbers',
-           not_none=True)
-
-# Define the upper limit on valid exponent of other absorbers
-params.set(key='TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=None, source=__NAME__,
-           desc='the upper limit on valid exponent of other absorbers',
-           not_none=True)
-
-# Define the default convergence limit for the telluric pre-clean
-params.set(key='TELLUCLEAN_CONVERGENCE_LIMIT', value=1.0e-3, source=__NAME__,
-           desc='the default convergence limit for the telluric pre-clean')
 
 # ---------------------------------------------------------------------
 # Parameters for the template construction
@@ -1175,7 +1114,6 @@ def instr_drift(okey, nkey, value) -> Tuple[Any, str]:
         eargs = [okey, nkey, value]
         raise base_classes.LblException(emsg.format(*eargs))
 
-
 # Define function to convert JD to MJD
 def jd_to_mjd(okey, nkey, value) -> Tuple[Any, str]:
     try:
@@ -1188,7 +1126,6 @@ def jd_to_mjd(okey, nkey, value) -> Tuple[Any, str]:
         emsg = 'Cannot translate value {0} to {1}. Value={2}'
         eargs = [okey, nkey, value]
         raise base_classes.LblException(emsg.format(*eargs))
-
 
 # Define function to convert MJD to human readable
 def jd_to_human(okey, nkey, value) -> Tuple[Any, str]:
@@ -1203,12 +1140,10 @@ def jd_to_human(okey, nkey, value) -> Tuple[Any, str]:
         eargs = [okey, nkey, value]
         raise base_classes.LblException(emsg.format(*eargs))
 
-
 # Define function to sky DPRTYPE
 def set_dprtype(okey, nkey, value) -> Tuple[Any, str]:
     _ = okey, nkey, value
     return 'OBJ_SKY', 'DPRTYPE (set to OBJ_SKY manually)'
-
 
 # lock parameters
 # noinspection PyProtectedMember
