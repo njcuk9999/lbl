@@ -125,6 +125,12 @@ def build(cubes, objects, path, config_file=None, chunk=64):
                 meta["berv_bary"] = np.asarray(meta["berv"], dtype=float)
             if "vstar" not in meta.colnames:
                 meta["vstar"] = np.zeros(len(meta))
+    # the observer's BERV (readers.observer_berv), missing from a cube made
+    #   before it was kept: its applied BERV, as the river plots then take it
+    if any("berv_obs" in meta.colnames for meta in metas):
+        for meta in metas:
+            if "berv_obs" not in meta.colnames:
+                meta["berv_obs"] = np.asarray(meta["berv"], dtype=float)
     rows = [len(m) for m in metas]
     total = int(sum(rows))
     has_trans = all(os.path.exists(os.path.join(c, "trans.npy")) for c in cubes)

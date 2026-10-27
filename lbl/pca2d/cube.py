@@ -372,7 +372,8 @@ class _Coadder:
         return self.data[:n_rows], self.sigma[:n_rows], trans, Table(self.rows)
 
 
-_MEAN_KEYS = ("bjd", "mjdmid", "berv", "berv_bary", "vstar", "bervmax",
+_MEAN_KEYS = ("bjd", "mjdmid", "berv", "berv_obs", "berv_bary", "vstar",
+              "bervmax",
               "airmass", "airmass_start",
               "airmass_end", "seeing", "humidity", "sun_elevation",
               "median_flux", "nan_fraction")
@@ -649,6 +650,7 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     files, labels = spnights.group_files(
         files, stack, extension=1,
         bundle=spnights.bundle_settings(inp) if stack else None,
+        berv_of=lambda path: _readers.file_observer_berv(config, path),
         orbits=config["registration"].get("orbits"),
         velocities=config["registration"].get("velocities"))
     n_groups = len(set(labels))
@@ -759,6 +761,7 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
     files, labels = spnights.group_files(
         files, stack, extension=0,
         bundle=spnights.bundle_settings(config["input"]) if stack else None,
+        berv_of=lambda path: _readers.file_observer_berv(config, path),
         orbits=config["registration"].get("orbits"),
         velocities=config["registration"].get("velocities"))
     n_groups = len(set(labels))

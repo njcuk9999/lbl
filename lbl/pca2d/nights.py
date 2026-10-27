@@ -72,30 +72,6 @@ def _stamp_from_header(path: str, extension: int) -> _dt.datetime | None:
         return None
 
 
-#: where a BERV is written, in km/s: APERO's t.fits (extension 1), the ESO
-#: archive's S2D and the TNG's (primary header)
-BERV_KEYS = ("BERV", "HIERARCH ESO QC BERV", "ESO QC BERV",
-             "HIERARCH TNG QC BERV", "TNG QC BERV")
-
-
-def header_berv(path: str):
-    """The exposure's BERV in km/s, from its headers, or None."""
-    try:
-        with fits.open(path) as hdulist:
-            for hdu in hdulist[:2]:
-                for key in BERV_KEYS:
-                    value = hdu.header.get(key)
-                    try:
-                        value = float(value)
-                    except (TypeError, ValueError):
-                        continue
-                    if np.isfinite(value):
-                        return value
-    except Exception:                                   # noqa: BLE001
-        return None
-    return None
-
-
 def header_bjd(path: str):
     """The exposure's BJD, from its headers, or None."""
     try:
@@ -220,13 +196,15 @@ def row_unit(source) -> str:
 
 
 def group_files(files: list[str], stack: bool, extension: int = 0,
-                bundle=None, orbits=None, velocities=None):
+                bundle=None, orbits=None, velocities=None, berv_of=None):
     """Sort files chronologically and label each with its output group.
 
     Returns (files, labels). With stack = False every file is its own group, so
     the rest of the pipeline needs no special case. With `bundle`
     (bundle_settings), each night is cut into bundles (split_nights), by
-    the star's frame when the star has `orbits` (frame_bervs).
+    the star's frame when the star has `orbits` (frame_bervs). The BERV of a
+    file is `berv_of(path)`, in km/s: the observer's, from LBL's instrument
+    profile (readers.file_observer_berv), never read here from the headers.
     """
     stamps = [timestamp_from_name(path) for path in files]
     missing = [i for i, s in enumerate(stamps) if s is None]
@@ -257,14 +235,17 @@ def group_files(files: list[str], stack: bool, extension: int = 0,
     if bundle:
         bervs = None
         if bundle.get("berv") is not None:
-            bervs = [header_berv(path) for path in files]
-            if any(b is None for b in bervs):
+            if berv_of is None:
+                raise RuntimeError("input.bundle_berv: no way to have the"
+                                   " BERV of the files (LBL's instrument"
+                                   " profile)")
+            bervs = [berv_of(path) for path in files]
+            bad = [b is None or not np.isfinite(b) for b in bervs]
+            if any(bad):
                 raise RuntimeError(
-                    "input.bundle_berv: no BERV in the headers of %d file(s),"
-                    " first %s (looked for %s)" % (
-                        sum(b is None for b in bervs),
-                        files[[b is None for b in bervs].index(True)],
-                        ", ".join(BERV_KEYS)))
+                    "input.bundle_berv: LBL's instrument profile gives no BERV"
+                    " for %d file(s), first %s" % (sum(bad),
+                                                   files[bad.index(True)]))
             bervs = frame_bervs(files, bervs, orbits, velocities)
         labels = split_nights(stamps, labels, bundle, bervs)
         n_groups = len(set(labels))

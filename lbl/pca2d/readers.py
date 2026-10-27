@@ -43,6 +43,7 @@ le recouvrement réel et prévient quand l'hypothèse ne tient pas.
 
 from __future__ import annotations
 
+import functools
 import os
 import warnings
 
@@ -79,7 +80,12 @@ def instrument(name, data_source, config_file=None):
     """
     from lbl.instruments import select
 
-    kwargs = dict(instrument=str(name), data_source=str(data_source))
+    # DATA_TYPE SCIENCE, as a wrap gives it to LBL's recipes: pca2d reads
+    #   science spectra only, and the profiles of SPIRou, NIRPS and
+    #   CARMENES give a BERV for science alone (get_berv), zero otherwise
+    #   (a SPIRou t.fits read with no DATA_TYPE had BERV 0, 2026-10-27)
+    kwargs = dict(instrument=str(name), data_source=str(data_source),
+                  data_type='SCIENCE')
     if config_file:
         kwargs["config_file"] = os.path.abspath(config_file)
     args = select.parse_args(
@@ -313,6 +319,77 @@ def berv_of(inst, header, from_header=None):
     return float(value) / 1000.0
 
 
+def observer_berv(inst, header):
+    """The observer's BERV in km/s, from LBL's instrument profile, as its
+    recipes take it: get_berv, what is left to apply to reach the star's
+    frame (the whole BERV for a grid in the observer's frame: APERO's
+    t.fits, HARPS's e2ds), plus get_berv_transmission, what the telluric
+    lines are shifted by on a grid that is already barycentric (the S2D of
+    ESO and of the TNG, whose get_berv is zero; lbl_telluclean). One of the
+    two is zero for every profile. The telluric lines move with it in the
+    star's frame, whatever frame the file is in: the river plots' green line
+    follows it, and the observer's frame (input.to_observer) and the
+    bundles of a night (input.bundle_berv) are made with it. NaN when the
+    profile cannot say."""
+    try:
+        value = (float(inst.get_berv(header))
+                 + float(inst.get_berv_transmission(header)))
+    except Exception:                                          # noqa: BLE001
+        return float("nan")
+    return value / 1000.0
+
+
+def as_science(inst, path):
+    """The profile as a recipe runs it on this spectrum: OBJECT_SCIENCE its
+    object, the folder it is in, when the profile has none (HARPS's
+    get_berv reads it: no BERV for an FP; without it, it raised, and the
+    BERV was read from the header instead), DATA_TYPE SCIENCE
+    (instrument())"""
+    try:
+        if not inst.params.get("OBJECT_SCIENCE"):
+            inst.params.set("OBJECT_SCIENCE", value=os.path.basename(
+                os.path.dirname(os.path.abspath(str(path)))),
+                source=__name__)
+    except Exception:                                          # noqa: BLE001
+        pass
+    return inst
+
+
+@functools.lru_cache(maxsize=8)
+def _profile(name, data_source):
+    """LBL's instrument profile, made once per instrument and source"""
+    return instrument(name, data_source)
+
+
+def profile_of(config, inst=None):
+    """LBL's instrument profile of a configuration (its `lbl` block, as
+    read() is given it), or `inst` when given"""
+    if inst is not None:
+        return inst
+    block = config.get("lbl") or {}
+    name = block.get("instrument") or (config.get("input") or {}).get(
+        "instrument")
+    return _profile(str(name), str(block.get("data_source") or "ESO"))
+
+
+def profile_header(inst, path):
+    """A spectrum's header as LBL's template recipe reads it to take its
+    BERV (lbl_template._load_template_header): the keys the template uses,
+    else the whole header"""
+    from lbl.recipes.lbl_template import _load_template_header
+    return _load_template_header(inst, path)
+
+
+def file_observer_berv(config, path, inst=None):
+    """observer_berv of a file, its header read as the template recipe
+    reads it"""
+    try:
+        inst = as_science(profile_of(config, inst), path)
+        return observer_berv(inst, profile_header(inst, path))
+    except Exception:                                          # noqa: BLE001
+        return float("nan")
+
+
 def flux_extension(path, flux):
     """Le nom (ou le numero) de l'extension d'ou vient ce flux.
 
@@ -424,7 +501,8 @@ def read(path, instrument_name, data_source, config_file=None,
     """
     from lbl.core import io as lbl_io                           # noqa: F401
 
-    inst = inst or instrument(instrument_name, data_source, config_file)
+    inst = as_science(inst or instrument(instrument_name, data_source,
+                                         config_file), path)
     flux, header = inst.load_science_file(path)
     flux = np.atleast_2d(np.asarray(flux, dtype=float))
     science_ext = flux_extension(path, flux)
@@ -534,13 +612,17 @@ def read(path, instrument_name, data_source, config_file=None,
     # modele n'a alors rien a quoi s'accrocher; avec, il est le repere reel du
     # telescope, et les deux blocs redeviennent distinguables. C'est une
     # option de l'AJUSTEMENT, pas de la lecture.
-    header_berv = number(key("KW_BERV"))
-    berv = berv_of(inst, header, header_berv)
+    # LE BERV DE L'OBSERVATEUR, tel que le profil de LBL le donne
+    #   (observer_berv: get_berv + get_berv_transmission), pour le repere de
+    #   l'observateur et la ligne verte des river plots; jamais lu ici dans
+    #   l'en-tete par une liste de mots-cles a nous
+    obs_berv = observer_berv(inst, header)
+    berv = berv_of(inst, header, number(key("KW_BERV")))
     if to_observer:
-        if not np.isfinite(header_berv):
+        if not np.isfinite(obs_berv):
             raise ValueError(
                 "%s: input.to_observer demande de defaire la correction"
-                " barycentrique, mais l'en-tete ne porte pas de BERV"
+                " barycentrique, mais le profil de LBL ne donne pas de BERV"
                 % os.path.basename(path))
         if berv not in (0.0,):
             # le fichier est deja dans le repere de l'observateur: il n'y a
@@ -548,8 +630,8 @@ def read(path, instrument_name, data_source, config_file=None,
             pass
         else:
             # lambda_observateur = lambda_bary / doppler(BERV), relativiste
-            wave = wave / _doppler(header_berv)
-            berv = float(header_berv)
+            wave = wave / _doppler(obs_berv)
+            berv = float(obs_berv)
     # le debut et la fin de pose n'ont pas de nom chez LBL: on les cherche
     # sous les graphies connues, et a defaut la masse d'air qu'il donne
     air_start = number(plain("HIERARCH ESO TEL AIRM START"),
@@ -566,6 +648,7 @@ def read(path, instrument_name, data_source, config_file=None,
         "mjdmid": float(mjd),
         "mjdate": float(mjd),
         "berv": berv,
+        "berv_obs": obs_berv,
         "bervmax": float(number(key("KW_BERVMAX"),
                                 plain("HIERARCH ESO QC BERVMAX"))),
         "exptime": float(number(plain("EXPTIME"), key("KW_EXPTIME"))),
@@ -687,7 +770,22 @@ def _read_any(path, config, inst=None):
     """read_any, without the star's frame"""
     if reads_natively(config):
         from . import tfits as sptf
-        return sptf.read_tfits(path)
+        payload = sptf.read_tfits(path)
+        # the BERV from LBL's instrument profile, as its recipes take it,
+        #   rather than as tfits reads the header (the same BERV keyword for
+        #   APERO, but one extraction for every reader); tfits' own when the
+        #   profile cannot be had (a configuration without its lbl block)
+        meta = payload["meta"]
+        try:
+            profile = as_science(profile_of(config, inst), path)
+            header = profile_header(profile, path)
+            applied = berv_of(profile, header, meta.get("berv"))
+            if np.isfinite(applied):
+                meta["berv"] = applied
+            meta["berv_obs"] = observer_berv(profile, header)
+        except Exception:                                      # noqa: BLE001
+            meta.setdefault("berv_obs", meta.get("berv", np.nan))
+        return payload
     block = config.get("lbl") or {}
     name = block.get("instrument") or (config.get("input") or {}).get("instrument")
     source = block.get("data_source") or "ESO"

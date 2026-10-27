@@ -193,6 +193,18 @@ def berv_steps(track, x):
     return xs, ys
 
 
+def observer_bervs(meta):
+    """The observer's BERV of each row [km/s], as LBL's instrument profile
+    gives it (the cube's berv_obs, readers.observer_berv); a cube made
+    before it was kept has only the BERV the fit applied, which is the same
+    on a grid in the observer's frame"""
+    berv = np.asarray(meta["berv"], dtype=float)
+    if "berv_obs" not in getattr(meta, "colnames", []):
+        return berv
+    obs = np.asarray(meta["berv_obs"], dtype=float)
+    return np.where(np.isfinite(obs), obs, berv)
+
+
 def order_label(meta):
     """What the rows are ordered by, said on the river plots: the BERV, or,
     when the star's frame follows known orbits (a vstar that is not zero),
@@ -487,6 +499,11 @@ def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=Fa
             "delta": -pixel_shift(np.asarray(fit["berv"], dtype=float), dv),
             "parity": row_parity(meta, n),
             "berv": np.asarray(meta["berv"], dtype=float),
+            # the observer's BERV, which the telluric lines follow in the
+            #   star's frame: LBL's profile's (readers.observer_berv), not
+            #   the BERV the fit applied, zero on a barycentric grid (the
+            #   S2D of ESO and the TNG without input.to_observer)
+            "berv_obs": observer_bervs(meta),
             # what the rows are ordered by: with orbits, berv is the star's
             #   frame, the BERV and the companions' velocity together
             "order_by": order_label(meta),
@@ -641,7 +658,7 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     # its bottom one, and steps sideways at the edge between two rows. Drawn
     # from row centre to row centre, a few rows made long diagonals that cut
     # across pixels the feature is not in
-    xs, ys = berv_steps(berv_track(centre, berv[rows]), x)
+    xs, ys = berv_steps(berv_track(centre, ctx["berv_obs"][rows]), x)
     for r in range(n_img):
         axes[r].plot(xs, ys, color=BERV_LINE, lw=2.8, solid_capstyle="butt",
                      solid_joinstyle="miter", zorder=5,

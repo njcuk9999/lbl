@@ -930,15 +930,26 @@ instruments:
                             # empreinte: cube_s2d_<hash>
       pattern: "*_S2D_A.fits"
       blaze_min_frac: 0.0
-      to_observer: false    # LA REGLE QUE J'AVAIS POSEE EST FAUSSE. Elle
-                            # disait: vrai partout ou le get_berv de LBL rend
-                            # zero. Mesure le 2026-10-15 sur HD 10700 avec un
-                            # LBL dont le masque est repare, sur 64 poses
-                            # communes: livres 1.56 m/s, 0-7 nominal 1.89,
-                            # 0-7 avec to_observer 15.00. Defaire la
-                            # correction barycentrique abime les spectres
-                            # (chi2 reduit de LBL: 122) et le levier gagne ne
-                            # compense pas. Voir le bloc HARPS.
+      to_observer: true     # COMME HARPS (2026-10-27): le S2D du TNG porte
+                            # une grille barycentrique, le get_berv du profil
+                            # de LBL rend zero, et sans cette option le
+                            # repere de l'observateur ETAIT celui de
+                            # l'etoile: BERV nul sur les 124 poses d'AD Leo,
+                            # un bloc observateur fige pendant que les
+                            # telluriques bougent du BERV. Avec, la grille
+                            # est ramenee dans le repere de l'observateur par
+                            # le BERV que donne le profil de LBL
+                            # (readers.observer_berv: get_berv +
+                            # get_berv_transmission). Les mesures d'avant
+                            # (HD 10700 et tau Ceti, bloc HARPS) restent a
+                            # refaire sur HARPS-N: 0-7 BERV nul 1.89 m/s,
+                            # repere de l'observateur 2.44 (75% des poses) a
+                            # 15.00 (unanimite), livres 1.56.
+    correct:
+      mask_share: 0.50      # va avec input.to_observer, comme pour HARPS:
+                            # chaque pose couvre un intervalle decale de son
+                            # BERV, et l'unanimite n'en garderait que
+                            # l'intersection
     domain:
       wave_min: 383.0
       wave_max: 693.0
