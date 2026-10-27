@@ -2273,20 +2273,28 @@ def star_sentence(star, numbers):
 def series_section(series, folder):
     """The report's first section: each star's velocity series as LBL's
     report draws it (lbl.report.figures.page_sequence), every epoch coloured
-    by its BERV, and how its scatter is distributed. [] when no star has
-    velocities yet."""
+    by the star's velocity in the telluric frame when SIMBAD has its
+    systemic velocity, by its BERV otherwise, and how its scatter is
+    distributed. [] when no star has velocities yet."""
     if not series:
         return []
     from lbl.report import figures as lbl_figures
     from lbl.report import series as lbl_series
     parts = ["\\section{The velocity series}\n"
-             "Every epoch coloured by its BERV: a residual that follows the"
-             " BERV is not the star's, and shows as colours that line up.\n"]
+             "Every epoch coloured by the star's velocity in the telluric"
+             " frame, $V_\\mathrm{tot}$, when SIMBAD has its systemic"
+             " velocity: a residual of the tellurics is largest near"
+             " $V_\\mathrm{tot} = 0$, where the colours are darkest, and"
+             " changes sign with it. Without it, by the BERV: a residual that"
+             " follows the BERV is not the star's, and shows as colours that"
+             " line up.\n"]
     for star, run in series:
         name = "series-%s.pdf" % slug(star)
         try:
             table = lbl_series.read_rdb(run["path"])
-            fig = lbl_figures.page_sequence(plt, table, star)
+            fig = lbl_figures.page_sequence(
+                plt, table, star, lbl_series.systemic_velocity(star))
+            coloured = fig.coloured_by
             fig.savefig(os.path.join(folder, "figures", name))
             plt.close(fig)
         except Exception as exc:                          # noqa: BLE001
@@ -2296,10 +2304,14 @@ def series_section(series, folder):
         parts.append(figure_block(
             "figures/" + name,
             "The %s velocities of %s that LBL measured (%s), each epoch"
-            " coloured by its BERV; below, how their scatter is distributed,"
+            " coloured by %s; below, how their scatter is distributed,"
             " dashed lines at plus and minus one MAD."
             % (tex(run["label"]), tex(star),
-               tex(os.path.basename(run["path"]))),
+               tex(os.path.basename(run["path"])),
+               "$V_\\mathrm{tot}$, the star's velocity in the telluric frame"
+               " (outlined: within %g km/s of the tellurics)"
+               % lbl_figures.VTOT_CLOSE if coloured == "V_tot"
+               else "its BERV"),
             short="Velocity series, %s" % tex(star)))
     return parts
 

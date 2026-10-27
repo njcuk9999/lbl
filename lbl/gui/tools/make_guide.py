@@ -864,9 +864,12 @@ log (<code>&lt;run&gt;.log</code>) and the archive search's and fetch's
 <tr><td><code>wrap_&lt;name&gt;.py</code></td><td>the wraps you saved</td></tr>
 </tbody></table></div>
 <p><strong>The report.</strong> With PCA2D, its pages come first: after the
-contents, <strong>the velocity series</strong>, every epoch coloured by its
-BERV (a residual that follows the BERV is not the star's, and shows as
-colours that line up); then the star, a summary of what the correction
+contents, <strong>the velocity series</strong>, every epoch coloured by
+the star's velocity in the telluric frame, V<sub>tot</sub>, when SIMBAD has
+its systemic velocity (darkest near zero, blue below and red above: the
+epochs whose lines sit on the tellurics stand out, and those within 4 km/s
+are outlined), by its BERV otherwise (a residual that follows the BERV is
+not the star's, and shows as colours that line up); then the star, a summary of what the correction
 changed (gain, loss, or changed where nothing should), the velocities
 before and after, the run's settings, and the correction itself (the river
 plots step by step, the components, their coefficients in time and their
@@ -908,9 +911,13 @@ enregistrés</td></tr>
 </tbody></table></div>
 <p><strong>Le rapport.</strong> Avec PCA2D, ses pages viennent en premier :
 après la table des matières, <strong>la série temporelle des
-vitesses</strong>, chaque époque colorée selon son BERV (un résidu qui suit
-le BERV ne vient pas de l'étoile, et se voit comme des couleurs qui
-s'alignent) ; puis l'étoile, un résumé de ce que la correction a changé
+vitesses</strong>, chaque époque colorée selon la vitesse de l'étoile dans
+le référentiel des telluriques, V<sub>tot</sub>, quand SIMBAD connaît sa
+vitesse systémique (plus foncé près de zéro, bleu en dessous et rouge
+au-dessus : les époques dont les raies tombent sur les telluriques
+ressortent, et celles à moins de 4 km/s sont cerclées), selon son BERV
+sinon (un résidu qui suit le BERV ne vient pas de l'étoile, et se voit comme
+des couleurs qui s'alignent) ; puis l'étoile, un résumé de ce que la correction a changé
 (gain, perte, ou changement là où rien n'aurait dû bouger), les vitesses
 avant et après, les réglages du run, et la correction elle-même (les
 graphiques en rivière étape par étape, les composantes, leurs coefficients

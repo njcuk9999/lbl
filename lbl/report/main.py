@@ -113,7 +113,8 @@ def _planet_section(planets):
 
 
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
-                known_periods=None, template_file=None, candidates_of=None):
+                known_periods=None, template_file=None, candidates_of=None,
+                star=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
     :param data_dir: str, the run's DATA_DIR
@@ -128,6 +129,9 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     :param candidates_of: str, the object whose transiting planets and TESS
                           candidates (candidates.yaml) have their K fitted
                           together (PLANETS), or None for no such fit
+    :param star: str, the science object: with SIMBAD's systemic velocity
+                 of it, the velocity series is coloured by the star's
+                 velocity in the telluric frame rather than by the BERV
     """
     try:
         import matplotlib
@@ -162,7 +166,8 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     # on a figure.
     wanted = [
         ('The velocity series',
-         lambda: figures.page_sequence(plt, table, title)),
+         lambda: figures.page_sequence(plt, table, title,
+                                       series.systemic_velocity(star))),
         ('Iterations to converge',
          lambda: figures.page_iterations(plt, table, title)),
         ('Velocity against BERV',

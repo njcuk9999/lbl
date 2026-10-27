@@ -152,17 +152,18 @@ def resolve(name: Any) -> Optional[Dict[str, Any]]:
     :param name: a name
 
     :return: dict(asked: the spelling SIMBAD knew, main: its main
-             identifier, ra, dec: J2000 [deg], sptype, plx [mas], ids:
-             every identifier, spaces collapsed), or None when SIMBAD
-             knows none of the spellings
+             identifier, ra, dec: J2000 [deg], sptype, plx [mas], rv: its
+             systemic velocity [km/s] or None, ids: every identifier,
+             spaces collapsed), or None when SIMBAD knows none of the
+             spellings
 
     :raises OSError: SIMBAD could not be asked, or did not answer
     """
     for one in name_variants(name):
         rows = tap('SELECT b.main_id, b.ra, b.dec, b.sp_type, b.plx_value,'
-                   ' s.ids FROM basic AS b JOIN ident AS i ON i.oidref ='
-                   ' b.oid JOIN ids AS s ON s.oidref = b.oid WHERE i.id = '
-                   + quoted(one))
+                   ' b.rvz_radvel, s.ids FROM basic AS b JOIN ident AS i ON'
+                   ' i.oidref = b.oid JOIN ids AS s ON s.oidref = b.oid'
+                   ' WHERE i.id = ' + quoted(one))
         if rows:
             row = rows[0]
             ids = [' '.join(str(ident).split())
@@ -171,7 +172,8 @@ def resolve(name: Any) -> Optional[Dict[str, Any]]:
                         ra=row['ra'], dec=row['dec'],
                         sptype=(str(row['sp_type']).strip()
                                 if row['sp_type'] else None),
-                        plx=row['plx_value'], ids=[i for i in ids if i])
+                        plx=row['plx_value'], rv=row['rvz_radvel'],
+                        ids=[i for i in ids if i])
     return None
 
 

@@ -408,7 +408,10 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                                      #   planets and candidates fitted
                                      candidates_of=(object_science if
                                                     runparams.get('PLANETS')
-                                                    else None))
+                                                    else None),
+                                     # its systemic velocity colours the
+                                     #   series by V_tot (SIMBAD's)
+                                     star=object_science)
         except Exception as _exc:
             log.warning('report failed: {0}'.format(_exc))
     return lbl_report

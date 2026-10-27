@@ -5,6 +5,7 @@ sert pour son rapport, et koloa peut l'importer pour lire un .rdb de LBL sans
 redire le format. Il ne depend que de numpy, pour qu'aucun des deux ne traine
 l'autre.
 """
+import functools
 import os
 
 import numpy as np
@@ -30,6 +31,25 @@ BERV = ('BERV', 'HIERARCH ESO QC BERV', 'HIERARCH ESO DRS BERV',
         'HIERARCH OHP DRS BERV')
 AIRMASS = ('AIRMASS', 'HIERARCH ESO TEL AIRM START',
            'HIERARCH TNG TEL AIRM START')
+
+
+@functools.lru_cache(maxsize=64)
+def systemic_velocity(star):
+    """SIMBAD's systemic velocity of a star [km/s] (lbl.core.simbad: any
+    spelling, LBL's suffixes off), or None when SIMBAD has none, does not
+    know the star, or cannot be asked. With it, the velocity series is
+    coloured by the star's velocity in the telluric frame rather than by
+    the BERV (figures.page_sequence)."""
+    if not star:
+        return None
+    from lbl.core import simbad
+    try:
+        found = simbad.resolve(star)
+    except OSError:
+        return None
+    if found is None or found.get('rv') is None:
+        return None
+    return float(found['rv'])
 
 
 def column(table, name, default=None):

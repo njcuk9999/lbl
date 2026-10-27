@@ -43,24 +43,81 @@ def _landmarks(ax, periods=LANDMARKS, known=None):
                     va='bottom', ha='left', fontsize=7, color='C3')
 
 
-def page_sequence(plt, table, title):
-    """The velocity series, with its error bars, each epoch coloured by its
-    BERV: the report's first figure (main._build puts it before the table).
+#: |V_tot| [km/s] under which the star's lines sit on the telluric lines,
+#:    within about one resolution element (lbl.pca2d.bervbias.CLOSE_KMS)
+VTOT_CLOSE = 4.0
 
-    WHY BY BERV. A residual that follows the BERV is not stellar (the Earth's
-    own motion: the atmosphere, the wavelength solution, a frame left
-    undone), and in the series it shows as a seasonal pattern whose colours
-    line up. page_berv measures it.
+
+def vtot_cmap():
+    """The colours of V_tot: blue below zero, red above, darkest at zero and
+    paling away from it, the hue changing abruptly at zero. The epochs whose
+    star lines sit on the tellurics are the ones that stand out, and which
+    side of them each is reads at a glance; a diverging map pale at zero
+    would hide exactly those."""
+    from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+    below = LinearSegmentedColormap.from_list('below', ['#d4e2f1', '#08306b'])
+    above = LinearSegmentedColormap.from_list('above', ['#67000d', '#f6d3c9'])
+    ramp = np.linspace(0.0, 1.0, 128)
+    return ListedColormap(np.vstack([below(ramp), above(ramp)]), name='vtot')
+
+
+def total_velocity(vrad, berv, systemic):
+    """V_tot [km/s], the star's velocity in the telluric frame: its systemic
+    velocity [km/s] plus the series less its median [m/s], less the BERV
+    [km/s], composed relativistically (lbl.core.math.add_velocities)"""
+    from lbl.core import math as mp
+    star = systemic * 1000.0 + (vrad - np.nanmedian(vrad))
+    return mp.add_velocities(star, -1000.0 * np.asarray(berv, float)) / 1000.0
+
+
+def page_sequence(plt, table, title, systemic=None):
+    """The velocity series, with its error bars, each epoch coloured by the
+    star's velocity in the telluric frame, V_tot, when its systemic velocity
+    is known (systemic, km/s: SIMBAD's, series.systemic_velocity), else by
+    its BERV: the report's first figure (main._build puts it before the
+    table). The figure's `coloured_by` says which ('V_tot' or 'BERV').
+
+    WHY BY V_TOT. A residual from the telluric lines is largest where the
+    star's lines sit on them, |V_tot| of a few km/s, and changes sign with
+    V_tot: the epochs near zero, darkest, are the ones to look at, and
+    their colours say on which side of the tellurics each one is. Without
+    the systemic velocity, the BERV: a residual that follows it is not
+    stellar (the Earth's own motion: the atmosphere, the wavelength
+    solution, a frame left undone), and shows as a seasonal pattern whose
+    colours line up. page_berv measures it.
     """
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
     centred = vrad - np.median(vrad)
     berv = S.column(table, S.BERV)
+    has_berv = berv is not None and np.isfinite(berv).any()
+    vtot = (total_velocity(vrad, berv, systemic)
+            if has_berv and systemic is not None else None)
 
     fig, axes = plt.subplots(2, 1, figsize=(10, 7),
                              gridspec_kw=dict(height_ratios=[2, 1]))
-    if berv is not None and np.isfinite(berv).any():
+    fig.coloured_by = None
+    if vtot is not None:
+        axes[0].errorbar(time, centred, yerr=svrad, fmt='none', ecolor='0.65',
+                         lw=0.7, zorder=2)
+        # symmetric about zero, so that zero is where the hue changes
+        limit = max(10.0, 5.0 * np.ceil(np.nanmax(np.abs(vtot)) / 5.0))
+        close = np.abs(vtot) < VTOT_CLOSE
+        scatter = axes[0].scatter(time, centred, c=vtot, cmap=vtot_cmap(),
+                                  vmin=-limit, vmax=limit, s=20,
+                                  edgecolors='0.25', linewidths=0.3,
+                                  zorder=3)
+        # the epochs on the tellurics, outlined
+        axes[0].scatter(time[close], centred[close], s=34, facecolors='none',
+                        edgecolors='k', linewidths=0.9, zorder=4)
+        bar = fig.colorbar(scatter, ax=axes[0], pad=0.01)
+        for sign in (-1, 1):
+            bar.ax.axhline(sign * VTOT_CLOSE, color='k', lw=0.8, ls='--')
+        bar.set_label('$V_\\mathrm{tot}$ = $V_\\mathrm{sys}$ + vrad - BERV'
+                      ' (km s$^{-1}$)')
+        fig.coloured_by = 'V_tot'
+    elif has_berv:
         axes[0].errorbar(time, centred, yerr=svrad, fmt='none', ecolor='0.65',
                          lw=0.7, zorder=2)
         scatter = axes[0].scatter(time, centred, c=berv, cmap='coolwarm',
@@ -68,6 +125,7 @@ def page_sequence(plt, table, title):
                                   zorder=3)
         bar = fig.colorbar(scatter, ax=axes[0], pad=0.01)
         bar.set_label('BERV (km s$^{-1}$)')
+        fig.coloured_by = 'BERV'
     else:
         axes[0].errorbar(time, centred, yerr=svrad, fmt='o', ms=3, lw=0.8,
                          capsize=0, alpha=0.85)
@@ -91,8 +149,18 @@ def page_sequence(plt, table, title):
                       ' plus and minus one MAD', fontsize=9)
     for ax in axes:
         ax.grid(alpha=0.3)
-    fig.suptitle('The velocity series, each epoch coloured by its BERV, and'
-                 ' how its scatter is distributed', fontsize=10)
+    if fig.coloured_by == 'V_tot':
+        coloured = ('each epoch coloured by $V_\\mathrm{tot}$, the star\'s'
+                    ' velocity in the telluric frame,\n($V_\\mathrm{sys}$ ='
+                    ' %.2f km s$^{-1}$ from SIMBAD; outlined: '
+                    '$|V_\\mathrm{tot}|$ < %g km s$^{-1}$, the star\'s lines'
+                    ' on the tellurics)' % (systemic, VTOT_CLOSE))
+    elif fig.coloured_by == 'BERV':
+        coloured = 'each epoch coloured by its BERV,\n'
+    else:
+        coloured = 'no BERV in the table,\n'
+    fig.suptitle('The velocity series, %s and how its scatter is'
+                 ' distributed' % coloured, fontsize=10)
     fig.tight_layout()
     return fig
 
@@ -803,7 +871,8 @@ def page_berv(plt, table, title):
     is the Earth's own motion, so anything correlated with it comes from the
     atmosphere, from the wavelength solution, or from a frame that was not
     undone properly. The series coloured by BERV (page_sequence, the
-    report's first figure) shows it at a glance; this page measures it.
+    report's first figure, when the star's systemic velocity is not known)
+    shows it at a glance; this page measures it.
     """
     berv = S.column(table, S.BERV)
     if berv is None or not np.isfinite(berv).any():

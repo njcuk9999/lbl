@@ -80,19 +80,29 @@ def report_part(pages):
             '<span lang="fr">Le rapport, section 1.</span></figcaption>'
             '</figure>',
             marks(["<strong>Every exposure's velocity</strong>, the median"
-                   " taken out, coloured by its BERV.",
-                   "<strong>The colour scale</strong> of the BERV (km/s). A"
-                   " residual that follows the BERV is not the star's: it"
-                   " shows as colours that line up (all the reds high, all"
-                   " the blues low).",
+                   " taken out, coloured by the star's velocity in the"
+                   " telluric frame (V<sub>tot</sub>) when SIMBAD has its"
+                   " systemic velocity, by its BERV otherwise.",
+                   "<strong>The colour scale</strong>, in km/s. With"
+                   " V<sub>tot</sub>: darkest near zero, where the star's"
+                   " lines sit on the tellurics (outlined within 4 km/s),"
+                   " blue below and red above. With the BERV: a residual"
+                   " that follows it is not the star's, and shows as colours"
+                   " that line up (all the reds high, all the blues low).",
                    "<strong>How the velocities are spread</strong>, with the"
                    " dashed lines at plus and minus one robust sigma (MAD)."],
                   ["<strong>La vitesse de chaque pose</strong>, la médiane"
-                   " retirée, colorée selon son BERV.",
-                   "<strong>L'échelle de couleur</strong> du BERV (km/s). Un"
-                   " résidu qui suit le BERV ne vient pas de l'étoile : il se"
-                   " voit comme des couleurs qui s'alignent (tous les rouges"
-                   " en haut, tous les bleus en bas).",
+                   " retirée, colorée selon la vitesse de l'étoile dans le"
+                   " référentiel des telluriques (V<sub>tot</sub>) quand"
+                   " SIMBAD connaît sa vitesse systémique, selon son BERV"
+                   " sinon.",
+                   "<strong>L'échelle de couleur</strong>, en km/s. Avec"
+                   " V<sub>tot</sub> : plus foncé près de zéro, là où les"
+                   " raies de l'étoile tombent sur les telluriques (cerclées"
+                   " à moins de 4 km/s), bleu en dessous et rouge au-dessus."
+                   " Avec le BERV : un résidu qui le suit ne vient pas de"
+                   " l'étoile, et se voit comme des couleurs qui s'alignent"
+                   " (tous les rouges en haut, tous les bleus en bas).",
                    "<strong>La distribution des vitesses</strong>, avec en"
                    " tirets plus et moins un sigma robuste (MAD)."]),
         ]
