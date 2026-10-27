@@ -75,6 +75,7 @@ import csv
 import io
 import json
 import re
+import socket
 import time as _time
 import urllib.error
 import urllib.parse
@@ -278,10 +279,38 @@ def _told(parts: Sequence[Tuple[RVData, Dict[str, Any]]], none: str) -> str:
 # -----------------------------------------------------------------------------
 # The OHP: SOPHIE and ELODIE
 # -----------------------------------------------------------------------------
+#: how long the OHP's archive may take to accept a connection [s]: its
+#:    queries can take a while, its connection does not, and a server that
+#:    is down held the search for two minutes (60 s, twice) before saying so
+#:    (atlas.obs-hp.fr accepted none from 2026-10-26 to at least 2026-10-27)
+OHP_CONNECT = 8.0
+#: when each host last refused or ignored a connection [s since the epoch]
+_DOWN: Dict[str, float] = {}
+
+
+def _reachable(base: str, where: str):
+    """stop at once, saying so, when the archive's server does not accept
+    a connection (not asked again for five minutes)"""
+    parts = urllib.parse.urlsplit(base)
+    host = parts.hostname or ''
+    port = parts.port or (443 if parts.scheme == 'https' else 80)
+    if _time.time() - _DOWN.get(host, -1e9) < 300.0:
+        raise RuntimeError(f'the {where} does not answer ({host} accepted no '
+                           f'connection a few minutes ago): try again later')
+    try:
+        socket.create_connection((host, port), timeout=OHP_CONNECT).close()
+    except OSError as err:
+        _DOWN[host] = _time.time()
+        raise RuntimeError(f'the {where} does not answer ({host} accepted no '
+                           f'connection in {OHP_CONNECT:.0f} s: {err}); its '
+                           f'server is down, try again later') from err
+
+
 def _ohp(base: str, table: str, star: Dict[str, Any], cols: str,
          where: str) -> List[Dict[str, str]]:
     """the rows of a table of an archive of the OHP in a box about the
     place of a star in 2000 (wide enough for where it is now)"""
+    _reachable(base, where)
     ra, dec = float(star['ra']) / 15.0, float(star['dec'])
     sign, dec = ('-' if dec < 0 else '+'), abs(dec)
     place = (f'J{int(ra):02d} {int(ra * 60) % 60:02d} '
