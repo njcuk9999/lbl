@@ -24,9 +24,11 @@ from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import fastmath
 from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
+from lbl.science import activity_lines
 from lbl.science import plot
 
 # =============================================================================
@@ -49,6 +51,13 @@ InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value
 speed_of_light_kms = constants.c.value / 1000.0
+
+# the two percentiles of mp.estimate_sigma (sigma=1), as fractions computed
+#   the way np.nanpercentile does (p / 100)
+_P1 = (1 - (1 - mp.normal_fraction(1.0)) / 2) * 100
+ESTIMATE_SIGMA_Q_HI = float(np.true_divide(_P1, np.float64(100)))
+ESTIMATE_SIGMA_Q_LO = float(np.true_divide(100 - _P1, np.float64(100)))
+
 # minimum number of lines a photometric band must hold to get its own
 #   residual projection columns (e.g. DTEMP3000_j)
 RESPROJ_BAND_MIN_LINES = 5
@@ -502,7 +511,9 @@ def spline_template(inst: InstrumentsType, template_file: str,
                                         k=k_order, ext=1)
 
     # deal with residual projection tables
+    resproj_keys = []
     if isinstance(inst.params['RESPROJ_TABLES'], dict):
+        resproj_keys = list(inst.params['RESPROJ_TABLES'].keys())
         # loop around table
         for key in inst.params['RESPROJ_TABLES'].keys():
             # log that we are constructing the spline
@@ -510,7 +521,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
             log.general(msg.format(key))
             # construct the path for the spline
             spline_file = inst.params['RESPROJ_TABLES'][key]
-            spline_path = os.path.join(models_dir, spline_file)
+            spline_path = io.model_path(models_dir, 'resproj', spline_file)
             # make sure file exists
             if not os.path.exists(spline_path):
                 emsg = 'RESPROJ Table {0} does not exist'
@@ -555,12 +566,34 @@ def spline_template(inst: InstrumentsType, template_file: str,
         sps['spline_mask_even'] = mp.iuv_spline(ntwave1, tmask_even,
                                                 k=1, ext=1)
     # -------------------------------------------------------------------------
+    # evaluate the splines on a window of knots around the requested points
+    #   (same values, without FITPACK's linear search along all the knots)
+    for key in list(sps.keys()):
+        if isinstance(sps[key], mp.IUVSpline):
+            sps[key] = mp.KnotWindowSpline(sps[key])
+    # groups of splines evaluated together at the same wavelengths in
+    #   compute_rv: the template and its derivatives (same knots), the masks
+    #   and the residual projection splines
+    if 'flux_odd' in template_table.colnames:
+        for suffix in ['_odd', '_even']:
+            names = ['spline', 'dspline', 'd2spline', 'd3spline']
+            sps['group' + suffix] = mp.SplineGroup(
+                [sps[name + suffix] for name in names])
+    else:
+        names = ['spline', 'dspline', 'd2spline', 'd3spline']
+        sps['group'] = mp.SplineGroup([sps[name] for name in names])
+    for key in list(sps.keys()):
+        if key.startswith('spline_mask') or key in resproj_keys:
+            sps['group_' + key] = mp.SplineGroup([sps[key]])
+    # -------------------------------------------------------------------------
     # return splines
     return sps
 
 
 def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
-                           mask_file: str) -> Dict[str, Any]:
+                           mask_file: str,
+                           sci_template_file: Optional[str] = None
+                           ) -> Dict[str, Any]:
     # set the function name
     func_name = __NAME__ + '.get_systemic_vel_props()'
     # print progress
@@ -603,8 +636,13 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     for ccf_region in inst.params['CCF_CLEAN_BANDS']:
         ccf_regions[ccf_region] = astro.ccf_regions[ccf_region]
     # ---------------------------------------------------------------------
-    # get the template file for the science object
-    sci_template_file = template_file.replace(template_objname, sci_objname)
+    # get the template file for the science object: the caller's (a vetted
+    #   comparison template is not in the templates folder, so the science
+    #   template is not where the comparison's path says), else the
+    #   comparison's path with the object's name
+    if sci_template_file is None:
+        sci_template_file = template_file.replace(template_objname,
+                                                  sci_objname)
     # load the science template
     msg = 'Loading science template file {}'
     margs = [sci_template_file]
@@ -812,15 +850,17 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
             norder = wavegrid[order_num] < wavegrid[order_num + 1, ::-1]
             # add to mask
             mask[order_num] &= norder
-        # make sure no NaNs present
-        mask &= np.isfinite(sci_data)
+        # make sure no NaNs present, and no zeros: a model is 0 where its
+        #   template has no data (its spline's outside), and those zeros
+        #   are a gap, not a spectrum (the gaps are left out below)
+        mask &= np.isfinite(sci_data) & (sci_data != 0)
         # make the sci_data and wave grid are 1d
         wavegrid2 = wavegrid[mask]
         sci_data2 = sci_data[mask]
     # else we have a 1D array so just need to make sure no NaNs present
     else:
-        # make sure no NaNs present
-        mask = np.isfinite(sci_data)
+        # make sure no NaNs present, and no zeros (as above)
+        mask = np.isfinite(sci_data) & (sci_data != 0)
         # apply mask to wavegrid and sci data
         wavegrid2 = wavegrid[mask]
         sci_data2 = sci_data[mask]
@@ -864,6 +904,35 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # define a mask that only keeps certain index values
     keep_line = index_mask > (rv_max / grid_step) + 2
     keep_line &= index_mask < len(magic_spline) - (rv_max / grid_step) - 2
+    # GAPS IN THE DATA: the spline runs straight across them, and a line
+    #   that slides into one during the scan adds a step to the CCF. A
+    #   template made of spectra that PCA2D masked where its fit had no
+    #   weight (GJ 1214 with HARPS, 2026-10-25: nothing below ~550 nm) gave
+    #   a model CCF whose minimum sat on the scan's edge, +300 km/s, and
+    #   every line window was then placed 260 km/s away from its line: the
+    #   errors four times larger, and files that did not converge. Only the
+    #   lines that stay on data over the whole scan are kept; a hole of a
+    #   few samples (a masked column) is not a gap.
+    gap_steps = inst.params.get('ROUGH_CCF_GAP_STEPS', 20)
+    wsort = np.sort(wavegrid2)
+    if len(wsort) > 1 and np.sum(keep_line) > 0:
+        nxt = np.clip(np.searchsorted(wsort, magic_grid), 1, len(wsort) - 1)
+        span = (wsort[nxt] - wsort[nxt - 1]) / wsort[nxt - 1]
+        off_data = span * speed_of_light_ms > gap_steps * grid_step
+        # off data anywhere a line visits during the scan: from
+        #   index - max(istep) to index - min(istep)
+        off_cum = np.concatenate([[0], np.cumsum(off_data)])
+        lo = np.clip(index_mask - istep.max(), 0, len(off_data) - 1)
+        hi = np.clip(index_mask - istep.min(), 0, len(off_data) - 1)
+        on_data = (off_cum[hi + 1] - off_cum[lo]) == 0
+        # the gaps matter only when they leave lines to the CCF: a spectrum
+        #   without any keeps its lines as they were
+        if np.sum(keep_line & on_data) >= 0.1 * np.sum(keep_line):
+            dropped = int(np.sum(keep_line & ~on_data))
+            if dropped:
+                msg = '\t\tCCF ({0}): {1} of {2} lines left out, near gaps'
+                log.general(msg.format(kind, dropped, int(np.sum(keep_line))))
+            keep_line &= on_data
     # only keep the indices and weights within the keep line mask
     index_mask = index_mask[keep_line]
     weight_line = weight_line[keep_line]
@@ -904,6 +973,12 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # record the systemic velocity and the FWHM
     systemic_velocity = gcoeffs[0]
     ccf_ewidth = abs(gcoeffs[1])
+    # a peak on the scan's edge is no peak: said, as everything after it
+    #   (the model velocity places every line window) would be wrong
+    if abs(systemic_velocity) > 0.95 * max(abs(rv_min), abs(rv_max)):
+        wmsg = ('CCF ({0}) peaks at {1:.0f} m/s, on the edge of its scan '
+                '({2:.0f} to {3:.0f} m/s): not a velocity')
+        log.warning(wmsg.format(kind, -systemic_velocity, rv_min, rv_max))
     # fit ccf
     ccf_fit = mp.gauss_fit_s(dvgrid, *gcoeffs)
     # log ccf velocity
@@ -990,7 +1065,9 @@ def get_scaling_ratio(spectrum1: np.ndarray,
 
 def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
                          model: np.ndarray,
-                         noise_sampling_width: float) -> np.ndarray:
+                         noise_sampling_width: float,
+                         npoints_orders: Optional[List[int]] = None,
+                         nstep: int = 4) -> np.ndarray:
     """
     Estimate the noise on spectrum given the model
 
@@ -999,6 +1076,11 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     :param model: np.ndarray, the model
     :param noise_sampling_width: float, the width of the window used to sample
                                    the noise.
+    :param npoints_orders: optional, the number of points of the sliding
+                           window for each order (get_velo_scale of each
+                           order of wavegrid), if already known
+    :param nstep: int, number of windows per window width (the windows
+                  are npoints // nstep apart; 4 is the original sampling)
 
     :return: np.ndarray, the rms vector for this spectrum give the model
     """

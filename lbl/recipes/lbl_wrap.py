@@ -287,6 +287,35 @@ def main(runparams: dict):
                              skip_done=runparams['SKIP_LBL_COMPILE'],
                              **keyword_args)
 
+def _pca2d_joint(runparams: dict, object_sciences, data_types,
+                 object_comparisons, pca2d_args: dict) -> dict:
+    """The joint pca2d correction of every science object of this wrap.
+
+    Not after the telluric cleaning: that is done one object at a time inside
+    the loop, so the other objects would not be cleaned yet when the joint
+    fit needs them all. Clean them first, in a wrap without PCA2D."""
+    from lbl.recipes import lbl_pca2d
+    if runparams['RUN_LBL_TELLUCLEAN']:
+        emsg = ('LBL_WRAP ERROR: PCA2D joint=True cannot follow '
+                'RUN_LBL_TELLUCLEAN in the same wrap. Run the telluric '
+                'cleaning first, then the joint correction on the _tc objects')
+        raise base_classes.LblException(emsg)
+    olen = len(object_sciences)
+    objects, comparisons = [], dict()
+    for num in range(olen):
+        wkargs = dict(iteration=num, length=olen)
+        if lbl_misc.wraplistcheck(data_types, 'DATA_TYPES',
+                                  **wkargs) != 'SCIENCE':
+            continue
+        objects.append(object_sciences[num])
+        comparisons[object_sciences[num]] = lbl_misc.wraplistcheck(
+            object_comparisons, 'OBJECT_COMPARISON', **wkargs)
+    if len(objects) < 2:
+        emsg = ('LBL_WRAP ERROR: PCA2D joint=True needs two science objects '
+                'or more, there is {0}')
+        raise base_classes.LblException(emsg.format(', '.join(objects)))
+    return lbl_pca2d.joint(objects=objects, comparisons=comparisons,
+                           **pca2d_args)
 
 
 def custom(runparams: dict, func, required_kwargs: List[str]):
