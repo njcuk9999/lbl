@@ -8,6 +8,7 @@ Created on 2021-10-18
 @author: cook
 """
 from lbl.core import base
+import traceback
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
@@ -60,11 +61,15 @@ def main(**kwargs):
     try:
         namespace = __main__(inst)
     except LblException as e:
-        raise LblException(e.message, verbose=False)
+        tbmsg = traceback.format_exc()
+        emsg = '{0}\n\nTraceback:\n{1}'
+        eargs = [e.message, tbmsg]
+        raise LblException(emsg.format(*eargs), verbose=False) from e
     except Exception as e:
-        emsg = 'Unexpected {0} error: {1}: {2}'
-        eargs = [__NAME__, type(e), str(e)]
-        raise LblException(emsg.format(*eargs))
+        tbmsg = traceback.format_exc()
+        emsg = 'Unexpected {0} error: {1}: {2}\n\nTraceback:\n{3}'
+        eargs = [__NAME__, type(e), str(e), tbmsg]
+        raise LblException(emsg.format(*eargs)) from e
     # end code
     lbl_misc.end(__NAME__, plogger=log)
     # return local namespace

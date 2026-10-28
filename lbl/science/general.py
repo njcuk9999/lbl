@@ -51,11 +51,18 @@ InstrumentsType = select.InstrumentsType
 # get speed of light
 speed_of_light_ms = constants.c.value
 speed_of_light_kms = constants.c.value / 1000.0
+
 # the two percentiles of mp.estimate_sigma (sigma=1), as fractions computed
 #   the way np.nanpercentile does (p / 100)
 _P1 = (1 - (1 - mp.normal_fraction(1.0)) / 2) * 100
 ESTIMATE_SIGMA_Q_HI = float(np.true_divide(_P1, np.float64(100)))
 ESTIMATE_SIGMA_Q_LO = float(np.true_divide(100 - _P1, np.float64(100)))
+
+# minimum number of lines a photometric band must hold to get its own
+#   residual projection columns (e.g. DTEMP3000_j)
+RESPROJ_BAND_MIN_LINES = 5
+# minimum fraction of the lines of a band with a valid value for a file
+RESPROJ_BAND_MIN_FRAC = 0.1
 
 
 # =============================================================================
@@ -1149,7 +1156,7 @@ def _f64(array: np.ndarray) -> np.ndarray:
 
 
 def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
-                         mean_rms: np.ndarray) -> Tuple[float, float]:
+                         mean_rms: float |np.ndarray) -> Tuple[float, float]:
     """
     Apply the Bouchy 2001 equation to a vector for the diff
 
@@ -1745,6 +1752,171 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     sci_data[order_num][x_start:x_end + 1]]
                 plot_dict['MODEL_ORD_LINE'] += [
                     model[order_num][x_start:x_end + 1]]
+            # -----------------------------------------------------------------
+            # derivative of the segment
+            d_seg = dmodel_ord[x_start: x_end + 1] * weight_mask
+
+            # only do the d2 and d3 stuff if on last iteration
+            if flag_last_iter:
+                # keep track of second and third derivatives
+                d2_seg = d2model_ord[x_start: x_end + 1] * weight_mask
+                d3_seg = d3model_ord[x_start: x_end + 1] * weight_mask
+                # deal with residual projection tables if required
+                if resproj_flag:
+                    # loop around residual project tables
+                    for key in inst.params['RESPROJ_TABLES']:
+                        # get model_order projection
+                        pmodel_ord = proj_model[key]['model_ord']
+                        # work out the d_seg for this projection
+                        pd_seg = pmodel_ord[x_start: x_end + 1] * weight_mask
+                        # add to projection_model
+                        proj_model[key]['d_seg'] = pd_seg
+            else:
+                d2_seg, d3_seg = None, None
+            # residual of the segment
+            # TODO -> investigate data type problem
+            # data type should work in the sum below. Does
+            # not happen with SPIRou data
+            sci_seg = sci_ord[x_start:x_end + 1]
+            model_seg = model_ord[x_start:x_end + 1]
+            b_ratio_seg = b_ratio_ord[x_start:x_end + 1]
+            norm_seg = norm_ord[x_start:x_end + 1]
+
+            # keep track of the fraction of each lines that is not finite
+            frac_mask = np.isfinite(sci_ord[x_start:x_end + 1])
+            frac_line_valid[line_it] = np.mean(frac_mask)
+
+            # diff_seg = (sci_seg - model_seg) * weight_mask
+            # work out the sum of the weights of the weight mask
+            sum_weight_mask = np.sum(weight_mask)
+
+            # -----------------------------------------------------------------
+            # This is part of the code we had when we had to subtract
+            #   a mean value for each segment as we high-passed
+            #   - no longer used (remove later)
+
+            # denominator = np.nansum(model_seg ** 2 * weight_mask ** 2)
+            # if (sum_weight_mask != 0) and (denominator != 0):
+            #     # subtract off normalized science sum
+            #     # scisum = mp.nansum(sci_seg * weight_mask)
+            #     # sci_seg = sci_seg - (scisum / sum_weight_mask)
+            #     # subtract off normalized model sum
+            #     # modsum = mp.nansum(model_seg * weight_mask)
+            #     #  model_seg = model_seg - (modsum / sum_weight_mask)
+            #     # to be consistent between the spectrum residuals and model
+            #     # d_sum = mp.nansum(d_seg * weight_mask)
+            #
+            #     # TODO --> check if useful at all
+            #     # TODO -> should be an option to subtraction or not the
+            #     # TODO -> mean line flux
+            #     # d_seg = d_seg# - (d_sum / sum_weight_mask)
+            #     # only do the d2 and d3 stuff if on last iteration
+            #     if flag_last_iter:
+            #         # to be consistent between the spectrum residuals and model
+            #         d2_sum = mp.nansum(d2_seg * weight_mask)
+            #         # to be consistent between the spectrum residuals and model
+            #         d3_sum = mp.nansum(d3_seg * weight_mask)
+            #         # deal with residual projection tables if required
+            #         if resproj_flag:
+            #             # loop around residual project tables
+            #             for key in inst.params['RESPROJ_TABLES']:
+            #                 # get the d_seg value
+            #                 d_seg = proj_model[key]['d_seg']
+            #                 # calculate the sum of the d_seg
+            #                 d_sum = mp.nansum(d_seg * weight_mask)
+            #                 # push into the projection model
+            #                 proj_model[key]['d_sum'] = d_sum
+            # -----------------------------------------------------------------
+            # calculate the difference of this segment (weighted by the mask)
+            # -----------------------------------------------------------------
+            # if we have any NaNs in our segment - reject this segment
+            if np.any(np.isnan(model_seg)):
+                continue
+            # remove any pixels are zero or negative remove segment
+            if np.any(model_seg <= 0):
+                continue
+
+            diff_seg = (sci_seg - model_seg) * weight_mask
+            # work out the sum of the rms
+            sum_rms = np.sum(rms_ord[x_start: x_end + 1] * weight_mask)
+
+            # We remove any segment that has a NaN in its template (any
+            # pixel) or has no valid pixel in the spectrum considered.
+            if not np.isfinite(sum_rms):
+                continue
+
+            # work out the mean rms of a line (float)
+            mean_rms = float(sum_rms / sum_weight_mask)
+
+            # -----------------------------------------------------------------
+            # work out the 1st derivative
+            #    From bouchy 2001 equation, RV error for each pixel
+            # -----------------------------------------------------------------
+            bout = bouchy_equation_line(d_seg, diff_seg, mean_rms)
+            dv[line_it], sdv[line_it] = bout
+
+            if flag_last_iter:
+                # to be consistent between the spectrum residuals and model
+                # -------------------------------------------------------------
+                # work out the 0th derivative
+                #    From bouchy 2001 equation, RV error for each pixel
+                # -------------------------------------------------------------
+                if np.sum(np.isfinite(model_seg)) >= 2:
+                    v1 = np.nanmean(model_seg)
+                    bout = bouchy_equation_line(model_seg - v1, diff_seg,
+                                                mean_rms)
+                    d0v[line_it], sd0v[line_it] = bout
+                # -------------------------------------------------------------
+                # work out the 2nd derivative
+                #    From bouchy 2001 equation, RV error for each pixel
+                # -------------------------------------------------------------
+                bout = bouchy_equation_line(d2_seg, diff_seg, mean_rms)
+                d2v[line_it], sd2v[line_it] = bout
+                # -------------------------------------------------------------
+                # work out the 3rd derivative
+                #    From bouchy 2001 equation, RV error for each pixel
+                # -------------------------------------------------------------
+                bout = bouchy_equation_line(d3_seg, diff_seg, mean_rms)
+                d3v[line_it], sd3v[line_it] = bout
+                # deal with residual projection tables if required
+                if resproj_flag:
+                    # loop around residual project tables
+                    for key in inst.params['RESPROJ_TABLES']:
+                        # get d_seg
+                        pd_seg = proj_model[key]['d_seg']
+                        # calculate the bouchy equation
+                        # Express as a fraction of the model rather than a 'raw'
+                        # value.
+                        # Same for error
+                        frac_diff_seg = np.array(diff_seg)
+                        # mean_rms is a float but we apply a weighting across
+                        # pixels in the line - so we force this into a vector
+                        frac_mean_rms = np.full_like(diff_seg, mean_rms)
+                        # performed on the unblazed, pseudo-continuum normalised
+                        # spectra
+                        frac_diff_seg /= (b_ratio_seg * norm_seg)
+                        frac_mean_rms /= (b_ratio_seg * norm_seg)
+
+                        pbout = bouchy_equation_line(pd_seg, frac_diff_seg,
+                                                     frac_mean_rms)
+                        # push into the projection model
+                        pd_key, psd_key = pbout
+                        if np.isfinite(pd_key) and np.isfinite(psd_key):
+                            # only update if both finite
+                            proj_model[key]['proj'][line_it] = pd_key
+                            proj_model[key]['sproj'][line_it] = psd_key
+
+            # only add stuff to the ref_table if on last iteration
+            if flag_last_iter:
+                # -----------------------------------------------------------------
+                # ratio of expected VS actual RMS in difference of model vs line
+                ref_table['RMSRATIO'][line_it] = mp.nanstd(diff_seg) / mean_rms
+                # effective number of pixels in line
+                ref_table['NPIXLINE'][line_it] = len(diff_seg)
+                # Considering the number of pixels, expected and actual RMS, this
+                #   is the likelihood that the line is actually valid from chi2
+                #   point of view
+                ref_table['CHI2'][line_it] = mp.nansum((diff_seg / mean_rms) ** 2)
         # ---------------------------------------------------------------------
         # get the best etimate of the velocity and update sline
         rv_mean, bulk_error = mp.odd_ratio_mean(dv, sdv)
@@ -2207,11 +2379,46 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # do not consider lines wider than max_pix_wid limit
     good &= npixline0 < max_pix_wid
     # remove good from rv table
-    rvtable0 = rvtable0[good]
+    rvtable0_good = rvtable0[good]
+    # -------------------------------------------------------------------------
+    # residual projections (e.g. DTEMP3000) per photometric band
+    # -------------------------------------------------------------------------
+    # the bands are the ones already defined for the per-band velocities
+    #   (astro.bands): every band that holds lines gets a {KEY}_{band} and a
+    #   s{KEY}_{band} column, next to the {KEY} and s{KEY} of the whole domain
+    resproj_bands = []
+    if resproj_flag:
+        # the wavelength of each line kept above
+        wave_lines = np.array(rvtable0_good['WAVE_START'], dtype=float)
+        # the lines of each band
+        for band in astro.bands:
+            bandmask = wave_lines > band.minimum
+            bandmask &= wave_lines < band.maximum
+            # a band with too few lines is not used at all
+            if np.sum(bandmask) < RESPROJ_BAND_MIN_LINES:
+                continue
+            resproj_bands.append((band.name, bandmask))
+        # add the columns (NaN until they are measured), each right after the
+        #   s{KEY} column of its residual projection
+        rdb_dict_bands = dict()
+        for colname in rdb_dict:
+            rdb_dict_bands[colname] = rdb_dict[colname]
+            for key in inst.params['RESPROJ_TABLES']:
+                if colname != 's' + key:
+                    continue
+                for bandname, _ in resproj_bands:
+                    bandkey = '{0}_{1}'.format(key, bandname)
+                    rdb_dict_bands[bandkey] = np.full(len(lblrvfiles), np.nan)
+                    rdb_dict_bands['s' + bandkey] = np.full(len(lblrvfiles),
+                                                            np.nan)
+        rdb_dict = rdb_dict_bands
+        # print the bands used
+        msg = 'Residual projections per band: {0}'
+        log.general(msg.format(', '.join([band[0] for band in resproj_bands])))
     ref_good_pix = np.array(good)  # if a calibration, we'll need this later
     # get columns of rvtable0
-    dv0 = np.array(rvtable0['dv'])
-    sdv0 = np.array(rvtable0['sdv'])
+    dv0 = np.array(rvtable0_good['dv'])
+    sdv0 = np.array(rvtable0_good['sdv'])
     # size of arrays
     nby, nbx = len(lblrvfiles), np.sum(good)
     # set up rv and dvrms
@@ -2242,6 +2449,25 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     best_mask = sdv0 < np.nanpercentile(sdv0, 5.0)
     # list for plot storage
     vrange_all, pdf_all, pdf_fit_all = [], [], []
+
+    # -------------------------------------------------------------------------
+    # Validate all rvtables
+    # -------------------------------------------------------------------------
+    # log progress
+    log.info('Validating all lbl rv files...')
+    # loop around lbl rv files
+    for row in tqdm(range(len(lblrvfiles))):
+        # ---------------------------------------------------------------------
+        # get lbl rv file table and header
+        # ---------------------------------------------------------------------
+        # load table and header
+        rvtable, rvhdr = inst.load_lblrv_file(str(lblrvfiles[row]))
+        # most importantly check that we have the same lines
+        # compared to original rvtable0
+        check_rvtables(inst, rvtable0, rvtable, str(lblrvfiles[0]),
+                       str(lblrvfiles[row]))
+        # remove files (open again later)
+        del rvtable, rvhdr
 
     # -------------------------------------------------------------------------
     # Loop around lbl rv files
@@ -2334,6 +2560,21 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 # push into the rdb dictioanry
                 rdb_dict[key][row] = val_guess
                 rdb_dict['s' + key][row] = val_bulk_error
+                # -------------------------------------------------------------
+                # the same, with the lines of each photometric band
+                for bandname, bandmask in resproj_bands:
+                    # we need a fraction of the lines of the band to be valid
+                    bandvalid = np.isfinite(arr[bandmask])
+                    bandvalid &= np.isfinite(sarr[bandmask])
+                    bandmin = RESPROJ_BAND_MIN_FRAC * np.sum(bandmask)
+                    if np.sum(bandvalid) < bandmin:
+                        continue
+                    # the odd ratio mean of the lines of this band
+                    bandout = mp.odd_ratio_mean(arr[bandmask], sarr[bandmask])
+                    # push into the rdb dictionary
+                    bandkey = '{0}_{1}'.format(key, bandname)
+                    rdb_dict[bandkey][row] = bandout[0]
+                    rdb_dict['s' + bandkey][row] = bandout[1]
         # get the d2v, sd2v, d3v and sd3v values from table
         wave_vec = np.array(rvtable['WAVE_START'][good], dtype=float)
         contrast = np.array(rvtable['contrast'][good], dtype=float)
@@ -2494,13 +2735,16 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_error[line_it] = np.nan
                 continue
             # find valid velocity measurements
-            good = np.isfinite(dv_arr[:, line_it])
+            good1 = np.isfinite(dv_arr[:, line_it])
             per_line_diff = (dv_arr[:, line_it] - rdb_dict['vrad'])
             # skip if less that 3 valid values for this line
-            if np.sum(good) < 3:
+            if np.sum(good1) < 3:
                 if dv_arr.shape[0] < 5:
                     per_line_mean[line_it] = np.nanmean(dv_arr[:, line_it])
-                    per_line_error[line_it] = np.nanstd(dv_arr[:, line_it])/np.sqrt(np.sum(good))
+                    # calculate the per line error
+                    part1 = np.nanstd(dv_arr[:, line_it])
+                    part2 = np.sqrt(np.sum(good))
+                    per_line_error[line_it] = part1 / part2
                 else:
                     per_line_mean[line_it] = np.nan
                     per_line_error[line_it] = np.nan
@@ -2524,7 +2768,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # and can be used to flag lines that suspiciously correlate
             # with BERV.
             with warnings.catch_warnings(record=True) as _:
-                pout = pearsonr(berv[good], per_line_diff[good])
+                pout = pearsonr(berv[good1], per_line_diff[good1])
             prob_pearsonr[line_it] = pout[1]
 
             if prob_pearsonr[line_it] < cut_pearsonr:
@@ -2574,7 +2818,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     rdb_fitsdata['SD2V'] = sd2v_arr
     rdb_fitsdata['D3V'] = d3v_arr
     rdb_fitsdata['SD3V'] = sd3v_arr
-    rdb_fitsdata['RDB0'] = rvtable0
+    rdb_fitsdata['RDB0'] = rvtable0_good
     # -------------------------------------------------------------------------
     # print progress
     log.info('Computing chromatic slope and per-bandpass statistics')
@@ -2624,18 +2868,20 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # loop around 10 iterations (but break on convergence)
         while itr_count <= 10:
             # find finite points
-            good = np.isfinite(err) & np.isfinite(rvs_row)
-            good &= np.isfinite(rv_per_line_model[0])
+            good2 = np.isfinite(err) & np.isfinite(rvs_row)
+            good2 &= np.isfinite(rv_per_line_model[0])
             # find very large outliers in the per-line velocities
             nsig = np.abs(rvs_row - np.nanmedian(rvs_row)) / err
-            good &= (nsig < 10)
-            good &= (err < 100 * np.nanmedian(err))
+            good2 &= (nsig < 10)
+            good2 &= (err < 100 * np.nanmedian(err))
+            # apply the path
+            rvtable0_good2 = rvtable0_good[good2]
             # get valid wave and subtract reference wavelength
-            valid_wave = rvtable0['WAVE_START'][good] - reference_wavelength
-            valid_log_wave = np.log(rvtable0['WAVE_START'][good])
+            valid_wave = rvtable0_good2['WAVE_START']- reference_wavelength
+            valid_log_wave = np.log(rvtable0_good2['WAVE_START'])
             # get valid rv an dv drms
-            valid_rv = (rvs_row - rv_per_line_model[0])[good]
-            valid_dvrms = err[good]
+            valid_rv = (rvs_row - rv_per_line_model[0])[good2]
+            valid_dvrms = err[good2]
             # get weights for the np.polyval fit. Do *not* use the square of
             # error bars for weight (see polyfit help)
 
@@ -2649,7 +2895,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 suspicious = valid_dvrms < threshold
                 valid_dvrms[suspicious] = threshold
 
-            weight_lin_fit = prob_good[good] / valid_dvrms
+            weight_lin_fit = prob_good[good2] / valid_dvrms
             # fitting the lines with weights
             # noinspection PyTupleAssignmentBalance
             scoeffs, scov = np.polyfit(valid_wave, valid_rv, 1,
@@ -2663,7 +2909,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             nsig = (valid_rv - sfit) / valid_dvrms
             # work out the likelihood of the line being a valid point
             gpart = np.exp(-0.5 * nsig ** 2)
-            prob_good[good] = (1 + 1.0e-4) * gpart / (1.0e-4 + gpart)
+            prob_good[good2] = (1 + 1.0e-4) * gpart / (1.0e-4 + gpart)
             # get the slope and velocity from the fit
             achromatic_velo = scoeffs[1]
             # expressed in m/s/um, hence the *1000 to go from nm (wave grid)
@@ -2778,8 +3024,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         for iband in range(len(bands)):
             # make a mask based on the band (can use rvtable0 as wave start
             #   is the same for all rvtables)
-            band_mask = rvtable0['WAVE_START'] > blue_end[iband]
-            band_mask &= rvtable0['WAVE_START'] < red_end[iband]
+            band_mask = rvtable0_good['WAVE_START'] > blue_end[iband]
+            band_mask &= rvtable0_good['WAVE_START'] < red_end[iband]
             # decide whether to use regions
             if use_regions[iband]:
                 band_regions = list(region_names)
@@ -2793,8 +3039,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # loop around the regions
             for iregion in range(len(band_regions)):
                 # mask based on region
-                region_mask = rvtable0['XPIX'] > band_region_low[iregion]
-                region_mask &= rvtable0['XPIX'] < band_region_high[iregion]
+                region_mask = rvtable0_good['XPIX'] > band_region_low[iregion]
+                region_mask &= rvtable0_good['XPIX'] < band_region_high[iregion]
                 # -------------------------------------------------------------
                 # get combined mask for band and region
                 comb_mask = band_mask & region_mask
@@ -3197,6 +3443,50 @@ def correct_rdb_drift(inst: InstrumentsType, rdb_table: Table,
     # ---------------------------------------------------------------------
     # return rdb table
     return rdb_table4
+
+
+def check_rvtables(inst: InstrumentsType,
+                   rvtable1: Table, rvtable2: Table,
+                   file1: str, file2: str,
+                   raise_exception: bool = True) -> bool:
+    """
+    Check that two rvtables are consistent (length and value of WAVE_START and
+    WAVE_END)
+
+    :param inst: Lbl Instrument instance
+    :param rvtable1: astropy.Table - the first rv table to compare
+    :param rvtable2: astropy.Table - the second rv table to compare
+    :param file1: str - the path of the first file
+    :param file2: str - the path of the second file
+    :param raise_exception: bool - if True raises exception on failure
+
+    :raises: LblException error on check failure (if raise_exception is True)
+
+    :return: bool, True if passes, False otherwise
+    """
+    # Case 1: table are same length but wave start/wave end are different
+    if len(rvtable1) == len(rvtable2):
+        # match rows in file
+        match1 = rvtable1['WAVE_START'] != rvtable2['WAVE_START']
+        match2 = rvtable1['WAVE_END'] != rvtable2['WAVE_END']
+        # if they both match
+        if (np.sum(match1) + np.sum(match2)) == 0:
+            return True
+    # get object science and object comparison
+    obj_sci = inst.params['OBJECT_SCIENCE']
+    obj_comp =inst.params['OBJECT_COMPARISON']
+    # error message
+    emsg = (f'RV Tables line definitions do not match.'
+            f'\n File1: {os.path.basename(file1)} Nlines={len(rvtable1)}'
+            f'\n File2: {os.path.basename(file2)} Nlines={len(rvtable2)}'
+            f'\n\tPlease remove all lbl.fits files for  '
+            f'{obj_sci}_{obj_comp} files and re-run lbl_compute '
+            f'for OBJECT_SCIENCE={obj_sci} OBJECT_COMPARISON={obj_comp}')
+    if raise_exception:
+        raise LblException(emsg)
+    # other wise log a warning and return False
+    log.warning(emsg)
+    return False
 
 
 # =============================================================================

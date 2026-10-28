@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -98,11 +99,15 @@ def main(**kwargs):
     try:
         namespace = __main__(inst, recipe_kwargs=kwargs)
     except LblException as e:
-        raise LblException(e.message, verbose=False)
+        tbmsg = traceback.format_exc()
+        emsg = '{0}\n\nTraceback:\n{1}'
+        eargs = [e.message, tbmsg]
+        raise LblException(emsg.format(*eargs), verbose=False) from e
     except Exception as e:
-        emsg = 'Unexpected {0} error: {1}: {2}'
-        eargs = [__NAME__, type(e), str(e)]
-        raise LblException(emsg.format(*eargs))
+        tbmsg = traceback.format_exc()
+        emsg = 'Unexpected {0} error: {1}: {2}\n\nTraceback:\n{3}'
+        eargs = [__NAME__, type(e), str(e), tbmsg]
+        raise LblException(emsg.format(*eargs)) from e
     # end code
     lbl_misc.end(__NAME__, plogger=log)
     # return local namespace

@@ -10,6 +10,7 @@ Created on 2021-08-24
 @author: cook
 """
 import os
+import traceback
 import warnings
 from typing import List
 
@@ -82,11 +83,15 @@ def main(**kwargs):
     try:
         namespace = __main__(inst)
     except LblException as e:
-        raise LblException(e.message, verbose=False)
+        tbmsg = traceback.format_exc()
+        emsg = '{0}\n\nTraceback:\n{1}'
+        eargs = [e.message, tbmsg]
+        raise LblException(emsg.format(*eargs), verbose=False) from e
     except Exception as e:
-        emsg = 'Unexpected {0} error: {1}: {2}'
-        eargs = [__NAME__, type(e), str(e)]
-        raise LblException(emsg.format(*eargs))
+        tbmsg = traceback.format_exc()
+        emsg = 'Unexpected {0} error: {1}: {2}\n\nTraceback:\n{3}'
+        eargs = [__NAME__, type(e), str(e), tbmsg]
+        raise LblException(emsg.format(*eargs)) from e
     # end code
     lbl_misc.end(__NAME__, plogger=log)
     # return local namespace
@@ -653,9 +658,9 @@ def run_template(inst, objname: str, objkind: str):
         low_snr_odd = snr_odd < snr_threshold
         p50_odd[low_snr_odd] = np.nan
         rms_odd[low_snr_odd] = np.nan
-        low_snr_odd = snr_even < snr_threshold
-        p50_even[low_snr_odd] = np.nan
-        rms_odd[low_snr_odd] = np.nan
+        low_snr_even = snr_even < snr_threshold
+        p50_even[low_snr_even] = np.nan
+        rms_odd[low_snr_even] = np.nan
     # -------------------------------------------------------------------------
     # other parameters for the header
     nfiles = len(science_files)
