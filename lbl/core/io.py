@@ -9,6 +9,7 @@ Created on 2021-03-15
 
 @author: cook
 """
+import contextlib
 import copy
 import fnmatch
 import itertools
@@ -170,22 +171,39 @@ class LBLHeader(UserDict):
 
     @classmethod
     def from_fits(cls, header: fits.Header,
-                  filename: Optional[str] = None) -> 'LBLHeader':
+                  filename: Optional[str] = None,
+                  keys: Optional[List[str]] = None) -> 'LBLHeader':
         """
         Construct a LBLHeader from a fits file
 
         :param header: fits.Header, the loaded fits header (astro.io.FitsHeader)
         :param filename: str, the filename of the header (for error reporting)
+        :param keys: optional list of keys: only keep these (same values and
+                     comments as in the full LBLHeader, the other keys are
+                     absent)
 
         :return: LBLHeader, the header
         """
         new = cls()
+        # unique keys, in header order: header[key] of a repeated key always
+        #   returns the same (first card / commentary) value, so copying it
+        #   once gives the same result as copying it at every occurrence
+        #   (a deepcopy of a commentary value copies the whole header)
+        keys_all = list(dict.fromkeys(header))
+        if keys is None:
+            keys = keys_all
+        else:
+            # keys as they are looked up (with or without 'HIERARCH ')
+            wanted = set(keys)
+            wanted |= set(key[len('HIERARCH '):] for key in keys
+                          if key.startswith('HIERARCH '))
+            keys = [key for key in keys_all if key in wanted]
         # loop around keys and add them to the header dictionary
-        for key in header:
+        for key in keys:
             new[key] = copy.deepcopy(header[key])
         # add comments
         new.comments = dict()
-        for key in header:
+        for key in keys:
             new.comments[key] = copy.deepcopy(header.comments[key])
         # set filename
         new.filename = filename
@@ -215,7 +233,7 @@ class LBLHeader(UserDict):
             if key in ['COMMENT', 'HISTORY']:
                 continue
             # Add key to dictionary
-            header[outkey] = (self.data[key], self.comments[key])
+            header_set(header, outkey, self.data[key], self.comments[key])
         # return header
         return header
 
