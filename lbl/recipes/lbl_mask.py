@@ -48,6 +48,8 @@ ARGS_MASK = [  # core
     'PLOT', 'PLOT_MASK_CCF',
     # other
     'OVERWRITE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
+    # mask lines at the significant extrema of the template
+    'MASK_SIGNIFICANT_EDGES', 'MASK_EDGE_NSIG', 'MASK_EDGE_NOISE_FACTOR',
 ]
 
 DESCRIPTION_MASK = 'Use this code to calculate the LBL mask'

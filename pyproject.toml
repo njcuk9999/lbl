@@ -15,6 +15,7 @@ license = {file = 'LICENSE'}
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "astropy==7.2.0",
+    "astroquery==0.4.11",
     "Bottleneck==1.6.0",
     "ipython==8.32.0",
     "scipy==1.17.0",
@@ -28,6 +29,7 @@ dependencies = [
     "tables==3.11.0",
     "tqdm==4.67.3",
     "PyYAML==6.0.3",
+    "pypdf==6.19.0",
     "wget==3.2",
 ]
 
@@ -40,3 +42,7 @@ lbl_find = "lbl.recipes.lbl_find:run"
 lbl_reset = "lbl.recipes.lbl_reset:run"
 lbl_demo = "lbl.recipes.lbl_demo:run"
 lbl_setup = "lbl.recipes.lbl_setup:run"
+# pca2d's own command line, for runs side by side outside a wrap file
+lbl_pca2d = "lbl.pca2d.cli:main"
+# the window: builds, runs and follows wraps, finds public spectra (lbl.gui)
+lbl_gui = "lbl.gui.app:main"

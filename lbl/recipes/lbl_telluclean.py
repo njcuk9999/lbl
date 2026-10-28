@@ -135,8 +135,20 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames
     # -------------------------------------------------------------------------
-    # template filename
-    template_file = inst.template_file(template_dir, 'science', required=False)
+    # template filename: the comparison's, which lbl_wrap sets to
+    #   <object>_tc for the second pass (the template made from the first
+    #   pass's cleaned spectra); the science object's own name is never that
+    #   template's, and with it the second pass ran without a template. The
+    #   first pass uses none: not looked for (a vetted comparison would be
+    #   downloaded for nothing)
+    template_file = ''
+    if inst.params['TELLUCLEAN_USE_TEMPLATE']:
+        template_file = inst.template_file(template_dir, 'comparison',
+                                           required=False)
+        if not os.path.exists(template_file):
+            wmsg = ('TELLUCLEAN_USE_TEMPLATE = True but no template {0}: '
+                    'the telluric cleaning runs without one')
+            log.warning(wmsg.format(template_file))
     # science filenames (always non _tc files)
     science_files = inst.science_files(science_dir)
 
@@ -182,6 +194,13 @@ def __main__(inst: InstrumentsType, **kwargs):
                                                 dtype=float)
         e2ds_dict['OBJECT'] = inst.params['OBJECT_SCIENCE']
         e2ds_dict['BERV'] = inst.get_berv(sci_hdr)
+        # LA TRANSMISSION SE DECALE QUAND LA GRILLE EST BARYCENTRIQUE. TAPAS
+        # decrit l'atmosphere, donc le repere du sol; get_berv rend zero pour
+        # les classes dont la grille est deja barycentrique, et c'est la bonne
+        # reponse pour les vitesses, mais l'atmosphere, elle, a bouge du BERV
+        # de l'en-tete. Les classes dont la grille est dans le repere de
+        # l'observateur rendent zero ici et rien ne bouge.
+        e2ds_dict['BERV_TRANS'] = inst.get_berv_transmission(sci_hdr)
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------
         # do the telluric correction (similar to APERO)

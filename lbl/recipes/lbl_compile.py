@@ -17,6 +17,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
 from lbl.resources import lbl_misc
+from lbl.science import activity_lines
 from lbl.science import general
 from lbl.science import plot
 
@@ -75,7 +76,8 @@ def main(**kwargs):
                     params=args, plogger=log)
     # run __main__
     try:
-        namespace = __main__(inst)
+        with io.fast_fits_config():
+            namespace = __main__(inst)
     except LblException as e:
         tbmsg = traceback.format_exc()
         emsg = '{0}\n\nTraceback:\n{1}'
@@ -141,7 +143,12 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 3: Produce RDB file (.rdb and .fits)
     # -------------------------------------------------------------------------
-    if os.path.exists(rdbfile1) and inst.params['SKIP_DONE']:
+    # the activity lines of each spectrum are columns of the rdb
+    #   (lbl.science.activity_lines): a science rdb compiled before them is
+    #   compiled again
+    science = inst.params['DATA_TYPE'] == 'SCIENCE'
+    outdated = science and not activity_lines.rdb_has_activity(rdbfile1)
+    if os.path.exists(rdbfile1) and inst.params['SKIP_DONE'] and not outdated:
         # log file exists and we are skipping
         msg = 'File {0} exists, we will read it. To regenerate use --skip'
         margs = [rdbfile1]
@@ -155,6 +162,9 @@ def __main__(inst: InstrumentsType, **kwargs):
                                                       lblrv_files, plot_dir)
         # get the rdb table out of rdb data
         rdb_table = rdb_data['RDB']
+        # the activity lines of each spectrum, as columns
+        if science:
+            activity_lines.add_to_rdb(rdb_table, lblrv_files)
         # plot here based on table (not required when loading)
         plot.compil_binned_band_plot(inst, rdb_table)
         # log creation of rdb table

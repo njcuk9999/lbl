@@ -1,3 +1,10 @@
 include lbl/resources/*.md
 include doc/*
 include lbl/version.txt
+include lbl/pca2d/nominal.yaml
+include lbl/pca2d/templates/*
+include lbl/pca2d/assets/*
+include lbl/resources/planets/*.yaml
+include lbl/resources/activity_lines.yaml
+include lbl/resources/vetted_templates.yaml
+include lbl/gui/static/*

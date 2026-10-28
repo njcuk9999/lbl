@@ -12,17 +12,21 @@ Created on 2021-08-24
 import os
 import traceback
 import warnings
+from typing import List
 
 import numpy as np
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import fastmath
 from lbl.core import math as mp
+from lbl.core import vetted
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 from lbl.science import apero
 from lbl.science import general
+from lbl.science import planets
 
 # =============================================================================
 # Define variables
@@ -131,9 +135,46 @@ def __main__(inst: InstrumentsType, **kwargs):
             log.info(lmsg)
             log.info('*' * 50)
         # run the full template code
-        run_template(inst, objname, objkind)
+        with io.fast_fits_config():
+            run_template(inst, objname, objkind)
     # return all local variables (for debug)
     return locals()
+
+
+def _load_template_header(inst, filename: str):
+    """
+    Science header for the template loop: only the keys the template uses
+    if the instrument knows them (same values), else the full header
+    """
+    keys = inst.template_header_keys()
+    if keys is None:
+        return inst.load_header(filename)
+    return inst.load_header_keys(filename, keys)
+
+
+def _load_template_science(inst, filename: str):
+    """
+    Science data and header for the template loop: only the header keys the
+    template uses if the instrument knows them (same values), else the full
+    header
+    """
+    keys = inst.template_header_keys()
+    if keys is None:
+        return inst.load_science_file(filename)
+    return inst.load_science_file_keys(filename, keys)
+
+
+def _nanpercentile_rows(cube: np.ndarray, percents: List[float]
+                        ) -> np.ndarray:
+    """
+    np.nanpercentile(cube, percents, axis=1), with a numba kernel for 2D
+    float64 cubes (same values)
+    """
+    if cube.ndim == 2 and cube.dtype == np.float64:
+        # the fractions np.nanpercentile uses
+        qs = np.true_divide(np.asarray(percents), np.float64(100))
+        return fastmath.nanpercentile_rows(np.ascontiguousarray(cube), qs)
+    return np.nanpercentile(cube, percents, axis=1)
 
 
 def run_template(inst, objname: str, objkind: str):
@@ -156,6 +197,12 @@ def run_template(inst, objname: str, objkind: str):
     # -------------------------------------------------------------------------
     # template filename
     template_file = inst.template_file(template_dir, objkind, required=False)
+    # a vetted template is the depot's, never made again from spectra (it
+    #   has none here): template_file put it there
+    if vetted.is_vetted(objname):
+        log.general('{0} is a vetted template: {1}'.format(objname,
+                                                           template_file))
+        return locals()
 
     # -------------------------------------------------------------------------
     # Step 3: Check if template exists
@@ -232,9 +279,54 @@ def run_template(inst, objname: str, objkind: str):
     drv0 = np.zeros_like(science_files, dtype=float)
 
     berv = np.zeros_like(science_files, dtype=float)
+    # the time of each spectrum [BJD], for the companions' velocities
+    bjd = np.zeros_like(science_files, dtype=float)
+    use_planets = (bool(inst.params['PLANETS'])
+                   and inst.params['DATA_TYPE'] == 'SCIENCE')
     for sci_it in range(len(science_files)):
-        sci_hdr = inst.load_header(science_files[sci_it])
+        sci_hdr = _load_template_header(inst, science_files[sci_it])
         berv[sci_it] = inst.get_berv(sci_hdr)
+        if use_planets:
+            # RJD = JD - 2400000
+            try:
+                bjd[sci_it] = inst.get_rjd_value(sci_hdr) + 2400000.0
+            except Exception as exc:
+                msg = ('PLANETS: no time for {0} ({1}): the known '
+                       'orbits are not used')
+                log.warning(msg.format(science_files[sci_it], exc))
+                use_planets = False
+    # -------------------------------------------------------------------------
+    # PLANETS: the known companions of the star. If the catalogs have their
+    #   orbits, every spectrum is registered with its BERV and their velocity
+    #   at its time, and the template is made in one pass; if not (None), the
+    #   velocities are iterated on as below
+    planets_used = None
+    if use_planets:
+        header_names = [refhdr.get(inst.params.get('KW_OBJNAME', 'OBJECT')),
+                        refhdr.get('DRSOBJN')]
+        planets_used = planets.orbits_for(
+            planets.star_names(objname, header_names),
+            inst.params['DATA_DIR'])
+    if planets_used is not None:
+        log.info('PLANETS: the template is made on BERV + the Keplerian '
+                 'velocity of each spectrum, in one pass')
+        rv0 = planets.star_velocity(bjd, planets_used['orbits'])
+        planets_used['velocity'] = np.array(rv0)
+        msg = ('PLANETS: velocity of the star from {0:.1f} to {1:.1f} m/s '
+               'over the {2} spectra')
+        log.info(msg.format(np.min(rv0), np.max(rv0), len(rv0)))
+    # SMALL_RV_SHIFT: the star's velocity taken as constant, the template
+    #   made in one pass on BERV alone (unless its orbits are known above);
+    #   False iterates on the velocities below
+    flat_rv = (planets_used is None and bool(inst.params['SMALL_RV_SHIFT'])
+               and inst.params['DATA_TYPE'] == 'SCIENCE')
+    if flat_rv:
+        log.info('SMALL_RV_SHIFT: the velocity of the star is taken as '
+                 'constant: the template is made on BERV alone, in one pass '
+                 '(SMALL_RV_SHIFT = False iterates on the velocities)')
+    # the passes: one when the velocities are known (or taken as
+    #   constant), up to 5 otherwise
+    n_passes = 1 if (planets_used is not None or flat_rv) else 5
     # storage of the science table
     med_spec_hp = 1
     # we distribute the files in bins of equal size ordered by berv
@@ -257,20 +349,23 @@ def run_template(inst, objname: str, objkind: str):
         even_weight_cube = np.zeros([len(wavegrid), nbin])
 
         # print iteration loop
-        msg = 'Iteration {0} of 5'
-        log.info(msg.format(ite + 1))
+        msg = 'Iteration {0} of {1}'
+        log.info(msg.format(ite + 1, n_passes))
         # science table
         sci_table = dict()
         # all bervs
         berv = np.zeros_like(science_files, dtype=float)
         # loop around files
         for it, filename in enumerate(science_files):
+            # on a terminal, the previous file's lines stay on screen while
+            #   this one runs, and the ones before are erased
+            log.transient()
             # print progress
             msg = 'Processing E2DS->S1D for file {0} of {1}'
             margs = [it + 1, len(science_files)]
             log.general(msg.format(*margs))
             # select the first science file as a reference file
-            sci_image, sci_hdr = inst.load_science_file(filename)
+            sci_image, sci_hdr = _load_template_science(inst, filename)
 
             # get wave solution for reference file
             sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
@@ -296,15 +391,17 @@ def run_template(inst, objname: str, objkind: str):
             sci_table = inst.populate_sci_table(filename, sci_table, sci_hdr,
                                                 berv=berv[it])
 
-            # apply berv if required
-            if berv[it] != 0.0:
-                sci_wave = mp.doppler_shift(sci_wave, -berv[it] + rv0[it])
+            # apply berv if required, with the star's velocity, the two
+            #   composed relativistically
+            if berv[it] != 0.0 or planets_used is not None:
+                sci_wave = mp.doppler_shift(
+                    sci_wave, mp.add_velocities(-berv[it], rv0[it]))
             # set exactly zeros to NaNs
             sci_image[sci_image == 0] = np.nan
-            # compute s1d from e2ds
-            s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                     sci_image, blazeimage,
-                                                     wavegrid)
+            # compute s1d from e2ds (all orders, odd orders, even orders)
+            if ite == 0:
+                s1d_all = apero.e2ds_to_s1d(inst.params, sci_wave, sci_image,
+                                            blazeimage, wavegrid, parity=True)
             # if this is not the first iteration we recompute the wave grid
             #   given what we know from the previous loop
             if ite != 0:
@@ -319,6 +416,14 @@ def run_template(inst, objname: str, objkind: str):
                 cut_low = inst.params['COMPIL_SLOPE_REF_WAVE'] * 0.95
                 cut_high = inst.params['COMPIL_SLOPE_REF_WAVE'] * 1.05
                 rms_domain = (wavegrid > cut_low) * (wavegrid < cut_high)
+                # s1d from e2ds, only needed in rms_domain (orders that do
+                #   not reach it are skipped)
+                rms_index = np.where(rms_domain)[0]
+                s1d_flux, _ = apero.e2ds_to_s1d(inst.params, sci_wave,
+                                                sci_image, blazeimage,
+                                                wavegrid,
+                                                domain=(rms_index[0],
+                                                        rms_index[-1] + 1))
                 # domain that is at the center of the detector
                 s1d_flux_tmp = s1d_flux[rms_domain]
                 # we remove the low frequency content
@@ -328,10 +433,15 @@ def run_template(inst, objname: str, objkind: str):
                 # -------------------------------------------------------------
                 # perform a sigma clip of the edges (to avoid dummy edge
                 #    effects)
-                for idv in range(len(dv)):
-                    tmp = np.roll(s1d_flux_tmp, dv[idv]) / med_spec_hp_domain
-                    n1, p1 = np.nanpercentile(tmp, [16, 84])
-                    sig[idv] = (p1 - n1) / 2.0
+                #   for each shift: np.nanpercentile of
+                #   np.roll(s1d_flux_tmp, shift) / med_spec_hp_domain
+                #   at 16 and 84 (numba kernel, same values)
+                qs = np.true_divide(np.asarray([16, 84]), np.float64(100))
+                sig[:] = fastmath.roll_ratio_sigma(
+                    np.ascontiguousarray(s1d_flux_tmp, dtype=np.float64),
+                    np.ascontiguousarray(med_spec_hp_domain,
+                                         dtype=np.float64),
+                    dv.astype(np.int64), qs[0], qs[1])
                 sig /= np.nanmedian(sig)
                 imin = np.argmin(sig)
                 # just to avoid dummy edge effects
@@ -352,22 +462,19 @@ def run_template(inst, objname: str, objkind: str):
                 rv0[it] -= drv0[it]
                 # get wave solution for reference file.
                 sci_wave = inst.get_wave_solution(filename, sci_image, sci_hdr)
-                sci_wave = mp.doppler_shift(sci_wave, -berv[it] + rv0[it])
+                sci_wave = mp.doppler_shift(
+                    sci_wave, mp.add_velocities(-berv[it], rv0[it]))
 
-                # compute s1d from e2ds
+                # compute s1d from e2ds (all, odd and even orders)
                 # with an updated wavelength grid
-                s1d_flux, s1d_weight = apero.e2ds_to_s1d(inst.params, sci_wave,
-                                                         sci_image, blazeimage,
-                                                         wavegrid)
+                s1d_all = apero.e2ds_to_s1d(inst.params, sci_wave, sci_image,
+                                            blazeimage, wavegrid, parity=True)
 
-            # these two see the updated wavelength grid if we are not at ite ==0
-            s1d_odd_args = [inst.params, sci_wave[1::2], sci_image[1::2],
-                            blazeimage[1::2], wavegrid]
-            s1d_flux_odd, s1d_weight_odd = apero.e2ds_to_s1d(*s1d_odd_args)
-
-            s1d_even_args = [inst.params, sci_wave[::2], sci_image[::2],
-                             blazeimage[::2], wavegrid]
-            s1d_flux_even, s1d_weight_even = apero.e2ds_to_s1d(*s1d_even_args)
+            # odd and even orders see the updated wavelength grid if we are
+            #   not at ite ==0
+            s1d_flux, s1d_weight = s1d_all[0], s1d_all[1]
+            s1d_flux_odd, s1d_weight_odd = s1d_all[2], s1d_all[3]
+            s1d_flux_even, s1d_weight_even = s1d_all[4], s1d_all[5]
 
             # push into arrays
             flux_cube[:, ibin[it]] += s1d_flux
@@ -378,6 +485,8 @@ def run_template(inst, objname: str, objkind: str):
             # push into arrays (right)
             even_cube[:, ibin[it]] += s1d_flux_even
             even_weight_cube[:, ibin[it]] += s1d_weight_even
+        # the last file's lines stay
+        log.transient(start=False)
 
         # -------------------------------------------------------------------------
         # Step 6. Creation of the template
@@ -483,8 +592,22 @@ def run_template(inst, objname: str, objkind: str):
             # , we are happy, we exit the loop on relative RV shifts
             if sig < inst.params['MAX_CONVERGENCE_TEMPLATE_RV']:
                 break
+        # with the companions' velocities the spectra are already where they
+        #   belong: one pass, no iteration on the velocities
+        if planets_used is not None:
+            log.general('PLANETS: template made in one pass, on BERV + the '
+                        'Keplerian velocity of each spectrum')
+            break
+        # with a constant velocity too (SMALL_RV_SHIFT)
+        if flat_rv:
+            log.general('SMALL_RV_SHIFT: template made in one pass, on BERV '
+                        'alone')
+            break
 
     sci_table['VSYS'] = rv0
+    if planets_used is not None:
+        # the Keplerian velocity of each spectrum, for the record
+        sci_table['VKEP'] = np.array(planets_used['velocity'])
 
     # -------------------------------------------------------------------------
     # bin cube by BERV (to give equal weighting to epochs)
@@ -503,15 +626,12 @@ def run_template(inst, objname: str, objkind: str):
         # bervbins
         log.general('computation done per-berv bin')
         log.general('\t- computation on flux cube')
-        p16, p50, p84 = np.nanpercentile(flux_cube, [16, 50, 84],
-                                         axis=1)
+        p16, p50, p84 = _nanpercentile_rows(flux_cube, [16, 50, 84])
         # same for left and right
         log.general('\t- computation on odd cube')
-        p16_odd, p50_odd, p84_odd = np.nanpercentile(odd_cube, [16, 50, 84],
-                                                     axis=1)
+        p16_odd, p50_odd, p84_odd = _nanpercentile_rows(odd_cube, [16, 50, 84])
         log.general('\t- computation on even cube')
-        p16_even, p50_even, p84_even = np.nanpercentile(even_cube, [16, 50, 84],
-                                                        axis=1)
+        p16_even, p50_even, p84_even = _nanpercentile_rows(even_cube, [16, 50, 84])
         # calculate the rms of each wavelength element
         rms = (p84 - p16) / 2
         # same for left and right
@@ -520,9 +640,10 @@ def run_template(inst, objname: str, objkind: str):
 
     # -------------------------------------------------------------------------
     # TODO: Andd local SNR part from EA
-    # Local SNR
-    snr_odd = p50_odd / rms_odd
-    snr_even = p50_even / rms_even
+    # Local SNR (infinite where the rms is zero)
+    with warnings.catch_warnings(record=True) as _:
+        snr_odd = p50_odd / rms_odd
+        snr_even = p50_even / rms_even
     # Perform a low pass filter on the SNR
     snr_odd = mp.lowpassfilter(snr_odd, hp_width)
     snr_even = mp.lowpassfilter(snr_even, hp_width)
@@ -600,6 +721,11 @@ def run_template(inst, objname: str, objkind: str):
 
         n_valid = np.sum(np.isfinite(p50[wavemask]))
         n_total = np.sum(wavemask)
+        # an order outside the template's grid: no samples, no fraction
+        if not n_total:
+            frac_valid[ordernum] = np.nan
+            frac_valid_odd_even[ordernum] = np.nan
+            continue
         frac_valid[ordernum] = n_valid / n_total
 
         # For odd/even we add the number of odd + even
@@ -619,7 +745,8 @@ def run_template(inst, objname: str, objkind: str):
                  eflux_even=rms_even, rms_odd=rms_odd,
                  rms_even=rms_even, template_coverage=template_coverage,
                  total_nobs_berv=total_nobs_berv, template_nobs=nfiles,
-                 savgol_fluxes=savgol_fluxes, template_type=template_type)
+                 savgol_fluxes=savgol_fluxes, template_type=template_type,
+                 planets=planets_used, small_rv_shift=flat_rv)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
 

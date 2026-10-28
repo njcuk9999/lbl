@@ -9,15 +9,26 @@ Created on 2021-03-15
 
 @author: cook
 """
-import numpy as np
+import copy
 import os
+import pickle
+import shutil
+import subprocess
+import sys
+import tempfile
 import traceback
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+from astropy.io import fits
+from scipy import stats
 
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.instruments import select
 from lbl.resources import lbl_misc
+from lbl.science import activity_lines
 from lbl.science import general
 
 # =============================================================================
@@ -50,10 +61,15 @@ ARGS_COMPUTE = [  # core
     # other
     'SKIP_DONE', 'VERBOSE', 'PROGRAM', 'MASK_FILE',
     # multiprocessing arguments
-    'ITERATION', 'TOTAL',
+    'ITERATION', 'TOTAL', 'COMPUTE_NPROC',
 ]
 
 DESCRIPTION_COMPUTE = 'Use this code to compute the LBL rv'
+
+# reference table columns that a file only sets for some lines (the other
+#   lines keep the value of the previous file): (columns, flag in outputs)
+CARRIED_COLUMNS = [(['MEANXPIX', 'MEANBLAZE'], 'LINES_XPIX_SET'),
+                   (['RMSRATIO', 'NPIXLINE', 'CHI2'], 'LINES_STATS_SET')]
 
 
 # =============================================================================
@@ -142,10 +158,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     comparison_template_file = inst.template_file(template_dir, 'comparison')
     # blaze filename (None if not set)
     blaze_file = inst.blaze_file(calib_dir)
-    # science filenames
-    science_files = inst.science_files(science_dir)
-    # sort science files by date (speeds up computation)
-    science_files = inst.sort_science_files(science_files)
+    if science_files is None:
+        # science filenames
+        science_files = inst.science_files(science_dir)
+        # sort science files by date (speeds up computation)
+        science_files = inst.sort_science_files(science_files)
     # reftable filename (None if not set)
     reftable_file, reftable_exists = inst.ref_table_file(lbl_reftable_dir,
                                                          mask_file)
@@ -166,10 +183,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 5: Get the systemic velocity properties for template
     # -------------------------------------------------------------------------
     # get systemic velocity for the science template
-    sargs = [inst, science_template_file, mask_file]
+    sargs = [inst, science_template_file, mask_file, science_template_file]
     science_sys_vel_props = general.get_systemic_vel_props(*sargs)
     # get systemic velocity for the comparison template
-    cargs = [inst, comparison_template_file, mask_file]
+    cargs = [inst, comparison_template_file, mask_file,
+             science_template_file]
     comparison_sys_vel_props = general.get_systemic_vel_props(*cargs)
 
     # -------------------------------------------------------------------------

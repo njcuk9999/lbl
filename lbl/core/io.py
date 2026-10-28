@@ -51,6 +51,77 @@ FORBIDDEN_KEYS = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2',
 # =============================================================================
 # Define classes
 # =============================================================================
+class _FrozenConf:
+    def __init__(self, conf: Any):
+        """
+        Stand-in for an astropy configuration namespace: each setting is read
+        from the real one once, then kept
+
+        :param conf: the astropy configuration namespace
+        """
+        self._conf = conf
+
+    def __getattr__(self, name: str) -> Any:
+        value = getattr(self._conf, name)
+        setattr(self, name, value)
+        return value
+
+
+@contextlib.contextmanager
+def fast_fits_config():
+    """
+    astropy.io.fits cards read their configuration (e.g.
+    conf.strip_header_whitespace) at every access to a card value, at a few
+    microseconds each: with ~1000 cards per header this is a good part of
+    reading and writing LBL files. Within this context these settings are
+    read once and kept (same values, so the same behaviour).
+    """
+    from astropy.io.fits import card as fits_card
+    real_conf = fits_card.conf
+    fits_card.conf = _FrozenConf(real_conf)
+    try:
+        yield
+    finally:
+        fits_card.conf = real_conf
+
+
+def header_set(header: fits.Header, key: str, value: Any,
+               comment: Optional[str]):
+    """
+    Same as header[key] = (value, comment) on an astropy fits.Header, but a
+    new keyword is appended with end=True, which skips astropy's O(n) index
+    update on each insertion (O(n^2) for a whole header).
+
+    The resulting header is identical: astropy only inserts a new keyword
+    before the end when the header ends with blank or commentary cards, and
+    in that case (or for commentary / existing keywords, or wildcards) we
+    fall back to header[key] = (value, comment).
+
+    :param header: fits.Header, updated in place
+    :param key: str, the keyword
+    :param value: the value
+    :param comment: str or None, the comment
+    """
+    # pylint: disable=protected-access
+    # noinspection PyProtectedMember
+    commentary = fits.Card._commentary_keywords
+    lookup = key.strip().upper().removeprefix('HIERARCH ')
+    cards = header._cards
+    fallback = lookup in commentary or lookup in header._keyword_indices
+    fallback |= ('*' in key) or ('?' in key) or ('...' in key)
+    if len(cards) > 0 and not fallback:
+        fallback = cards[-1].is_blank or cards[-1].keyword in commentary
+    if fallback:
+        header[key] = (value, comment)
+        return
+    # same value/comment handling as fits.Header.__setitem__ with a 2-tuple
+    if value is None:
+        value = fits.card.UNDEFINED
+    if comment is None:
+        comment = ''
+    header.append((key, value, comment), end=True)
+
+
 class LBLHeader(UserDict):
     def __init__(self, *arg, **kw):
         """
@@ -560,6 +631,99 @@ def make_dir(path: str, directory: str, kind: str,
             raise LblException(emsg.format(*eargs))
 
 
+#: the subfolders of DATA_DIR/models, by what they hold. The others are
+#:   named by instrument and DATA_SOURCE: template_<INSTRUMENT>_<SOURCE>
+#:   (the vetted templates, lbl.core.vetted) and pca2d_<INSTRUMENT>_<SOURCE>
+#:   (the PCA2D observer bases one keeps, lbl.pca2d.basis)
+MODEL_SUBDIRS = dict(phoenix='stellar models (PHOENIX)',
+                     tellurics='the TAPAS model (tapas_lbl.fits)',
+                     resproj='RESPROJ tables (temperature gradients, PCA2D'
+                             ' star components)',
+                     masks='default masks',
+                     **{'default-blaze': 'the default blaze of each setup that'
+                                         ' needs one, blaze_<INSTRUMENT>_'
+                                         '<DATA_SOURCE>.fits (Instrument.'
+                                         'blaze_path)'})
+
+
+def model_subdir(kind: str, instrument: str, data_source: str) -> str:
+    """The subfolder of DATA_DIR/models of an instrument and DATA_SOURCE,
+    kind 'template' or 'pca2d': template_SPIROU_APERO, pca2d_NIRPS_HE_CADC"""
+    return '{0}_{1}_{2}'.format(kind, str(instrument or 'UNKNOWN').upper(),
+                                str(data_source or 'UNKNOWN').upper())
+
+
+def model_path(model_dir: str, subdir: str, filename: str) -> str:
+    """
+    A file of DATA_DIR/models, in its subfolder: model_dir/subdir/filename.
+    The subfolder is made if needed, and a file of that name still at the
+    top of models/ (where LBL kept them all before 2026-10-26) is moved
+    into it. An absolute filename is returned as it is.
+
+    :param model_dir: str, the models folder (MODEL_DIR)
+    :param subdir: str, a key of MODEL_SUBDIRS or a model_subdir() name
+    :param filename: str, the file's name
+
+    :return: str, the file's path (it may not exist)
+    """
+    if os.path.isabs(filename):
+        return filename
+    folder = os.path.join(model_dir, subdir)
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, filename)
+    legacy = os.path.join(model_dir, filename)
+    if not os.path.exists(path) and os.path.isfile(legacy):
+        try:
+            os.replace(legacy, path)
+            log.general('Moved {0} into models/{1}'.format(filename, subdir))
+        except OSError:
+            # another run moved it first
+            pass
+    return path
+
+
+#: what sort_models moves from the top of models/ into a subfolder, by the
+#:   start of the file's name (lower case)
+MODEL_PREFIXES = (('lte', 'phoenix'), ('wave_phoenix', 'phoenix'),
+                  ('tapas', 'tellurics'), ('temperature_gradient', 'resproj'),
+                  ('strpca', 'resproj'))
+
+
+def sort_models(model_dir: str, instrument: str, data_source: str) -> list:
+    """
+    Move the files at the top of models/ (where LBL kept them all before
+    2026-10-26) into their subfolders: the stellar models, TAPAS, the
+    RESPROJ tables, and this instrument's vetted depot files
+    (vetted_<object>_<instrument>.fits) into template_<INSTRUMENT>_<SOURCE>.
+    Anything else (a default mask, a file someone put there) is left, and
+    moved by model_path when LBL looks for it.
+
+    :param model_dir: str, the models folder (MODEL_DIR)
+    :param instrument: str, the run's INSTRUMENT
+    :param data_source: str, the run's DATA_SOURCE
+
+    :return: list of str, the files moved
+    """
+    vetted_suffix = '_{0}.fits'.format(str(instrument).lower())
+    moved = []
+    for name in sorted(os.listdir(model_dir)):
+        lower = name.lower()
+        if not os.path.isfile(os.path.join(model_dir, name)) or \
+                not lower.endswith('.fits'):
+            continue
+        subdir = None
+        for prefix, folder in MODEL_PREFIXES:
+            if lower.startswith(prefix):
+                subdir = folder
+                break
+        if lower.startswith('vetted_') and lower.endswith(vetted_suffix):
+            subdir = model_subdir('template', instrument, data_source)
+        if subdir is not None:
+            model_path(model_dir, subdir, name)
+            moved.append(name)
+    return moved
+
+
 def find_files(path_list: List[Path],
                prefix: Optional[str] = None,
                suffix: Optional[str] = None,
@@ -686,6 +850,37 @@ def load_fits(filename: str,
         eargs = [kind, filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
     return np.array(data)
+
+
+def load_fits_multi(filename: str, extnames: List[str],
+                    header_extname: str, kind: Union[str, None] = None
+                    ) -> Tuple[List[np.ndarray], fits.Header]:
+    """
+    Load several image extensions (by name) and one extension header from a
+    fits file, opening the file once. Same data and header as load_fits and
+    load_header (np.array copies of the data, a copy of the header).
+
+    :param filename: str, the filename
+    :param extnames: list of str, the extension names to load the data of
+    :param header_extname: str, the extension name to load the header of
+    :param kind: the kind (for error message)
+
+    :return: tuple, 1. list of data arrays (same order as extnames),
+             2. the header of header_extname
+    """
+    # deal with no kind
+    if kind is None:
+        kind = 'fits file'
+    # try to load fits file
+    try:
+        with fits.open(filename) as hdulist:
+            datas = [np.array(hdulist[extname].data) for extname in extnames]
+            header = hdulist[header_extname].header.copy()
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return datas, header
 
 
 def load_header(filename: str,
@@ -851,7 +1046,7 @@ def write_fits(filename: str, data: FitsData = None,
                 continue
             # add key
             with warnings.catch_warnings(record=True) as _:
-                hdu0.header[key] = (value, comment)
+                header_set(hdu0.header, key, value, comment)
     # add primary extension to hdu list
     hdus = [hdu0]
     # -------------------------------------------------------------------------
@@ -1060,6 +1255,37 @@ def load_table(filename: str, kind: Union[str, None] = None,
         return table
 
 
+def load_table_and_header(filename: str, header_extname: str,
+                          kind: Union[str, None] = None
+                          ) -> Tuple[Table, fits.Header]:
+    """
+    Load the first table of a fits file and the header of extension
+    header_extname, opening the file once. Same table as
+    load_table(filename) (Table.read opens the file with
+    character_as_bytes=True and memmap=False, then reads the first table
+    HDU) and same header as load_header(filename, extname=header_extname).
+
+    :param filename: str, the filename
+    :param header_extname: str, the extension name of the header to load
+    :param kind: str, the kind of file (for error messages)
+
+    :return: tuple, 1. the table (no masked columns), 2. the header (copy)
+    """
+    if kind is None:
+        kind = 'fits table'
+    try:
+        with warnings.catch_warnings(record=True) as _:
+            with fits.open(filename, character_as_bytes=True,
+                           memmap=False) as hdulist:
+                table = Table.read(hdulist, format='fits')
+                header = hdulist[header_extname].header.copy()
+    except Exception as e:
+        emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
+        eargs = [kind, filename, type(e), str(e)]
+        raise LblException(emsg.format(*eargs))
+    return no_mask_table(table), header
+
+
 def no_mask_table(table: Table) -> Table:
     """
     Deal with masked tables by converting them to normal tables.
@@ -1109,7 +1335,7 @@ def generate_checksum(filename: str, size: int = 16) -> Optional[str]:
         with open(filename, 'rb') as f:
             # read the file in chunks
             checksum = hashlib.md5()
-            for chunk in iter(lambda: f.read(4096), b""):
+            for chunk in iter(lambda: f.read(1 << 20), b""):
                 checksum.update(chunk)
             # return the checksum
             return checksum.hexdigest()[:size]

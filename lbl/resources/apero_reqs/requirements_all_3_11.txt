@@ -76,3 +76,4 @@ Astraeus @ git+https://github.com/kevin218/Astraeus.git
 # aperocore @ git+https://github.com/njcuk9999/apero-drs.git@v0.8.003#subdirectory=apero-core
 # lbl @ git+https://github.com/njcuk9999/lbl.git
 # sossisse @ git+https://github.com/njcuk9999/sossisse.git
+pypdf==6.19.0

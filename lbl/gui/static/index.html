@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LBL</title>
+  <!-- a spectral line and its Doppler-shifted copy, on the LBL badge's
+       gradient: the .ico for Safari's tabs (which take no SVG), the SVG
+       for the others, the 180 px PNG for a home screen; ?v= changed with
+       the icon, browsers keep an icon long -->
+  <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div id="backdrop" class="backdrop"></div>
+  <div class="backdrop-veil"></div>
+  <div class="bg-orb orb-a"></div>
+  <div class="bg-orb orb-b"></div>
+
+  <div class="site-banner">
+    <div class="site-banner-inner">
+      <div class="site-banner-text">
+        <h2><img class="banner-icon" src="/static/favicon.svg" alt=""><span class="mark">LBL</span><span data-t="banner_name"></span></h2>
+        <p data-t="tagline"></p>
+      </div>
+      <button id="theme" class="home-link pill-button" type="button"></button>
+      <button id="lang" class="home-link pill-button" type="button">FR</button>
+      <a href="https://eartigau.github.io/" class="home-link" target="_blank">&larr; <span data-t="home">Home</span></a>
+    </div>
+  </div>
+
+  <main class="layout">
+    <section class="card span-3" id="setup">
+      <div class="setup-grid setup-one">
+        <label class="field wide">
+          <span class="label"><span data-t="data_dir"></span><span class="info" data-help="data_dir"></span></span>
+          <span class="row">
+            <input id="data_dir" type="text" spellcheck="false" autocomplete="off">
+            <button id="scan" type="button" class="button primary" data-t="scan"></button>
+          </span>
+          <span class="hint small" id="scan_status" data-t="data_dir_hint"></span>
+        </label>
+      </div>
+    </section>
+
+    <nav class="span-3 tabs" id="tabs">
+      <button type="button" data-tab="targets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg><span data-t="tab_targets"></span></button>
+      <button type="button" data-tab="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h3l2.5-7 3.5 14 3-10 2 5h6"/></svg><span data-t="tab_lbl"></span></button>
+      <button type="button" data-tab="pca2d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span data-t="tab_pca2d"></span></button>
+      <button type="button" data-tab="run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5l12 7.5-12 7.5z"/></svg><span data-t="tab_run"></span></button>
+      <button type="button" data-tab="runs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg><span data-t="tab_runs"></span></button>
+      <button type="button" data-tab="cleanup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span data-t="tab_cleanup"></span></button>
+      <button type="button" data-tab="refs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5h6a2 2 0 0 1 2 2V20a1.5 1.5 0 0 0-1.5-1.5H4zM20 4.5h-6a2 2 0 0 0-2 2V20a1.5 1.5 0 0 1 1.5-1.5H20z"/></svg><span data-t="tab_refs"></span></button>
+    </nav>
+
+    <!-- TARGETS -->
+    <section class="pane span-3" id="pane-targets">
+      <div class="subtabs" id="target_subtabs">
+        <button type="button" data-sub="local" data-t="sub_local"></button>
+        <button type="button" data-sub="archive" data-t="sub_archive"></button>
+      </div>
+      <div id="sub-archive" class="stack" hidden>
+        <div class="card">
+          <div class="row spread">
+            <h2><span data-t="archive_title"></span><span class="info" data-help="archive"></span></h2>
+            <span class="hint small warn-text" id="archive_unavailable"></span>
+          </div>
+          <div class="archive-form">
+            <label class="field"><span class="label" data-t="archive_target"></span>
+              <input id="archive_target" type="text" spellcheck="false" autocomplete="off" placeholder="GJ 1, GJ 2"></label>
+            <div class="field"><span class="label" data-t="archive_instruments"></span><div id="archive_instruments" class="row gap wrap"></div></div>
+            <button type="button" class="button primary" id="archive_search" data-t="archive_search"></button>
+            <button type="button" class="button danger" id="archive_search_stop" data-t="archive_search_stop" hidden></button>
+          </div>
+          <p class="small" id="archive_star"></p>
+          <div id="archive_states" class="row gap wrap"></div>
+          <div class="table-wrap" id="archive_wrap" hidden><table class="data" id="archive_table"></table></div>
+          <div id="archive_bars" class="bars"></div>
+          <details class="archive-log" id="archive_log_box" open hidden>
+            <summary data-t="archive_log"></summary>
+            <div class="log-wrap">
+              <div id="archive_log" class="archive-log-lines"></div>
+              <div class="log-jumps">
+                <button type="button" class="log-jump" id="archive_log_top" data-t-title="archive_log_top">↑</button>
+                <button type="button" class="log-jump" id="archive_log_bottom" data-t-title="archive_log_bottom">↓</button>
+              </div>
+            </div>
+          </details>
+          <div class="row spread archive-foot">
+            <span class="hint" id="archive_progress"></span>
+            <span class="row gap">
+              <button type="button" class="button danger" id="archive_stop" data-t="stop" hidden></button>
+              <button type="button" class="launch small-launch" id="archive_fetch" disabled><span id="archive_fetch_label"></span></button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div id="sub-local" class="stack">
+      <div class="tiles" id="tiles"></div>
+      <div class="pane-grid">
+        <div class="card span-2">
+          <div class="row spread">
+            <h2 data-t="tab_targets"></h2>
+            <span class="row gap">
+              <span class="hint small" id="ticked"></span>
+              <button type="button" class="button" id="refresh_targets" data-t="refresh_targets"></button>
+              <button type="button" class="button" id="tick_all" data-t="all"></button>
+              <button type="button" class="button" id="tick_none" data-t="none"></button>
+            </span>
+          </div>
+          <div id="instrument_filters" class="row gap wrap small"></div>
+          <div id="target_errors"></div>
+          <div id="targets_message" class="message warning big" hidden></div>
+          <div class="table-wrap tall" id="targets_wrap">
+            <table class="data" id="targets_table"></table>
+          </div>
+          <p class="hint small warn-text" id="target_notes"></p>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <h2 data-t="plot_berv"></h2>
+            <div id="plot_berv" class="plot"></div>
+            <p class="hint small" data-t="plot_berv_hint"></p>
+          </div>
+          <div class="card">
+            <h2 data-t="plot_snr"></h2>
+            <div id="plot_snr" class="plot"></div>
+            <p class="hint small" data-t="plot_snr_hint"></p>
+          </div>
+          <div class="card" hidden>
+            <h2><span data-t="plot_vtot"></span><span class="info" data-help="vtot"></span></h2>
+            <div id="plot_vtot" class="plot"></div>
+            <p class="hint small" data-t="plot_vtot_hint"></p>
+          </div>
+          <div class="card">
+            <h2 data-t="plot_time"></h2>
+            <div id="plot_time" class="plot"></div>
+            <div class="row gap small">
+              <label class="field inline"><span data-t="min_rjd"></span><input id="min_rjd" type="number" step="1" class="mono"></label>
+              <label class="field inline"><span data-t="max_rjd"></span><input id="max_rjd" type="number" step="1" class="mono"></label>
+              <span class="info" data-help="bounds"></span>
+            </div>
+            <p class="hint small" data-t="plot_time_hint"></p>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- LBL SETTINGS -->
+    <section class="pane span-3" id="pane-lbl" hidden>
+      <div class="pane-grid">
+        <!-- the instrument, the data source and the Python that runs the
+             wraps: set from the ticked targets' files, changed here only
+             when the window guessed wrong -->
+        <div class="card span-3" id="lbl_setup">
+          <h2 data-t="lbl_setup"></h2>
+          <div class="setup-grid setup-lbl">
+            <label class="field">
+              <span class="label"><span data-t="instrument"></span><span class="info" data-help="instrument"></span></span>
+              <select id="instrument"></select>
+            </label>
+            <label class="field">
+              <span class="label"><span data-t="source"></span><span class="info" data-help="source"></span></span>
+              <select id="source"></select>
+            </label>
+            <label class="field wide">
+              <span class="label"><span data-t="python"></span><span class="info" data-help="python"></span></span>
+              <input id="python" type="text" spellcheck="false" autocomplete="off" class="mono small">
+            </label>
+          </div>
+          <div class="setup-status" id="lbl_setup_status"></div>
+          <p class="hint small" data-t="lbl_setup_hint"></p>
+        </div>
+        <div class="card span-2">
+          <div class="row spread">
+            <h2 data-t="per_target"></h2>
+            <span class="row gap">
+              <button type="button" class="button" id="simbad_teff" data-t="simbad_ask"></button>
+              <span class="row gap" id="vetted_bar" hidden>
+                <button type="button" class="button" id="best_all" data-t="best_match_all"></button>
+                <span class="info" data-help="vetted"></span>
+              </span>
+            </span>
+          </div>
+          <div class="table-wrap"><table class="data" id="per_target"></table></div>
+          <p class="hint small warn-text" id="vetted_notes"></p>
+          <p class="hint small" data-t="comparison_hint"></p>
+        </div>
+        <div class="card">
+          <h2 data-t="lbl_steps"></h2>
+          <label class="check master"><input type="checkbox" id="overwrite_all"> <span data-t="overwrite_all"></span><span class="info" data-help="overwrite_all"></span></label>
+          <div id="switches" class="switches"></div>
+          <label class="check"><input type="checkbox" id="resproj"> <span data-t="resproj"></span><span class="info" data-help="resproj"></span></label>
+          <div id="extra_box" class="extra" hidden>
+            <div class="group-title" data-t="extra_title"></div>
+            <pre id="extra" class="codeblock small"></pre>
+            <p class="hint small" data-t="extra_hint"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PCA2D SETTINGS -->
+    <section class="pane span-3" id="pane-pca2d" hidden>
+      <div class="card">
+        <div class="row spread">
+          <h2><span data-t="pca2d_on"></span><span class="info" data-help="pca2d_on"></span></h2>
+          <span class="row gap">
+            <label class="field inline"><span data-t="skip_pca2d"></span><span class="info" data-help="skip_pca2d"></span><select id="skip_pca2d"></select></label>
+            <label class="switch"><input type="checkbox" id="pca2d_on"><span class="hint small" data-t="pca2d_on_hint"></span></label>
+          </span>
+        </div>
+        <div id="options"></div>
+        <div id="pca2d_extra_box" hidden>
+          <div class="group-title" data-t="extra_title"></div>
+          <pre id="pca2d_extra" class="codeblock small"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUN -->
+    <section class="pane span-3" id="pane-run" hidden>
+      <div class="card launch-bar">
+        <label class="field inline"><span data-t="run_name"></span><span class="info" data-help="run_name"></span><input id="run_name" type="text" class="mono" spellcheck="false"></label>
+        <button type="button" class="button" id="name_auto" data-t="run_name_auto"></button>
+        <span class="grow"></span>
+        <button type="button" class="launch" id="queue">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5l12 7.5-12 7.5z" fill="currentColor"/></svg>
+          <span id="launch_label"></span>
+        </button>
+      </div>
+      <div class="pane-grid">
+        <div class="card span-2">
+          <div class="row spread">
+            <h2><span data-t="wrap"></span><span class="info" data-help="wrap"></span></h2>
+          </div>
+          <div id="messages"></div>
+          <div class="code-edit">
+            <pre class="code-hl" aria-hidden="true"><code id="wrap_hl"></code></pre>
+            <textarea id="wrap_text" class="code-input" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+          </div>
+          <p class="hint small" data-t="wrap_hint"></p>
+          <div class="row gap wrap">
+            <button type="button" class="button" id="check" data-t="check"></button>
+            <button type="button" class="button" id="save_wrap" data-t="save_wrap"></button>
+            <span class="hint small" id="save_status"></span>
+          </div>
+          <div class="load">
+            <div class="group-title"><span data-t="load_title"></span><span class="info" data-help="load"></span></div>
+            <div class="row gap">
+              <select id="wrap_list"></select>
+              <input id="wrap_path" type="text" class="mono small" spellcheck="false">
+              <button type="button" class="button" id="load_wrap" data-t="load"></button>
+            </div>
+            <p class="hint small" data-t="load_hint"></p>
+            <div id="load_messages"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2 data-t="queue_title"></h2>
+          <div id="queue_list"></div>
+        </div>
+        <div class="card span-3">
+          <div class="row spread">
+            <h2><span data-t="steps_title"></span><span class="info" data-help="steps"></span></h2>
+            <span class="hint small" id="steps_note"></span>
+          </div>
+          <div id="steps" class="steps"></div>
+        </div>
+        <div class="card span-3">
+          <div class="row spread">
+            <h2><span data-t="log"></span> <span class="mono small muted" id="log_title"></span></h2>
+            <span class="row gap">
+              <span class="badge" id="log_stage"></span>
+              <button type="button" class="button danger" id="stop" data-t="stop"></button>
+            </span>
+          </div>
+          <div class="status-line mono small" id="log_status"></div>
+          <div class="log-wrap">
+            <div id="log" class="log"></div>
+            <div class="log-jumps">
+              <button type="button" class="log-jump" id="log_top" data-t-title="log_top">↑</button>
+              <button type="button" class="log-jump" id="log_bottom" data-t-title="log_bottom">↓</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUNS -->
+    <section class="pane span-3" id="pane-runs" hidden>
+      <div class="card">
+        <div class="row spread"><h2 data-t="runs_window"></h2><button type="button" class="button" id="runs_refresh" data-t="refresh"></button></div>
+        <div class="table-wrap"><table class="data" id="runs_window"></table></div>
+      </div>
+      <div class="card">
+        <h2 data-t="runs_reports"></h2>
+        <div class="table-wrap"><table class="data" id="runs_reports"></table></div>
+      </div>
+    </section>
+
+    <!-- CLEANUP -->
+    <section class="pane span-3" id="pane-cleanup" hidden>
+      <div class="card">
+        <div class="row spread">
+          <h2 data-t="tab_cleanup"></h2>
+          <span class="row gap">
+            <span class="hint small" id="cleanup_status"></span>
+            <span class="small" id="cleanup_selected"></span>
+            <button type="button" class="button" id="measure" data-t="measure"></button>
+            <button type="button" class="button danger" id="delete" data-t="delete_selected"></button>
+          </span>
+        </div>
+        <div id="cleanup"></div>
+      </div>
+    </section>
+
+    <!-- REFERENCES: the method, and the papers that used our codes, each
+         as its title, its authors and its ADS page (static/references.json,
+         made by tools/lbl_references.py) -->
+    <section class="pane span-3" id="pane-refs" hidden>
+      <div class="card">
+        <h2 data-t="refs_method"></h2>
+        <div id="refs_method"></div>
+        <h2 id="refs_title" class="refs-used"></h2>
+        <p class="hint" id="refs_hint"></p>
+        <div id="refs_list"></div>
+      </div>
+      <div class="card">
+        <h2 data-t="refs_backdrop"></h2>
+        <p class="hint" data-t="refs_backdrop_hint"></p>
+        <ul class="refs-credits" id="refs_credits"></ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>lbl_gui <span id="version" class="mono"></span> &middot; LBL <span id="lbl_home" class="mono"></span> &middot;
+      <a href="https://eartigau.github.io/" target="_blank">More tools</a></p>
+  </footer>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card card">
+      <p id="modal_text"></p>
+      <div class="row gap end">
+        <button type="button" class="button" id="modal_no" data-t="no"></button>
+        <button type="button" class="button danger" id="modal_yes" data-t="yes"></button>
+      </div>
+    </div>
+  </div>
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

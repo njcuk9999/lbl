@@ -10,6 +10,9 @@ Created on 2021-03-19
 @author: cook
 """
 from typing import List
+import glob
+import os
+import re
 import sys
 
 from lbl.core import base
@@ -48,9 +51,13 @@ REMOVE_KEYS = [  # core
     'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
     # skip keys
     'SKIP_LBL_TELLUCLEAN', 'SKIP_LBL_TEMPLATE', 'SKIP_LBL_MASK',
-    'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE',
+    'SKIP_LBL_COMPUTE', 'SKIP_LBL_COMPILE', 'SKIP_LBL_PCA2D',
     # general keys already used
-    'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE']
+    'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE',
+    # the pca2d precleaning, lbl_pca2d's and no other recipe's
+    'PCA2D',
+    # le rapport de fin de run
+    'REPORT']
 
 # Define the default values
 DEFAULTS = dict()
@@ -61,10 +68,17 @@ DEFAULTS['RUN_LBL_TEMPLATE'] = False
 DEFAULTS['RUN_LBL_MASK'] = False
 DEFAULTS['RUN_LBL_COMPUTE'] = False
 DEFAULTS['RUN_LBL_COMPILE'] = False
+#: LE RAPPORT EST FAIT PAR DEFAUT. Il coute quelques secondes a la fin d'un
+#: run qui en a pris des minutes, et c'est lui qui dit si le run a marche.
+DEFAULTS['REPORT'] = True
 DEFAULTS['SKIP_LBL_TEMPLATE'] = False
 DEFAULTS['SKIP_LBL_MASK'] = False
 DEFAULTS['SKIP_LBL_COMPUTE'] = False
 DEFAULTS['SKIP_LBL_COMPILE'] = False
+#: NI VRAI NI FAUX PAR DEFAUT: la correction PCA2D n'est refaite que si les
+#: reglages, les fichiers d'entree ou nominal.yaml ont change. True garde
+#: celle sur disque meme alors, False la refait toujours (lbl_pca2d.correct)
+DEFAULTS['SKIP_LBL_PCA2D'] = None
 
 
 # =============================================================================
@@ -113,6 +127,10 @@ def main(runparams: dict):
     # -------------------------------------------------------------------------
     # mark the expected length if a list
     olen = len(object_sciences)
+    # the joint pca2d correction, once made: {object: (corrected, comparison)}
+    pca2d_joint = None
+    # the objects LBL has measured as delivered (PCA2D compare)
+    measured = set()
     # loop around all files
     for num in range(olen):
         # get the science target
@@ -182,6 +200,20 @@ def main(runparams: dict):
                                 blaze_corrected=blaze_corr,
                                 blaze_file=blaze_file,
                                 **keyword_args)
+            # the template made again, from the second pass's spectra: LBL's
+            #   template step below keeps a template already on disk (unless
+            #   OVERWRITE), so the first pass's would have stayed, and the
+            #   mask, the velocities and PCA2D would have measured the second
+            #   pass's spectra against it (GJ 1214, 2026-10-25)
+            lbl_template.main(instrument=instrument, data_dir=data_dir,
+                              data_source=data_source,
+                              data_type=data_type,
+                              object_science=object_science + '_tc',
+                              object_comparison=object_comparison,
+                              blaze_corrected=blaze_corr,
+                              blaze_file=blaze_file,
+                              overwrite=True,
+                              **keyword_args)
             # update object name
             if not object_science.endswith('_tc'):
                 object_science = object_science + '_tc'

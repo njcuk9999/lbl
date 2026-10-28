@@ -1,0 +1,73 @@
+# =============================================================================
+# personal_planet_catalog.yaml: YOUR Keplerian orbits, for LBL's PLANETS option
+# =============================================================================
+# With rparams['PLANETS'] = True, lbl_template looks the object up in the
+# catalogs, by its name and by every name under `names`. If it finds the star
+# with at least one complete orbit, it registers each spectrum with its BERV
+# plus the sum of the orbits' velocities at its time (composed
+# relativistically) and makes the template in one pass. Otherwise the
+# template iterates on the velocities as it always has. The velocities LBL
+# reports stay corrected for the BERV only; the orbits only set where the
+# template is built and where compute starts. The report says which orbits
+# were used.
+#
+# The catalogs, searched in this order; the first that knows the star gives
+# ALL its orbits, so a star entered here REPLACES its published orbits:
+#
+#   DATA_DIR/personal_planet_catalog.yaml        one data directory (optional)
+#   lbl/resources/planets/personal_planet_catalog.yaml   this file, every run
+#   lbl/resources/planets/known_planets.yaml     the published orbits
+#
+# HOW TO ENTER AN ORBIT
+# ---------------------
+# One entry per star under `stars:`, keyed by its APERO name (the
+# OBJECT_SCIENCE of the wrap: TOI6478, GJ3622, TYC_3980M1081M1...). Names are
+# matched ignoring case, spaces and punctuation: TOI-6478, toi 6478 and
+# TOI6478 are one name. 'LP 804-27' and APERO's 'LP_804M27' are not, which is
+# what `names` is for.
+#
+#   stars:
+#     <APERO name>:
+#       names: [<APERO name>, <other names of the star>]
+#       planets:
+#         - name: <the companion>
+#           period: <P, days>
+#           k: <semi-amplitude of the STAR, m/s>
+#           e: <eccentricity>                    # optional, 0 if not given
+#           omega: <argument of periastron of the STAR, degrees>
+#                                                # needed when e > 0
+#           tp: <time of periastron, BJD>        # either tp ...
+#           t0: <inferior conjunction, BJD>      # ... or t0, the transit:
+#                                                #   omega + nu = 90 deg there
+#           reference: <where the solution comes from>
+#
+# - Several companions: several items under `planets`; their velocities add.
+# - Times are full BJD: 2459475.87, not 59475.87.
+# - omega in DEGREES (a paper in radians: times 57.29578), and of the STAR, as
+#   radial-velocity fits give it: v = K [cos(nu + omega) + e cos(omega)],
+#   positive receding. An omega of the planet is the star's plus 180.
+# - A circular orbit needs no e and no omega, only period, k and tp or t0.
+# - Check with:
+#     python -c "from lbl.science import planets; print(planets.orbits_for(['TOI6478']))"
+# =============================================================================
+stars:
+
+  # THE EXAMPLE. Welopoai Aa (TYC 3980-1081-1), an M4 dwarf 8 pc away, and the
+  # white dwarf of its inner binary, Welopoai Ab. The radial-velocity
+  # Keplerian of Artigau et al. 2026, "Welopoai: a peculiar triple system 8 pc
+  # from the Sun", A&A (manuscript aa61214-26): P = 3590 (+12 -13) d,
+  # K = 8441.4 +- 4.7 m/s, e = 0.1898, omega = 5.6615 rad, inferior
+  # conjunction JD 2459475.87 +- 0.68 (omega_RV + nu = 90 deg).
+  TYC_3980M1081M1:
+    names: [TYC_3980M1081M1, Welopoai, Welopoai Aa, TYC 3980-1081-1,
+            TYC3980-1081-1,
+            IRAS 21500+5903, 2MASS J21513828+5917383,
+            Gaia DR2 2202703050388170880]
+    planets:
+      - name: Welopoai Ab
+        period: 3590.0
+        k: 8441.4
+        e: 0.1898
+        omega: 324.379
+        t0: 2459475.87
+        reference: Artigau et al. 2026, A&A, aa61214-26 (RV Keplerian)

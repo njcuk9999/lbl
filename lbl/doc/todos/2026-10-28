@@ -1,0 +1,12 @@
+Only download things relevant to the instrument being used
+
+Move functions out of 'doc' folder and move to a 'maintenance'
+
+Move pca2d assets into the generic assets
+
+have all comments in English, some Claude comments are in French
+
+get rid with a BARYCENTRIC frame in tellurics  ;        e2ds_dict['BERV_TRANS'] = inst.get_berv_transmission(sci_hdr)
+... grids should *always* be in the observer's restframe
+
+do *not* mention koloa anywhere in the documentation

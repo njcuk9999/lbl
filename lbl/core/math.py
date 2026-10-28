@@ -20,10 +20,12 @@ from scipy import optimize
 from scipy import signal
 from scipy.special import factorial
 from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
+from scipy.interpolate._fitpack_impl import splev as _fitpack_splev
 from scipy.special import erf
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import fastmath
 
 # try to import bottleneck module
 # noinspection PyBroadException
@@ -332,7 +334,7 @@ if not HAS_NUMBA:
 
 
 # Set "nopython" mode for best performance, equivalent to @nji
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
                    odd_ratio: float = 2e-4, nmax: int = 10,
                    conv_cut=1e-2) -> Tuple[float, float]:
@@ -458,6 +460,114 @@ class NanSpline:
         return np.repeat(np.nan, len(x))
 
 
+class KnotWindowSpline:
+    def __init__(self, spline: IUVSpline):
+        """
+        Wrap an InterpolatedUnivariateSpline so that spline(x) only hands
+        FITPACK the knots around the range of x.
+
+        FITPACK's splev looks for the knot interval of the first point with
+        a linear search from the start of the knot vector, which dominates
+        the cost for a spline with ~1e5-1e6 knots (e.g. a template) evaluated
+        on a short range. The value of a degree-k B-spline at x only depends
+        on the k+1 coefficients and 2k knots around its knot interval, so
+        evaluating on a window of knots (with margins) runs the same
+        arithmetic and gives the same values. Points outside the support of
+        the full spline, NaNs or derivatives use the full spline.
+
+        :param spline: the scipy InterpolatedUnivariateSpline to wrap
+        """
+        self.spline = spline
+        self.t, self.c, self.k = spline._eval_args
+        self.ext = spline.ext
+        self.nknots = len(self.t)
+        # support of the spline
+        self.tb = self.t[self.k]
+        self.te = self.t[self.nknots - self.k - 1]
+
+    def __call__(self, x: np.ndarray, nu: int = 0,
+                 ext: Optional[int] = None) -> np.ndarray:
+        x = np.asarray(x)
+        if nu != 0 or ext is not None or x.ndim != 1 or x.size == 0:
+            return self.spline(x, nu=nu, ext=ext)
+        xmin, xmax = np.min(x), np.max(x)
+        # NaNs: use the full spline
+        if not (np.isfinite(xmin) and np.isfinite(xmax)):
+            return self.spline(x)
+        t, k, nknots = self.t, self.k, self.nknots
+        # knot interval of the first and last point (FITPACK uses the
+        #   intervals k to nknots - k - 2, the last one up to te included)
+        l_min = np.searchsorted(t, xmin, side='right') - 1
+        l_max = np.searchsorted(t, xmax, side='right') - 1
+        l_min = min(max(l_min, k), nknots - k - 2)
+        l_max = min(max(l_max, k), nknots - k - 2)
+        # window of knots: k knots before, k + 1 after, plus a margin
+        #   (and the full ends if a point is at or beyond the support edges)
+        margin = 2
+        lo = l_min - k - margin
+        hi = l_max + k + 2 + margin
+        if xmin < self.tb or lo < 0:
+            lo = 0
+        if xmax >= self.te or hi > nknots:
+            hi = nknots
+        if lo == 0 and hi == nknots:
+            return self.spline(x)
+        tck = (t[lo:hi], self.c[lo:hi], k)
+        return _fitpack_splev(x, tck, der=0, ext=self.ext)
+
+
+class SplineGroup:
+    def __init__(self, splines: List[Any]):
+        """
+        Several splines evaluated at the same points in one go.
+
+        When all are scipy InterpolatedUnivariateSplines (or
+        KnotWindowSplines) with the same knots, degree and extrapolation mode
+        (e.g. splines of a template and of its derivatives, all fitted on the
+        same wavelength grid), the FITPACK evaluation is done by
+        fastmath.splev_group, which finds the knot interval and the B-spline
+        basis once per point and gives the same values as scipy. Otherwise
+        each spline is called.
+
+        :param splines: list of splines (callables)
+        """
+        self.splines = list(splines)
+        self.fast = False
+        bases = [sp.spline if isinstance(sp, KnotWindowSpline) else sp
+                 for sp in self.splines]
+        if all(isinstance(sp, IUVSpline) for sp in bases):
+            t0, _, k0 = bases[0]._eval_args
+            ext0 = bases[0].ext
+            same = all(np.array_equal(sp._eval_args[0], t0) and
+                       sp._eval_args[2] == k0 and sp.ext == ext0
+                       for sp in bases)
+            # ext=2 (raise outside) is left to scipy
+            if same and ext0 in (0, 1, 3) and len(t0) >= 2 * k0 + 2:
+                self.fast = True
+                self.t = np.ascontiguousarray(t0, dtype=np.float64)
+                self.k = int(k0)
+                self.ext = int(ext0)
+                self.cs = np.ascontiguousarray(
+                    [sp._eval_args[1] for sp in bases], dtype=np.float64)
+
+    def __call__(self, x: np.ndarray, nspl: Optional[int] = None
+                 ) -> List[np.ndarray]:
+        """
+        Evaluate the first nspl splines (all by default) at x
+
+        :return: list of arrays, one per spline
+        """
+        if nspl is None:
+            nspl = len(self.splines)
+        x = np.asarray(x)
+        if not self.fast or x.ndim != 1 or x.size == 0:
+            return [self.splines[it](x) for it in range(nspl)]
+        out = fastmath.splev_group(self.t, self.cs[:nspl], self.k,
+                                   np.ascontiguousarray(x, dtype=np.float64),
+                                   self.ext)
+        return list(out)
+
+
 def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
                ) -> Union[IUVSpline, NanSpline]:
     """
@@ -502,6 +612,12 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
             # raise exception if len(x) is bad
             emsg = ('IUV Spline sum(valid) < 5')
             return NanSpline(emsg)
+    # if y has no NaN/inf the fill below does not happen and the returned
+    #   spline is IUVSpline(x[valid], y[valid]): build it directly (the base
+    #   spline would not be used)
+    y_finite = np.isfinite(y)
+    if y_finite.all():
+        return IUVSpline(x[valid], y[valid], **kwargs)
     # restrict to valid data only
     x_valid, y_valid = x[valid], y[valid]
     # ensure x is strictly increasing (required by spline)
@@ -510,9 +626,9 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     # build base spline on valid data
     base_spline = IUVSpline(x_valid, y_valid, **kwargs)
     # if y had NaNs, fill them by interpolation
-    if np.any(~np.isfinite(y)):
+    if np.any(~y_finite):
         y_filled = y.copy()
-        nan_y = ~np.isfinite(y)
+        nan_y = ~y_finite
         y_filled[nan_y] = base_spline(x[nan_y])
     else:
         y_filled = y
@@ -520,6 +636,54 @@ def iuv_spline(x: np.ndarray, y: np.ndarray, **kwargs
     valid2 = np.isfinite(x) & np.isfinite(y_filled)
     # return spline
     return IUVSpline(x[valid2], y_filled[valid2], **kwargs)
+
+
+def iuv_spline_eval(x: np.ndarray, y: np.ndarray, xnew: np.ndarray,
+                    **kwargs) -> np.ndarray:
+    """
+    iuv_spline(x, y, **kwargs)(xnew), with the numba FITPACK kernels
+    (fastmath.fpcurf_interp and fastmath.splev_group, same values) in the
+    usual case: finite y, strictly increasing finite x, integer ext 0, 1 or
+    3. Anything else goes through iuv_spline.
+
+    :param x: the x values of the spline
+    :param y: the y values of the spline
+    :param xnew: the points to evaluate the spline at (1D)
+    :param kwargs: k and ext, as for iuv_spline
+
+    :return: np.ndarray, the spline values at xnew
+    """
+    k = kwargs.get('k', 3)
+    ext = kwargs.get('ext', 0)
+    fast = set(kwargs.keys()) <= {'k', 'ext'}
+    fast &= isinstance(k, (int, np.integer)) and 1 <= int(k) <= 5
+    fast &= (isinstance(ext, (int, np.integer)) and
+             not isinstance(ext, bool) and int(ext) in (0, 1, 3))
+    if fast:
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+        xnew = np.asarray(xnew, float)
+        fast = x.ndim == 1 and x.shape == y.shape and xnew.ndim == 1
+    if fast:
+        valid = np.isfinite(x) & np.isfinite(y)
+        n_valid = int(np.count_nonzero(valid))
+        # iuv_spline returns a NaN spline for too few points (if k is given)
+        if 'k' in kwargs and (n_valid < int(k) + 1 or n_valid < 5):
+            fast = False
+        # iuv_spline fills NaN y values first
+        elif not np.all(np.isfinite(y)):
+            fast = False
+    if fast:
+        x_valid = x[valid]
+        y_valid = y[valid]
+        fast = (x_valid.size > int(k) and xnew.size > 0 and
+                bool(np.all(np.diff(x_valid) > 0)))
+    if not fast:
+        return iuv_spline(x, y, **kwargs)(xnew)
+    t, c = fastmath.fpcurf_interp(np.ascontiguousarray(x_valid),
+                                  np.ascontiguousarray(y_valid), int(k))
+    return fastmath.splev_group(t, c.reshape(1, -1), int(k),
+                                np.ascontiguousarray(xnew), int(ext))[0]
 
 
 def lowpassfilter(input_vect: np.ndarray, width: int = 101,
@@ -549,6 +713,12 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
 
     :return:
     """
+    # fast path (numba, same arithmetic) for float64 vectors and integer
+    #   widths
+    if _lowpass_fast_ok(input_vect, width):
+        xmed, ymed = fastmath.lowpass_windows(
+            np.ascontiguousarray(input_vect, dtype=np.float64), int(width))
+        return _lowpass_spline(input_vect, xmed, ymed, k)
     # indices along input vector
     index = np.arange(len(input_vect))
     # placeholders for x and y position along vector
@@ -582,6 +752,29 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
     # convert to arrays
     xmed = np.array(xmed, dtype=float)
     ymed = np.array(ymed, dtype=float)
+    return _lowpass_spline(input_vect, xmed, ymed, k)
+
+
+def _lowpass_fast_ok(input_vect: np.ndarray, width: Any) -> bool:
+    """
+    Whether lowpassfilter can use the numba window loop: a 1D float64 vector
+    (any byte order) and an integer width with a non-zero step
+    """
+    if not isinstance(input_vect, np.ndarray) or input_vect.ndim != 1:
+        return False
+    if input_vect.dtype.kind != 'f' or input_vect.dtype.itemsize != 8:
+        return False
+    if isinstance(width, bool) or not isinstance(width, (int, np.integer)):
+        return False
+    return int(width) // 4 > 0
+
+
+def _lowpass_spline(input_vect: np.ndarray, xmed: np.ndarray,
+                    ymed: np.ndarray, k: int) -> np.ndarray:
+    """
+    End of lowpassfilter: spline the box medians (ymed) at the box positions
+    (xmed) onto every pixel of input_vect
+    """
     # we need at least 3 valid points to return a
     # low-passed vector.
     if len(xmed) < 3:
@@ -595,8 +788,8 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
         xmed = xmed2
         ymed = ymed2
     # splining the vector
-    spline = iuv_spline(xmed, ymed, k=k, ext=3)
-    lowpass = spline(np.arange(len(input_vect)))
+    lowpass = iuv_spline_eval(xmed, ymed, np.arange(len(input_vect)), k=k,
+                              ext=3)
     # return the low pass filtered input vector
     return lowpass
 
@@ -616,6 +809,22 @@ def doppler_shift(wavegrid: np.ndarray, velocity: float) -> np.ndarray:
     part2 = 1 + (velocity / speed_of_light_ms)
     # return updated wave grid
     return wavegrid * np.sqrt(part1 / part2)
+
+
+def add_velocities(velocity1: Union[float, np.ndarray],
+                   velocity2: Union[float, np.ndarray]
+                   ) -> Union[float, np.ndarray]:
+    """
+    Relativistic sum of two velocities along the line of sight: the velocity
+    whose Doppler shift is the product of theirs, (v1 + v2) / (1 + v1 v2 / c2)
+
+    :param velocity1: float or np.ndarray, velocity in m/s
+    :param velocity2: float or np.ndarray, velocity in m/s
+
+    :return: float or np.ndarray, the combined velocity in m/s
+    """
+    return ((velocity1 + velocity2)
+            / (1 + velocity1 * velocity2 / speed_of_light_ms ** 2))
 
 
 def gauss_function(x: Union[float, np.ndarray], a: float, x0: float,

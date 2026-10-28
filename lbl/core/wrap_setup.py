@@ -374,16 +374,6 @@ def generic_instrument(wrap_dict: Dict[str, Any]) -> Dict[str, Any]:
     # Type: BOOL
     rparams['TELLUCLEAN_FORCE_AIRMASS'] = None
 
-    # Define the CCF scan range in km/s
-    # Example: 150
-    # Type: FLOAT
-    rparams['TELLUCLEAN_CCF_SCAN_RANGE'] = None
-
-    # Define the maximum number of iterations for the tellu-cleaning loop
-    # Example: 20
-    # Type: INT
-    rparams['TELLUCLEAN_MAX_ITERATIONS'] = None
-
     # Define the kernel width in pixels
     # Example: 1.4
     # Type: FLOAT
@@ -410,46 +400,6 @@ def generic_instrument(wrap_dict: Dict[str, Any]) -> Dict[str, Any]:
     # Type: FLOAT
     rparams['TELLUCLEAN_TRANSMISSION_THRESHOLD'] = None
 
-    # Define the sigma cut threshold above which pixels are removed from fit
-    # Example: 10
-    # Type: FLOAT
-    rparams['TELLUCLEAN_SIGMA_THRESHOLD'] = None
-
-    # Define whether to recenter the CCF on the first iteration
-    # Example: False
-    # Type: BOOL
-    rparams['TELLUCLEAN_RECENTER_CCF'] = None
-
-    # Define whether to recenter the CCF of others on the first iteration
-    # Example: False
-    # Type: BOOL
-    rparams['TELLUCLEAN_RECENTER_CCF_FIT_OTHERS'] = None
-
-    # Define the default water absorption to use
-    # Example: 5.0
-    # Type: FLOAT
-    rparams['TELLUCLEAN_DEFAULT_WATER_ABSO'] = None
-
-    # Define the lower limit on valid exponent of water absorbers
-    # Example: 0.05
-    # Type: FLOAT
-    rparams['TELLUCLEAN_WATER_BOUNDS_LOWER'] = None
-
-    # Define the upper limit on valid exponent of water absorbers
-    # Example: 15
-    # Type: FLOAT
-    rparams['TELLUCLEAN_WATER_BOUNDS_UPPER'] = None
-
-    # Define the lower limit on valid exponent of other absorbers
-    # Example: 0.05
-    # Type: FLOAT
-    rparams['TELLUCLEAN_OTHERS_BOUNDS_LOWER'] = None
-    
-    # Define the upper limit on valid exponent of other absorbers
-    # Example: 15
-    # Type: FLOAT
-    rparams['TELLUCLEAN_OTHERS_BOUNDS_UPPER'] = None
-    
     # ---------------------------------------------------------------------
     # Parameters for the template construction
     # ---------------------------------------------------------------------
