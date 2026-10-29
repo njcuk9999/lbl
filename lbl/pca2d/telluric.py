@@ -39,11 +39,12 @@ from __future__ import annotations
 import os
 
 import numpy as np
+from astropy import constants
 
 from .grids import doppler
 from .logger import log
 
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 
 
 def _cache_path(config, key):

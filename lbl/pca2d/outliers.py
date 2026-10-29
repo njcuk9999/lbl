@@ -77,11 +77,12 @@ import os
 import warnings
 
 import numpy as np
+from astropy import constants
 
 from .grids import pixel_shift
 
 #: the light speed the resolution element is measured with, km/s
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 
 
 def expected_chi2(nsig):

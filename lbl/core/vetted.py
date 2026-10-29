@@ -21,6 +21,7 @@ import os
 from typing import Dict, List, Optional
 
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 from astropy.table import Table
 
@@ -45,7 +46,7 @@ LIST_FILE = os.path.join(os.path.dirname(os.path.dirname(
 #: the Teff range a vetted template is offered as a best match for [K]
 TEFF_RANGE = (2900.0, 4300.0)
 #: speed of light [m/s]
-SPEED_OF_LIGHT = 299792458.0
+SPEED_OF_LIGHT = constants.c.value
 
 _LIST = None
 

@@ -7,11 +7,12 @@ import glob
 import json
 import os
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 from scipy.ndimage import median_filter
 from scipy.optimize import curve_fit
 
-C = 299792.458
+C = constants.c.to("km/s").value
 
 
 def width(path):

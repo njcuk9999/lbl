@@ -13,12 +13,13 @@ Created on 2026-10-23
 import os
 
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 
 from lbl.core import math as mp
 from lbl.instruments import espadons as es
 
-C_KMS = 299792.458
+C_KMS = constants.c.to('km/s').value
 HELIO = 25.0
 
 

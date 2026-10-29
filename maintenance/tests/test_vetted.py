@@ -13,6 +13,7 @@ import os
 import shutil
 
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 from astropy.table import Table
 
@@ -20,7 +21,7 @@ from lbl.core import base_classes
 from lbl.core import vetted
 from lbl.instruments import select
 
-C_MS = 299792458.0
+C_MS = constants.c.value
 
 
 def _inst(data_dir, instrument='SPIROU', source='CADC'):

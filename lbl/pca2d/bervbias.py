@@ -71,6 +71,7 @@ pipeline's environment, and four parameters do not need it.
 from __future__ import annotations
 
 import numpy as np
+from astropy import constants
 
 #: the FWHM's prior: Gaussian, (mean, standard deviation), within bounds
 FWHM_PRIOR = (5.0, 1.5)
@@ -91,7 +92,7 @@ MIN_NEAR = 12
 #: it would describe the prior; an upper limit on the peak is what is said
 DETECTED = 3.0
 UNITS = ("(m/s)/(km/s)", "km/s", "m/s", "m/s")
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 #: |V_tot| below which the star's lines sit on the telluric lines, within
 #: about one resolution element: the exposures the report lists by date
 CLOSE_KMS = 4.0

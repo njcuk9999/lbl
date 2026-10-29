@@ -12,11 +12,14 @@ Created on 2026-10-23
 import os
 
 import numpy as np
+from astropy import constants
 from astropy.table import Table
 
 from lbl.pca2d.grids import pixel_shift
 from lbl.pca2d import outliers
 from lbl.pca2d.outliers import residual_outliers
+
+C_KMS = constants.c.to("km/s").value
 
 
 def _cube(tmp_path, n_files=12, m=4000, dv=0.5, seed=3):
@@ -26,7 +29,7 @@ def _cube(tmp_path, n_files=12, m=4000, dv=0.5, seed=3):
     rng = np.random.default_rng(seed)
     n = 2 * n_files
     berv = np.repeat(np.linspace(-20.0, 20.0, n_files), 2)
-    grid = 1500.0 * np.exp(np.arange(m) * dv / 299792.458)
+    grid = 1500.0 * np.exp(np.arange(m) * dv / C_KMS)
     data = rng.normal(0.0, 0.01, (n, m)).astype(np.float32)
     shift = np.rint(-pixel_shift(berv, dv)).astype(int)
     for r in range(n):

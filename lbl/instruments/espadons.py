@@ -72,6 +72,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+from astropy import constants
 from astropy import units as uu
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.io import fits
@@ -97,7 +98,7 @@ Instrument = default.Instrument
 LblException = base_classes.LblException
 log = io.log
 #: the speed of light in km/s
-C_KMS = 299792.458
+C_KMS = constants.c.to('km/s').value
 #: the diffraction orders, bluest first, and m * lambda at an order's centre
 #:    [nm] (61 at 371.5 nm to 22 at 1030 nm, the SNR comments of the files)
 ORDERS = np.arange(61, 21, -1)

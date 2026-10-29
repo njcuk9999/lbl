@@ -3,10 +3,11 @@ gone, 2026-10-27): its cost is the scatter of the corrected spectrum's
 gradient IN UNITS OF ITS NOISE, which follows the division by the
 transmission. A synthetic atmosphere of known exponents, no TAPAS file."""
 import numpy as np
+from astropy import constants
 
 from lbl.science import tellu_derivative as td
 
-C = 299792.458
+C = constants.c.to("km/s").value
 
 
 def _atmosphere(seed=2):

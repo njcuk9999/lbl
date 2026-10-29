@@ -44,8 +44,9 @@ WHAT IS FREE, for the optical (instruction of 2026-10-15):
                     barycentric grid as LBL does (docs/tapas_frame.md).
 """
 import numpy as np
+from astropy import constants
 
-C = 299792.458
+C = constants.c.to("km/s").value
 FWHM2SIG = 2.3548
 #: the smooth weights of telluric_fit.tellu_tools.get_transmission_weights
 WEIGHTS = dict(depth_max=0.6, depth_saturated=0.5, reject_saturated=0.8,

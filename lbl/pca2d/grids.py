@@ -19,10 +19,11 @@ pipeline rather than of any particular input file:
 from __future__ import annotations
 
 import numpy as np
+from astropy import constants
 
 from .logger import log
 
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 
 # MKO half-power points, in nm. K is included on purpose even though NIRPS
 # stops at 1.95 um: the same configuration has to serve an instrument that

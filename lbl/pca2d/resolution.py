@@ -12,8 +12,9 @@ detector structure, which is real at the pixel.
 """
 
 import numpy as np
+from astropy import constants
 
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 
 
 def fwhm_samples(resolution, dv, fraction=1.0):

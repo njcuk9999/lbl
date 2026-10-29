@@ -21,6 +21,8 @@ import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from astropy import constants
+
 from . import __version__, cleanup, history, i18n, lblinfo, runner
 from . import archives, simbad, targets
 from . import wrapgen, wrapload
@@ -173,10 +175,13 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/strings":
                 return self._json(i18n.strings(query.get("lang", "en")))
             if route == "/api/state":
+                # c for the page's relativistic sums, astropy's: the page
+                #   has no constant of its own
                 return self._json(dict(state=ctx.state,
                                        python=sys.executable,
                                        version=__version__,
-                                       lbl=lblinfo.lbl_home()))
+                                       lbl=lblinfo.lbl_home(),
+                                       c_kms=constants.c.to("km/s").value))
             if route == "/api/instruments":
                 return self._json(lblinfo.instruments())
             if route == "/api/options":

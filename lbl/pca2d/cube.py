@@ -19,6 +19,7 @@ import shutil
 import warnings
 
 import numpy as np
+from astropy import constants
 from astropy.table import Table
 
 from . import grids
@@ -90,7 +91,7 @@ def same_object(meta: dict, wanted) -> bool:
     return any(object_key(meta.get(name)) in keys
                for name in ("object", "drsobjn") if meta.get(name))
 
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 
 # Storage dtype of the cube, and not a knob. float64 doubles four arrays of
 # (rows x samples) for nothing the fit can use: the data are photon counts

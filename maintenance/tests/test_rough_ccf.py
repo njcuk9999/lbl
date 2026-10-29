@@ -8,10 +8,11 @@ times larger."""
 from types import SimpleNamespace
 
 import numpy as np
+from astropy import constants
 
 from lbl.science import general
 
-C = 299792458.0
+C = constants.c.value
 
 
 def _inst():

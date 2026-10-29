@@ -9,17 +9,20 @@ import os
 
 import numpy as np
 import pytest
+from astropy import constants
 from astropy.io import fits
 from astropy.table import Table
 
 from lbl.pca2d import basis
+
+C_KMS = constants.c.to('km/s').value
 
 
 def _fake_run(folder, n_rows=6, n_pix=50, n_earth=3):
     """A fit folder with what basis.save reads: two stars, two parity rows
     per exposure"""
     rng = np.random.default_rng(0)
-    grid = 965.0 * np.exp(np.arange(n_pix) * 0.5 / 299792.458)
+    grid = 965.0 * np.exp(np.arange(n_pix) * 0.5 / C_KMS)
     q = np.linalg.qr(rng.normal(size=(n_pix, n_earth)))[0].T
     files = np.repeat(['f%d.fits' % i for i in range(n_rows // 2)], 2)
     np.savez_compressed(

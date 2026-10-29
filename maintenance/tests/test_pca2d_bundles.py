@@ -13,6 +13,7 @@ import os
 
 import numpy as np
 import pytest
+from astropy import constants
 from astropy.table import Table
 
 from lbl.pca2d import cube as spcube
@@ -213,7 +214,7 @@ def test_the_berv_line_runs_where_the_observer_frame_goes():
     (the barycentric correction adds it), relativistically: the line of the
     river plots, checked against WASP-76's telluric residuals."""
     from lbl.pca2d.figures.sequence import berv_track
-    c = 299792.458
+    c = constants.c.to("km/s").value
     berv = np.array([-10.0, 0.0, 10.0])
     track = berv_track(1000.0, berv)
     assert track[1] == pytest.approx(1000.0)

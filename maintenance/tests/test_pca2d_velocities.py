@@ -10,13 +10,14 @@ Created on 2026-10-24
 @author: artigau
 """
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 from astropy.table import Table
 
 from lbl.pca2d import nights, readers
 from lbl.recipes import lbl_pca2d
 
-C_KMS = 299792.458
+C_KMS = constants.c.to('km/s').value
 
 
 def test_the_star_frame_takes_each_file_its_velocity():

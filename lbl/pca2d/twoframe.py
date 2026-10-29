@@ -34,12 +34,13 @@ from .progress import set_label as _set_label
 from .grids import pixel_shift, shift_velocity
 from .nights import row_unit
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 from astropy.table import Table
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy.fft import irfft, next_fast_len, rfft
 
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 PARITY_NAMES = ("even", "odd")
 EDGE = 64          # samples zeroed at each end; the FFT wraps, the shifts are <=43
 
@@ -2265,7 +2266,7 @@ def _hierarchical_median(home, berv, bin_kms, min_entries, desc=None):
     return out
 
 #: the speed of light [m/s]
-C_MS = 299792458.0
+C_MS = constants.c.value
 
 
 def _live_segments(live):

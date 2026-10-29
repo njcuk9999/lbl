@@ -73,6 +73,7 @@ import shutil
 import sys
 
 import numpy as np
+from astropy import constants
 import yaml
 
 from lbl.core import base_classes
@@ -268,7 +269,7 @@ def star_template(data_dir: str, name: str, comparison: str,
     from astropy.io import fits as _fits
     v_template = float(_fits.getheader(masks[0])['SYSTVELO'])
     v_object = float(np.nanmedian(series.read_rdb(rdb)['vrad']))
-    c_ms = 299792458.0
+    c_ms = constants.c.value
     velocity = (v_object - v_template) / (1 - v_object * v_template
                                           / c_ms ** 2)
     return dict(file=template, velocity=float(velocity),
