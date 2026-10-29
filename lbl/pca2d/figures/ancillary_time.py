@@ -8,7 +8,7 @@ plotting.ancillary_table), time aside. Each exposure, or night in a stacked
 cube, is one point, marked by what the fit did with it: used it, rejected its
 coefficients, or never saw it because its band SNR was below the cut.
 
-    python ancillary_time.py --cube CUBE --fit FIT.npz --out PAGE.pdf
+    python -m lbl.pca2d.figures.ancillary_time --cube CUBE --fit FIT.npz --out PAGE.pdf
 """
 from __future__ import annotations
 
@@ -38,8 +38,8 @@ STYLE = {
                        label="not fitted: band SNR below the cut"),
 }
 #: with several objects in one cube the colour says WHICH STAR and the marker
-#: says what the fit did with the exposure: a joint run's page held three
-#: campaigns of airmass and seeing with nothing to tell them apart.
+#: says what the fit did with the exposure: otherwise a joint run's page would
+#: hold several campaigns of airmass and seeing with nothing to tell them apart.
 MARKER = {"fitted": dict(marker="o", ms=3, ls="none"),
           "rejected": dict(marker="x", ms=5, ls="none"),
           "not fitted": dict(marker="o", ms=3, ls="none", mfc="none")}
@@ -69,7 +69,7 @@ def exposure_table(meta, fit):
 
     The labels are the correlation matrix's, in its order, without `time`.
     Values come from the cube's metadata; a quantity only the fit has (the
-    water column, read from the t.fits headers) comes from the fit, NaN for
+    water column, read from the spectra's headers) comes from the fit, NaN for
     an exposure it did not fit. status is "fitted", "rejected" (the
     coefficient cut) or "not fitted" (dropped before the fit, band SNR below
     the cut).
@@ -114,8 +114,8 @@ def draw(rjd, values, status, title="", unit="exposures", objects=None):
     """One portrait page per PER_PAGE quantities, time on a shared axis.
 
     One colour per object when the cube holds several, the marker keeping what
-    the fit did with the exposure. A joint run drew three campaigns' airmass,
-    seeing and water on one axis with nothing to tell the stars apart.
+    the fit did with the exposure, so that the campaigns of a joint run, drawn
+    on one axis, can be told apart.
     """
     labels = list(values)
     counts = ", ".join("%d %s" % ((status == s).sum(), s) for s in STYLE

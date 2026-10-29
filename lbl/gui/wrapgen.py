@@ -47,8 +47,8 @@ NO_TELLUCLEAN = ("NIRPS", "SPIROU")
 
 
 #: the headers' names of an instrument that LBL spells otherwise: the TNG
-#:    writes HARPN for HARPS-N (2026-10-27: ADLeo_HARPSN_ESO was refused as
-#:    HARPN spectra run as HARPSN)
+#:    writes HARPN for HARPS-N, which without this would be taken for
+#:    another instrument than LBL's HARPSN and refused
 FAMILY_ALIASES = {"HARPN": "HARPSN"}
 
 
@@ -90,10 +90,10 @@ def build(state: dict) -> dict:
     elif instrument and str(source) not in sources:
         errors.append(say("err_no_source", instrument, source,
                           ", ".join(sources)))
-    # THE SPECTRA ARE THE INSTRUMENT'S: SPIRou files run as NIRPS_HE made a
-    #   NIRPS template of SPIRou spectra and stopped on the first lblrv file
-    #   (2026-10-23). The headers' instrument against the one chosen, by
-    #   family (NIRPS for NIRPS_HE and NIRPS_HA)
+    # THE SPECTRA ARE THE INSTRUMENT'S: spectra of one instrument run as
+    #   another make a template of the wrong instrument, and LBL stops on
+    #   the first lblrv file. The headers' instrument is checked against
+    #   the one chosen, by family (NIRPS for NIRPS_HE and NIRPS_HA)
     for target, header in (state.get("instruments") or {}).items():
         if target in targets and instrument and _family(header) \
                 and _family(header) != _family(instrument):
@@ -156,8 +156,9 @@ def build(state: dict) -> dict:
             errors.append(say("err_archive_source", target, origin["lbl"],
                               origin["source"]))
     # THE OTHERS: the data source their files' layout says
-    #   (targets.layout_source). The CADC's t.fits run as APERO stopped LBL
-    #   on the first one, WAVEORDN not in the header it reads (2026-10-24)
+    #   (targets.layout_source). Files read with another source's reader
+    #   stop LBL on the first one (the CADC's t.fits read as APERO's: no
+    #   WAVEORDN in the header that reader looks in)
     from .targets import layout_of
     for target, origin in zip(targets, origins):
         if origin:
@@ -173,8 +174,8 @@ def build(state: dict) -> dict:
             rparams.setdefault(key, value)
     # LOCAL FOLDERS, where LBL's default says nothing of the files ('*.fits'
     #   for HARPS): the end their spectra's names share, as LBL's own HARPS
-    #   wraps write it. Without it PCA2D took its HARPS default, the ESO
-    #   archive's *_S2D_A.fits, and found no e2ds (GJ 1214, 2026-10-25)
+    #   wraps write it. Without it PCA2D takes its HARPS default, the ESO
+    #   archive's *_S2D_A.fits, and finds none of a folder of e2ds
     default = (sources.get(str(source)) or {}).get("input_file")
     if not found and "INPUT_FILE" not in rparams \
             and default in (None, "", "*", "*.fits"):
@@ -214,8 +215,8 @@ def build(state: dict) -> dict:
         for key, row in options.items():
             if key not in chosen:
                 # n_star and n_earth are always written, their defaults when
-                #   the window left them: the fit's folder is named after
-                #   them (a fresh window named its run s<None>-o<None>)
+                #   the window left them: the fit's folder and the run are
+                #   named after them (s<None>-o<None> otherwise)
                 if key in ALWAYS and row["default"] is not None:
                     pca2d[key] = row["default"]
                 continue
@@ -382,9 +383,9 @@ def window_text(posted: str, rparams: dict, name: str = "",
                 python: str = "") -> str:
     """The wrap to write, run or saved: the window's own, commented and
     current, when the text the page posts reads back to these very run
-    parameters (the page can hold a wrap written before the comments were:
-    a run saved without them on 2026-10-24); the posted text as it is when
-    it was edited by hand."""
+    parameters (the page can hold the same wrap without its comments, or
+    with comments that are out of date); the posted text as it is when it
+    was edited by hand."""
     import json
     from .wrapload import read_text
     fresh = render(rparams, name, python)
@@ -406,7 +407,9 @@ def render(rparams: dict, name: str = "", python: str = "") -> str:
     lines = [
         "#!%s" % python,
         "# -*- coding: utf-8 -*-",
-        '"""',
+        # raw: the interpreter's path below is a Windows one there, whose
+        #   backslashes (C:\Users) would otherwise be escapes
+        'r"""',
         "%s: LBL%s on %s (%s, %s), written by the LBL window (lbl_gui)"
         " on %s."
         % (name or "run", " with the PCA2D precleaning"

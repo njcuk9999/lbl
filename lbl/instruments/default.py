@@ -17,6 +17,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import EarthLocation
 
+from lbl.core import astro
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
@@ -566,11 +567,10 @@ class Instrument:
             frac_valid[ordernum] = n_valid / n_total if n_total else np.nan
 
         # we check that at least 50% of the data is valid (not NaN) in the
-        #   template. SAID, NOT FATAL: until 2026-10-23 the orders outside
-        #   the grid made the mean NaN and the check never failed, and the
-        #   templates of corrected spectra (PCA2D masks whole telluric
-        #   bands) are below it and measure well; a run is not stopped for
-        #   them, and the orders that are short are named
+        #   template. SAID, NOT FATAL: the templates of corrected spectra
+        #   (PCA2D masks whole telluric bands) are below it and measure well;
+        #   a run is not stopped for them, and the orders that are short are
+        #   named
         if not np.isfinite(frac_valid).any():
             log.warning(f'No order of the template "{vectorname}" is on its '
                         f'grid: its valid fraction cannot be checked')
@@ -1109,6 +1109,89 @@ class Instrument:
         """
         _ = sci_hdr
         return 0.0
+
+    def pca2d_settings(self) -> Dict[str, Dict[str, Any]]:
+        """
+        The instrument-dependent settings of the PCA2D precleaning
+        (lbl.pca2d), as one layer of its configuration: the sections and
+        keys of lbl/pca2d/nominal.yaml that depend on the instrument.
+
+        They come from this class: its PCA2D_* parameters, its wavelength
+        domain (wavemin, wavemax), its resolving power (APPROX_RESOLUTION),
+        and the photometric bands of lbl.core.astro that overlap its domain.
+        A class changes them in its param_override, never PCA2D's code.
+
+        :return: dict, {section: {key: value}}
+        """
+        if self.wavemin is None or self.wavemax is None:
+            emsg = ('Instrument {0} has no wavelength domain (wavemin, '
+                    'wavemax), which PCA2D needs')
+            raise LblException(emsg.format(self.name))
+        wavemin, wavemax = float(self.wavemin), float(self.wavemax)
+        # the photometric bands that overlap the domain: PCA2D fits its
+        #   components on the part of each that its grid covers
+        bands = dict()
+        for band in astro.bands:
+            if band.maximum > wavemin and band.minimum < wavemax:
+                bands[band.name] = [band.minimum, band.maximum]
+        settings = dict()
+        settings['lbl'] = dict(instrument=self.params['INSTRUMENT'],
+                               data_source=self.params['DATA_SOURCE'])
+        settings['input'] = dict(
+            format=self.params['PCA2D_INPUT_FORMAT'],
+            extensions=self.params['PCA2D_TFITS_EXTENSIONS'],
+            pattern=self.params['PCA2D_INPUT_PATTERN'],
+            to_observer=self.params['PCA2D_TO_OBSERVER'],
+            nightly_stack=self.params['PCA2D_NIGHTLY_STACK'],
+            header_keys=self.pca2d_header_keys())
+        # the anchor of PCA2D's log-uniform grid is a whole number of nm at
+        #   or below the bluest wavelength, so that every run of an
+        #   instrument samples the same wavelengths
+        settings['domain'] = dict(wave_min=wavemin, wave_max=wavemax,
+                                  wave0=float(np.floor(wavemin)), bands=bands)
+        settings['twoframe'] = dict(
+            resolution=self.params['APPROX_RESOLUTION'],
+            n_earth=self.params['PCA2D_N_EARTH'])
+        settings['correct'] = dict(mask_share=self.params['PCA2D_MASK_SHARE'])
+        settings['quality'] = dict(drs_modes=self.params['PCA2D_DRS_MODES'])
+        settings['output'] = dict(windows=list(self.params['PCA2D_WINDOWS']
+                                               or []))
+        return settings
+
+    def pca2d_header_keys(self) -> Dict[str, List[str]]:
+        """
+        The header keywords PCA2D reads into its metadata when it reads the
+        files itself (APERO t.fits and s1d), by PCA2D's name for each: the
+        keywords of this class's KW_* parameters, in the order they are
+        tried (the first the header has is used). An empty list for what
+        this instrument does not write.
+
+        :return: dict, {metadata name: [keyword, ...]}
+        """
+        def keys(*names) -> List[str]:
+            out = []
+            for name in names:
+                value = self.params[name] if name in self.params else None
+                if value is None:
+                    continue
+                if isinstance(value, (list, tuple)):
+                    out += [str(v) for v in value if v]
+                else:
+                    out.append(str(value))
+            return out
+
+        return dict(bjd=keys('KW_BJD'),
+                    mjdmid=keys('KW_MID_EXP_TIME', 'KW_MJDATE'),
+                    berv=keys('KW_BERV'), bervmax=keys('KW_BERVMAX'),
+                    exptime=keys('KW_EXPTIME'),
+                    airmass_start=keys('KW_AIRMASS'),
+                    airmass_end=keys('KW_AIRMASS_END', 'KW_AIRMASS'),
+                    seeing=keys('KW_SEEING'), humidity=keys('KW_HUMIDITY'),
+                    sun_elevation=keys('KW_SUN_ELEVATION'),
+                    drs_mode=keys('KW_DRS_MODE'),
+                    dprtype=keys('KW_DPRTYPE'), object=keys('KW_OBJNAME'),
+                    drsobjn=keys('KW_DRSOBJN'),
+                    teff=keys('KW_TEMPERATURE'))
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """

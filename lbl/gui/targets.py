@@ -21,11 +21,11 @@ import threading
 import numpy as np
 
 #: where the indexes are kept, one per data folder
-INDEX_HOME = os.path.expanduser("~/.lbl_pca2d_gui/scans")
-#: bumped when the shape of an index changes, or what a record holds: 5
-#:    since 2026-10-27, when a PP_RV whose source is 'header' (SPIRou's
-#:    OBJRV copied: 578 km/s for KIC 7847566) and ESO's placeholders
-#:    (-99999 km/s) stopped being taken as the systemic velocity
+INDEX_HOME = os.path.join(os.path.expanduser("~"), ".lbl_pca2d_gui", "scans")
+#: the shape of an index and of what its records hold: raised whenever
+#:    either changes (a new field, a number read otherwise, such as the
+#:    systemic velocity below), so that an index of another version is
+#:    read again from the headers rather than trusted
 VERSION = 5
 #: a folder made from another by LBL or PCA2D is not a target: the corrected
 #: (<object>_pca2d, <object>_pca2d_<name>) and the cleaned (<object>_tc)
@@ -50,16 +50,16 @@ TEFF_KEYS = ("OBJTEMP", "PP_TEFF", "TEFF", "HIERARCH ESO OCS TARG TEFF")
 #: the star's systemic velocity: APERO's PP_RV [m/s], when PP_RVS names its
 #:    source (a reference: 2018MNRAS.475.1960F), else ESO's target velocity
 #:    [km/s], what the observer typed. SPIRou's OBJRV is not read: it can be
-#:    anything (280 km/s for KIC 12060710, whose lines LBL finds at 4
-#:    km/s), and neither is a PP_RV whose source is 'header', which is that
-#:    OBJRV copied (578 km/s for KIC 7847566, 2026-10-27). The window
-#:    prefers SIMBAD's systemic velocity to these, when SIMBAD has one
+#:    anything, hundreds of km/s off the velocity LBL finds for the star;
+#:    neither is a PP_RV whose source is 'header', which is that OBJRV
+#:    copied. The window prefers SIMBAD's systemic velocity to these, when
+#:    SIMBAD has one
 VSYS_SOURCE_KEY, VSYS_APERO_KEY = "PP_RVS", "PP_RV"
 VSYS_ESO_KEY = "HIERARCH ESO TEL TARG RADVEL"
 #: PP_RVS that do not name where the velocity comes from
 VSYS_NO_SOURCE = ("", "none", "header", "null")
-#: a velocity [km/s] beyond this is a placeholder (ESO's -99999 for
-#:    GJ 1214), and 0 means unknown
+#: a velocity [km/s] beyond this is a placeholder (ESO writes -99999 when
+#:    it has none), and 0 means unknown
 VSYS_MAX = 1000.0
 #: the night a spectrum belongs to: MJD shifted so that a night does not
 #: straddle midnight UTC anywhere it matters (Chile, Hawaii)
@@ -236,14 +236,14 @@ def _espadons(header, out: dict) -> dict:
 def index_path(data_dir: str) -> str:
     digest = hashlib.sha1(os.path.abspath(data_dir).encode()).hexdigest()[:10]
     stem = re.sub(r"[^A-Za-z0-9]+", "_", os.path.basename(
-        os.path.abspath(data_dir).rstrip("/")))
+        os.path.abspath(data_dir).rstrip(os.sep)))
     return os.path.join(INDEX_HOME, "%s_%s.json" % (stem, digest))
 
 
 def load_index(data_dir: str) -> dict:
     path = index_path(data_dir)
     try:
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             index = json.load(handle)
         if index.get("version") == VERSION:
             return index
@@ -257,7 +257,7 @@ def save_index(index: dict, data_dir: str) -> None:
     path = index_path(data_dir)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w") as handle:
+    with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(index, handle)
     os.replace(tmp, path)
 

@@ -110,7 +110,7 @@ def ask(name, header_object=None):
 def _read(data_dir):
     path = os.path.join(data_dir, CACHE)
     try:
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             return json.load(handle)
     except (OSError, ValueError):
         return {}
@@ -122,8 +122,8 @@ def teffs(data_dir, targets, refresh=False):
     failed question is not kept, so that it is asked again."""
     with _lock:
         known = _read(data_dir)
-    # an answer kept before SIMBAD's systemic velocity was asked (no rv) is
-    #   asked again, once
+    # an answer kept without SIMBAD's systemic velocity (no rv) is asked
+    #   again, once
     todo = [t for t in targets if refresh or t["name"] not in known
             or (known[t["name"]].get("state") == "done"
                 and "rv" not in known[t["name"]])]
@@ -142,7 +142,7 @@ def teffs(data_dir, targets, refresh=False):
                     known.pop(target["name"], None)
             path = os.path.join(data_dir, CACHE)
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as handle:
+            with open(path, "w", encoding="utf-8") as handle:
                 json.dump(known, handle, indent=1)
         failed = {t["name"]: a for t, a in zip(todo, answers)
                   if a["state"] == "failed"}

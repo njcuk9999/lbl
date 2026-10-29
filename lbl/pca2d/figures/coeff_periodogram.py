@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Periodogram of every coefficient, with the star's known signals marked.
 
-    python -m lbl.pca2d.figures.coeff_periodogram --fit outputs/TOI2120/1-3v/fit.npz \
-        --planets 5.7998 --out outputs/TOI2120/1-3v/coeff_periodogram.pdf
+    python -m lbl.pca2d.figures.coeff_periodogram --fit outputs/<object>/<tag>/fit.npz \
+        --planets <period in days> ... --out outputs/<object>/<tag>/coeff_periodogram.pdf
 
 The question this answers is the one that decides whether a correction is safe
 to apply: does any component of the basis vary on the period of a known planet?
@@ -90,8 +90,8 @@ def main(argv=None):
         return
 
     # the nights, which belong to the exposures and not to any one coefficient:
-    # the nominal fit has NO star coefficient (n_star 0), and asking a[:, 0] for
-    # the dates failed on every one of them
+    # a fit with NO star coefficient (n_star 0, the default) has no a[:, 0] to
+    # take the dates from
     t = np.unique(bjd)
     baseline = t.max() - t.min()
     freq = np.linspace(1.0 / args.pmax, 1.0 / args.pmin, 20000)

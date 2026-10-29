@@ -163,7 +163,7 @@ def wraps_in(data_dir: str) -> list:
                                          "wrap.py"))
     for path in candidates:
         try:
-            with open(path) as handle:
+            with open(path, encoding="utf-8", errors="replace") as handle:
                 text = handle.read(20000)
         except OSError:
             continue

@@ -3,7 +3,7 @@
 
     python -m lbl.pca2d.figures.weight_spectrum --cube <cube> --fit <fit.npz> \
         --mask lbl/masks/<the object's LBL mask>.fits \
-        --out outputs/TOI2120/1-3v/weight_spectrum.pdf
+        --out outputs/<object>/<tag>/weight_spectrum.pdf
 
 A weighted fit is not democratic. A tenth of the columns can carry half the
 weight, and if they do, that tenth is what the components describe, whatever the
@@ -13,10 +13,10 @@ come from.
 
 The overlay of the last two is the point. The PCA and LBL both weight by their
 own idea of the noise, and if they disagree about which region is informative,
-then the correction is being applied where the velocities are not measured. On
-TOI-2120 with the photon model alone that is exactly what happened: the star
-block put 98.8 per cent of its weighted power beyond 2350 nm while LBL takes
-47.8 per cent of its lines from below 1500 nm.
+then the correction is being applied where the velocities are not measured.
+With photon-noise weights alone, for instance, the star block can put nearly
+all of its weighted power in one band while LBL takes most of its lines from
+another; the overlap in the last panel measures how far the two agree.
 """
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ def binned(grid, values, step, how="sum"):
 def main(argv=None):
     args = parse_args(argv)
     # the cube whole, then the rows the FIT used: its own list is the authority,
-    # and re-deriving the selection ties the figure to whatever the
-    # signal-to-noise cut was the day the fit was made
+    # and re-deriving the selection would tie the figure to the signal-to-noise
+    # cut as it is now rather than to the one the fit was made with
     grid, data, w, meta = load_cube(args.cube, min_snr_frac=0.0)
     fit = np.load(args.fit)
     select = rows_of(meta, fit)
@@ -77,10 +77,9 @@ def main(argv=None):
                              max_shift=int(np.ceil(np.abs(delta).max())) + 2)
 
     # weighted power each block puts on each column, which is what decides
-    # what the components describe. With NO star component, which is the
-    # nominal, there is no star block to weigh: the einsum was then asked to
-    # contract a zero-length axis and refused, so every run at n_star 0 lost
-    # this page (2026-09-13).
+    # what the components describe. With NO star component (n_star 0, the
+    # default), there is no star block to weigh, and the einsum would be asked
+    # to contract a zero-length axis: the star's power is left at zero.
     star = np.zeros(data.shape[1])
     if P.ndim == 2 and P.shape[0]:
         prepared = shifter.prepare(P)
@@ -159,8 +158,10 @@ def main(argv=None):
 
     log("  %-14s %9s %9s %9s %9s" % ("band (nm)", "weight", "star", "observer",
                                        "LBL lines"))
-    for lo, hi in ((955, 1500), (1500, 2000), (2000, 2300), (2300, 2400),
-                   (2400, 2600)):
+    # LBL's photometric bands (u to K), those the grid reaches
+    from lbl.core import astro
+    for band in astro.bands:
+        lo, hi = band.minimum, band.maximum
         m = (x >= lo) & (x < hi)
         if not m.any():
             continue
