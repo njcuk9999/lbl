@@ -73,14 +73,15 @@ SETTING_FLAGS = (
     ("--excursion-elements", "correct.excursion_elements", float,
      "how wide those windows go, in resolution elements of the instrument"),
     ("--weight-floor", "correct.weight_floor", float,
-     "NaN where the loop down-weighted the sample below this fraction of its"
-     " nominal weight: the fit's weight is the mask"),
+     "NaN la ou la boucle a deprecie l'echantillon sous cette fraction de son"
+     " poids nominal: le poids du fit est le masque"),
     ("--bias-nsig", "correct.bias_nsig", float,
-     "drop from every exposure the columns whose MEAN residual over the"
-     " exposures exceeds this many sigmas: what is anchored in the observer's"
-     " frame and has a sign"),
+     "retirer de toutes les poses les colonnes dont le residu MOYEN sur les"
+     " poses depasse ce nombre de sigmas: ce qui est ancre dans le referentiel"
+     " de l'observateur et a un signe"),
     ("--bias-elements", "correct.bias_elements", float,
-     "the width over which that mean is summed, in resolution elements"),
+     "la largeur sur laquelle cette moyenne est sommee, en elements de"
+     " resolution"),
     ("--excess-nsig", "correct.excess_nsig", float,
      "drop from every exposure the observer columns whose scatter over the"
      " exposures is this many sigmas above the noise"),
@@ -1110,13 +1111,13 @@ def run_cube(plan):
     argv = [plan["written_config"]]
     if not cfg["output"]["use_cache"]:
         argv.append("--no-cache")
-    # THE REQUESTED FRAME IS RESPECTED. build.main brings registration.frame
-    # back to 'observer' unless told not to, because that is the setting of
-    # almost every run and a frame left by mistake in a config file cost
-    # twenty minutes of useless cube. But when the resolved config really
-    # asks for another frame, it is a choice and not an oversight: the
-    # high-pass against a median template, for example, only makes sense if
-    # the stellar lines are co-incident.
+    # LE REPERE DEMANDE EST RESPECTE. build.main ramene registration.frame a
+    # 'observer' sauf si on le lui interdit, parce que c'est le reglage de
+    # presque tous les runs et qu'un frame laisse par megarde dans un fichier
+    # de config coutait vingt minutes de cube inutile. Mais quand la config
+    # resolue demande vraiment un autre repere, c'est un choix et non un
+    # oubli: le passe-haut contre un template median, par exemple, n'a de
+    # sens que si les raies stellaires sont co-incidentes.
     if (cfg.get("registration") or {}).get("frame", "observer") != "observer":
         argv.append("--allow-any-frame")
     build_main(argv)
@@ -1198,12 +1199,12 @@ def run_correct(plan):
         # whatever the cube's rows are
         mode = list(mode) + ["--refit"]
     if "--config" not in mode:
-        # THE CONFIGURATION ALWAYS GOES ALONG, NOT ONLY TO REFIT. It says by
-        # which reader the spectra were read, hence which extension carries
-        # the flux to replace: without it, an instrument that goes through
-        # LBL's bridge falls back on APERO's table and the correction stops
-        # on "unsupported INSTRUME 'HARPS'". Seen on 2026-10-14 with
-        # correct.weight: flux, the only path that does not refit.
+        # LA CONFIGURATION PART TOUJOURS, PAS SEULEMENT POUR REAJUSTER. Elle
+        # dit par quel lecteur les spectres ont ete lus, donc quelle extension
+        # porte le flux a remplacer: sans elle, un instrument qui passe par le
+        # pont de LBL retombe sur la table d'APERO et la correction s'arrete
+        # sur « unsupported INSTRUME 'HARPS' ». Vu le 2026-10-14 avec
+        # correct.weight: flux, le seul chemin qui ne reajuste pas.
         mode = list(mode) + ["--config", plan["written_config"]]
     if "--refit" in mode:
         log("the fit's rows are nights: every exposure of every fitted night is"
@@ -1308,8 +1309,8 @@ def clip_args(cfg, quiet=False):
         out += ["--excursion-nsig", str(float(excursion)),
                 "--excursion-samples", str(int(samples))]
     if floor:
-        say("and setting to NaN what the loop down-weighted below %.2f of its"
-            " nominal weight: the fit's weight is the mask" % float(floor),
+        say("et mettant a NaN ce que la boucle a deprecie sous %.2f de son"
+            " poids nominal: le poids du fit est le masque" % float(floor),
             "info")
         out += ["--weight-floor", str(float(floor))]
     bias = corr.get("bias_nsig")
@@ -1330,9 +1331,9 @@ def clip_args(cfg, quiet=False):
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         wide = element_samples(resolution, cfg["domain"]["dv"],
                                corr.get("bias_elements") or 2.0)
-        say("and dropping from every exposure the columns whose MEAN residual"
-            " over the exposures, summed over %d samples, exceeds %.0f sigmas:"
-            " what is anchored in the observer's frame"
+        say("et retirant de toutes les poses les colonnes dont le residu MOYEN"
+            " sur les poses, somme sur %d echantillons, depasse %.0f sigmas:"
+            " ce qui est ancre dans le referentiel de l'observateur"
             % (wide, float(bias)), "info")
         out += ["--bias-nsig", str(float(bias)),
                 "--bias-samples", str(int(wide))]
