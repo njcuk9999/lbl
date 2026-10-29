@@ -5,8 +5,8 @@ SIMBAD, asked through its Python client (astroquery.simbad, on SIMBAD's TAP
 service), for the window's archive search and Teff, the PCA2D report and
 the astrometry of the secular acceleration. Not through a web page or CDS's
 Sesame resolver: a service that takes a script for a robot can block it,
-and on 2026-10-27 Sesame did not answer at all while SIMBAD's TAP service
-did, in a fraction of a second.
+and Sesame can be down while SIMBAD's TAP service answers in a fraction of
+a second.
 
 A name is asked as it is written, then as SIMBAD writes it
 (name_variants): TOI_1234, TOI 1234 and TOI1234 are TOI-1234, Gl_699 is

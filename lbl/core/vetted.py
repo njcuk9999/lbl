@@ -125,7 +125,7 @@ def template_path(inst, basename: str, legacy_dir: str = None) -> str:
     """
     Where the LBL template of a vetted template is kept: BASENAME in
     folder(inst). One still in LEGACY_DIR (the templates folder, where
-    they were written before 2026-10-26) is moved there.
+    older versions of LBL wrote them) is moved there.
 
     :param inst: Instrument, the instrument of the run
     :param basename: str, the template's name for this instrument
@@ -167,7 +167,7 @@ def fetch(inst, objname: str, template_path: str):
         raise base_classes.LblException(emsg.format(objname, instrument,
                                                     names))
     # the depot file beside the template; one at the top of models/ (where
-    #   it was kept before 2026-10-26) is moved there
+    #   older versions of LBL kept it) is moved there
     depot_file = io.model_path(os.path.dirname(folder(inst)),
                                os.path.basename(folder(inst)), entry['file'])
     url = '{0}/{1}'.format(inst.params['MODEL_REPO_URL'], entry['file'])

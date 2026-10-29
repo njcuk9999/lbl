@@ -54,7 +54,7 @@ class Context:
     @staticmethod
     def load_state() -> dict:
         try:
-            with open(STATE_FILE) as handle:
+            with open(STATE_FILE, encoding="utf-8") as handle:
                 return json.load(handle)
         except (OSError, ValueError):
             return {}
@@ -65,7 +65,7 @@ class Context:
             if state.get("data_dir"):
                 self.roots.add(os.path.abspath(state["data_dir"]))
             tmp = STATE_FILE + ".tmp"
-            with open(tmp, "w") as handle:
+            with open(tmp, "w", encoding="utf-8") as handle:
                 json.dump(state, handle, indent=1)
             os.replace(tmp, STATE_FILE)
 
@@ -86,7 +86,10 @@ class Context:
             return False
         with self.lock:
             roots = list(self.roots)
-        return any(plain.startswith(root + os.sep) for root in roots)
+        # case ignored where the system ignores it (Windows)
+        plain = os.path.normcase(plain)
+        return any(plain.startswith(os.path.join(os.path.normcase(root), ""))
+                   for root in roots)
 
 
 def suggest_name(state: dict, rparams: dict) -> str:
@@ -411,7 +414,7 @@ class Handler(BaseHTTPRequestHandler):
                     text = wrapgen.window_text(
                         text, built["rparams"], body.get("name", ""),
                         body["state"].get("python") or sys.executable)
-                with open(path, "w") as handle:
+                with open(path, "w", encoding="utf-8") as handle:
                     handle.write(text)
                 os.chmod(path, 0o755)
                 return self._json(dict(path=path))
@@ -469,7 +472,7 @@ class Handler(BaseHTTPRequestHandler):
         folder = os.path.join(data_dir, history.GUI_RUNS, job_id)
         os.makedirs(folder, exist_ok=True)
         wrap = os.path.join(folder, "wrap.py")
-        with open(wrap, "w") as handle:
+        with open(wrap, "w", encoding="utf-8") as handle:
             handle.write(text)
         os.chmod(wrap, 0o755)
         job = self.ctx.runner.submit(

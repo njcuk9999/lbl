@@ -1,5 +1,6 @@
 """The window's words, in English and in French, under the same keys
-(tests/test_i18n.py checks that neither language lacks one).
+(maintenance/tests/test_gui_app_i18n.py checks that neither language
+lacks one).
 
 OPTIONS below gives each PCA2D option a label and a help in both languages,
 written from LBL's doc and the comments of its nominal.yaml. An option LBL
@@ -11,7 +12,7 @@ EN = {
     "title": "LBL",
     "banner_name": "line-by-line velocities",
     "tagline": "with or without the PCA2D precleaning: pick the targets, set, run, follow",
-    "home": "Home",
+    "home": "LBL on GitHub",
     "eyebrow": "LBL · PCA2D",
     "intro": "The window writes an ordinary LBL wrap for the targets and options picked, runs it in the environment LBL is installed in, one run at a time, and shows its log as it goes. Every run keeps its wrap and its log in DATA_DIR/gui/runs.",
     "data_dir": "Data folder (DATA_DIR)",
@@ -118,7 +119,7 @@ EN = {
     "sw_SKIP_LBL_COMPUTE": "keep the velocities on disk",
     "sw_SKIP_LBL_COMPILE": "keep the rdb on disk",
     "sw_REPORT": "report",
-    "sw_PLANETS": "known planets (orbits and candidates)",
+    "sw_PLANETS": "known planets (their orbits)",
     "sw_SMALL_RV_SHIFT": "small velocity changes (template in one pass)",
     "run_name": "Run name",
     "run_name_auto": "auto",
@@ -160,6 +161,7 @@ EN = {
     "nothing": "nothing yet",
     "measure": "Measure again",
     "busy": "A run is going in this folder, so nothing can be deleted until it ends: %s",
+    "busy_unknown": "Whether a run is going in this folder cannot be told on this system (neither psutil nor lsof is there), so nothing can be deleted: install psutil (pip install psutil).",
     "measuring": "measuring...",
     "kind_scratch": "scratch: remade by the next run that needs it",
     "kind_rebuildable": "rebuildable: remade by running again",
@@ -196,7 +198,7 @@ EN = {
     "help_data_dir": "The LBL data folder (DATA_DIR). Each target's spectra are in science/<object>/; LBL writes its templates, masks, per-exposure velocities (lblrv), tables (lblrdb) and reports beside them.\n\n'Read the targets' reads every spectrum's header once (SNR, BERV, date, Teff) and keeps the result, so reading again later is quick.",
     "help_instrument": "The LBL instrument, and its mode, the spectra come from. It sets how LBL reads the files, the wavelength domain and the resolution. Guessed from the headers when the targets are read; NIRPS_HE and NIRPS_HA are NIRPS's two modes.",
     "help_source": "The pipeline that reduced the spectra (DATA_SOURCE: APERO, ESO, CADC...). It sets the file format LBL expects. A PCA2D basis made from another source cannot be used here.",
-    "help_python": "The Python that runs the wraps: that of the conda environment LBL (its lbl-pca2d branch) is installed in. By default, the Python this window runs with.",
+    "help_python": "The Python that runs the wraps: that of the environment LBL is installed in (the installation steps explain it). By default, the Python this window runs with.",
     "help_pca2d_on": "The precleaning: PCA2D separates what moves with the star from what stays fixed on the detector (telluric residuals, airglow, detector features), divides the latter out of the spectra, and LBL then measures the corrected spectra, science/<object>_pca2d/. The delivered spectra are never written.\n\nUnticked, the wrap runs LBL alone, on the delivered spectra.",
     "help_skip_pca2d": "What to do with a correction already on disk (SKIP_LBL_PCA2D).\n\n'redo only if the request changed': kept if the settings, the input files and LBL's nominal.yaml are those it was made with, made again otherwise. 'keep it': kept even if they changed, which a warning says. 'redo it': made again in every case; the previous one is moved aside, not deleted.",
     "help_comparison": "The template LBL measures each exposure against (OBJECT_COMPARISON).\n\n'its own': built from the target's own spectra. Another star's template (from templates/, of a similar spectral type) suits a target with few spectra or little BERV coverage, whose own template would be noisy or carry telluric residuals. With PCA2D, it is also the star's spectrum in the fit.",
@@ -216,7 +218,7 @@ EN = {
     "help_sw_SKIP_LBL_COMPUTE": "Do not measure again an exposure whose per-line velocities are on disk: only the new exposures are measured. Untick it when the template or the mask changed, or old and new velocities get mixed in one table.",
     "help_sw_SKIP_LBL_COMPILE": "Keep the rdb tables on disk. Off by default: compiling takes seconds and must include every new exposure.",
     "help_sw_REPORT": "Write the PDF report in reports/: the velocities, their periodograms, the indicators and, with PCA2D, its own pages first (the river plots, the components, the velocities before and after).",
-    "help_sw_PLANETS": "Use the star's known planets and candidates (LBL's planet catalogs, and DATA_DIR/personal_planet_catalog.yaml): the template is built on the BERV plus their Keplerian velocity, and the report fits their K at their periods. The velocities reported stay corrected for the BERV only.",
+    "help_sw_PLANETS": "Use the star's known planets: the published orbits of its confirmed planets (LBL's catalog, lbl/resources/planets/known_planets.yaml), or your own solutions (DATA_DIR/personal_planet_catalog.yaml), which replace them for that star. The template is built on the BERV plus their Keplerian velocity, and the report fits their K at their periods. The velocities reported stay corrected for the BERV only.",
     "help_sw_SMALL_RV_SHIFT": "Ticked (the default): the star's velocity is taken as constant, and its template is made in one pass, every spectrum shifted by its BERV alone. Right when the velocity varies by less than about 100 m/s over the spectra (MAX_CONVERGENCE_TEMPLATE_RV): planets of a few to a few tens of m/s, activity; it saves the template's convergence passes. Unticked: each spectrum's velocity is measured against the template and the template made again, up to 5 times, until the shifts agree to 100 m/s; for a binary, a brown dwarf or a hot Jupiter (HD 189733's K is 205 m/s), whose lines would otherwise be smeared in the template. With known planets ticked and the star's orbits in the catalogs, the template follows the orbits instead. Unticked, PCA2D's star frame follows the velocities the template measured. Not PCA2D's velocity_term, a velocity per exposure fitted inside the PCA2D fit, which changes no template.",
     "launch": "Run",
     "launch_running": "Running · %s",
@@ -317,7 +319,7 @@ EN = {
     "col_folder": "folder",
     "err_archive_source": "%s was fetched for %s %s: choose that instrument and data source",
     "err_layout_source": "%s holds spectra laid out for the data source %s, and the one chosen is %s: choose %s",
-    "help_archive": "The public spectra that LBL reads, of one star or of several (separate their names with commas), in the archives the window knows (lbl.gui.fetch, carried into LBL from koloa): SPIRou's t.fits at the CADC, NIRPS, HARPS and ESPRESSO at ESO, HARPS-N at the TNG, SOPHIE at the OHP. Each name is resolved by SIMBAD (its name, its coordinates and its Teff are shown under the field), then every star is asked of every archive at once, two requests at a time in one archive. An archive whose telescope never sees the star (less than 20 degrees above its horizon at best) is not asked, said 'out of reach'; one that does not answer is said, and Stop the search stops waiting for it.\n\nThe ticked rows are fetched into DATA_DIR/science/<star>/ (calibrations in DATA_DIR/calib/), four files at a time, the instruments at once, nothing there moved or overwritten; a folder that holds another reader's spectra gets a folder of its own. Each folder keeps what it came from, and the wrap takes the data source and the file pattern from it. The log under the results says what each archive answered and why a file was not fetched.",
+    "help_archive": "The public spectra that LBL reads, of one star or of several (separate their names with commas), in the archives the window knows: SPIRou's t.fits at the CADC, NIRPS, HARPS and ESPRESSO at ESO, HARPS-N at the TNG, SOPHIE at the OHP. Each name is resolved by SIMBAD (its name, its coordinates and its Teff are shown under the field), then every star is asked of every archive at once, two requests at a time in one archive. An archive whose telescope never sees the star (less than 20 degrees above its horizon at best) is not asked, said 'out of reach'; one that does not answer is said, and Stop the search stops waiting for it.\n\nThe ticked rows are fetched into DATA_DIR/science/<star>/ (calibrations in DATA_DIR/calib/), four files at a time, the instruments at once, nothing there moved or overwritten; a folder that holds another reader's spectra gets a folder of its own. Each folder keeps what it came from, and the wrap takes the data source and the file pattern from it. The log under the results says what each archive answered and why a file was not fetched.",
     "refresh_targets": "Refresh",
     "lang_switch": "FR",
     "theme_light": "Light",
@@ -338,7 +340,7 @@ FR = {
     "title": "LBL",
     "banner_name": "vitesses raie par raie",
     "tagline": "avec ou sans le pré-nettoyage PCA2D : choisir les cibles, régler, lancer, suivre",
-    "home": "Accueil",
+    "home": "LBL sur GitHub",
     "eyebrow": "LBL · PCA2D",
     "intro": "La fenêtre écrit un wrap LBL ordinaire pour les cibles et les options choisies, le lance dans l'environnement où LBL est installé, un run à la fois, et en affiche le journal au fil du calcul. Chaque run garde son wrap et son journal dans DATA_DIR/gui/runs.",
     "data_dir": "Dossier de données (DATA_DIR)",
@@ -445,7 +447,7 @@ FR = {
     "sw_SKIP_LBL_COMPUTE": "garder les vitesses sur disque",
     "sw_SKIP_LBL_COMPILE": "garder le rdb sur disque",
     "sw_REPORT": "rapport",
-    "sw_PLANETS": "planètes connues (orbites et candidates)",
+    "sw_PLANETS": "planètes connues (leurs orbites)",
     "sw_SMALL_RV_SHIFT": "faibles variations de vitesse (template en une passe)",
     "run_name": "Nom du run",
     "run_name_auto": "auto",
@@ -487,6 +489,7 @@ FR = {
     "nothing": "rien pour l'instant",
     "measure": "Mesurer à nouveau",
     "busy": "Un run tourne dans ce dossier : rien ne peut être supprimé avant qu'il se termine. %s",
+    "busy_unknown": "Ce système ne permet pas de savoir si un run tourne dans ce dossier (ni psutil ni lsof ne s'y trouvent) : rien ne peut donc être supprimé. Installez psutil (pip install psutil).",
     "measuring": "mesure en cours...",
     "kind_scratch": "jetable : refait par le prochain run qui en a besoin",
     "kind_rebuildable": "refaisable : refait en relançant",
@@ -523,7 +526,7 @@ FR = {
     "help_data_dir": "Le dossier de données de LBL (DATA_DIR). Les spectres de chaque cible sont dans science/<objet>/ ; LBL écrit à côté ses templates, masques, vitesses par pose (lblrv), tables (lblrdb) et rapports.\n\n« Lire les cibles » lit une fois l'entête de chaque spectre (SNR, BERV, date, Teff) et garde le résultat : une relecture plus tard est rapide.",
     "help_instrument": "L'instrument LBL, et son mode, dont viennent les spectres. Il fixe la façon dont LBL lit les fichiers, le domaine de longueurs d'onde et la résolution. Deviné à partir des entêtes à la lecture des cibles ; NIRPS_HE et NIRPS_HA sont les deux modes de NIRPS.",
     "help_source": "Le pipeline qui a réduit les spectres (DATA_SOURCE : APERO, ESO, CADC...). Il fixe le format de fichier qu'attend LBL. Une base PCA2D faite à partir d'une autre source ne peut pas servir ici.",
-    "help_python": "Le Python qui lance les wraps : celui de l'environnement conda où LBL (sa branche lbl-pca2d) est installé. Par défaut, le Python de cette fenêtre.",
+    "help_python": "Le Python qui lance les wraps : celui de l'environnement où LBL est installé (les étapes d'installation l'expliquent). Par défaut, le Python de cette fenêtre.",
     "help_pca2d_on": "Le pré-nettoyage : PCA2D sépare ce qui suit l'étoile de ce qui reste fixe sur le détecteur (résidus telluriques, airglow, défauts du détecteur), divise ces derniers des spectres, et LBL mesure ensuite les spectres corrigés, science/<objet>_pca2d/. Les spectres livrés ne sont jamais réécrits.\n\nDécoché, le wrap lance LBL seul, sur les spectres livrés.",
     "help_skip_pca2d": "Que faire d'une correction déjà sur disque (SKIP_LBL_PCA2D).\n\n« refaite seulement si la demande a changé » : gardée si les réglages, les fichiers d'entrée et le nominal.yaml de LBL sont ceux avec lesquels elle a été faite, refaite sinon. « la garder » : gardée même s'ils ont changé, ce qu'un avertissement signale. « la refaire » : refaite dans tous les cas ; la précédente est mise de côté, pas effacée.",
     "help_comparison": "Le template contre lequel LBL mesure chaque pose (OBJECT_COMPARISON).\n\n« le sien » : construit à partir des spectres de la cible. Le template d'une autre étoile (dans templates/, de type spectral voisin) convient à une cible qui a peu de spectres ou peu de couverture en BERV, dont le propre template serait bruité ou garderait des résidus telluriques. Avec PCA2D, c'est aussi le spectre de l'étoile dans le fit.",
@@ -543,7 +546,7 @@ FR = {
     "help_sw_SKIP_LBL_COMPUTE": "Ne pas remesurer une pose dont les vitesses par raie sont sur disque : seules les nouvelles poses sont mesurées. À décocher quand le template ou le masque a changé, sinon d'anciennes et de nouvelles vitesses se mélangent dans une même table.",
     "help_sw_SKIP_LBL_COMPILE": "Garder les tables rdb sur disque. Désactivé par défaut : compiler prend quelques secondes et doit inclure chaque nouvelle pose.",
     "help_sw_REPORT": "Écrire le rapport PDF dans reports/ : les vitesses, leurs périodogrammes, les indicateurs et, avec PCA2D, ses propres pages d'abord (les river plots, les composantes, les vitesses avant et après).",
-    "help_sw_PLANETS": "Utiliser les planètes connues et candidates de l'étoile (les catalogues de planètes de LBL, et DATA_DIR/personal_planet_catalog.yaml) : le template est construit sur le BERV plus leur vitesse képlérienne, et le rapport ajuste leur K à leurs périodes. Les vitesses rapportées restent corrigées du seul BERV.",
+    "help_sw_PLANETS": "Utiliser les planètes connues de l'étoile : les orbites publiées de ses planètes confirmées (le catalogue de LBL, lbl/resources/planets/known_planets.yaml), ou vos propres solutions (DATA_DIR/personal_planet_catalog.yaml), qui les remplacent pour cette étoile. Le template est construit sur le BERV plus leur vitesse képlérienne, et le rapport ajuste leur K à leurs périodes. Les vitesses rapportées restent corrigées du seul BERV.",
     "help_sw_SMALL_RV_SHIFT": "Coché (par défaut) : la vitesse de l'étoile est prise constante, et son template est fait en une passe, chaque spectre décalé de son seul BERV. Juste quand la vitesse varie de moins d'environ 100 m/s sur les spectres (MAX_CONVERGENCE_TEMPLATE_RV) : planètes de quelques m/s à quelques dizaines de m/s, activité ; cela évite les passes de convergence du template. Décoché : la vitesse de chaque spectre est mesurée contre le template, et le template refait, jusqu'à 5 fois, jusqu'à ce que les décalages s'accordent à 100 m/s ; pour une binaire, une naine brune ou un Jupiter chaud (le K de HD 189733 est de 205 m/s), dont les raies seraient sinon étalées dans le template. Avec les planètes connues cochées et les orbites de l'étoile dans les catalogues, le template suit plutôt les orbites. Décoché, le référentiel de l'étoile de PCA2D suit les vitesses que le template a mesurées. Ce n'est pas le velocity_term de PCA2D, une vitesse par pose ajustée dans le fit PCA2D, qui ne change aucun template.",
     "launch": "Lancer",
     "launch_running": "En cours · %s",
@@ -644,7 +647,7 @@ FR = {
     "col_folder": "dossier",
     "err_archive_source": "%s a été récupérée pour %s %s : choisissez cet instrument et cette source de données",
     "err_layout_source": "%s contient des spectres au format de la source de données %s, et celle choisie est %s : choisissez %s",
-    "help_archive": "Les spectres publics que LBL lit, d'une étoile ou de plusieurs (séparez leurs noms par des virgules), dans les archives que la fenêtre connaît (lbl.gui.fetch, repris de koloa dans LBL) : les t.fits de SPIRou au CADC, NIRPS, HARPS et ESPRESSO à l'ESO, HARPS-N au TNG, SOPHIE à l'OHP. Chaque nom est résolu par SIMBAD (son nom, ses coordonnées et sa Teff s'affichent sous le champ), puis chaque étoile est demandée à chaque archive en même temps, deux requêtes à la fois par archive. Une archive dont le télescope ne voit jamais l'étoile (moins de 20 degrés au-dessus de son horizon au mieux) n'est pas interrogée, et l'étoile y est dite « hors de portée » ; une archive qui ne répond pas est signalée, et Arrêter la recherche cesse de l'attendre.\n\nLes lignes cochées sont récupérées dans DATA_DIR/science/<étoile>/ (les calibrations dans DATA_DIR/calib/), quatre fichiers à la fois, les instruments en même temps, sans rien déplacer ni écraser ; un dossier qui contient les spectres d'un autre lecteur en reçoit un à part. Chaque dossier garde sa provenance, et le wrap en tire la source des données et le motif des fichiers. Le journal sous les résultats dit ce que chaque archive a répondu et pourquoi un fichier n'a pas été récupéré.",
+    "help_archive": "Les spectres publics que LBL lit, d'une étoile ou de plusieurs (séparez leurs noms par des virgules), dans les archives que la fenêtre connaît : les t.fits de SPIRou au CADC, NIRPS, HARPS et ESPRESSO à l'ESO, HARPS-N au TNG, SOPHIE à l'OHP. Chaque nom est résolu par SIMBAD (son nom, ses coordonnées et sa Teff s'affichent sous le champ), puis chaque étoile est demandée à chaque archive en même temps, deux requêtes à la fois par archive. Une archive dont le télescope ne voit jamais l'étoile (moins de 20 degrés au-dessus de son horizon au mieux) n'est pas interrogée, et l'étoile y est dite « hors de portée » ; une archive qui ne répond pas est signalée, et Arrêter la recherche cesse de l'attendre.\n\nLes lignes cochées sont récupérées dans DATA_DIR/science/<étoile>/ (les calibrations dans DATA_DIR/calib/), quatre fichiers à la fois, les instruments en même temps, sans rien déplacer ni écraser ; un dossier qui contient les spectres d'un autre lecteur en reçoit un à part. Chaque dossier garde sa provenance, et le wrap en tire la source des données et le motif des fichiers. Le journal sous les résultats dit ce que chaque archive a répondu et pourquoi un fichier n'a pas été récupéré.",
     "refresh_targets": "Rafraîchir",
     "lang_switch": "EN",
     "theme_light": "Clair",
@@ -675,8 +678,8 @@ OPTIONS = {
          " with a free amplitude per exposure, to look at the star's own"
          " variability; it is never divided out of the corrected files. 0 is"
          " refused.\n\n"
-         "1 gave the better velocities wherever it was measured (TOI-2120,"
-         " GJ 1, TOI-4552). The fit's folder is named s<n_star>-o<n_earth>.",
+         "1 gave the better velocities on every star where the two were"
+         " compared. The fit's folder is named s<n_star>-o<n_earth>.",
          "Le nombre de spectres qui décrivent l'étoile, son template"
          " compris.\n\n"
          "1 (le nominal) : l'étoile est son template seul, porté au BERV de"
@@ -685,8 +688,8 @@ OPTIONS = {
          " référentiel de l'étoile, avec une amplitude libre par pose, pour"
          " regarder la variabilité propre de l'étoile ; elle n'est jamais"
          " divisée des fichiers corrigés. 0 est refusé.\n\n"
-         "1 a donné les meilleures vitesses partout où cela a été mesuré"
-         " (TOI-2120, GJ 1, TOI-4552). Le dossier du fit est nommé"
+         "1 a donné les meilleures vitesses sur toutes les étoiles où les"
+         " deux ont été comparés. Le dossier du fit est nommé"
          " s<n_star>-o<n_earth>.")),
     "n_earth": (
         ("observer components", "composantes de l'observateur"),
@@ -695,9 +698,9 @@ OPTIONS = {
          " stays put on the detector while the star moves with the BERV."
          " They are divided out of the spectra LBL then measures.\n\n"
          "More components follow more of the atmosphere, but also have more"
-         " freedom to take part of the star when the BERV moves little. 3 is"
-         " the nominal for a star fitted on its own; a basis learned on"
-         " several stars carries more (7 for NIRPS_SNR45-90).\n\n"
+         " freedom to take part of the star when the BERV moves little. The"
+         " nominal is the instrument's own (LBL's PCA2D_N_EARTH), shown as"
+         " the default here.\n\n"
          "With a frozen basis (below), leave it unset to take all of its"
          " components.",
          "Le nombre de composantes fixes dans le référentiel de"
@@ -707,9 +710,8 @@ OPTIONS = {
          " spectres que LBL mesure ensuite.\n\n"
          "Plus de composantes suivent mieux l'atmosphère, mais ont aussi plus"
          " de liberté pour absorber une partie de l'étoile quand le BERV"
-         " varie peu. 3 est le nominal pour une étoile ajustée seule ; une"
-         " base apprise sur plusieurs étoiles en porte davantage (7 pour"
-         " NIRPS_SNR45-90).\n\n"
+         " varie peu. Le nominal est celui de l'instrument (PCA2D_N_EARTH"
+         " de LBL), affiché ici comme défaut.\n\n"
          "Avec une base figée (plus bas), laissez vide pour prendre toutes"
          " ses composantes.")),
     "joint": (
@@ -919,11 +921,11 @@ OPTIONS = {
          " (5% of the mean) keeps a component living where the star is flat"
          " from having no amplitude at all.\n\n"
          "flux: each sample weighted as in the fit (photon noise and"
-         " telluric weights), the older behaviour.\n\n"
+         " telluric weights).\n\n"
          "Only the measurement of the amplitudes changes: what is divided"
-         " out, the blanked samples and the shrinkage do not. The two were"
-         " indistinguishable on TOI-2120 and TOI-4552; velocity is nominal"
-         " on principle.",
+         " out, the blanked samples and the shrinkage do not. The two gave"
+         " indistinguishable velocities where they were compared; velocity"
+         " is nominal on principle.",
          "La pondération des échantillons quand les amplitudes des"
          " composantes sont mesurées à nouveau dans chaque pose, au moment"
          " de la correction.\n\n"
@@ -935,11 +937,11 @@ OPTIONS = {
          " vitesse. Un plancher (5 % de la moyenne) évite qu'une composante"
          " qui ne vit que là où l'étoile est plate n'ait aucune amplitude.\n\n"
          "flux : chaque échantillon pèse comme dans le fit (bruit de photons"
-         " et poids telluriques), l'ancien comportement.\n\n"
+         " et poids telluriques).\n\n"
          "Seule la mesure des amplitudes change : ce qui est divisé, les"
          " échantillons masqués et le rétrécissement restent identiques. Les"
-         " deux sont indiscernables sur TOI-2120 et TOI-4552 ; velocity est"
-         " le nominal par principe.")),
+         " deux ont donné des vitesses indiscernables là où ils ont été"
+         " comparés ; velocity est le nominal par principe.")),
     "mask": (
         ("samples blanked in the corrected files",
          "échantillons masqués dans les fichiers corrigés"),
@@ -949,17 +951,18 @@ OPTIONS = {
          " soon as the fit gave it no weight in one of them (see the share"
          " below), so the whole campaign is measured on ONE set of lines."
          " exposure: each exposure blanks its own, so every epoch has a"
-         " different set of lines; that alone cost 1.8 m/s of rms on"
-         " TOI-4552. none: keep the delivered flux there.",
+         " different set of lines, which alone adds scatter to the"
+         " velocities (1.8 m/s of rms in one comparison). none: keep the"
+         " delivered flux there.",
          "Quels échantillons les fichiers corrigés masquent (NaN), là où le"
          " fit n'avait rien à dire.\n\n"
          "common (le nominal) : un échantillon est masqué dans toutes les"
          " poses dès que le fit ne lui a donné aucun poids dans l'une"
          " d'elles (voir la fraction plus bas) ; toute la campagne est donc"
          " mesurée sur UN seul jeu de raies. exposure : chaque pose masque"
-         " les siens, et chaque époque a un jeu de raies différent ; cela"
-         " seul a coûté 1.8 m/s de rms sur TOI-4552. none : garder le flux"
-         " livré à ces endroits.")),
+         " les siens, et chaque époque a un jeu de raies différent, ce qui"
+         " suffit à disperser les vitesses (1.8 m/s de rms dans une"
+         " comparaison). none : garder le flux livré à ces endroits.")),
     "mask_share": (
         ("share of exposures that must weight a sample",
          "fraction des poses qui doivent pondérer un échantillon"),
@@ -968,33 +971,35 @@ OPTIONS = {
          "1 (the nominal) is unanimity: the strictest, and cheap when every"
          " exposure covers the same range. Below 1 the set of lines is"
          " decided by a majority, still one set for the whole campaign;"
-         " useful when the exposures cover different ranges (on HD 10700,"
-         " unanimity blanked 43% of the pixels once each exposure was"
-         " shifted by its own BERV).",
+         " useful when the exposures cover different ranges (for a star"
+         " observed over a wide range of BERV, unanimity can blank close to"
+         " half the pixels once each exposure is shifted by its own BERV).",
          "Avec mask = common, la fraction des poses qui doivent avoir donné"
          " du poids à un échantillon pour qu'il soit gardé.\n\n"
          "1 (le nominal) est l'unanimité : la plus stricte, et peu coûteuse"
          " quand toutes les poses couvrent le même intervalle. Sous 1, le"
          " jeu de raies est décidé à la majorité, et reste unique pour toute"
          " la campagne ; utile quand les poses couvrent des intervalles"
-         " différents (sur HD 10700, l'unanimité masquait 43 % des pixels"
-         " une fois chaque pose décalée de son propre BERV).")),
+         " différents (pour une étoile observée sur un large intervalle de"
+         " BERV, l'unanimité peut masquer près de la moitié des pixels une"
+         " fois chaque pose décalée de son propre BERV).")),
     "nsig_cut": (
         ("residual clip (sigmas)", "coupure du résidu (sigmas)"),
         ("Blank every sample whose residual (the data less everything the"
          " fit models, panel 5 of the river plots) is beyond this many"
          " robust sigmas, measured locally (1.4826 MAD over the high pass's"
          " window): cosmic rays, bad pixels, local sky residuals.\n\n"
-         "Together with the bias test below, on TOI-2120: rms from 17.0 to"
-         " 14.6 m/s, without moving the planet's K. Unset: nothing clipped.",
+         "Together with the bias test below, it lowered the rms of a"
+         " planet host's velocities from 17.0 to 14.6 m/s without moving the"
+         " planet's K. Unset: nothing clipped.",
          "Masquer tout échantillon dont le résidu (les données moins tout ce"
          " que le fit modélise, panneau 5 des river plots) dépasse ce nombre"
          " de sigmas robustes, mesurés localement (1.4826 MAD sur la fenêtre"
          " du passe-haut) : rayons cosmiques, mauvais pixels, résidus de"
          " ciel locaux.\n\n"
-         "Avec le test de biais plus bas, sur TOI-2120 : rms de 17.0 à"
-         " 14.6 m/s, sans déplacer le K de la planète. Vide : rien n'est"
-         " coupé.")),
+         "Avec le test de biais plus bas, il a fait passer le rms des"
+         " vitesses d'une étoile à planète de 17.0 à 14.6 m/s, sans déplacer"
+         " le K de la planète. Vide : rien n'est coupé.")),
     "column_frac": (
         ("column clip: fraction", "colonnes : fraction coupée"),
         ("A column (one wavelength, in the observer's frame) where more than"
@@ -1037,7 +1042,7 @@ OPTIONS = {
          "The residual cut compares each exposure to the others, so it"
          " cannot see a residual present in all of them; the mean over N"
          " exposures gains √N and shows whole lines left badly corrected"
-         " (methane and water near 1761 to 1805 nm). On TOI-2120, 10 sigmas"
+         " (methane and water near 1761 to 1805 nm). 10 sigmas typically"
          " blanks about 10% of the domain; lower blanks more.",
          "Une colonne dont le résidu MOYEN sur toutes les poses (sommé sur"
          " deux éléments de résolution) dépasse ce nombre de sigmas est"
@@ -1045,7 +1050,7 @@ OPTIONS = {
          "La coupure du résidu compare chaque pose aux autres : elle ne voit"
          " pas un résidu présent dans toutes. La moyenne sur N poses gagne"
          " √N et révèle des raies entières mal corrigées (méthane et eau"
-         " vers 1761 à 1805 nm). Sur TOI-2120, 10 sigmas masquent environ"
+         " vers 1761 à 1805 nm). 10 sigmas masquent typiquement environ"
          " 10 % du domaine ; plus bas masque davantage.")),
     "star_column_frac": (
         ("star frame: fraction clipped",
@@ -1057,8 +1062,8 @@ OPTIONS = {
          " It catches what stands still on the star, as a narrow BERV range"
          " leaves it. Measured against another star's template, the static"
          " difference between the two stars (their metallicity) is expected"
-         " and is taken out before this test. Off (unset) until measured on"
-         " more stars than KIC 7847566.",
+         " and is taken out before this test. Off (unset) by default: it has"
+         " been measured on too few stars for a nominal value.",
          "Le test des colonnes ci-dessus, dans le référentiel de l'étoile :"
          " chaque pose portée par son propre décalage, une colonne de"
          " l'étoile où plus de cette fraction des poses a été coupée (et"
@@ -1067,8 +1072,9 @@ OPTIONS = {
          " qui reste immobile sur l'étoile, comme le laisse un intervalle de"
          " BERV étroit. Mesurée contre le template d'une autre étoile,"
          " la différence statique entre les deux étoiles (leur métallicité)"
-         " est attendue et retirée avant ce test. Désactivé (vide) tant"
-         " qu'il n'a pas été mesuré sur d'autres étoiles que KIC 7847566.")),
+         " est attendue et retirée avant ce test. Désactivé (vide) par"
+         " défaut : il a été mesuré sur trop peu d'étoiles pour fixer une"
+         " valeur nominale.")),
     "star_column_chi2": (
         ("star frame: chi2", "référentiel de l'étoile : chi2"),
         ("The second condition of the star-frame column test: the reduced"
@@ -1146,7 +1152,7 @@ def strings(lang: str) -> dict:
 def option_text(key: str, lang: str, lbl_description: str = "") -> dict:
     """An option's label and help in one language: dict(label, help, lbl).
     `lbl` is LBL's own description (English), given only for an option the
-    window has no help of its own for (one LBL added since)."""
+    window has no help of its own for."""
     index = 1 if str(lang).lower().startswith("fr") else 0
     known = OPTIONS.get(key)
     label = known[0][index] if known else key

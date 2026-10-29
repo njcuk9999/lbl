@@ -782,6 +782,71 @@ params.set(key='SMALL_RV_SHIFT', value=True, source=__NAME__,
 # the template
 params.set('TEMPLATE_SNR_THRES', 10, source=__NAME__)
 
+# ---------------------------------------------------------------------
+# Parameters for the PCA2D precleaning (lbl.pca2d)
+# ---------------------------------------------------------------------
+# These are the instrument-dependent settings of PCA2D. Everything else
+#    PCA2D uses is in lbl/pca2d/nominal.yaml and is the same for every
+#    instrument. The wavelength domain is the instrument's own
+#    (wavemin / wavemax), its resolving power is APPROX_RESOLUTION, and the
+#    photometric bands are those of lbl.core.astro that overlap the domain.
+# How PCA2D reads the spectra: 'tfits' for APERO t.fits, which PCA2D reads
+#    itself with the extensions of PCA2D_TFITS_EXTENSIONS because they carry
+#    the telluric transmission and the sky that this class does not return;
+#    's2d' or 'e2ds' (order by order) read through this class. The name also
+#    labels the cached cube.
+params.set(key='PCA2D_INPUT_FORMAT', value='e2ds', source=__NAME__,
+           desc='how PCA2D reads the spectra: tfits (APERO t.fits, read by '
+                'PCA2D itself), s2d or e2ds (read through the instrument '
+                'class)', dtype=str, options=['tfits', 's2d', 'e2ds', 's1d'])
+# The extensions of an APERO t.fits PCA2D reads, as a dictionary with the
+#    keys flux, wave, blaze, recon (the telluric transmission) and sky (the
+#    sky emission that was subtracted, or None). Only used with
+#    PCA2D_INPUT_FORMAT = 'tfits'. A wrong fibre raises no error (it returns
+#    another fibre's light), which is why it is set here and never guessed
+params.set(key='PCA2D_TFITS_EXTENSIONS', value=None, source=__NAME__,
+           desc='the extensions of an APERO t.fits read by PCA2D: dict with '
+                'flux, wave, blaze, recon and sky')
+# The files of a science folder PCA2D reads (a glob). A wrap's INPUT_FILE,
+#    when it is more specific than *.fits, takes precedence
+params.set(key='PCA2D_INPUT_PATTERN', value='*.fits', source=__NAME__,
+           desc='the files of a science folder PCA2D reads (glob)', dtype=str)
+# Whether PCA2D brings the wavelength grid back to the observer's frame
+#    before the fit. Only for a pipeline that delivers a barycentric grid
+#    (get_berv then returns 0): the two-frame fit separates the star from
+#    the atmosphere by the BERV, and with a barycentric grid the two frames
+#    are one
+params.set(key='PCA2D_TO_OBSERVER', value=False, source=__NAME__,
+           desc='bring a barycentric wavelength grid back to the observer '
+                'frame before the PCA2D fit', dtype=bool)
+# The fraction of exposures that must have weighted a sample for the
+#    corrected files to keep it (1.0: all of them). Below 1 when the
+#    exposures do not all cover the same interval, as with
+#    PCA2D_TO_OBSERVER, where each one is shifted by its own BERV
+params.set(key='PCA2D_MASK_SHARE', value=1.0, source=__NAME__,
+           desc='fraction of exposures that must have weighted a sample for '
+                'PCA2D to keep it in the corrected files', dtype=float)
+# The instrument modes PCA2D keeps (the DRS mode in the headers), or None
+#    for all. Two modes (another fibre, another resolution) are two
+#    instruments for a common basis, with their own velocity zero points
+params.set(key='PCA2D_DRS_MODES', value=None, source=__NAME__,
+           desc='the instrument modes PCA2D keeps (None for all)')
+# The number of observer-frame components PCA2D fits and divides out when
+#    the wrap's PCA2D dict does not say
+params.set(key='PCA2D_N_EARTH', value=7, source=__NAME__,
+           desc='the number of observer-frame components of PCA2D',
+           dtype=int)
+# Whether PCA2D coadds the exposures of a night before the fit: 'auto'
+#    (only when the fit would not otherwise fit in memory), True or False
+params.set(key='PCA2D_NIGHTLY_STACK', value='auto', source=__NAME__,
+           desc='coadd the exposures of a night before the PCA2D fit: auto, '
+                'True or False')
+# The wavelength windows PCA2D's figures show, as 'centre:width' in nm.
+#    They aim at the regions with the deepest tellurics, each placed near
+#    the middle of an order's blaze (maintenance/windows/order_windows.py)
+params.set(key='PCA2D_WINDOWS', value=[], source=__NAME__,
+           desc='the windows of the PCA2D figures, centre:width in nm')
+
 # =============================================================================
 # Define other parameters
 # =============================================================================
@@ -922,6 +987,38 @@ params.set(key='KW_EXPTIME', value=None, source=__NAME__, not_none=False,
 # define the airmass of the observation
 params.set(key='KW_AIRMASS', value=None, source=__NAME__, not_none=False,
            desc='the airmass of the observation', fp_flag=True)
+
+# The keywords below describe the conditions of an exposure; PCA2D reads them
+#    into its metadata (lbl.pca2d). Each is a keyword or a list of keywords
+#    tried in order (the first the header has is used), and None for an
+#    instrument that does not write it
+
+# define the airmass at the end of the observation (None: KW_AIRMASS alone)
+params.set(key='KW_AIRMASS_END', value=None, source=__NAME__,
+           not_none=False,
+           desc='the airmass at the end of the observation')
+
+# define the seeing during the observation [arcsec]
+params.set(key='KW_SEEING', value=None, source=__NAME__, not_none=False,
+           desc='the seeing during the observation [arcsec]')
+
+# define the relative humidity during the observation [%]
+params.set(key='KW_HUMIDITY', value=None, source=__NAME__, not_none=False,
+           desc='the relative humidity during the observation [%]')
+
+# define the elevation of the Sun during the observation [deg]
+params.set(key='KW_SUN_ELEVATION', value=None, source=__NAME__,
+           not_none=False,
+           desc='the elevation of the Sun during the observation [deg]')
+
+# define the instrument mode of the observation (PCA2D_DRS_MODES selects on
+#    it)
+params.set(key='KW_DRS_MODE', value=None, source=__NAME__, not_none=False,
+           desc='the instrument mode of the observation')
+
+# define the largest BERV of the target over the year [km/s]
+params.set(key='KW_BERVMAX', value=None, source=__NAME__, not_none=False,
+           desc='the largest BERV of the target over the year [km/s]')
 
 # define the human date of the observation
 params.set(key='KW_DATE', value=None, source=__NAME__, not_none=False,

@@ -78,15 +78,22 @@ import re
 import shutil
 import time as _time
 import urllib.error
+import urllib.request
 import uuid
 import warnings
-import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
+
+from . import observatories as obs
+from . import tng
 from .log import log
+from .paths import USER_AGENT
+from .stars import resolve
 
 
+# =============================================================================
+# Define variables
+# =============================================================================
 #: the files of the archive of the TNG, and the e2ds of SOPHIE's
 TNG_FILES = 'http://archives.ia2.inaf.it/files/tng/'
 
@@ -95,40 +102,20 @@ SOPHIE_E2DS = ('http://atlas.obs-hp.fr/sophie/sophie.cgi?c=i&a=mime:'
                'application/fits&o=sophie:%5Be2ds,{seq}%5D')
 
 
-#: the instruments: what they are called, where their spectra are from,
-#: about how large one is [MB], and whether their velocities hold the
-#: perspective acceleration of the star (koloa.secular): LBL puts a
-#: spectrum at rest with the BERV of its pipeline, so they hold it as the
-#: velocities of that pipeline do (koloa.observatories): those of ESO
-#: (espdr: HARPS-N at the TNG, NIRPS, ESPRESSO) and of SOPHIE do, APERO's
-#: do not. HARPS-N on Barnard's star: 4.94 m/s/yr from 2013 to 2020, where
-#: 4.54 is expected
+#: the instruments: what they are called, and about how large one of
+#:    their spectra is once fetched [MB]
 INSTRUMENTS: Dict[str, Dict[str, Any]] = {
-    'HARPSN': dict(label='HARPS-N', size=9.8, classes=['HARPSN_ESO'],
-                   keys=[''], archive='the archive of the TNG (espdr S2D_A)',
-                   perspective=True),
-    'SOPHIE': dict(label='SOPHIE', size=4.2, classes=['SOPHIE_None'],
-                   keys=['', 'HE'], archive='the archive of the OHP (e2ds)',
-                   perspective=True),
-    'SPIROU': dict(label='SPIRou', size=18.4, classes=['SPIROU_CADC'],
-                   keys=[''], archive='the CADC (APERO t.fits)',
-                   perspective=False),
-    'NIRPS': dict(label='NIRPS', size=24.0,
-                  classes=['NIRPS_HE_ESO', 'NIRPS_HA_ESO'], keys=['', 'HA'],
-                  archive='the archive of ESO (S2D, telluric model)',
-                  perspective=True),
-    'HARPS': dict(label='HARPS', size=1.5, classes=['HARPS_ORIG'],
-                  keys=['', 'EGGS'],
-                  archive='the archive of ESO (HARPS DRS e2ds)',
-                  perspective=True),
-    'ESPRESSO': dict(label='ESPRESSO', size=65.0, classes=['ESPRESSO_None'],
-                     keys=['', 'HR11', 'HR21', 'HR42', 'UHR11', 'MR42', 'MR84'],
-                     archive='the archive of ESO (S2D_A)', perspective=True),
+    'HARPSN': dict(label='HARPS-N', size=9.8),
+    'SOPHIE': dict(label='SOPHIE', size=4.2),
+    'SPIROU': dict(label='SPIRou', size=18.4),
+    'NIRPS': dict(label='NIRPS', size=24.0),
+    'HARPS': dict(label='HARPS', size=1.5),
+    'ESPRESSO': dict(label='ESPRESSO', size=65.0),
 }
 
 
-#: the deepest telluric line kept in a spectrum of NIRPS from ESO (its
-#: transmission in ESO's model); deeper, the pixel is left out
+#: the least transmission of ESO's telluric model kept in a NIRPS
+#:    spectrum; where the model is lower, the pixel is left out
 TELLURIC_FLOOR = 0.5
 
 
@@ -136,74 +123,36 @@ TELLURIC_FLOOR = 0.5
 HEAD_BYTES = 512 + 2880 * 24
 
 
-#: the names of the datasets of the files kept, beside them, and the
-#: perspective acceleration taken out of them
-LABELS = 'labels.json'
-
-
-ALWAYS = (-1e9, 1e9)
-
-
+# =============================================================================
+# Define functions
+# =============================================================================
 def object_name(target: str) -> str:
     """the name of the star for LBL (letters and digits: GJ436)"""
     return re.sub(r'[^A-Za-z0-9]+', '', str(target)) or 'star'
 
 
-def _ident(target: str) -> Dict[str, Any]:
-    """the star as SIMBAD knows it, with how it moves"""
-    from .archive import resolve
-    from .secular import star_astrometry
-    ident = resolve(target)
-    try:
-        ident['astrometry'] = star_astrometry(ident)
-    except Exception as err:  # its place then is that of 2000
-        log(f'astrometry: {type(err).__name__}: {err}', 'warn')
-        ident['astrometry'] = None
-    return ident
+def folder_name(target: str) -> str:
+    """the folder of a star in the cache: its name as given, spaces as
+    underscores"""
+    return re.sub(r'[^A-Za-z0-9+\-.]+', '_', target.strip()).strip('_')
+
+
+def identify(target: str) -> Dict[str, Any]:
+    """the star as SIMBAD knows it, with how it moves (stars.resolve)"""
+    return resolve(target)
 
 
 def _star(ident: Dict[str, Any]) -> Dict[str, Any]:
     """the star as the archives are asked about it"""
-    astro = ident.get('astrometry') or {}
-    return dict(ra=ident['ra'], dec=ident['dec'], pmra=astro.get('pmra'),
-                pmdec=astro.get('pmdec'),
+    return dict(ra=ident['ra'], dec=ident['dec'], pmra=ident.get('pmra'),
+                pmdec=ident.get('pmdec'),
                 names=[ident.get('main') or ''] + list(
                     ident.get('aliases') or []))
 
 
 # -----------------------------------------------------------------------------
-# The spectra of each instrument, and how a file of them is fetched
+# Fetching a file, or a part of one
 # -----------------------------------------------------------------------------
-def harpsn_spectra(target: str, root: str = 'archives',
-                   ident: Optional[Dict[str, Any]] = None) -> List[str]:
-    """
-    The espdr S2D_A files of HARPS-N of a star: those of the exposures
-    koloa keeps from their CCFs (koloa.tng.series), read from the folder of
-    the star when its archives were gathered, else from what koloa's users
-    shared or from the archive
-
-    :return: list of str, the names of the files (gzipped, as the archive
-             has them), by date
-    """
-    from . import tng
-    from .gather import folder_name
-    folder = os.path.join(root, folder_name(target), 'rv', 'published')
-    table = os.path.join(folder, 'tng_exposures.csv')
-    if os.path.exists(table):
-        import csv
-        with open(table) as handle:
-            rows = list(csv.DictReader(handle))
-    else:
-        os.makedirs(folder, exist_ok=True)
-        rows = tng.exposures(_star(ident or _ident(target)), folder)
-    kept = [about for _, about in tng.series(rows, target)
-            if about['reduction'] == 'espdr']
-    if not kept:
-        return []
-    return [name.replace('_CCF_A.fits', '_S2D_A.fits')
-            for name in kept[0]['files']]
-
-
 def _download(url: str, path: str, timeout: float = 300.0,
               gunzip: bool = False) -> str:
     """a file of an archive, gunzipped if asked, written whole or not at
@@ -211,7 +160,7 @@ def _download(url: str, path: str, timeout: float = 300.0,
     part = path + '.part'
     try:
         with urllib.request.urlopen(urllib.request.Request(
-                url, headers={'User-Agent': 'koloa'}),
+                url, headers={'User-Agent': USER_AGENT}),
                 timeout=timeout) as response, open(part, 'wb') as handle:
             source = gzip.GzipFile(fileobj=response) if gunzip else response
             shutil.copyfileobj(source, handle, 1 << 20)
@@ -227,7 +176,7 @@ def _range(url: str, start: int, size: int, timeout: float = 300.0
            ) -> bytes:
     """bytes of a file of an archive (an HTTP Range request)"""
     with urllib.request.urlopen(urllib.request.Request(
-            url, headers={'User-Agent': 'koloa', 'Range':
+            url, headers={'User-Agent': USER_AGENT, 'Range':
                           f'bytes={start}-{start + size - 1}'}),
             timeout=timeout) as response:
         data = response.read()
@@ -275,49 +224,21 @@ def tar_members(url: str) -> List[Tuple[str, int, int]]:
     return out
 
 
-def _get_tng(one: Dict[str, Any], science: str, calib: str) -> str:
-    """an S2D_A of the TNG, gunzipped"""
-    return _download(TNG_FILES + one['id'], os.path.join(science, one['name']),
-                     gunzip=True)
+def _member(members: List[Tuple[str, int, int]], *ends: str
+            ) -> Optional[Tuple[str, int, int]]:
+    """the file of a tar whose name ends one of the ways given"""
+    return next((one for end in ends for one in members
+                 if one[0].endswith(end)), None)
 
 
-def _get_sophie(one: Dict[str, Any], science: str, calib: str) -> str:
-    """an e2ds of SOPHIE: its spectrum (fibre A) as the science file, its
-    blaze as the calibration file its header names; a spectrum of a
-    programme still protected (no BERV, its date rounded) left out"""
-    try:
-        from astropy.io import fits
-    except ImportError:
-        return 'astropy is needed to read the spectra of SOPHIE'
-    try:
-        with urllib.request.urlopen(urllib.request.Request(
-                SOPHIE_E2DS.format(seq=one['id']),
-                headers={'User-Agent': 'koloa'}), timeout=300) as response:
-            raw = response.read()
-    except (urllib.error.URLError, TimeoutError, OSError) as err:
-        return f'{type(err).__name__}: {err}'
-    if not raw:
-        return 'not public yet'
-    try:
-        with fits.open(io.BytesIO(raw)) as hdul:
-            head = hdul[0].header.copy()
-            bjd = head.get('HIERARCH OHP DRS BJD')
-            if head.get('HIERARCH OHP DRS BERV') is None or bjd is None \
-                    or float(bjd) == int(float(bjd)):
-                return 'of a programme still protected (no BERV)'
-            blaze = f'{one["id"]}_blaze_A.fits'
-            head['HIERARCH OHP DRS BLAZE FILE'] = blaze
-            fits.PrimaryHDU(hdul['BLAZE_A'].data).writeto(
-                os.path.join(calib, blaze), overwrite=True)
-            path = os.path.join(science, one['name'])
-            fits.PrimaryHDU(hdul[0].data, head).writeto(path + '.part',
-                                                        overwrite=True)
-            os.replace(path + '.part', path)
-    except (OSError, KeyError, ValueError) as err:
-        return f'{type(err).__name__}: {err}'
-    return ''
+def _safe(name: str) -> str:
+    """a name of a file with only plain characters (LBL asks for them)"""
+    return re.sub(r'[^A-Za-z0-9._-]+', '-', name)
 
 
+# -----------------------------------------------------------------------------
+# Which exposures are the star's
+# -----------------------------------------------------------------------------
 def _designation(name: str) -> Optional[Tuple[str, str]]:
     """a name as a catalogue and a number (GJ 699, Gl699, GJ699-HE: GJ and
     699; TOI-1452: TOI and 1452; GJ 15 B: GJ and 15B), None when it is not
@@ -333,9 +254,9 @@ def _designation(name: str) -> Optional[Tuple[str, str]]:
 
 def _other(name: str, mine: Dict[str, set]) -> bool:
     """whether the name of a target is that of another star: of a
-    catalogue the star is in, under another number (TOI-1760 beside
-    TOI-1452, GJ 15 B beside GJ 15 A); a name of no catalogue of the star,
-    or none, is not (an observer's own: K4_02)"""
+    catalogue the star is in, under another number (GJ 15 B beside GJ 15
+    A); a name of no catalogue of the star, or none, is not (an observer's
+    own: K4_02)"""
     found = _designation(name)
     if found is None or found[0] not in mine:
         return False
@@ -353,8 +274,8 @@ def _named(found: List[Dict[str, Any]], star: Dict[str, Any],
     """
     The exposures pointed at a star that are not of another star by their
     name: one of a catalogue the star is in, under another number (the
-    companion of a binary, TOI-1760 beside TOI-1452), would spoil the
-    template of LBL; the observers' own names are kept (GJ699-HE, Gl699)
+    companion of a binary), would spoil the template of LBL; the
+    observers' own names are kept (GJ699-HE, Gl699)
 
     :param found: the exposures, each with its target
     """
@@ -372,15 +293,29 @@ def _named(found: List[Dict[str, Any]], star: Dict[str, Any],
     return kept
 
 
+def harpsn_spectra(target: str, star: Dict[str, Any], root: str
+                   ) -> List[str]:
+    """
+    The espdr S2D_A files of HARPS-N of a star: those of the exposures on
+    the star (tng.espdr_files), whose headers are kept in the star's folder
+    of the cache (root/<target>/tng.TABLE)
+
+    :return: list of str, the names of the files (gzipped, as the archive
+             has them), by date
+    """
+    folder = os.path.join(root, folder_name(target))
+    rows = tng.exposures(star, folder)
+    return [name.replace('_CCF_A.fits', '_S2D_A.fits')
+            for name in tng.espdr_files(rows)]
+
+
 def spirou_spectra(star: Dict[str, Any]) -> List[str]:
     """
     The t.fits of SPIRou of a star at the CADC (APERO's spectra, the
     telluric lines taken out): those public, pointed at where the star was
-    (koloa.observatories, as its CCFs are)
 
     :return: list of str, their URIs (cadc:CFHT/<odometer>t.fits), by date
     """
-    from . import observatories as obs
     rows = obs._tap(obs.CADC_TAP, (
         "SELECT o.target_name AS target, "
         "o.targetPosition_coordinates_cval1 AS ra, "
@@ -405,36 +340,6 @@ def spirou_spectra(star: Dict[str, Any]) -> List[str]:
         kept, key=lambda one: one['mjd'])))
 
 
-def _get_cadc(one: Dict[str, Any], science: str, calib: str) -> str:
-    """a t.fits of SPIRou at the CADC (a signed address it redirects to);
-    one of an older reduction, whose FluxAB LBL cannot read (no MJDMID),
-    left out"""
-    from .observatories import CADC_FILE
-    path = os.path.join(science, one['name'])
-    why = _download(CADC_FILE + one['id'], path)
-    if why:
-        return why
-    try:
-        from astropy.io import fits
-        with fits.open(path) as hdul:
-            head = hdul['FluxAB'].header
-            if 'MJDMID' not in head:
-                version = hdul[0].header.get('VERSION', '?')
-                os.remove(path)
-                return f'APERO {version}: an older reduction LBL does not read'
-    except ImportError:
-        pass
-    except (OSError, KeyError) as err:
-        os.remove(path)
-        return f'{type(err).__name__}: {err}'
-    return ''
-
-
-def _safe(name: str) -> str:
-    """a name of a file with only plain characters (LBL asks for them)"""
-    return re.sub(r'[^A-Za-z0-9._-]+', '-', name)
-
-
 def eso_spectra(star: Dict[str, Any], ins: str,
                 category: str = 'ANCILLARY.2DECHELLE.TAR'
                 ) -> List[Dict[str, Any]]:
@@ -448,8 +353,6 @@ def eso_spectra(star: Dict[str, Any], ins: str,
     :return: list of dict: id (the tar), target, mjd, mode, bin, object, by
              date
     """
-    from . import observatories as obs
-    from .tng import header
     ra, dec = float(star['ra']), float(star['dec'])
     rows = obs._tap(obs.ESO_OBS, (
         "SELECT o.target_name AS target, o.t_min AS mjd, o.obs_release_date "
@@ -475,7 +378,7 @@ def eso_spectra(star: Dict[str, Any], ins: str,
             raw = _range(obs.ESO_FILE + one['id'], 0, HEAD_BYTES, 120.0)
         except (urllib.error.URLError, TimeoutError, OSError):
             return None
-        cards = header(raw[512:])
+        cards = tng.header(raw[512:])
         return dict(one, mode=str(cards.get('ESO INS MODE') or '').strip(),
                     bin=f'{cards.get("ESO DET BINX", 1)}'
                         f'{cards.get("ESO DET BINY", 1)}',
@@ -486,31 +389,94 @@ def eso_spectra(star: Dict[str, Any], ins: str,
     return sorted(out, key=lambda one: one['mjd'])
 
 
-def _member(url: str, members: List[Tuple[str, int, int]], *ends: str
-            ) -> Optional[Tuple[str, int, int]]:
-    """the file of a tar whose name ends one of the ways given"""
-    return next((one for end in ends for one in members
-                 if one[0].endswith(end)), None)
+# -----------------------------------------------------------------------------
+# One spectrum of each instrument into the data folder: '' or why not
+# -----------------------------------------------------------------------------
+def _get_tng(one: Dict[str, Any], science: str, calib: str) -> str:
+    """an S2D_A of the TNG, gunzipped"""
+    return _download(TNG_FILES + one['id'], os.path.join(science, one['name']),
+                     gunzip=True)
+
+
+def _get_sophie(one: Dict[str, Any], science: str, calib: str) -> str:
+    """an e2ds of SOPHIE: its spectrum (fibre A) as the science file, its
+    blaze as the calibration file its header names; a spectrum of a
+    programme still protected (no BERV, its date rounded) left out"""
+    try:
+        from astropy.io import fits
+    except ImportError:
+        return 'astropy is needed to read the spectra of SOPHIE'
+    try:
+        with urllib.request.urlopen(urllib.request.Request(
+                SOPHIE_E2DS.format(seq=one['id']),
+                headers={'User-Agent': USER_AGENT}), timeout=300) as response:
+            raw = response.read()
+    except (urllib.error.URLError, TimeoutError, OSError) as err:
+        return f'{type(err).__name__}: {err}'
+    if not raw:
+        return 'not public yet'
+    try:
+        with fits.open(io.BytesIO(raw)) as hdul:
+            head = hdul[0].header.copy()
+            bjd = head.get('HIERARCH OHP DRS BJD')
+            if head.get('HIERARCH OHP DRS BERV') is None or bjd is None \
+                    or float(bjd) == int(float(bjd)):
+                return 'of a programme still protected (no BERV)'
+            blaze = f'{one["id"]}_blaze_A.fits'
+            head['HIERARCH OHP DRS BLAZE FILE'] = blaze
+            fits.PrimaryHDU(hdul['BLAZE_A'].data).writeto(
+                os.path.join(calib, blaze), overwrite=True)
+            path = os.path.join(science, one['name'])
+            fits.PrimaryHDU(hdul[0].data, head).writeto(path + '.part',
+                                                        overwrite=True)
+            os.replace(path + '.part', path)
+    except (OSError, KeyError, ValueError) as err:
+        return f'{type(err).__name__}: {err}'
+    return ''
+
+
+def _get_cadc(one: Dict[str, Any], science: str, calib: str) -> str:
+    """a t.fits of SPIRou at the CADC (a signed address it redirects to);
+    one of an older reduction, whose FluxAB LBL cannot read (no MJDMID),
+    left out"""
+    path = os.path.join(science, one['name'])
+    why = _download(obs.CADC_FILE + one['id'], path)
+    if why:
+        return why
+    try:
+        from astropy.io import fits
+        with fits.open(path) as hdul:
+            head = hdul['FluxAB'].header
+            if 'MJDMID' not in head:
+                version = hdul[0].header.get('VERSION', '?')
+                os.remove(path)
+                return f'APERO {version}: an older reduction LBL does not read'
+    except ImportError:
+        pass
+    except (OSError, KeyError) as err:
+        os.remove(path)
+        return f'{type(err).__name__}: {err}'
+    return ''
 
 
 def _get_nirps(one: Dict[str, Any], science: str, calib: str) -> str:
     """
     A spectrum of NIRPS from ESO: its S2D with the blaze (S2D_BLAZE_A)
     divided by ESO's model of the telluric lines (S2D_TELL_SPECTRUM_A),
-    the lines deeper than TELLURIC_FLOOR left out, as the science file;
-    the blaze of its night, as the calibration file its header names
+    the pixels whose transmission is below TELLURIC_FLOOR left out, as the
+    science file; the blaze of its night, as the calibration file its
+    header names
     """
     try:
         from astropy.io import fits
         import numpy as np
     except ImportError:
         return 'astropy is needed to read the spectra of ESO'
-    from .observatories import ESO_FILE
-    url = ESO_FILE + one['id']
+    url = obs.ESO_FILE + one['id']
     try:
         members = tar_members(url)
-        flux = _member(url, members, '_S2D_BLAZE_A.fits')
-        tell = _member(url, members, '_S2D_TELL_SPECTRUM_A.fits')
+        flux = _member(members, '_S2D_BLAZE_A.fits')
+        tell = _member(members, '_S2D_TELL_SPECTRUM_A.fits')
         # the blaze of the night (not the S2D with its blaze)
         blaze = next((part for part in members
                       if part[0].endswith('_BLAZE_A.fits')
@@ -534,8 +500,8 @@ def _get_nirps(one: Dict[str, Any], science: str, calib: str) -> str:
                     data = np.asarray(hdul[ext].data, float) / trans
                     data[bad] = np.nan
                     hdul[ext].data = data.astype(np.float32)
-            hdul[0].header['HIERARCH KOLOA TELL FLOOR'] = (
-                TELLURIC_FLOOR, 'koloa: divided by S2D_TELL_SPECTRUM_A')
+            hdul[0].header['HIERARCH LBL TELL FLOOR'] = (
+                TELLURIC_FLOOR, 'divided by S2D_TELL_SPECTRUM_A')
             path = os.path.join(science, one['name'])
             hdul.writeto(path + '.part', overwrite=True)
             os.replace(path + '.part', path)
@@ -590,11 +556,10 @@ def _get_harps(one: Dict[str, Any], science: str, calib: str) -> str:
         from astropy.io import fits
     except ImportError:
         return 'astropy is needed to read the spectra of ESO'
-    from .observatories import ESO_FILE
-    url = ESO_FILE + one['id']
+    url = obs.ESO_FILE + one['id']
     try:
         members = tar_members(url)
-        flux = _member(url, members, '_e2ds_A.fits')
+        flux = _member(members, '_e2ds_A.fits')
         if not flux:
             return 'no e2ds_A in its tar'
         raw = _range(url, flux[1], flux[2])
@@ -606,8 +571,8 @@ def _get_harps(one: Dict[str, Any], science: str, calib: str) -> str:
             blaze = os.path.join(calib, os.path.basename(bname))
             if not os.path.exists(blaze):
                 head = fits.Header()
-                head['HIERARCH KOLOA BLAZE'] = (
-                    'empirical', 'koloa: envelope of ' + flux[0][-40:])
+                head['HIERARCH LBL BLAZE'] = (
+                    'empirical', 'envelope of ' + flux[0][-40:])
                 part = f'{blaze}.{uuid.uuid4().hex}.part'
                 fits.PrimaryHDU(empirical_blaze(hdul[0].data),
                                 header=head).writeto(part)
@@ -631,11 +596,10 @@ def _get_harps(one: Dict[str, Any], science: str, calib: str) -> str:
 def _get_espresso(one: Dict[str, Any], science: str, calib: str) -> str:
     """a spectrum of ESPRESSO from ESO: the S2D_A of its tar (blaze
     corrected), as it is"""
-    from .observatories import ESO_FILE
-    url = ESO_FILE + one['id']
+    url = obs.ESO_FILE + one['id']
     try:
         members = tar_members(url)
-        flux = _member(url, members, '_S2D_A.fits') or next(
+        flux = _member(members, '_S2D_A.fits') or next(
             (part for part in members
              if os.path.basename(part[0]).startswith('ES_S2DA')), None)
         if not flux:
@@ -649,162 +613,97 @@ def _get_espresso(one: Dict[str, Any], science: str, calib: str) -> str:
     return ''
 
 
-def groups(target: str, inst: str, root: str = 'archives',
+# -----------------------------------------------------------------------------
+# The runs of LBL of an instrument for a star
+# -----------------------------------------------------------------------------
+def groups(target: str, inst: str, root: str,
            ident: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """
-    The runs of LBL of an instrument for a star: for each, its spectra
-    (id in the archive, name here), the class of LBL that reads them, its
-    parameters, and the datasets its rdb makes (eras: suffix of the file,
-    name of the dataset, from and to [BJD - 2400000])
+    The runs of LBL of an instrument for a star: for each, the LBL
+    instrument and data source that read its spectra, its file pattern,
+    the parameters its wrap sets, its spectra (id in the archive, name
+    here) and how one of them is fetched
 
-    :return: list of dict: key, obj, lbl, source, input, tellu, params,
-             spectra, eras, get
+    :param target: str, the star as it was asked for
+    :param inst: str, one of INSTRUMENTS
+    :param root: str, a folder of the cache for what a search keeps
+    :param ident: dict or None, the star (identify(target) when None)
+
+    :return: list of dict: key (the setting, '' for the main one), obj (the
+             object name LBL gets), lbl, source, input, params, spectra
+             (list of dict: id, name), get (function: one spectrum, the
+             science folder, the calibration folder; '' or why not)
     """
     obj = object_name(target)
+    star = _star(ident or identify(target))
     if inst == 'HARPSN':
-        names = harpsn_spectra(target, root, ident)
+        names = harpsn_spectra(target, star, root)
         return [dict(key='', obj=obj, lbl='HARPSN', source='ESO',
-                     input='*S2D_A.fits', tellu=True, params={},
-                     spectra=[dict(id=name, name=name[:-3]) for name in names],
-                     eras=[('', 'HARPS-N (LBL)') + ALWAYS], get=_get_tng, via='tng')]
+                     input='*S2D_A.fits', params={},
+                     spectra=[dict(id=name, name=name[:-3])
+                              for name in names],
+                     get=_get_tng)]
     if inst == 'SOPHIE':
-        from . import observatories
-        parts, _ = observatories.sophie(_star(ident or _ident(target)), '',
-                                        name=target)
-        out = []
-        for mode, key in (('HR', ''), ('HE', 'HE')):
-            seqs = [seq for _, about in parts
-                    if (' HE ' in about['label']) == (mode == 'HE')
-                    for seq in about.get('files', [])]
-            if not seqs:
-                continue
-            tail = ' HE' if mode == 'HE' else ''
-            cut = observatories.SOPHIE_2011
-            out.append(dict(
-                key=key, obj=obj + key, lbl='SOPHIE', source='None',
-                input='*_e2ds_A.fits', tellu=True, params={},
-                spectra=[dict(id=seq, name=f'{seq}_e2ds_A.fits')
-                         for seq in seqs],
-                eras=[(key, f'SOPHIE{tail} (LBL)', ALWAYS[0], cut),
-                      (key + 'p', f'SOPHIE+{tail} (LBL)', cut, ALWAYS[1])],
-                get=_get_sophie, via='sophie'))
-        return out
+        found = obs.sophie_spectra(star)
+        return [dict(key=key, obj=obj + key, lbl='SOPHIE', source='None',
+                     input='*_e2ds_A.fits', params={},
+                     spectra=[dict(id=seq, name=f'{seq}_e2ds_A.fits')
+                              for seq in found[mode]],
+                     get=_get_sophie)
+                for mode, key in (('HR', ''), ('HE', 'HE'))
+                if found.get(mode)]
     if inst == 'SPIROU':
-        uris = spirou_spectra(_star(ident or _ident(target)))
+        uris = spirou_spectra(star)
         return [dict(key='', obj=obj, lbl='SPIROU', source='CADC',
-                     input='*t.fits', tellu=False, params={},
+                     input='*t.fits', params={},
                      spectra=[dict(id=uri, name=uri.rsplit('/', 1)[-1])
                               for uri in uris],
-                     eras=[('', 'SPIRou (LBL)') + ALWAYS], get=_get_cadc, via='cadc')]
+                     get=_get_cadc)]
     if inst == 'NIRPS':
-        found = eso_spectra(_star(ident or _ident(target)), 'NIRPS')
+        found = eso_spectra(star, 'NIRPS')
         out = []
         for mode, key in (('HE', ''), ('HA', 'HA')):
             mine = [one for one in found if one['mode'] == mode]
             if mine:
                 out.append(dict(
                     key=key, obj=obj + key, lbl=f'NIRPS_{mode}', source='ESO',
-                    input='*TCORR_A.fits', tellu=False,
+                    input='*TCORR_A.fits',
                     params=dict(BLAZE_CORRECTED=False),
                     spectra=[dict(id=one['id'], name=_safe(
                         f'r.NIRPS.{one["id"]}_S2D_BLAZE_TCORR_A.fits'))
                         for one in mine],
-                    eras=[(key, 'NIRPS' + ('' if mode == 'HE' else '_HA')
-                           + ' (LBL)') + ALWAYS], get=_get_nirps, via='nirps'))
+                    get=_get_nirps))
         return out
     if inst == 'HARPS':
-        from .observatories import HARPS_2015
-        found = eso_spectra(_star(ident or _ident(target)), 'HARPS',
-                            'ANCILLARY.HARPSTAR')
+        found = eso_spectra(star, 'HARPS', 'ANCILLARY.HARPSTAR')
         out = []
         for mode, key in (('HAM', ''), ('EGGS', 'EGGS')):
             mine = [one for one in found
                     if (one['mode'].upper() == 'EGGS') == (mode == 'EGGS')]
-            if not mine:
-                continue
-            tail = '' if mode == 'HAM' else '_EGGS'
-            out.append(dict(
-                key=key, obj=obj + key, lbl='HARPS', source='ORIG',
-                input='*_e2ds_A.fits', tellu=True, params={},
-                spectra=[dict(id=one['id'], name=_safe(
-                    f'HARPS.{one["id"]}_e2ds_A.fits')) for one in mine],
-                eras=[(key + '03', f'HARPS03{tail} (LBL)', ALWAYS[0],
-                       HARPS_2015),
-                      (key + '15', f'HARPS15{tail} (LBL)', HARPS_2015,
-                       ALWAYS[1])],
-                get=_get_harps, via='harps'))
+            if mine:
+                out.append(dict(
+                    key=key, obj=obj + key, lbl='HARPS', source='ORIG',
+                    input='*_e2ds_A.fits', params={},
+                    spectra=[dict(id=one['id'], name=_safe(
+                        f'HARPS.{one["id"]}_e2ds_A.fits')) for one in mine],
+                    get=_get_harps))
         return out
     if inst == 'ESPRESSO':
-        from .observatories import ESPRESSO_2019
-        found = eso_spectra(_star(ident or _ident(target)), 'ESPRESSO')
+        found = eso_spectra(star, 'ESPRESSO')
         kinds = [one['mode'].replace('SINGLE', '').replace('MULTI', '')
                  + one['bin'] for one in found]
         out = []
         if kinds:
+            # the setting most spectra have is the main run
             main = max(set(kinds), key=kinds.count)
             for kind in sorted(set(kinds), key=lambda one: (one != main, one)):
-                mine = [one for one, it in zip(found, kinds) if it == kind]
                 key = '' if kind == main else kind
-                tail = '' if kind == main else f'_{kind}'
                 out.append(dict(
                     key=key, obj=obj + key, lbl='ESPRESSO', source='None',
-                    input='*S2D_A.fits', tellu=True, params={},
+                    input='*S2D_A.fits', params={},
                     spectra=[dict(id=one['id'], name=_safe(
                         f'ESPRESSO.{one["id"]}_S2D_A.fits'))
-                        for one in mine],
-                    eras=[(key + '18', f'ESPRESSO18{tail} (LBL)', ALWAYS[0],
-                           ESPRESSO_2019),
-                          (key + '19', f'ESPRESSO19{tail} (LBL)',
-                           ESPRESSO_2019, ALWAYS[1])],
-                    get=_get_espresso, via='espresso'))
+                        for one, it in zip(found, kinds) if it == kind],
+                    get=_get_espresso))
         return out
     raise ValueError(f'no instrument {inst} for LBL: {", ".join(INSTRUMENTS)}')
-
-
-#: how the spectra of a run are fetched, by its name in a plan
-GETTERS = dict(tng=_get_tng, sophie=_get_sophie, cadc=_get_cadc,
-               nirps=_get_nirps, espresso=_get_espresso, harps=_get_harps)
-
-
-def plain_group(group: Dict[str, Any]) -> Dict[str, Any]:
-    """a run as a plan keeps it (JSON: the way its spectra are fetched by
-    its name)"""
-    return {key: val for key, val in group.items() if key != 'get'}
-
-
-def live_group(group: Dict[str, Any]) -> Dict[str, Any]:
-    """a run of a plan, its way of fetching its spectra back"""
-    return dict(group, get=GETTERS[group['via']],
-                eras=[tuple(era) for era in group['eras']])
-
-
-def kept(target: str, root: str = 'archives') -> List[Dict[str, Any]]:
-    """the rdb of LBL kept for a star: path, inst, label (its dataset),
-    npoints, made"""
-    from .gather import folder_name
-    name = folder_name(target)
-    here = os.path.join(root, name, 'lbl')
-    if not os.path.isdir(here):
-        return []
-    labels = {}
-    if os.path.exists(os.path.join(here, LABELS)):
-        with open(os.path.join(here, LABELS)) as handle:
-            labels = json.load(handle)
-    out = []
-    for file in sorted(os.listdir(here)):
-        found = re.match(re.escape(name) + r'_([A-Z]+?)([A-Za-z0-9]*)_lbl\.rdb$',
-                         file)
-        if not found:
-            continue
-        inst = next((key for key in INSTRUMENTS
-                     if (found[1] + found[2]).startswith(key)), found[1])
-        path = os.path.join(here, file)
-        with open(path) as handle:
-            npoints = max(0, sum(1 for _ in handle) - 2)
-        out.append(dict(path=os.path.abspath(path), inst=inst,
-                        label=labels.get(file, INSTRUMENTS.get(
-                            inst, {}).get('label', inst) + ' (LBL)'),
-                        npoints=npoints, made=_time.strftime(
-                            '%Y-%m-%d %H:%M', _time.localtime(
-                                os.path.getmtime(path)))))
-    return out

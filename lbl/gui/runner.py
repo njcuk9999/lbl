@@ -2,8 +2,10 @@
 handed to whoever watches it.
 
 A run is an ordinary LBL wrap (wrap.py) started with the python of the
-environment LBL is installed in, in its own process group so that Stop stops
-everything it started (LBL and PCA2D start workers of their own). Its output
+environment LBL is installed in, through a small launcher (LAUNCHER) rather
+than a shell, so that it starts the same way on Windows as on macOS and
+Linux, in its own process group so that Stop stops everything it started
+(LBL and PCA2D start workers of their own). Its output
 is cut into finished lines and redraws of a progress bar (cut_output), each
 line given the level its colour says (LBL's and PCA2D's loggers colour info,
 values, warnings and errors), and kept as a list of events that a page can
@@ -49,6 +51,47 @@ COUNTERS = (re.compile(r"\bfile (\d+) of (\d+)\b"),
             re.compile(r"\b(\d+)/(\d+) files\b"))
 #: how long a run is given to stop before it is killed [s]
 GRACE = 10.0
+#: what a run is started with, by the wrap's own interpreter (python -u -c
+#:   LAUNCHER wrap exit_file): the wrap run as `python wrap.py` runs it (its
+#:   folder first on sys.path where -c put the current one, its name as
+#:   sys.argv, as __main__), then its exit code written to exit_file whatever
+#:   happened (a normal end, a SystemExit, an exception, its traceback
+#:   printed from the wrap's frame on), where a window closed meanwhile can
+#:   still read it. Any Python 3 reads it (the wrap's interpreter need not be
+#:   the window's), and it holds no double quote and no backslash, which a
+#:   Windows command line would have to escape
+LAUNCHER = '''
+import os, runpy, sys, traceback
+wrap, exit_file = sys.argv[1], sys.argv[2]
+sys.argv = [wrap]
+if sys.path and sys.path[0] == '':
+    sys.path[0] = os.path.dirname(os.path.realpath(wrap))
+code = 1
+try:
+    runpy.run_path(wrap, run_name='__main__')
+    code = 0
+except SystemExit as exc:
+    if exc.code is None:
+        code = 0
+    elif isinstance(exc.code, int):
+        code = exc.code
+    else:
+        print(exc.code, file=sys.stderr)
+except BaseException as exc:
+    where = exc.__traceback__
+    while where is not None and where.tb_frame.f_code.co_filename != wrap:
+        where = where.tb_next
+    traceback.print_exception(type(exc), exc, where)
+finally:
+    try:
+        with open(exit_file, 'w', encoding='utf-8') as handle:
+            handle.write(str(code))
+    except OSError:
+        pass
+sys.stdout.flush()
+sys.stderr.flush()
+sys.exit(code)
+'''
 
 
 def cut_output(buffer: str):
@@ -60,7 +103,6 @@ def cut_output(buffer: str):
     carriage return, i.e. it is one draw of a bar that the next segment
     replaces; `rest` is what is not terminated yet, to be put in front of the
     next chunk (a pipe hands its output over wherever it happened to fill).
-    (Ported from pca2d-preclean's window.)
     """
     segments = []
     start = i = 0
@@ -170,6 +212,11 @@ class Job:
         level = level_of(text)
         plain = strip(text)
         with self.cond:
+            # the draw already on show (shown while the run was quiet, before
+            #   the carriage return that ends it came): nothing new
+            if transient and self.transient and self.events \
+                    and self.events[-1]["text"] == plain:
+                return
             op = "replace" if self.transient and self.events else "add"
             self.events.append(dict(n=len(self.events), op=op,
                                     text=plain, level=level))
@@ -250,17 +297,18 @@ class Job:
         """run.json, what the history reads back."""
         out = self.summary()
         out.pop("events", None)
-        with open(os.path.join(self.folder, "run.json"), "w") as handle:
+        with open(os.path.join(self.folder, "run.json"), "w",
+                  encoding="utf-8") as handle:
             json.dump(out, handle, indent=1, default=str)
 
 
 class Runner:
     """The queue: runs start in the order they were asked for, one at a
-    time (a PCA2D fit can take most of a laptop's memory).
+    time (a PCA2D fit can take most of a machine's memory).
 
     A run does not depend on the window: its output goes to a file
     (run.raw) that the window follows, and its exit code to another (exit),
-    written by the shell that starts it. Closing the window leaves a run
+    written by the launcher that runs it. Closing the window leaves a run
     going; opening it again on the same data folder finds it (adopt), and
     the runs still queued with it.
     """

@@ -1,7 +1,6 @@
 """The spectra of a star in the public archives, for LBL: searched and
-fetched through lbl.gui.fetch (koloa's archive code, carried into LBL:
-github.com/eartigau/koloa, koloa.lblrun), which knows where each
-instrument's LBL-readable spectra are:
+fetched through lbl.gui.fetch, which knows where each instrument's
+LBL-readable spectra are:
 
     SPIROU    the CADC, APERO's t.fits (LBL's SPIROU CADC)
     NIRPS     ESO, the S2D with ESO's telluric model (NIRPS_HE/HA ESO)
@@ -15,11 +14,10 @@ A search asks every instrument at once (an archive that does not answer
 holds the others up no more than its own time); what each one has is a
 run of LBL, a group: its LBL instrument and source, its spectra. A fetch
 writes a group's spectra into DATA_DIR/science/<folder>/ and its
-calibrations into DATA_DIR/calib/, through fetch.lblrun's own getters,
-and never moves or overwrites a file that is there (koloa's lblrun.fetch
-moves aside what is not the star's: not here). The folder
-then holds ARCHIVE_FILE, what it came from, which the window reads to set
-the data source and the file pattern of the wrap.
+calibrations into DATA_DIR/calib/, through each group's own getter, and
+never moves or overwrites a file that is there. The folder then holds
+ARCHIVE_FILE, what it came from, which the window reads to set the data
+source and the file pattern of the wrap.
 """
 from __future__ import annotations
 
@@ -34,13 +32,12 @@ from concurrent.futures import ThreadPoolExecutor
 #: the instruments asked, in the order the window shows them
 INSTRUMENTS = ("SPIROU", "NIRPS", "HARPS", "HARPSN", "SOPHIE", "ESPRESSO")
 #: each instrument's archive and the product LBL reads, said shortly
-#:    (fetch.lblrun's own description is an English sentence)
 ARCHIVE_NAMES = dict(SPIROU="CADC · APERO t.fits", NIRPS="ESO · S2D + tellu",
                      HARPS="ESO · DRS e2ds",
                      HARPSN="TNG (IA2) · S2D_A", SOPHIE="OHP · e2ds",
                      ESPRESSO="ESO · S2D_A")
-#: what the search keeps while it works (the TNG's exposures of a star...),
-#:    in the fetch's cache (fetch.paths)
+#: what the search keeps while it works (the headers of a star's HARPS-N
+#:    exposures), in the fetch's cache (fetch.paths)
 def _root():
     from .fetch.paths import cache
     return cache("archives")
@@ -49,7 +46,7 @@ ARCHIVE_FILE = ".lbl_archive.json"
 #: the files fetched at once
 WORKERS = 4
 #: each instrument's observatory and its latitude [deg] (astropy's site
-#:    registry, EarthLocation.of_site, 2026-10-25): a star that never rises
+#:    registry, EarthLocation.of_site): a star that never rises
 #:    MIN_ALTITUDE above its horizon is not asked for there
 SITES = dict(SPIROU=("CFHT", 19.8267), NIRPS=("La Silla", -29.2567),
              HARPS=("La Silla", -29.2567), HARPSN=("the TNG", 28.7583),
@@ -64,37 +61,32 @@ MAX_REQUESTS, PER_ARCHIVE = 12, 2
 LOG_KEEP, LOG_SENT = 2000, 400
 #: the window's archives, which the fetch's own lines go to while it works
 _SINK = None
-_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+#: the fetch's levels as the window's log has them
+_LEVELS = dict(value="info", warn="warn", error="error")
+
+
+def _hear(message, level):
+    """One line the fetch says (fetch.log.log), into the window's log too:
+    it says what an archive is doing while it is slow."""
+    if _SINK is not None and str(message).strip():
+        _SINK.say("fetch: " + str(message).strip(),
+                  _LEVELS.get(level, "info"))
 
 
 def _hook_log():
-    """The fetch prints its lines (fetch.log._say): they go to the window's
-    log too, since they say what an archive is doing while it is slow."""
+    """The window listens to the fetch's lines, once."""
     try:
-        from .fetch import log as klog
+        from .fetch import log as fetch_log
     except Exception:                                     # noqa: BLE001
         return
-    if getattr(klog, "_lbl_gui_hooked", False):
-        return
-    said = klog._say
-
-    def both(line):
-        said(line)
-        if _SINK is not None:
-            text = _ANSI.sub("", str(line)).strip()
-            # the fetch's own 'YYMMDD HH:MM:SS.SS | ' stamp: the log has its
-            #   own
-            text = re.sub(r"^\d{6} \d\d:\d\d:\d\d(\.\d+)? \| ", "", text)
-            if text:
-                _SINK.say("fetch: " + text)
-    klog._say = both
-    klog._lbl_gui_hooked = True
+    if _hear not in fetch_log.LISTENERS:
+        fetch_log.LISTENERS.append(_hear)
 
 
 def available():
     """None if the archive search can be used, else why not."""
     try:
-        from .fetch import lblrun                         # noqa: F401
+        from .fetch import spectra                        # noqa: F401
     except Exception as exc:                              # noqa: BLE001
         return "%s: %s" % (type(exc).__name__, exc)
     return None
@@ -103,7 +95,8 @@ def available():
 def provenance(folder: str):
     """What a folder of spectra was fetched from (ARCHIVE_FILE), or None."""
     try:
-        with open(os.path.join(folder, ARCHIVE_FILE)) as handle:
+        with open(os.path.join(folder, ARCHIVE_FILE),
+                  encoding="utf-8") as handle:
             return json.load(handle)
     except (OSError, ValueError):
         return None
@@ -206,7 +199,7 @@ class Archives:
         if path:
             try:
                 os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, "a") as handle:
+                with open(path, "a", encoding="utf-8") as handle:
                     handle.write("%s | %-5s | %s\n" % (
                         now.strftime("%Y-%m-%d %H:%M:%S"), level, text))
             except OSError:
@@ -310,7 +303,7 @@ class Archives:
                 self.search.update(state="failed", error=why)
             self.say("the archive search cannot be used: %s" % why, "error")
             return
-        from .fetch import lblrun
+        from .fetch import spectra
         ROOT = _root()
         os.makedirs(ROOT, exist_ok=True)
         gates = {inst: threading.Semaphore(PER_ARCHIVE) for inst in instruments}
@@ -319,7 +312,7 @@ class Archives:
         def star(target):
             """SIMBAD's name and Teff of a star, then its instruments"""
             try:
-                ident = lblrun._ident(target)
+                ident = spectra.identify(target)
             except Exception as exc:                      # noqa: BLE001
                 with self.lock:
                     self.search["stars"][target] = dict(
@@ -360,14 +353,14 @@ class Archives:
                             state="skipped", error=why)
                         self._sum_instruments()
                     self.say("%s, %s: not asked, %s" % (
-                        target, lblrun.INSTRUMENTS[inst]["label"], why))
+                        target, spectra.INSTRUMENTS[inst]["label"], why))
                 else:
                     jobs.append((target, inst, ident, teff))
             return jobs
 
         def one(job):
             target, inst, ident, teff = job
-            label = lblrun.INSTRUMENTS[inst]["label"]
+            label = spectra.INSTRUMENTS[inst]["label"]
             said = "%s, %s" % (target, label) if several else label
             with gates[inst]:
                 if not self._current(number):
@@ -376,7 +369,7 @@ class Archives:
                                                                     inst)))
                 tick = time.time()
                 try:
-                    found = lblrun.groups(target, inst, ROOT, ident)
+                    found = spectra.groups(target, inst, ROOT, ident)
                 except Exception as exc:                  # noqa: BLE001
                     if not self._current(number):
                         return
@@ -391,7 +384,7 @@ class Archives:
                 self.say("%s: answered after the search was stopped, %.0f s;"
                          " not kept" % (said, time.time() - tick), "warn")
                 return
-            size = lblrun.INSTRUMENTS[inst]["size"]
+            size = spectra.INSTRUMENTS[inst]["size"]
             rows = []
             for group in found:
                 if not group["spectra"]:
@@ -570,7 +563,8 @@ class Archives:
             list(pool.map(get, todo))
         with self.lock:
             self.fetch["bars"][index]["ended"] = time.time()
-        with open(os.path.join(science, ARCHIVE_FILE), "w") as handle:
+        with open(os.path.join(science, ARCHIVE_FILE), "w",
+                  encoding="utf-8") as handle:
             json.dump(dict(target=row.get("target"), inst=row["inst"],
                            lbl=row["lbl"], source=row["source"],
                            input=row["input"], params=row["params"],
