@@ -308,7 +308,7 @@ def exposures(star: Dict[str, Any], folder: str) -> List[Dict[str, Any]]:
     table = os.path.join(folder, TABLE)
     known: Dict[str, Dict[str, Any]] = {}
     if os.path.exists(table):
-        with open(table) as handle:
+        with open(table, encoding='utf-8') as handle:
             # what was read: not a file that failed, nor one that was
             #   private then
             known = {row['file']: row for row in csv.DictReader(handle)
@@ -332,7 +332,7 @@ def exposures(star: Dict[str, Any], folder: str) -> List[Dict[str, Any]]:
                        date=one['date'])
         rows.append(dict(row, policy=one['policy']))
     os.makedirs(folder, exist_ok=True)
-    with open(table, 'w', newline='') as handle:
+    with open(table, 'w', newline='', encoding='utf-8') as handle:
         writer = csv.DictWriter(handle, fieldnames=COLUMNS,
                                 extrasaction='ignore')
         writer.writeheader()

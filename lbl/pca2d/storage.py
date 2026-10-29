@@ -202,8 +202,9 @@ def link_dir(config: dict, local: str) -> str:
         os.rename(moving, local)
         raise
     # removes the links inside without following them, so what they point to
-    # (the files already out there) is untouched
-    shutil.rmtree(moving)
+    # (the files already out there) is untouched; read-only files too
+    from lbl.core.io import remove_path
+    remove_path(moving)
     log("%s moved to %s (%d files, %.1f MB, and %d already there) and linked"
         % (local, target, len(files), sum(files.values()) / 1e6, len(placed)),
         "value")

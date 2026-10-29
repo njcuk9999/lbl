@@ -16,6 +16,7 @@ import functools
 import itertools
 import os
 import shutil
+import stat
 import subprocess
 import warnings
 from collections import UserDict
@@ -540,6 +541,45 @@ class LBLHeader(UserDict):
 # =============================================================================
 # Define functions
 # =============================================================================
+def _writable_and_again(function, path: str, exc: BaseException):
+    """shutil.rmtree's onexc: an entry refused for its read-only attribute
+    (Windows does not delete a read-only file) is made writable and removed
+    again; any other failure is raised."""
+    if isinstance(exc, PermissionError) and os.path.lexists(path) \
+            and not os.path.islink(path):
+        os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+        function(path)
+    else:
+        raise exc
+
+
+def remove_path(path: str) -> None:
+    """
+    Remove a file, a link (never what it points to) or a folder and all it
+    holds, read-only files included: Windows refuses to delete a file with
+    the read-only attribute, which a copied spectrum can carry from its
+    original.
+
+    :param path: str, what to remove
+
+    :return: None
+    """
+    if os.path.islink(path):
+        # a link to a folder is removed as a folder on Windows
+        if os.name == 'nt' and os.path.isdir(path):
+            os.rmdir(path)
+        else:
+            os.remove(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path, onexc=_writable_and_again)
+    else:
+        try:
+            os.remove(path)
+        except PermissionError:
+            os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+            os.remove(path)
+
+
 @functools.lru_cache(maxsize=1)
 def find_pdflatex() -> Optional[str]:
     """

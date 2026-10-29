@@ -15,7 +15,6 @@ exactly that, saying what it removes and how much room that gives back.
 from __future__ import annotations
 
 import os
-import shutil
 
 from .logger import log
 from .progress import size
@@ -91,10 +90,9 @@ def clean(config: dict, dry_run: bool = False) -> tuple:
                               size(nbytes)), "warn")
         if dry_run:
             continue
-        if os.path.islink(path) or os.path.isfile(path):
-            os.remove(path)
-        else:
-            shutil.rmtree(path)
+        # read-only files too (lbl.core.io.remove_path)
+        from lbl.core.io import remove_path
+        remove_path(path)
     log("%s %d cache entries, %s" % ("would free" if dry_run else "freed",
                                      len(found), size(total)), "value")
     return len(found), total

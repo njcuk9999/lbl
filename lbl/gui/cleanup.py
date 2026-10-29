@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import glob
 import os
-import shutil
 import subprocess
 
 from .targets import DERIVED
@@ -238,10 +237,9 @@ def delete(data_dir: str, paths: list) -> list:
                             why="not a product the window may delete"))
             continue
         try:
-            if os.path.islink(path) or os.path.isfile(path):
-                os.unlink(path)
-            else:
-                shutil.rmtree(path)
+            # read-only files too
+            from lbl.core.io import remove_path
+            remove_path(path)
             out.append(dict(path=path, done=True, why=""))
         except OSError as exc:
             out.append(dict(path=path, done=False, why=str(exc)))

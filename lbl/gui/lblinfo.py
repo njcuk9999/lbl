@@ -138,7 +138,7 @@ def pca2d_defaults(instrument: str, source: str = None) -> dict:
     from lbl.pca2d.config import DEFAULTS as CODE_DEFAULTS
     from lbl.pca2d.config import instrument_layer
     path = os.path.join(lbl_home(), "pca2d", "nominal.yaml")
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         nominal = yaml.safe_load(handle) or {}
     merged = _merge(CODE_DEFAULTS, nominal.get("general") or {})
     if not source:
@@ -169,7 +169,7 @@ def doc_descriptions() -> dict:
     out = {}
     if not os.path.exists(path):
         return out
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         for line in handle:
             cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
             if len(cells) < 2 or not cells[0].startswith("`"):

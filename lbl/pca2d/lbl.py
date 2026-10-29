@@ -316,7 +316,12 @@ def link_spectra(files, target: str, mode: str = "symlink") -> tuple:
                 kept += 1
                 continue
         if mode == "copy":
-            shutil.copy2(path, destination)
+            # the content and the dates, not the permissions: a read-only
+            #   original would make a copy LBL's cleanup cannot delete on
+            #   Windows
+            shutil.copyfile(path, destination)
+            stats = os.stat(path)
+            os.utime(destination, (stats.st_atime, stats.st_mtime))
         else:
             os.symlink(os.path.abspath(path), destination)
         linked += 1

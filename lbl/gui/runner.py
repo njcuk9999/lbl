@@ -84,7 +84,7 @@ except BaseException as exc:
     traceback.print_exception(type(exc), exc, where)
 finally:
     try:
-        with open(exit_file, 'w') as handle:
+        with open(exit_file, 'w', encoding='utf-8') as handle:
             handle.write(str(code))
     except OSError:
         pass
@@ -459,8 +459,10 @@ class Runner:
         #   writes a pipe or a file in its code page otherwise), which is
         #   what _follow decodes; progress bars drawn (pca2d.progress), the
         #   window redrawing a carriage-returned line in place
+        # a bar redrawn once a second at most (tqdm reads TQDM_MININTERVAL):
+        #   every redraw is an event the window keeps
         env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8",
-                   LBL_PROGRESS_BARS="1")
+                   LBL_PROGRESS_BARS="1", TQDM_MININTERVAL="1")
         job.state = "running"
         job.started = time.time()
         job.note("started: %s %s" % (job.python, os.path.basename(job.wrap)))
@@ -590,7 +592,11 @@ def launch(python: str, wrap: str, exit_file: str, cwd: str, env: dict,
     Stop reaches as a whole: a new session on macOS and Linux (whose leader
     it is), a new process group on Windows. Returns the Popen."""
     if os.name == "nt":
-        group = dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        # no console of its own and none shared with the window: closing the
+        #   terminal lbl_gui runs in would otherwise end the run, as it does
+        #   every process attached to that console
+        group = dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                     | subprocess.CREATE_NO_WINDOW)
     else:
         group = dict(start_new_session=True)
     return subprocess.Popen([python, "-u", "-c", LAUNCHER, wrap, exit_file],
@@ -603,20 +609,14 @@ def stop_group(pid: int, hard: bool = False) -> str:
     """Stop the process group a run leads (launch), and say what was sent.
 
     macOS and Linux: SIGTERM to the group, or SIGKILL when `hard`. Windows:
-    Ctrl+Break to the group, which ends a console program as SIGTERM does
-    (a run reached through no console shared with the window cannot be sent
-    one, and is killed at once instead), or when `hard` the whole tree
-    killed by taskkill, a Windows command.
+    the whole tree killed by taskkill, a Windows command. A run there has no
+    console (launch), so it cannot be sent Ctrl+Break, the console's
+    equivalent of SIGTERM; LBL and PCA2D catch neither, so the two end a run
+    the same way.
     """
     if os.name != "nt":
         os.killpg(pid, signal.SIGKILL if hard else signal.SIGTERM)
         return "SIGKILL" if hard else "SIGTERM"
-    if not hard:
-        try:
-            os.kill(pid, signal.CTRL_BREAK_EVENT)
-            return "Ctrl+Break"
-        except OSError:
-            pass
     subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)],
                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                    stderr=subprocess.DEVNULL, timeout=30)

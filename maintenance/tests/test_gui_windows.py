@@ -235,6 +235,8 @@ def windows(monkeypatch):
     """os.name 'nt', and the Windows-only constants this system lacks."""
     monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200,
                         raising=False)
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0x08000000,
+                        raising=False)
     monkeypatch.setattr(signal, "CTRL_BREAK_EVENT", 1, raising=False)
     monkeypatch.setattr(os, "name", "nt")
     return monkeypatch
@@ -254,7 +256,9 @@ def test_windows_starts_a_run_in_a_new_process_group(windows, tmp_path):
     assert asked["args"] == ["C:\\env\\python.exe", "-u", "-c",
                              runner.LAUNCHER, "D:\\data\\wrap.py",
                              "D:\\data\\exit"]
-    assert asked["creationflags"] == 0x200
+    # its own process group, and no console: closing the window's terminal
+    #   does not end it
+    assert asked["creationflags"] == 0x200 | 0x08000000
     assert "start_new_session" not in asked
     assert asked["stderr"] == subprocess.STDOUT
     # no shell anywhere, and nothing a Windows command line has to escape
@@ -262,32 +266,22 @@ def test_windows_starts_a_run_in_a_new_process_group(windows, tmp_path):
     assert '"' not in runner.LAUNCHER and "\\" not in runner.LAUNCHER
 
 
-def test_windows_stop_sends_ctrl_break_then_taskkill(windows):
-    kills, runs = [], []
-    windows.setattr(os, "kill", lambda pid, sig: kills.append((pid, sig)))
-    windows.setattr(subprocess, "run",
-                    lambda args, **kw: runs.append(args))
-    assert runner.stop_group(4242) == "Ctrl+Break"
-    assert kills == [(4242, signal.CTRL_BREAK_EVENT)] and runs == []
-    assert runner.stop_group(4242, hard=True) == "taskkill /T /F"
-    assert runs == [["taskkill", "/T", "/F", "/PID", "4242"]]
-    assert len(kills) == 1                       # the hard way sends none
-
-
-def test_windows_stop_without_a_shared_console_kills_at_once(windows):
+def test_windows_stop_kills_the_tree(windows):
+    """A run has no console on Windows (CREATE_NO_WINDOW), so no Ctrl+Break:
+    taskkill ends it and everything it started, and os.kill is never used."""
     runs = []
 
-    def refused(pid, sig):
-        raise OSError(87, "no console shared with this process")
-    windows.setattr(os, "kill", refused)
+    def forbidden(*args):
+        raise AssertionError("os.kill ends a process on Windows")
+    windows.setattr(os, "kill", forbidden)
     windows.setattr(subprocess, "run", lambda args, **kw: runs.append(args))
     assert runner.stop_group(4242) == "taskkill /T /F"
-    assert runs == [["taskkill", "/T", "/F", "/PID", "4242"]]
+    assert runner.stop_group(4242, hard=True) == "taskkill /T /F"
+    assert runs == [["taskkill", "/T", "/F", "/PID", "4242"]] * 2
 
 
-def test_windows_stop_of_a_run_escalates_after_the_grace(windows, tmp_path):
-    kills, runs = [], []
-    windows.setattr(os, "kill", lambda pid, sig: kills.append((pid, sig)))
+def test_windows_stop_of_a_run_tries_again_after_the_grace(windows, tmp_path):
+    runs = []
     windows.setattr(subprocess, "run", lambda args, **kw: runs.append(args))
     windows.setattr(runner, "GRACE", 0.05)
     windows.setattr(runner, "_alive", lambda pid: True)
@@ -299,13 +293,10 @@ def test_windows_stop_of_a_run_escalates_after_the_grace(windows, tmp_path):
         queue.jobs[job.id] = job
         queue.order.append(job.id)
     assert queue.stop(job.id)
-    assert _wait_for(lambda: runs, 5)
-    assert kills == [(4242, signal.CTRL_BREAK_EVENT)]
-    assert runs == [["taskkill", "/T", "/F", "/PID", "4242"]]
+    assert _wait_for(lambda: len(runs) == 2, 5)
+    assert runs == [["taskkill", "/T", "/F", "/PID", "4242"]] * 2
     notes = [e["text"] for e in job.events]
-    assert any("Ctrl+Break to the run" in n for n in notes)
-    assert _wait_for(lambda: any("taskkill /T /F" in e["text"]
-                                 for e in job.events), 5)
+    assert any("taskkill /T /F to the run" in n for n in notes)
     job.state = "stopped"
 
 
@@ -519,3 +510,48 @@ console.log(JSON.stringify(out));
     assert json.loads(result.stdout) == [
         "r.pdf", "r.pdf", "pca2d\\cache", "C:\\other\\x",
         "C:\\data\\lbl\\science", "pca2d/cache", "/data/lbl/science"]
+
+
+def test_read_only_files_are_removed(tmp_path):
+    """Windows refuses to delete a read-only file: remove_path makes it
+    writable first, in a folder or alone, and never touches what a link
+    points to."""
+    import stat
+    from lbl.core.io import remove_path
+    folder = tmp_path / "product"
+    (folder / "sub").mkdir(parents=True)
+    for name in ("a.fits", "sub/b.fits"):
+        path = folder / name
+        path.write_text("x")
+        os.chmod(path, stat.S_IREAD)
+    alone = tmp_path / "c.fits"
+    alone.write_text("x")
+    os.chmod(alone, stat.S_IREAD)
+    kept = tmp_path / "kept.fits"
+    kept.write_text("x")
+    link = tmp_path / "link.fits"
+    os.symlink(kept, link)
+    remove_path(str(folder))
+    remove_path(str(alone))
+    remove_path(str(link))
+    assert not folder.exists() and not alone.exists()
+    assert not os.path.lexists(link) and kept.exists()
+
+
+def test_a_copied_spectrum_is_writable(tmp_path):
+    """The copies made for LBL's science folder keep the content and the
+    dates, not a read-only attribute that would block its cleanup."""
+    import stat
+    from lbl.pca2d import lbl as splbl
+    source = tmp_path / "in"
+    source.mkdir()
+    spectrum = source / "s.fits"
+    spectrum.write_text("x")
+    os.utime(spectrum, (1.0e9, 1.0e9))
+    os.chmod(spectrum, stat.S_IREAD)
+    target = tmp_path / "out"
+    linked, kept, _ = splbl.link_spectra([str(spectrum)], str(target), "copy")
+    copy = target / "s.fits"
+    assert linked == 1 and copy.read_text() == "x"
+    assert os.access(copy, os.W_OK)
+    assert abs(os.path.getmtime(copy) - 1.0e9) < 1

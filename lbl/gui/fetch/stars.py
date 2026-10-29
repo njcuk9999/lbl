@@ -115,7 +115,7 @@ def resolve(name: str, refresh: bool = False) -> Dict[str, Any]:
                                              name.strip()) + '.json')
     if os.path.exists(kept) and not refresh:
         try:
-            with open(kept) as handle:
+            with open(kept, encoding='utf-8') as handle:
                 out = json.load(handle)
             if all(key in out for key in _KEPT):
                 return dict(out, name=name)
@@ -145,7 +145,7 @@ def resolve(name: str, refresh: bool = False) -> Dict[str, Any]:
         out.update(pmra=_float(rows[0].get('pmra')),
                    pmdec=_float(rows[0].get('pmdec')))
     os.makedirs(os.path.dirname(kept), exist_ok=True)
-    with open(kept, 'w') as handle:
+    with open(kept, 'w', encoding='utf-8') as handle:
         json.dump(out, handle)
     return out
 
@@ -202,7 +202,7 @@ def tic_teff(tic: Any, timeout: float = 30.0) -> Optional[float]:
     path = os.path.join(TIC_CACHE, f'{number}.json')
     if os.path.exists(path):
         try:
-            with open(path) as handle:
+            with open(path, encoding='utf-8') as handle:
                 return _float(json.load(handle).get('teff'))
         except (OSError, ValueError, AttributeError):
             pass
@@ -222,7 +222,7 @@ def tic_teff(tic: Any, timeout: float = 30.0) -> Optional[float]:
         return None
     teff = _float(row.get('Teff'))
     os.makedirs(TIC_CACHE, exist_ok=True)
-    with open(path, 'w') as handle:
+    with open(path, 'w', encoding='utf-8') as handle:
         json.dump(dict(teff=teff), handle)
     return teff
 
