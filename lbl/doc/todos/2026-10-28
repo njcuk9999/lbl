@@ -99,3 +99,114 @@ better commenting in choose.py
 in the vetted template folder, we are short in comments in code
 
 again, in HARPS : get_berv_transmission ... fix common grid
+
+
+--- this needs to be corrected :     def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the TELLURIC TRANSMISSION must be shifted by, in m/s.
+
+        Not the same question as get_berv, which answers "what is left to
+        apply to reach the star's frame". TAPAS describes the atmosphere, so
+        it lives in the observer frame: when the wave solution we are handed
+        is already barycentric, the transmission has to be evaluated at the
+        wavelengths the ground sees.
+
+        THIS IS A CORRECTION FOR THE OPTICAL. The infrared spectrographs
+        arrive already telluric-corrected from APERO and have
+        DO_TELLUCLEAN = False (spirou.py:180, nirps.py:183), so this recipe
+        never runs on them. It is the optical classes, which clean their own
+        tellurics and are handed a barycentric grid, that need the shift.
+
+        Zero by default, so nothing moves unless a class says otherwise.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s, 0.0 for no shift
+        """
+        _ = sci_hdr
+        return 0.0
+
+MDs in subfolders are for internal use, do not include
+
+damnit : C_KMS = 299792.458
+
+nominal.yaml should be with other parameters
+
+for 'grids' ->
+C_KMS = 299792.458
+
+# MKO half-power points, in nm. K is included on purpose even though NIRPS
+# stops at 1.95 um: the same configuration has to serve an instrument that
+# does reach K, and a band that falls outside the grid is simply dropped.
+DEFAULT_BANDS = {
+    "Y": [970.0, 1070.0],
+    "J": [1170.0, 1330.0],
+    "H": [1490.0, 1780.0],
+    "K": [2030.0, 2370.0],
+}
+should use lbl defaults
+
+do *not* hardcode environment : sys.executable, "the environment pca2d-preclean runs in" in lbl.py
+
+Do not hardcode per-target info as in lblscan:
+    On TOI-1452, whose binary companion gives 412 m/s of curvature over one
+    season, the correction absorbed 45% of that curve and the raw rms fell by a
+    third, from 100 to 68 m/s, while the scatter within a night and the error per
+    exposure both got worse. A figure of merit that rewards eating astrophysics
+    is not a figure of merit, so this reports, beside the rms:
+
+In lbltemplate :     That mean is the part of the star each parity sees and the star block does
+    not. Under the default --mean offset the block is one spectrum for both
+    parities, while the two sample a line at different places on the order and
+    so at different resolutions, and LBL measures each order against the
+    template of its own parity. On TOI-2120 LBL's own template differs between
+    parities at line scales by 0.014 in ln f, a third of the line structure,
+    and against a template whose parities were one spectrum LBL's velocity
+    errors came out 20% larger. The velocity term is not in the model
+    subtracted: its mean over the exposures moves both parities by the same
+    velocity, which LBL takes as an offset.
+
+    ... no target info
+
+in 'nights.py': Averaging the exposures of a night before the PCA is the cheapest speed-up
+available: NIRPS visits a target three or four times in a row, so the cube
+shrinks by that factor and the decomposition -- whose cost is linear in the
+number of rows -- shrinks with it.
+... don'T get specific about instuments
+
+
+Inside LBL_compute, there is a parallel computing but LBL can already be in parallel:
+# =============================================================================
+# Parallel computation (COMPUTE_NPROC > 1)
+# =============================================================================
+
+
+Avoid explicit pointing to discussion we had in Claude inside comments : in BERVbias : (written `amp*np.exp(-0.5*BERV/sigma)*BERV` when it was asked for, on
+2026-09-16:
+Explain the logic of things as they stand, there's no need for memory of discussions in code.
+
+
+In PCA2D, there are defaults that should not be hardcoded there, defaults are stored at a single location in LBL
+
+In diagnostics :     """La nuit d'une pose: floor(BJD - 0.5), la convention du cube."""
+... in english
+
+grids.py : C_KMS = 299792.458
+
+# MKO half-power points, in nm. K is included on purpose even though NIRPS
+# stops at 1.95 um: the same configuration has to serve an instrument that
+# does reach K, and a band that falls outside the grid is simply dropped.
+DEFAULT_BANDS = {
+    "Y": [970.0, 1070.0],
+    "J": [1170.0, 1330.0],
+    "H": [1490.0, 1780.0],
+    "K": [2030.0, 2370.0],
+}
+
+
+resolve_teff doesn't really pertain to pca2d, it is a tool that should be upstream in the LBL setup.
+
+also, naming a function 'lbl' inside pca2d that is itself a module of LBL is just bad naming! Be more creative
+
+
+lbltemplate inside pca2d ... this is über confusing as there is a template inside the main LBL code. Make the disctinction much more clear. Use the lbl template itself ideally

@@ -29,6 +29,7 @@ from lbl.instruments import espresso
 from lbl.instruments import harps
 from lbl.instruments import harpsn
 from lbl.instruments import sophie
+from lbl.instruments import espadons
 from lbl.instruments import nirps
 from lbl.instruments import spirou
 from lbl.instruments import maroonx
@@ -62,6 +63,7 @@ InstrumentsType = Union[default.Instrument,
                         coralie.Coralie,
                         expres.Expres, expres.Expres_ESSP,
                         neid.Neid_ESSP,
+                        espadons.Espadons,
                         generic.Generic]
 InstrumentsList = (default.Instrument,
                    spirou.Spirou, spirou.SpirouCADC,
@@ -76,6 +78,7 @@ InstrumentsList = (default.Instrument,
                    coralie.Coralie,
                    expres.Expres, expres.Expres_ESSP,
                    neid.Neid_ESSP,
+                   espadons.Espadons,
                    generic.Generic)
 
 # Add all the instrument + source combinations and link them to instrument
@@ -117,6 +120,8 @@ InstDict['EXPRES']['ORIG'] = expres.Expres
 InstDict['EXPRES']['ESSP'] = expres.Expres_ESSP
 InstDict['NEID'] = dict()
 InstDict['NEID']['ESSP'] = neid.Neid_ESSP
+InstDict['ESPADONS'] = dict()
+InstDict['ESPADONS']['CADC'] = espadons.Espadons
 InstDict['Generic'] = dict()
 InstDict['Generic']['None'] = generic.Generic
 
@@ -398,6 +403,10 @@ def make_all_directories(inst: Union[InstrumentsType],
     plot_dir = io.make_dir(data_dir, 'plots', 'Plot')
     # make the model directory
     model_dir = io.make_dir(data_dir, 'models', 'Model')
+    # its files in their subfolders (io.MODEL_SUBDIRS), those of a models/
+    #   from before 2026-10-26 moved there
+    io.sort_models(model_dir, inst.params['INSTRUMENT'],
+                   inst.params['DATA_SOURCE'])
     # -------------------------------------------------------------------------
     # make sure we have all the model files
     inst.get_model_files(model_dir, inst.params['MODEL_REPO_URL'],

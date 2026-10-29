@@ -11,10 +11,11 @@ import glob
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import requests
+from astropy.io import fits
 from astropy.table import Table
 
 from lbl.core import base
@@ -468,6 +469,21 @@ class Spirou(Instrument):
         """
         return self.load_header(science_file)
 
+    def science_header_value(self, science_file: str, key: str,
+                             dtype: Any = None) -> Any:
+        """
+        Value of one key of the science file header
+        (same as self.load_science_header(science_file).get_hkey(key, ...))
+
+        :param science_file: str, the science file
+        :param key: str, the header key
+        :param dtype: type to convert the value to (None: no conversion)
+
+        :return: the header value
+        """
+        sci_hdr = self.load_science_header(science_file)
+        return sci_hdr.get_hkey(key, science_file, dtype=dtype)
+
     def sort_science_files(self, science_files: List[str]) -> List[str]:
         """
         Sort science files (instrument specific)
@@ -479,11 +495,9 @@ class Spirou(Instrument):
         times = []
         # loop around science files
         for science_file in science_files:
-            # load header
-            sci_hdr = self.load_science_header(science_file)
             # get mid exposure time
-            mid_exp_time = sci_hdr.get_hkey(self.params['KW_MID_EXP_TIME'],
-                                            science_file, dtype=float)
+            mid_exp_time = self.science_header_value(
+                science_file, self.params['KW_MID_EXP_TIME'], dtype=float)
             # get time
             times.append(mid_exp_time)
         # get sort mask
@@ -519,10 +533,9 @@ class Spirou(Instrument):
             return np.ones_like(sci_image), True
         # get blaze file from science header
         blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
+        # construct absolute path: the blaze the header names, else the
+        #   default blaze of the setup (Instrument.blaze_path)
+        abspath = self.blaze_path(calib_directory, blaze_file)
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # deal with normalizing per order
@@ -1193,6 +1206,20 @@ class Spirou(Instrument):
 # =============================================================================
 # Define Spirou CADC class
 # =============================================================================
+# last wave solution read by SpirouCADC.load_science_file, so that
+#   get_wave_solution does not read it again: {file key: wave map}
+_WAVE_CACHE = dict()
+
+
+def _file_key(filename: str) -> Tuple[str, int, int]:
+    """
+    Identify a file on disk (path, modification time, size) so that a cached
+    read is not reused if the file changes
+    """
+    stat = os.stat(filename)
+    return str(filename), stat.st_mtime_ns, stat.st_size
+
+
 class SpirouCADC(Spirou):
     def __init__(self, params: base_classes.ParamDict,
                  args: base_classes.ParamDict, name: str = None):
@@ -1255,6 +1282,19 @@ class SpirouCADC(Spirou):
         :param science_file: str, the filename to load
         :return:
         """
+        return self._load_science_file(science_file)
+
+    def _load_science_file(self, science_file: str,
+                           keys: Optional[List[str]] = None
+                           ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        Load science data and header (only the given keys of the header if
+        keys is set)
+
+        :param science_file: str, the filename to load
+        :param keys: optional list of header keys to keep
+        :return:
+        """
         # Fiber must be set for SPIROU CADC
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
@@ -1268,11 +1308,16 @@ class SpirouCADC(Spirou):
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name
         extname = self.get_extname(flux_extname)
-        # load the first extension of each
-        sci_data = io.load_fits(science_file, kind='science Flux extension',
-                                extname=extname)
-        sci_hdr = self.load_header(science_file, kind='science Flux extension',
-                                   extname=extname)
+        wave_extname = self.get_extname('Wave')
+        # load the flux, its header and the wave solution (file opened once)
+        datas, hdr = io.load_fits_multi(science_file, [extname, wave_extname],
+                                        header_extname=extname,
+                                        kind='science Flux extension')
+        sci_data, wavemap = datas
+        sci_hdr = io.LBLHeader.from_fits(hdr, science_file, keys=keys)
+        # keep the wave solution for get_wave_solution (same file)
+        _WAVE_CACHE.clear()
+        _WAVE_CACHE[_file_key(science_file)] = wavemap
         # return data and header
         return sci_data, sci_hdr
 
@@ -1351,6 +1396,91 @@ class SpirouCADC(Spirou):
         """
         return self.load_header(science_file, extname=self.get_extname('Flux'))
 
+    def load_lblrv_file(self, filename: str) -> Tuple[Table, io.LBLHeader]:
+        """
+        Load an LBL RV file: the table and the header (load_header, i.e.
+        the extension named as the flux extension, which is the primary
+        header of lblrv files), opening the file once
+
+        :param filename: str, the LBL RV filename
+
+        :return: tuple, 1. the LBL RV table, 2. the LBL RV header
+        """
+        table, hdr = io.load_table_and_header(
+            filename, self.get_extname('Flux'), kind='lbl rv fits table')
+        return table, io.LBLHeader.from_fits(hdr, filename)
+
+    def load_header_keys(self, filename: str, keys: List[str],
+                         kind: str = 'fits file') -> io.LBLHeader:
+        """
+        load_header with only the given keys (same values and comments),
+        without converting the whole header
+
+        :param filename: str, the filename to load
+        :param keys: list of str, the keys to keep
+        :param kind: str, the kind of file we are loading
+
+        :return: LBLHeader with these keys (those present in the file)
+        """
+        hdr = io.load_header(filename, kind, None, self.get_extname('Flux'))
+        return io.LBLHeader.from_fits(hdr, filename, keys=keys)
+
+    def load_science_file_keys(self, science_file: str, keys: List[str]
+                               ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        load_science_file with only the given keys in the header (same
+        values and comments)
+
+        :param science_file: str, the filename to load
+        :param keys: list of str, the header keys to keep
+
+        :return: the science data and header
+        """
+        return self._load_science_file(science_file, keys=keys)
+
+    def template_header_keys(self) -> Optional[List[str]]:
+        """
+        The science header keys used by lbl_template: get_berv (KW_BERV) and
+        populate_sci_table (keep in line with these two methods)
+        """
+        drs_keys = ['KW_BERV', 'KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
+                    'KW_DATE', 'KW_DPRTYPE', 'KW_OBJNAME', 'KW_EXT_SNR',
+                    # get_rjd_value, for the companions' velocities (PLANETS)
+                    'KW_BJD']
+        keys = []
+        for drs_key in drs_keys:
+            if drs_key in self.params:
+                keys.append(self.params[drs_key])
+            else:
+                keys.append(str(drs_key))
+        return keys
+
+    def science_header_value(self, science_file: str, key: str,
+                             dtype: Any = None) -> Any:
+        """
+        Value of one key of the science file (Flux extension) header, read
+        without building the whole LBLHeader (only the requested card is
+        parsed). Same value as load_science_header(science_file)[key]; any
+        problem (e.g. missing key) goes through the full path for the usual
+        error.
+
+        :param science_file: str, the science file
+        :param key: str, the header key
+        :param dtype: type to convert the value to (None: no conversion)
+
+        :return: the header value
+        """
+        # noinspection PyBroadException
+        try:
+            header = fits.getheader(science_file,
+                                    extname=self.get_extname('Flux'))
+            value = header[key]
+            if dtype is not None:
+                value = dtype(value)
+            return value
+        except Exception as _:
+            return super().science_header_value(science_file, key, dtype)
+
     def load_blaze_from_science(self, science_file: str,
                                 sci_image: np.ndarray,
                                 sci_hdr: io.LBLHeader,
@@ -1402,6 +1532,10 @@ class SpirouCADC(Spirou):
         # we load wavelength solution from extension
         # so we do not use data and header
         _ = data, header
+        # wave solution already read with the science data
+        file_key = _file_key(science_filename)
+        if file_key in _WAVE_CACHE:
+            return np.array(_WAVE_CACHE[file_key])
         # load wavemap
         wavemap = io.load_fits(science_filename, 'wave fits extension',
                                extname=self.get_extname('Wave'))

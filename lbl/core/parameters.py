@@ -142,6 +142,14 @@ params.set(key='TOTAL', value=-1, source=__NAME__, dtype=int,
                 '-1 means no multiprocessing',
            arg='--total')
 
+# Define the number of processes lbl_compute uses (1 = sequential). With
+#    more than one, the science files are split in contiguous blocks run in
+#    parallel, with the same results as a sequential run
+params.set(key='COMPUTE_NPROC', value=1, source=__NAME__, dtype=int,
+           desc='number of processes used by lbl_compute (1 = sequential, '
+                'results are identical)',
+           arg='--nproc')
+
 
 # =============================================================================
 # Define generic instrument parameters
@@ -295,6 +303,14 @@ params.set(key='USE_NOISE_MODEL', value=False, source=__NAME__,
 # to be adjusted.
 params.set(key='NOISE_SAMPLING_WIDTH', value=2e5, source=__NAME__,
            desc='Size of the running window (in m/s) for the RMS calculation.')
+
+# Define the number of noise sampling windows per window width: the robust
+#    rms is measured in windows of NOISE_SAMPLING_WIDTH, every
+#    NOISE_SAMPLING_WIDTH / NOISE_SAMPLING_NSTEP (4: the original sampling;
+#    smaller values are faster and approximate)
+params.set(key='NOISE_SAMPLING_NSTEP', value=4, source=__NAME__, dtype=int,
+           desc='number of noise sampling windows per window width '
+                '(4 = original; fewer is faster, approximate)')
 
 # define the rough CCF rv minimum limit in m/s
 params.set(key='ROUGH_CCF_MIN_RV', value=-3e5, source=__NAME__,
@@ -660,7 +676,6 @@ MODEL_FILES['DTemp 5000 gradient file'] = 'temperature_gradient_5000.fits'
 MODEL_FILES['DTemp 5500 gradient file'] = 'temperature_gradient_5500.fits'
 MODEL_FILES['DTemp 6000 gradient file'] = 'temperature_gradient_6000.fits'
 
-
 # define a dictionary of model files to be downloaded from the MODEL_REPO_URL
 params.set(key='MODEL_FILES', value=MODEL_FILES, source=__NAME__,
            desc='define a dictionary of model files to be downloaded from '
@@ -692,15 +707,6 @@ params.set(key='TELLUCLEAN_MASK_DOMAIN_UPPER', value=None, source=__NAME__,
 params.set(key='TELLUCLEAN_FORCE_AIRMASS', value=None, source=__NAME__,
            desc='whether to force using airmass from header', not_none=True)
 
-# Define the CCF scan range in km/s
-params.set(key='TELLUCLEAN_CCF_SCAN_RANGE', value=None, source=__NAME__,
-           desc='the CCF scan range in km/s', not_none=True)
-
-# Define the maximum number of iterations for the tellu-cleaning loop
-params.set(key='TELLUCLEAN_MAX_ITERATIONS', value=20, source=__NAME__,
-           desc='the maximum number of iterations for the tellu-cleaning loop',
-           not_none=True)
-
 # Define the kernel width in pixels
 params.set(key='TELLUCLEAN_KERNEL_WID', value=None, source=__NAME__,
            desc='the kernel width in pixels', not_none=True)
@@ -721,49 +727,6 @@ params.set(key='TELLUCLEAN_WAVE_UPPER', value=None, source=__NAME__,
 params.set(key='TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1, source=__NAME__,
            desc='the transmission threshold exp(-1) at which tellurics '
                 'are uncorrectable', not_none=True)
-
-# Define the sigma cut threshold above which pixels are removed from fit
-params.set(key='TELLUCLEAN_SIGMA_THRESHOLD', value=10, source=__NAME__,
-           desc='the sigma cut threshold above which pixels are removed '
-                'from fit', not_none=True)
-
-# Define whether to recenter the CCF on the first iteration
-params.set(key='TELLUCLEAN_RECENTER_CCF', value=None, source=__NAME__,
-           desc='whether to recenter the CCF on the first iteration',
-           not_none=True)
-
-# Define whether to recenter the CCF of others on the first iteration
-params.set(key='TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=None, source=__NAME__,
-           desc='whether to recenter the CCF on the first iteration',
-           not_none=True)
-
-# Define the default water absorption to use
-params.set(key='TELLUCLEAN_DEFAULT_WATER_ABSO', value=None, source=__NAME__,
-           desc='the default water absorption to use', not_none=True)
-
-# Define the lower limit on valid exponent of water absorbers
-params.set(key='TELLUCLEAN_WATER_BOUNDS_LOWER', value=None, source=__NAME__,
-           desc='the lower limit on valid exponent of water absorbers',
-           not_none=True)
-
-# Define the upper limit on valid exponent of water absorbers
-params.set(key='TELLUCLEAN_WATER_BOUNDS_UPPER', value=None, source=__NAME__,
-           desc='the upper limit on valid exponent of water absorbers',
-           not_none=True)
-
-# Define the lower limit on valid exponent of other absorbers
-params.set(key='TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=None, source=__NAME__,
-           desc='the lower limit on valid exponent of other absorbers',
-           not_none=True)
-
-# Define the upper limit on valid exponent of other absorbers
-params.set(key='TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=None, source=__NAME__,
-           desc='the upper limit on valid exponent of other absorbers',
-           not_none=True)
-
-# Define the default convergence limit for the telluric pre-clean
-params.set(key='TELLUCLEAN_CONVERGENCE_LIMIT', value=1.0e-3, source=__NAME__,
-           desc='the default convergence limit for the telluric pre-clean')
 
 # ---------------------------------------------------------------------
 # Parameters for the template construction
@@ -787,6 +750,33 @@ params.set('TEMPLATE_MEDBINMAX', 19, source=__NAME__)
 params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=__NAME__)
 # ignore weights below this value for the template construction
 params.set('TEMPLATE_WEIGHT_MIN', 0.1, source=__NAME__)
+# the known companions of the star: if True the template looks the object up
+#   in the planet catalogs (lbl/resources/planets, and
+#   DATA_DIR/personal_planet_catalog.yaml) and, if it finds Keplerian orbits,
+#   registers each spectrum with BERV + their velocity, in one pass, instead
+#   of iterating on the velocities. Reported velocities stay BERV-corrected
+#   only (lbl/science/planets.py)
+params.set(key='PLANETS', value=False, source=__NAME__,
+           desc='template on BERV + the Keplerian velocity of the known '
+                'companions of the star, if the planet catalogs have them',
+           dtype=bool)
+# the star's velocity changes little over its spectra: True takes it as
+#   constant, and the template is made in one pass on BERV alone. Right for
+#   a star whose velocity varies by less than MAX_CONVERGENCE_TEMPLATE_RV
+#   (100 m/s): planets of a few to a few tens of m/s, activity. False
+#   measures each spectrum's velocity against the template of the pass
+#   before and makes the template again (up to 5 passes), until the shifts
+#   agree to MAX_CONVERGENCE_TEMPLATE_RV: for a binary, a brown dwarf, a hot
+#   Jupiter (HD 189733's K is 205 m/s), whose lines would otherwise be
+#   smeared in the template by the star's motion. With PLANETS and the
+#   star's orbits in the catalogs, the template follows the orbits instead,
+#   whatever this says. Science data only.
+params.set(key='SMALL_RV_SHIFT', value=True, source=__NAME__,
+           desc='the star\'s velocity is taken as constant: the template '
+                'is made in one pass on BERV alone, without iterating on '
+                'the velocities (False: iterate, for a star whose velocity '
+                'varies by more than MAX_CONVERGENCE_TEMPLATE_RV)',
+           dtype=bool)
 
 # define the mnimal SNR required for a pixel to be considered valid in
 # the template
@@ -1124,7 +1114,6 @@ def instr_drift(okey, nkey, value) -> Tuple[Any, str]:
         eargs = [okey, nkey, value]
         raise base_classes.LblException(emsg.format(*eargs))
 
-
 # Define function to convert JD to MJD
 def jd_to_mjd(okey, nkey, value) -> Tuple[Any, str]:
     try:
@@ -1137,7 +1126,6 @@ def jd_to_mjd(okey, nkey, value) -> Tuple[Any, str]:
         emsg = 'Cannot translate value {0} to {1}. Value={2}'
         eargs = [okey, nkey, value]
         raise base_classes.LblException(emsg.format(*eargs))
-
 
 # Define function to convert MJD to human readable
 def jd_to_human(okey, nkey, value) -> Tuple[Any, str]:
@@ -1152,12 +1140,10 @@ def jd_to_human(okey, nkey, value) -> Tuple[Any, str]:
         eargs = [okey, nkey, value]
         raise base_classes.LblException(emsg.format(*eargs))
 
-
 # Define function to sky DPRTYPE
 def set_dprtype(okey, nkey, value) -> Tuple[Any, str]:
     _ = okey, nkey, value
     return 'OBJ_SKY', 'DPRTYPE (set to OBJ_SKY manually)'
-
 
 # lock parameters
 # noinspection PyProtectedMember

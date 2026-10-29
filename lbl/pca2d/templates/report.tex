@@ -1,0 +1,84 @@
+%% A pca2d-preclean run report.
+%%
+%% Written by pca2d/texreport.py from pca2d/templates/report.tex: edit the
+%% template to change every report, or this file to change this one and run
+%% `pdflatex` twice in its folder (the second pass fills the contents).
+%%
+%% Every package past the LaTeX base is optional. A TeX installation without
+%% one still builds the report, only plainer: BasicTeX lacks booktabs, xcolor
+%% and hyperref, and a report that stopped at the first missing package would
+%% be no report at all.
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\IfFileExists{lmodern.sty}{\usepackage{lmodern}}{}
+\usepackage[margin=2.2cm,headheight=14pt]{geometry}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{verbatim}
+\IfFileExists{microtype.sty}{\usepackage{microtype}}{}
+\IfFileExists{booktabs.sty}{\usepackage{booktabs}}{%
+  \newcommand{\toprule}{\hline}%
+  \newcommand{\midrule}{\hline}%
+  \newcommand{\bottomrule}{\hline}}
+\IfFileExists{xcolor.sty}{%
+  \usepackage{xcolor}%
+  \definecolor{gain}{HTML}{1B7F3B}%
+  \definecolor{loss}{HTML}{B3261E}%
+  \definecolor{watch}{HTML}{9A5B00}%
+  \definecolor{muted}{HTML}{5F6368}}{%
+  \providecommand{\textcolor}[2]{#2}}
+\IfFileExists{fancyhdr.sty}{%
+  \usepackage{fancyhdr}%
+  \pagestyle{fancy}%
+  \fancyhf{}%
+  \lhead{\small <<RUNHEAD>>}%
+  \rhead{\small\thepage}%
+  \renewcommand{\headrulewidth}{0.4pt}}{}
+\IfFileExists{hyperref.sty}{\usepackage[hidelinks]{hyperref}}{}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6ex plus 0.3ex}
+\renewcommand{\arraystretch}{1.15}
+%% figures stay in their section: a report read section by section is not
+%% helped by a figure that floated two sections on
+\makeatletter
+\renewcommand{\fps@figure}{!htbp}
+%% and a page of figures starts at the top rather than centring them
+\setlength{\@fptop}{0pt}
+\setlength{\@fpsep}{14pt plus 2fil}
+\setlength{\@fpbot}{0pt plus 1fil}
+\makeatother
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.8}
+
+\newcommand{\gain}[1]{\textcolor{gain}{#1}}
+\newcommand{\loss}[1]{\textcolor{loss}{#1}}
+\newcommand{\watch}[1]{\textcolor{watch}{#1}}
+\newcommand{\muted}[1]{\textcolor{muted}{#1}}
+
+\title{<<TITLE>>}
+\author{<<SUBTITLE>>}
+\date{<<DATE>>}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+<<ABSTRACT>>
+\end{abstract}
+
+\tableofcontents
+%% every figure by a short name: the report runs to dozens of them, and the
+%% one somebody wants is found here rather than by paging
+\listoffigures
+\clearpage
+
+<<BODY>>
+
+\end{document}

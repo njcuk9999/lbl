@@ -353,13 +353,7 @@ TELLUCLEAN_MASK_DOMAIN_UPPER: None
 ## Default = None   SPIROU_VALUE = None
 TELLUCLEAN_FORCE_AIRMASS: None
 
-# the CCF scan range in km/s
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_CCF_SCAN_RANGE: None
 
-# the maximum number of iterations for the tellu-cleaning loop
-## Default = 20   SPIROU_VALUE = 20
-TELLUCLEAN_MAX_ITERATIONS: 20
 
 # the kernel width in pixels
 ## Default = None   SPIROU_VALUE = None
@@ -381,37 +375,13 @@ TELLUCLEAN_WAVE_UPPER: None
 ## Default = -1   SPIROU_VALUE = -1
 TELLUCLEAN_TRANSMISSION_THRESHOLD: '-1'
 
-# the sigma cut threshold above which pixels are removed from fit
-## Default = 10   SPIROU_VALUE = 10
-TELLUCLEAN_SIGMA_THRESHOLD: 10
 
-# whether to recenter the CCF on the first iteration
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_RECENTER_CCF: None
 
-# whether to recenter the CCF on the first iteration
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_RECENTER_CCF_FIT_OTHERS: None
 
-# the default water absorption to use
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_DEFAULT_WATER_ABSO: None
 
-# the lower limit on valid exponent of water absorbers
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_WATER_BOUNDS_LOWER: None
 
-# the upper limit on valid exponent of water absorbers
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_WATER_BOUNDS_UPPER: None
 
-# the lower limit on valid exponent of other absorbers
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_OTHERS_BOUNDS_LOWER: None
 
-# the upper limit on valid exponent of other absorbers
-## Default = None   SPIROU_VALUE = None
-TELLUCLEAN_OTHERS_BOUNDS_UPPER: None
 
 # storage of command line arguments used
 ## Default = None   SPIROU_VALUE = []

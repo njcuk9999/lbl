@@ -21,6 +21,8 @@ from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
+from lbl.core import vetted
+from lbl.science import activity_lines
 
 
 # =============================================================================
@@ -139,6 +141,44 @@ class Instrument:
         hdr = io.load_header(filename, kind, extnum, extname)
         # return the LBL Header class
         return io.LBLHeader.from_fits(hdr, filename)
+
+    def load_header_keys(self, filename: str, keys: List[str],
+                         kind: str = 'fits file') -> io.LBLHeader:
+        """
+        Load a header, of which only the given keys will be used (instruments
+        can then skip the others; the values of these keys are those of
+        load_header). Default: the full header (load_header)
+
+        :param filename: str, the filename to load
+        :param keys: list of str, the keys that will be used
+        :param kind: str, the kind of file we are loading
+
+        :return: LBLHeader with (at least) these keys
+        """
+        _ = keys
+        return self.load_header(filename, kind=kind)
+
+    def load_science_file_keys(self, science_file: str, keys: List[str]
+                               ) -> Tuple[np.ndarray, io.LBLHeader]:
+        """
+        load_science_file when only the given keys of the header will be
+        used (see load_header_keys). Default: load_science_file
+
+        :param science_file: str, the filename to load
+        :param keys: list of str, the header keys that will be used
+
+        :return: the science data and header
+        """
+        _ = keys
+        return self.load_science_file(science_file)
+
+    def template_header_keys(self) -> Optional[List[str]]:
+        """
+        The science header keys used by lbl_template (get_berv and
+        populate_sci_table), or None if not known (the full headers are
+        then loaded)
+        """
+        return None
 
     def load_mask(self, filename: str) -> Table:
         """
@@ -345,9 +385,18 @@ class Instrument:
         msg = 'Writing reference table to: {0}'
         margs = [ref_filename]
         log.general(msg.format(*margs))
+        # the activity lines, in their own extension (science files only)
+        if outputs.get('ACTIVITY') is not None:
+            data = [None, table, outputs['ACTIVITY']]
+            headers = [header, None, outputs['ACTIVITY_HEADER']]
+            dtypes = [None, 'table', 'table']
+            names = [None, None, activity_lines.EXTNAME]
+        else:
+            data, headers = [None, table], [header, None]
+            dtypes, names = [None, 'table'], None
         # write to disk
-        io.write_fits(ref_filename, data=[None, table],
-                      header=[header, None], dtype=[None, 'table'])
+        io.write_fits(ref_filename, data=data, header=headers, dtype=dtypes,
+                      names=names)
 
     def get_lblrv_files(self, directory: str) -> np.ndarray:
         """
@@ -511,16 +560,28 @@ class Instrument:
                 n_valid += np.sum(np.isfinite(vector[wavemask]))
 
             n_total = np.sum(wavemask)
-            frac_valid[ordernum] = n_valid / n_total
+            # an order outside the template's grid has no sample to judge:
+            #   no verdict (it was 0/0, a warning, and a NaN mean that let
+            #   any template through)
+            frac_valid[ordernum] = n_valid / n_total if n_total else np.nan
 
-        # we check that at least 50% of the data is valid (not NaN) in the template
-        if np.mean(frac_valid) < 0.5:
-            emsg = ('Less than 50% of the data in "{0}" valid in the template.')
-            emsg = emsg.format(vectorname)
-            for order_num in np.where(frac_valid > 0.5)[0]:
-                emsg += (f'\n\t- Order {order_num} has only '
-                         f'{frac_valid[order_num]:.1%} valid data')
-            raise LblException(emsg)
+        # we check that at least 50% of the data is valid (not NaN) in the
+        #   template. SAID, NOT FATAL: until 2026-10-23 the orders outside
+        #   the grid made the mean NaN and the check never failed, and the
+        #   templates of corrected spectra (PCA2D masks whole telluric
+        #   bands) are below it and measure well; a run is not stopped for
+        #   them, and the orders that are short are named
+        if not np.isfinite(frac_valid).any():
+            log.warning(f'No order of the template "{vectorname}" is on its '
+                        f'grid: its valid fraction cannot be checked')
+        elif np.nanmean(frac_valid) < 0.5:
+            wmsg = ('Only {0:.0%} of the data in "{1}" is valid in the '
+                    'template (under 50%); the orders below half:')
+            wmsg = wmsg.format(np.nanmean(frac_valid), vectorname)
+            for order_num in np.where(frac_valid < 0.5)[0]:
+                wmsg += (f'\n\t- Order {order_num}: '
+                         f'{frac_valid[order_num]:.1%} valid')
+            log.warning(wmsg)
         else:
             log.general(f'Quality control pass: '
                         f'At least 50% of the data in "{vectorname}" '
@@ -662,14 +723,38 @@ class Instrument:
         for key in sci_table:
             table2[key] = sci_table[key]
         # ---------------------------------------------------------------------
+        # the companions whose Keplerian velocities registered the spectra
+        #   (PLANETS), as a third table, for the report
+        data, names = [None, table1, table2], [None, 'TEMPLATE', 'SCI_TABLE']
+        found = props.get('planets')
+        header['PLANETS'] = (found is not None,
+                             'template on BERV + Keplerian velocities')
+        # SMALL_RV_SHIFT: the star's velocity taken as constant, one pass
+        header['SMALLRV'] = (bool(props.get('small_rv_shift', False)),
+                             'template on BERV alone, constant velocity')
+        if found is not None:
+            header['PLNSTAR'] = (str(found['star']), 'star in the catalog')
+            header['PLNCAT'] = (os.path.basename(found['catalog']),
+                                'planet catalog used')
+            table3 = Table()
+            orbits = found['orbits']
+            table3['name'] = [str(o.get('name', '?')) for o in orbits]
+            for key in ('period', 'k', 'e', 'omega', 'tp', 't0'):
+                table3[key] = [float(o[key]) if o.get(key) is not None
+                               else np.nan for o in orbits]
+            table3['reference'] = [str(o.get('reference', ''))
+                                   for o in orbits]
+            data.append(table3)
+            names.append('PLANETS')
+        # ---------------------------------------------------------------------
         # Save template to disk
         log.general('Saving template to file: {0}'.format(template_file))
         # ---------------------------------------------------------------------
         # write to file
-        io.write_fits(template_file, data=[None, table1, table2],
-                      header=[header, None, None],
-                      dtype=[None, 'table', 'table'],
-                      names=[None, 'TEMPLATE', 'SCI_TABLE'])
+        io.write_fits(template_file, data=data,
+                      header=[header] + [None] * (len(data) - 1),
+                      dtype=[None] + ['table'] * (len(data) - 1),
+                      names=names)
 
     def write_tellu_cleaned(self, write_tellu_file: str, props: dict,
                             sci_hdict: io.LBLHeader,
@@ -799,8 +884,10 @@ class Instrument:
             #   no default mask
             if url is None or filename is None:
                 return
-            # construct path to mask file
-            model_file = os.path.join(directory, filename)
+            # its subfolder of models: the TAPAS model in tellurics, the
+            #   others are RESPROJ tables (the temperature gradients)
+            subdir = 'tellurics' if 'tapas' in key.lower() else 'resproj'
+            model_file = io.model_path(directory, subdir, filename)
             # update url to include file
             fileurl = '{0}/{1}'.format(url, filename)
             # get file from url
@@ -821,7 +908,7 @@ class Instrument:
         if filename is None:
             return
         # define input and output path
-        in_path = os.path.join(model_directory, filename)
+        in_path = io.model_path(model_directory, 'masks', filename)
         out_path = os.path.join(mask_directory, filename)
         # deal with file already existing
         if os.path.exists(out_path):
@@ -879,6 +966,13 @@ class Instrument:
             basename = template_file
         # get absolute path
         abspath = os.path.join(directory, basename)
+        # a vetted template (VETTED_<object>) is kept in
+        #   models/template_<INSTRUMENT>_<DATA_SOURCE>, downloaded and
+        #   written as an LBL template the first time it is looked for
+        if vetted.is_vetted(objname):
+            abspath = vetted.template_path(self, basename, directory)
+            if not os.path.exists(abspath):
+                vetted.fetch(self, objname, abspath)
         # check that this file exists
         if required:
             io.check_file_exists(abspath, '{0} template'.format(tkind))
@@ -895,6 +989,67 @@ class Instrument:
         """
         _ = self, directory
         raise self._not_implemented('blaze_file')
+
+    #: the default blazes already said, once each per process
+    _DEFAULT_BLAZES_SAID = set()
+
+    def default_blaze_file(self) -> Optional[str]:
+        """
+        The default blaze of this instrument and DATA_SOURCE:
+        DATA_DIR/models/default-blaze/blaze_<INSTRUMENT>_<DATA_SOURCE>.fits,
+        a blaze of the setup (an ESO BLAZE_A file for NIRPS_HE ESO) put there
+        once, for the spectra whose own blaze, the one their header names,
+        is not in the calibration folder. None without a DATA_DIR.
+
+        :return: str, its path (it may not exist), or None
+        """
+        data_dir = self.params.get('DATA_DIR')
+        if not data_dir:
+            return None
+        name = 'blaze_{0}_{1}.fits'.format(
+            str(self.params['INSTRUMENT']).upper(),
+            str(self.params['DATA_SOURCE']).upper())
+        return os.path.join(str(data_dir), 'models', 'default-blaze', name)
+
+    def blaze_path(self, calib_directory: str,
+                   blaze_file: Optional[str]) -> str:
+        """
+        The blaze of a spectrum: the file its header names, in the
+        calibration folder; when it is not there, the default blaze of the
+        setup (default_blaze_file), said once. Without either, LBL stops,
+        saying where a default blaze can go.
+
+        :param calib_directory: str, the calibration folder
+        :param blaze_file: str, the file the spectrum's header names (None
+                           when it names none)
+
+        :return: str, the blaze to read
+        """
+        named = None
+        if blaze_file not in (None, '', 'None'):
+            named = os.path.join(calib_directory, blaze_file)
+            if os.path.exists(named):
+                return named
+        default = self.default_blaze_file()
+        if default is not None and os.path.exists(default):
+            if default not in Instrument._DEFAULT_BLAZES_SAID:
+                Instrument._DEFAULT_BLAZES_SAID.add(default)
+                msg = ('Blaze {0} is not in {1}: the default blaze of {2} {3}'
+                       ' is used instead ({4}), for this spectrum and every'
+                       ' other whose own blaze is missing')
+                log.warning(msg.format(blaze_file, calib_directory,
+                                       self.params['INSTRUMENT'],
+                                       self.params['DATA_SOURCE'], default))
+            return default
+        emsg = ('Blaze {0} is not in {1}, and {2} {3} has no default blaze:'
+                ' put the blaze of the night there, or a blaze of this'
+                ' setup as {4}, which is then used for every spectrum whose'
+                ' own blaze is missing')
+        raise base_classes.LblException(emsg.format(
+            blaze_file, calib_directory, self.params['INSTRUMENT'],
+            self.params['DATA_SOURCE'],
+            default or 'DATA_DIR/models/default-blaze/blaze_<INSTRUMENT>_'
+                       '<DATA_SOURCE>.fits'))
 
     def load_blaze(self, filename: str, science_file: Optional[str] = None,
                    normalize: bool = True):
@@ -929,6 +1084,31 @@ class Instrument:
         sci_hdr = self.load_header(science_file, kind='science fits file')
         # return data and header
         return sci_data, sci_hdr
+
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the TELLURIC TRANSMISSION must be shifted by, in m/s.
+
+        Not the same question as get_berv, which answers "what is left to
+        apply to reach the star's frame". TAPAS describes the atmosphere, so
+        it lives in the observer frame: when the wave solution we are handed
+        is already barycentric, the transmission has to be evaluated at the
+        wavelengths the ground sees.
+
+        THIS IS A CORRECTION FOR THE OPTICAL. The infrared spectrographs
+        arrive already telluric-corrected from APERO and have
+        DO_TELLUCLEAN = False (spirou.py:180, nirps.py:183), so this recipe
+        never runs on them. It is the optical classes, which clean their own
+        tellurics and are handed a barycentric grid, that need the shift.
+
+        Zero by default, so nothing moves unless a class says otherwise.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s, 0.0 for no shift
+        """
+        _ = sci_hdr
+        return 0.0
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
@@ -1132,8 +1312,8 @@ class Instrument:
         keep_time = []
         # loop around science files
         for science_file in tqdm(science_files):
-            # load science file header
-            sci_hdr = self.load_header(science_file)
+            # load science file header (only hkey is used)
+            sci_hdr = self.load_header_keys(science_file, [hkey])
             # get mjdmid
             mjdmid = sci_hdr[hkey]
             keep_files.append(science_file)

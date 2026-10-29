@@ -218,74 +218,232 @@ def main(runparams: dict):
             if not object_science.endswith('_tc'):
                 object_science = object_science + '_tc'
         # ---------------------------------------------------------------------
-        # if runparams['RUN_LBL_RESMAP']:
-        #     lbl_resmap.main(instrument=instrument, data_dir=data_dir,
-        #                     data_source=data_source,
-        #                     data_type=data_type,
-        #                     object_science=object_science,
-        #                     object_comparison=object_comparison,
-        #                     blaze_corrected=blaze_corr,
-        #                     blaze_file=blaze_file,
-        #                     overwrite=not runparams['SKIP_LBL_RESMAP'],
-        #                     **keyword_args)
+        # LBL's own steps, from the template to the report
+        steps = dict(runparams=runparams, keyword_args=keyword_args,
+                     instrument=instrument, data_dir=data_dir,
+                     data_source=data_source, data_type=data_type,
+                     object_teff=object_teff, blaze_corr=blaze_corr,
+                     blaze_file=blaze_file)
         # ---------------------------------------------------------------------
-        # make the template (if not present)
-        if runparams['RUN_LBL_TEMPLATE']:
-            # Must produce the template for the science data and the template
-            #   we use a set to do this (only runs once if they are the same)
-            for _obj_template in {object_science, object_comparison}:
-                lbl_template.main(instrument=instrument, data_dir=data_dir,
-                                  data_source=data_source,
-                                  data_type=data_type,
-                                  object_science=object_science,
-                                  object_comparison=_obj_template,
-                                  blaze_corrected=blaze_corr,
-                                  blaze_file=blaze_file,
-                                  overwrite=not runparams['SKIP_LBL_TEMPLATE'],
-                                  **keyword_args)
-        # ---------------------------------------------------------------------
-        # make the mask (if not present)
-        if runparams['RUN_LBL_MASK']:
-            # Must produce the mask for the science data and the template
-            #   we use a set to do this (only runs once if they are the same)
-            for _obj_comparison in {object_science, object_comparison}:
-                lbl_mask.main(instrument=instrument, data_dir=data_dir,
+        # THE PCA2D PRECLEANING, on the object as it now is: after the
+        # telluric cleaning when there was one, so an optical instrument gets
+        # <object>_tc_pca2d. Its corrected spectra are a science object of
+        # their own, <object>_pca2d, and every step below measures that one.
+        # Without a PCA2D key nothing of it is even imported, and the steps
+        # run once, on the object, exactly as they always did.
+        if runparams.get('PCA2D') not in (None, False) and \
+                data_type == 'SCIENCE':
+            from lbl.recipes import lbl_pca2d
+            pca2d = runparams['PCA2D']
+            delivered = object_science
+            # the delivered object measured first, so that the report can set
+            # its velocities beside the corrected ones (PCA2D compare=True)
+            if lbl_pca2d.compare(pca2d) and object_science not in measured:
+                _lbl_steps(object_science=object_science,
+                           object_comparison=object_comparison, **steps)
+                measured.add(object_science)
+            # A JOINT FIT: every other star measured as delivered too, BEFORE
+            #   it, since a star whose OBJECT_COMPARISON is another star needs
+            #   its velocity against that template to place it (lbl_pca2d
+            #   star_template); their own iterations then skip that pass
+            joint = isinstance(pca2d, dict) and pca2d.get('joint')
+            if joint and pca2d_joint is None and lbl_pca2d.compare(pca2d) \
+                    and not runparams['RUN_LBL_TELLUCLEAN']:
+                for other in range(olen):
+                    if object_sciences[other] in measured:
+                        continue
+                    kw_other = dict(iteration=other, length=olen)
+                    if lbl_misc.wraplistcheck(data_types, 'DATA_TYPES',
+                                              **kw_other) != 'SCIENCE':
+                        continue
+                    steps_other = dict(
+                        steps,
+                        object_teff=lbl_misc.wraplistcheck(
+                            object_teffs, 'OBJECT_TEFF', **kw_other),
+                        blaze_corr=lbl_misc.wraplistcheck(
+                            blaze_corrs, 'BLAZE_CORRECTED', **kw_other),
+                        blaze_file=lbl_misc.wraplistcheck(
+                            blaze_files, 'BLAZE_FILE', **kw_other))
+                    _lbl_steps(object_science=object_sciences[other],
+                               object_comparison=lbl_misc.wraplistcheck(
+                                   object_comparisons, 'OBJECT_COMPARISON',
+                                   **kw_other), **steps_other)
+                    measured.add(object_sciences[other])
+            pca2d_args = dict(instrument=instrument, data_dir=data_dir,
+                              data_source=data_source, pca2d=pca2d,
+                              input_file=runparams.get('INPUT_FILE'),
+                              science_subdir=runparams.get('SCIENCE_SUBDIR',
+                                                           'science'),
+                              report=runparams.get('REPORT', True),
+                              skip=runparams['SKIP_LBL_PCA2D'],
+                              planets=bool(runparams.get('PLANETS', False)))
+            if isinstance(pca2d, dict) and pca2d.get('joint'):
+                # every science object against ONE observer basis, done once,
+                # at the first of them
+                if pca2d_joint is None:
+                    pca2d_joint = _pca2d_joint(runparams, object_sciences,
+                                               data_types, object_comparisons,
+                                               pca2d_args)
+                object_science, object_comparison = \
+                    pca2d_joint[object_science]
+            else:
+                object_science, object_comparison = lbl_pca2d.main(
+                    object_science=object_science,
+                    object_comparison=object_comparison, **pca2d_args)
+            lbl_report = _lbl_steps(object_science=object_science,
+                                    object_comparison=object_comparison,
+                                    **steps)
+            # ONE REPORT: pca2d's (the star, delivered against corrected, the
+            # river plots, the components...) followed by LBL's own pages
+            if runparams.get('REPORT', True) and runparams['RUN_LBL_COMPILE']:
+                lbl_pca2d.report(data_dir=data_dir, delivered=delivered,
+                                 corrected=object_science,
+                                 lbl_report=lbl_report)
+        else:
+            _lbl_steps(object_science=object_science,
+                       object_comparison=object_comparison, **steps)
+
+
+def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
+               data_type, object_science, object_comparison, object_teff,
+               blaze_corr, blaze_file):
+    """Template, mask, compute, compile and report, as asked, on one object.
+
+    The body of the loop as it always was, made a function so that a PCA2D
+    run can measure the delivered object and then the corrected one. Returns
+    the report's PDF, or None.
+    """
+    lbl_report = None
+    # ---------------------------------------------------------------------
+    # if runparams['RUN_LBL_RESMAP']:
+    #     lbl_resmap.main(instrument=instrument, data_dir=data_dir,
+    #                     data_source=data_source,
+    #                     data_type=data_type,
+    #                     object_science=object_science,
+    #                     object_comparison=object_comparison,
+    #                     blaze_corrected=blaze_corr,
+    #                     blaze_file=blaze_file,
+    #                     overwrite=not runparams['SKIP_LBL_RESMAP'],
+    #                     **keyword_args)
+    # ---------------------------------------------------------------------
+    # make the template (if not present)
+    if runparams['RUN_LBL_TEMPLATE']:
+        # Must produce the template for the science data and the template
+        #   we use a set to do this (only runs once if they are the same)
+        for _obj_template in {object_science, object_comparison}:
+            lbl_template.main(instrument=instrument, data_dir=data_dir,
                               data_source=data_source,
                               data_type=data_type,
                               object_science=object_science,
-                              object_comparison=_obj_comparison,
-                              object_teff=object_teff,
-                              overwrite=not runparams['SKIP_LBL_MASK'],
+                              object_comparison=_obj_template,
+                              blaze_corrected=blaze_corr,
+                              blaze_file=blaze_file,
+                              overwrite=not runparams['SKIP_LBL_TEMPLATE'],
                               **keyword_args)
-        # ---------------------------------------------------------------------
-        # # make the noise model (if not present)
-        # if runparams['RUN_LBL_NOISE']:
-        #     lbl_noise(instrument=instrument, data_dir=data_dir,
-        #               object_science=object_science,
-        #               object_comparison=object_comparison,
-        #               **keyword_args)
-        # ---------------------------------------------------------------------
-        # run the compute code
-        if runparams['RUN_LBL_COMPUTE']:
-            lbl_compute.main(instrument=instrument, data_dir=data_dir,
-                             data_source=data_source,
-                             data_type=data_type,
-                             object_science=object_science,
-                             object_comparison=object_comparison,
-                             blaze_corrected=blaze_corr,
-                             blaze_file=blaze_file,
-                             skip_done=runparams['SKIP_LBL_COMPUTE'],
-                             **keyword_args)
-        # ---------------------------------------------------------------------
-        # run the compile code
-        if runparams['RUN_LBL_COMPILE']:
-            lbl_compile.main(instrument=instrument, data_dir=data_dir,
-                             data_source=data_source,
-                             data_type=data_type,
-                             object_science=object_science,
-                             object_comparison=object_comparison,
-                             skip_done=runparams['SKIP_LBL_COMPILE'],
-                             **keyword_args)
+    # ---------------------------------------------------------------------
+    # make the mask (if not present)
+    if runparams['RUN_LBL_MASK']:
+        # Must produce the mask for the science data and the template
+        #   we use a set to do this (only runs once if they are the same)
+        for _obj_comparison in {object_science, object_comparison}:
+            lbl_mask.main(instrument=instrument, data_dir=data_dir,
+                          data_source=data_source,
+                          data_type=data_type,
+                          object_science=object_science,
+                          object_comparison=_obj_comparison,
+                          object_teff=object_teff,
+                          overwrite=not runparams['SKIP_LBL_MASK'],
+                          **keyword_args)
+    # ---------------------------------------------------------------------
+    # # make the noise model (if not present)
+    # if runparams['RUN_LBL_NOISE']:
+    #     lbl_noise(instrument=instrument, data_dir=data_dir,
+    #               object_science=object_science,
+    #               object_comparison=object_comparison,
+    #               **keyword_args)
+    # ---------------------------------------------------------------------
+    # run the compute code
+    if runparams['RUN_LBL_COMPUTE']:
+        lbl_compute.main(instrument=instrument, data_dir=data_dir,
+                         data_source=data_source,
+                         data_type=data_type,
+                         object_science=object_science,
+                         object_comparison=object_comparison,
+                         blaze_corrected=blaze_corr,
+                         blaze_file=blaze_file,
+                         skip_done=runparams['SKIP_LBL_COMPUTE'],
+                         **keyword_args)
+    # ---------------------------------------------------------------------
+    # run the compile code
+    if runparams['RUN_LBL_COMPILE']:
+        lbl_compile.main(instrument=instrument, data_dir=data_dir,
+                         data_source=data_source,
+                         data_type=data_type,
+                         object_science=object_science,
+                         object_comparison=object_comparison,
+                         skip_done=runparams['SKIP_LBL_COMPILE'],
+                         **keyword_args)
+    # ---------------------------------------------------------------------
+    # LE RAPPORT, a la toute fin et jamais fatal. C'est un compte rendu du
+    # run, pas une etape de calcul: s'il ne peut pas se dessiner, le run
+    # reste bon et on le dit, on ne le perd pas.
+    if runparams.get('REPORT', True) and runparams['RUN_LBL_COMPILE']:
+        try:
+            from lbl.report import make_report
+            rdb = os.path.join(data_dir, 'lblrdb',
+                               'lbl_%s_%s.rdb' % (object_science,
+                                                  object_comparison))
+            lbl_report = make_report(data_dir=data_dir, rdb_file=rdb,
+                                     title='%s_%s' % (object_science,
+                                                      object_comparison),
+                                     science_dir=os.path.join(
+                                         data_dir, 'science', object_science),
+                                     tc_dir=os.path.join(
+                                         data_dir, 'science',
+                                         object_science + '_tc'),
+                                     template_file=_template_of(
+                                         data_dir, object_comparison,
+                                         instrument),
+                                     # PLANETS: the K of its transiting
+                                     #   planets and candidates fitted
+                                     candidates_of=(object_science if
+                                                    runparams.get('PLANETS')
+                                                    else None),
+                                     # its systemic velocity colours the
+                                     #   series by V_tot (SIMBAD's)
+                                     star=object_science)
+        except Exception as _exc:
+            log.warning('report failed: {0}'.format(_exc))
+    return lbl_report
+
+
+def _template_of(data_dir: str, objname: str, instrument: str):
+    """The template LBL made of an object, for the report to say whether it
+    was made on known orbits (PLANETS). Its name depends on the instrument
+    (LBL_Template_<object>_nirps_he.fits, Template_<object>_HARPS_ESO.fits...)
+    so it is looked for; the templates of the objects made from this one
+    (<object>_pca2d..., <object>_tc) are not it. None if there is none.
+    A vetted template's is in models/template_<INSTRUMENT>_<DATA_SOURCE>
+    (lbl.core.vetted)."""
+    folders = [os.path.join(data_dir, 'templates')] + sorted(glob.glob(
+        os.path.join(data_dir, 'models', 'template_{0}_*'.format(
+            str(instrument).upper()))))
+    pattern = re.compile(r'^(LBL_)?Template_{0}_(.+)\.fits$'.format(
+        re.escape(str(objname))))
+    found = []
+    for folder in folders:
+        for name in (os.listdir(folder) if os.path.isdir(folder) else []):
+            match = pattern.match(name)
+            if match and not match.group(2).startswith(('pca2d', 'tc_',
+                                                        'tc.')):
+                found.append(os.path.join(folder, name))
+    if not found:
+        return None
+    # the instrument's own, else the most recent
+    mine = [path for path in found
+            if str(instrument).lower() in os.path.basename(path).lower()]
+    return max(mine or found, key=os.path.getmtime)
+
 
 def _pca2d_joint(runparams: dict, object_sciences, data_types,
                  object_comparisons, pca2d_args: dict) -> dict:

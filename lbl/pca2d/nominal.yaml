@@ -1,0 +1,1076 @@
+# pca2d-preclean: the one configuration file
+# ---------------------------------------------------------------------------
+# Three layers, merged in this order, later winning:
+#
+#   1. `general`            everything that does not depend on the instrument
+#   2. `instruments.<NAME>` what does, picked from the INSTRUME keyword of the
+#                           files themselves, never from a command line flag
+#   3. `objects.<NAME>`     anything one target needs and the others do not
+#
+# So a run is `pca2d-preclean --object TOI-2120` and nothing else, and adding a
+# spectrograph is adding a block under `instruments`, not editing any code.
+
+general:
+
+  input:
+    directory: data         # the input ROOT. One run reads
+                            # <directory>/<object>/ and writes nothing there,
+                            # so this can be a shared or read-only archive.
+                            # --data-dir overrides it for one run.
+    format: tfits           # APERO telluric-corrected 2D spectra
+    pattern: "*t.fits"      # <directory>/<object>/ is searched with this
+    max_files: null         # a small number here makes a fast dry run
+    min_order_finite_fraction: 0.05
+    blaze_min_frac: 0.05    # reject a pixel where the blaze has fallen below
+                            # this fraction of its order's peak
+    nightly_stack: auto     # auto, true or false. Coadding a night is a MEMORY
+                            # decision and never a modelling one: every exposure
+                            # is registered with its own BERV before it is
+                            # added, so nothing is smeared either way, and
+                            # fitting the individual spectra is strictly more
+                            # information. `auto` weighs the fit's footprint
+                            # against output.max_memory_gb and coadds only if it
+                            # would not otherwise fit.
+    bundle_berv: 0.1        # WITH STACKING, EACH NIGHT CUT INTO BUNDLES of at
+    bundle_minutes: null    # most this BERV range (km/s), this many minutes
+    bundle_max: null        # or this many exposures, each bundle one row of
+                            # the fit. The cube is in the observer's frame, so
+                            # a coadd smears the star by its BERV range: 600
+                            # m/s over a five-hour WASP-76 transit night, and
+                            # its sky changes with the airmass. 0.1 km/s since
+                            # 2026-10-21: an ordinary NIRPS visit (median
+                            # range 4 to 35 m/s over twenty targets) stays one
+                            # row. null: whole nights. Without stacking
+                            # (nightly_stack: false) they do nothing.
+
+  output:
+    directory: outputs      # the output ROOT. Everything a run produces lands
+                            # in <directory>/<object>/<n_star>-<n_earth>/: the
+                            # resolved config, the bases, the PDF, and the
+                            # corrected spectra under `corrected/`.
+                            # --out-dir overrides it for one run.
+    fits_directory: null    # EMPTY ON PURPOSE: this is a path on ONE machine,
+                            # and a path on one machine has no business in a
+                            # configuration everybody clones. It was
+                            # /Volumes/irrisor/pca2d_preclean here until
+                            # 2026-09-15, which meant every fresh install asked
+                            # for a disk it had never heard of. Set it in the
+                            # window, which remembers it per machine and blanks
+                            # it when the disk is not there.
+                            #
+                            # What it does: where a run's products are KEPT. Each run folder
+                            # (outputs/<object>/<tag>) is ONE link to the same
+                            # path under this one, made before the run writes
+                            # anything, so the corrected spectra, the fit's
+                            # components and the figures land there directly.
+                            # So do LBL's folders, all but lbl/science: it is
+                            # made of links, and an exFAT disk cannot hold one.
+                            # null keeps everything local. If the disk is not
+                            # mounted the run STOPS, rather than quietly fill
+                            # the internal disk again.
+    model_directory: outputs/lbl/models
+                            # ou LBL garde ses modeles, dont tapas_lbl.fits.
+                            # Sert aux instruments qui n'ont PAS de
+                            # transmission tellurique dans leurs fichiers:
+                            # HARPS, HARPS-N, ESPRESSO, SOPHIE. pca2d y evalue
+                            # le modele TAPAS de LBL a la masse d'air de la
+                            # pose, ce qui lui rend l'equivalent du Recon d'un
+                            # t.fits d'APERO. Vide, la transmission vaut 1
+                            # partout et les coupures qui en dependent ne
+                            # retirent rien, ce que le rapport d'une campagne
+                            # dit explicitement.
+    cache_directory: cache  # rebuildable intermediates, and deliberately not
+                            # under the output root: a cube costs twenty
+                            # minutes and does not depend on where a run's
+                            # products are asked to go, so pointing --out-dir
+                            # somewhere new must not orphan it.
+    use_cache: true
+    max_memory_gb: 16.0
+    windows:                # centre:width in nm, the regions each run draws.
+                            # Quoted, as text: YAML 1.1 reads an unquoted
+                            # 1220:4 as the base-60 number 73204, and any
+                            # reader but pca2d's own drops the window.
+                            # PLACED IN THE ORDERS on 2026-10-23
+                            # (lbl/doc/windows/order_windows.py, SPIRou's
+                            # wavelength solution and LBL's TAPAS model):
+                            # deep tellurics as close to the centre of an
+                            # order as can be, centrality 1 at the centre
+                            # and 0 at the edge (was, now):
+      - "1204.3:2"          # 0.89 -> 0.67, absorbed 44 -> 75%, deepest 0.004
+      - "1213:4"            # 0.80 -> 0.62, absorbed 35 -> 58%, deepest 0.045
+      - "1264.25:2"         # 0.50 -> 0.64, O2 at 1267, 100%, deepest 0.002
+      - "1601.6:2"          # 0.72 -> 0.88, absorbed 3 -> 43% (CO2)
+      - "1667.75:5"         # 0.89 -> 0.85, absorbed 10 -> 27% (CH4)
+      - "1707.5:3"          # 0.73 -> 0.90, absorbed 20 -> 51%
+      - "2196.2:2"          # 0.91, kept
+      - "2465:5"            # 0.22 -> 0.61 (was 2450, at an edge)
+
+  domain:
+    grid_source: magic      # lambda_i = wave0 * exp(i * dv / c). On a
+                            # log-uniform grid a Doppler shift is a pure
+                            # translation, which is what lets the star basis be
+                            # carried into each exposure's frame by an exact
+                            # operator instead of an interpolation.
+    smart_dv: false         # WHERE dv COMES FROM. false: the number below.
+                            # true: the data, and THE NUMBER BELOW IS NOT USED,
+                            # whatever it says. It is measured as the finest
+                            # pixel step in the first spectrum sampled at 70% of
+                            # its own width, which is all a resampling has to
+                            # guarantee, and a number in place of `true` is that
+                            # fraction. SPIRou pixels are about 2.27 km/s, so
+                            # this gives dv = 1.58 against the 0.5 below: three
+                            # times fewer samples, three times less memory, and
+                            # a fit faster by about as much. The measured step
+                            # is written back as domain.pixel_dv, and dv is
+                            # rounded DOWN to 10 m/s so that a wavelength
+                            # solution which moved by a hair between two
+                            # reductions does not re-key the cube.
+    dv: 0.5                 # km/s per sample. Read ONLY when smart_dv is false.
+                            # With smart_dv true this line is dead, and the run
+                            # says so rather than leaving it to be believed;
+                            # `dv: null` is the honest way to write it then.
+    # wave_min, wave_max and wave0 are per instrument, below.
+
+  registration:
+    frame: observer         # NOT a free choice: the two-frame fit does its own
+                            # BERV shifting, and a pre-shifted cube would leave
+                            # it nothing to shift.
+    target_berv: 0.0
+    spline_order: 3
+    mask_threshold: 0.999
+    orbits: []              # THE STAR'S FRAME FOLLOWS ITS COMPANIONS when this
+                            # holds their Keplerian orbits (period [d], k [m/s],
+                            # e, omega [deg], tp or t0 [BJD], the format of
+                            # lbl/resources/planets/*.yaml): every shift into the
+                            # star's frame is then the BERV composed
+                            # relativistically with their velocity at the
+                            # exposure's BJD, so a planet's reflex motion is not
+                            # left for the observer components to follow (on
+                            # WASP-76 they took a third of K). LBL's PLANETS
+                            # option fills it per object; the BERV itself is
+                            # kept as berv_bary, the velocity as vstar [km/s].
+                            # Empty: the BERV alone
+
+  highpass:
+    method: savgol
+    width_kms: 100          # Savitzky-Golay width in km/s, so it filters a line
+                            # the same way whatever the grid step. The window in
+                            # samples is derived from it: 201 at dv = 0.5. A
+                            # config that sets `window` (samples) instead, as
+                            # every run saved before 2026-09-11 does, keeps it.
+    polyorder: 2
+    mode: log_sub           # ln(f) - savgol(ln(f))
+
+  quality:
+    min_snr: 1.0
+    require_positive_flux: true
+    max_nan_fraction: 0.9
+    max_sky_ratio: 4.0      # drop a sample where the sky emission the pipeline
+                            # subtracted was more than this many times the
+                            # stellar flux. null keeps everything.
+    isolated_window: 3      # drop a valid sample that has a gap within this many
+                            # samples on BOTH sides. It passed every cut but its
+                            # neighbourhood did not, so its high pass came from a
+                            # filter window mostly filled by interpolation.
+    min_rjd: null
+    max_rjd: null
+    drs_modes: null         # la liste des modes de HIERARCH ESO INS MODE a
+                            # garder. null garde tout. Mis pour HARPS plus bas:
+                            # 8 des 100 poses de HD 10700 sont en mode EGGS.
+
+  weights:
+    mode: photon
+    snr_pixel_scale: 1.0
+    ln_clip_low: -0.5
+    ln_clip_high: null
+    sigma_floor_frac: 0.0
+    telluric_mode: recon
+    telluric_ramp_zero: 0.5
+    telluric_ramp_one: 1.0
+    telluric_file: null
+    telluric_power: 2.0
+    telluric_min_transmission: null
+    empirical_noise_box: 201  # samples. Measures the noise from the
+                              # sample-to-sample scatter and keeps the LARGER of
+                              # that and the photon estimate.
+                              #
+                              # Not a refinement. Past about 2200 nm on SPIRou
+                              # the THERMAL background dominates. Those photons
+                              # were counted, so they carry their own Poisson
+                              # noise, and the pipeline subtracts their MEAN and
+                              # not their variance: the noise stays in the data
+                              # after the signal it belonged to has gone. A
+                              # photon sigma computed from what is left
+                              # describes a spectrum that was never recorded,
+                              # and it calls the noisiest part of the detector
+                              # the quietest, by a factor of fifty. The
+                              # sample-to-sample scatter cannot make that
+                              # mistake: it measures what is there.
+    min_good_fraction: 0.2
+
+  twoframe:
+    n_star: 0               # components anchored in the STELLAR rest frame.
+                            # ZERO since 2026-09-15, and it is the measured
+                            # choice everywhere it has been measured (LBL rms /
+                            # robust, corrected against 1 star component):
+                            # TOI-2120 17.40/14.07 against 18.34/14.37, GJ 1
+                            # 2.61/2.38 against 2.85/2.78 and below its own
+                            # delivered series, TOI-4552 14.24/11.20 against
+                            # 15.86/15.86. The reason it is not a tuning knob:
+                            # an amplitude in front of a term in a logarithm is
+                            # an EXPONENT on the flux, and an exponent on a
+                            # star's mean spectrum describes no star. The star
+                            # is the per-parity spectrum below (mean: star),
+                            # taken out with a coefficient of exactly 1; a
+                            # component beside it only adds a second static
+                            # template with an arbitrary normalisation. Raise it
+                            # to 2 or more only to LOOK at variability, and read
+                            # the correlation table before believing it
+                            # (docs/options.md, twoframe-nstar2-degeneracy)
+    n_earth: 7              # components anchored in the OBSERVER frame
+    mean: star              # nominal since 2026-09-11: one star-frame spectrum
+                            # per parity and no observer-frame mean (below).
+                            # offset: the one-shot per-parity
+                            # offset the reports were made with; the correction
+                            # divides it out with the observer block. (iterate:
+                            # per-parity means in both frames, re-estimated
+                            # every sweep; not converging on TOI2120 yet.
+                            # star: one star-frame spectrum per parity, taken
+                            # out once before the fit, and no observer-frame
+                            # mean; the correction divides out the observer
+                            # block alone. Under test since 2026-09-11)
+    star_basis: spline      # the star as one cubic B-spline, evaluated at every
+                            # exposure's shifted positions and updated exactly;
+                            # SETTLED 2026-09-14: the code's own default, and
+                            # the window no longer offers a choice. `grid` (the
+                            # Lanczos kernel and the normal diagonal, as before)
+                            # is still read here and in a variant file, for
+                            # redoing the runs that were made on it
+    template: false         # the one-shot star-frame median of the older
+                            # modes; ignored by mean: iterate
+    iters: 16
+    order: star_first
+    tie_parities: true
+    max_mad: 10.0           # rejection threshold in ROBUST SIGMAS, 1.4826 x MAD
+    max_mad_rounds: 2
+    clip: 3.0
+    min_snr_frac: 0.5
+    dtype: float32          # storage for the two (rows, samples) arrays the fit
+                            # lives in. float32 halves them, which is what makes
+                            # fitting every exposure possible instead of nightly
+                            # means; every weighted sum accumulates in float64
+                            # whatever this says.
+    shift: lanczos
+    kernel_halfwidth: 8
+    gap_guard: true
+    leakage: true
+    chunk: null
+    template_berv_bin: 3000
+    template_berv_min_entries: 3
+    velocity_term: false    # OFF by default since 2026-09-11, as the sanity
+                            # check on what it does; true (or --velocity-term)
+                            # fits ONE VELOCITY PER EXPOSURE beside the
+                            # components, as the derivative of the reconstructed
+                            # star carried to that exposure's BERV. On a grid
+                            # uniform in velocity that derivative is a plain
+                            # np.gradient, which is one more reason the grid is
+                            # built that way.
+                            #
+                            # It is there to keep the star's own motion OUT of
+                            # the observer block. The star is never exactly
+                            # where the BERV alone puts it: it has a planet and
+                            # it has activity, and the carry leaves a residual
+                            # of its own. That residual has one shape, f', and
+                            # seven free vectors with an amplitude per exposure
+                            # will describe it. Dividing that block back out
+                            # then moves the star's lines, and when the star has
+                            # a real signal the correction subtracts the very
+                            # thing it was run to reveal.
+                            #
+                            # Fitted, never divided out: taking it out of the
+                            # data would erase the signal. The amplitude is
+                            # written to the corrected files as PCASTR_V.
+    velocity_min_transmission: 0.95
+                            # WHERE the shift is measured: only on columns that
+                            # are inside a photometric band AND whose telluric
+                            # transmission stays above this in 90% of the
+                            # exposures, read from the Recon the cube carries on
+                            # its own grid. Both halves matter. The bands come
+                            # from `domain.bands`, which is per instrument, so
+                            # NIRPS drops K by not defining it rather than by
+                            # anyone remembering to. And a column whose
+                            # transmission collapses on a bad night is a column
+                            # where the flux is atmosphere: a velocity fitted
+                            # there is fitted to the wrong thing. Measured
+                            # against LBL, the unmasked term came out 1.8 times
+                            # too large. 0 keeps the band cut and drops the
+                            # transmission one.
+
+  lbl:                      # running LBL on the result, which is the point of
+                            # correcting anything. Both objects are set up, the
+                            # spectra as delivered and the corrected ones, as
+                            # two objects in one LBL tree, so the velocities can
+                            # be read side by side rather than in two runs
+                            # somebody has to remember to line up.
+    prepare: true           # write lbl_config.yaml and run_lbl.py beside the
+                            # run's other outputs, and symlink both sets of
+                            # spectra into LBL's science folders
+    run: true               # and actually run LBL. That is hours, so it is
+                            # asked for: `true` here, or --run-lbl for one run.
+    environment: lbl-rapide # WHICH LBL: the conda environment its script is
+                            # run in, found by name. lbl-rapide, the default
+                            # since 2026-09-18, is LBL's speed branch
+                            # (test-speed-260918-110104: numba kernels, one
+                            # open per FITS file, every commit said to leave
+                            # the outputs unchanged), in an environment of its
+                            # own, made once with
+                            #
+                            #   git clone -b test-speed-260918-110104 \
+                            #       https://github.com/njcuk9999/lbl.git lbl-rapide
+                            #   conda create -n lbl-rapide python=3.12
+                            #   conda activate lbl-rapide
+                            #   pip install -e ./lbl-rapide
+                            #
+                            # `current` is the LBL environment.yml installs
+                            # beside this package (main), which measured every
+                            # run before that. A path is a python. A run that
+                            # is to run LBL and cannot find this one stops at
+                            # the top, before the fit, and says so.
+    directory: null         # LBL's DATA_DIR. null is `lbl` under the output
+                            # ROOT (output.directory or --out-dir), before a
+                            # run name or a variant adds its level: one tree
+                            # for every run under that root, since the
+                            # delivered object's LBL is the same for all of
+                            # them and hours to make. It was `lbl` beside
+                            # wherever the run started until 2026-09-16, which
+                            # put SMETHELLS_20's velocities in another clone's
+                            # folder while its report was on the data disk.
+                            # Point it at an existing LBL tree (--lbl-dir, or
+                            # the window's LBL field) and that tree is used.
+    suffix: _PCA2D_{tag}    # what the corrected object is called next to the
+                            # delivered one: TOI-2120 and TOI-2120_PCA2D_2-7.
+                            # `{tag}` is the run's <M>-<N>, and it is in the
+                            # default for a reason: without it, two runs at
+                            # different component counts put their corrected
+                            # spectra in ONE LBL science folder, and LBL's glob
+                            # measures the mixture without a word.
+    before: true            # measure the delivered spectra too. Leaving this
+                            # off measures the correction against nothing.
+    after: true
+    star_template: false    # false since 2026-09-12: the corrected object is
+                            # measured against the template LBL builds from the
+                            # corrected spectra themselves.
+                            #
+                            # Measured on Proxima, the same corrected spectra
+                            # against the fit's star template instead: the line
+                            # width LBL fits grows from 9076 to 11306 m/s and
+                            # the error per exposure from 0.97 to 1.67, for
+                            # 3.34 m/s rms against 3.04 (delivered 2.86). On
+                            # TOI-4552 the widths and the error behave the same
+                            # way. Whatever the fit's template lacks, LBL
+                            # notices it and pays for it per line.
+                            #
+                            # true writes the fit's star at its mean amplitude,
+                            # each order parity with its own residual mean, by
+                            # LBL's own writer where LBL looks for it, so LBL's
+                            # template step finds it and skips. One LBL built
+                            # for that object is never replaced.
+    strpca: true            # with two or more star components, the ones past
+                            # the first go to LBL as RESPROJ tables STRPCA2..N,
+                            # the way its DTEMP gradients do: the rdb gets each
+                            # exposure's projection on them, and its error.
+    dtemp: auto             # LBL's temperature-gradient projection, DTEMP<T>,
+                            # on both objects, for the report's before/after.
+                            # auto: the table (3000 to 6000 K by 500) nearest
+                            # the star's Teff; a number: nearest that; false:
+                            # none. First among the RESPROJ tables, since this
+                            # LBL divides the residual in place for each and
+                            # only the first is right; with STRPCA tables too,
+                            # false puts STRPCA2 first again.
+    teff: auto             # the target's effective temperature, which LBL
+                            # needs to choose the stellar model its mask comes
+                            # from, and stops without. `auto` reads it from the
+                            # spectra: APERO writes it as OBJTEMP on the
+                            # primary header and PP_TEFF on the science one. A
+                            # number here overrides the header, and the run
+                            # says so when the two disagree.
+    template: null          # OBJECT_COMPARISON. null means each object builds
+                            # its own template, which is what makes the two
+                            # velocity series comparable: a shared template
+                            # would be one ruler that fits neither.
+    steps: [template, mask, compute, compile]
+    link: symlink           # symlink or copy. A few hundred t.fits are tens of
+                            # gigabytes and they already exist twice. A disk
+                            # that cannot hold a link gets copies whatever this
+                            # says, and the run says so at the top; the one
+                            # that can is found by making one, not by its name
+                            # (irrisor, exFAT, takes them under macOS 26).
+    input_file: null        # LBL's glob inside a science folder. null keeps
+                            # LBL's own '*.fits', which is what BOTH sets need:
+                            # the corrected files are <stem>t_<M>-<N>.fits, so
+                            # a '*t.fits' glob would quietly find none of them.
+
+  correct:
+    n_star: 0               # star components divided out of the corrected file.
+                            # ZERO on purpose: with no template the first star
+                            # component IS the star, and dividing it out would
+                            # flatten the spectrum a velocity code is about to
+                            # measure. Only what is fixed in the observer's
+                            # frame comes off.
+    n_earth: null           # null means every observer component the fit has
+    excursion_nsig: null    # THE UNIT IS AN EXCURSION, NOT A SAMPLE. One sample
+    excursion_elements: 2.0 # beyond 3 sigma is noise: 0.27% of pure noise is,
+                            # and 1% of these residuals were. A run of samples
+                            # leaning the same way over a line's width is not.
+                            # So every window from one sample up to
+                            # excursion_elements resolution elements is judged
+                            # by the aggregate significance of its sum,
+                            #
+                            #   Z(w) = |sum of z| / sqrt(V(w))
+                            #
+                            # and flagged, whole, beyond excursion_nsig sigmas.
+                            #
+                            # V(w) IS MEASURED, NEVER w: the grid oversamples
+                            # the spectrograph (0.5 km/s against a 2.3 km/s
+                            # SPIRou pixel, one resolution element 4.3), and the
+                            # registration and the high pass correlate
+                            # neighbours further. On TOI-2120 the residual's
+                            # autocorrelation is rho_1 = 0.935, rho_2 = 0.766,
+                            # rho_4 = 0.303, so V(4) = 13.8, not 4: four samples
+                            # at 3 sigma are 3.2 sigma and not 6, because they
+                            # are one pixel. Over 17 samples (two elements, four
+                            # pixels) V = 83 and a flat 3.2 sigma bump reaches
+                            # 6, which is four INDEPENDENT pixels at 3 sigma:
+                            # the rule of thumb, with the arithmetic done
+                            # (outliers.noise_correlation, window_variance).
+                            #
+                            # 6.0 is the threshold this was built for; null
+                            # until it is measured on more than one target.
+                            # Header: PCA2XSIG, PCA2XWID, PCA2XRHO.
+    bias_nsig: 10.0         # LE BIAIS ANCRE DANS LE REFERENTIEL DE
+    bias_elements: 2.0      # L'OBSERVATEUR, nominal depuis le 2026-09-26.
+                            # clip_weights compare chaque pose AUX AUTRES POSES
+                            # a la meme longueur d'onde, donc un residu present
+                            # dans toutes n'est aberrant pour aucune: sur la
+                            # bande O2 a 1267 nm son |z| median vaut 0.67,
+                            # comme sur une region temoin. La moyenne sur les
+                            # poses, elle, gagne sqrt(N) = 17.8 avec 316 poses,
+                            # et revele des raies entieres mal corrigees
+                            # (1761, 1803, 1805, 1764-1769 nm: methane et eau).
+                            # Une colonne dont le residu MOYEN, somme sur
+                            # bias_elements elements de resolution, depasse
+                            # bias_nsig sigmas part de TOUTES les poses.
+                            #
+                            # 10 sigmas masque 10.2% du domaine; le balayage
+                            # donne 15 sigmas a 15.79 de rms, 20 a 16.66, 30 a
+                            # 16.89, et 5 masque 29.7% pour 15.11. La largeur
+                            # compte peu (1 element: 15.12, 2: 15.29, 4: 15.40).
+                            # Header: PCA2BSIG, PCA2BWID, PCA2BCOL.
+    nsig_cut: 3.0           # AVEC le biais ci-dessus, nominal depuis le
+                            # 2026-09-26: les deux axes voient des choses
+                            # differentes et s'additionnent (biais seul 15.29,
+                            # coupure seule 15.64, les deux 14.63). Mesure sur
+                            # TOI-2120 a 0-7: rms 17.01 -> 14.63, par nuit
+                            # 14.57 -> 11.52, sigma_K 1.23 -> 1.05 et K a 5.54
+                            # contre 5.42, donc sans deplacer la planete. La
+                            # coupure seule a 2.5 sigma donnait 14.60 mais
+                            # faisait tomber K a 3.67, soit 1.6 sigma.
+                            #
+                            # also NaN every sample whose residual (panel 5 of
+                            # the sequence figure: the data less everything the
+                            # fit models) is beyond this many running robust
+                            # sigmas, 1.4826 MAD over highpass.window samples.
+                            # The count goes in the header as PCA2RNAN. null
+                            # keeps them all.
+    column_frac: 0.10       # AND THEN THE WHOLE COLUMN. With nsig_cut set, the
+    column_chi2: 1.5        # residual divided by that local sigma is a z, so
+                            # the exposures can be compared column by column in
+                            # the OBSERVER's frame. A column where more than
+                            # column_frac of them is clipped AND whose
+                            # survivors' reduced chi2 is still above
+                            # column_chi2 is dropped from EVERY exposure: no
+                            # exposure can describe it, so it is a defect, a
+                            # telluric line the correction does not reach or a
+                            # sky residual, not a measurement of the star.
+                            # Both conditions, not either.
+                            #
+                            # The numbers are measured (outliers.py, and
+                            # scratchpad/null_chi2.py): pure Gaussian noise
+                            # gives 0.973 after a 3 sigma clip, never above
+                            # 1.27 over 4096 columns, and never more than 2.2%
+                            # of exposures clipped, so 10% cannot be met by
+                            # noise. Together they caught 39 of 40 columns
+                            # given twice their neighbours' noise and none of
+                            # the 4056 good ones. Header: PCA2CFRC, PCA2CCHI,
+                            # PCA2CCOL. null in either leaves the columns in.
+    column_min_rows: 10     # fewer exposures of a parity than this: no verdict
+    shrink: true            # nominal since 2026-09-11: divide each observer
+                            # component out only where it is significant at
+                            # that column, all exposures together: Q_ji times
+                            # max(0, 1 - 1/z^2), z its significance with every
+                            # row's own weight, the weights scaled by the fit's
+                            # reduced chi2 (pca2d.shrink). Where it goes to
+                            # zero the file keeps its delivered flux. PCA2SHRK
+    weight: velocity        # THE METRIC THE AMPLITUDES ARE MEASURED IN when
+                            # they are refitted for a file. `flux`: every sample
+                            # as the fit saw it, the nominal. `velocity`: every
+                            # sample weighted by the star's own derivative
+                            # there, (dT/dv)^2, since what a contaminant does to
+                            # a radial velocity is its overlap with that
+                            # derivative and a contaminant flat where the star
+                            # has structure moves no line. It implies a refit,
+                            # and it changes only how b is MEASURED: what is
+                            # divided out, which samples are blanked and the
+                            # shrinkage below are untouched.
+                            #
+                            # NOMINAL since 2026-09-15, on the principle rather
+                            # than on a measured gain: what a contaminant does
+                            # to a velocity IS its overlap with the star's
+                            # derivative, so that is the metric to measure it
+                            # in. Measured, the two are indistinguishable on
+                            # both targets tried: TOI-2120 (where the correction
+                            # gains a factor three) 15.4 +- 1.2 against 15.0 +-
+                            # 1.2 m/s, paired t = 0.90; TOI-4552 (where it
+                            # costs) 12.33/10.82 against 12.07/11.60, t = 0.44.
+                            # `flux` is the older behaviour and still runs.
+    velocity_floor: 0.05    # with weight: velocity, what a sample carrying no
+                            # velocity information keeps, as a fraction of the
+                            # mean. Zero would leave a component that lives only
+                            # where the star is flat with no amplitude at all
+    mask: common            # which samples a corrected file blanks. `exposure`
+                            # blanks the ones that exposure's own fit gave no
+                            # weight, so every epoch carries a different set of
+                            # lines; on TOI-4552 that alone cost 1.8 m/s of rms
+                            # with nothing divided out at all, while the error
+                            # per exposure did not move. `common`, nominal since
+                            # 2026-09-12, blanks a sample in every exposure as
+                            # soon as one of them gave it no weight: one line
+                            # set for the whole campaign, for 3.6 points more of
+                            # each TOI-4552 exposure and 6.7 on Proxima.
+                            # `none` keeps the delivered flux there instead.
+    mask_share: 1.0         # avec `mask: common`, la FRACTION DE POSES qui
+                            # doit avoir pondere un echantillon pour qu'il
+                            # soit garde. 1.0 est l'intersection stricte,
+                            # celle d'avant le 2026-10-15, et reste le
+                            # nominal: le jeu de raies est UNIQUE pour la
+                            # campagne dans les deux cas, il est seulement
+                            # decide a la majorite plutot qu'a l'unanimite.
+                            #
+                            # A QUOI CA SERT. L'unanimite coute peu quand
+                            # toutes les poses couvrent le meme intervalle, et
+                            # cher quand elles ne le couvrent pas. Mesure sur
+                            # HD 10700: 21.7% de pixels a NaN avec la grille
+                            # livree, 43.0% avec input.to_observer, ou chaque
+                            # pose est decalee de son propre BERV.
+                            #
+                            # Ne pas confondre avec `mask: exposure`, qui
+                            # donne a chaque pose SON jeu de raies et qui est
+                            # bien pire (693 m/s sur HD 10700): ici le jeu
+                            # reste commun.
+    shrink_smooth: false    # with shrink: average z^2 over one resolution
+                            # element first, so a line is judged over its width
+    smooth_components: []   # observer components (1-based) to smooth by LBL's
+                            # template filter over one resolution element, and
+                            # then shrink, before dividing out: for the ones
+                            # that are mostly noise ([2, 3] on TOI-2120)
+
+# ---------------------------------------------------------------------------
+# One block per spectrograph. The instrument is read from the INSTRUME keyword
+# of the files, so this is never chosen by hand and cannot be chosen wrongly.
+#
+# `extensions` is the part that matters most and the part that fails silently
+# if it is wrong: a SPIRou file carries FluxA and FluxB as well as FluxAB, and
+# reading FluxA from one raises no error, it returns half the light with a
+# different blaze and SNR.
+# ---------------------------------------------------------------------------
+instruments:
+
+  SPIROU:
+    lbl:
+      instrument: SPIROU    # LBL's own name for it, and with the source below
+      data_source: CADC     # it is what selects the class that reads the files.
+                            # CADC and not APERO even for APERO reductions:
+                            # LBL's CADC class is the one that reads the named
+                            # fibre extensions, FluxAB / WaveAB / BlazeAB, which
+                            # is where the wavelength solution of these files
+                            # actually is. Its APERO class reads the primary
+                            # header's wavelength polynomials, which a t.fits
+                            # does not carry there, and which this package
+                            # refuses to use anywhere in any case.
+    extensions:
+      flux: FluxAB          # the combined AB fibre, NEVER FluxA or FluxB
+      wave: WaveAB          # the extension, NEVER the header polynomials
+      blaze: BlazeAB
+      recon: Recon
+      sky: OHLine
+    domain:
+      wave_min: 955.0
+      wave_max: 2500.0
+      wave0: 955.0
+      bands:
+        Y: [970.0, 1070.0]
+        J: [1170.0, 1330.0]
+        H: [1490.0, 1780.0]
+        K: [2030.0, 2370.0]
+    twoframe:
+      resolution: 70000       # lambda/dlambda, LBL's APPROX_RESOLUTION for
+                              # SPIRou: one resolution element, c/R, is what
+                              # every Savitzky-Golay here is measured in. It
+                              # turns no smoothing on by itself (see
+                              # twoframe.star_smooth and correct.shrink_smooth,
+                              # correct.smooth_components)
+
+  NIRPS:
+    lbl:
+      instrument: NIRPS_HE  # HA or HE, by the mode the data were taken in.
+                            # LBL expects to be told: it does not read the mode
+                            # from the header, and the wrong one here is not an
+                            # error, it is velocities from another instrument's
+                            # profile.
+      data_source: CADC     # as for SPIRou above: the CADC class reads FluxA,
+                            # WaveA and BlazeA, which is where the solution is
+    extensions:
+      flux: FluxA
+      wave: WaveA
+      blaze: BlazeA
+      recon: Recon
+      sky: SKYCORR_SCI
+    domain:
+      wave_min: 965.0
+      wave_max: 1950.0
+      wave0: 965.0
+      bands:
+        Y: [970.0, 1070.0]
+        J: [1170.0, 1330.0]
+        H: [1490.0, 1780.0]
+    twoframe:
+      resolution: 80000       # lambda/dlambda, LBL's APPROX_RESOLUTION for NIRPS
+    input:
+      nightly_stack: true   # NIRPS takes three or four exposures a visit and
+                            # the campaign cubes were built this way; kept
+                            # explicit so those cache keys still pin.
+    output:
+      windows:              # NIRPS's own, inside 965 to 1950 nm (the general
+                            # list's K band is out of reach), placed in ITS
+                            # orders on 2026-10-23 (order_windows.py, NIRPS
+                            # HE's wavelength solution), centrality was, now:
+        - "1187.8:2"        # 0.56 -> 0.88, absorbed 44 -> 92%, deepest 0.000
+        - "1208.25:4"       # 0.50 -> 0.69, absorbed 35 -> 49%, deepest 0.020
+        - "1269.75:2"       # 0.41 -> 0.72, O2 at 1267, 100%, deepest 0.000
+        - "1608.6:2"        # 0.81 -> 0.76, absorbed 3 -> 33% (CO2)
+        - "1667.5:5"        # 0.44 -> 0.62, absorbed 10 -> 27% (CH4)
+        - "1707.5:3"        # 0.49 -> 0.64, absorbed 20 -> 51%
+
+  # -------------------------------------------------------------------------
+  # LES SPECTROGRAPHES DU VISIBLE. Ajoutes le 2026-10-14: « tout ce qui passe
+  # dans le LBL peut etre envoye au PCA2D ». Ils n'ont pas de t.fits d'APERO,
+  # donc pca2d les lit par le pont de readers.py, qui appelle la classe de
+  # lecture de LBL elle-meme. Ce qu'un t.fits porte et qu'eux n'ont pas:
+  #
+  #   Recon  la transmission tellurique. Modelisee par TAPAS (readers.
+  #          tapas_transmission) quand output.model_directory la pointe,
+  #          absente sinon, et les coupures qui en dependent sont alors
+  #          inactives plutot que fausses.
+  #   OHLine l'emission du ciel par pose. Aucun de ces instruments ne la livre:
+  #          quality.max_sky_ratio est sans objet ici.
+  #   SNR    mesure sur le flux, ordre par ordre (readers.order_snr).
+  #
+  # Le blaze vaut UN partout sur ces instruments, et ce n'est pas une panne:
+  # la classe HARPS de LBL ne deblaze pas, le S2D est deja plat. Donc
+  # input.blaze_min_frac ne coupe rien ici, et c'est voulu.
+  # -------------------------------------------------------------------------
+
+  HARPS:
+    quality:
+      # DEUX FIBRES SONT DEUX INSTRUMENTS, ET CHACUNE A SON OFFSET. HARPS
+      # observe en mode HAM (fibre de 1") et en mode EGGS (fibre de 1.4", a
+      # haute efficacite). Ce ne sont pas des poses a jeter: ce sont deux
+      # LOTS, chacun avec son propre zero de vitesse, son template et son
+      # masque. Les melanger dans une seule campagne revient a additionner
+      # deux echelles de vitesse differentes.
+      #
+      # LA MESURE, sur les CCF du DRS de l'ESO (2026-10-16, HD 10700, les
+      # vitesses que le pipeline lui-meme publie, sans rien de pca2d):
+      #     mode HAM    92 poses   -16684 m/s, rms 2.15, erreur 0.34
+      #     mode EGGS    8 poses      -819 m/s (6 poses) et -31900 (2 poses),
+      #                              erreur 15 a 33 m/s
+      # soit un offset de l'ordre de 16 km/s, et une erreur CCF cinquante
+      # fois plus grande. Melangees, les 100 poses donnent un rms de 4404 m/s
+      # contre 2.15 pour le seul mode HAM.
+      #
+      # `drs_modes` garde ici le mode principal. Pour mesurer l'autre lot, on
+      # relance avec drs_modes: [EGGS] et un nom d'objet a lui: il aura alors
+      # son template, son masque et sa vitesse systemique, et les deux series
+      # se comparent ensuite en DIFFERENTIEL, chacune autour de sa mediane.
+      drs_modes: [HARPS, HARPS+NIRPS]  # UN SEUL MODE PAR LOT (HARPS+NIRPS
+                            # est HARPS, observe en meme temps que NIRPS depuis
+                            # 2023: le meme mode). Mesure le 2026-10-15
+                            # sur les 100 poses de HD 10700: 8 sont en mode
+                            # EGGS, la fibre de 1.4" a haute efficacite, et ce
+                            # sont EXACTEMENT les 8 dont l'ajustement
+                            # tellurique echoue: l'exposant d'eau y tombe
+                            # entre 0.004 et 0.047, cent fois moins que les
+                            # 0.30 des poses HARPS, alors qu'il y a toujours
+                            # de l'eau au-dessus d'un telescope.
+                            #
+                            # CE N'EST PAS UN DECALAGE EN VITESSE. Je l'ai
+                            # d'abord cru, et c'etait faux: le modele TAPAS
+                            # tombe a sa place sur ces poses comme sur les
+                            # autres, minimum local du cout entre 0 et +3 km/s
+                            # pour 7 des 8, le cout a zero restant a moins de
+                            # 3% du creux (tools/tellu_shift.py, page 2). Le
+                            # +16 km/s que j'avais annonce etait un argmin lu
+                            # sur le BORD du balayage, pas un creux.
+                            #
+                            # Ce n'est pas non plus la resolution: de R=115000
+                            # a R=60000, l'eau de ces poses ne monte que de
+                            # 0.0039 a 0.0089. Et les telluriques y sont bien,
+                            # a la meme profondeur que dans les poses HARPS
+                            # (creux de 0.135 contre 0.122 dans la bande B).
+                            #
+                            # CE QUI CLOCHE SUR CES POSES RESTE A TROUVER. On
+                            # les ecarte parce que leur correction tellurique
+                            # est manifestement fausse, pas parce qu'on a
+                            # compris pourquoi.
+    lbl:
+      instrument: HARPS
+      data_source: ESO      # le S2D de l'archive ESO, celui que DACE livre.
+                            # ORIG serait l'e2ds du DRS d'origine, ESSP le
+                            # format du consortium: trois lectures differentes
+                            # du meme spectrographe, et LBL veut savoir laquelle
+    input:
+      format: s2d        # le nom du cube en cache dit par quel
+                            # lecteur il a ete fait, pas seulement son
+                            # empreinte: cube_s2d_<hash>
+      to_observer: true   # DEFAIRE LA CORRECTION BARYCENTRIQUE. Le S2D de
+                            # l'ESO porte WAVEDATA_VAC_BARY, une grille deja
+                            # ramenee au barycentre: la classe HARPS de LBL
+                            # le sait et son get_berv rend zero (verifie le
+                            # 2026-10-14: la pente de vrad contre le BERV vaut
+                            # +0.00002 km/s par km/s sur 52 km/s d'etendue).
+                            #
+                            # Mais l'ajustement a deux reperes VIT de l'ecart
+                            # entre eux: une composante de l'observateur est
+                            # fixe en longueur d'onde pendant que l'etoile se
+                            # deplace. Avec un BERV nul partout, les deux
+                            # reperes n'en font qu'un, rien ne retient le bloc
+                            # observateur de suivre le bruit (chi2 reduit de
+                            # l'ajustement: 0.594, soit mieux que le bruit ne
+                            # l'autorise) et la correction a fait passer le
+                            # rms de LBL de 11.2 a 51.6 m/s.
+                            #
+                            # On remet donc le spectre dans le repere de
+                            # l'observateur, en divisant la grille par le
+                            # Doppler relativiste du BERV d'en-tete, et le
+                            # BERV redevient celui qui est a appliquer. Les
+                            # fichiers CORRIGES gardent la grille d'origine:
+                            # seule la lecture change de repere.
+                            #
+                            # Mesure le 2026-10-14 sur HD 10700, rms de LBL:
+                            # 11.2 m/s tels que livres, 51.6 sans cette
+                            # option, 14.2 avec. Elle rend donc l'essentiel
+                            # de ce que l'absence de contraste faisait
+                            # perdre, et c'est le meilleur reglage connu.
+                            #
+                            # CE QU'ELLE COUTE: chaque pose couvre alors un
+                            # intervalle decale du sien, et `correct.mask:
+                            # common` ne garde que l'intersection de toutes,
+                            # soit 39.7% des echantillons contre 61.5%, d'ou
+                            # 44.9% de pixels a NaN. `mask: exposure` rendrait
+                            # 63.3% vivants mais donne 693.8 m/s, parce que
+                            # chaque pose garderait un AUTRE jeu de raies.
+                            # L'intersection est le prix d'un jeu coherent.
+                            #
+                            # MESURE LE 2026-10-15, avec un LBL dont le
+                            # masque est repare (correctifs 645f550 et
+                            # 0f1c82d: les mesures d'avant se jouaient dans
+                            # du bruit de masque, la serie livree sortant a
+                            # 11.33 m/s au lieu de 1.57). Sur 64 poses
+                            # communes de HD 10700:
+                            #
+                            #   livres                    1.56 m/s
+                            #   0-7 nominal (BERV nul)    1.89  (+21%)
+                            #   0-7 to_observer          15.00  (+859%)
+                            #   0-7 to_observer sans shrink 14.12
+                            #
+                            # to_observer est donc FRANCHEMENT MAUVAIS, alors
+                            # qu'il paraissait le meilleur sur la base
+                            # bruitee. Defaire la correction barycentrique
+                            # abime les spectres (chi2 reduit de LBL: 122) et
+                            # ce que l'ajustement y gagne en levier ne
+                            # compense pas. Laisse a false.
+                            #
+                            # CE QUI COUTE, mesure: dans le repere du sol
+                            # chaque pose couvre un intervalle decale de son
+                            # BERV, et `correct.mask: common` ne garde que
+                            # l'intersection de toutes. Resultat: 43% de
+                            # pixels a NaN contre 21.7% sans l'option. C'est
+                            # le prix direct du changement de repere, et il
+                            # depasse ce que le levier rapporte.
+                            #
+                            # A REPRENDRE, parce que la logique est la bonne:
+                            # l'ajustement doit travailler dans le repere de
+                            # l'observateur et celui de l'etoile, comme sur
+                            # SPIRou et NIRPS, et seule la grille de depart
+                            # differe. Ce qui manque est un masque commun qui
+                            # n'exige pas l'accord de TOUTES les poses (une
+                            # fraction suffirait), ou un masque ancre dans le
+                            # repere de l'etoile.
+                            #
+                            # ANCIENNE NOTE, fausse, gardee pour memoire:
+                            # par raie 2.8 fois trop petites sur les spectres
+                            # corriges (1249 contre 3517 m/s), alors que les
+                            # fichiers sont coherents (ERRDATA inchangee,
+                            # bruit mesure / erreur annoncee 1.40 avant comme
+                            # apres) et que la correction ne lisse rien (sur
+                            # LES MEMES pixels, bruit corrige / original =
+                            # 0.999). La difference nait dans LBL, sans doute
+                            # dans le gabarit, plus creux ici. Voir
+                            # docs/multi_instrument.md.
+      pattern: "*_S2D_A.fits"   # la fibre A, la science. La fibre B est le
+                                # ciel ou la lampe de calibration et n'a rien
+                                # a faire dans un cube de spectres d'etoile
+      blaze_min_frac: 0.0       # le blaze vaut 1 partout (voir ci-dessus):
+                                # une coupure relative a son maximum ne
+                                # couperait pas un pixel, autant le dire
+    domain:
+      wave_min: 380.0           # mesure sur un S2D de HD10700 le 2026-10-14:
+      wave_max: 692.0           # 71 ordres, 380.5 a 691.5 nm
+      wave0: 380.0
+      bands:
+        B: [380.0, 500.0]
+        V: [500.0, 600.0]
+        R: [600.0, 692.0]
+    twoframe:
+      resolution: 115000        # APPROX_RESOLUTION de la classe HARPS de LBL
+      n_earth: 2            # DEUX COMPOSANTES DANS L'OPTIQUE, et non sept.
+                            # L'intuition de l'utilisateur le 2026-10-15, que
+                            # la mesure confirme avec un creux net. Ce que le
+                            # bloc observateur a a decrire dans le visible est
+                            # simple: entre 380 et 700 nm il n'y a que les
+                            # bandes de l'oxygene et quelques bandes d'eau,
+                            # gouvernees par la masse d'air et la colonne
+                            # d'eau, soit deux parametres. Dans le H et le K
+                            # de SPIRou, le methane et l'eau couvrent des
+                            # ordres entiers avec des profils qui varient
+                            # autrement, d'ou les sept.
+                            #
+                            # HD 10700, 64 poses communes, repere observateur
+                            # et masque a 50%, rms de LBL:
+                            #
+                            #   une composante     1.91 m/s  chi2 6.9
+                            #   DEUX composantes   1.80      chi2 5.4
+                            #   sept composantes   2.42      chi2 9.9
+                            #
+                            # La premiere porte deja 29.1% de la variance, la
+                            # deuxieme 4.3%, les cinq suivantes moins de 2%
+                            # chacune: elles n'ont plus qu'a suivre le bruit.
+    correct:
+      mask_share: 0.50      # VA AVEC input.to_observer, et ne s'en separe
+                            # pas. Dans le repere du sol chaque pose couvre
+                            # un intervalle decale de son BERV, et un masque
+                            # commun a l'unanimite n'en garde que
+                            # l'intersection. Mesure le 2026-10-15 sur tau
+                            # Ceti, 64 poses communes, rms de LBL:
+                            #
+                            #   livres                        1.56 m/s
+                            #   0-7 BERV nul                  1.89
+                            #   0-7 obs., unanimite           5.19  (43.0% NaN)
+                            #   0-7 obs., 75% des poses       2.44  (17.0% NaN)
+                            #   0-7 obs., 50% des poses       2.76  (14.2% NaN)
+    output:
+      windows:                  # centre:largeur en nm. LES FENETRES SERVENT A
+                                # MONTRER CE QUE LA CORRECTION FAIT, donc elles
+                                # visent la ou il y a quelque chose a corriger:
+                                # les regions les plus telluriques du domaine.
+                                # Choisies sur mesure le 2026-10-15, en
+                                # evaluant le modele TAPAS sur une pose de tau
+                                # Ceti et en classant les tranches de 2 nm par
+                                # transmission au 2e centile.
+                                # PLACEES DANS LES ORDRES le 2026-10-23
+                                # (lbl/doc/windows/order_windows.py, solution
+                                # en longueur d'onde de HARPS): 628 et 649
+                                # chevauchaient deux ordres, et un ordre de
+                                # HARPS fait 5 a 8 nm, d'ou des fenetres plus
+                                # etroites. AU MILIEU DU BLAZE depuis le
+                                # 2026-10-25 (le centre geometrique d'un ordre
+                                # n'est pas le pic de son blaze): le plus bas
+                                # du blaze dans la fenetre, sur le pic de son
+                                # ordre, est d'au moins 0.8. Bande B 0.89,
+                                # gamma 0.88, eau 594 0.85, eau 651 0.91.
+                                # Centralite geometrique d'alors (1 au
+                                # centre, 0 au bord):
+        - "687.75:2.5"          #   bande B de O2, 0.25 -> 0.64, 65% absorbe
+        - "630.75:2"            #   bande gamma de O2, deux ordres -> 0.66,
+                                #          100% absorbe
+        - "594.25:2.25"         #   eau, 0.49 -> 0.65, 100% absorbe
+        - "651.0:2.5"           #   eau, deux ordres -> 0.64, 52% absorbe
+        - "586.5:1.5"           #   eau, au milieu du blaze de l'ordre 56. Le
+                                #          doublet D du sodium (589.0:1.5) y
+                                #          etait, sur le FLANC ROUGE du blaze
+                                #          (0.75 a 0.45 du pic, a 586.6 nm):
+                                #          la riviere y montrait un spectre
+                                #          plus bruite que ce que la methode
+                                #          donne, ce qui trompait sur sa
+                                #          qualite (2026-10-25). Aucune
+                                #          fenetre qui le garde n'atteint 0.8
+                                #          du blaze; celle-ci, 0.87
+        - "519.0:2"             #   triplet b du magnesium (b1, 518.36 nm),
+                                #          temoin presque sans tellurique;
+                                #          518.0:2 descendait a 0.70 du
+                                #          blaze, celle-ci 0.86
+
+  HARPN:
+    lbl:
+      instrument: HARPSN        # LBL l'epelle sans le tiret; INSTRUME dans les
+      data_source: ESO          # fichiers est HARPN, d'ou les deux graphies
+    input:
+      format: s2d        # le nom du cube en cache dit par quel
+                            # lecteur il a ete fait, pas seulement son
+                            # empreinte: cube_s2d_<hash>
+      pattern: "*_S2D_A.fits"
+      blaze_min_frac: 0.0
+      to_observer: true     # COMME HARPS (2026-10-27): le S2D du TNG porte
+                            # une grille barycentrique, le get_berv du profil
+                            # de LBL rend zero, et sans cette option le
+                            # repere de l'observateur ETAIT celui de
+                            # l'etoile: BERV nul sur les 124 poses d'AD Leo,
+                            # un bloc observateur fige pendant que les
+                            # telluriques bougent du BERV. Avec, la grille
+                            # est ramenee dans le repere de l'observateur par
+                            # le BERV que donne le profil de LBL
+                            # (readers.observer_berv: get_berv +
+                            # get_berv_transmission). Les mesures d'avant
+                            # (HD 10700 et tau Ceti, bloc HARPS) restent a
+                            # refaire sur HARPS-N: 0-7 BERV nul 1.89 m/s,
+                            # repere de l'observateur 2.44 (75% des poses) a
+                            # 15.00 (unanimite), livres 1.56.
+    correct:
+      mask_share: 0.50      # va avec input.to_observer, comme pour HARPS:
+                            # chaque pose couvre un intervalle decale de son
+                            # BERV, et l'unanimite n'en garderait que
+                            # l'intersection
+    domain:
+      wave_min: 383.0
+      wave_max: 693.0
+      wave0: 383.0
+      bands:
+        B: [383.0, 500.0]
+        V: [500.0, 600.0]
+        R: [600.0, 693.0]
+    twoframe:
+      resolution: 115000
+    output:
+      windows:                  # HARPS-N N'EN AVAIT PAS: il prenait la liste
+                                # generale, celle du proche infrarouge, hors de
+                                # sa portee, et ses rapports n'en dessinaient
+                                # aucune. Celles de HARPS placees dans SES
+                                # ordres le 2026-10-23 (order_windows.py,
+                                # solution de HARPS-N), centralite:
+        - "687.5:2.5"           #   bande B de O2, 0.61
+        - "630.5:2"             #   bande gamma de O2, 0.69
+        - "594.0:2.25"          #   eau, 0.63
+        - "650.75:2.5"          #   eau, 0.65
+        - "589.0:1.5"           #   doublet D du sodium, stellaire, 0.52
+        - "518.0:2"             #   triplet b du magnesium, temoin, 0.51
+
+  ESPRESSO:
+    lbl:
+      instrument: ESPRESSO
+      data_source: None         # la table instrument/source de LBL n'en a
+                                # qu'une pour ESPRESSO, et elle s'appelle None
+    input:
+      format: s2d        # le nom du cube en cache dit par quel
+                            # lecteur il a ete fait, pas seulement son
+                            # empreinte: cube_s2d_<hash>
+      pattern: "*_S2D_A.fits"
+      blaze_min_frac: 0.0
+      to_observer: false    # comme HARPS: la grille est deja barycentrique
+                            # et le get_berv d'ESPRESSO rend zero, mais
+                            # defaire cette correction fait PERDRE (15.00 m/s
+                            # contre 1.89 sur HD 10700 le 2026-10-15). Voir le
+                            # bloc HARPS pour la mesure.
+      #
+      # LES 170 ORDRES SONT 85 ORDRES PHYSIQUES EN DEUX TRANCHES. Mesure le
+      # 2026-10-14 sur un S2D de HD 10700: les ordres 0 et 1 couvrent tous
+      # deux 377.2-383.1 nm, a 0.001 nm pres, parce que ESPRESSO coupe
+      # chaque ordre en deux tranches de la fente. La parite de pca2d separe
+      # donc les deux TRANCHES, et non deux ordres voisins.
+      #
+      # Consequence: a l'interieur d'une tranche, deux ordres consecutifs se
+      # recouvrent de 3.4 nm, dont 1.8 survivent a l'erosion des bords. Le
+      # recouvrement de meme parite est donc REEL ici, contrairement a
+      # SPIRou et HARPS, et c'est l'arbitrage de tfits._overlap_blaze qui
+      # tranche: le moins lumineux des deux passe a NaN. Le blaze valant UN
+      # partout, c'est le flux median qui departage (16036 contre 11749 sur
+      # la zone commune aux ordres 0 et 2).
+    domain:
+      wave_min: 377.0           # mesure sur un S2D de HD 10700 le 2026-10-14:
+      wave_max: 791.0           # 170 ordres, 377.2 a 790.9 nm
+      wave0: 377.0
+      bands:
+        B: [377.0, 500.0]
+        V: [500.0, 600.0]
+        R: [600.0, 791.0]
+    twoframe:
+      resolution: 140000
+    output:
+      windows:                  # LES FENETRES MONTRENT CE QUE LA CORRECTION
+                                # FAIT, donc elles visent les regions les plus
+                                # telluriques. Mesure le 2026-10-15 sur une
+                                # pose de HD 10700, modele TAPAS, transmission
+                                # au 2e centile par tranches de 2 nm.
+                                # PLACEES DANS LES ORDRES le 2026-10-23
+                                # (order_windows.py, solution d'ESPRESSO):
+                                # 762 et 628 chevauchaient deux ordres.
+                                # Centralite (1 au centre, 0 au bord):
+        - "765.25:4"            #   bande A de O2, deux ordres -> 0.61, la
+                                #         plus profonde du visible, et
+                                #         ESPRESSO le seul a l'atteindre
+        - "688.25:2.5"          #   bande B de O2, 0.50 -> 0.71
+        - "720.0:3"             #   eau, 0.35 -> 0.64
+        - "631.25:3"            #   bande gamma de O2, deux ordres -> 0.67
+        - "589.0:1.5"           #   doublet D du sodium, STELLAIRE en zone
+                                #         tellurique; 0.71 -> 0.78
+        - "518.0:2"             #   triplet b du magnesium, temoin sans
+                                #         tellurique; 0.42 -> 0.54
+
+  SOPHIE:
+    lbl:
+      instrument: SOPHIE
+      data_source: None
+    input:
+      format: e2ds        # le nom du cube en cache dit par quel
+                            # lecteur il a ete fait, pas seulement son
+                            # empreinte: cube_e2ds_<hash>
+      pattern: "*e2ds_A.fits"
+      blaze_min_frac: 0.0
+    domain:
+      wave_min: 387.0
+      wave_max: 695.0
+      wave0: 387.0
+      bands:
+        B: [387.0, 500.0]
+        V: [500.0, 600.0]
+        R: [600.0, 695.0]
+    twoframe:
+      resolution: 75000
+    output:
+      windows:                  # SOPHIE N'EN AVAIT PAS (la liste generale, du
+                                # proche infrarouge, hors de sa portee): celles
+                                # de HARPS, PAS ENCORE PLACEES dans les ordres
+                                # de SOPHIE (l'archive de l'OHP ne repondait
+                                # pas le 2026-10-23). A refaire avec
+                                # lbl/doc/windows/order_windows.py sur un e2ds.
+        - "687.75:2.5"
+        - "630.75:2"
+        - "594.25:2.25"
+        - "651.0:2.5"
+        - "589.0:1.5"
+        - "518.0:2"
+
+# ---------------------------------------------------------------------------
+# Anything one target needs and the others do not. Keys here are OBJECT names
+# and match --object. Everything is optional; most targets need nothing.
+# ---------------------------------------------------------------------------
+objects: {}

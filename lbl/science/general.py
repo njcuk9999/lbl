@@ -1095,41 +1095,28 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
             rms[order_num] = np.full(model.shape[1], fill_value=np.nan)
             continue
         # calculate the number of points for the sliding error rms
-        npoints = get_velo_scale(waveord, noise_sampling_width)
+        if npoints_orders is None:
+            npoints = get_velo_scale(waveord, noise_sampling_width)
+        else:
+            npoints = npoints_orders[order_num]
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
-        # get the pixels along the model to spline at (box centers)
-        indices = np.arange(0, model.shape[1], npoints // 4)
-        # store the sigmas
-        sigma = np.zeros_like(indices, dtype=float)
-        # loop around each pixel and work out sigma value
-        for it in range(len(indices)):
-            # get start and end values for this box
-            istart = indices[it] - npoints // 2
-            iend = indices[it] + npoints // 2
-            # fix boundary problems
-            if istart < 0:
-                istart = 0
-            if iend > model.shape[1]:
-                iend = model.shape[1]
-            tmp = residuals[istart: iend]
-            # if more than 50% of the points are valid. If shorter at the
-            # start or end of domain, we compare to npoints rather than the
-            # length of tmp
-            frac_valid = np.sum(np.isfinite(tmp)) / npoints
-            if frac_valid > 0.5:
-                # work out the sigma of this box
-                sigma[it] = mp.estimate_sigma(tmp)
-            # set any zero values to NaN
-            sigma[sigma == 0] = np.nan
+        # robust sigma in boxes of npoints pixels, every npoints // 4 pixels
+        #   (box centers = indices). Boxes with <= 50% valid points (compared
+        #   to npoints, also at the edges) and zero sigmas are NaN.
+        indices, sigma = fastmath.noise_model_windows(
+            np.ascontiguousarray(residuals, dtype=float), int(npoints),
+            ESTIMATE_SIGMA_Q_HI, ESTIMATE_SIGMA_Q_LO, int(nstep))
         # mask all NaN values
         good = np.isfinite(sigma)
         # if we have enough points calculate the rms
         if np.sum(good) > 2:
             # get the spline across all indices
-            rms_spline = mp.iuv_spline(indices[good], sigma[good], k=1, ext=1)
+            rms_values = mp.iuv_spline_eval(indices[good], sigma[good],
+                                            np.arange(model.shape[1]),
+                                            k=1, ext=1)
             # apply the spline to the model positions
-            rms[order_num] = rms_spline(np.arange(model.shape[1]))
+            rms[order_num] = rms_values
         # else we don't have a noise model
         else:
             # we fill the rms with NaNs for each pixel
@@ -1137,6 +1124,35 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
     rms[rms == 0] = np.nan
     # return rms
     return rms
+
+
+def _spline_group(splines: Dict[str, Any], key: str,
+                  members: List[Any]) -> mp.SplineGroup:
+    """
+    The spline group splines[key] (made by spline_template), or a new group
+    of the member splines if the dictionary does not have it
+    """
+    if key in splines:
+        return splines[key]
+    return mp.SplineGroup(members)
+
+
+def _native(array: np.ndarray) -> np.ndarray:
+    """
+    Native byte order version of an array (same dtype precision, same
+    values); FITS data are big-endian. No copy if already native.
+    """
+    array = np.asarray(array)
+    return np.ascontiguousarray(array,
+                                dtype=array.dtype.newbyteorder('='))
+
+
+def _f64(array: np.ndarray) -> np.ndarray:
+    """
+    Native-endian, C-contiguous float64 version of an array (FITS data are
+    big-endian, which numba does not take). No copy if already the case.
+    """
+    return np.ascontiguousarray(array, dtype=np.float64)
 
 
 def bouchy_equation_line(vector: np.ndarray, diff_vector: np.ndarray,
@@ -1246,6 +1262,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     else:
         rms = np.sqrt(np.abs(sci_data) + readout_noise ** 2)
     # -------------------------------------------------------------------------
+    # work on a native byte order copy of the science data (FITS data are
+    #   big-endian): same values, no conversion in every operation below
+    sci_data = _native(sci_data)
     # copy science data
     sci_data0 = np.array(sci_data)
     # get the mid exposure time in MJD
@@ -1256,6 +1275,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # instrument specific wave solution --> use instrument method
     wavegrid = inst.get_wave_solution(data=sci_data, header=sci_hdr,
                                       science_filename=science_file)
+    wavegrid = _native(wavegrid)
+    # window size of the noise model in each order (depends on wavegrid only)
+    noise_npoints = []
+    for order_num in range(wavegrid.shape[0]):
+        if np.sum(np.isfinite(wavegrid[order_num])) < 5:
+            noise_npoints.append(None)
+        else:
+            noise_npoints.append(get_velo_scale(wavegrid[order_num],
+                                                noise_sampling_width))
     # loop around orders
     # for order_num in range(sci_data.shape[0]):
     #    # work out the velocity scale
@@ -1343,6 +1371,17 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # a keep mask - for keep good mask lines
     mask_keep = np.ones_like(ref_table['ORDER'], dtype=bool)
+    # lines whose MEANXPIX / MEANBLAZE and RMSRATIO / NPIXLINE / CHI2 values
+    #   in ref_table are set by this file (the others keep the values of a
+    #   previous file)
+    lines_xpix_set = np.zeros(len(ref_table['ORDER']), dtype=bool)
+    lines_stats_set = np.zeros(len(ref_table['ORDER']), dtype=bool)
+    # line indices in each order and line edges (for the line-by-line loop)
+    line_orders = np.asarray(ref_table['ORDER'], dtype=np.int64)
+    order_lines = [np.where(line_orders == order_num)[0]
+                   for order_num in range(sci_data.shape[0])]
+    line_wave_start = _f64(ref_table['WAVE_START'])
+    line_wave_end = _f64(ref_table['WAVE_END'])
     # store number of iterations required to converge
     num_to_converge = 0
     # set up models to spline onto
@@ -1386,6 +1425,20 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         spline_mask = [splines['spline_mask_odd'], splines['spline_mask_even']]
         log.general('\tThe template has left/right asymetry handled '
                     'with odd/even splines')
+    # the same splines grouped for a joint evaluation (template and its
+    #   derivatives share their knots): same values as calling them
+    tgroup = (_spline_group(splines, 'group_odd', [spline[0], dspline[0],
+                                                   d2spline[0], d3spline[0]]),
+              _spline_group(splines, 'group_even', [spline[1], dspline[1],
+                                                    d2spline[1], d3spline[1]]))
+    if 'spline_odd' not in splines:
+        tgroup = (_spline_group(splines, 'group', [spline[0], dspline[0],
+                                                   d2spline[0], d3spline[0]]),) * 2
+    mgroup = (_spline_group(splines, 'group_spline_mask_odd', [spline_mask[0]]),
+              _spline_group(splines, 'group_spline_mask_even', [spline_mask[1]]))
+    if 'spline_odd' not in splines:
+        mgroup = (_spline_group(splines, 'group_spline_mask',
+                                [spline_mask[0]]),) * 2
 
     # set up storage for the dv, d2v, d3v and corresponding rms values
     #    fill with NaNs
@@ -1414,12 +1467,15 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # starting values for condition on the last_iteration = True/False
     rv_mean = np.inf
     bulk_error = 1.0
+    # the messages of the current iteration: only the last iteration's are
+    #   printed, after the loop, the others scroll past too fast to be read
+    iter_msgs = []
     # loop around iterations
     for iteration in range(compute_rv_n_iters):
         # log iteration
-        log.general('\t' + '-' * 50)
-        log.general('\tIteration {0}'.format(iteration + 1))
-        log.general('\t' + '-' * 50)
+        iter_msgs = ['\t' + '-' * 50]
+        iter_msgs += ['\tIteration {0}'.format(iteration + 1)]
+        iter_msgs += ['\t' + '-' * 50]
         # add to the number of iterations used to converge
         num_to_converge += 1
         # get start time
@@ -1432,6 +1488,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             model_offset = float(model_velocity)
         else:
             model_offset = 0
+        # the shift of the model in this iteration (the activity lines are
+        #   measured in its frame)
+        model_shift = -sys_rv - model_offset
         # loop around each order and update model, dmodel, d2model, d3model
         for order_num in range(sci_data.shape[0]):
             # flag whether an order is even or odd
@@ -1441,18 +1500,21 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if width[order_num] == 0:
                 continue
             # doppler shifted wave grid for this order
-            shift = -sys_rv - model_offset
-            wave_ord = mp.doppler_shift(wavegrid[order_num], shift)
+            wave_ord = mp.doppler_shift(wavegrid[order_num], model_shift)
             # get the blaze for this order
             blaze_ord = blaze[order_num]
+            # template spline and derivatives at these wavelengths (d2 and
+            #   d3 only needed on the last iteration)
+            nspl = 4 if flag_last_iter else 2
+            tvals = tgroup[is_even](wave_ord, nspl)
             # get the low-frequency component out
             model_mask = np.ones_like(model[order_num])
             # add the spline mask values to model_mask (spline mask is 0 or 1)
-            smask = spline_mask[is_even](wave_ord) < 0.99
+            smask = mgroup[is_even](wave_ord)[0] < 0.99
             # set spline mask splined values to NaN
             model_mask[smask] = np.nan
             # RV shift the spline and correct for blaze and add model mask
-            ord_model = spline[is_even](wave_ord) * blaze_ord * model_mask
+            ord_model = tvals[0] * blaze_ord * model_mask
             # push into mask
             model[order_num] = ord_model
             # we are so close in RV with RV_mean<10*sigma that there is no need
@@ -1477,7 +1539,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                     lp_wid = int(width[order_num])
                     ratio[order_num] = mp.lowpassfilter(ratio_full, lp_wid, k=3)
                 if order_num == 0:
-                    log.general('\t\tLow-pass match of model to science ratio')
+                    iter_msgs += ['\t\tLow-pass match of model to science '
+                                  'ratio']
 
             model[order_num] *= ratio[order_num]
 
@@ -1485,7 +1548,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             if iteration == 0:
                 # normalization of the local pseudo continuum level of the unblazed
                 # model
-                model0[order_num] = spline[is_even](wave_ord)
+                model0[order_num] = tvals[0]
                 model0[order_num][model0[order_num] == 0] = np.nan
                 lp_wid = model0.shape[1] // 2 # half the blaze length
                 norm[order_num] = mp.lowpassfilter(model0[order_num], lp_wid, k=2)
@@ -1508,11 +1571,11 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             # update the other splines
             # track ratio if relevant
             b_ratio[order_num] = blaze_ord * ratio[order_num]
-            dmodel[order_num] = dspline[is_even](wave_ord) * b_ratio[order_num]
+            dmodel[order_num] = tvals[1] * b_ratio[order_num]
             # only do the d2 and d3 stuff if on last iteration
             if flag_last_iter:
-                d2model_ord = d2spline[is_even](wave_ord) * b_ratio[order_num]
-                d3model_ord = d3spline[is_even](wave_ord) * b_ratio[order_num]
+                d2model_ord = tvals[2] * b_ratio[order_num]
+                d3model_ord = tvals[3] * b_ratio[order_num]
                 d2model[order_num] = d2model_ord
                 d3model[order_num] = d3model_ord
                 # deal with residual projection tables if required
@@ -1523,7 +1586,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
                         # To keep the physical units of the gradient files
                         # (computed on pseudo-continuum normalised spectra),
                         # we need to multiply by the local continuum level
-                        rp_spline = splines[key](wave_ord)# * b_ratio[order_num] / norm[order_num]
+                        rp_spline = _spline_group(
+                            splines, 'group_' + key, [splines[key]])(
+                            wave_ord)[0]  # * b_ratio[order_num] / norm[order_num]
                         # The models are always expressed in terms of the
                         # original spectrum
                         # rblaze = np.nanmedian(sci_data0[order_num] / blaze_ord)
@@ -1538,7 +1603,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         if not use_noise_model:
 
             rms = estimate_noise_model(sci_data, wavegrid, model,
-                                       noise_sampling_width)
+                                       noise_sampling_width,
+                                       npoints_orders=noise_npoints,
+                                       nstep=inst.params['NOISE_SAMPLING_NSTEP'])
             # work out the number of sigma away from the model
             nsig = (sci_data - model) / rms
             # mask for nsigma
@@ -1560,24 +1627,20 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # work out dv line-by-line
         # ---------------------------------------------------------------------
         # get orders
-        orders = ref_table['ORDER']
+        orders = line_orders
         # set these for use/update later
         nwavegrid = mp.doppler_shift(wavegrid, -sys_rv)
-        # get splines between shifted wave grid and pixel grid
-        wave2pixlist = []
+        # the wave -> pixel splines of the orders (evaluated at the line
+        #   edges below); orders with too few finite points give NaNs
         xpix = np.arange(model.shape[1])
+        wave2pix_ok = np.ones(wavegrid.shape[0], dtype=bool)
         for order_num in range(wavegrid.shape[0]):
             # deal with too few finite points in wavegrid
             if np.sum(np.isfinite(nwavegrid[order_num])) < 5:
                 emsg = ('Order {0} has too few finite points (<5) in '
                         'wavegrid to spline')
                 log.warning(emsg.format(order_num))
-                nspline = mp.NanSpline(emsg.format(order_num),
-                                       nwavegrid[order_num], xpix)
-                wave2pixlist.append(nspline)
-            else:
-                # spline between wavelength and pixel position
-                wave2pixlist.append(mp.iuv_spline(nwavegrid[order_num], xpix))
+                wave2pix_ok[order_num] = False
         # ---------------------------------------------------------------------
         # debug plot dictionary for plotting later
         if iteration == 0:
@@ -1609,87 +1672,86 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             continue
         # ---------------------------------------------------------------------
         # loop through all lines
-        for line_it in range(0, len(orders)):
-            # get the order number for this line
-            order_num = orders[line_it]
-            # -----------------------------------------------------------------
-            # if line has been flagged as bad (in all but the first iteration)
-            #   skip this line
-            if (iteration != 1) and not (mask_keep[line_it]):
+        #   (numba kernel with the same arithmetic as the per-line python
+        #    code it replaces: see lbl.core.fastmath.line_loop)
+        # lines visited in this iteration (lines flagged as bad are skipped
+        #   in all but the second iteration)
+        if iteration != 1:
+            visit = np.array(mask_keep)
+        else:
+            visit = np.ones(len(orders), dtype=bool)
+        # pixel position of the line edges: spline between wavelength and
+        #   pixel position of each order (one spline per order)
+        x_start_f = np.full(len(orders), np.nan)
+        x_end_f = np.full(len(orders), np.nan)
+        for order_num in range(len(order_lines)):
+            in_order = order_lines[order_num]
+            if len(in_order) == 0 or not wave2pix_ok[order_num]:
                 continue
-            # -----------------------------------------------------------------
-            # get this orders values (shallow copy)
-            ww_ord = nwavegrid[order_num]
-            sci_ord = sci_data[order_num]
-            wave2pix = wave2pixlist[order_num]
-            rms_ord = rms[order_num]
-            model_ord = model[order_num]
-            dmodel_ord = dmodel[order_num]
-            blaze_ord = blaze[order_num]
-            b_ratio_ord = b_ratio[order_num]
-            norm_ord = norm[order_num]
-            # only do the d2 and d3 stuff if on last iteration
-            if flag_last_iter:
-                d2model_ord = d2model[order_num]
-                d3model_ord = d3model[order_num]
-                # deal with residual projection tables if required
-                if resproj_flag:
-                    # loop around residual project tables
-                    for key in inst.params['RESPROJ_TABLES']:
-                        # add the model for this order
-                        pmodel_ord = proj_model[key]['model'][order_num]
-                        # add to projection_model
-                        proj_model[key]['model_ord'] = pmodel_ord
-            else:
-                d2model_ord = None
-                d3model_ord = None
-            # -----------------------------------------------------------------
-            # get the start and end wavelengths and pixels for this line
-            wave_start = ref_table['WAVE_START'][line_it]
-            wave_end = ref_table['WAVE_END'][line_it]
-            x_start, x_end = wave2pix([wave_start, wave_end])
-            # round pixel positions to nearest pixel
-            x_start, x_end = int(np.floor(x_start)), int(np.floor(x_end))
-            # -----------------------------------------------------------------
-            # boundary conditions
-            if (x_end - x_start) < min_line_width:
-                mask_keep[line_it] = False
-                continue
-            if x_start < 0:
-                mask_keep[line_it] = False
-                continue
-            if x_end > len(ww_ord) - 2:
-                mask_keep[line_it] = False
-                continue
-            # -----------------------------------------------------------------
-            # get weights at the edge of the domain. Pixels inside have a
-            # weight of 1, at the edge, it's proportional to the overlap
-            weight_mask = np.ones(x_end - x_start + 1)
-            # deal with overlapping pixels (before start)
-            if ww_ord[x_start] < wave_start:
-                refdiff = ww_ord[x_start + 1] - wave_start
-                wavediff = ww_ord[x_start + 1] - ww_ord[x_start]
-                weight_mask[0] = 1 - refdiff / wavediff
-            # deal with overlapping pixels (after end)
-            if ww_ord[x_end + 1] > wave_end:
-                refdiff = wave_end - ww_ord[x_end]
-                wavediff = ww_ord[x_end] - ww_ord[x_end - 1]
-                weight_mask[-1] = 1 - (refdiff / wavediff)
-            # get the x pixels
-            xpix = np.arange(x_start, len(weight_mask) + x_start)
-            # get mean xpix and mean blaze for line
-            mean_xpix = mp.nansum(weight_mask * xpix) / mp.nansum(weight_mask)
-            mean_blaze = blaze_ord[(x_start + x_end) // 2]
-            # push mean xpix and mean blaze into ref table
-            ref_table['MEANXPIX'][line_it] = mean_xpix
-            ref_table['MEANBLAZE'][line_it] = mean_blaze
-            # -----------------------------------------------------------------
-            # add to the plots dictionary (for plotting later)
-            if iteration == 1:
+            edges = np.concatenate([line_wave_start[in_order],
+                                    line_wave_end[in_order]])
+            pix_edges = mp.iuv_spline_eval(nwavegrid[order_num], xpix, edges)
+            x_start_f[in_order] = pix_edges[:len(in_order)]
+            x_end_f[in_order] = pix_edges[len(in_order):]
+        # the per-line code did int(np.floor(x)): it fails on a non-finite x
+        if not np.all(np.isfinite(x_start_f[visit]) &
+                      np.isfinite(x_end_f[visit])):
+            raise ValueError('cannot convert float NaN to integer')
+        x_start_i = np.zeros(len(orders), dtype=np.int64)
+        x_end_i = np.zeros(len(orders), dtype=np.int64)
+        x_start_i[visit] = np.floor(x_start_f[visit]).astype(np.int64)
+        x_end_i[visit] = np.floor(x_end_f[visit]).astype(np.int64)
+        # residual projection models (only used on the last iteration)
+        if flag_last_iter and resproj_flag:
+            resproj_keys = list(inst.params['RESPROJ_TABLES'].keys())
+            proj_models = np.array([proj_model[key]['model']
+                                    for key in resproj_keys], dtype=float)
+            proj_all = np.array([proj_model[key]['proj']
+                                 for key in resproj_keys], dtype=float)
+            sproj_all = np.array([proj_model[key]['sproj']
+                                  for key in resproj_keys], dtype=float)
+        else:
+            resproj_keys = []
+            proj_models = np.zeros((0, 1, 1))
+            proj_all = np.zeros((0, len(orders)))
+            sproj_all = np.zeros((0, len(orders)))
+        # lines that passed the boundary conditions (for the plot)
+        passed_bounds = np.zeros(len(orders), dtype=bool)
+        # lines whose RMSRATIO / NPIXLINE / CHI2 are set (last iteration)
+        stats_updated = np.zeros(len(orders), dtype=bool)
+        # run the line-by-line loop
+        fastmath.line_loop(iteration, flag_last_iter, orders,
+                           line_wave_start, line_wave_end,
+                           x_start_i, x_end_i, mask_keep,
+                           _f64(nwavegrid), _f64(sci_data), _f64(rms),
+                           _f64(model), _f64(dmodel), _f64(d2model),
+                           _f64(d3model), _f64(blaze), _f64(b_ratio),
+                           _f64(norm), proj_models,
+                           min_line_width, dv, sdv, d0v, sd0v, d2v, sd2v,
+                           d3v, sd3v, frac_line_valid,
+                           ref_table['MEANXPIX'], ref_table['MEANBLAZE'],
+                           ref_table['RMSRATIO'], ref_table['NPIXLINE'],
+                           ref_table['CHI2'], proj_all, sproj_all,
+                           passed_bounds, stats_updated)
+        # keep track of the reference table values set for this file
+        lines_xpix_set |= passed_bounds
+        lines_stats_set |= stats_updated
+        # push the residual projections back
+        for ikey, key in enumerate(resproj_keys):
+            proj_model[key]['proj'] = proj_all[ikey]
+            proj_model[key]['sproj'] = sproj_all[ikey]
+        # add to the plots dictionary (for plotting later)
+        if iteration == 1:
+            for line_it in np.where(passed_bounds)[0]:
+                order_num = orders[line_it]
+                x_start, x_end = x_start_i[line_it], x_end_i[line_it]
                 plot_dict['LINE_ORDERS'] += [order_num]
-                plot_dict['WW_ORD_LINE'] += [ww_ord[x_start:x_end + 1]]
-                plot_dict['SPEC_ORD_LINE'] += [sci_ord[x_start:x_end + 1]]
-                plot_dict['MODEL_ORD_LINE'] += [model_ord[x_start:x_end + 1]]
+                plot_dict['WW_ORD_LINE'] += [
+                    nwavegrid[order_num][x_start:x_end + 1]]
+                plot_dict['SPEC_ORD_LINE'] += [
+                    sci_data[order_num][x_start:x_end + 1]]
+                plot_dict['MODEL_ORD_LINE'] += [
+                    model[order_num][x_start:x_end + 1]]
             # -----------------------------------------------------------------
             # derivative of the segment
             d_seg = dmodel_ord[x_start: x_end + 1] * weight_mask
@@ -1875,7 +1937,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # log the value
         msg = '\t\tstdev_meas/stdev_pred = {0:.2f}'
         margs = [stddev_nsig]
-        log.general(msg.format(*margs))
+        iter_msgs += [msg.format(*margs)]
         # ---------------------------------------------------------------------
         # get final rv value
         rv_final = np.array(dv + sys_rv - berv + model_offset)
@@ -1892,9 +1954,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         msgs += ['RV = {4:.2f} m/s, sigma = {1:.2f} m/s']
         margs = [iteration, bulk_error, -sys_rv, duration, rv_mean,
                  bulk_error]
-        # loop around messages and add to log
+        # loop around messages and add to the iteration's messages
         for msg in msgs:
-            log.general('\t\t' + msg.format(*margs))
+            iter_msgs += ['\t\t' + msg.format(*margs)]
         # ---------------------------------------------------------------------
         if flag_last_iter:
             # break here
@@ -1903,15 +1965,32 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         if np.abs(rv_mean) < (converge_thres * bulk_error):
             msg = '\t\tConverged RV = {0:.2f} m/s, sigma = {1:.2f} m/s'
             margs = [rv_mean, bulk_error]
-            log.general(msg.format(*margs))
+            iter_msgs += [msg.format(*margs)]
 
             # One more iteration
             flag_last_iter = True
+    # print the last iteration's messages only
+    for msg in iter_msgs:
+        log.general(msg)
 
     # -------------------------------------------------------------------------
     # line plot
     # -------------------------------------------------------------------------
     plot.compute_line_plot(inst, plot_dict)
+    # -------------------------------------------------------------------------
+    # differential equivalent widths of the activity lines, against the
+    #   template at the converged velocity (lbl.science.activity_lines)
+    # -------------------------------------------------------------------------
+    if inst.params['DATA_TYPE'] == 'SCIENCE':
+        # the template of the last iteration, without the blaze
+        with warnings.catch_warnings(record=True):
+            template_now = model / b_ratio
+        activity = activity_lines.measure(wavegrid, sci_data0, template_now,
+                                          blaze, rms, model_shift, berv)
+        activity_lines.log_measured(activity)
+        activity_header = activity_lines.extension_header(science_file)
+    else:
+        activity, activity_header = None, None
     # -------------------------------------------------------------------------
     # update reference table
     # -------------------------------------------------------------------------
@@ -1983,6 +2062,10 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['HP_WIDTH'] = hp_width
     outputs['TOTAL_DURATION'] = total_time
     outputs['MODEL_VELOCITY'] = model_velocity
+    outputs['LINES_XPIX_SET'] = lines_xpix_set
+    outputs['LINES_STATS_SET'] = lines_stats_set
+    outputs['ACTIVITY'] = activity
+    outputs['ACTIVITY_HEADER'] = activity_header
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs
@@ -2446,12 +2529,12 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration we set the rvs and dvrms from rv table
         if not flag_calib:
-            dv_arr[row] = rvtable[good]['dv']
-            sdv_arr[row] = rvtable[good]['sdv']
+            dv_arr[row] = rvtable['dv'][good]
+            sdv_arr[row] = rvtable['sdv'][good]
         # else we calculate it using odd ratio mean
         else:
-            cal_rv = np.array(rvtable[good]['dv'], dtype=float)
-            cal_dvrms = np.array(rvtable[good]['sdv'], dtype=float)
+            cal_rv = np.array(rvtable['dv'][good], dtype=float)
+            cal_dvrms = np.array(rvtable['sdv'][good], dtype=float)
             # estimate using odd ratio mean
             cal_guess, cal_bulk_error = mp.odd_ratio_mean(cal_rv, cal_dvrms)
             # push into rdb_dict
@@ -2469,9 +2552,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                             'key {0}')
                     raise LblException(emsg.format(key))
                 # copy the rvtable array for this residual projection
-                arr = np.array(rvtable[good][key], dtype=float)
+                arr = np.array(rvtable[key][good], dtype=float)
                 # copy the rvtable error array for this residual projection
-                sarr = np.array(rvtable[good]['s' + key], dtype=float)
+                sarr = np.array(rvtable['s' + key][good], dtype=float)
                 # get the guess and bulk error
                 val_guess, val_bulk_error = mp.odd_ratio_mean(arr, sarr)
                 # push into the rdb dictioanry
@@ -2493,13 +2576,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                     rdb_dict[bandkey][row] = bandout[0]
                     rdb_dict['s' + bandkey][row] = bandout[1]
         # get the d2v, sd2v, d3v and sd3v values from table
-        wave_vec = np.array(rvtable[good]['WAVE_START'], dtype=float)
-        contrast = np.array(rvtable[good]['contrast'], dtype=float)
-        scontrast = np.array(rvtable[good]['sig_contrast'], dtype=float)
-        d2v = np.array(rvtable[good]['d2v'], dtype=float)
-        sd2v = np.array(rvtable[good]['sd2v'], dtype=float)
-        d3v = np.array(rvtable[good]['d3v'], dtype=float)
-        sd3v = np.array(rvtable[good]['sd3v'], dtype=float)
+        wave_vec = np.array(rvtable['WAVE_START'][good], dtype=float)
+        contrast = np.array(rvtable['contrast'][good], dtype=float)
+        scontrast = np.array(rvtable['sig_contrast'][good], dtype=float)
+        d2v = np.array(rvtable['d2v'][good], dtype=float)
+        sd2v = np.array(rvtable['sd2v'][good], dtype=float)
+        d3v = np.array(rvtable['d3v'][good], dtype=float)
+        sd3v = np.array(rvtable['sd3v'][good], dtype=float)
         # push these values into array (for saving images later)
         wave_arr[row] = wave_vec
         d2v_arr[row], sd2v_arr[row] = d2v, sd2v
@@ -2523,8 +2606,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['d3v'][row] = d3v_guess
         rdb_dict['sd3v'][row] = d3v_bulk_error
         # ---------------------------------------------------------------------
-        # if we don't have a calibration add plot values
-        if not flag_calib:
+        # if we don't have a calibration add plot values (only used by the
+        #   cumulative plot)
+        cumul_plot = inst.params['PLOT'] and inst.params['PLOT_COMPIL_CUMUL']
+        if not flag_calib and cumul_plot:
             # plot specific domain. We use the median velocity of the file
             # for the plot domain. +-15 km/s to get an idea of residuals.
             xlim = [med_velo - 15000, med_velo + 15000]
@@ -3450,11 +3535,6 @@ def get_stellar_models(inst: InstrumentsType, model_dir: str
     # get stellar model file
     modelfile = params['STELLAR_MODEL_FILE']
     # -------------------------------------------------------------------------
-    # get the output path for the wave file
-    wavefile_outdir = str(model_dir)
-    # get the outpth path for the model files
-    modelfile_outdir = str(model_dir)
-    # -------------------------------------------------------------------------
     # get instrument specific format dictionary
     fkwargs = inst.get_stellar_model_format_dict(params)
     # -------------------------------------------------------------------------
@@ -3462,12 +3542,11 @@ def get_stellar_models(inst: InstrumentsType, model_dir: str
     wavefile_url = (wave_url + wavefile).format(**fkwargs)
     modelfile_url = (model_url + modelfile).format(**fkwargs)
     # -------------------------------------------------------------------------
-    # get the full output paths (including files)
-    wavefile_outfile = os.path.join(wavefile_outdir, wavefile)
-    model_outfile = os.path.join(modelfile_outdir, modelfile)
-    # get the full wave output file and model output file
-    out_wavefile = wavefile_outfile.format(**fkwargs)
-    out_model = model_outfile.format(**fkwargs)
+    # get the full wave output file and model output file, in models/phoenix
+    out_wavefile = io.model_path(str(model_dir), 'phoenix',
+                                 wavefile.format(**fkwargs))
+    out_model = io.model_path(str(model_dir), 'phoenix',
+                              modelfile.format(**fkwargs))
     # -------------------------------------------------------------------------
     # check if we already have the wave file
     if not os.path.exists(out_wavefile):
@@ -3776,7 +3855,9 @@ def significant_extrema(wavegrid: np.ndarray, flux: np.ndarray,
              crossing of the derivative), 2. its wavelength [nm], 3. its kind
              (+1 maximum, -1 minimum)
     """
-    zvalues = dflux / sigma_dflux
+    # infinite or NaN where sigma_dflux is zero, a hole as below
+    with warnings.catch_warnings(record=True) as _:
+        zvalues = dflux / sigma_dflux
     # the template has holes (NaN): an extremum is never declared across one
     valid = np.isfinite(zvalues) & np.isfinite(flux)
     # storage for the outputs

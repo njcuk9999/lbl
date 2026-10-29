@@ -186,11 +186,6 @@ class HarpsN(Instrument):
         # Define whether to force using airmass from header
         self.param_set('TELLUCLEAN_FORCE_AIRMASS', value=False,
                         source=func_name)
-        # Define the CCF scan range in km/s
-        self.param_set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
-                        source=func_name)
-        # Define the maximum number of iterations for the tellu-cleaning loop
-        self.param_set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
         # Define the kernel width in pixels
         self.param_set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
         # Define the gaussian shape (2=pure gaussian, >2=boxy)
@@ -203,30 +198,6 @@ class HarpsN(Instrument):
         # Define the transmission threshold exp(-1) at which tellurics are
         #     uncorrectable
         self.param_set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
-                        source=func_name)
-        # Define the sigma cut threshold above which pixels are removed from fit
-        self.param_set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
-                        source=func_name)
-        # Define whether to recenter the CCF on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF', value=False,
-                        source=func_name)
-        # Define whether to recenter the CCF of others on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
-                        source=func_name)
-        # Define the default water absorption to use
-        self.param_set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
-                        source=func_name)
-        # Define the lower limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
-                        source=func_name)
-        # Define the upper limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
-                        source=func_name)
-        # Define the lower limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
-                        source=func_name)
-        # Define the upper limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
         # ---------------------------------------------------------------------
         # Parameters for the template construction
@@ -869,10 +840,9 @@ class HarpsN_ORIG(HarpsN):
             return np.ones_like(sci_image), True
         # get blaze file from science header
         blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
+        # construct absolute path: the blaze the header names, else the
+        #   default blaze of the setup (Instrument.blaze_path)
+        abspath = self.blaze_path(calib_directory, blaze_file)
         # read blaze file
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # get wave solution for reference file
@@ -1129,10 +1099,9 @@ class HarpsN_ESO(HarpsN):
             blaze_file = sci_hdr.find_hkey(self.params['KW_BLAZE_FILE_WILDF'],
                                            self.params['KW_BLAZE_FILE_WILDM'],
                                            self.params['KW_BLAZE_FILE_WILDV'])
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
+        # construct absolute path: the blaze the header names, else the
+        #   default blaze of the setup (Instrument.blaze_path)
+        abspath = self.blaze_path(calib_directory, blaze_file)
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
@@ -1228,6 +1197,30 @@ class HarpsN_ESO(HarpsN):
         # return wave solution map
         return wavemap
 
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s.
+
+        This class is handed a wave solution that is ALREADY barycentric, so
+        its get_berv returns zero: nothing is left to apply to reach the
+        star's frame. But TAPAS describes the atmosphere, which sat in the
+        observer frame, and the atmosphere did move by the header's BERV.
+
+        Measured on HD 10700 (HARPS, 2026-10-15), O2 B band: without this
+        shift the model correlates with the spectrum at -0.035, i.e. not at
+        all, and the residual offset tracks the BERV with a slope of -1.0003.
+        With it, 0.973 and a slope of 0.0000.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
+        hdr_key = self.params['KW_BERV']
+        try:
+            return float(sci_hdr.get_hkey(hdr_key, dtype=float)) * 1000
+        except Exception:
+            return 0.0
+
     def get_berv(self, sci_hdr: io.LBLHeader) -> float:
         """
         Get the Barycenteric correction for the RV in m/s
@@ -1317,7 +1310,7 @@ class HarpsN_ESSP(essp.ESSP):
         # define the compil maximum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MAX', 700, source=func_name)
         # define the maximum pixel width allowed for lines [pixels]
-        self.param_set('COMPIL_MAX_PIXEL_WIDTH', 50, source=func_name)
+        self.param_set('COMPIL_MAX_PIXEL_WIDTH', 500, source=func_name)
         # define min likelihood of correlation with BERV
         self.param_set('COMPIL_CUT_PEARSONR', -1, source=func_name)
         # define the CCF e-width to use for FP files
@@ -1395,11 +1388,6 @@ class HarpsN_ESSP(essp.ESSP):
         # Define whether to force using airmass from header
         self.param_set('TELLUCLEAN_FORCE_AIRMASS', value=False,
                         source=func_name)
-        # Define the CCF scan range in km/s
-        self.param_set('TELLUCLEAN_CCF_SCAN_RANGE', value=50,
-                        source=func_name)
-        # Define the maximum number of iterations for the tellu-cleaning loop
-        self.param_set('TELLUCLEAN_MAX_ITERATIONS', value=20, source=func_name)
         # Define the kernel width in pixels
         self.param_set('TELLUCLEAN_KERNEL_WID', value=1.4, source=func_name)
         # Define the gaussian shape (2=pure gaussian, >2=boxy)
@@ -1412,30 +1400,6 @@ class HarpsN_ESSP(essp.ESSP):
         # Define the transmission threshold exp(-1) at which tellurics are
         #     uncorrectable
         self.param_set('TELLUCLEAN_TRANSMISSION_THRESHOLD', value=-1,
-                        source=func_name)
-        # Define the sigma cut threshold above which pixels are removed from fit
-        self.param_set('TELLUCLEAN_SIGMA_THRESHOLD', value=10,
-                        source=func_name)
-        # Define whether to recenter the CCF on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF', value=False,
-                        source=func_name)
-        # Define whether to recenter the CCF of others on the first iteration
-        self.param_set('TELLUCLEAN_RECENTER_CCF_FIT_OTHERS', value=False,
-                        source=func_name)
-        # Define the default water absorption to use
-        self.param_set('TELLUCLEAN_DEFAULT_WATER_ABSO', value=0.5,
-                        source=func_name)
-        # Define the lower limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_LOWER', value=0.01,
-                        source=func_name)
-        # Define the upper limit on valid exponent of water absorbers
-        self.param_set('TELLUCLEAN_WATER_BOUNDS_UPPER', value=15,
-                        source=func_name)
-        # Define the lower limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_LOWER', value=0.05,
-                        source=func_name)
-        # Define the upper limit on valid exponent of other absorbers
-        self.param_set('TELLUCLEAN_OTHERS_BOUNDS_UPPER', value=15,
                         source=func_name)
         # ---------------------------------------------------------------------
         # Parameters for the template construction

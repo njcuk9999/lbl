@@ -483,10 +483,9 @@ class NIRPS(Instrument):
             return np.ones_like(sci_image), True
         # get blaze file from science header
         blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
+        # construct absolute path: the blaze the header names, else the
+        #   default blaze of the setup (Instrument.blaze_path)
+        abspath = self.blaze_path(calib_directory, blaze_file)
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # deal with normalizing per order
@@ -2005,7 +2004,7 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
-                    'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
+                    'KW_TAU_H2O', 'KW_TAU_OTHERS', 'KW_NITERATIONS',
                     'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
@@ -2132,10 +2131,9 @@ class NIRPS_HA_ESO(NIRPS_HA):
                                            self.params['KW_BLAZE_FILE_WILDM'],
                                            self.params['KW_BLAZE_FILE_WILDV'])
 
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
+        # construct absolute path: the blaze the header names, else the
+        #   default blaze of the setup (Instrument.blaze_path)
+        abspath = self.blaze_path(calib_directory, blaze_file)
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)
@@ -2466,7 +2464,7 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # these are defined in params
         drs_keys = ['KW_MJDATE', 'KW_MID_EXP_TIME', 'KW_EXPTIME',
                     'KW_AIRMASS', 'KW_DATE', 'KW_BERV', 'KW_DPRTYPE',
-                    'KW_TAU_H2O', 'KW_TAU_OTHERS' 'KW_NITERATIONS',
+                    'KW_TAU_H2O', 'KW_TAU_OTHERS', 'KW_NITERATIONS',
                     'KW_RESET_RV',
                     'KW_SYSTEMIC_VELO', 'KW_OBJNAME',
                     'KW_EXT_SNR', 'KW_BJD', 'KW_CCF_EW']
@@ -2595,10 +2593,9 @@ class NIRPS_HE_ESO(NIRPS_HE):
             blaze_file = sci_hdr.find_hkey(self.params['KW_BLAZE_FILE_WILDF'],
                                            self.params['KW_BLAZE_FILE_WILDM'],
                                            self.params['KW_BLAZE_FILE_WILDV'])
-        # construct absolute path
-        abspath = os.path.join(calib_directory, blaze_file)
-        # check that this file exists
-        io.check_file_exists(abspath, 'blaze')
+        # construct absolute path: the blaze the header names, else the
+        #   default blaze of the setup (Instrument.blaze_path)
+        abspath = self.blaze_path(calib_directory, blaze_file)
         # read blaze file (data and header)
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # load wave (we have to modify the blaze)

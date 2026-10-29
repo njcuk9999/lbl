@@ -25,6 +25,7 @@ from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import general
 from lbl.science import plot
+from lbl.science import tellu_derivative
 
 # =============================================================================
 # Define variables
@@ -68,10 +69,10 @@ def get_tapas_lbl(inst: InstrumentsType, modeldir: str,
     data_dir = inst.params['DATA_DIR']
     # get data directory
     data_dir = io.check_directory(data_dir)
-    # make other directory
-    tapas_path = io.make_dir(data_dir, 'other', 'Other')
+    # make other directory (quietly: this runs two to three times per file)
+    tapas_path = io.make_dir(data_dir, 'other', 'Other', verbose=False)
     # construct tapas in/out file path
-    tapas_inpath = os.path.join(modeldir, tapas_file)
+    tapas_inpath = io.model_path(modeldir, 'tellurics', tapas_file)
     tapas_outpath = os.path.join(tapas_path, tapas_file)
     # copy tapas file to tapas
     if os.path.exists(tapas_outpath):
@@ -120,39 +121,6 @@ def get_tapas_spl(inst: InstrumentsType, model_dir: str
     # -------------------------------------------------------------------------
     # return spl_others and spl_water
     return spl_others, spl_water
-
-
-def load_tellu_masks(inst, model_dir: str) -> Tuple[Table, Table]:
-    """
-    Load telluric masks for others and water content
-
-    :param inst: Instrument Type instance - the instrument class
-    :param model_dir: str, the model directory
-
-    :return: tuple, 1. the others mask, 2. the water mask
-    """
-    # get parameters from inst
-    mask_domain_lower = inst.params['TELLUCLEAN_MASK_DOMAIN_LOWER']
-    mask_domain_upper = inst.params['TELLUCLEAN_MASK_DOMAIN_UPPER']
-    # -------------------------------------------------------------------------
-    # read others file
-    table_others = get_tapas_lbl(inst, model_dir, 'CCFOTHER')
-    # remove domain that is out of bounds
-    keep_others = table_others['ll_mask_s'] > mask_domain_lower
-    keep_others &= table_others['ll_mask_s'] < mask_domain_upper
-    # apply mask to others table
-    table_others = table_others[keep_others]
-    # -------------------------------------------------------------------------
-    # read water file
-    table_water = get_tapas_lbl(inst, model_dir, 'CCFWATER')
-    # remove domain that is out of bounds
-    keep_others = table_water['ll_mask_s'] > mask_domain_lower
-    keep_others &= table_water['ll_mask_s'] < mask_domain_upper
-    # apply mask to others table
-    table_water = table_water[keep_others]
-    # -------------------------------------------------------------------------
-    # return tables for the other mask and water mask
-    return table_others, table_water
 
 
 def get_abso_sp(wave_vector: np.ndarray, expo_others: float, expo_water: float,
@@ -263,22 +231,11 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     """
     # get parameters from inst
     force_airmass = inst.params['TELLUCLEAN_FORCE_AIRMASS']
-    ccf_scan_range = inst.params['TELLUCLEAN_CCF_SCAN_RANGE']
-    max_iterations = inst.params['TELLUCLEAN_MAX_ITERATIONS']
     kwidth = inst.params['TELLUCLEAN_KERNEL_WID']
     ex_gau = inst.params['TELLUCLEAN_GAUSSIAN_SHAPE']
     wave0 = inst.params['TELLUCLEAN_WAVE_LOWER']
     wave1 = inst.params['TELLUCLEAN_WAVE_UPPER']
     trans_threshold = inst.params['TELLUCLEAN_TRANSMISSION_THRESHOLD']
-    sigma_threshold = inst.params['TELLUCLEAN_SIGMA_THRESHOLD']
-    recenter_ccf = inst.params['TELLUCLEAN_RECENTER_CCF']
-    recenter_ccf_fit_others = inst.params['TELLUCLEAN_RECENTER_CCF_FIT_OTHERS']
-    default_water_abso = inst.params['TELLUCLEAN_DEFAULT_WATER_ABSO']
-    others_bounds_lower = inst.params['TELLUCLEAN_OTHERS_BOUNDS_LOWER']
-    others_bounds_upper = inst.params['TELLUCLEAN_OTHERS_BOUNDS_UPPER']
-    water_bounds_lower = inst.params['TELLUCLEAN_WATER_BOUNDS_LOWER']
-    water_bounds_upper = inst.params['TELLUCLEAN_WATER_BOUNDS_UPPER']
-    conv_limit = inst.params['TELLUCLEAN_CONVERGENCE_LIMIT']
     # get the e2ds flux from e2ds parameters
     e2ds_flux = np.array(e2ds_params['flux'])
     e2ds_ini_flux = np.array(e2ds_params['flux'])
@@ -286,6 +243,9 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     airmass = e2ds_params['AIRMASS']
     objname = e2ds_params['OBJECT']
     berv = e2ds_params['BERV']
+    # le BERV dont la TRANSMISSION doit etre decalee, qui n'est pas celui des
+    # vitesses: zero quand la grille est deja dans le repere de l'observateur
+    berv_trans = e2ds_params.get('BERV_TRANS', 0.0)
     # -------------------------------------------------------------------------
     # Load the template (if it exists and if we want to use it)
     # -------------------------------------------------------------------------
@@ -357,286 +317,117 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # remove NaNs for numerical stability
     # -------------------------------------------------------------------------
-    # removing nans and setting to zero biases a bit the CCF but this should be
-    #   okay after we converge
     sp_vector[np.isnan(sp_vector)] = 0
     sp_vector[sp_vector < 0] = 0
     # -------------------------------------------------------------------------
-    # Measure the exponents
-    # -------------------------------------------------------------------------
-    # first guess at velocity of absorption is 0 km/s
-    dv_abso = 0.0
-    # set initial velocity measurements for water and others to zero
-    dv_water = 0.0
-    dv_others = 0.0
-    # -------------------------------------------------------------------------
-    # load the masks
-    table_others, table_water = load_tellu_masks(inst, model_dir)
-    # -------------------------------------------------------------------------
-    # start with no correction of abso to get the ccf
-    # we start at zero to get a velocity measurement even if we may force to
-    # airmass
-    expo_water = 0
-    expo_others = 0
-    # keep track of consecutive exponents and test convergence
-    expo_water_prev = np.inf
-    expo_others_prev = np.inf
-    # set the gradient of exponents to be large initially
-    dexpo = np.inf
-    # storage for amps and exponents
-    amp_water_list = []
-    amp_others_list = []
-    expos_water = []
-    expos_others = []
-    # scanning range for the ccf computation
-    ddvec = np.arange(-ccf_scan_range, ccf_scan_range + 1)  # + dv_abso
-
-    # storage for the CCFs
-    ccf_others = np.zeros_like(ddvec, dtype=float)
-    ccf_water = np.zeros_like(ddvec, dtype=float)
-
-    # get a wave solution for the tranmission shifted by the berv if required
+    # the transmission is evaluated where the ground sees it
+    #
+    # TAPAS DESCRIBES THE ATMOSPHERE, SO IT LIVES IN THE OBSERVER FRAME. When
+    # the wave solution handed to us is already barycentric, as it is for the
+    # ESO S2D files of HARPS, HARPS-N and ESPRESSO, the transmission has to be
+    # evaluated at the wavelengths the ground sees, not the ones the barycentre
+    # does. get_berv is zero for those classes, which is the right answer for
+    # the velocities and the reason this shift was never applied; the BERV of
+    # the header is what the atmosphere moved by.
+    #
+    # Measured on HD 10700 (HARPS, 2026-10-15), O2 B band 686-690 nm: with the
+    # barycentric grid the model correlates with the spectrum at -0.035, i.e.
+    # not at all, and the cleaning divided by at most 2.7 where the model asks
+    # for 7.5. Shifted here, the correlation is 0.973 and the residual offset
+    # against the BERV goes from a slope of -1.0003 to 0.0000.
+    #
+    # doppler_shift(wave, +berv) maps barycentric wavelengths onto the ones the
+    # observer sees: at a BERV of +23.74 km/s it moves 688 nm by -23.74 km/s.
     wave_trans = np.array(wave_vector)
+    if berv_trans:
+        wave_trans = mp.doppler_shift(wave_trans, berv_trans)
+    # the absorption is not shifted in velocity: the model is evaluated in the
+    #   ground frame above, which is where the atmosphere is
+    dv_abso = 0.0
     # -------------------------------------------------------------------------
-    # counter for the number of iterations (we will stop after a certain number)
-    #   if it hasn't converged
-    iteration = 0
-    # storage for plotting
-    plt_ddvecs, plt_ccf_waters, plt_ccf_others = dict(), dict(), dict()
-    sp_tmp, trans = np.zeros_like(sp_vector), np.zeros_like(sp_vector)
-    # loop around until criteria met or maximum iterations met
-    while (dexpo > conv_limit) and (iteration < max_iterations):
-        # ---------------------------------------------------------------------
-        # get the absorption spectrum from exponents describing water and
-        #     'others' in absorption
-        trans = get_abso_sp(wave_trans, expo_others, expo_water,
-                            spl_others, spl_water, kwidth=kwidth, ex_gau=ex_gau,
-                            dv_abso=dv_abso, wave0=wave0, wave1=wave1)
-        # ---------------------------------------------------------------------
-        # remove the transmission from the spectrum
-        sp_tmp = sp_vector / trans
-        # remove the template from the spectrum
-        sp_tmp = sp_tmp / template_vector
-
-        # flag any NaN pixels
-        valid = np.isfinite(sp_tmp)
-        # remove any poor transmission
-        valid &= (trans > np.exp(trans_threshold))
-        # ---------------------------------------------------------------------
-        # apply some cuts to very discrepant points. These will be set to zero
-        #   not to bias the CCF too mch
-        sigma_cut = np.nanmedian(np.abs(sp_tmp[sp_tmp != 0])) * sigma_threshold
-        # remove non finite pixels
-        sp_tmp[~np.isfinite(sp_tmp)] = 0.0
-        # remove outliers
-        sp_tmp[sp_tmp > sigma_cut] = 0.0
-        # remove negative pixels
-        sp_tmp[sp_tmp < 0] = np.nan
-        # ---------------------------------------------------------------------
-        # compute the CCFs for others and water
-        # ---------------------------------------------------------------------
-        # get the CCF of the test spectrum
-        ccf_spl = mp.iuv_spline(wave_vector[valid], sp_tmp[valid], k=1, ext=1)
-        # storage for all CCF values for others and water
-        all_others = np.zeros([len(table_others), len(ddvec)])
-        all_water = np.zeros([len(table_water), len(ddvec)])
-        # loop around our CCF elements vector and calculate the CCF
-        #    we compute ccf_others all the tiem, even when forcing the airmass
-        #    just to look at its structure and potential residuals
-        for it in range(len(ddvec)):
-            # shift the wavelengths by ccf element
-            wave_other1 = table_others['ll_mask_s']
-            wave_other2 = mp.doppler_shift(wave_other1, ddvec[it] * 1000)
-            # calculate spline at this wavelength shift and multiply by mask
-            tmp_other = ccf_spl(wave_other2) * table_others['w_mask']
-            # set all zero values to NaN
-            tmp_other[tmp_other == 0] = np.nan
-            # push into CCF vector
-            all_others[:, it] = tmp_other
-            # -----------------------------------------------------------------
-            # shift the wavelengths by ccf element
-            wave_water1 = table_water['ll_mask_s']
-            wave_water2 = mp.doppler_shift(wave_water1, ddvec[it] * 1000)
-            # calculate spline at this wavelength shift and multiply by mask
-            tmp_water = ccf_spl(wave_water2) * table_water['w_mask']
-            # set all zero values to NaN
-            tmp_water[tmp_water == 0] = np.nan
-            # push into CCF vector
-            all_water[:, it] = tmp_water
-        # CCF by definition is the sum of all spectra points
-        ccf_water = np.nansum(all_water, axis=0)
-        ccf_others = np.nansum(all_others, axis=0)
-        # ---------------------------------------------------------------------
-        # remove a polynomial fit (remove continuum of the CCF) for water
-        water_coeffs, _ = mp.robust_polyfit(ddvec, ccf_water, 2, 3)
-        ccf_water = ccf_water - np.polyval(water_coeffs, ddvec)
-        # remove a polynomial fit (remove continuum of the CCF) for water
-        others_coeffs, _ = mp.robust_polyfit(ddvec, ccf_others, 2, 3)
-        ccf_others = ccf_others - np.polyval(others_coeffs, ddvec)
-        # ---------------------------------------------------------------------
-        # subtract the median of the CCF outside the core of the gaussian.
-        #     We take this to be the 'external' part of of the scan range
-        out_mask = np.abs(ddvec) > ccf_scan_range / 2
-        ccf_water = ccf_water - np.nanmedian(ccf_water[out_mask])
-        if not force_airmass:
-            ccf_others = ccf_others - np.nanmedian(ccf_others[out_mask])
-        # ---------------------------------------------------------------------
-        # we measure absorption velocity by fitting a gaussian to the
-        #     absorption profile. This updates the dv_abso value for the
-        #     next steps.
-        if recenter_ccf:
-            # deal with first iteration
-            if iteration == 0:
-                # set up our curve fit guess for water
-                guess = [ddvec[np.argmin(ccf_water), 4, np.nanmin(ccf_water)]]
-                # fit water
-                popt, pcov = mp.curve_fit(mp.gauss_function, ddvec,
-                                          ccf_water, p0=guess)
-                # velocity of the water is the mean position of the gaussian
-                dv_water = popt[1]
-                # fit others (if required)
-                if recenter_ccf_fit_others:
-                    # set up our curve fit guess for others
-                    guess = [0, 4, np.nanmin(ccf_others)]
-                    # fit water
-                    popt, pcov = mp.curve_fit(mp.gauss_function, ddvec,
-                                              ccf_others, p0=guess)
-                    # velocity of others is the mean position of the gaussian
-                    dv_others = popt[1]
-                # else set to the same velocity as water
-                else:
-                    dv_others = float(dv_water)
-                # mean of water and others
-                dv_abso = 0.5 * (dv_others + dv_water)
-        # ---------------------------------------------------------------------
-        # define middle of ccf
-        middle_mask = np.abs(ddvec - dv_abso) < kwidth
-        # get the amplitude of the middle of the CCF
-        amp_water = np.nansum(ccf_water[middle_mask])
-        amp_others = np.nansum(ccf_others[middle_mask])
-        # push into storage
-        amp_water_list.append(amp_water)
-        amp_others_list.append(amp_others)
-        # store exponents
-        expos_others.append(expo_others)
-        expos_water.append(expo_water)
-        # ---------------------------------------------------------------------
-        # for first iteration the next exponents to be used for others is the
-        #   airmass (in all cases) and for water is the default typical value
-        if iteration == 0:
-            # set the exponent of others to airmass
-            expo_others = float(airmass)
-            # set the exponent of otherse to default water absorption
-            expo_water = float(default_water_abso)
-            # keep track of the convergence params
-            expo_water_prev = expo_water
-            expo_others_prev = expo_others
-            # store vectors for plotting
-            plt_ddvecs[iteration] = np.array(ddvec)
-            plt_ccf_waters[iteration] = ccf_water
-            plt_ccf_others[iteration] = ccf_others
-            # add to iteration number
-            iteration += 1
-            # continue to next iteration
-            continue
-        # ---------------------------------------------------------------------
-        # for the 2 to 5 iterations we fit a line and find the point where
-        #   the amplitude would be zero
-        # for more than 5 iterations we get smarter and fit a 2nd order
-        # polynomial
-        # ---------------------------------------------------------------------
-        # get the current amp_waters and amp_others
-        c_amp_water = np.array(amp_water_list)
-        c_amp_others = np.array(amp_others_list)
-        c_expos_water = np.array(expos_water)
-        c_expos_others = np.array(expos_others)
-
-        # simple linear fit for iterations <= 5
-        if iteration <= 5:
-            # for others
-            sortmask_others = np.argsort(np.abs(c_amp_others))
-            fit_others = np.polyfit(c_amp_others[sortmask_others[:4]],
-                                    c_expos_others[sortmask_others[:4]], 1)
-            # for water
-            sortmask_water = np.argsort(np.abs(c_amp_water))
-            fit_water = np.polyfit(c_amp_water[sortmask_water[:4]],
-                                   c_expos_water[sortmask_water[:4]], 1)
-        # otherwise fit a 2nd order polynomial
+    # THE EXPONENTS, BY THE DERIVATIVE METHOD, FOR EVERY INSTRUMENT
+    #
+    # The derivative method of telluric_fit (tellu_tools.optimize_exponents,
+    # called by predict_abso.py) keeps the exponents that make the CORRECTED
+    # spectrum smoothest, i.e. that minimise the weighted scatter of its
+    # pixel-to-pixel gradient on the telluric windows. A wrong exponent leaves
+    # a derivative-shaped residual at every telluric line; stellar lines
+    # contribute the same whatever the exponent, so the criterion depends on
+    # the tellurics alone (lbl.science.tellu_derivative).
+    #
+    # IT REPLACES THE CCF LOOP for good (2026-10-27), which cross-correlated
+    # the spectrum with TAPAS line masks and extrapolated each exponent from a
+    # polynomial fitted on its first iterations. That extrapolation often
+    # failed: on 100 HARPS exposures of HD 10700 (2026-10-15), 37% ended at
+    # water = 0.0100 and 64% at dry = 0.0500, its lower bounds, where there is
+    # always water above a telescope and an airmass of 1.08 asks for about
+    # 1.1; and it degraded the spectrum (gradient scatter in the 593-595 nm
+    # water band: raw 344.8, the loop 359.6, the derivative 304.1). It ran
+    # only on the instruments that had not been switched to the derivative
+    # (TELLUCLEAN_DERIVATIVE_WATER): every instrument now cleans the same way.
+    #
+    # Water is free per file, the water column changing too fast for a
+    # nightly model; the dry absorbers are free too (fixed to the airmass they
+    # impose a systematic 4% error, La Silla sitting above part of the column
+    # TAPAS assumes), unless TELLUCLEAN_FORCE_AIRMASS fixes them to it.
+    #
+    # AND THE FIT SEES THE SPECTRUM DIVIDED BY THE TEMPLATE: that is APERO's
+    # logic, and it is where the constraint comes from. template_vector is
+    # ones without a template (the first, blind pass of lbl_wrap).
+    sp_for_fit = sp_vector / template_vector
+    # THE NOISE FOLLOWS THE DIVISIONS: photon noise of the observed flux,
+    #   sqrt(F), carried through the division by the template here and by
+    #   the transmission in the fit (tellu_derivative.objective)
+    noise_for_fit = np.sqrt(np.clip(sp_vector, 0, None)) / template_vector
+    try:
+        expo_water, expo_others = tellu_derivative.fit_exponents(
+            wave_trans, sp_for_fit, spl_water, spl_others, float(airmass),
+            resolution=inst.params['APPROX_RESOLUTION'],
+            free_dry=not force_airmass, noise=noise_for_fit)
+    except Exception as exc:
+        # nothing to fit on (no telluric window in this spectrum's range):
+        #   the derivative's own fallback, marked as such
+        expo_water = 0.35 + tellu_derivative.FALLBACK_MARK
+        expo_others = float(airmass)
+        log.warning('\ttelluric exponents not fitted ({0}): H2O {1:.4f}, '
+                    'dry at the airmass {2:.4f}, template={3}'
+                    ''.format(exc, expo_water, expo_others, template_flag))
+    else:
+        # LE JOURNAL DOIT DIRE SI C'EST UN REPLI. A quatre decimales, la
+        # marque de 1e-7 est invisible, et une pose au repli s'affiche
+        # "0.3500" exactement comme une pose qui converge vers 0.35: j'ai
+        # compte zero repli sur un lot qui en avait treize (2026-10-16).
+        # ONE LINE PER SPECTRUM, with the exponents applied (its header's
+        #   KW_TAU_H2O and KW_TAU_OTHERS) and which pass it is (template)
+        if tellu_derivative.is_fallback(expo_water):
+            log.general('\tH2O exponent: FALLBACK {0:.4f} (the derivative '
+                        'cost curve had nothing to go on), dry {1:.4f}, '
+                        'template={2}'.format(expo_water, expo_others,
+                                              template_flag))
         else:
-            fit_others = np.polyfit(c_amp_others, c_expos_others, 1)
-            fit_water = np.polyfit(c_amp_water, c_expos_water, 1)
-        # ---------------------------------------------------------------------
-        # deal with the next guesse at expo others
-        # ---------------------------------------------------------------------
-        # if we force the airmass the next guess is always the airmass
-        if force_airmass:
-            expo_others = float(airmass)
-        # otherwise we use the fit
-        else:
-            expo_others = float(fit_others[1])
-        # deal with out of bounds expo_others
-        if expo_others < others_bounds_lower:
-            expo_others = others_bounds_lower
-            # TODO: could be used as a QC check
-        elif expo_others > others_bounds_upper:
-            expo_others = others_bounds_upper
-            # TODO: could be used as a QC check
-        # ---------------------------------------------------------------------
-        # deal with the next guesse at expo others
-        # ---------------------------------------------------------------------
-        # find best guess for water exponent
-        expo_water = float(fit_water[1])
-        # deal with out of bounds expo_water
-        if expo_water < water_bounds_lower:
-            expo_water = water_bounds_lower
-            # TODO: could be used as a QC check
-        elif expo_water > water_bounds_upper:
-            expo_water = water_bounds_upper
-            # TODO: could be used as a QC check
-        # ---------------------------------------------------------------------
-        # calculate difference between this iteration and previous iteration
-        expo_water_diff = np.abs(expo_water_prev - expo_water)
-        expo_others_diff = np.abs(expo_others_prev - expo_others)
-
-        # have we converged yet?
-        if force_airmass:
-            dexpo = float(expo_water_diff)
-
-        else:
-            dexpo = np.sqrt(expo_water_diff ** 2 + expo_others_diff ** 2)
-        # ---------------------------------------------------------------------
-        # print out this iterations values
-        if not force_airmass:
-            msg = ('{0}:\twater expo={1:.4f}, dry expo={2:.4f}, '
-                   'airmass={3:.4f}, template={4}  dexpo={5:.4f}')
-        else:
-            msg = ('{0}:\twater expo={1:.4f}, dry expo={2:.4f}, '
-                   'force=True, template={4}  dexpo={5:.4f}')
-        # args
-        margs = [iteration, expo_water, expo_others, airmass, template_flag,
-                 dexpo]
-        # log message
-        log.general(msg.format(*margs))
-
-        # keep track of the convergence params
-        expo_water_prev = float(expo_water)
-        expo_others_prev = float(expo_others)
-        # store vectors for plotting
-        plt_ddvecs[iteration] = np.array(ddvec)
-        plt_ccf_waters[iteration] = ccf_water
-        plt_ccf_others[iteration] = ccf_others
-        # add to iteration number
-        iteration += 1
-    # -------------------------------------------------------------------------
-    # plot the ccf vectors for each iteration
-    plot.ccf_vector_plot(inst, plt_ddvecs, plt_ccf_waters, plt_ccf_others,
-                         objname)
+            log.general('\ttelluric exponents by the derivative method: '
+                        'H2O {0:.4f}, dry {1:.4f} (airmass {2:.4f}), '
+                        'template={3}'.format(expo_water, expo_others,
+                                              float(airmass), template_flag))
+    # the transmission at these exponents, for the plot
+    trans = get_abso_sp(wave_trans, expo_others, expo_water,
+                        spl_others, spl_water, kwidth=kwidth, ex_gau=ex_gau,
+                        dv_abso=dv_abso, wave0=wave0, wave1=wave1)
     # plot the corrected spectrum
     plot.tellu_corr_plot(inst, wave_vector, sp_vector, trans,
                          template_vector, template_flag, objname)
     # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)
+    #
+    # AND SHIFT IT THE SAME WAY, for the same reason as above: this is the
+    # transmission that is actually divided out of the science data, so a
+    # grid left in the barycentric frame here would undo the fit done in the
+    # observer frame. The loop above was corrected without this line once
+    # (2026-10-15) and nothing changed in the written files, which is how the
+    # omission showed up.
     wave_trans = np.array(wavemap)
+    if berv_trans:
+        wave_trans = mp.doppler_shift(wave_trans, berv_trans)
     # -------------------------------------------------------------------------
     # get the final absorption spectrum to be used on the science data.
     #    No trimming done on the wave grid
@@ -662,14 +453,6 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     # add the exponents of water and others
     e2ds_params['pre_cleaned_exponent_water'] = expo_water
     e2ds_params['pre_cleaned_exponent_others'] = expo_others
-    # add the velocities of water and others
-    e2ds_params['pre_cleaned_dv_water'] = dv_water
-    e2ds_params['pre_cleaned_dv_others'] = dv_others
-    # calculate the derivative of the ccfs powers
-    dccf_water = np.gradient(ccf_water)
-    dccf_others = np.gradient(ccf_others)
-    e2ds_params['pre_cleaned_power_water'] = np.nansum(dccf_water ** 2)
-    e2ds_params['pre_cleaned_power_others'] = np.nansum(dccf_others ** 2)
     # -------------------------------------------------------------------------
     # return the e2ds parameters
     return e2ds_params
