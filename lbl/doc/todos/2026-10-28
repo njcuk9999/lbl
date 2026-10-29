@@ -235,3 +235,28 @@ Bits such as 'freeze' are useless, see this comment:
     to fail where it is used, as it did before.
     """
     ...this is just because we were debugging!
+
+Find hard-coded paths such as this one : FONT_PATHS = ("/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+              "/System/Library/Fonts/Helvetica.ttc")
+Make things not OS specific
+
+
+Do not have 'environnement specific' stuff :     environment: lbl-rapide # WHICH LBL: the conda environment its script is
+                            # run in, found by name. lbl-rapide, the default
+                            # since 2026-09-18, is LBL's speed branch
+                            # (test-speed-260918-110104: numba kernels, one
+                            # open per FITS file, every commit said to leave
+                            # the outputs unchanged), in an environment of its
+                            # own, made once with
+                            #
+                            #   git clone -b test-speed-260918-110104 \
+                            #       https://github.com/njcuk9999/lbl.git lbl-rapide
+                            #   conda create -n lbl-rapide python=3.12
+                            #   conda activate lbl-rapide
+                            #   pip install -e ./lbl-rapide
+                            #
+                            # `current` is the LBL environment.yml installs
+                            # beside this package (main), which measured every
+                            # run before that. A path is a python. A run that
+                            # is to run LBL and cannot find this one stops at
+                            # the top, before the fit, and says so.

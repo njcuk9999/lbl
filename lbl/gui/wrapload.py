@@ -79,8 +79,11 @@ class _Reader(ast.NodeVisitor):
 
 def read(path: str) -> dict:
     """A wrap's run parameters: dict(rparams, skipped), `skipped` the keys
-    whose value is computed rather than written."""
-    with open(path) as handle:
+    whose value is computed rather than written. Read in the encoding Python
+    would read it in (UTF-8 unless its first lines say otherwise), not the
+    system's (Windows' is not UTF-8)."""
+    import tokenize
+    with tokenize.open(path) as handle:
         return read_text(handle.read(), path)
 
 

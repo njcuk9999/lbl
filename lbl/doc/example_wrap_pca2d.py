@@ -44,24 +44,16 @@ With RUN_LBL_TELLUCLEAN on, which is the path for the optical spectrographs,
 step 2 comes after LBL's telluric cleaning and corrects <object>_tc into
 <object>_tc_pca2d.
 
-AN EXAMPLE OF WHAT IT GIVES
----------------------------
-TOI-2120, an M dwarf, 321 SPIRou exposures over a 37.9 km/s BERV span, deep
-water bands across the stellar lines: the nightly velocity scatter goes from
-47.98 to 14.20 m/s on the 80 nights both series share, a factor 3.4.
-
-SIPS J1259-4336, NIRPS HE, 54 exposures, run through this very path on
-2026-10-19: its corrected velocities equal those of the standalone pca2d
-pipeline to 1.6e-6 m/s.
-
-Not every star gains, and the fit can take part of a real signal with it.
-50 m/s signals injected at 37.3 d into NIRPS spectra came out 12 to 14%
-smaller after the correction, with a narrow BERV span (TOI-210, 7.6 km/s)
-and a wide one (TOI-782, 58 km/s) alike; TOI-756 c (K = 273 m/s) kept 68% of
-its amplitude. On a narrow span the components can follow the star's own
-velocity night after night. The report's velocity pages are there to say
-which case a star is: read them before trusting a gain.
-https://eartigau.github.io/pca2d_preclean/ has the method and the results.
+WHAT IT GIVES, AND WHAT IT CAN COST
+----------------------------------
+On a star whose lines sit among deep telluric bands, over a wide BERV span,
+the nightly velocity scatter can drop several-fold. Not every star gains,
+and the fit can take part of a real signal with it: an injected signal can
+come out a little smaller after the correction, and on a narrow BERV span
+the components can follow the star's own velocity night after night. The
+report's velocity pages are there to say which case a star is: read them
+before trusting a gain. lbl/doc/PCA2D.md describes the method and every
+setting.
 
 Created on 2026-10-19
 """
@@ -86,8 +78,8 @@ if __name__ == "__main__":
     #   corrected object's template, built from the corrected spectra
     rparams['OBJECT_COMPARISON'] = ['TOI756']                  # CHANGE
     rparams['OBJECT_TEFF'] = [3300]
-    # not for SPIRou or NIRPS from APERO, whose t.fits are already
-    #   telluric-corrected; yes for the optical spectrographs
+    # not for spectra that are already telluric-corrected (APERO's
+    #   t.fits); yes for pipelines that leave the tellurics in
     rparams['RUN_LBL_TELLUCLEAN'] = False
     rparams['RUN_LBL_TEMPLATE'] = True
     rparams['RUN_LBL_MASK'] = True
@@ -125,16 +117,18 @@ if __name__ == "__main__":
         # the figures of the correction (river plots, components...): they
         #   follow REPORT unless set here
         # figures=True,
-        # --- what a row of the fit is. For NIRPS, by default, a night
-        #     coadded, cut into bundles of at most 0.1 km/s of BERV (a visit
-        #     of three or four exposures stays one row, a transit night is
-        #     cut into several):
+        # --- what a row of the fit is. With nightly stacking (the
+        #     instrument's PCA2D_NIGHTLY_STACK), a night coadded, cut into
+        #     bundles of at most 0.1 km/s of BERV (a visit of a few
+        #     exposures stays one row, a transit night is cut into several):
         # bundle_berv=0.05,                 # bundles of at most 50 m/s
         # bundle_minutes=20,                # or of at most 20 minutes
         # bundle_berv=None,                 # whole nights
         # nightly_stack=False,              # or every exposure on its own
-        # --- anything else is a key of lbl/pca2d/nominal.yaml, which says
-        #     what each one does and why it has the value it has. Examples:
+        # --- anything else is a key of lbl/pca2d/nominal.yaml (or one the
+        #     instrument's LBL class sets, its PCA2D_* parameters), which
+        #     says what each one does and why it has the value it has.
+        #     Examples:
         # keep the residual outliers rather than setting them to NaN
         # nsig_cut=0,
         # a sample is kept if most exposures weighted it, not all of them

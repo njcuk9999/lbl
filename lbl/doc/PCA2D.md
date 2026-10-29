@@ -4,8 +4,7 @@
 star's rest frame, plus a few components anchored in the star frame and a
 few anchored in the observer frame (residual tellurics, airglow, detector
 features). The observer-frame part is divided out of the spectra, which
-LBL then measures like any other object. Method and results:
-<https://eartigau.github.io/pca2d_preclean/>.
+LBL then measures like any other object.
 
 ## Turning it on
 
@@ -55,7 +54,7 @@ report followed by LBL's.
 | `science/<object>/` | read, never written |
 | `science/<object>_pca2d/` | the corrected spectra, same names, same format |
 | `pca2d/<object>/request.yaml` | the configuration that ran |
-| `pca2d/<object>/s<M>-o<N>/` | the fit, the figures, the report (PDF): M = n_star, N = n_earth (`<K>-<N>` before 2026-10-22, K = n_star - 1) |
+| `pca2d/<object>/s<M>-o<N>/` | the fit, the figures, the report (PDF): M = n_star, N = n_earth |
 | `pca2d/cache/` | the registered cubes, rebuildable |
 | `pca2d/components/` | the components of every fit, observer and star (below) |
 | `models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/` | the observer bases one keeps (below): no cleanup touches `models/` |
@@ -68,6 +67,12 @@ each window, the components and their share of the variance, their
 coefficients in time, against BERV, airmass and the rest, and their
 periodograms, the weight spectrum, every setting that ran; then LBL's pages
 for the corrected object.
+
+The report is typeset with pdflatex, from any TeX distribution (TeX Live,
+MiKTeX, MacTeX). LBL looks for it on the PATH, then, outside Windows, on the
+PATH of your login shell (so a window started from a desktop launcher finds
+the same one as a terminal); `LBL_PDFLATEX` set to the full path of pdflatex
+overrides both. Without it, the report is the figures bound into one PDF.
 
 Every step after it (template, mask, compute, compile, report) runs on
 `<object>_pca2d`, and the comparison follows when it was the object itself.
@@ -94,6 +99,13 @@ optical spectrographs.
 Anything else is a key of the pca2d configuration,
 `lbl/pca2d/nominal.yaml`, which holds the nominal settings and their
 reasons: as `'section.key'`, as a dict per section, or by a short name.
+What depends on the instrument (how its files are read, its domain, its
+resolving power, its number of observer components, the modes kept, the
+windows of the figures) is not in that file: it comes from the instrument's
+LBL class, its `PCA2D_*` parameters (`lbl/core/parameters.py` for the
+defaults, `lbl/instruments/*.py` for each instrument), and the photometric
+bands are LBL's (`lbl/core/astro.py`, u to K). Adding an instrument to
+PCA2D is giving its class these parameters.
 
 ```python
 rparams['PCA2D'] = dict(n_star=1, n_earth=7,
