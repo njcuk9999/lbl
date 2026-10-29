@@ -3,7 +3,7 @@ taken in a running window and annotated: a frame around what to fill or
 click, a numbered badge, an arrow from one to the other. The numbers are
 the ones the guide's text explains, in both languages.
 
-    python tools/tutorial_shots.py URL OUT LANG PHASE
+    python maintenance/gui/tutorial_shots.py URL OUT LANG PHASE
 
 URL a window (started on the guide's demo folder, with a HOME of its own so
 that it does not touch the user's), OUT the folder the images go to, LANG

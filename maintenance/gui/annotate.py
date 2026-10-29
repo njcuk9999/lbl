@@ -1,6 +1,6 @@
 """Frames, numbered badges and arrows drawn on a screenshot (Pillow only),
-for the testers' guide: tools/tutorial_shots.py draws them on the window's
-screenshots, tools/make_guide.py on the pages of the example's report."""
+for the testers' guide: tutorial_shots.py draws them on the window's
+screenshots, make_guide.py on the pages of the example's report."""
 import math
 import os
 

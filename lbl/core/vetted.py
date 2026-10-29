@@ -7,8 +7,8 @@ poor (few spectra, a narrow BERV range) to be measured against.
 
 A wrap names one as OBJECT_COMPARISON = 'VETTED_<object>' (the objects are
 in lbl/resources/vetted_templates.yaml, with why each was chosen; the
-choice itself is in lbl/doc/vetted_templates). Nothing else changes in the
-wrap: when the template LBL looks for is not on disk, the depot file is
+choice itself is in maintenance/vetted_templates). Nothing else changes
+in the wrap: when the template LBL looks for is not on disk, the depot file is
 downloaded from MODEL_REPO_URL and written as an LBL template, with LBL's
 own Savitzky-Golay columns, under the name the instrument gives the
 template of VETTED_<object>. Both are kept in
@@ -180,10 +180,10 @@ def fetch(inst, objname: str, template_path: str):
 def write_template(inst, depot_file: str, template_path: str,
                    objname: Optional[str] = None):
     """
-    A depot file (lbl/doc/vetted_templates/make_vetted.py) written as an LBL
-    template: the flux where at least half of the spectra contributed (as
-    LBL reads APERO's templates), the same flux for both order parities (the
-    depot has none apart), and LBL's Savitzky-Golay columns
+    A depot file (maintenance/vetted_templates/make_vetted.py) written as an
+    LBL template: the flux where at least half of the spectra contributed
+    (as LBL reads APERO's templates), the same flux for both order parities
+    (the depot has none apart), and LBL's Savitzky-Golay columns
 
     :param inst: Instrument, the instrument of the run
     :param depot_file: str, the depot file

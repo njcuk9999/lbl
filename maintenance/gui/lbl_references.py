@@ -1,12 +1,12 @@
-"""static/references.json, what the References tab shows: the paper that
-describes LBL and the papers whose velocities LBL measured
-(tools/lbl_references.yaml, read paper by paper, with the sentence that
+"""lbl/gui/static/references.json, what the References tab shows: the paper
+that describes LBL and the papers whose velocities LBL measured
+(lbl_references.yaml, read paper by paper, with the sentence that
 says so), each as its title, its first authors and its link to ADS. The
 authors come from CrossRef (by DOI, found with OpenAlex), else from the
 arXiv record.
 
-    python tools/lbl_references.py <folder with meta/papers.json,
-                                    meta/citing_biblio.json, meta/lbl_biblio.json>
+    python maintenance/gui/lbl_references.py <folder with meta/papers.json,
+        meta/citing_biblio.json, meta/lbl_biblio.json>
 """
 import datetime
 import html
@@ -20,7 +20,7 @@ import urllib.request
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STATIC = os.path.join(HERE, "..", "static")
+STATIC = os.path.join(HERE, "..", "..", "lbl", "gui", "static")
 UA = {"User-Agent": "lbl-gui-references/1.0 (personal research tool)"}
 
 

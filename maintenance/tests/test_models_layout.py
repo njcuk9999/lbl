@@ -4,7 +4,8 @@ template_<INSTRUMENT>_<SOURCE>, the PCA2D observer bases one keeps in
 pca2d_<INSTRUMENT>_<SOURCE>. A models/ from before, every file at its top,
 is sorted the first time a file is looked for.
 
-    PYTHONPATH=<this checkout> python -m pytest tests/test_models_layout.py
+    PYTHONPATH=<this checkout> python -m pytest \
+        maintenance/tests/test_models_layout.py
 """
 import os
 

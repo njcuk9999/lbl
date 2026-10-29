@@ -5,7 +5,8 @@ not one sky. The bundles cut a night by time, BERV range or count; the cube
 records which exposure went into which row, and the correct stage matches an
 exposure to its row by that, since its night alone no longer says.
 
-    PYTHONPATH=<this checkout> python -m pytest tests/test_pca2d_bundles.py
+    PYTHONPATH=<this checkout> python -m pytest \
+        maintenance/tests/test_pca2d_bundles.py
 """
 import datetime as dt
 import os

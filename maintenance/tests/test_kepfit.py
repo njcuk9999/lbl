@@ -1,7 +1,8 @@
 """lbl.report.kepfit: the joint fit of a star's transiting planets and
 candidates finds the K it is given, with honest errors.
 
-    PYTHONPATH=<this checkout> python -m pytest tests/test_kepfit.py
+    PYTHONPATH=<this checkout> python -m pytest \
+        maintenance/tests/test_kepfit.py
 """
 import numpy as np
 

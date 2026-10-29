@@ -1,6 +1,6 @@
 # LBL's VETTED TEMPLATES: in each 100 K bin of 3000-4200 K and for each
 # instrument, the star whose APERO template holds the most spectra, among
-# slow rotators that are not young (lbl/doc/vetted_templates: choose.py and
+# slow rotators that are not young (maintenance/vetted_templates: choose.py and
 # its README). A wrap names one as OBJECT_COMPARISON = 'VETTED_<object>';
 # LBL downloads <file> from MODEL_REPO_URL and makes it one of its
 # templates (lbl.core.vetted). teff [K] is APERO's PP_TEFF (teff_ref its

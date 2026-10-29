@@ -4,7 +4,8 @@ No spectrum is read here: what is checked is what the PCA2D dict becomes,
 which LBL products a new correction moves aside, and that a wrap without
 PCA2D does not even import it.
 
-    PYTHONPATH=<this checkout> python -m pytest tests/test_lbl_pca2d.py
+    PYTHONPATH=<this checkout> python -m pytest \
+        maintenance/tests/test_lbl_pca2d.py
 """
 import os
 import subprocess

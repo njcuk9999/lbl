@@ -15,6 +15,7 @@ by its name and by every synonym the catalogs give it:
                                               with the NASA Exoplanet
                                               Archive's transit epochs and
                                               APERO's names), made by
+                                              maintenance/planets/
                                               build_known_planets.py
 
 The first catalog that knows the star gives ALL its orbits: a personal entry

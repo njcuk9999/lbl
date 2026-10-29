@@ -1,5 +1,5 @@
 """The step-by-step part of the testers' guide: one worked example, Gliese 229
-with HARPS, every step with its screenshot (tools/tutorial_shots.py), the
+with HARPS, every step with its screenshot (tutorial_shots.py), the
 numbers on the screenshot explained, and what you should see. The numbers
 quoted are those of the example run made for the screenshots.
 

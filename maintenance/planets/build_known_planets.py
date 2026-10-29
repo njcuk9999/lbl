@@ -3,7 +3,7 @@
 """
 Make known_planets.yaml: the published orbits LBL's PLANETS option reads.
 
-    python -m lbl.resources.planets.build_known_planets
+    python maintenance/planets/build_known_planets.py
 
 Three sources, read when it runs (network needed):
 
@@ -651,7 +651,7 @@ HEADER = """\
 # =============================================================================
 # known_planets.yaml: the PUBLISHED Keplerian orbits, for LBL's PLANETS option
 # =============================================================================
-# MADE BY lbl/resources/planets/build_known_planets.py ON {date}: do not edit
+# MADE BY maintenance/planets/build_known_planets.py ON {date}: do not edit
 # it, it is remade from the sources. Your own orbits, and corrections to these,
 # go in personal_planet_catalog.yaml, which says how to enter them and is
 # searched first.
@@ -838,7 +838,7 @@ CANDIDATES_HEADER = """\
 # candidates.yaml: transiting planets and TESS candidates, with their
 # ephemerides, for the joint Keplerian fit of LBL's report (PLANETS = True)
 # =============================================================================
-# MADE BY lbl/resources/planets/build_known_planets.py ON {date}: do not edit
+# MADE BY maintenance/planets/build_known_planets.py ON {date}: do not edit
 # it. Your own candidates go under `candidates` in personal_planet_catalog.yaml.
 #
 # {nstars} stars, {ncands} candidates ({ntoi} TOIs that are not false

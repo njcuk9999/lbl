@@ -91,7 +91,7 @@ general:
                             # 1220:4 as the base-60 number 73204, and any
                             # reader but pca2d's own drops the window.
                             # PLACED IN THE ORDERS on 2026-10-23
-                            # (lbl/doc/windows/order_windows.py, SPIRou's
+                            # (maintenance/windows/order_windows.py, SPIRou's
                             # wavelength solution and LBL's TAPAS model):
                             # deep tellurics as close to the centre of an
                             # order as can be, centrality 1 at the centre
@@ -888,7 +888,7 @@ instruments:
                                 # Ceti et en classant les tranches de 2 nm par
                                 # transmission au 2e centile.
                                 # PLACEES DANS LES ORDRES le 2026-10-23
-                                # (lbl/doc/windows/order_windows.py, solution
+                                # (maintenance/windows/order_windows.py, solution
                                 # en longueur d'onde de HARPS): 628 et 649
                                 # chevauchaient deux ordres, et un ordre de
                                 # HARPS fait 5 a 8 nm, d'ou des fenetres plus
@@ -1061,7 +1061,7 @@ instruments:
                                 # de HARPS, PAS ENCORE PLACEES dans les ordres
                                 # de SOPHIE (l'archive de l'OHP ne repondait
                                 # pas le 2026-10-23). A refaire avec
-                                # lbl/doc/windows/order_windows.py sur un e2ds.
+                                # maintenance/windows/order_windows.py sur un e2ds.
         - "687.75:2.5"
         - "630.75:2"
         - "594.25:2.25"

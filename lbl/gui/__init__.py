@@ -11,8 +11,9 @@ products weigh on disk are read back from the data folder.
 KEPT APART FROM THE REST OF LBL: nothing of LBL imports lbl.gui, and lbl.gui
 reads LBL only as a user would (its instruments' parameters, its wrap). Its
 archive search is lbl.gui.fetch, koloa's archive code carried here, so that
-the window depends on nothing outside LBL. Its page is static/; tools/ holds
-what makes the page's references and background and the testers' guide
-(eartigau.github.io/lbl-gui), for the window's maintainers only.
+the window depends on nothing outside LBL. Its page is static/; what makes
+the page's references and background and the testers' guide
+(eartigau.github.io/lbl-gui) is in maintenance/gui, for the window's
+maintainers only.
 """
 from lbl.core.base import __version__  # noqa: F401

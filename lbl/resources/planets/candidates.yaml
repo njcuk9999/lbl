@@ -2,7 +2,7 @@
 # candidates.yaml: transiting planets and TESS candidates, with their
 # ephemerides, for the joint Keplerian fit of LBL's report (PLANETS = True)
 # =============================================================================
-# MADE BY lbl/resources/planets/build_known_planets.py ON 2026-10-22: do not edit
+# MADE BY maintenance/planets/build_known_planets.py ON 2026-10-22: do not edit
 # it. Your own candidates go under `candidates` in personal_planet_catalog.yaml.
 #
 # 8811 stars, 10259 candidates (6635 TOIs that are not false

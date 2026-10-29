@@ -8,7 +8,8 @@ from the LaTeX source of each (arXiv e-print), the figures whose caption
 names LBL, then those of its velocities. Only papers under a Creative Commons licence that allows
 derivatives are used (a blurred figure is one), each credited.
 
-    python tools/paper_backdrop.py <folder with meta/papers.json and figs/>
+    python maintenance/gui/paper_backdrop.py <folder with meta/papers.json
+        and figs/>
 
 <folder>/meta/papers.json and <folder>/figs/ are what the fetch writes (the
 scratch entry lbl-gui/261024_*_lbl_paper_figures holds the script).
@@ -25,7 +26,7 @@ import yaml
 from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                      "static")
+                      "..", "lbl", "gui", "static")
 #: the mosaic, in pixels; the page scales it to the window (cover)
 WIDTH, HEIGHT = 2400, 1400
 #: the rows of figures, and the gap between them [px]

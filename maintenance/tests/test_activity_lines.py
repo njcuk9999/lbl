@@ -1,7 +1,8 @@
 """lbl.science.activity_lines on synthetic spectra: a line of known
 equivalent width added to the spectrum comes back as EW_DIFF.
 
-    PYTHONPATH=<this checkout> python -m pytest tests/test_activity_lines.py
+    PYTHONPATH=<this checkout> python -m pytest \
+        maintenance/tests/test_activity_lines.py
 """
 import numpy as np
 import pytest

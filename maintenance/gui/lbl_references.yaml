@@ -1,5 +1,5 @@
 # The papers whose velocities LBL measured, for the References tab
-# (tools/lbl_references.py makes static/references.json from this).
+# (lbl_references.py makes lbl/gui/static/references.json from this).
 #
 # (arXiv ids quoted: a bare 2406.10380 is a number, and loses its 0)
 # Read paper by paper on 2026-10-24: every paper citing Artigau et al. 2022

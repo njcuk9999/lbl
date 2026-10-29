@@ -2,7 +2,8 @@
 components and read back, and the checks made before a fit uses an observer
 basis frozen.
 
-    PYTHONPATH=<this checkout> python -m pytest tests/test_pca2d_basis.py
+    PYTHONPATH=<this checkout> python -m pytest \
+        maintenance/tests/test_pca2d_basis.py
 """
 import os
 

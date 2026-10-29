@@ -6,7 +6,7 @@ window does: the help of every control and every PCA2D option, in both
 languages (lbl.gui.i18n), and the defaults of the options for each
 instrument (lbl.gui.lblinfo). The rest is written here.
 
-    python tools/make_guide.py <eartigau.github.io folder>
+    python maintenance/gui/make_guide.py <eartigau.github.io folder>
 
 The page is not linked from the site (not released yet): it carries a
 warning and asks search engines not to index it.
@@ -1446,7 +1446,7 @@ def main(site, shots=None, example=None):
     folder = os.path.join(os.path.abspath(os.path.expanduser(site)), "lbl-gui")
     os.makedirs(folder, exist_ok=True)
     if shots:
-        # the tutorial's screenshots (tools/tutorial_shots.py)
+        # the tutorial's screenshots (tutorial_shots.py)
         target = os.path.join(folder, "shots")
         os.makedirs(target, exist_ok=True)
         for name in sorted(os.listdir(shots)):
@@ -1475,7 +1475,7 @@ def main(site, shots=None, example=None):
     for name in ("theme.css", "lightbox.js"):
         shutil.copyfile(os.path.join(THEMES, name), os.path.join(folder, name))
     # the window's own icon
-    static = os.path.join(HERE, "..", "static")
+    static = os.path.join(HERE, "..", "..", "lbl", "gui", "static")
     # (the .ico for Safari's tabs, which take no SVG)
     for name in ("favicon.ico", "favicon.svg", "apple-touch-icon.png"):
         shutil.copyfile(os.path.join(static, name), os.path.join(folder, name))

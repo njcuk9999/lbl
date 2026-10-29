@@ -1650,7 +1650,8 @@ async function deleteSelected() {
 
 // ── background ──────────────────────────────────────────────────────────
 // blurred figures of papers whose velocities LBL measured, one mosaic per
-//   theme (tools/paper_backdrop.py); the References tab credits them
+//   theme (maintenance/gui/paper_backdrop.py); the References tab
+//   credits them
 let backdropFor = null;
 // the Python this window runs with: the wraps' by default
 let DEFAULT_PYTHON = '';
