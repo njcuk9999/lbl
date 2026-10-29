@@ -1,0 +1,30 @@
+"""Per-measurement v sin i of the top five candidates of each bin, from
+SIMBAD's mesRot, with their bibcodes and upper-limit flags."""
+import json
+import numpy as np
+from astroquery.simbad import Simbad
+d = json.load(open("candidates_simbad.json"))
+cands, sim = d["cands"], d["simbad"]
+names = set()
+for inst in ("NIRPS_HE", "SPIROU"):
+    for lo in range(3000, 4200, 100):
+        rows = sorted([r for lst in cands.values() for r in lst if r["inst"] == inst and r["bin"] == lo],
+                      key=lambda r: -(r["ntemp"] or 0))[:5]
+        names |= {r["name"] for r in rows}
+s = Simbad()
+s.add_votable_fields("mesrot")
+out = {}
+for name in sorted(names):
+    info = sim.get(name)
+    if not info:
+        continue
+    t = s.query_objects([info["query"]])
+    meas = []
+    for row in t:
+        v = row["mesrot.vsini"]
+        if np.ma.is_masked(v):
+            continue
+        meas.append(dict(v=float(v), up=str(row["mesrot.upvsini"]).strip(), bib=str(row["mesrot.bibcode"]).strip()))
+    out[name] = meas
+json.dump(out, open("vsini_rows.json", "w"), indent=1)
+print(len(out))

@@ -56,7 +56,7 @@ REMOVE_KEYS = [  # core
     'SKIP_DONE', 'OVERWRITE', 'TELLUCLEAN_USE_TEMPLATE',
     # the pca2d precleaning, lbl_pca2d's and no other recipe's
     'PCA2D',
-    # le rapport de fin de run
+    # the end-of-run report
     'REPORT']
 
 # Define the default values
@@ -68,16 +68,16 @@ DEFAULTS['RUN_LBL_TEMPLATE'] = False
 DEFAULTS['RUN_LBL_MASK'] = False
 DEFAULTS['RUN_LBL_COMPUTE'] = False
 DEFAULTS['RUN_LBL_COMPILE'] = False
-#: LE RAPPORT EST FAIT PAR DEFAUT. Il coute quelques secondes a la fin d'un
-#: run qui en a pris des minutes, et c'est lui qui dit si le run a marche.
+#: THE REPORT IS MADE BY DEFAULT. It costs a few seconds at the end of a run
+#: that took minutes, and it is what tells whether the run worked.
 DEFAULTS['REPORT'] = True
 DEFAULTS['SKIP_LBL_TEMPLATE'] = False
 DEFAULTS['SKIP_LBL_MASK'] = False
 DEFAULTS['SKIP_LBL_COMPUTE'] = False
 DEFAULTS['SKIP_LBL_COMPILE'] = False
-#: NI VRAI NI FAUX PAR DEFAUT: la correction PCA2D n'est refaite que si les
-#: reglages, les fichiers d'entree ou nominal.yaml ont change. True garde
-#: celle sur disque meme alors, False la refait toujours (lbl_pca2d.correct)
+#: NEITHER TRUE NOR FALSE BY DEFAULT: the PCA2D correction is redone only if
+#: the settings, the input files or nominal.yaml have changed. True keeps the
+#: one on disk even then, False always redoes it (lbl_pca2d.correct)
 DEFAULTS['SKIP_LBL_PCA2D'] = None
 
 
@@ -384,9 +384,9 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                          skip_done=runparams['SKIP_LBL_COMPILE'],
                          **keyword_args)
     # ---------------------------------------------------------------------
-    # LE RAPPORT, a la toute fin et jamais fatal. C'est un compte rendu du
-    # run, pas une etape de calcul: s'il ne peut pas se dessiner, le run
-    # reste bon et on le dit, on ne le perd pas.
+    # THE REPORT, at the very end and never fatal. It is an account of the
+    # run, not a computation step: if it cannot be drawn, the run stays
+    # good and this is said, the run is not lost.
     if runparams.get('REPORT', True) and runparams['RUN_LBL_COMPILE']:
         try:
             from lbl.report import make_report

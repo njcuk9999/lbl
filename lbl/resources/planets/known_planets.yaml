@@ -1,7 +1,7 @@
 # =============================================================================
 # known_planets.yaml: the PUBLISHED Keplerian orbits, for LBL's PLANETS option
 # =============================================================================
-# MADE BY lbl/resources/planets/build_known_planets.py ON 2026-10-21: do not edit
+# MADE BY maintenance/planets/build_known_planets.py ON 2026-10-21: do not edit
 # it, it is remade from the sources. Your own orbits, and corrections to these,
 # go in personal_planet_catalog.yaml, which says how to enter them and is
 # searched first.

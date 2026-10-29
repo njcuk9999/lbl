@@ -194,12 +194,12 @@ def __main__(inst: InstrumentsType, **kwargs):
                                                 dtype=float)
         e2ds_dict['OBJECT'] = inst.params['OBJECT_SCIENCE']
         e2ds_dict['BERV'] = inst.get_berv(sci_hdr)
-        # LA TRANSMISSION SE DECALE QUAND LA GRILLE EST BARYCENTRIQUE. TAPAS
-        # decrit l'atmosphere, donc le repere du sol; get_berv rend zero pour
-        # les classes dont la grille est deja barycentrique, et c'est la bonne
-        # reponse pour les vitesses, mais l'atmosphere, elle, a bouge du BERV
-        # de l'en-tete. Les classes dont la grille est dans le repere de
-        # l'observateur rendent zero ici et rien ne bouge.
+        # THE TRANSMISSION IS SHIFTED WHEN THE GRID IS BARYCENTRIC. TAPAS
+        # describes the atmosphere, hence the observer frame; get_berv
+        # returns zero for the classes whose grid is already barycentric,
+        # and that is the right answer for the velocities, but the
+        # atmosphere has moved by the header BERV. The classes whose grid is
+        # in the observer frame return zero here and nothing moves.
         e2ds_dict['BERV_TRANS'] = inst.get_berv_transmission(sci_hdr)
         e2ds_dict['FILENAME'] = filename
         # ---------------------------------------------------------------------

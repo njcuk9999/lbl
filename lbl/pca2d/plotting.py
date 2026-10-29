@@ -86,26 +86,26 @@ def order_bounds(path):
             _, e_wave, _, _ = extensions_for(hdulist)
             wave = np.asarray(hdulist[e_wave].data, dtype=float)
     except Exception:                                         # noqa: BLE001
-        # UN SPECTRE DU VISIBLE N'A PAS D'EXTENSION D'APERO, et la table ne
-        # connait que SPIRou et NIRPS: elle levait, l'appelant avalait
-        # l'exception, et la parite n'etait JAMAIS choisie. Les deux parites
-        # restaient alors empilees sur la meme page, ce qui met cote a cote
-        # deux jeux d'ordres differents et fait pencher ce qui devrait etre
-        # vertical. Vu le 2026-10-15 sur la fenetre 626-630 nm de HD 10700,
-        # 174 lignes tracees au lieu de 87.
+        # A VISIBLE SPECTRUM HAS NO APERO EXTENSION, and the table only
+        # knows SPIRou and NIRPS: it raised, the caller swallowed the
+        # exception, and the parity was NEVER chosen. The two parities then
+        # stayed stacked on the same page, which puts two different sets of
+        # orders side by side and tilts what should be vertical. Seen on
+        # 2026-10-15 on the 626-630 nm window of HD 10700, 174 lines drawn
+        # instead of 87.
         #
-        # On passe donc par le pont de LBL, qui sait lire n'importe quel
-        # instrument, exactement comme le cube l'a lu.
+        # So this goes through LBL's bridge, which can read any instrument,
+        # exactly as the cube read it.
         from astropy.io import fits
 
         from . import readers as _readers
         name = str(fits.getheader(path).get("INSTRUME", "")).strip().upper()
-        # LA SOURCE SE MESURE, ELLE NE SE DEVINE PAS. Un instrument a
-        # plusieurs classes de lecture (HARPS: ORIG, ESO, ESSP) et elles ne
-        # lisent pas le meme fichier: l'une veut des polynomes d'en-tete que
-        # ce fichier n'a pas. On essaie donc celles que LBL declare et on
-        # garde la premiere qui rend une grille, ce qui est aussi la seule
-        # facon de le savoir sans la configuration du run.
+        # THE SOURCE IS MEASURED, NOT GUESSED. An instrument has several
+        # reading classes (HARPS: ORIG, ESO, ESSP) and they do not read the
+        # same file: one wants header polynomials that this file does not
+        # have. So the ones LBL declares are tried and the first that
+        # returns a grid is kept, which is also the only way to know it
+        # without the run's configuration.
         wave = None
         for source in _readers.KNOWN.get(name, ()):
             try:

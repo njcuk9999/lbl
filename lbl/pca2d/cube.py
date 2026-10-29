@@ -19,6 +19,7 @@ import shutil
 import warnings
 
 import numpy as np
+from astropy import constants
 from astropy.table import Table
 
 from . import grids
@@ -40,22 +41,23 @@ def object_key(name) -> str:
 
 
 def one_object(meta: dict, inp: dict) -> dict:
-    """UNE CAMPAGNE EST UN OBJET, DONC UNE VITESSE.
+    """A CAMPAIGN IS ONE OBJECT, HENCE ONE VELOCITY.
 
-    `meta["object"]` sort de l'en-tete, et un observateur ecrit ce qu'il veut:
-    les cent poses HARPS de HD 10700 portent HD10700, tau-Cet ou HR509 selon
-    l'annee, pour la MEME etoile. Tout ce qui groupe par objet les prenait
-    alors pour trois cibles, et chacune recevait sa propre vitesse systemique,
-    son propre masque commun et son propre seuil de SNR.
+    `meta["object"]` comes from the header, and an observer writes whatever
+    they want: the hundred HARPS exposures of HD 10700 carry HD10700,
+    tau-Cet or HR509 depending on the year, for the SAME star. Everything
+    that groups by object then took them for three targets, and each one
+    got its own systemic velocity, its own common mask and its own SNR
+    threshold.
 
-    Mesure le 2026-10-15 sur la raie stellaire a 685.7 nm, decalage median par
-    graphie: HD10700 -0.93 km/s, tau-Cet -16.55, HR509 -89.04. La raie
-    sautait d'un bloc d'observations a l'autre dans le river plot, sans aucun
-    rapport avec le BERV (pente -0.17, correlation -0.09), uniquement parce
-    que le nom change.
+    Measured on 2026-10-15 on the stellar line at 685.7 nm, median shift
+    per spelling: HD10700 -0.93 km/s, tau-Cet -16.55, HR509 -89.04. The
+    line jumped from one block of observations to the next in the river
+    plot, with no relation at all to the BERV (slope -0.17, correlation
+    -0.09), only because the name changes.
 
-    Le nom de la campagne est celui que l'utilisateur a demande, pas celui que
-    l'en-tete porte: c'est lui qui decide ce qui est une cible.
+    The campaign's name is the one the user asked for, not the one the
+    header carries: the user is the one who decides what a target is.
     """
     wanted = inp.get("object")
     if wanted:
@@ -71,16 +73,16 @@ def same_object(meta: dict, wanted) -> bool:
     an observing form: 'Proxima' on the files APERO calls PROXIMA, which an
     exact comparison with the folder's name skipped one by one.
 
-    PLUSIEURS NOMS SONT ACCEPTES. `wanted` peut etre une liste, parce qu'une
-    archive ne couvre pas cinq ans sans changer de graphie: les poses HARPS de
-    tau Ceti sont OBJECT = HD10700 en 2003 et tau-Cet en 2004, et aucune
-    normalisation ne rapproche un nom de catalogue d'un nom de Bayer. Les
-    donner tous les deux est la seule reponse honnete; la deviner en serait
-    une mauvaise, parce qu'elle melangerait un jour deux etoiles.
+    SEVERAL NAMES ARE ACCEPTED. `wanted` can be a list, because an archive
+    does not cover five years without a change of spelling: the HARPS
+    exposures of tau Ceti are OBJECT = HD10700 in 2003 and tau-Cet in 2004,
+    and no normalisation brings a catalogue name close to a Bayer name.
+    Giving both is the only honest answer; guessing it would be a bad one,
+    because it would one day mix up two stars.
     """
-    # "*": tout fichier du dossier est la cible. C'est le cas dans LBL, ou le
-    # dossier science/<objet> definit l'objet et ou son nom n'a pas a etre
-    # celui des en-tetes (lbl.recipes.lbl_pca2d)
+    # "*": every file in the folder is the target. That is the case in LBL,
+    # where the science/<object> folder defines the object and where its
+    # name need not be the one in the headers (lbl.recipes.lbl_pca2d)
     if wanted == "*":
         return True
     keys = {object_key(w) for w in
@@ -89,7 +91,7 @@ def same_object(meta: dict, wanted) -> bool:
     return any(object_key(meta.get(name)) in keys
                for name in ("object", "drsobjn") if meta.get(name))
 
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 
 # Storage dtype of the cube, and not a knob. float64 doubles four arrays of
 # (rows x samples) for nothing the fit can use: the data are photon counts
@@ -151,8 +153,8 @@ def _save_cache(path: str, grid, data, sigma, trans, meta):
         np.save(os.path.join(tmp, "trans.npy"), trans)
     meta.write(os.path.join(tmp, "meta.fits"), overwrite=True)
     if _PENDING_TEMPLATE is not None:
-        # le template du passe-haut voyage avec le cube: `correct` doit
-        # filtrer les spectres exactement comme le fit l'a fait
+        # the high-pass template travels with the cube: `correct` must
+        # filter the spectra exactly as the fit did
         np.save(os.path.join(tmp, TEMPLATE_FILE), _PENDING_TEMPLATE)
     if _PENDING_MEMBERS is not None:
         # which exposure went into which row: what `correct` matches an
@@ -333,15 +335,15 @@ class _Coadder:
                                  float(meta.get("berv", np.nan))))
         for parity in range(self.n_parity):
             slot = self.n_groups * self.n_parity + parity
-            # UN POIDS NON NUL N'EST PAS UN POIDS UTILISABLE. sigma vaut
-            # 1/sqrt(somme des poids), et le cube est en float32: sous un
-            # poids de 1e-77 la sigma depasse 3.4e38 et devient inf a la
-            # conversion. Un inf n'est pas faux (il pese zero) mais il
-            # contamine toute somme qui le rencontre, et numpy criait 45 fois
-            # par campagne. Vu le 2026-10-14 sur ESPRESSO, dont les ordres se
-            # recouvrent assez pour qu'un echantillon ne recoive que le bord
-            # mourant d'un ordre. On declare donc mort ce qui ne tient pas
-            # dans le type du cube, ce qui est la meme chose dite franchement.
+            # A NON-ZERO WEIGHT IS NOT A USABLE WEIGHT. sigma is
+            # 1/sqrt(sum of the weights), and the cube is float32: below a
+            # weight of 1e-77 the sigma exceeds 3.4e38 and becomes inf on
+            # conversion. An inf is not wrong (it weighs zero) but it
+            # contaminates every sum that meets it, and numpy complained 45
+            # times per campaign. Seen on 2026-10-14 on ESPRESSO, whose
+            # orders overlap enough that a sample receives only the dying
+            # edge of an order. What does not fit in the cube's type is
+            # therefore declared dead, which is the same thing said plainly.
             biggest = float(np.finfo(self.sigma.dtype).max)
             live = self._sw[parity] > 1.0 / (biggest * biggest)
             with np.errstate(invalid="ignore", divide="ignore"):
@@ -407,13 +409,13 @@ def _merge_meta(rows):
     return merged
 
 
-#: les formats ou chaque ORDRE est une ligne, que _build_tfits sait lire: un
-#: t.fits d'APERO, un S2D de l'archive ESO (HARPS, HARPS-N, ESPRESSO), un e2ds
-#: du DRS d'origine (HARPS, SOPHIE). Ce qu'ils ont en commun n'est pas le nom
-#: mais la forme, et c'est la forme qui decide du constructeur.
+#: the formats where each ORDER is a row, which _build_tfits can read: an
+#: APERO t.fits, an ESO archive S2D (HARPS, HARPS-N, ESPRESSO), an e2ds from
+#: the original DRS (HARPS, SOPHIE). What they have in common is not the
+#: name but the shape, and the shape is what decides the builder.
 ORDER_FORMATS = frozenset({"tfits", "s2d", "e2ds"})
 
-#: les formats deja recolles sur une grille unique, que _build_s1d sait lire
+#: the formats already stitched onto a single grid, which _build_s1d can read
 FLAT_FORMATS = frozenset({"s1d"})
 
 
@@ -443,12 +445,13 @@ def build_cube(config: dict):
     log("found %d files in %s" % (len(files), source), "value")
 
     grid, _ = destination_grid(config, files)
-    # CE QUE `format` DECIDE: un spectre par ORDRE ou un spectre deja recolle.
-    # Les noms sont ceux des fichiers (t.fits d'APERO, S2D d'ESO, e2ds du DRS
-    # de HARPS et de SOPHIE), mais la seule chose qui change ici est la
-    # dimension: _build_tfits parcourt les ordres, _build_s1d une grille
-    # unique. Le nom sert aussi a etiqueter le cube en cache, pour qu'un
-    # listing du dossier dise de quel instrument il vient (2026-10-14).
+    # WHAT `format` DECIDES: one spectrum per ORDER or a spectrum already
+    # stitched. The names are those of the files (APERO t.fits, ESO S2D,
+    # e2ds from the HARPS and SOPHIE DRS), but the only thing that changes
+    # here is the dimension: _build_tfits walks through the orders,
+    # _build_s1d through a single grid. The name also serves to label the
+    # cached cube, so that a listing of the folder says which instrument it
+    # comes from (2026-10-14).
     fmt = str(inp.get("format", "tfits"))
     snippets = {}
     if fmt in ORDER_FORMATS:
@@ -611,9 +614,9 @@ def _prepare_exposure(path, config, grid, blocks):
                            if usable.any() else np.nan)
     meta["nan_fraction"] = float(1.0 - usable.mean())
 
-    # LES LONGUEURS D'ONDE DE LA POSE, et non la grille: c'est la seule
-    # branche qui en dispose, et le critere qui rejette une solution qui
-    # recule a besoin de les voir ordre par ordre.
+    # THE EXPOSURE'S WAVELENGTHS, and not the grid: this is the only branch
+    # that has them, and the criterion that rejects a solution that goes
+    # backward needs to see them order by order.
     reason = _quality_reason(meta, payload["wave"], config["quality"])
     if reason is not None:
         out["log"].append(("rejecting %s: %s" % (meta["filename"], reason),
@@ -660,7 +663,7 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     coadd = _Coadder(n_groups, 2, n_pixels, CUBE_DTYPE, use_recon)
 
     n_rejected = 0
-    #: les poses qui attendent le template, quand le passe-haut est differe
+    #: the exposures waiting for the template, when the high-pass is deferred
     held = []
     n_used = 0
     parity_ratio = []
@@ -884,12 +887,12 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
     return grid, data, sigma, trans, meta_table
 
 
-#: le nom du template, a cote du cube
+#: the template's name, next to the cube
 TEMPLATE_FILE = "hp_template.npy"
 
 
 def template_path(config):
-    """Ou le template du passe-haut est range, ou None s'il n'y en a pas."""
+    """Where the high-pass template is stored, or None if there is none."""
     from .config import cache_key
 
     if not (config.get("highpass") or {}).get("against_template"):
@@ -900,12 +903,11 @@ def template_path(config):
     return os.path.join(folder, TEMPLATE_FILE)
 
 
-#: le template que la seconde passe vient de construire, en attente d'etre
-#: ecrit avec le cube. IL NE PEUT PAS ETRE ECRIT TOUT DE SUITE: _save_cache
-#: batit le cube dans un dossier .partial puis efface le dossier final avant
-#: de renommer, donc un fichier depose la avant serait emporte (vu le
-#: 2026-10-16: le template etait construit, annonce dans le journal, et
-#: absent du disque).
+#: the template the second pass has just built, waiting to be written with
+#: the cube. IT CANNOT BE WRITTEN RIGHT AWAY: _save_cache builds the cube in
+#: a .partial folder then deletes the final folder before renaming, so a
+#: file placed there beforehand would be swept away (seen on 2026-10-16:
+#: the template was built, announced in the log, and absent from the disk).
 _PENDING_TEMPLATE = None
 #: the coadder's members, [(exposure, row name, group)], saved with the cube
 _PENDING_MEMBERS = None
@@ -919,13 +921,13 @@ def set_pending_members(members):
 
 
 def _stash_template(config, template):
-    """Mettre le template de cote jusqu'a l'ecriture du cube."""
+    """Set the template aside until the cube is written."""
     global _PENDING_TEMPLATE
     _PENDING_TEMPLATE = np.asarray(template, dtype=np.float32)
 
 
 def load_template(config):
-    """Le template du passe-haut, ou None."""
+    """The high-pass template, or None."""
     path = template_path(config)
     if path is None or not os.path.exists(path):
         return None
@@ -936,35 +938,37 @@ def load_template(config):
 
 
 def _highpass_against_template(coadd, held, grid, config):
-    """La seconde passe: le passe-haut pris sur le residu a un template median.
+    """The second pass: the high-pass taken on the residual to a median
+    template.
 
-    LE PROBLEME QU'ELLE RESOUT. Un Savitzky-Golay passe sur un spectre entier
-    est tire vers le bas par chaque raie profonde: le lisse n'est pas le
-    continu, c'est le continu moins une fraction de la raie. Tant que la raie
-    est la meme d'une pose a l'autre, ce biais est constant et la PCA ne le
-    voit pas. Mais une tellurique qui balaie le coeur d'une raie stellaire
-    avec le BERV change ce biais D'UNE POSE A L'AUTRE, et laisse un residu qui
-    suit le BERV sans etre stellaire.
+    THE PROBLEM IT SOLVES. A Savitzky-Golay run over a whole spectrum is
+    pulled down by every deep line: the smooth is not the continuum, it is
+    the continuum minus a fraction of the line. As long as the line is the
+    same from one exposure to the next, this bias is constant and the PCA
+    does not see it. But a telluric that sweeps across the core of a
+    stellar line with the BERV changes this bias FROM ONE EXPOSURE TO THE
+    NEXT, and leaves a residual that follows the BERV without being
+    stellar.
 
-    Mesure le 2026-10-16 sur HD 69830, raie a 688.85 nm: quand le BERV couvre
-    ses 51 km/s, la tellurique parcourt 0.117 nm, plusieurs largeurs de raie,
-    et sa profondeur au coeur passe de 3% a 89%. L'effet etant intermittent,
-    une correlation simple avec le BERV ne le voit pas (0.036 sur la
-    campagne).
+    Measured on 2026-10-16 on HD 69830, line at 688.85 nm: as the BERV
+    covers its 51 km/s, the telluric travels 0.117 nm, several line widths,
+    and its depth at the core goes from 3% to 89%. The effect being
+    intermittent, a simple correlation with the BERV does not see it (0.036
+    over the campaign).
 
-    LE TEMPLATE EST BATI DANS LE REPERE DE L'ETOILE, puis redescendu dans le
-    repere de chaque pose. Le cube, lui, ne change pas de repere: l'ajustement
-    a deux reperes fait son propre decalage du bloc stellaire et wizard.py
-    refuse un cube deja registre. Seul le template voyage.
+    THE TEMPLATE IS BUILT IN THE STAR FRAME, then brought back down into
+    each exposure's frame. The cube itself does not change frame: the
+    two-frame fit does its own shift of the stellar block and wizard.py
+    refuses an already registered cube. Only the template travels.
 
-    LE FILTRE RESTE PAR SEGMENT D'ORDRE, jamais a travers le trou qui separe
-    deux ordres de meme parite, exactement comme la premiere passe.
+    THE FILTER STAYS PER ORDER SEGMENT, never across the gap that separates
+    two orders of the same parity, exactly like the first pass.
     """
     bervs = np.array([float(m["berv"]) for _, _, _, _, _, m, _ in held])
     workers = int(config["input"].get("workers") or 1)
 
-    # le template: la mediane des poses ramenees dans le repere de l'etoile,
-    # deja faites par les processus qui les ont lues (moved), sinon ici
+    # the template: the median of the exposures brought into the star frame,
+    # already done by the processes that read them (moved), otherwise here
     rows = []
     for (_, values, _, _, good, meta, _), berv in zip(held, bervs):
         moved = meta.pop("_moved", None)
@@ -979,13 +983,13 @@ def _highpass_against_template(coadd, held, grid, config):
     covered = int(np.sum(np.isfinite(template)))
     log("high pass against a median template built in the star's frame:"
         " %d of %d samples covered" % (covered, template.size), "value")
-    # LE TEMPLATE EST ECRIT A COTE DU CUBE, parce que l'etape `correct` doit
-    # appliquer EXACTEMENT le meme passe-haut: elle resample les memes
-    # spectres et retranche les composantes ajustees ici, donc un filtre
-    # different de part et d'autre compare des choses qui ne sont pas a la
-    # meme echelle. Vu le 2026-10-16: sans cela `correct` recevait du
-    # ln(flux) brut (mediane +10.14) la ou le cube portait un residu
-    # passe-haut (mediane +0.017), et le bruit des spectres corriges doublait.
+    # THE TEMPLATE IS WRITTEN NEXT TO THE CUBE, because the `correct` stage
+    # must apply EXACTLY the same high-pass: it resamples the same spectra
+    # and subtracts the components fitted here, so a different filter on
+    # either side compares things that are not on the same scale. Seen on
+    # 2026-10-16: without it `correct` received raw ln(flux) (median
+    # +10.14) where the cube carried a high-passed residual (median
+    # +0.017), and the noise of the corrected spectra doubled.
     _stash_template(config, template)
 
     n_used = 0
@@ -1008,8 +1012,8 @@ def _star_frame_row(values, good, berv, grid, config):
     from . import preprocess as prep
     reg = config["registration"]
     row = np.where(good, values, np.nan)
-    # chaque parite normalisee par sa mediane, pour qu'une pose brillante
-    # ne pese pas plus qu'une pose faible
+    # each parity normalised by its median, so that a bright exposure
+    # does not weigh more than a faint one
     with np.errstate(invalid="ignore"):
         row = row - np.nanmedian(row, axis=1, keepdims=True)
     moved = np.empty_like(row)
@@ -1062,14 +1066,14 @@ def _quality_reason(meta, wave, quality):
     """
     if np.size(wave) < 10:
         return "no coverage in the requested band"
-    # UNE SOLUTION EN LONGUEUR D'ONDE QUI RECULE REND LA POSE INUTILISABLE, et
-    # pas seulement pour pca2d. Mesure le 2026-10-14: 5 des 60 poses ESPRESSO
-    # de tau Ceti ont, au bord bleu de leur ordre le plus bleu, 177 pixels
-    # dont la longueur d'onde decroit avant de repartir. pca2d sait les
-    # ecarter du masque et trier ses abscisses, mais LBL lit les MEMES
-    # fichiers et s'arrete dessus dans lbl_template, donc une pose corrigee
-    # par pca2d et refusee par LBL n'avance a rien. On rejette la pose ici,
-    # une fois, et les deux cotes la voient partir pour la meme raison.
+    # A WAVELENGTH SOLUTION THAT GOES BACKWARD MAKES THE EXPOSURE UNUSABLE,
+    # and not only for pca2d. Measured on 2026-10-14: 5 of the 60 ESPRESSO
+    # exposures of tau Ceti have, at the blue edge of their bluest order, 177
+    # pixels whose wavelength decreases before moving forward again. pca2d
+    # can drop them from the mask and sort its abscissae, but LBL reads the
+    # SAME files and stops on them in lbl_template, so an exposure corrected
+    # by pca2d and refused by LBL gets nowhere. The exposure is rejected
+    # here, once, and both sides see it go for the same reason.
     if np.ndim(wave) == 2 and wave.shape[1] > 1:
         steps = np.diff(wave, axis=1)
         backward = np.isfinite(steps) & (steps <= 0)
@@ -1110,19 +1114,19 @@ def _quality_reason(meta, wave, quality):
         if int(np.floor(rjd)) not in {int(n) for n in nights}:
             return "rjd %.2f is not one of the %d nights asked for" % (
                 rjd, len(nights))
-    # LE MODE DU SPECTROGRAPHE, quand une campagne en melange deux. Mesure le
-    # 2026-10-15 sur les 100 poses HARPS de HD 10700: 8 sont en mode EGGS, la
-    # fibre de 1.4" a haute efficacite, et ce sont EXACTEMENT les 8 dont
-    # l'ajustement tellurique echoue, l'exposant d'eau y tombant entre 0.004
-    # et 0.047 contre 0.30 pour les poses HARPS.
+    # THE SPECTROGRAPH MODE, when a campaign mixes two. Measured on
+    # 2026-10-15 on the 100 HARPS exposures of HD 10700: 8 are in EGGS mode,
+    # the high-efficiency 1.4" fibre, and they are EXACTLY the 8 whose
+    # telluric fit fails, the water exponent there falling between 0.004
+    # and 0.047 against 0.30 for the HARPS exposures.
     #
-    # CE N'EST PAS UN DECALAGE EN VITESSE, contrairement a ce que ce
-    # commentaire a d'abord dit: le modele TAPAS tombe a sa place sur ces
-    # poses, minimum local entre 0 et +3 km/s pour 7 des 8. Ce n'est pas non
-    # plus la resolution (de 115000 a 60000, l'eau ne monte que de 0.0039 a
-    # 0.0089), et les telluriques y sont bien presentes, aussi profondes que
-    # dans les poses HARPS. Ce qui cloche reste a trouver; on les ecarte parce
-    # que leur correction est manifestement fausse, pas parce qu'on a compris.
+    # IT IS NOT A VELOCITY SHIFT, contrary to what this comment first said:
+    # the TAPAS model falls in its place on these exposures, local minimum
+    # between 0 and +3 km/s for 7 of the 8. Nor is it the resolution (from
+    # 115000 to 60000, the water only rises from 0.0039 to 0.0089), and the
+    # tellurics are indeed present there, as deep as in the HARPS exposures.
+    # What is wrong remains to be found; they are set aside because their
+    # correction is plainly wrong, not because it is understood.
     modes = quality.get("drs_modes")
     if modes:
         mode = str(meta.get("drs_mode", "") or "").strip()
@@ -1166,24 +1170,24 @@ def build_weights(config: dict, grid, data, sigma, meta, trans=None, chunk=64):
         bad = ~np.isfinite(values)
         block[bad] = 0.0
         counters["dead"] += int(np.sum(block == 0))
-        # LE SEUIL PORTE SUR LE SNR DU PIXEL, PAS SUR SA PROFONDEUR. Un fond de
-        # raie profonde porte moins de photons, donc un RMS fractionnaire plus
-        # grand, mais ce n'est pas une raison de le jeter: c'est au contraire
-        # l'endroit ou le contenu en vitesse est le plus dense. Ce qu'il faut
-        # ecarter, c'est le pixel dont le bruit depasse ce que les photons
-        # expliquent, pas celui qui est simplement sombre.
+        # THE THRESHOLD APPLIES TO THE PIXEL'S SNR, NOT TO ITS DEPTH. The
+        # bottom of a deep line carries fewer photons, hence a larger
+        # fractional RMS, but that is no reason to throw it away: on the
+        # contrary, it is where the velocity content is densest. What must
+        # be set aside is the pixel whose noise exceeds what the photons
+        # explain, not the one that is simply dark.
         #
-        # sigma est le sigma photonique du log-flux (preprocess.photon_sigma),
-        # donc 1/sigma EST le SNR local, et le seuil se lit en SNR.
+        # sigma is the photon sigma of the log-flux (preprocess.photon_sigma),
+        # so 1/sigma IS the local SNR, and the threshold reads as an SNR.
         #
-        # CE QUE L'ANCIEN CRITERE COUTAIT, mesure le 2026-10-16 sur HD 10700:
-        # ln_clip_low = -0.5 tuait tout pixel sous exp(-0.5) = 0.607 du
-        # continu, c'est-a-dire le fond de TOUTE raie plus profonde que 39%.
-        # Au fond du Na D2 a 589.15 nm, les pixels perdus avaient une
-        # profondeur mediane de 0.340 contre 0.712 pour les gardes. Les
-        # spectres corrigeaient 13.7% de NaN contre 0.07% dans les livres, et
-        # LBL y perdait le tiers de ses raies (7860 au lieu de 11134) avec une
-        # erreur par raie de 340 m/s au lieu de 145.
+        # WHAT THE OLD CRITERION COST, measured on 2026-10-16 on HD 10700:
+        # ln_clip_low = -0.5 killed every pixel below exp(-0.5) = 0.607 of
+        # the continuum, that is the bottom of EVERY line deeper than 39%.
+        # At the bottom of Na D2 at 589.15 nm, the lost pixels had a median
+        # depth of 0.340 against 0.712 for the kept ones. The corrected
+        # spectra had 13.7% NaN against 0.07% in the delivered ones, and LBL
+        # lost a third of its lines there (7860 instead of 11134) with a
+        # per-line error of 340 m/s instead of 145.
         if wcf.get("min_pixel_snr") is not None:
             with np.errstate(invalid="ignore", divide="ignore"):
                 snr = 1.0 / np.sqrt(variance)

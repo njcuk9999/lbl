@@ -147,22 +147,22 @@ def register(wave_obs, values, good, berv, target_berv, grid,
     values = np.asarray(values, dtype=np.float64)
     good = np.asarray(good)
 
-    # LE SPLINE EXIGE DES ABSCISSES CROISSANTES, et une solution en longueur
-    # d'onde ne l'est pas toujours. Mesure le 2026-10-14: 5 des 60 poses
-    # ESPRESSO de tau Ceti ont, au bord bleu de leur ordre le plus bleu, 177
-    # pixels dont la longueur d'onde RECULE avant de repartir, et scipy
-    # s'arretait sur « x must be increasing ». Les trier remet ces pixels a
-    # la longueur d'onde que leur solution leur donne, ce qui est la seule
-    # lecture honnete de ce qu'elle dit; order_quality les a deja retires du
-    # masque, donc ils ne pesent sur rien, mais le spline a quand meme besoin
-    # d'une abscisse ordonnee pour exister. Un tri est sans effet quand
-    # l'ordre est deja croissant, ce qui est le cas partout ailleurs.
+    # THE SPLINE REQUIRES INCREASING ABSCISSAE, and a wavelength solution
+    # is not always increasing. Measured on 2026-10-14: 5 of the 60 ESPRESSO
+    # exposures of tau Ceti have, at the blue edge of their bluest order, 177
+    # pixels whose wavelength GOES BACKWARD before moving forward again, and
+    # scipy stopped on "x must be increasing". Sorting them puts these pixels
+    # back at the wavelength their solution gives them, which is the only
+    # honest reading of what it says; order_quality has already removed them
+    # from the mask, so they weigh on nothing, but the spline still needs an
+    # ordered abscissa to exist. A sort has no effect when the ordering is
+    # already increasing, which is the case everywhere else.
     if not np.all(np.diff(wave_shifted) > 0):
         order = np.argsort(wave_shifted, kind="stable")
         wave_shifted, values, good = (wave_shifted[order], values[order],
                                       good[order])
-        # deux pixels a la MEME longueur d'onde restent interdits: on ne garde
-        # que le premier de chaque groupe, l'autre ne mesure rien de nouveau
+        # two pixels at the SAME wavelength remain forbidden: only the first
+        # of each group is kept, the other one measures nothing new
         keep = np.ones(wave_shifted.size, dtype=bool)
         keep[1:] = np.diff(wave_shifted) > 0
         wave_shifted, values, good = (wave_shifted[keep], values[keep],
@@ -289,41 +289,43 @@ def empirical_sigma(values, good, box=201):
 
 def highpass_against_template(values, good, template, window, polyorder,
                               already_log=False):
-    """Le passe-haut pris sur le RESIDU au template, et non sur le spectre.
+    """The high-pass taken on the RESIDUAL to the template, not on the
+    spectrum.
 
-    LE PROBLEME QU'IL RESOUT. Un Savitzky-Golay passe sur un spectre entier
-    est tire vers le bas par chaque raie profonde: le lisse n'est pas le
-    continu, c'est le continu moins une fraction de la raie. Tant que la raie
-    est la meme d'une pose a l'autre, ce biais est constant et la PCA ne le
-    voit pas. Mais une tellurique qui balaie le coeur d'une raie stellaire
-    avec le BERV change ce biais D'UNE POSE A L'AUTRE, et laisse dans le
-    repere de l'etoile un residu qui suit le BERV sans etre stellaire.
+    THE PROBLEM IT SOLVES. A Savitzky-Golay run over a whole spectrum is
+    pulled down by every deep line: the smooth is not the continuum, it is
+    the continuum minus a fraction of the line. As long as the line is the
+    same from one exposure to the next, this bias is constant and the PCA
+    does not see it. But a telluric that sweeps across the core of a
+    stellar line with the BERV changes this bias FROM ONE EXPOSURE TO THE
+    NEXT, and leaves in the star frame a residual that follows the BERV
+    without being stellar.
 
-    Mesure le 2026-10-16 sur HD 69830, raie a 688.85 nm: en balayant le BERV
-    de -25 a +25 km/s, la tellurique parcourt 0.117 nm, soit plusieurs
-    largeurs de raie, et sa profondeur au coeur passe de 3% a 89%. Le lisse
-    local change donc par intermittence, et pas de facon lineaire en BERV,
-    ce qui le rend invisible a une simple correlation (0.036 sur la
-    campagne).
+    Measured on 2026-10-16 on HD 69830, line at 688.85 nm: sweeping the
+    BERV from -25 to +25 km/s, the telluric travels 0.117 nm, i.e. several
+    line widths, and its depth at the core goes from 3% to 89%. The local
+    smooth therefore changes intermittently, and not linearly in BERV,
+    which makes it invisible to a simple correlation (0.036 over the
+    campaign).
 
-    LA METHODE. Les spectres etant deja dans le repere de l'etoile et sur une
-    grille commune:
+    THE METHOD. The spectra being already in the star frame and on a common
+    grid:
 
-        residu  = ln(flux) - template        (le template est le meme pour
-                                              toutes les poses, donc il ne
-                                              peut pas biaiser une pose plus
-                                              qu'une autre)
-        residu -= savgol(residu)             (le passe-haut travaille sur un
-                                              residu PLAT, sans raie profonde
-                                              pour tirer le lisse)
-        sortie  = residu + (template - savgol(template))
+        residual  = ln(flux) - template    (the template is the same for
+                                            all exposures, so it cannot
+                                            bias one exposure more than
+                                            another)
+        residual -= savgol(residual)       (the high-pass works on a FLAT
+                                            residual, with no deep line to
+                                            pull the smooth)
+        output    = residual + (template - savgol(template))
 
-    Le dernier terme rend au spectre sa structure stellaire passe-haut, prise
-    une fois pour toutes sur le template et donc identique pour toutes les
-    poses. Aucune raie n'est masquee, et rien n'entre ou ne sort du masque
-    selon le BERV.
+    The last term gives the spectrum back its high-passed stellar
+    structure, taken once and for all on the template and therefore
+    identical for all exposures. No line is masked, and nothing enters or
+    leaves the mask depending on the BERV.
 
-    `template` est en ln(flux), sur la meme grille que `values`.
+    `template` is in ln(flux), on the same grid as `values`.
     """
     values = np.asarray(values, dtype=float)
     template = np.asarray(template, dtype=float)
@@ -334,8 +336,8 @@ def highpass_against_template(values, good, template, window, polyorder,
 
     positive = np.asarray(good, dtype=bool) & np.isfinite(values)
     if already_log:
-        # le chemin par ordres donne deja ln(flux): le reprendre en logarithme
-        # le mettrait au carre
+        # the per-order path already gives ln(flux): taking its logarithm
+        # again would square it
         log_flux = np.where(positive, values, np.nan)
     else:
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -345,46 +347,47 @@ def highpass_against_template(values, good, template, window, polyorder,
     if usable.sum() < window:
         return np.zeros_like(values), np.zeros(values.shape, dtype=bool)
 
-    # LES DEUX SAVGOL NE VOIENT PAS LE MEME SUPPORT, et c'est tout l'interet.
+    # THE TWO SAVGOLS DO NOT SEE THE SAME SUPPORT, and that is the whole
+    # point.
     #
-    # Sur un support IDENTIQUE la formule se simplifierait, le savgol etant
-    # lineaire: (s - t) - sg(s - t) + t - sg(t) = s - sg(s), soit le
-    # passe-haut ordinaire. Verifie le 2026-10-16: les deux coincident alors
-    # a 2e-16.
+    # On an IDENTICAL support the formula would simplify, the savgol being
+    # linear: (s - t) - sg(s - t) + t - sg(t) = s - sg(s), i.e. the
+    # ordinary high-pass. Checked on 2026-10-16: the two then agree to
+    # 2e-16.
     #
-    # MAIS LES SUPPORTS DIFFERENT. La pose a des pixels masques la ou une
-    # tellurique saturee lui mange le coeur d'une raie; le template median,
-    # lui, n'en a pas, puisque la tellurique bouge avec le BERV et que la
-    # mediane la gomme. Le residu est donc filtre sur un support troue et le
-    # template sur un support plein, les deux filtres ne s'annulent plus, et
-    # la raie stellaire est rendue depuis le template PLEIN au lieu d'etre
-    # reconstruite depuis une pose trouee. Mesure sur une raie de 1.2 en ln
-    # avec dix pixels masques en son coeur: 0.2365 d'ecart entre les deux
-    # formules, contre 2e-16 sans masque.
+    # BUT THE SUPPORTS DIFFER. The exposure has masked pixels where a
+    # saturated telluric eats the core of one of its lines; the median
+    # template has none, since the telluric moves with the BERV and the
+    # median erases it. The residual is therefore filtered on a support
+    # with holes and the template on a full support, the two filters no
+    # longer cancel, and the stellar line is returned from the FULL template
+    # instead of being rebuilt from an exposure with holes. Measured on a
+    # line of 1.2 in ln with ten pixels masked at its core: 0.2365 of
+    # difference between the two formulas, against 2e-16 without a mask.
     #
-    # CE QUI COMPTE EST QUE LES PIXELS PERDUS SE DEPLACENT. Un masque fixe ne
-    # ferait qu'un biais constant, que la PCA absorberait; c'est le
-    # DEPLACEMENT du trou avec le BERV qui injecte un signal. Mesure le
-    # 2026-10-16 sur un spectre SYNTHETIQUE garde identique, dont seul le
-    # masque de dix pixels se deplace autour du coeur d'une raie de 1.2 en
-    # ln, en relevant un pixel du continu voisin:
+    # WHAT MATTERS IS THAT THE LOST PIXELS MOVE. A fixed mask would only
+    # make a constant bias, which the PCA would absorb; it is the MOVEMENT
+    # of the hole with the BERV that injects a signal. Measured on
+    # 2026-10-16 on a SYNTHETIC spectrum kept identical, of which only the
+    # ten-pixel mask moves around the core of a line of 1.2 in ln, by
+    # recording one pixel of the neighbouring continuum:
     #
-    #     decalage du masque   classique    vs template
+    #     mask shift           classic      vs template
     #              -30 px       0.078476       0.078364
     #              -10 px       0.076784       0.077253
-    #                0 px       0.071938       0.077854   <- le creux
+    #                0 px       0.071938       0.077854   <- the dip
     #              +10 px       0.076951       0.078194
     #              +30 px       0.077911       0.077810
     #
-    #     dispersion            0.002265       0.000372   (6.1 fois moins)
+    #     dispersion            0.002265       0.000372   (6.1 times less)
     #
-    # Le passe-haut ordinaire decroche quand le trou tombe sur le coeur,
-    # c'est-a-dire pour une poignee de BERV seulement: le biais est
-    # intermittent, donc invisible a une correlation lineaire avec le BERV.
+    # The ordinary high-pass breaks off when the hole falls on the core,
+    # that is for a handful of BERVs only: the bias is intermittent, hence
+    # invisible to a linear correlation with the BERV.
     residual, _ = _fill_gaps(np.where(usable, log_flux - template, np.nan))
     residual = residual - savgol_filter(residual, window, polyorder)
 
-    # le template est filtre sur SON support, qui est plein
+    # the template is filtered on ITS support, which is full
     filled_template, _ = _fill_gaps(np.where(np.isfinite(template), template,
                                              np.nan))
     star = filled_template - savgol_filter(filled_template, window, polyorder)
@@ -395,10 +398,11 @@ def highpass_against_template(values, good, template, window, polyorder,
 
 
 def median_template(rows, weights=None):
-    """Le template: la mediane des poses deja registrees, en ln(flux).
+    """The template: the median of the already registered exposures, in
+    ln(flux).
 
-    Chaque ordre est normalise par sa mediane avant d'entrer, pour qu'une
-    pose brillante ne pese pas plus qu'une pose faible.
+    Each order is normalised by its median before going in, so that a
+    bright exposure does not weigh more than a faint one.
     """
     stack = np.asarray(rows, dtype=float)
     if stack.ndim != 2 or stack.shape[0] == 0:

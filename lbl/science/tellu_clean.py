@@ -243,8 +243,8 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     airmass = e2ds_params['AIRMASS']
     objname = e2ds_params['OBJECT']
     berv = e2ds_params['BERV']
-    # le BERV dont la TRANSMISSION doit etre decalee, qui n'est pas celui des
-    # vitesses: zero quand la grille est deja dans le repere de l'observateur
+    # the BERV by which the TRANSMISSION must be shifted, which is not the
+    # velocities' one: zero when the grid is already in the observer frame
     berv_trans = e2ds_params.get('BERV_TRANS', 0.0)
     # -------------------------------------------------------------------------
     # Load the template (if it exists and if we want to use it)
@@ -393,10 +393,10 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
                     'dry at the airmass {2:.4f}, template={3}'
                     ''.format(exc, expo_water, expo_others, template_flag))
     else:
-        # LE JOURNAL DOIT DIRE SI C'EST UN REPLI. A quatre decimales, la
-        # marque de 1e-7 est invisible, et une pose au repli s'affiche
-        # "0.3500" exactement comme une pose qui converge vers 0.35: j'ai
-        # compte zero repli sur un lot qui en avait treize (2026-10-16).
+        # THE LOG MUST SAY WHETHER IT IS A FALLBACK. At four decimals, the
+        # 1e-7 mark is invisible, and an exposure at the fallback shows
+        # "0.3500" exactly like an exposure that converges to 0.35: I
+        # counted zero fallbacks in a batch that had thirteen (2026-10-16).
         # ONE LINE PER SPECTRUM, with the exponents applied (its header's
         #   KW_TAU_H2O and KW_TAU_OTHERS) and which pass it is (template)
         if tellu_derivative.is_fallback(expo_water):

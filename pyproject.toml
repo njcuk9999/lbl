@@ -46,3 +46,8 @@ lbl_setup = "lbl.recipes.lbl_setup:run"
 lbl_pca2d = "lbl.pca2d.cli:main"
 # the window: builds, runs and follows wraps, finds public spectra (lbl.gui)
 lbl_gui = "lbl.gui.app:main"
+
+# the package is lbl alone: maintenance/ (the tests, and the tools that make
+# ancillary files) stays in the repository and is not installed
+[tool.setuptools.packages.find]
+include = ["lbl*"]

@@ -634,7 +634,7 @@ h2 .info { vertical-align: 3px; }
 .extra { margin-top: 12px; }
 #extra, #pca2d_extra { white-space: pre-wrap; }
 
-/* ── the background: figures of papers that used LBL, blurred (tools/paper_backdrop.py) */
+/* ── the background: figures of papers that used LBL, blurred (maintenance/gui/paper_backdrop.py) */
 .backdrop {
   position: fixed;
   inset: -60px;

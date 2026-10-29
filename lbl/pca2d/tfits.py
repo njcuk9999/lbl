@@ -36,6 +36,7 @@ import os
 import warnings
 
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 
 from . import preprocess as prep
@@ -43,7 +44,7 @@ from .grids import doppler
 from .io import header_float, robust_open
 from .logger import log
 
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 
 # ---------------------------------------------------------------------------
 # Which extensions to read, per instrument
@@ -263,15 +264,15 @@ def order_quality(payload: dict, config: dict):
             ratio = np.abs(sky) / np.where(flux > 0, flux, np.nan)
         good &= ~(np.isfinite(ratio) & (ratio > float(max_sky)))
 
-    # UNE SOLUTION EN LONGUEUR D'ONDE QUI RECULE N'EST PAS UNE SOLUTION. Le
-    # reechantillonnage est un spline, qui exige des abscisses croissantes, et
-    # scipy s'arrete sur « x must be increasing ». Mesure le 2026-10-14: 5 des
-    # 60 poses ESPRESSO de tau Ceti ont, au bord bleu de leur ordre le plus
-    # bleu, 177 pixels dont la longueur d'onde DECROIT avant de repartir. Ce
-    # n'est pas une oscillation numerique (le recul vaut 0.00026 nm contre un
-    # pas median de 0.00062) mais un bout de solution qui ne tient pas. On
-    # rejette ces pixels, comme on rejette un flux negatif, plutot que
-    # d'arreter la campagne ou de les reordonner en silence.
+    # A WAVELENGTH SOLUTION THAT RUNS BACKWARDS IS NOT A SOLUTION. The
+    # resampling is a spline, which requires increasing abscissae, and scipy
+    # stops on "x must be increasing". Measured on 2026-10-14: 5 of the 60
+    # ESPRESSO exposures of tau Ceti have, at the blue edge of their bluest
+    # order, 177 pixels whose wavelength DECREASES before rising again. This
+    # is not a numerical oscillation (the step back is 0.00026 nm against a
+    # median step of 0.00062) but a piece of solution that does not hold.
+    # These pixels are rejected, as a negative flux is rejected, rather than
+    # stopping the campaign or silently reordering them.
     rising = np.ones_like(good)
     forward = np.diff(wave, axis=1) > 0
     rising[:, 1:] &= forward
@@ -352,20 +353,21 @@ def _order_sigma(flux, recon, good, snr_order):
 
 def _overlap_blaze(w_shift, blaze_order, ok, grid, start, stop,
                    flux_order=None):
-    """Ce que cet ordre porte comme signal sur la zone [start, stop].
+    """What this order carries as signal over the zone [start, stop].
 
-    Sert a arbitrer un recouvrement entre deux ordres de meme parite: celui
-    qui porte le plus de signal y est au milieu de son ordre, l'autre y est
-    sur son bord et son flux y est bruite. Le perdant est mis a NaN.
+    Used to arbitrate an overlap between two orders of the same parity: the
+    one that carries the most signal is in the middle of its order there, the
+    other is on its edge there and its flux is noisy. The loser is set to
+    NaN.
 
-    LE BLAZE D'ABORD, LE FLUX QUAND IL NE DIT RIEN. Sur un t.fits d'APERO le
-    blaze decrit la reponse de l'ordre et repond seul. Sur un S2D de l'ESO il
-    vaut UN partout, parce que la classe de LBL ne deblaze pas: il ne
-    departage alors rien, et c'est le flux median qui le fait. Mesure le
-    2026-10-14 sur un S2D d'ESPRESSO, zone commune aux ordres 0 et 2: 16036
-    contre 11749, soit le bord rouge de l'ordre 0 contre le bord bleu de
-    l'ordre 2, et le premier gagne. Comparer des flux ne vaut qu'entre deux
-    ordres de la MEME pose au MEME endroit, ce qui est exactement le cas ici.
+    THE BLAZE FIRST, THE FLUX WHEN IT SAYS NOTHING. On an APERO t.fits the
+    blaze describes the order's response and answers on its own. On an ESO
+    S2D it is ONE everywhere, because LBL's class does not deblaze: it then
+    separates nothing, and the median flux does. Measured on 2026-10-14 on
+    an ESPRESSO S2D, zone common to orders 0 and 2: 16036 against 11749,
+    that is the red edge of order 0 against the blue edge of order 2, and
+    the first one wins. Comparing fluxes is only valid between two orders of
+    the SAME exposure at the SAME place, which is exactly the case here.
     """
     if stop < start:
         return None
@@ -419,16 +421,16 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
 
     shift = float(doppler(berv) / doppler(target))
     last_stop = {0: -1, 1: -1}
-    #: le dernier ordre pose de chaque parite, garde pour lui redemander ce
-    #: qu'il porte sur la zone que le suivant va recouvrir: (longueurs d'onde
-    #: decalees, masque, numero d'ordre)
+    #: the last order laid down for each parity, kept to ask it again what it
+    #: carries over the zone the next one will overlap: (shifted
+    #: wavelengths, mask, order number)
     last_order = {0: None, 1: None}
     n_written = 0
 
     edge = int(reg.get("edge_pixels", 1))
-    #: les bornes des segments ecrits, quand le passe-haut est differe: la
-    #: seconde passe doit filtrer segment par segment, jamais a travers le
-    #: trou qui separe deux ordres de meme parite
+    #: the bounds of the written segments, when the high-pass is deferred:
+    #: the second pass must filter segment by segment, never across the gap
+    #: that separates two orders of the same parity
     segments = []
     for order in orders:
         # the last valid pixel beside every gap goes before the spline sees the
@@ -446,25 +448,26 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
         if stop <= start:
             continue
         if start <= last_stop[parity]:
-            # DEUX ORDRES DE MEME PARITE SE RECOUVRENT. On garde CELUI DONT
-            # LE BLAZE EST LE PLUS HAUT, l'autre etant mis a NaN (poids nul):
-            # dans la zone commune l'un finit sur son bord, la ou le blaze
-            # s'effondre et le flux est bruite, et l'autre y debute.
+            # TWO ORDERS OF THE SAME PARITY OVERLAP. The one WHOSE BLAZE IS
+            # THE HIGHEST is kept, the other being set to NaN (zero weight):
+            # in the common zone one of them ends on its edge, where the
+            # blaze collapses and the flux is noisy, and the other starts
+            # there.
             #
-            # Mesure le 2026-10-14 sur SPIRou: les longueurs d'onde BRUTES de
-            # 14 paires se recouvrent jusqu'a 5.4 nm (ordres 0 a 13), mais une
-            # fois les bords eroces et les pixels de mauvaise qualite ecartes
-            # (order_quality, erode_edges) il reste 7 nm d'ECART entre l'ordre
-            # 0 (964.6-982.2 nm valides) et l'ordre 2 (989.3-1007.7): le
-            # recouvrement brut tombe entierement dans ce qui est deja rejete.
-            # Cette branche ne se declenche donc pas sur SPIRou ni sur HARPS
-            # (recouvrement nul); elle est la pour les geometries a venir.
+            # Measured on 2026-10-14 on SPIRou: the RAW wavelengths of 14
+            # pairs overlap by up to 5.4 nm (orders 0 to 13), but once the
+            # edges are eroded and the bad-quality pixels set aside
+            # (order_quality, erode_edges) there is a 7 nm GAP left between
+            # order 0 (964.6-982.2 nm valid) and order 2 (989.3-1007.7): the
+            # raw overlap falls entirely within what is already rejected.
+            # This branch therefore does not trigger on SPIRou nor on HARPS
+            # (zero overlap); it is there for geometries to come.
             overlap_hi = min(stop - 1, last_stop[parity])
-            # LES DEUX MESURES SUR LA MEME ZONE, celle du recouvrement. Un
-            # ordre moyenne sur toute sa largeur contre un autre pris sur son
-            # bord ne se comparent pas: le premier gagnerait toujours. On
-            # redemande donc au precedent ce qu'il porte ICI, avec ses
-            # longueurs d'onde et son masque a lui (2026-10-14).
+            # THE TWO MEASUREMENTS OVER THE SAME ZONE, that of the overlap.
+            # An order averaged over its whole width and another taken on
+            # its edge cannot be compared: the first would always win. So
+            # the previous one is asked again what it carries HERE, with its
+            # own wavelengths and its own mask (2026-10-14).
             here = _overlap_blaze(w_shift, blaze[order], ok, grid,
                                   start, overlap_hi, flux[order])
             before = None
@@ -474,21 +477,22 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
                 before = _overlap_blaze(p_shift, blaze[p_order], p_ok, grid,
                                         start, overlap_hi, flux[p_order])
             if before is not None and here is not None and here < before:
-                # l'ordre deja pose est le meilleur: celui-ci cede la zone
+                # the order already laid down is the better one: this one
+                # gives up the zone
                 start = last_stop[parity] + 1
                 if stop <= start:
                     continue
             elif before is not None and here is not None:
-                # celui-ci est le meilleur: on efface ce que l'autre a laisse
+                # this one is the better one: what the other left is erased
                 lo = max(0, start)
                 good[parity][lo:overlap_hi + 1] = False
                 sigma[parity][lo:overlap_hi + 1] = np.nan
-            log("les ordres de meme parite se recouvrent vers %.2f nm sur %d"
-                " echantillons: on garde le blaze le plus haut"
+            log("orders of the same parity overlap near %.2f nm over %d"
+                " samples: the highest blaze is kept"
                 % (grid[start], overlap_hi - start + 1), "warn")
         last_stop[parity] = stop - 1
-        # de quoi redemander a cet ordre ce qu'il porte sur une zone qu'on ne
-        # connait pas encore, celle de son recouvrement avec le suivant
+        # what is needed to ask this order again what it carries over a zone
+        # not known yet, that of its overlap with the next one
         last_order[parity] = (w_shift, ok, order)
         segment = grid[start:stop]
 
@@ -526,10 +530,10 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
                                       np.log(np.abs(seg_values)), 0.0)
             hp_good = seg_good & np.isfinite(seg_values)
         elif hip.get("against_template"):
-            # LE PASSE-HAUT ATTEND LE TEMPLATE. On ne garde ici que le
-            # logarithme du flux; le filtre passera dans cube.py, sur le
-            # residu a un template median, une fois toutes les poses lues.
-            # Voir preprocess.highpass_against_template pour pourquoi.
+            # THE HIGH-PASS WAITS FOR THE TEMPLATE. Only the logarithm of
+            # the flux is kept here; the filter will run in cube.py, on the
+            # residual to a median template, once all exposures are read.
+            # See preprocess.highpass_against_template for why.
             with np.errstate(invalid="ignore", divide="ignore"):
                 seg_values = np.where(seg_good & (seg_values > 0),
                                       np.log(np.abs(seg_values)), 0.0)
@@ -571,9 +575,9 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
         good[parity, start:stop] = keep
         n_written += 1
 
-    # LES SEGMENTS SONT TOUJOURS RENDUS, meme vides: un retour dont le nombre
-    # d'elements depend d'un reglage se desynchronise au premier appelant
-    # qu'on oublie de mettre a jour.
+    # THE SEGMENTS ARE ALWAYS RETURNED, even empty: a return value whose
+    # number of elements depends on a setting falls out of step with the
+    # first caller that someone forgets to update.
     return values, sigma, trans, good, n_written, segments
 
 

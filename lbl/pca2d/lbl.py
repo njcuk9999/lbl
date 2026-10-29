@@ -600,11 +600,11 @@ def runparams(config: dict, data_dir: str, instrument: str, data_source: str,
     tables = dtemp_table(block, teff)
     if tables:
         params["RESPROJ_TABLES"] = tables
-    # LE RAPPORT DE LBL, celui que lbl/report ecrit apres compile. Il est vrai
-    # par defaut chez LBL comme ici: il coute quelques secondes a la fin d'un
-    # run qui en a pris des minutes, et c'est lui qui dit si le run a marche.
-    # Mis a false dans la config quand on enchaine des dizaines de variantes
-    # et que seuls les .rdb comptent.
+    # LBL'S REPORT, the one lbl/report writes after compile. It is true by
+    # default in LBL as here: it costs a few seconds at the end of a run that
+    # took minutes, and it is what says whether the run worked. Set to false
+    # in the config when dozens of variants are chained and only the .rdb
+    # files matter.
     params["REPORT"] = bool(block.get("report", True))
     return params
 
@@ -712,13 +712,13 @@ def check_profile(instrument: str, data_source: str, config_file: str,
     except Exception as exc:                                  # noqa: BLE001
         return True, "LBL is not importable here (%s), so nothing was checked" % exc
     try:
-        # L'INSTRUMENT ET LA SOURCE PASSENT EN CLAIR, PAS PAR LE YAML. Le
-        # lecteur de YAML de LBL saute les valeurs 'None' (select.py: « skip
-        # Nones »), et c'est precisement le nom de la source d'ESPRESSO, de
-        # SOPHIE, de CARMENES et de CORALIE dans sa propre table. Lue par le
-        # fichier, elle disparaissait, et la verification echouait sur « Data
-        # source must be defined » pour les instruments qui marchent le mieux.
-        # Vu le 2026-10-14 sur ESPRESSO.
+        # THE INSTRUMENT AND THE SOURCE ARE PASSED EXPLICITLY, NOT THROUGH
+        # THE YAML. LBL's YAML reader skips 'None' values (select.py: "skip
+        # Nones"), and that is precisely the source name of ESPRESSO, SOPHIE,
+        # CARMENES and CORALIE in its own table. Read through the file, it
+        # disappeared, and the check failed on "Data source must be defined"
+        # for the instruments that work best. Seen on 2026-10-14 on
+        # ESPRESSO.
         args = select.parse_args(
             ["INSTRUMENT", "DATA_DIR", "DATA_SOURCE", "DATA_TYPE", "INPUT_FILE"],
             dict(config_file=os.path.abspath(config_file),
@@ -785,30 +785,31 @@ def star_template(plan, config_file: str, name: str, files, place=True) -> dict:
             "status": status}
 
 
-#: les dossiers de l'arbre LBL ou un produit porte le nom de l'objet, et ou
-#: une collision de casse fait donc relire le produit d'un AUTRE run
+#: the folders of the LBL tree where a product carries the object's name, and
+#: where a case collision therefore makes LBL reread the product of ANOTHER
+#: run
 _NAMED_PRODUCTS = ("templates", "masks", "lblreftable", "lblrdb")
 
 
 def _warn_case_collisions(data_dir, objects):
-    """Dire quels produits d'un run precedent LBL va relire par collision de
-    casse, parce qu'il ne le dira pas, lui.
+    """Say which products of a previous run LBL will reread through a case
+    collision, because LBL itself will not say so.
 
-    CE QUI S'EST PASSE le 2026-10-15. Le systeme de fichiers de macOS ne
-    distingue pas la casse, alors que LBL nomme ses produits d'apres l'objet.
-    Un run precedent sur HD10700_tc a donc laisse un template, un masque et un
-    .rdb que le run sur HD10700_TC a pris pour les siens:
+    WHAT HAPPENED on 2026-10-15. The macOS filesystem does not distinguish
+    case, while LBL names its products after the object. A previous run on
+    HD10700_tc thus left a template, a mask and an .rdb that the run on
+    HD10700_TC took for its own:
 
         Template ... exists. Skipping template creation.
         File lbl_HD10700_TC_HD10700_TC.rdb exists, we will read it.
 
-    La deuxieme ligne est la pire: LBL venait de calculer 99 vitesses
-    fraiches, et il a compile un tableau de 74 lignes a partir du fichier d'un
-    autre run, sans rien signaler d'anormal.
+    The second line is the worst: LBL had just computed 99 fresh velocities,
+    and it compiled a 74-line table from another run's file, without
+    flagging anything abnormal.
 
-    On ne touche a rien: effacer le produit d'un autre run serait pire. On
-    nomme le fichier, l'objet qui le reclame et celui qui l'a ecrit, pour que
-    la decision soit prise en connaissance de cause.
+    Nothing is touched: erasing another run's product would be worse. The
+    file, the object that claims it and the one that wrote it are named, so
+    that the decision is made with full knowledge.
     """
     import os
 
@@ -826,9 +827,9 @@ def _warn_case_collisions(data_dir, objects):
             for key, asked in lowered.items():
                 if key not in low:
                     continue
-                # le nom tel qu'il est ecrit sur le disque, a la place du nom
-                # demande: s'ils ne different que par la casse, c'est une
-                # collision et non le produit de ce run
+                # the name as it is written on disk, in place of the name
+                # asked for: if they differ only by case, this is a
+                # collision and not this run's product
                 start = low.index(key)
                 written = entry[start:start + len(key)]
                 if written != asked:

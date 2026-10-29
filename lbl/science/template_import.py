@@ -34,6 +34,7 @@ import os
 from typing import Optional
 
 import numpy as np
+from astropy import constants
 from astropy.io import fits
 from astropy.table import Table
 from numpy.polynomial import chebyshev
@@ -47,7 +48,7 @@ from lbl.core import math as mp
 __NAME__ = 'lbl.science.template_import.py'
 log = io.log
 #: the speed of light [km/s]
-C_KMS = 299792.458
+C_KMS = constants.c.to('km/s').value
 #: the velocities searched for the e2ds's offset from the s1d [km/s]
 OFFSET_RANGE = np.arange(-5.0, 5.001, 0.02)
 

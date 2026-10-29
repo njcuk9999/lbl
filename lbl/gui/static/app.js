@@ -812,7 +812,8 @@ function inBounds(mjd) {
 //   frame, when its systemic velocity is known (SIMBAD's, else the
 //   headers': targets.py's _vsys), against the BERV otherwise: when the
 //   ticked targets are of both kinds, each plot comes twice, one per kind
-const C_KMS = 299792.458;
+// the speed of light [km/s], astropy's, sent by the server (/api/state)
+let C_KMS = null;
 // |v_tot| under which the star's lines sit on the tellurics (km/s)
 const VTOT_CLOSE = 4;
 function vsysOf(name, i) {
@@ -1650,7 +1651,8 @@ async function deleteSelected() {
 
 // ── background ──────────────────────────────────────────────────────────
 // blurred figures of papers whose velocities LBL measured, one mosaic per
-//   theme (tools/paper_backdrop.py); the References tab credits them
+//   theme (maintenance/gui/paper_backdrop.py); the References tab
+//   credits them
 let backdropFor = null;
 // the Python this window runs with: the wraps' by default
 let DEFAULT_PYTHON = '';
@@ -1682,6 +1684,7 @@ async function init() {
   S.python = S.python || state.python;
   $('version').textContent = state.version;
   $('lbl_home').textContent = state.lbl;
+  C_KMS = state.c_kms;
   await loadStrings();
   INSTRUMENTS = await api.get('/api/instruments');
   fillInstruments();

@@ -1,112 +1,116 @@
-"""L'exposant H2O par la DERIVEE, la methode de telluric_fit.
+"""The H2O exponent by the DERIVATIVE, the method of telluric_fit.
 
-Reprise de papier_helium/referee/tellu_derivative.py et de
-telluric_fit/tellu_tools.py:2413 (optimize_exponents, appelee par
-predict_abso.py), transposee du WINERED au visible.
+Taken from papier_helium/referee/tellu_derivative.py and from
+telluric_fit/tellu_tools.py:2413 (optimize_exponents, called by
+predict_abso.py), carried over from WINERED to the visible.
 
-LE PRINCIPE. On divise le spectre par la transmission modelisee et on retient
-l'exposant qui rend le spectre corrige le plus LISSE, c'est-a-dire qui
-minimise la dispersion ponderee du gradient pixel a pixel. Un exposant faux
-laisse a chaque raie tellurique un residu en forme de DERIVEE, qui gonfle
-cette dispersion; les raies stellaires y contribuent la meme chose quel que
-soit l'exposant, donc le critere ne depend que des telluriques, meme la ou
-elles sont minoritaires. C'est ce qui le rend stable la ou l'extrapolation
-polynomiale de LBL s'effondre sur ses bornes.
+THE PRINCIPLE. The spectrum is divided by the modelled transmission and the
+exponent kept is the one that makes the corrected spectrum the SMOOTHEST,
+that is, the one that minimises the weighted dispersion of the
+pixel-to-pixel gradient. A wrong exponent leaves at each telluric line a
+residual shaped like a DERIVATIVE, which inflates that dispersion; the
+stellar lines contribute the same amount to it whatever the exponent, so
+the criterion depends only on the tellurics, even where they are a
+minority. This is what makes it stable where the polynomial extrapolation
+of LBL collapses onto its bounds.
 
-LA FORMULATION EST CELLE DU CODE QUI MARCHE, et deux details y sont
-essentiels (mesures le 2026-10-15, une premiere version qui les ignorait
-tapait la borne sur 35% des poses):
+THE FORMULATION IS THAT OF THE CODE THAT WORKS, and two details in it are
+essential (measured on 2026-10-15, a first version that ignored them hit
+the bound on 35% of the exposures):
 
-    la PROFONDEUR OPTIQUE, tau = -ln(T), portee sur une grille log UNIFORME,
-    puis exponentiee: tau se multiplie par l'exposant, ce qui est lineaire,
-    la ou interpoler des transmissions deja exponentiees sur la grille
-    irreguliere du spectre melange les deux operations;
+    the OPTICAL DEPTH, tau = -ln(T), carried on a UNIFORM log grid, then
+    exponentiated: tau is multiplied by the exponent, which is linear,
+    whereas interpolating already exponentiated transmissions onto the
+    irregular grid of the spectrum mixes the two operations;
 
-    la CONVOLUTION a la resolution de l'instrument, APRES la puissance et
-    AVANT la division. TAPAS est bien plus fin que le spectrographe (2.6
-    km/s sur HARPS), et des raies trop etroites ne peuvent pas annuler des
-    raies elargies.
+    the CONVOLUTION to the resolution of the instrument, AFTER the power and
+    BEFORE the division. TAPAS is much finer than the spectrograph (2.6
+    km/s on HARPS), and lines that are too narrow cannot cancel broadened
+    lines.
 
-CE QUI EST LIBRE, pour l'optique (consigne du 2026-10-15):
+WHAT IS FREE, for the optical (instruction of 2026-10-15):
 
-    H2O             libre PAR FICHIER: la colonne d'eau change trop vite pour
-                    un modele par nuit. Et il y a TOUJOURS de l'eau: un
-                    exposant sur la borne basse est un echec d'ajustement,
-                    jamais une nuit seche.
-    le reste        d'un seul bloc, pas par espece chimique: dans le visible
-                    seul O2 compte vraiment parmi les secs, et ils suivent
-                    tous la meme masse d'air. C'est aussi le decoupage que
-                    TAPAS donne dans LBL (ABSO_WATER et ABSO_OTHERS).
-    la vitesse      NON libre: le modele est evalue dans le repere du SOL, ou
-                    l'atmosphere se trouve, et non sur la grille
-                    barycentrique comme LBL le fait (docs/tapas_frame.md).
+    H2O             free PER FILE: the water column changes too fast for
+                    a per-night model. And there is ALWAYS water: an
+                    exponent on the lower bound is a fit failure, never a
+                    dry night.
+    the rest        as a single block, not per chemical species: in the
+                    visible only O2 really matters among the dry species,
+                    and they all follow the same airmass. This is also the
+                    split that TAPAS gives in LBL (ABSO_WATER and
+                    ABSO_OTHERS).
+    the velocity    NOT free: the model is evaluated in the OBSERVER frame
+                    (the ground), where the atmosphere is, and not on the
+                    barycentric grid as LBL does (docs/tapas_frame.md).
 """
 import numpy as np
+from astropy import constants
 
-C = 299792.458
+C = constants.c.to("km/s").value
 FWHM2SIG = 2.3548
-#: les poids lisses de telluric_fit.tellu_tools.get_transmission_weights
+#: the smooth weights of telluric_fit.tellu_tools.get_transmission_weights
 WEIGHTS = dict(depth_max=0.6, depth_saturated=0.5, reject_saturated=0.8,
                transition_sigma=0.02)
 OUTLIER_SIGMA = 6.0
-#: le pas de la grille du modele, en km/s
+#: the step of the model grid, in km/s
 STEP_KMS = 0.25
 
-#: les bandes d'eau du domaine HARPS, mesurees sur TAPAS le 2026-10-15:
-#: ailleurs l'eau ne depasse pas 1% de profondeur et l'ajustement se faisait
-#: noyer par les raies stellaires
+#: the water bands of the HARPS domain, measured on TAPAS on 2026-10-15:
+#: elsewhere water does not exceed 1% depth and the fit got drowned by the
+#: stellar lines
 WATER_BANDS_HARPS = ((586.0, 600.0), (644.0, 664.0), (686.0, 696.0))
 
-#: LES BANDES DU SEC: SEULEMENT LA OU IL CONTRAINT QUELQUE CHOSE.
+#: THE DRY BANDS: ONLY WHERE IT CONSTRAINS SOMETHING.
 #:
-#: Le sec n'est pas l'eau et ne se mesure pas aux memes endroits. Releve sur
-#: TAPAS par fenetres de 5 nm le 2026-10-16, les seules fenetres du domaine
-#: HARPS ou il depasse 5% de profondeur:
+#: The dry component is not water and is not measured in the same places.
+#: Surveyed on TAPAS in 5 nm windows on 2026-10-16, the only windows of the
+#: HARPS domain where it exceeds 5% depth:
 #:
 #:     575-585 nm   6%     marginal
-#:     625-635 nm   70%    O2 gamma, et l'eau n'y fait que 9%
-#:     685-690 nm   100%   bande B, saturee, et l'eau n'y fait que 2.6%
-#:     690-695 nm   100%   ECARTEE: l'eau y monte a 77%, les deux especes
-#:                         s'y confondent et l'ajustement ne peut plus les
-#:                         separer
+#:     625-635 nm   70%    O2 gamma, and water is only 9% there
+#:     685-690 nm   100%   B band, saturated, and water is only 2.6% there
+#:     690-695 nm   100%   DISCARDED: water rises to 77% there, the two
+#:                         species merge there and the fit can no longer
+#:                         separate them
 #:
-#: Sous 450 nm il tombe a 0.2% de profondeur maximale, c'est-a-dire rien.
-#: L'ajuster sur tout le domaine coute environ cinquante fois plus cher en
-#: calcul pour une information qui ne vient que du rouge, et ajoute le bruit
-#: de la moitie bleue a une mesure qu'elle ne contraint pas.
+#: Below 450 nm it drops to 0.2% maximum depth, that is, nothing.
+#: Fitting it over the whole domain costs about fifty times more in
+#: computation for information that only comes from the red, and adds the
+#: noise of the blue half to a measurement that half does not constrain.
 DRY_BANDS_HARPS = ((625.0, 635.0), (685.0, 690.0))
 
-#: LA MARQUE DU REPLI. La valeur de repli (0.35) tombe exactement sur un point
-#: du balayage, donc une pose qui converge vers 0.35 et une pose qui a echoue
-#: rendraient le meme chiffre. On ajoute cet epsilon aux seules valeurs de
-#: repli: trois millionnemes de l'exposant, c'est-a-dire rien pour la
-#: physique, mais `is_fallback` les reconnait, et un journal aussi.
+#: THE FALLBACK MARK. The fallback value (0.35) falls exactly on a point of
+#: the sweep, so an exposure that converges to 0.35 and an exposure that
+#: failed would return the same number. This epsilon is added to the
+#: fallback values only: three ten-millionths of the exponent, that is,
+#: nothing for the physics, but `is_fallback` recognises them, and so does
+#: a log.
 FALLBACK_MARK = 1e-7
 
 
-#: LES FENETRES QUE L'AJUSTEMENT VOIT, lues sur TAPAS plutot que codees en
-#: dur: les fenetres de 5 nm ou l'eau (exposant 1, a la resolution de
-#: l'instrument) depasse 15% de profondeur, ou le sec 25%. Releve le
-#: 2026-10-25 de 380 a 790 nm, elles redonnent sur le domaine de HARPS les
-#: bandes ci-dessus (585-600, 645-660, 625-635, 685-695 nm) et ajoutent pour
-#: ESPRESSO 695-740 (eau) et 755-770 (bande A). Sans elles, l'objectif
-#: portait sur tout le spectre: le minimum restait au meme endroit, mais sa
-#: variation tombait sous les 5% du garde-fou (0.5 a 7%, contre 7 a 54% sur
-#: les fenetres) et presque toutes les poses passaient au repli (HD 189733:
-#: 382 sur 382, Gliese 229: 385 sur 428).
+#: THE WINDOWS THE FIT SEES, read from TAPAS rather than hard-coded: the
+#: 5 nm windows where water (exponent 1, at the resolution of the
+#: instrument) exceeds 15% depth, or the dry component 25%. Surveyed on
+#: 2026-10-25 from 380 to 790 nm, they give back on the HARPS domain the
+#: bands above (585-600, 645-660, 625-635, 685-695 nm) and add for
+#: ESPRESSO 695-740 (water) and 755-770 (A band). Without them, the
+#: objective covered the whole spectrum: the minimum stayed in the same
+#: place, but its variation fell below the 5% of the safeguard (0.5 to 7%,
+#: against 7 to 54% on the windows) and almost all exposures went to the
+#: fallback (HD 189733: 382 out of 382, Gliese 229: 385 out of 428).
 WINDOW_NM = 5.0
 WINDOW_WATER_DEPTH = 0.15
 WINDOW_DRY_DEPTH = 0.25
-#: le bord de la grille du modele, ou la convolution fabrique de fausses
-#: raies (45% de profondeur aux deux extremites): jamais une fenetre
+#: the edge of the model grid, where the convolution makes up false lines
+#: (45% depth at both ends): never a window
 WINDOW_EDGE_NM = 2.0
-#: en dessous, les fenetres ne disent rien et le spectre entier est garde
+#: below this, the windows say nothing and the whole spectrum is kept
 WINDOW_MIN_PIXELS = 2000
 
 
 def telluric_windows(model, wave):
-    """Les pixels de `wave` qui tombent dans une fenetre profonde en eau ou
-    en sec (WINDOW_*), lues sur le modele TAPAS a l'exposant 1."""
+    """The pixels of `wave` that fall in a window deep in water or in the
+    dry component (WINDOW_*), read from the TAPAS model at exponent 1."""
     wave = np.asarray(wave, dtype=float)
     water = 1.0 - transmission(model, wave, 1.0, 0.0)
     dry = 1.0 - transmission(model, wave, 0.0, 1.0)
@@ -126,12 +130,12 @@ def telluric_windows(model, wave):
 
 
 def is_fallback(water, fallback=0.35):
-    """Cet exposant vient-il du repli plutot que d'une mesure?"""
+    """Does this exponent come from the fallback rather than a measurement?"""
     return bool(abs(float(water) - (fallback + FALLBACK_MARK)) < FALLBACK_MARK / 10)
 
 
 def band_mask(wave, bands):
-    """Les pixels qui tombent dans une des bandes."""
+    """The pixels that fall in one of the bands."""
     wave = np.asarray(wave, dtype=float)
     out = np.zeros(wave.shape, dtype=bool)
     for low, high in bands:
@@ -140,7 +144,7 @@ def band_mask(wave, bands):
 
 
 def water_mask(wave, bands=WATER_BANDS_HARPS):
-    """Les pixels des bandes d'eau, ou l'exposant H2O s'ajuste."""
+    """The pixels of the water bands, where the H2O exponent is fitted."""
     wave = np.asarray(wave, dtype=float)
     out = np.zeros(wave.shape, dtype=bool)
     for lo, hi in bands:
@@ -149,12 +153,12 @@ def water_mask(wave, bands=WATER_BANDS_HARPS):
 
 
 def _spans_of(wave, gap_nm=1.0):
-    """Les intervalles que ces longueurs d'onde couvrent vraiment.
+    """The intervals these wavelengths really cover.
 
-    Rend une liste (debut, fin) en sautant les trous de plus de `gap_nm`.
-    C'est ce qui permet a model_grid de ne construire le modele que la ou il
-    servira: sur HARPS les trois bandes d'eau n'occupent que 40% de
-    l'intervalle qu'elles enjambent.
+    Returns a list of (start, end), skipping the gaps wider than `gap_nm`.
+    This is what lets model_grid build the model only where it will be
+    used: on HARPS the three water bands only take up 40% of the interval
+    they span.
     """
     wave = np.asarray(wave, dtype=float)
     wave = np.sort(wave[np.isfinite(wave)])
@@ -168,22 +172,22 @@ def _spans_of(wave, gap_nm=1.0):
 
 def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
                step_kms=STEP_KMS, bands=None):
-    """Les profondeurs optiques sur une grille log uniforme, et le noyau.
+    """The optical depths on a uniform log grid, and the kernel.
 
-    tau plutot que T, parce que c'est tau qui se multiplie par l'exposant.
+    tau rather than T, because tau is what gets multiplied by the exponent.
 
-    `bands` restreint la grille aux seuls intervalles utiles. Sans lui la
-    grille couvre wave_min a wave_max EN CONTINU, et sur HARPS les trois
-    bandes d'eau n'occupent que 40% de cet intervalle: 60% de la convolution,
-    qui est le poste le plus cher une fois la propagation vectorisee, part a
-    la poubelle. Mesure du 2026-10-16: 206293 points de grille pour 82340
-    utiles.
+    `bands` restricts the grid to the useful intervals only. Without it the
+    grid covers wave_min to wave_max CONTINUOUSLY, and on HARPS the three
+    water bands only take up 40% of that interval: 60% of the convolution,
+    which is the most expensive item once the propagation is vectorised,
+    goes in the bin. Measured on 2026-10-16: 206293 grid points for 82340
+    useful ones.
 
-    Chaque morceau est elargi de la demi-largeur du noyau de part et d'autre,
-    sinon la convolution serait fausse sur ses propres bords; les morceaux qui
-    se recouvrent apres elargissement sont fusionnes. Le resultat est
-    numeriquement le meme que la grille continue, aux bords pres qui sont
-    maintenant corrects par construction.
+    Each piece is widened by the half-width of the kernel on either side,
+    otherwise the convolution would be wrong on its own edges; the pieces
+    that overlap after widening are merged. The result is numerically the
+    same as the continuous grid, except at the edges, which are now correct
+    by construction.
     """
     step = np.arctanh(step_kms / C)
     sig_pix = np.arctanh(C / resolution / FWHM2SIG / C) / step
@@ -193,14 +197,14 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
     kernel = kernel / kernel.sum()
 
     if bands:
-        # les morceaux, elargis du noyau et fusionnes quand ils se touchent
+        # the pieces, widened by the kernel and merged when they touch
         margin = (half + 1) * step
-        # LES MORCEAUX TOMBENT SUR LA GRILLE CONTINUE, pas a cote: on arrondit
-        # chaque debut au point de grille inferieur. Sans cela les deux
-        # grilles different d'une fraction de pas, np.interp echantillonne la
-        # meme fonction a des endroits decales, et le modele bouge de 2e-3 par
-        # endroits, ce qui n'est pas une erreur mais rend la comparaison avec
-        # l'ancienne version impossible a lire.
+        # THE PIECES FALL ON THE CONTINUOUS GRID, not beside it: each start
+        # is rounded down to the grid point below. Without this the two
+        # grids differ by a fraction of a step, np.interp samples the same
+        # function at shifted places, and the model moves by 2e-3 in
+        # places, which is not an error but makes the comparison with the
+        # former version impossible to read.
         base = np.log(wave_min)
         spans = []
         for low, high in sorted(bands):
@@ -222,23 +226,23 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
     wave = np.exp(lnw)
     tau_water = -np.log(np.clip(spl_water(wave), 1e-6, 1.0))
     tau_dry = -np.log(np.clip(spl_dry(wave), 1e-6, 1.0))
-    # les frontieres entre morceaux, pour convoluer chacun chez lui: une
-    # convolution a cheval melangerait deux regions non adjacentes
+    # the boundaries between pieces, to convolve each one on its own: a
+    # straddling convolution would mix two non-adjacent regions
     edges = np.cumsum([0] + [len(np.arange(lo, hi, step)) for lo, hi in spans])
     return dict(wave=wave, tau_water=tau_water, tau_dry=tau_dry,
                 kernel=kernel, pieces=edges)
 
 
 def transmission(model, wave_ground, alpha_water, alpha_dry):
-    """T sur `wave_ground`: la puissance d'abord, la convolution ensuite."""
+    """T on `wave_ground`: the power first, the convolution next."""
     raw = np.exp(-alpha_water * model["tau_water"]
                  - alpha_dry * model["tau_dry"])
     pieces = model.get("pieces")
     if pieces is None or len(pieces) <= 2:
         conv = np.convolve(raw, model["kernel"], mode="same")
     else:
-        # CHAQUE MORCEAU CHEZ LUI: une convolution a cheval sur deux morceaux
-        # melangerait des longueurs d'onde qui ne se touchent pas
+        # EACH PIECE ON ITS OWN: a convolution straddling two pieces would
+        # mix wavelengths that do not touch
         conv = np.empty_like(raw)
         for start, stop in zip(pieces[:-1], pieces[1:]):
             conv[start:stop] = np.convolve(raw[start:stop], model["kernel"],
@@ -248,24 +252,24 @@ def transmission(model, wave_ground, alpha_water, alpha_dry):
 
 def transmission_weights(trans, depth_max, depth_saturated, reject_saturated,
                          transition_sigma):
-    """Les poids 0-1 de telluric_fit: une sigmoide sur la profondeur, et les
-    raies saturees et leurs ailes mises a zero.
+    """The 0-1 weights of telluric_fit: a sigmoid on the depth, and the
+    saturated lines and their wings set to zero.
 
-    LA PROPAGATION EST VECTORISEE, et c'est le seul changement: une double
-    boucle Python sur 24500 pixels, appelee 580 fois par ajustement, prenait
-    14.2 s sur les 16.6 s d'un fit (86% du temps, mesure au profileur le
-    2026-10-16). La version ci-dessous donne le MEME resultat, verifie sur
-    200 tirages aleatoires, sur les cas limites (tout sature, rien sature, un
-    seul pixel, tableau vide, alternance) et sur TAPAS, pour 73 fois moins de
-    temps.
+    THE PROPAGATION IS VECTORISED, and that is the only change: a double
+    Python loop over 24500 pixels, called 580 times per fit, took 14.2 s of
+    the 16.6 s of a fit (86% of the time, measured with the profiler on
+    2026-10-16). The version below gives the SAME result, checked on 200
+    random draws, on the edge cases (all saturated, nothing saturated, a
+    single pixel, empty array, alternation) and on TAPAS, in 73 times less
+    time.
 
-    LA REGLE, inchangee: en balayant dans un sens, on ENTRE en contamination a
-    chaque pixel sature et on en SORT au premier pixel qui remonte au-dessus
-    de `reject_saturated`; un pixel est contamine si c'est le cas dans l'un
-    des deux sens. Autrement dit un pixel est contamine quand le dernier
-    evenement rencontre avant lui est un SATURE et non un retour au-dessus du
-    seuil, ce qu'un maximum cumulatif des indices d'evenements donne en une
-    passe.
+    THE RULE, unchanged: sweeping in one direction, contamination is
+    ENTERED at each saturated pixel and LEFT at the first pixel that rises
+    back above `reject_saturated`; a pixel is contaminated if it is so in
+    either of the two directions. In other words a pixel is contaminated
+    when the last event met before it is a SATURATED pixel and not a return
+    above the threshold, which a cumulative maximum of the event indices
+    gives in one pass.
     """
     w_depth = 1.0 / (1.0 + np.exp(-(trans - depth_max) / transition_sigma))
     n = len(trans)
@@ -286,7 +290,7 @@ def transmission_weights(trans, depth_max, depth_saturated, reject_saturated,
 
 
 def weighted_nanstd(data, weights):
-    """La dispersion ponderee de telluric_fit."""
+    """The weighted dispersion of telluric_fit."""
     ok = np.isfinite(data) & np.isfinite(weights) & (weights > 0)
     d, w = data[ok], weights[ok]
     if d.size < 32:
@@ -318,17 +322,18 @@ def gradient_noise(trans, noise=None):
 
 
 def objective(sp, trans, noise=None):
-    """La dispersion ponderee du gradient du spectre corrige, EN UNITES DE
-    SON BRUIT (2026-10-27).
+    """The weighted dispersion of the gradient of the corrected spectrum, IN
+    UNITS OF ITS NOISE (2026-10-27).
 
-    Diviser par la transmission divise aussi le bruit: un pixel de bruit
-    sigma devient sigma / T, et sans en tenir compte chaque exposant de plus
-    gonfle le bruit des raies profondes. Sur une etoile faible ce bruit
-    l'emportait sur les raies telluriques qu'on enleve: le cout montait de
-    facon monotone avec l'exposant, sans minimum, et l'eau tombait au repli
-    (les 6 poses HARPS de GJ 1214, au plus bas du balayage). Le gradient est
-    donc divise par son bruit (gradient_noise), qui suit la division par la
-    transmission et, avec `noise`, le bruit de photons de la pose."""
+    Dividing by the transmission also divides the noise: a pixel of noise
+    sigma becomes sigma / T, and without accounting for it every increase
+    of the exponent inflates the noise of the deep lines. On a faint star
+    this noise outweighed the telluric lines being removed: the cost rose
+    monotonically with the exponent, with no minimum, and the water fell to
+    the fallback (the 6 HARPS exposures of GJ 1214, at the bottom of the
+    sweep). The gradient is therefore divided by its noise
+    (gradient_noise), which follows the division by the transmission and,
+    with `noise`, the photon noise of the exposure."""
     grad = np.gradient(sp / np.clip(trans, 1e-3, None))
     grad = grad / gradient_noise(trans, noise)
     w = transmission_weights(trans, **WEIGHTS)
@@ -351,37 +356,37 @@ DRY_RANGE = (0.5, 1.5)
 def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
                   resolution=115000.0, free_dry=True, fallback=0.35,
                   flat_span=1e-3, noise=None):
-    """(exposant H2O, exposant sec) de CE fichier, par la derivee.
+    """(H2O exponent, dry exponent) of THIS file, by the derivative.
 
-    L'AJUSTEMENT SE FAIT EN LOGARITHME, et c'est ce qui empeche d'atteindre
-    les bornes. Il y a TOUJOURS de l'eau dans l'atmosphere (des dizaines de
-    milliers de spectres infrarouges le disent), donc un exposant nul est un
-    echec d'ajustement et jamais une nuit seche. En ajustant ln(alpha),
-    alpha reste strictement positif quoi que fasse le simplexe, et une
-    variation relative compte autant en haut qu'en bas de la gamme, ce qui
-    est la bonne metrique pour une colonne qui varie d'un facteur plusieurs.
+    THE FIT IS DONE IN LOGARITHM, and that is what keeps it from reaching
+    the bounds. There is ALWAYS water in the atmosphere (tens of thousands
+    of infrared spectra say so), so a zero exponent is a fit failure and
+    never a dry night. By fitting ln(alpha), alpha stays strictly positive
+    whatever the simplex does, and a relative variation counts as much at
+    the top as at the bottom of the range, which is the right metric for a
+    column that varies by a factor of several.
 
-    Mesure le 2026-10-15 sur 100 poses de HD 10700: en lineaire, une pose
-    tombait exactement a zero et neuf restaient sous 0.05; en logarithme,
-    aucune.
+    Measured on 2026-10-15 on 100 exposures of HD 10700: in linear, one
+    exposure fell exactly to zero and nine stayed below 0.05; in logarithm,
+    none.
 
-    `free_dry` est VRAI par defaut depuis le 2026-10-16. Le sec suit bien la
-    masse d'air, mais pas avec le coefficient 1 que TAPAS suppose: mesure sur
-    les 92 poses du mode HAM de HD 10700, ajuste librement sur les bandes
-    seches, il vaut 0.961 fois la masse d'air avec un MAD de 0.026. Ces 4% de
-    colonne en moins sont ce qu'une altitude de 2400 m donne, TAPAS etant
-    calcule pour une colonne de reference qui n'est pas celle de La Silla.
+    `free_dry` is TRUE by default since 2026-10-16. The dry component does
+    follow the airmass, but not with the coefficient 1 that TAPAS assumes:
+    measured on the 92 exposures of the HAM mode of HD 10700, fitted freely
+    on the dry bands, it is 0.961 times the airmass with a MAD of 0.026.
+    These 4% less column are what an altitude of 2400 m gives, TAPAS being
+    computed for a reference column that is not that of La Silla.
 
-    Le fixer revenait donc a imposer une erreur systematique de 4% sur toute
-    l'absorption seche. Libre, l'ajustement est stable: le residu contre la
-    droite ajustee a un MAD de 0.031, et pente et ordonnee se lisent
-    separement (0.980 et -0.019 en moindres carres), ce qui est exactement la
-    forme attendue d'un offset d'altitude.
+    Fixing it therefore amounted to imposing a systematic error of 4% on all
+    the dry absorption. Free, the fit is stable: the residual against the
+    fitted line has a MAD of 0.031, and slope and intercept can be read
+    separately (0.980 and -0.019 in least squares), which is exactly the
+    expected shape of an altitude offset.
 
-    `fallback` et `flat_span` portent le garde-fou sur les poses sans signal,
-    decrit au balayage ci-dessous. Il est ICI et non seulement dans
-    fit_campaign parce que LBL appelle cette fonction une pose a la fois et
-    n'a donc aucune mediane de campagne sous la main.
+    `fallback` and `flat_span` carry the safeguard on the exposures without
+    signal, described at the sweep below. It is HERE and not only in
+    fit_campaign because LBL calls this function one exposure at a time and
+    so has no campaign median at hand.
     """
     from scipy.optimize import minimize
 
@@ -394,19 +399,18 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     good = (np.isfinite(sp) & (sp > 0) & np.isfinite(wave_ground)
             & np.isfinite(noise) & (noise > 0))
     wave_ground, sp, noise = wave_ground[good], sp[good], noise[good]
-    # LES MORCEAUX VIENNENT DES DONNEES, et non d'une liste de bandes codee en
-    # dur: on ne modelise que la ou il y a des pixels a expliquer. Un trou de
-    # plus de 1 nm dans les longueurs d'onde separe deux morceaux; en dessous
-    # ce n'est qu'un ordre qui finit, et les coudre coute moins que les
-    # separer. Marche pour n'importe quel instrument et n'importe quel choix
-    # de bandes.
+    # THE PIECES COME FROM THE DATA, and not from a hard-coded list of
+    # bands: the model is only built where there are pixels to explain. A
+    # gap of more than 1 nm in the wavelengths separates two pieces; below
+    # that it is only an order ending, and stitching them costs less than
+    # separating them. Works for any instrument and any choice of bands.
     model = model_grid(spl_water, spl_dry, wave_ground.min() * 0.999,
                        wave_ground.max() * 1.001, resolution,
                        bands=_spans_of(wave_ground))
-    # L'AJUSTEMENT NE VOIT QUE LES FENETRES TELLURIQUES (telluric_windows):
-    #   ailleurs le spectre n'apporte que des raies stellaires et du bruit,
-    #   qui ne dependent pas de l'exposant et noyaient sa variation sous le
-    #   garde-fou du balayage
+    # THE FIT ONLY SEES THE TELLURIC WINDOWS (telluric_windows):
+    #   elsewhere the spectrum only brings stellar lines and noise, which
+    #   do not depend on the exponent and drowned its variation under the
+    #   safeguard of the sweep
     keep = telluric_windows(model, wave_ground)
     if keep.sum() >= WINDOW_MIN_PIXELS:
         wave_ground, sp, noise = wave_ground[keep], sp[keep], noise[keep]
@@ -424,34 +428,37 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
         return objective(sp, transmission(model, wave_ground, water, dry),
                          noise)
 
-    # LE BALAYAGE D'ABORD, et il sert DEUX fois: il dit si la pose a de quoi
-    # trancher, et il donne au simplexe un point de depart du bon cote.
+    # THE SWEEP FIRST, and it serves TWICE: it says whether the exposure has
+    # enough to decide, and it gives the simplex a starting point on the
+    # right side.
     #
-    # Mesure le 2026-10-15 sur deux poses de HD 10700 prises la meme nuit:
+    # Measured on 2026-10-15 on two exposures of HD 10700 taken the same
+    # night:
     #
     #                        alpha=0.005   alpha=2.0   variation   minimum
-    #     pose qui marche        340.1       408.0       41%       interieur
-    #     pose qui s'effondre     17.76       18.23      2.6%      monotone
+    #     working exposure       340.1       408.0       41%       interior
+    #     collapsing exposure     17.76       18.23      2.6%      monotonic
     #
-    # La seconde n'a pas de minimum du tout: son cout MONTE des la plus
-    # petite valeur, donc le simplexe la pousse a zero. Comme il y a toujours
-    # de l'eau, c'est un echec d'ajustement, et on rend `fallback` plutot
-    # qu'une valeur inventee.
+    # The second has no minimum at all: its cost RISES from the smallest
+    # value on, so the simplex pushes it to zero. Since there is always
+    # water, this is a fit failure, and `fallback` is returned rather than
+    # an invented value.
     #
-    # LE BALAYAGE DESCEND A 0.002, et ce detail compte. Une version qui
-    # s'arretait a 0.02 mettait au repli 19 poses sur 100: les 8 du mode EGGS
-    # (un autre repere, voir plus bas), une a SNR 6.6, et ONZE poses
-    # parfaitement saines. Ces onze, balayees jusqu'a 0.002, montrent un
-    # minimum franc et INTERIEUR, de 0.2 a 1.0, avec 25 a 45% de variation:
-    # le garde-fou les cassait au lieu de les mesurer, parce que leur
-    # contraste de cout (1.6 a 2.2) est plus faible que celui des poses
-    # faciles (2.7) et que le bord du balayage tombait du mauvais cote.
+    # THE SWEEP GOES DOWN TO 0.002, and this detail matters. A version that
+    # stopped at 0.02 sent 19 exposures out of 100 to the fallback: the 8 of
+    # the EGGS mode (another frame, see below), one at SNR 6.6, and ELEVEN
+    # perfectly healthy exposures. Those eleven, swept down to 0.002, show a
+    # clear and INTERIOR minimum, from 0.2 to 1.0, with 25 to 45% variation:
+    # the safeguard broke them instead of measuring them, because their cost
+    # contrast (1.6 to 2.2) is weaker than that of the easy exposures (2.7)
+    # and the edge of the sweep fell on the wrong side.
     scan = np.array([0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.35, 0.6,
                      1.0, 1.6, 2.5])
-    # le balayage ne bouge que l'eau; le sec reste a sa valeur de depart, ce
-    # qui suffit pour localiser le creux en eau. Les DEUX parametres sont
-    # passes quand le sec est libre, sinon cost() lit un p[1] absent (bug vu
-    # le 2026-10-16: free_dry=True levait IndexError des le balayage).
+    # the sweep only moves the water; the dry component stays at its
+    # starting value, which is enough to locate the dip in water. BOTH
+    # parameters are passed when the dry component is free, otherwise
+    # cost() reads a missing p[1] (bug seen on 2026-10-16: free_dry=True
+    # raised IndexError right from the sweep).
     dry0 = np.log(max(float(airmass), 1e-3))
     costs = np.array([cost([np.log(a), dry0]) for a in scan])
     if not np.all(np.isfinite(costs)):
@@ -469,16 +476,17 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     flat = span < flat_span
     on_edge = jbest in (0, len(scan) - 1)
     if flat or on_edge:
-        # LE REPLI DOIT SE RECONNAITRE. `fallback` vaut 0.35, qui est AUSSI un
-        # point du balayage: une pose qui converge vraiment vers 0.35 rend
-        # alors le meme chiffre qu'une pose qui a echoue, et ni le journal ni
-        # l'en-tete ne permettent de les separer. Vu le 2026-10-16 sur
-        # HD 69830, ou j'ai compte 18% de repli alors que plusieurs de ces
-        # poses convergeaient franchement vers 0.35 (variation 39 a 42%).
+        # THE FALLBACK MUST BE RECOGNISABLE. `fallback` is 0.35, which is
+        # ALSO a point of the sweep: an exposure that really converges to
+        # 0.35 then returns the same number as an exposure that failed, and
+        # neither the log nor the header can tell them apart. Seen on
+        # 2026-10-16 on HD 69830, where I counted 18% fallback whereas
+        # several of these exposures clearly converged to 0.35 (variation
+        # 39 to 42%).
         #
-        # On decale donc d'un epsilon invisible physiquement (0.35 contre
-        # 0.3500001, soit trois millionnemes de l'exposant) mais qui rend le
-        # repli reconnaissable a la lecture.
+        # So the value is shifted by an epsilon that is physically invisible
+        # (0.35 against 0.3500001, i.e. three ten-millionths of the exponent)
+        # but that makes the fallback recognisable on reading.
         return float(fallback) + FALLBACK_MARK, float(airmass)
 
     x0 = [np.log(scan[jbest]), np.log(max(float(airmass), 1e-3))]
@@ -493,24 +501,23 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
 
 def fit_campaign(frames, spl_water, spl_dry, resolution=115000.0,
                  floor=0.05):
-    """Les exposants H2O d'une campagne, avec un garde-fou sur le SNR.
+    """The H2O exponents of a campaign, with a safeguard on the SNR.
 
-    `frames` est une liste de (wave_ground, sp, airmass). Rend un tableau
-    d'exposants, un par pose.
+    `frames` is a list of (wave_ground, sp, airmass). Returns an array of
+    exponents, one per exposure.
 
-    POURQUOI UN GARDE-FOU. Il y a toujours de l'eau, donc un exposant qui
-    s'effondre est un echec. Mesure le 2026-10-15 sur HD 10700: les poses qui
-    derivent sont celles dont le SNR est faible, et leur courbe de cout est
-    PLATE (17.76 a 17.94 entre alpha 0.005 et 0.8, soit 1% de variation, la
-    ou une pose qui marche montre un minimum net a 0.3). Le critere n'a
-    simplement pas de quoi trancher: les forcer ne ferait qu'inventer une
-    valeur.
+    WHY A SAFEGUARD. There is always water, so an exponent that collapses
+    is a failure. Measured on 2026-10-15 on HD 10700: the exposures that
+    drift are those with a low SNR, and their cost curve is FLAT (17.76 to
+    17.94 between alpha 0.005 and 0.8, i.e. 1% variation, whereas an
+    exposure that works shows a clear minimum at 0.3). The criterion simply
+    has nothing to decide with: forcing them would only invent a value.
 
-    Ces poses recoivent donc la MEDIANE de la campagne, ce qui est la
-    meilleure estimation disponible pour elles, et le dit. `floor` est le
-    seuil en dessous duquel on considere que l'ajustement n'a pas abouti:
-    0.05 sur HARPS, bien au-dessous du 5e centile des poses qui convergent
-    (0.15) et bien au-dessus de ce que donnent les echecs (moins de 0.01).
+    These exposures therefore get the campaign MEDIAN, which is the best
+    estimate available for them, and says so. `floor` is the threshold
+    below which the fit is considered not to have succeeded: 0.05 on HARPS,
+    well below the 5th percentile of the exposures that converge (0.15) and
+    well above what the failures give (less than 0.01).
     """
     out = np.full(len(frames), np.nan)
     for i, (wave_ground, sp, airmass) in enumerate(frames):

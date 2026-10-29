@@ -62,13 +62,12 @@ def probe_files(config, max_open=1):
         return None
     out = {"n_files": len(paths), "first": paths[0], "directory": directory}
     from . import readers as _readers
-    # UN T.FITS N'EST PAS LE SEUL SPECTRE VALIDE. Les instruments du visible
-    # passent par le pont de LBL et n'ont ni WaveA ni WaveAB: leur solution
-    # peut etre une table d'un autre nom. Demander la grille au lecteur que la
-    # configuration designe verifie donc la meme chose pour tous, et bien
-    # davantage qu'un nom d'extension: que le fichier s'ouvre, que la classe
-    # de LBL le reconnaisse et qu'il en sorte des longueurs d'onde
-    # (2026-10-14).
+    # A T.FITS IS NOT THE ONLY VALID SPECTRUM. Visible instruments go
+    # through LBL's bridge and have neither WaveA nor WaveAB: their solution
+    # can be a table with another name. Asking the reader the configuration
+    # names for the grid therefore checks the same thing for all of them, and
+    # much more than an extension name: that the file opens, that LBL's class
+    # recognises it and that wavelengths come out of it (2026-10-14).
     out["bridged"] = not _readers.reads_natively(config)
     try:
         with robust_open(paths[0]) as hdulist:

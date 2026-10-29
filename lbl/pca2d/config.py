@@ -213,28 +213,28 @@ DEFAULTS = {
                                      # 'log_sub' -> y = ln(f) - lowpass(ln f)
         "frame": "target",           # s1d only: apply before ('observer') or
                                      # after ('target') the BERV registration.
-                                     # 'target' depuis le 2026-10-16: le
-                                     # passe-haut contre un template demande
-                                     # la grille commune, et c'est devenu le
-                                     # defaut.
+                                     # 'target' since 2026-10-16: the
+                                     # high-pass against a template needs
+                                     # the common grid, and it became the
+                                     # default.
                                      # t.fits always filters on the destination
                                      # grid, per order -- the native sampling is
                                      # not uniform in velocity.
-        # LE PASSE-HAUT SUR LE RESIDU AU TEMPLATE plutot que sur le spectre.
-        # Un savgol passe sur un spectre entier est tire vers le bas par
-        # chaque raie profonde, et quand une tellurique balaie le coeur d'une
-        # raie avec le BERV ce biais change D'UNE POSE A L'AUTRE: il reste
-        # alors, dans le repere de l'etoile, un residu qui suit le BERV sans
-        # etre stellaire. Mesure le 2026-10-16 sur HD 69830 a 688.85 nm: la
-        # tellurique parcourt 0.117 nm sur les 51 km/s de BERV, et sa
-        # profondeur au coeur passe de 3% a 89%, par intermittence.
+        # THE HIGH-PASS ON THE RESIDUAL TO THE TEMPLATE rather than on the
+        # spectrum. A savgol run over a whole spectrum is pulled down by
+        # every deep line, and when a telluric sweeps across the core of a
+        # line with the BERV this bias changes FROM ONE EXPOSURE TO THE NEXT:
+        # there then remains, in the star frame, a residual that follows the
+        # BERV without being stellar. Measured on 2026-10-16 on HD 69830 at
+        # 688.85 nm: the telluric travels 0.117 nm over the 51 km/s of BERV,
+        # and its depth at the core goes from 3% to 89%, intermittently.
         #
-        # Avec cette option le passe-haut se fait en DEUX PASSES: template
-        # median de toutes les poses registrees, savgol sur le RESIDU au
-        # template, puis la structure stellaire rendue depuis le template
-        # seul. Aucune raie n'est masquee, rien n'entre ni ne sort selon le
-        # BERV. Demande frame: target, le passe-haut devant se faire dans le
-        # repere de l'etoile.
+        # With this option the high-pass is done in TWO PASSES: a median
+        # template of all the registered exposures, savgol on the RESIDUAL to
+        # the template, then the stellar structure restored from the template
+        # alone. No line is masked, nothing enters or leaves depending on the
+        # BERV. Requires frame: target, since the high-pass has to be done in
+        # the star frame.
         "against_template": True,
     },
     "quality": {
@@ -262,35 +262,36 @@ DEFAULTS = {
         "min_rjd": None,
         "max_rjd": None,
         "nights": None,
-        # LE MODE DU SPECTROGRAPHE: la liste des modes gardes, lue dans
-        # HIERARCH ESO INS MODE. null garde tout, ce qui est le defaut parce
-        # qu'un seul mode est le cas ordinaire. Sur les 100 poses HARPS de
-        # HD 10700, 8 sont en EGGS (la fibre de 1.4") et veulent le modele
-        # tellurique decale de +16 km/s la ou les 92 autres le veulent a
-        # zero: autre fibre, autre solution en longueur d'onde, donc un
-        # autre instrument du point de vue d'une base commune. Hashe dans la
-        # cle du cache de cube quand il est mis.
+        # THE SPECTROGRAPH MODE: the list of modes kept, read from
+        # HIERARCH ESO INS MODE. null keeps everything, which is the default
+        # because a single mode is the ordinary case. Of the 100 HARPS
+        # exposures of HD 10700, 8 are in EGGS (the 1.4" fibre) and want the
+        # telluric model shifted by +16 km/s where the other 92 want it at
+        # zero: another fibre, another wavelength solution, so another
+        # instrument from the point of view of a common basis. Hashed into
+        # the cube cache key when set.
         "drs_modes": None,
     },
     "weights": {
         "mode": "photon",            # 'photon' or 'uniform'
         "snr_pixel_scale": 1.0,      # EXTSN is per e2ds pixel; rescale if wanted
-        # LE SEUIL PAR PIXEL EST UN SEUIL DE SNR, pas de profondeur. Un fond de
-        # raie profonde porte moins de photons, donc un RMS fractionnaire plus
-        # grand, mais c'est l'endroit ou le contenu en vitesse est le plus
-        # dense: ce qu'il faut ecarter est le pixel dont le bruit depasse ce
-        # que les photons expliquent, pas celui qui est sombre.
+        # THE PER-PIXEL THRESHOLD IS AN SNR THRESHOLD, not a depth one. The
+        # bottom of a deep line carries fewer photons, hence a larger
+        # fractional RMS, but it is where the velocity content is densest:
+        # what has to be rejected is the pixel whose noise exceeds what the
+        # photons explain, not the one that is dark.
         #
-        # sigma etant le sigma photonique du log-flux, 1/sigma EST le SNR
-        # local. 5 est bas exprès: ecarter le pixel mort, pas trier par
-        # brillance. Mis a null, c'est `ln_clip_low` qui reprend la main.
+        # sigma being the photon sigma of the log-flux, 1/sigma IS the local
+        # SNR. 5 is low on purpose: reject the dead pixel, not sort by
+        # brightness. Set to null, `ln_clip_low` takes over again.
         "min_pixel_snr": 5.0,
-        "ln_clip_low": None,         # ANCIEN: y below this -> zero weight.
-                                     # Remplace le 2026-10-16 par min_pixel_snr:
-                                     # a -0.5 il tuait le fond de toute raie
-                                     # plus profonde que 39% du continu, 13.7%
-                                     # des pixels sur HD 10700, et LBL y perdait
-                                     # le tiers de ses raies
+        "ln_clip_low": None,         # OLD: y below this -> zero weight.
+                                     # Replaced on 2026-10-16 by
+                                     # min_pixel_snr: at -0.5 it killed the
+                                     # bottom of every line deeper than 39%
+                                     # of the continuum, 13.7% of the pixels
+                                     # on HD 10700, and LBL lost a third of
+                                     # its lines there
         "ln_clip_high": None,        # y above this -> zero weight (None = keep)
         "sigma_floor_frac": 0.0,     # add this (in ln units) in quadrature
         "telluric_mode": "recon",        # 'recon'     = the paired
@@ -442,8 +443,8 @@ DEFAULTS = {
         # TOI-2120 4 m/s, at half an element 2 (2026-09-11). The observer
         # components are never smoothed here.
         "star_smooth": None,
-        # VALIDATION CROISEE (pca2d.diagnostics.holdout_rows): "even" ou "odd",
-        # les nuits tenues hors du fit. None, le nominal: toutes les nuits.
+        # CROSS-VALIDATION (pca2d.diagnostics.holdout_rows): "even" or "odd",
+        # the nights held out of the fit. None, the nominal: all the nights.
         "holdout": None,
         # A SAVED OBSERVER BASIS (pca2d.basis, the PCA2D dict's basis=):
         # its components are taken frozen and never updated, and only the
@@ -510,36 +511,37 @@ DEFAULTS = {
         # a significance: excess_nsig sigmas of it, and a windowed chi2 above
         # excess_chi2, drop the region from every exposure. On TOI-2120 the
         # 1.27 um O2 band reaches a column chi2 of 222 and 1919 nm of 63.
-        # LE POIDS DE LA BOUCLE EST LE MASQUE. La boucle deprecie deja chaque
-        # echantillon par (clip/|z|)^2 au-dela de la coupure
-        # (twoframe.clip_weights); sous cette fraction de son poids nominal,
-        # l'echantillon n'a pas ete decrit par le modele et devient NaN dans le
-        # fichier corrige. 0.5 est |z| > 4.24 sigma avec le clip a 3, et coute
-        # 0.388% des echantillons sur TOI-2120, par pose et non en commun.
+        # THE LOOP'S WEIGHT IS THE MASK. The loop already down-weights each
+        # sample by (clip/|z|)^2 beyond the cut (twoframe.clip_weights);
+        # below this fraction of its nominal weight, the sample was not
+        # described by the model and becomes NaN in the corrected file. 0.5
+        # is |z| > 4.24 sigma with the clip at 3, and costs 0.388% of the
+        # samples on TOI-2120, per exposure and not in common.
         "weight_floor": None,
-        # LE BIAIS COHERENT SUR LES POSES, le troisieme axe et le seul que ni
-        # la coupure ni l'exces de dispersion ne peuvent voir: clip_weights
-        # compare chaque pose aux AUTRES POSES, donc un residu present dans
-        # toutes n'est aberrant pour aucune. La moyenne sur les poses, elle,
-        # gagne sqrt(N) = 17.8 avec 316 poses. Sur TOI-2120: 21.9% du domaine
-        # au-dela de 3 sigma, 2.8% au-dela de 10, et les pires regions sont
-        # 1761, 1803, 1805 et 1764-1769 nm (methane et eau), larges de 4 a 6
-        # elements de resolution: des raies entieres mal corrigees.
-        # NOMINAL depuis le 2026-09-26, avec nsig_cut 3.0: mesure sur
-        # TOI-2120 a 0-7, rms 17.01 -> 14.63, rms par nuit 14.57 -> 11.52, et
-        # sigma_K 1.23 -> 1.05 avec K a 5.54 contre 5.42, donc sans deplacer
-        # l'amplitude de la planete (la coupure seule a 2.5 sigma donnait
-        # 14.60 mais faisait tomber K a 3.67). Les deux axes s'additionnent
-        # parce qu'ils voient des choses differentes: la coupure les accidents
-        # d'une pose, le biais ce qui est ancre dans le referentiel de
-        # l'observateur et qu'aucun critere par pose ne peut voir.
+        # THE COHERENT BIAS OVER THE EXPOSURES, the third axis and the only
+        # one that neither the cut nor the excess scatter can see:
+        # clip_weights compares each exposure to the OTHER EXPOSURES, so a
+        # residual present in all of them is an outlier in none. The mean
+        # over the exposures, on the other hand, gains sqrt(N) = 17.8 with
+        # 316 exposures. On TOI-2120: 21.9% of the domain beyond 3 sigma,
+        # 2.8% beyond 10, and the worst regions are 1761, 1803, 1805 and
+        # 1764-1769 nm (methane and water), 4 to 6 resolution elements wide:
+        # whole badly corrected lines.
+        # NOMINAL since 2026-09-26, with nsig_cut 3.0: measured on TOI-2120
+        # at 0-7, rms 17.01 -> 14.63, per-night rms 14.57 -> 11.52, and
+        # sigma_K 1.23 -> 1.05 with K at 5.54 against 5.42, so without moving
+        # the planet's amplitude (the cut alone at 2.5 sigma gave 14.60 but
+        # dropped K to 3.67). The two axes add up because they see different
+        # things: the cut sees the accidents of one exposure, the bias what is
+        # anchored in the observer frame and that no per-exposure criterion
+        # can see.
         "bias_nsig": 10.0,
         "bias_elements": 2.0,
         "excess_nsig": None,
         "excess_chi2": 1.25,
         "excess_elements": 2.0,
-        # 3.0 est nominal depuis le 2026-09-26, avec bias_nsig 10.0. Seul, il
-        # gagne 1.37 m/s; 2.5 gagnait 2.41 mais deplacait K de 1.6 sigma.
+        # 3.0 is nominal since 2026-09-26, with bias_nsig 10.0. Alone, it
+        # gains 1.37 m/s; 2.5 gained 2.41 but moved K by 1.6 sigma.
         "nsig_cut": 3.0,             # NaN beyond this many running robust sigmas
         # And then the column the exposures agree is bad. With nsig_cut set,
         # an observer column where more than column_frac of the exposures is
@@ -573,10 +575,11 @@ DEFAULTS = {
         # 2026-09-15 (config.yaml carries the measurements).
         "weight": "velocity",
         "velocity_floor": 0.05,
-        # LES DIAGNOSTICS DE LA NUIT DU 2026-10-17 (pca2d.diagnostics), tous
-        # deux inactifs a None. q_support: ne diviser la base que la ou la
-        # transmission du cube descend sous ce seuil. permute_b: une graine,
-        # chaque nuit corrigee avec les amplitudes d'une autre (test nul).
+        # THE DIAGNOSTICS OF THE NIGHT OF 2026-10-17 (pca2d.diagnostics),
+        # both inactive at None. q_support: divide the basis out only where
+        # the cube's transmission drops below this threshold. permute_b: a
+        # seed, each night corrected with the amplitudes of another (null
+        # test).
         "q_support": None,
         "permute_b": None,      # what a sample with no velocity info keeps
         "shrink": True,              # each component only where it is significant
@@ -624,13 +627,13 @@ DEFAULTS = {
         # at its mean amplitude (lbltemplate.py), written by LBL's own writer
         # where LBL looks for it, so LBL's template step finds it and skips.
         # A template LBL made for that object is never replaced.
-        # LE RAPPORT PDF que lbl/report ecrit apres compile, dans
-        # <DATA_DIR>/reports: la table des statistiques du run, la sequence,
-        # la vitesse contre le BERV, les periodogrammes, le FIP et la qualite
-        # de la correction tellurique. Vrai par defaut, parce qu'il coute
-        # quelques secondes a la fin d'un run qui en a pris des minutes. A
-        # mettre a false quand on enchaine des dizaines de variantes et que
-        # seuls les .rdb comptent.
+        # THE PDF REPORT that lbl/report writes after compile, in
+        # <DATA_DIR>/reports: the table of the run's statistics, the
+        # sequence, the velocity against the BERV, the periodograms, the FIP
+        # and the quality of the telluric correction. True by default,
+        # because it costs a few seconds at the end of a run that took
+        # minutes. Set it to false when running dozens of variants in a row
+        # and only the .rdb files matter.
         "report": True,
         "star_template": True,
         # With two or more star components, the ones past the first go to
@@ -699,11 +702,11 @@ def measure_pixel_dv(directory: str, pattern: str = "*t.fits",
     paths = sorted(glob.glob(os.path.join(directory, pattern)))
     if not paths:
         raise SystemExit("no file matching %s in %s" % (pattern, directory))
-    # Un instrument lu par le pont de LBL n'a pas d'extension WaveAB a ouvrir:
-    # sa solution peut etre une table, un polynome d'en-tete ou un autre
-    # format par instrument, et c'est justement ce que la classe de lecture de
-    # LBL sait faire. On lui demande donc la grille plutot que de deviner un
-    # nom d'extension qui n'existe pas (2026-10-14).
+    # An instrument read through LBL's bridge has no WaveAB extension to
+    # open: its solution can be a table, a header polynomial or another
+    # per-instrument format, and that is exactly what LBL's reader class
+    # knows how to handle. So the grid is asked of it rather than guessing
+    # an extension name that does not exist (2026-10-14).
     bridged = config is not None and not _readers.reads_natively(config)
     for path in paths[:20]:
         try:
@@ -968,13 +971,14 @@ def detect_instrument(directory: str, pattern: str = "*t.fits") -> str:
 
     paths = sorted(glob.glob(os.path.join(directory, pattern)))
     if not paths:
-        # L'OEUF ET LA POULE. Le motif des fichiers est une propriete de
-        # l'instrument (*t.fits sur APERO, *_S2D_A.fits sur HARPS, *e2ds_A.fits
-        # sur SOPHIE), mais l'instrument se lit DANS un fichier, qu'il faut
-        # donc trouver avant de le connaitre. A ce stade le motif est encore
-        # celui de `general`, donc il ne vaut rien pour un instrument qui n'est
-        # pas celui par defaut. INSTRUME, lui, est dans tout fichier FITS: on
-        # elargit a eux tous plutot que de refuser (2026-10-14).
+        # THE CHICKEN AND THE EGG. The file pattern is a property of the
+        # instrument (*t.fits on APERO, *_S2D_A.fits on HARPS, *e2ds_A.fits
+        # on SOPHIE), but the instrument is read IN a file, which therefore
+        # has to be found before it is known. At this point the pattern is
+        # still that of `general`, so it is worthless for an instrument that
+        # is not the default one. INSTRUME, on the other hand, is in every
+        # FITS file: the search widens to all of them rather than refusing
+        # (2026-10-14).
         paths = sorted(glob.glob(os.path.join(directory, "*.fits")))
     if not paths:
         raise SystemExit("no file matching %s in %s" % (pattern, directory))
@@ -1319,9 +1323,9 @@ def cache_key(config: dict) -> str:
         # the window the width resolved to, not the width: dv is hashed with
         # the domain, and a config in samples from before width_kms has to
         # keep the key its cube was built under
-        # against_template est omis quand il est faux, pour la meme raison que
-        # les autres reglages ajoutes apres coup: son apparition dans le
-        # dictionnaire ne doit pas orpheliner les cubes deja construits.
+        # against_template is omitted when it is false, for the same reason as
+        # the other settings added after the fact: its appearance in the
+        # dictionary must not orphan the cubes already built.
         "highpass": {k: v for k, v in config["highpass"].items()
                      if k != "width_kms"
                      and not (k == "against_template" and not v)},

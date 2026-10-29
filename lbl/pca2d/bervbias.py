@@ -71,6 +71,7 @@ pipeline's environment, and four parameters do not need it.
 from __future__ import annotations
 
 import numpy as np
+from astropy import constants
 
 #: the FWHM's prior: Gaussian, (mean, standard deviation), within bounds
 FWHM_PRIOR = (5.0, 1.5)

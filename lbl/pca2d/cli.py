@@ -1375,12 +1375,12 @@ def clip_args(cfg, quiet=False):
 
 
 def diagnostic_args(cfg):
-    """Les tests de diagnostic de l'etape correct (pca2d.diagnostics): le
-    support tellurique et la permutation des amplitudes entre nuits.
+    """The diagnostic tests of the correct step (pca2d.diagnostics): the
+    telluric support and the permutation of the amplitudes between nights.
 
-    A part de shrink_args, qui part aussi vers la figure de sequence: ces deux
-    options ne sont pas des corrections a dessiner mais des questions posees
-    aux fichiers, et la figure ne les connait pas."""
+    Separate from shrink_args, which also goes to the sequence figure: these
+    two options are not corrections to draw but questions asked of the
+    files, and the figure does not know them."""
     corr = cfg.get("correct") or {}
     out = []
     if corr.get("q_support"):
@@ -1487,23 +1487,22 @@ def _velocity_pages(plan):
 
 
 def _check_lbl_tree(directory):
-    """Refuser de lancer LBL sur un arbre dont un dossier est un lien MORT.
+    """Refuse to launch LBL on a tree in which a folder is a DEAD link.
 
-    CE QUI S'EST PASSE le 2026-10-15 a 22h55. outputs/lbl/ portait dix liens
-    vers /Volumes/irrisor, un disque externe qui n'etait pas monte. LBL s'est
-    arrete au bout de 1.9 seconde sur une FileExistsError en voulant creer son
-    dossier de log, et le journal de la nuit ne disait rien de plus: les
-    quatre etapes d'avant avaient reussi, donc la chaine avait l'air d'etre
-    allee au bout.
+    WHAT HAPPENED on 2026-10-15 at 22:55. outputs/lbl/ held ten links to
+    /Volumes/irrisor, an external disk that was not mounted. LBL stopped
+    after 1.9 seconds on a FileExistsError while trying to create its log
+    folder, and the night's log said nothing more: the four steps before
+    had succeeded, so the chain looked as if it had gone to the end.
 
-    Le piege est que Path.exists() SUIT le lien: un lien casse n'existe pas
-    pour lui, donc io.make_dir de LBL passe dans sa branche "creer", et le
-    mkdir echoue parce que le nom, lui, est bien pris. Les deux moities du
-    test portent sur des choses differentes.
+    The trap is that Path.exists() FOLLOWS the link: a broken link does not
+    exist for it, so LBL's io.make_dir goes into its "create" branch, and
+    the mkdir fails because the name, for its part, is indeed taken. The
+    two halves of the test are about different things.
 
-    On regarde donc ici, une fois, avant de donner l'arbre a LBL, et on dit
-    quel lien et vers quoi plutot que de laisser LBL mourir sur un message qui
-    ne nomme pas la cause.
+    So we look here, once, before handing the tree to LBL, and say which
+    link and to what rather than letting LBL die on a message that does not
+    name the cause.
     """
     broken = []
     try:

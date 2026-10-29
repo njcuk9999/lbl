@@ -1,44 +1,44 @@
-"""Lire un spectre de n'importe quel instrument, en passant par LBL.
+"""Read a spectrum from any instrument, through LBL.
 
-« Tout ce qui passe dans le LBL peut être envoyé au PCA2D » (2026-10-14). LBL
-sait déjà lire quinze combinaisons instrument/source: SPIRou et NIRPS en APERO,
-CADC et ESO, HARPS et HARPS-N en ORIG, ESO et ESSP, ESPRESSO, CARMENES, SOPHIE,
-CORALIE, MAROON-X, EXPRES, NEID, plus une classe générique. Réimplémenter cette
-lecture ici reviendrait à la maintenir deux fois et à diverger; et puisque
-pca2d a vocation à finir dans LBL, mieux vaut en emprunter dès maintenant le
-chemin.
+"Anything that goes through LBL can be sent to PCA2D" (2026-10-14). LBL
+already reads fifteen instrument/source combinations: SPIRou and NIRPS in
+APERO, CADC and ESO, HARPS and HARPS-N in ORIG, ESO and ESSP, ESPRESSO,
+CARMENES, SOPHIE, CORALIE, MAROON-X, EXPRES, NEID, plus a generic class.
+Reimplementing that reading here would mean maintaining it twice and
+diverging; and since pca2d is meant to end up in LBL, it is better to take
+that path now.
 
-    read(path, instrument, data_source) -> le même dict que tfits.read_tfits
+    read(path, instrument, data_source) -> the same dict as tfits.read_tfits
 
-Ce que LBL donne nativement et ce qu'il faut en tirer:
+What LBL gives natively and what has to be drawn from it:
 
-    flux    inst.load_science_file(path), toujours 2D (ordres, pixels)
-    wave    inst.get_wave_solution(path, data, header), en nm
-    blaze   inst.load_blaze_from_science(...), normalisé par ordre
-    meta    les mots-clés par leur nom LBL (KW_BERV, KW_MJDATE...), que chaque
-            classe traduit pour son instrument
+    flux    inst.load_science_file(path), always 2D (orders, pixels)
+    wave    inst.get_wave_solution(path, data, header), in nm
+    blaze   inst.load_blaze_from_science(...), normalised per order
+    meta    the keywords by their LBL name (KW_BERV, KW_MJDATE...), which
+            each class translates for its instrument
 
-Ce que LBL ne donne pas, et ce qu'on en fait:
+What LBL does not give, and what is done about it:
 
-    recon   la transmission tellurique. APERO l'écrit dans le t.fits (Recon);
-            HARPS et les autres ne l'ont pas, et LBL la calcule lui-même à
-            partir de son modèle TAPAS (lbl/science/tellu_clean.py, le fichier
-            tapas_lbl.fits qu'il télécharge). `tapas_transmission` ci-dessous
-            l'évalue sur la grille du spectre, ce qui donne à pca2d le même
-            objet que le Recon d'APERO.
-    sky     l'émission du ciel. Aucun spectrographe visible ne la livre par
-            pose; quality.max_sky_ratio est alors sans objet et le masque de
-            ciel est laissé à l'instrument. None, et le reste du pipeline en
-            tient compte.
-    snr     le rapport signal sur bruit par ordre. Quand l'en-tête ne le porte
-            pas, il est mesuré sur le flux lui-même (robuste, par ordre).
+    recon   the telluric transmission. APERO writes it in the t.fits
+            (Recon); HARPS and the others do not have it, and LBL computes
+            it itself from its TAPAS model (lbl/science/tellu_clean.py, the
+            file tapas_lbl.fits that it downloads). `tapas_transmission`
+            below evaluates it on the spectrum's grid, which gives pca2d the
+            same object as APERO's Recon.
+    sky     the sky emission. No visible spectrograph delivers it per
+            exposure; quality.max_sky_ratio then does not apply and the sky
+            mask is left to the instrument. None, and the rest of the
+            pipeline takes that into account.
+    snr     the signal-to-noise ratio per order. When the header does not
+            carry it, it is measured on the flux itself (robust, per order).
 
-LES DEUX PARITÉS. pca2d ramène chaque pose à deux spectres, les ordres pairs et
-les ordres impairs, parce que sur un échelle les ordres n et n+1 se recouvrent
-alors que n et n+2 ne se touchent jamais: tout le spectre tient donc sans
-redondance sur deux lignes. La règle est gardée pour tous les instruments
-(décidé le 2026-10-14), mais elle est VÉRIFIÉE par `parity_is_safe`, qui mesure
-le recouvrement réel et prévient quand l'hypothèse ne tient pas.
+THE TWO PARITIES. pca2d reduces each exposure to two spectra, the even orders
+and the odd orders, because on an echelle orders n and n+1 overlap while n and
+n+2 never touch: the whole spectrum thus fits on two rows with no redundancy.
+The rule is kept for all instruments (decided on 2026-10-14), but it is
+CHECKED by `parity_is_safe`, which measures the actual overlap and warns when
+the assumption does not hold.
 """
 
 from __future__ import annotations
@@ -49,9 +49,9 @@ import warnings
 
 import numpy as np
 
-#: ce que LBL appelle les instruments, et la source de données associée, tels
-#: que select.InstDict les épelle. Ce qui n'est pas ici n'est pas refusé: la
-#: paire est passée telle quelle à LBL, qui dira ce qu'il en pense.
+#: what LBL calls the instruments, and the associated data source, as
+#: select.InstDict spells them. What is not here is not refused: the pair is
+#: passed as it is to LBL, which will say what it thinks of it.
 KNOWN = {
     "SPIROU": ("APERO", "CADC"),
     "NIRPS_HA": ("APERO", "CADC", "ESO"),
@@ -66,17 +66,17 @@ KNOWN = {
     "EXPRES": ("ORIG", "ESSP"),
     "NEID": ("ESSP",),
 }
-#: GENERIC existe comme classe dans LBL mais pas dans sa table instrument/source:
-#: il se configure à la main, donc pca2d ne l'annonce pas ici. Il reste
-#: utilisable en passant son nom directement à `instrument`.
+#: GENERIC exists as a class in LBL but not in its instrument/source table:
+#: it is configured by hand, so pca2d does not list it here. It can still be
+#: used by passing its name directly to `instrument`.
 
 
 def instrument(name, data_source, config_file=None):
-    """La classe LBL qui lit cet instrument, instanciée.
+    """The LBL class that reads this instrument, instantiated.
 
-    `parse=False` est ce qui permet de l'instancier depuis du code plutôt que
-    depuis une ligne de commande; c'est déjà ainsi que lbl.check_profile
-    vérifie un profil avant une campagne.
+    `parse=False` is what allows it to be instantiated from code rather than
+    from a command line; this is already how lbl.check_profile checks a
+    profile before a campaign.
     """
     from lbl.instruments import select
 
@@ -95,19 +95,19 @@ def instrument(name, data_source, config_file=None):
 
 
 def _lbl_root():
-    """Le dossier du paquet LBL REELLEMENT installe, ou None.
+    """The folder of the ACTUALLY installed LBL package, or None.
 
-    Trois chemins, du plus franc au plus obstine, parce que le dossier de
-    donnees `lbl/` du depot peut masquer les deux premiers:
+    Three paths, from the most direct to the most stubborn, because the
+    repository's `lbl/` data folder can mask the first two:
 
-      1. l'import ordinaire, quand rien ne le masque;
-      2. les entrees de sys.path qui portent un vrai lbl/__init__.py;
-      3. la distribution installee, par importlib.metadata. C'est le seul qui
-         survit a une installation EDITABLE (pip install -e), ou le paquet
-         n'est sur aucune entree de sys.path mais atteint par un chercheur
-         pose par un .pth: un paquet-espace-de-noms gagne contre ce
-         chercheur, et seul le dossier declare par la distribution dit ou le
-         code se trouve vraiment.
+      1. the ordinary import, when nothing masks it;
+      2. the sys.path entries that hold a real lbl/__init__.py;
+      3. the installed distribution, through importlib.metadata. It is the
+         only one that survives an EDITABLE install (pip install -e), where
+         the package is on no sys.path entry but is reached by a finder set
+         up by a .pth: a namespace package wins against that finder, and
+         only the folder declared by the distribution says where the code
+         really is.
     """
     import importlib.metadata as metadata
     import importlib.util
@@ -127,8 +127,8 @@ def _lbl_root():
     for item in dist.files or []:
         if item.parts[:2] == ("lbl", "__init__.py"):
             return os.path.dirname(str(dist.locate_file(item)))
-    # une installation editable: le chercheur pose par le .pth sait ou est le
-    # code, et il le dit dans sa table MAPPING
+    # an editable install: the finder set up by the .pth knows where the code
+    # is, and says so in its MAPPING table
     for item in dist.files or []:
         text = str(item)
         if "__editable___" in text and text.endswith("_finder.py"):
@@ -145,21 +145,22 @@ def _lbl_root():
 
 
 def _lbl_science(name):
-    """Un module de lbl.science, meme quand le dossier de donnees le masque.
+    """A module of lbl.science, even when the data folder masks it.
 
-    LE PIEGE, mesure le 2026-10-14: ce depot contient un dossier `lbl/` qui est
-    une arborescence de DONNEES de LBL (calib, masks, models, science...). Des
-    que la racine du depot est sur sys.path, `import lbl` trouve ce dossier
-    avant le paquet installe et en fait un paquet-espace-de-noms: lbl.__file__
-    vaut None et `from lbl.science import tellu_clean` echoue avec « unknown
-    location ». Et c'est pire qu'un echec franc, parce que lbl.instruments,
-    lui, n'est PAS masque (le dossier de donnees n'a pas ce sous-dossier):
-    l'instrument se charge, la transmission non, et rien ne le dit.
+    THE TRAP, measured on 2026-10-14: this repository holds an `lbl/` folder
+    that is an LBL DATA tree (calib, masks, models, science...). As soon as
+    the repository's root is on sys.path, `import lbl` finds this folder
+    before the installed package and turns it into a namespace package:
+    lbl.__file__ is None and `from lbl.science import tellu_clean` fails with
+    "unknown location". And this is worse than a plain failure, because
+    lbl.instruments is NOT masked (the data folder has no such subfolder):
+    the instrument loads, the transmission does not, and nothing says so.
 
-    Charger le seul module voulu par son chemin ne suffit pas: il importe ses
-    voisins par `from lbl.science import general`, qui retombe sur le dossier
-    masque. On REPARE donc le paquet, en ajoutant le vrai dossier au __path__
-    de lbl et de lbl.science, apres quoi l'import ordinaire trouve tout.
+    Loading only the wanted module by its path is not enough: it imports its
+    neighbours through `from lbl.science import general`, which falls back
+    on the masked folder. So the package is REPAIRED, by adding the real
+    folder to the __path__ of lbl and of lbl.science, after which the
+    ordinary import finds everything.
     """
     import importlib
     import sys
@@ -174,8 +175,8 @@ def _lbl_science(name):
             paths = list(getattr(package, "__path__", []))
             if root not in paths:
                 package.__path__ = [root] + paths
-                # lbl.science a pu etre resolu avant la reparation: il porte
-                # alors le chemin du dossier de donnees et doit etre oublie
+                # lbl.science may have been resolved before the repair: it
+                # then carries the data folder's path and must be forgotten
                 for key in [k for k in sys.modules
                             if k == "lbl.science" or k.startswith("lbl.science.")]:
                     del sys.modules[key]
@@ -185,24 +186,24 @@ def _lbl_science(name):
 
 
 def tapas_transmission(inst, wave, model_dir, airmass=1.0):
-    """La transmission tellurique sur `wave`, du modèle TAPAS de LBL.
+    """The telluric transmission on `wave`, from LBL's TAPAS model.
 
-    APERO écrit la transmission qu'il a divisée dans le t.fits (Recon), et
-    pca2d s'en sert pour savoir où le spectre est aveugle. Les spectrographes
-    visibles ne la livrent pas: LBL la modélise, et c'est ce modèle qu'on
-    évalue ici, élevé à la masse d'air de la pose.
+    APERO writes the transmission it divided out into the t.fits (Recon), and
+    pca2d uses it to know where the spectrum is blind. Visible spectrographs
+    do not deliver it: LBL models it, and it is that model that is evaluated
+    here, raised to the exposure's airmass.
 
-    Rend None quand le modèle n'est pas là, ce que l'appelant doit accepter:
-    sans transmission, les coupures qui en dépendent sont simplement inactives.
+    Returns None when the model is not there, which the caller must accept:
+    with no transmission, the cuts that depend on it are simply inactive.
     """
     tellu_clean = _lbl_science("tellu_clean")
     if tellu_clean is None:
         return None
-    # LBL recopie le fichier TAPAS dans <DATA_DIR>/other/ avant de le lire, et
-    # DATA_DIR est vide sur une classe instanciee hors d'une campagne: sans
-    # lui, get_tapas_lbl s'arrete sur un realpath(None). Le dossier des
-    # modeles est, par construction, <DATA_DIR>/models, donc son parent est la
-    # reponse. On ne l'ecrase jamais quand une campagne l'a deja pose.
+    # LBL copies the TAPAS file into <DATA_DIR>/other/ before reading it, and
+    # DATA_DIR is empty on a class instantiated outside a campaign: without
+    # it, get_tapas_lbl stops on a realpath(None). The models folder is, by
+    # construction, <DATA_DIR>/models, so its parent is the answer. It is
+    # never overwritten when a campaign has already set it.
     try:
         if not inst.params.get("DATA_DIR"):
             inst.params.set("DATA_DIR",
@@ -215,9 +216,9 @@ def tapas_transmission(inst, wave, model_dir, airmass=1.0):
         return None
     if splines is None:
         return None
-    # get_tapas_spl rend les splines des deux composantes de TAPAS, l'eau et
-    # le reste; la transmission totale est leur produit, chacune à la masse
-    # d'air de la pose
+    # get_tapas_spl returns the splines of the two TAPAS components, water
+    # and the rest; the total transmission is their product, each at the
+    # exposure's airmass
     out = np.ones_like(np.asarray(wave, dtype=float))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -233,11 +234,12 @@ def tapas_transmission(inst, wave, model_dir, airmass=1.0):
 
 
 def order_snr(flux, header_snr=None, n_orders=None):
-    """Le rapport signal sur bruit par ordre.
+    """The signal-to-noise ratio per order.
 
-    Celui de l'en-tête quand l'instrument l'écrit (APERO le fait, EXTSNxxx),
-    mesuré sur le flux sinon: la médiane divisée par l'écart robuste des
-    différences voisines, qui ne suppose rien sur le modèle de bruit.
+    The header's when the instrument writes it (APERO does, EXTSNxxx),
+    measured on the flux otherwise: the median divided by the robust scatter
+    of the differences between neighbours, which assumes nothing about the
+    noise model.
     """
     if header_snr is not None and np.size(header_snr):
         return np.asarray(header_snr, dtype=float)
@@ -250,19 +252,19 @@ def order_snr(flux, header_snr=None, n_orders=None):
         level = float(np.median(row[good]))
         step = np.diff(row[good])
         noise = 1.4826 * float(np.median(np.abs(step - np.median(step))))
-        # la différence de deux voisins a sqrt(2) fois le bruit d'un seul
+        # the difference of two neighbours has sqrt(2) times the noise of one
         out[i] = level / (noise / np.sqrt(2.0)) if noise > 0 else np.nan
     return out if n_orders is None else out[:n_orders]
 
 
 def parity_is_safe(wave, tolerance=0.0):
-    """(vrai si les ordres n et n+2 ne se recouvrent pas, le pire recouvrement).
+    """(true if orders n and n+2 do not overlap, the worst overlap).
 
-    pca2d met les ordres pairs sur une ligne et les impairs sur l'autre, ce qui
-    suppose que deux ordres de même parité ne mesurent jamais la même longueur
-    d'onde. C'est vrai sur SPIRou et NIRPS; ailleurs il faut le vérifier plutôt
-    que l'espérer, parce qu'un recouvrement ferait écrire deux mesures dans la
-    même colonne de la grille.
+    pca2d puts the even orders on one row and the odd ones on the other, which
+    assumes that two orders of the same parity never measure the same
+    wavelength. That is true on SPIRou and NIRPS; elsewhere it has to be
+    checked rather than hoped for, because an overlap would write two
+    measurements into the same column of the grid.
     """
     wave = np.atleast_2d(np.asarray(wave, dtype=float))
     worst = 0.0
@@ -277,11 +279,12 @@ def parity_is_safe(wave, tolerance=0.0):
 
 
 def _doppler(velocity_kms):
-    """Le rapport de longueurs d'onde pour une vitesse, RELATIVISTE.
+    """The wavelength ratio for a velocity, RELATIVISTIC.
 
-    Un seul Doppler dans le depot, celui de grids: sqrt((1 + v/c) / (1 - v/c)),
-    v > 0 si la source s'eloigne. Le premier ordre, 1 + v/c, se trompe de
-    (v/c)^2 / 2, soit 1.5 m/s a 30 km/s de BERV, ce qui compte ici.
+    A single Doppler in the repository, the one in grids:
+    sqrt((1 + v/c) / (1 - v/c)), v > 0 if the source is receding. The first
+    order, 1 + v/c, is off by (v/c)^2 / 2, i.e. 1.5 m/s at a 30 km/s BERV,
+    which matters here.
     """
     from .grids import doppler
 
@@ -289,26 +292,26 @@ def _doppler(velocity_kms):
 
 
 def berv_of(inst, header, from_header=None):
-    """Le BERV a appliquer a ce spectre, en km/s, tel que LBL le decide.
+    """The BERV to apply to this spectrum, in km/s, as LBL decides it.
 
-    PAS CELUI DE L'EN-TETE. La question n'est pas « quel etait le mouvement
-    barycentrique », que l'en-tete donne toujours, mais « reste-t-il a
-    l'appliquer », qui depend du format. Un t.fits de SPIRou est dans le
-    repere de l'observateur et il faut l'appliquer; un S2D de l'ESO porte
-    WAVEDATA_VAC_BARY, une grille DEJA corrigee, et l'appliquer une seconde
-    fois decale le spectre de tout le BERV.
+    NOT THE HEADER'S. The question is not "what was the barycentric motion",
+    which the header always gives, but "is it still to be applied", which
+    depends on the format. A SPIRou t.fits is in the observer frame and it
+    must be applied; an ESO S2D carries WAVEDATA_VAC_BARY, an ALREADY
+    corrected grid, and applying it a second time shifts the spectrum by the
+    whole BERV.
 
-    LBL a deja tranche, classe par classe: son get_berv lit l'en-tete pour
-    SPIRou et rend zero pour HARPS, HARPS-N, ESPRESSO et SOPHIE. On lui pose
-    donc la question plutot que d'y repondre, et le jour ou un format change
-    de convention c'est LBL qui le saura.
+    LBL has already settled this, class by class: its get_berv reads the
+    header for SPIRou and returns zero for HARPS, HARPS-N, ESPRESSO and
+    SOPHIE. So the question is put to it rather than answered here, and the
+    day a format changes convention, LBL is the one that will know.
 
-    Mesure le 2026-10-14 sur tau Ceti: en prenant le BERV de l'en-tete, les
-    poses au BERV le plus negatif sortaient a 1.3 et 4 km/s du groupe, et le
-    rms des vitesses de LBL etait de 1311 m/s.
+    Measured on 2026-10-14 on tau Ceti: taking the header's BERV, the
+    exposures at the most negative BERV came out 1.3 and 4 km/s away from
+    the group, and the rms of LBL's velocities was 1311 m/s.
     """
     try:
-        value = inst.get_berv(header)          # LBL rend des m/s
+        value = inst.get_berv(header)          # LBL returns m/s
     except Exception:                                          # noqa: BLE001
         value = None
     if value is None:
@@ -391,20 +394,20 @@ def file_observer_berv(config, path, inst=None):
 
 
 def flux_extension(path, flux):
-    """Le nom (ou le numero) de l'extension d'ou vient ce flux.
+    """The name (or the number) of the extension this flux comes from.
 
-    RENDRE LE SPECTRE CORRIGE DANS LE FORMAT D'ORIGINE. Le fichier corrige est
-    une copie de l'original dont on remplace le flux; encore faut-il savoir
-    quelle extension remplacer, et elle n'a pas le meme nom partout: FluxAB
-    sur un t.fits de SPIRou, SCIDATA sur un S2D de l'ESO. LBL ne la nomme pas:
-    sa classe par defaut appelle fits.getdata(fichier) sans extension, ce qui
-    rend la PREMIERE qui porte des donnees.
+    RETURN THE CORRECTED SPECTRUM IN THE ORIGINAL FORMAT. The corrected file
+    is a copy of the original whose flux is replaced; that still requires
+    knowing which extension to replace, and it does not have the same name
+    everywhere: FluxAB on a SPIRou t.fits, SCIDATA on an ESO S2D. LBL does not
+    name it: its default class calls fits.getdata(file) with no extension,
+    which returns the FIRST one that holds data.
 
-    On ne devine donc pas ce nom, on le RETROUVE: l'extension dont les donnees
-    ont la forme du flux lu, la premiere en partant du debut, exactement comme
-    astropy a choisi. Rend un nom quand il y en a un, sinon un numero, et None
-    si rien ne correspond, auquel cas l'appelant refuse d'ecrire plutot que
-    d'ecrire au mauvais endroit.
+    So this name is not guessed, it is FOUND AGAIN: the extension whose data
+    have the shape of the flux read, the first one from the start, exactly as
+    astropy chose. Returns a name when there is one, otherwise a number, and
+    None if nothing matches, in which case the caller refuses to write rather
+    than write in the wrong place.
     """
     from astropy.io import fits
 
@@ -494,10 +497,11 @@ def _blaze(inst, path, flux, header, model_dir):
 
 def read(path, instrument_name, data_source, config_file=None,
          model_dir=None, inst=None, to_observer=False):
-    """Un spectre, dans la forme que pca2d attend, quel que soit l'instrument.
+    """A spectrum, in the form pca2d expects, whatever the instrument.
 
-    Même dict que tfits.read_tfits: flux, wave, blaze, recon, sky, snr, meta.
-    `inst` évite de réinstancier la classe LBL à chaque fichier d'une campagne.
+    Same dict as tfits.read_tfits: flux, wave, blaze, recon, sky, snr, meta.
+    `inst` avoids re-instantiating the LBL class for every file of a
+    campaign.
     """
     from lbl.core import io as lbl_io                           # noqa: F401
 
@@ -512,14 +516,14 @@ def read(path, instrument_name, data_source, config_file=None,
     blaze = _blaze(inst, path, flux, header, model_dir)
 
     def key(name, default=None):
-        """Un mot-clé par son nom LBL, que chaque classe traduit pour son
-        instrument: KW_BERV est BERV sur APERO, HIERARCH ESO QC BERV sur ESO,
-        HIERARCH TNG QC BERV sur HARPS-N et HIERARCH OHP DRS BERV sur SOPHIE.
+        """A keyword by its LBL name, which each class translates for its
+        instrument: KW_BERV is BERV on APERO, HIERARCH ESO QC BERV on ESO,
+        HIERARCH TNG QC BERV on HARPS-N and HIERARCH OHP DRS BERV on SOPHIE.
 
-        UNE ENTREE PEUT ETRE UNE LISTE. ESPRESSO donne quatre mots-clés pour
-        la masse d'air, un par télescope unitaire du VLT, dont un seul est
-        rempli selon l'UT qui a observé: `header[liste]` lèverait. On prend
-        donc le premier qui est là (2026-10-14).
+        AN ENTRY CAN BE A LIST. ESPRESSO gives four keywords for the
+        airmass, one per VLT unit telescope, of which only one is filled,
+        depending on the UT that observed: `header[list]` would raise. So
+        the first one that is there is taken (2026-10-14).
         """
         try:
             wanted = inst.params[name]
@@ -536,20 +540,20 @@ def read(path, instrument_name, data_source, config_file=None,
         return default
 
     def plain(name, default=None):
-        """Un mot-clé par son nom FITS, sans passer par la table de LBL."""
+        """A keyword by its FITS name, without going through LBL's table."""
         try:
             return header[name]
         except Exception:                                       # noqa: BLE001
             return default
 
     def number(*candidates):
-        """Le premier des candidats qui est un nombre fini et non sentinelle.
+        """The first of the candidates that is a finite, non-sentinel number.
 
-        Un instrument qui n'a pas mesure quelque chose l'ecrit souvent par une
-        valeur convenue plutot que par un vide: -1 pour un seeing que l'ESO
-        n'a pas, -9999.9 pour un mat meteo en panne. La traiter comme un
-        nombre reviendrait a mettre un seeing negatif dans un diagnostic, donc
-        elle devient NaN, exactement comme dans tfits.read_tfits.
+        An instrument that did not measure something often writes it as an
+        agreed value rather than as a blank: -1 for a seeing that ESO does
+        not have, -9999.9 for a weather mast that is down. Treating it as a
+        number would mean putting a negative seeing into a diagnostic, so it
+        becomes NaN, exactly as in tfits.read_tfits.
         """
         for value in candidates:
             try:
@@ -564,76 +568,77 @@ def read(path, instrument_name, data_source, config_file=None,
         return np.nan
 
     airmass = key("KW_AIRMASS", 1.0)
-    # LE TEMPS ET LA POSE NE VIENNENT PAS DE LA TABLE DE LBL. Mesuré le
-    # 2026-10-14 sur un S2D HARPS: la classe HARPS fait pointer KW_MJDATE ET
-    # KW_EXPTIME sur le même mot-clé, HIERARCH ESO QC BJD, parce que LBL n'a
-    # besoin que d'un axe temporel et se moque de la durée de pose. pca2d s'en
-    # sert autrement: mjdate est une date MODIFIÉE et exptime pondère. Les
-    # vrais mots-clés sont là (MJD-OBS = 52859.31, EXPTIME = 60.0 s), donc on
-    # les lit d'abord et la table de LBL ne sert plus que de dernier recours.
+    # TIME AND EXPOSURE DO NOT COME FROM LBL'S TABLE. Measured on 2026-10-14
+    # on a HARPS S2D: the HARPS class points KW_MJDATE AND KW_EXPTIME at the
+    # same keyword, HIERARCH ESO QC BJD, because LBL only needs a time axis
+    # and does not care about the exposure time. pca2d uses them differently:
+    # mjdate is a MODIFIED date and exptime weights. The real keywords are
+    # there (MJD-OBS = 52859.31, EXPTIME = 60.0 s), so they are read first
+    # and LBL's table is only a last resort.
     mjd = number(plain("MJD-OBS"), key("KW_MJDATE"))
-    # un en-tête qui ne donne qu'un BJD: on le ramène en MJD plutôt que de
-    # laisser 2.45 millions de jours passer pour une date modifiée
+    # a header that gives only a BJD: it is brought back to an MJD rather
+    # than letting 2.45 million days pass for a modified date
     if np.isfinite(mjd) and mjd > 2.4e6:
         mjd -= 2400000.5
-    # LE MEME CONTRAT QUE read_tfits, cle pour cle. cube.py lit meta["bjd"],
-    # meta["berv"], meta["object"]... sans savoir d'ou vient le spectre: un
-    # dict incomplet ne provoque pas une lecture degradee mais un KeyError au
-    # milieu d'une campagne. Ce que l'en-tete ne porte pas vaut NaN, qui est
-    # la reponse honnete, et jamais une valeur inventee.
+    # THE SAME CONTRACT AS read_tfits, key for key. cube.py reads
+    # meta["bjd"], meta["berv"], meta["object"]... without knowing where the
+    # spectrum comes from: an incomplete dict does not cause a degraded read
+    # but a KeyError in the middle of a campaign. What the header does not
+    # carry is NaN, which is the honest answer, and never an invented value.
     bjd = number(key("KW_BJD"), key("KW_MJDATE"))
     if np.isfinite(bjd) and bjd < 1.0e6:
-        # un en-tete qui ne donne qu'un MJD: le BJD est a 2400000.5 pres, et
-        # l'ecart barycentrique (au plus 8 minutes) n'a pas de sens ici
+        # a header that gives only an MJD: the BJD is that plus 2400000.5,
+        # and the barycentric difference (at most 8 minutes) is not
+        # meaningful here
         bjd += 2400000.5
-    # LE REPERE DANS LEQUEL ON REND LE SPECTRE.
+    # THE FRAME IN WHICH THE SPECTRUM IS RETURNED.
     #
-    # LA REGLE EST CELLE DE LBL, ET ELLE EST UNIFORME. Chaque classe de LBL
-    # repond a une seule question par son get_berv: « que reste-t-il a
-    # appliquer pour atteindre le repere de l'etoile ». Un t.fits de SPIRou
-    # est dans le repere de l'observateur et la reponse est le BERV de
-    # l'en-tete; un S2D de l'ESO porte une grille deja barycentrique et la
-    # reponse est zero. LBL ne traite pas ces deux cas differemment ensuite:
-    # il appelle get_berv une fois (science/general.py, « instrument specific
-    # berv --> use instrument method ») et tout le reste est commun.
+    # THE RULE IS LBL'S, AND IT IS UNIFORM. Each LBL class answers a single
+    # question with its get_berv: "what is left to apply to reach the star
+    # frame". A SPIRou t.fits is in the observer frame and the answer is the
+    # header's BERV; an ESO S2D carries an already barycentric grid and the
+    # answer is zero. LBL does not treat these two cases differently
+    # afterwards: it calls get_berv once (science/general.py, "instrument
+    # specific berv --> use instrument method") and everything else is
+    # common.
     #
-    # pca2d donne a meta["berv"] EXACTEMENT ce sens-la, parce que c'est deja
-    # celui qu'il lui donnait: twoframe decale le repere de l'etoile de
-    # -pixel_shift(meta["berv"]). Passer par get_berv plutot que par l'en-tete
-    # n'ajoute donc aucune regle, il en retire une: pca2d n'a plus a savoir
-    # quel instrument livre quel repere, LBL le sait pour lui.
+    # pca2d gives meta["berv"] EXACTLY that meaning, because it is already
+    # the one it gave it: twoframe shifts the star frame by
+    # -pixel_shift(meta["berv"]). Going through get_berv rather than through
+    # the header therefore adds no rule, it removes one: pca2d no longer has
+    # to know which instrument delivers which frame, LBL knows it for it.
     #
-    # CE QUE `to_observer` CHANGE, ET CE QU'IL NE CHANGE PAS. Verifie le
-    # 2026-10-15 au pixel: avec ou sans, la raie stellaire tombe a la MEME
-    # longueur d'onde (380.455648 nm sur la premiere pose de tau Ceti), donc
-    # le repere de l'ETOILE est le meme et la physique est inchangee. Ce qui
-    # change est le repere de l'OBSERVATEUR: sans l'option il est la grille
-    # barycentrique, la meme pour toutes les poses, et le bloc observateur du
-    # modele n'a alors rien a quoi s'accrocher; avec, il est le repere reel du
-    # telescope, et les deux blocs redeviennent distinguables. C'est une
-    # option de l'AJUSTEMENT, pas de la lecture.
-    # LE BERV DE L'OBSERVATEUR, tel que le profil de LBL le donne
-    #   (observer_berv: get_berv + get_berv_transmission), pour le repere de
-    #   l'observateur et la ligne verte des river plots; jamais lu ici dans
-    #   l'en-tete par une liste de mots-cles a nous
+    # WHAT `to_observer` CHANGES, AND WHAT IT DOES NOT. Checked on 2026-10-15
+    # to the pixel: with or without it, the stellar line falls at the SAME
+    # wavelength (380.455648 nm on the first exposure of tau Ceti), so the
+    # STAR frame is the same and the physics is unchanged. What changes is
+    # the OBSERVER frame: without the option it is the barycentric grid, the
+    # same for all exposures, and the model's observer block then has nothing
+    # to hold on to; with it, it is the actual frame of the telescope, and
+    # the two blocks become distinguishable again. It is an option of the
+    # FIT, not of the reading.
+    # THE OBSERVER'S BERV, as LBL's profile gives it
+    #   (observer_berv: get_berv + get_berv_transmission), for the observer
+    #   frame and the green line of the river plots; never read here from
+    #   the header through a keyword list of our own
     obs_berv = observer_berv(inst, header)
     berv = berv_of(inst, header, number(key("KW_BERV")))
     if to_observer:
         if not np.isfinite(obs_berv):
             raise ValueError(
-                "%s: input.to_observer demande de defaire la correction"
-                " barycentrique, mais le profil de LBL ne donne pas de BERV"
+                "%s: input.to_observer asks to undo the barycentric"
+                " correction, but LBL's profile gives no BERV"
                 % os.path.basename(path))
         if berv not in (0.0,):
-            # le fichier est deja dans le repere de l'observateur: il n'y a
-            # rien a defaire, et le refaire decalerait tout
+            # the file is already in the observer frame: there is nothing
+            # to undo, and redoing it would shift everything
             pass
         else:
-            # lambda_observateur = lambda_bary / doppler(BERV), relativiste
+            # lambda_observer = lambda_bary / doppler(BERV), relativistic
             wave = wave / _doppler(obs_berv)
             berv = float(obs_berv)
-    # le debut et la fin de pose n'ont pas de nom chez LBL: on les cherche
-    # sous les graphies connues, et a defaut la masse d'air qu'il donne
+    # the start and end of the exposure have no name in LBL: they are looked
+    # for under the known spellings, and failing that the airmass it gives
     air_start = number(plain("HIERARCH ESO TEL AIRM START"),
                        plain("HIERARCH TNG TEL AIRM START"),
                        plain("HIERARCH OHP TEL AIRM START"),
@@ -667,13 +672,13 @@ def read(path, instrument_name, data_source, config_file=None,
         "data_source": str(data_source),
     }
     meta["drsobjn"] = meta["object"]
-    # LA TRANSMISSION N'EST JAMAIS None. order_quality et _order_sigma
-    # l'indexent comme un tableau: un None les ferait planter, et la rendre
-    # optionnelle partout en aval reviendrait a semer des `if` pour une
-    # situation qui a une reponse honnete. Sans modele, on declare une
-    # transmission de 1, c'est-a-dire « aucune absorption connue ici »: les
-    # coupures qui en dependent ne retirent alors rien, au lieu de retirer
-    # n'importe quoi. Le rapport d'une campagne dit laquelle des deux.
+    # THE TRANSMISSION IS NEVER None. order_quality and _order_sigma index it
+    # as an array: a None would make them crash, and making it optional
+    # everywhere downstream would mean scattering `if`s for a situation that
+    # has an honest answer. Without a model, a transmission of 1 is declared,
+    # that is "no known absorption here": the cuts that depend on it then
+    # remove nothing, instead of removing anything at all. A campaign's
+    # report says which of the two.
     recon = (tapas_transmission(inst, wave, model_dir, meta["airmass"])
              if model_dir else None)
     meta["telluric_model"] = "tapas" if recon is not None else "none"
@@ -684,26 +689,26 @@ def read(path, instrument_name, data_source, config_file=None,
                 snr=order_snr(flux), meta=meta)
 
 
-#: ce qu'un en-tete ecrit quand la mesure n'a pas eu lieu, et qui doit devenir
-#: NaN plutot que passer pour un nombre. Les trois premieres sont celles de
-#: tfits.read_tfits (le mat meteo du CFHT); -1 est celle de l'ESO pour un
-#: seeing absent, vue le 2026-10-14 sur un S2D HARPS.
+#: what a header writes when the measurement did not take place, and which
+#: must become NaN rather than pass for a number. The first three are those
+#: of tfits.read_tfits (the CFHT weather mast); -1 is ESO's for a missing
+#: seeing, seen on 2026-10-14 on a HARPS S2D.
 SENTINELS = (-9999.0, -9999.9, -999.0, -1.0)
 
 
-#: les instruments que pca2d lit avec son propre lecteur, parce que les t.fits
-#: d'APERO portent des choses que LBL ne rend pas (le ciel dans OHLine, la
-#: transmission dans Recon, le SNR par ordre dans l'en-tete) et que ce lecteur
-#: les exploite. Tout le reste passe par LBL.
+#: the instruments that pca2d reads with its own reader, because APERO's
+#: t.fits carry things that LBL does not return (the sky in OHLine, the
+#: transmission in Recon, the SNR per order in the header) and this reader
+#: makes use of them. Everything else goes through LBL.
 NATIVE = ("SPIROU", "NIRPS", "NIRPS_HA", "NIRPS_HE")
 
 
 def reads_natively(config):
-    """Faut-il lire ces spectres avec tfits, ou passer par LBL ?
+    """Should these spectra be read with tfits, or go through LBL?
 
-    APERO est lu nativement (le t.fits porte le ciel et la transmission);
-    HARPS, SOPHIE, ESPRESSO et les autres passent par LBL. `input.reader`
-    tranche quand on veut forcer l'un ou l'autre.
+    APERO is read natively (the t.fits carries the sky and the
+    transmission); HARPS, SOPHIE, ESPRESSO and the others go through LBL.
+    `input.reader` decides when one or the other is to be forced.
     """
     asked = str((config.get("input") or {}).get("reader") or "auto").lower()
     if asked in ("tfits", "native"):
@@ -712,7 +717,7 @@ def reads_natively(config):
         return False
     instrument = str((config.get("input") or {}).get("instrument") or "").upper()
     source = str((config.get("lbl") or {}).get("data_source") or "").upper()
-    # un t.fits d'APERO: notre lecteur en tire plus que LBL n'en donne
+    # an APERO t.fits: our reader draws more from it than LBL gives
     return instrument in NATIVE and source in ("", "APERO", "CADC")
 
 
@@ -756,12 +761,12 @@ def star_frame(payload, config, path=None):
 
 
 def read_any(path, config, inst=None):
-    """Un spectre, par le lecteur que la configuration designe, dans le
-    repere de l'etoile que la configuration designe (star_frame).
+    """A spectrum, by the reader the configuration names, in the star frame
+    the configuration names (star_frame).
 
-    C'est le seul point ou pca2d decide comment lire: cube, reconstruct et
-    plotting passent par ici, donc ajouter un instrument ne touche qu'a
-    `reads_natively`.
+    This is the only place where pca2d decides how to read: cube,
+    reconstruct and plotting go through here, so adding an instrument only
+    touches `reads_natively`.
     """
     return star_frame(_read_any(path, config, inst), config, path)
 
