@@ -39,6 +39,7 @@ from __future__ import annotations
 import os
 
 import numpy as np
+from astropy import constants
 
 from .grids import doppler
 from .logger import log
