@@ -210,3 +210,28 @@ also, naming a function 'lbl' inside pca2d that is itself a module of LBL is jus
 
 
 lbltemplate inside pca2d ... this is über confusing as there is a template inside the main LBL code. Make the disctinction much more clear. Use the lbl template itself ideally
+
+tfits inside the pca2d should be done at the io leve for the main code, there's no point having two ways of reading files at two locations in code.
+
+In writing a report, read user setup to decide on the page format
+
+Make an explicit subset of codes for the reports. You have rvpages mixed with stuff linked to the arithmetics of PCA2d
+
+We should not need a bridge such as 'readers' when LBL does it. Things inside pca2d should be seeing the same as bits outside
+
+Bits such as 'freeze' are useless, see this comment:
+"""Load every module of the package NOW. Returns the source fingerprint.
+
+    A stage imports what it needs when it starts, and a run lasts hours. On
+    2026-09-16 the code was edited while a joint run was fitting: config.py had
+    been loaded at 10:06, lbl.py was loaded for the first time at 10:52, and
+    the new lbl.py asked the old config.py for a function it did not have. The
+    run died at the LBL stage with a traceback whose lines did not match its
+    line numbers, since Python prints the file as it is on disk NOW.
+
+    Loaded together at the start, the run is one version of the code from its
+    first line to its last, whatever happens on disk meanwhile. About a second
+    for the package's forty modules. A module that fails to load here is left
+    to fail where it is used, as it did before.
+    """
+    ...this is just because we were debugging!

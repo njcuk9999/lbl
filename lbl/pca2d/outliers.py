@@ -1,0 +1,839 @@
+"""Samples the model leaves unexplained, found and set to NaN.
+
+What panel 5 of the report's sequence figure shows, the data less everything
+the fit models (the star block, the observer block and the parity offset), is
+noise where the model is right and something else where it is not: a cosmic
+ray the MAD cut let through, a hot pixel, a sky residual. Against the noise
+around it, measured where it is, a sample far outside that noise is not a
+measurement of the star, and a corrected file is better without it.
+
+    running_stats      the local median and robust sigma (1.4826 MAD) of each
+                       row, in boxes as wide as the high pass (highpass.window)
+    clip               NaN wherever a value is more than nsig of them away
+    residual_outliers  the same on the fit's own residual, per exposure, as
+                       the (even, odd) grid mask the correct stage applies
+
+The corrected files take it through reconstruct's NaN mask, beside the samples
+the fit gave no weight, when correct.nsig_cut is set in config.yaml; null
+leaves every sample in.
+
+A SAMPLE IS THE WRONG UNIT. One sample beyond 3 sigma is not an event: 0.27%
+of pure noise is, and 1% of these residuals were, which is what asking for
+correct.nsig_cut 3 threw away (2026-09-25). What is not noise is a run of
+samples leaning the same way, a bump as wide as a line rather than a spike, so
+the unit is the EXCURSION: every window from one sample up to
+correct.excursion_elements resolution elements, each judged by the aggregate
+significance of its sum,
+
+    Z(w) = |sum of z over the window| / sqrt(V(w))
+
+and flagged, with every sample in it, when Z is beyond correct.excursion_nsig.
+Six sigma there is not six sigma on one sample: four samples at three sigma
+each make six when the noise is independent, which is the point.
+
+V(w) IS MEASURED, NEVER w. The grid oversamples the spectrograph on purpose
+(0.5 km/s against a SPIRou pixel of 2.3 and a resolution element of 4.3), and
+the Lanczos registration and the high pass correlate neighbours further, so
+neighbouring samples are anything but independent and sqrt(w) would inflate
+every excursion into a detection. The exact variance of a sum of w correlated
+samples is
+
+    V(w) = w + 2 * sum over k of (w - k) * rho_k
+
+with rho_k the autocorrelation of the residual at lag k, measured on the run's
+own cube by noise_correlation. On TOI-2120 (SPIRou, 0.5 km/s) rho_1 is about
+0.9, so V(17) is near 90 rather than 17: a window of two resolution elements
+holds about three independent measurements, not seventeen.
+
+    window_variance     V(w) from the measured rho
+    noise_correlation   rho_k of the residual, from the cube and the fit
+    excursions          the mask of every window whose Z is beyond the threshold
+
+ONE COLUMN, ACROSS THE EXPOSURES. The same z also says, column by column in
+the OBSERVER's frame, how the exposures agree there. A column where too many
+of them are flagged AND whose survivors still carry more variance than noise
+is a column the model cannot describe in any exposure: a detector defect, a
+telluric line the correction does not reach, a sky residual that stands still.
+It goes for every exposure rather than for the few that happened to be caught.
+
+    frac    the fraction of exposures flagged in that column, > correct.column_frac
+    chi2    the reduced chi2 of the SURVIVORS, > correct.column_chi2
+
+Both, not either. What each threshold means, measured rather than assumed
+(scratchpad/null_chi2.py, 4096 columns of 321 rows of pure Gaussian noise, at
+the 3 sigma per-sample clip): the survivors' reduced chi2 is 0.973, not 1,
+because the clip takes the tails with it (expected_chi2 below is the closed
+form). Its median over columns was 0.979 and its highest 1.271, so 1.5 is well
+clear of noise. The clipped fraction reached 2.2% at most, so the 10% of
+column_frac cannot be met by noise alone: it is what keeps a column with a
+handful of genuinely bad exposures, whose survivors are clean, from being
+thrown away whole.
+"""
+
+from __future__ import annotations
+
+import math
+import os
+import warnings
+
+import numpy as np
+
+from .grids import pixel_shift
+
+#: the light speed the resolution element is measured with, km/s
+C_KMS = 299792.458
+
+
+def expected_chi2(nsig):
+    """E[z^2] of what survives a clip at `nsig`, for unit Gaussian noise.
+
+    The number the column test's threshold is measured against: clipping
+    removes the tails, so the survivors of a 3 sigma clip carry 0.973 and not
+    1. A threshold below this would throw away pure noise.
+    """
+    a = float(nsig)
+    phi = math.exp(-0.5 * a * a) / math.sqrt(2.0 * math.pi)
+    inside = math.erf(a / math.sqrt(2.0))
+    return (inside - 2.0 * a * phi) / inside
+
+
+def element_samples(resolution, dv, elements=1.0):
+    """How many grid samples `elements` resolution elements cover.
+
+    One element is c/R km/s wide, 4.28 for R = 70000, and the grid step is
+    dv: at 0.5 km/s that is 8.6 samples, and two elements 17.
+    """
+    return max(1, int(round(float(elements) * (C_KMS / float(resolution))
+                            / float(dv))))
+
+
+def window_variance(width, rho):
+    """The variance of the sum of `width` consecutive samples of unit variance
+    whose autocorrelation is `rho` (rho[0] is lag 1).
+
+        V(w) = w + 2 * sum over k < w of (w - k) * rho_k
+
+    With rho all zero this is w, the independent case, and sqrt(V) is what an
+    excursion's sum must be divided by to become a significance.
+    """
+    w = int(width)
+    v = float(w)
+    for k in range(1, min(w, len(rho) + 1)):
+        v += 2.0 * (w - k) * float(rho[k - 1])
+    return max(v, 1e-6)
+
+
+def coherent_bias(mean, count, width, rho, min_rows=10):
+    """(le Z du residu MOYEN sur les poses, colonne par colonne et sur `width`).
+
+    Le troisieme axe, et le seul que ni la coupure ni l'exces de dispersion ne
+    peuvent voir (2026-09-26). clip_weights compare chaque pose aux AUTRES
+    POSES a la meme longueur d'onde, donc un residu present dans toutes les
+    poses n'est aberrant pour aucune: sur la bande O2 a 1267 nm son |z| median
+    reste a 0.67, comme sur une region temoin. La coupure locale en lambda ne
+    le voit pas non plus tant qu'il reste sous son seuil dans chaque pose.
+
+    Ce qui le revele est la MOYENNE sur les poses: l'etoile se deplace avec le
+    BERV et s'y moyenne, ce qui est ancre dans le referentiel de l'observateur
+    s'y ajoute. Avec N poses la moyenne gagne sqrt(N) = 17.8 contre le bruit,
+    donc un biais de 0.2 sigma ressort a 3.5.
+
+        Z(j) = |somme de la moyenne sur la fenetre| / sqrt(V(w) / N)
+
+    avec V(w) la variance mesuree d'une somme de w echantillons correles
+    (window_variance) et N le nombre de poses de la colonne. Chaque colonne de
+    la fenetre porte le verdict de la fenetre, donc une region sort entiere.
+
+    Sur TOI-2120: 21.9% du domaine au-dela de 3 sigma, 2.8% au-dela de 10, et
+    les pires regions sont 1761, 1803, 1805 et 1764-1769 nm (methane et eau
+    vers 1.76-1.81 um), larges de 35 a 51 echantillons, soit 4 a 6 elements de
+    resolution: des raies entieres mal corrigees, pas des accidents.
+    """
+    mean = np.atleast_2d(np.asarray(mean, dtype=float))
+    count = np.atleast_2d(np.asarray(count))
+    rows, m = mean.shape
+    w = max(1, int(width))
+    ok = count >= int(min_rows)
+    out = np.zeros((rows, m))
+    variance = window_variance(w, rho)
+    for p in range(rows):
+        good = ok[p]
+        if not good.any():
+            continue
+        filled = np.where(good, mean[p], 0.0)
+        csum = np.concatenate([[0.0], np.cumsum(filled)])
+        cnum = np.concatenate([[0], np.cumsum(good.astype(int))])
+        took = cnum[w:] - cnum[:-w]
+        total = csum[w:] - csum[:-w]
+        rooms = np.where(good, count[p], 10 ** 9)
+        least = np.minimum.reduce([rooms[i:m - w + 1 + i] for i in range(w)])
+        sd = np.sqrt(variance / np.maximum(least, 1))
+        here = np.where((took == w) & (sd > 0), np.abs(total) / sd, 0.0)
+        for k in range(w):
+            span = slice(k, k + m - w + 1)
+            out[p, span] = np.maximum(out[p, span], here)
+    return out
+
+
+def excess_rms(chi2, count, width, length, min_rows=10):
+    """(the windowed chi2 of each column, the significance of its excess over 1).
+
+    A leftover anchored in the observer's frame need not have one sign, but it
+    always has SCATTER the noise does not account for: chi2(j), the mean of
+    z^2 over the exposures at that column, above 1. Averaged over a window of
+    `width` columns, that average has an uncertainty of
+
+        sqrt(2 / (N * width / length))
+
+    with N the exposures the column has and `length` the correlation length of
+    the residual in samples (1 + 2 sum rho), since a window of 17 samples on
+    this grid holds about 4.7 independent columns and not 17. Every column of
+    a window carries that window's verdict, so a region comes out whole.
+    """
+    chi2 = np.atleast_2d(np.asarray(chi2, dtype=float))
+    count = np.atleast_2d(np.asarray(count))
+    rows, m = chi2.shape
+    w = max(1, int(width))
+    ok = count >= int(min_rows)
+    windowed = np.zeros((rows, m))
+    sigma = np.zeros((rows, m))
+    for p in range(rows):
+        good = ok[p]
+        if not good.any():
+            continue
+        filled = np.where(good, chi2[p], 0.0)
+        csum = np.concatenate([[0.0], np.cumsum(filled)])
+        cnum = np.concatenate([[0], np.cumsum(good.astype(int))])
+        took = cnum[w:] - cnum[:-w]
+        mean = np.divide(csum[w:] - csum[:-w], took,
+                         out=np.zeros(m - w + 1), where=took > 0)
+        rooms = np.where(good, count[p], 10 ** 9)
+        least = np.minimum.reduce([rooms[i:m - w + 1 + i] for i in range(w)])
+        independent = np.maximum(took / max(float(length), 1.0), 1.0)
+        sd = np.sqrt(2.0 / np.maximum(least * independent, 1.0))
+        for k in range(w):
+            here = slice(k, k + m - w + 1)
+            windowed[p, here] = np.maximum(windowed[p, here], mean)
+            sigma[p, here] = np.maximum(sigma[p, here], sd)
+    excess = np.divide(windowed - 1.0, sigma, out=np.zeros((rows, m)),
+                       where=sigma > 0)
+    return windowed, excess
+
+
+def autocorrelation(z, lags, clip_at=5.0):
+    """rho_1..rho_lags of rows of z, ignoring NaN and anything beyond clip_at.
+
+    Measured on the residual itself, because what correlates neighbouring
+    samples is the grid's oversampling, the Lanczos registration and the high
+    pass together, and no formula for the three is worth trusting over the
+    thing they did. The excursions themselves are left out (clip_at), so this
+    is the correlation of the NOISE and not of what is being looked for.
+    """
+    z = np.atleast_2d(np.asarray(z, dtype=float))
+    good = np.isfinite(z) & (np.abs(z) <= float(clip_at))
+    x = np.where(good, z, 0.0)
+    out = []
+    var = float((x * x).sum())
+    pairs = float(good.sum())
+    if not var or not pairs:
+        return [0.0] * int(lags)
+    for k in range(1, int(lags) + 1):
+        both = good[:, :-k] & good[:, k:]
+        if not both.any():
+            out.append(0.0)
+            continue
+        a, b = x[:, :-k][both], x[:, k:][both]
+        # normalised by the variance of the samples that enter the product, so
+        # rho_0 is 1 by construction whatever was thrown out
+        norm = math.sqrt(float((a * a).sum()) * float((b * b).sum()))
+        out.append(float((a * b).sum() / norm) if norm else 0.0)
+    return out
+
+
+def excursions(z, widths, rho, nsig):
+    """The mask of every sample inside a window whose aggregate Z is beyond nsig.
+
+    `z` is (rows, columns), `widths` the window lengths in samples, in
+    ascending order; a window is judged only where all of its samples were
+    measured. Every sample of a flagged window is flagged, which is why a wide
+    excursion comes out as the band it is rather than as its centre.
+    """
+    z = np.atleast_2d(np.asarray(z, dtype=float))
+    n, m = z.shape
+    finite = np.isfinite(z)
+    filled = np.where(finite, z, 0.0)
+    zero = np.zeros((n, 1))
+    csum = np.concatenate([zero, np.cumsum(filled, axis=1)], axis=1)
+    cfin = np.concatenate([zero, np.cumsum(finite, axis=1)], axis=1)
+    out = np.zeros((n, m), dtype=bool)
+    for w in widths:
+        w = int(w)
+        if w < 1 or w > m:
+            continue
+        limit = float(nsig) * math.sqrt(window_variance(w, rho))
+        total = csum[:, w:] - csum[:, :-w]
+        count = cfin[:, w:] - cfin[:, :-w]
+        hit = (count == w) & (np.abs(total) > limit)
+        if not hit.any():
+            continue
+        # every sample covered by a flagged window: a start in [i - w + 1, i]
+        starts = np.zeros((n, m), dtype=np.int32)
+        starts[:, :m - w + 1] = hit
+        run = np.cumsum(starts, axis=1)
+        covered = run.copy()
+        covered[:, w:] -= run[:, :-w]
+        out |= covered > 0
+    return out
+
+
+def _nanmedian_rows(boxes):
+    """np.nanmedian(boxes, axis=1), by bottleneck when it is there: the same
+    values to the bit (NaN where a row has none, the mean of the two middle
+    values for an even count), without the masked-array sort numpy takes for
+    small arrays. running_stats calls it thousands of times per correction,
+    which was 25 of the 36 s of residual_outliers on Welopoai's cube."""
+    try:
+        import bottleneck
+    except ImportError:                                       # pragma: no cover
+        return np.nanmedian(boxes, axis=1)
+    return bottleneck.nanmedian(boxes, axis=1)
+
+
+def running_stats(values, window, step=None, min_valid=0.5, origin=0):
+    """(local median, robust sigma) of `values` along its last axis.
+
+    The median and 1.4826 times the median absolute deviation about it, in
+    boxes of `window` samples centred every `step` (window // 4 by default) and
+    interpolated linearly in between. NaN are ignored; a box with fewer than
+    `min_valid` of its samples finite gives no estimate, and its neighbours'
+    are carried across it. Robust on purpose: the statistic has to describe
+    the noise around an outlier, not be pulled by it. `origin` is the index of
+    the first sample in a longer array: the box centres sit at multiples of
+    `step` of that array, so a slice of it gets the same boxes as the whole.
+    """
+    x = np.atleast_2d(np.asarray(values, dtype=float))
+    n, m = x.shape
+    window = int(window) | 1
+    half = window // 2
+    step = max(1, int(step) if step else window // 4)
+    centres = np.unique(np.r_[0, np.arange((-int(origin)) % step, m, step), m - 1])
+    med = np.full((n, m), np.nan)
+    sig = np.full((n, m), np.nan)
+    index = np.arange(m)
+    pad = np.full(half, np.nan)
+    for r in range(n):
+        boxes = np.lib.stride_tricks.sliding_window_view(
+            np.concatenate([pad, x[r], pad]), window)[centres]
+        count = np.isfinite(boxes).sum(axis=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            mc = _nanmedian_rows(boxes)
+            sc = 1.4826 * _nanmedian_rows(np.abs(boxes - mc[:, None]))
+        ok = (count >= min_valid * window) & np.isfinite(sc) & (sc > 0)
+        if ok.sum() < 2:
+            continue
+        med[r] = np.interp(index, centres[ok], mc[ok])
+        sig[r] = np.interp(index, centres[ok], sc[ok])
+    shape = np.shape(values)
+    return med.reshape(shape), sig.reshape(shape)
+
+
+def clip(values, window, nsig, **kwargs):
+    """(values with NaN where they sit beyond nsig robust sigma of the local
+    median, the mask of what was set to NaN)."""
+    values = np.asarray(values, dtype=float)
+    med, sig = running_stats(values, window, **kwargs)
+    with np.errstate(invalid="ignore"):
+        cut = np.abs(values - med) > float(nsig) * sig
+    cut &= np.isfinite(values) & np.isfinite(sig)
+    return np.where(cut, np.nan, values), cut
+
+
+def _pieces(cube, fit, window):
+    """What every pass over a cube's residual needs, read once."""
+    from .twoframe import (cube_grid, load_cube, row_parity)
+    m = np.asarray(cube_grid(cube)).size
+    _, _, w1, meta = load_cube(cube, dtype=np.float32, columns=np.arange(0, 1))
+    n = w1.shape[0]
+    if len(fit["berv"]) != n:
+        raise SystemExit("the fit has %d rows and the cube %d: it was not made on"
+                         " this cube" % (len(fit["berv"]), n))
+    delta = -pixel_shift(np.asarray(fit["berv"], dtype=float), float(fit["dv"]))
+    reach = int(np.ceil(np.abs(delta).max())) + 2
+    window = int(window) | 1
+    return dict(n=n, m=m, meta=meta, parity=row_parity(meta, n) % 2,
+                names=[os.path.basename(str(v)) for v in meta["filename"]],
+                delta=delta, reach=reach, window=window,
+                margin=reach + 16 + window)
+
+
+#: A STAR WHOSE SPECTRUM IS ANOTHER STAR'S TEMPLATE (OBJECT_COMPARISON, an
+#: appaired or vetted template) differs from it by what the two stars do
+#: not share, metallicity first: line depths off by a few percent, the same
+#: in every exposure, still in the star's frame. Expected, and not a defect:
+#: the rejection takes it out before testing (star_static), where it was
+#: clipped sample by sample and, summed over the exposures by the
+#: star-frame bias test, masked whole lines (2026-10-24). Estimated on the
+#: samples clear of tellurics only (transmission at least STATIC_CLEAR), so
+#: that a telluric residual standing still in both frames at a narrow BERV
+#: is never taken for the star's, and only where at least STATIC_SHARE of
+#: the star's exposures (and STATIC_LEAST of them) saw the column clear.
+STATIC_CLEAR = 0.95
+STATIC_SHARE = 0.3
+STATIC_LEAST = 5
+
+
+def _sample_at(values, positions):
+    """Linear interpolation of rows of `values` at `positions` (same shape),
+    NaN outside or where a neighbour is NaN."""
+    width = values.shape[-1]
+    i0 = np.floor(positions).astype(int)
+    frac = positions - i0
+    inside = (i0 >= 0) & (i0 < width - 1)
+    i0c = np.clip(i0, 0, width - 2)
+    rows = np.arange(values.shape[0])[:, None]
+    left = values[rows, i0c]
+    right = values[rows, i0c + 1]
+    out = left * (1.0 - frac) + right * frac
+    return np.where(inside, out, np.nan)
+
+
+def star_static(resid, delta, tgroup, external, trans=None):
+    """The static residual, in the star's frame, of each star spectrum that is
+    another star's template: (groups, columns), 0 where it is not known.
+
+    `resid` is every row's residual (rows, columns), `delta` each row's
+    shift (star column j is the row's column j + delta), `tgroup` each row's
+    star-spectrum group and `external` which groups are another star's
+    template. The median over the group's rows of each row's residual
+    carried to the star's frame, on its telluric-clear samples only.
+    """
+    n, width = resid.shape
+    out = np.zeros((len(external), width))
+    x = np.arange(width, dtype=float)
+    for g in np.flatnonzero(np.asarray(external, dtype=bool)):
+        rows = np.flatnonzero(np.asarray(tgroup) == g)
+        if rows.size < STATIC_LEAST:
+            continue
+        clear = np.asarray(resid[rows], dtype=float)
+        if trans is not None:
+            clear = np.where(np.asarray(trans[rows]) >= STATIC_CLEAR, clear,
+                             np.nan)
+        carried = _sample_at(clear, x[None, :] + np.asarray(delta)[rows, None])
+        count = np.isfinite(carried).sum(axis=0)
+        with np.errstate(all="ignore"), warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            median = np.nanmedian(carried, axis=0)
+        enough = count >= max(STATIC_LEAST, STATIC_SHARE * rows.size)
+        out[g] = np.where(enough & np.isfinite(median), median, 0.0)
+    return out
+
+
+def take_static(resid, static, delta, tgroup, external):
+    """`resid` less each row's static residual (star_static), carried back
+    to the row's frame; in place, and returned."""
+    x = np.arange(resid.shape[1], dtype=float)
+    for g in np.flatnonzero(np.asarray(external, dtype=bool)):
+        rows = np.flatnonzero(np.asarray(tgroup) == g)
+        if not rows.size or not np.any(static[g]):
+            continue
+        back = _sample_at(np.broadcast_to(static[g], (rows.size, static.shape[1])),
+                          x[None, :] - np.asarray(delta)[rows, None])
+        resid[rows] -= np.nan_to_num(back)
+    return resid
+
+
+def scaled_z(resid, sigma, window, origin=0):
+    """A residual in sigmas: each sample divided by its own photon sigma,
+    then that ratio by its local robust sigma (running_stats over `window`
+    samples), about its local median. Where the photon sigmas are right,
+    the local scale is 1 and the z is the sample's own; where they are all
+    off by a factor, the scale takes it out. A sample with no sigma is NaN."""
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ratio = np.asarray(resid, dtype=float) / np.asarray(sigma, dtype=float)
+    med, sig = running_stats(ratio, window, origin=origin)
+    with np.errstate(invalid="ignore"):
+        return (ratio - med) / sig
+
+
+def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
+               columns=None):
+    """Yield the residual's z, chunk by chunk: (rows, c0, c1, inner, z).
+
+    The residual is panel 5's: the cube less the star block carried into each
+    row's frame, the star-frame means if the fit has them, the observer block
+    and the parity offset, NaN where the fit gave no weight. EACH SAMPLE IS
+    DIVIDED BY ITS OWN PHOTON SIGMA first, then the whole by the local robust
+    sigma of that ratio (running_stats over `window` samples), so what comes
+    out is comparable from one exposure and one wavelength to the next AND
+    within a line: the core of a deep line has fewer photons and a larger
+    sigma of its log flux. Divided by the running sigma alone, which the
+    continuum around it sets, the core of Na D (5% of the continuum) came out
+    at 4 to 5 sigmas in every exposure of GJ 229 and was masked
+    (2026-10-23). The running sigma is now a scale only: where the photon
+    sigmas are right it is 1. The cube is read `block` columns at a time, each with a margin
+    covering the largest shift, the Lanczos kernel and half the window, so
+    every column comes out as from the whole cube; `block=None` reads it whole,
+    and `blocks` stops after that many (for a measurement rather than a pass).
+    `columns` restricts the pass to a (first, last) range of the grid, which is
+    what a figure of one window needs.
+
+    A star whose spectrum is another star's template (the fit's
+    `external_parities`: its rows, by their `parity`, 2 x member + parity)
+    has its static mismatch to it taken out of the residual first
+    (star_static): expected, it is not tested.
+    """
+    from .twoframe import (LanczosShifter, carried_means, fit_means,
+                           fit_templates, load_cube, star_model)
+    part = _pieces(cube, fit, window)
+    n, m = part["n"], part["m"]
+    P, a = np.asarray(fit["P"], dtype=float), np.asarray(fit["a"], dtype=float)
+    Q, b = np.asarray(fit["Q"], dtype=float), np.asarray(fit["b"], dtype=float)
+    means, group = fit_means(fit, part["meta"], n, m)
+    T, tgroup = fit_templates(fit, part["meta"], n, m)
+    files = list(getattr(fit, "files", []) or getattr(fit, "keys", lambda: [])())
+    # the rows whose star is another star's template, grouped by member and
+    #   parity: the star spectrum is in P (n_star = 1, a coefficient of 1),
+    #   not in the star-frame means, so the rows are found by their parity
+    sgroup, external = np.zeros(n, dtype=int), np.zeros(1, dtype=bool)
+    if "external_parities" in files and "parity" in files \
+            and len(fit["parity"]) == n:
+        parity_rows = np.asarray(fit["parity"], dtype=int)
+        kinds = np.unique(parity_rows)
+        sgroup = np.searchsorted(kinds, parity_rows)
+        external = np.isin(kinds, np.asarray(fit["external_parities"],
+                                             dtype=int))
+    step = m if block is None else int(block)
+    done = 0
+    first, last = (0, m) if columns is None else (max(0, int(columns[0])),
+                                                 min(m, int(columns[1])))
+    for c0 in range(first, last, step):
+        if blocks is not None and done >= int(blocks):
+            return
+        done += 1
+        c1 = min(c0 + step, last)
+        a0, b0 = max(0, c0 - part["margin"]), min(m, c1 + part["margin"])
+        _, data, w, _, noise, trans = load_cube(
+            cube, dtype=np.float32, columns=np.arange(a0, b0),
+            with_sigma=True, with_trans=True)
+        shifter = LanczosShifter(b0 - a0, a=8, max_shift=part["reach"])
+        Tf = shifter.prepare(T[:, a0:b0]) if np.any(T[:, a0:b0]) else None
+        inner = slice(c0 - a0, c1 - a0)
+        # every row's residual first: the static mismatch of a star measured
+        #   against another star's template is a median over its rows
+        resid = np.empty((n, b0 - a0), dtype=np.float32)
+        for start in range(0, n, chunk):
+            stop = min(start + chunk, n)
+            rows = slice(start, stop)
+            model = star_model(P[:, a0:b0], a[rows], shifter,
+                               part["delta"][rows], stop - start, b0 - a0)
+            if Tf is not None:
+                model += carried_means(Tf, tgroup, shifter, part["delta"],
+                                       start, stop)
+            model += b[rows] @ Q[:, a0:b0]
+            model += means[:, a0:b0][group[rows]]
+            resid[rows] = np.where(w[rows] > 0, data[rows] - model, np.nan)
+        if external.any():
+            static = star_static(resid, part["delta"], sgroup, external, trans)
+            take_static(resid, static, part["delta"], sgroup, external)
+        for start in range(0, n, chunk):
+            stop = min(start + chunk, n)
+            z = scaled_z(resid[start:stop], noise[start:stop], part["window"],
+                         origin=a0)
+            yield (start, stop), c0, c1, inner, z
+        del data, w, noise, trans, resid
+
+
+def noise_correlation(cube, fit, window, lags, blocks=1, chunk=16, clip_at=5.0):
+    """The residual's rho_1..rho_lags, measured on the run's own cube.
+
+    A block of columns is enough: the whole point is the shape of the noise's
+    correlation, which the grid step, the registration and the high pass set,
+    not the wavelength. Averaged over the chunks of rows it sees.
+    """
+    weights, total = 0.0, np.zeros(int(lags))
+    for (start, stop), _c0, _c1, inner, z in residual_z(
+            cube, fit, window, chunk=chunk, blocks=blocks):
+        rho = autocorrelation(z[:, inner], lags, clip_at=clip_at)
+        count = float(np.isfinite(z[:, inner]).sum())
+        total += count * np.asarray(rho)
+        weights += count
+    return list(total / weights) if weights else [0.0] * int(lags)
+
+
+def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
+                      column_frac=None, column_chi2=None, column_min_rows=10,
+                      excursion_nsig=None, excursion_samples=None, rho=None,
+                      excess_nsig=None, excess_chi2=None, excess_samples=None,
+                      excess_clip=10.0, bias_nsig=None, bias_samples=None,
+                      bias_clip=5.0, star_frac=None, star_chi2=None,
+                      star_bias_nsig=None, within=None):
+    """(file -> (2, grid) mask of what to NaN, a report).
+
+    Row 0 of each mask is the even orders, row 1 the odd ones, as
+    reconstruct.fit_weights_mask.
+
+    What is flagged, per exposure:
+      * with `excursion_nsig` and `excursion_samples`, every window from one
+        sample to `excursion_samples` whose aggregate significance is beyond
+        `excursion_nsig`, the whole window (excursions, window_variance). `rho`
+        is the noise's autocorrelation; it is measured here when not given.
+      * otherwise every sample beyond `nsig` robust sigmas on its own, which
+        is what correct.nsig_cut asked for before the excursions existed.
+
+    Then, with `column_frac` and `column_chi2`, every exposure also loses the
+    columns the exposures disagree on as a body: more than `column_frac` of
+    them flagged there and the survivors' reduced chi2 still above
+    `column_chi2`, over at least `column_min_rows` exposures of that parity.
+
+    THE SAME IN THE STAR'S FRAME (2026-10-22). Each exposure's z carried to
+    the star's frame by its own shift (to the nearest sample), where what
+    the star's spectrum does not describe stands still. What another star's
+    template (OBJECT_COMPARISON) describes differently, its metallicity
+    first, is expected and is taken out of the residual before any test
+    (residual_z, star_static): on TOI-5579, TOI-4860 and TOI-1452 against
+    vetted templates it had 35% of 1275-1307 nm masked, 3% without it
+    (2026-10-24). Then: with `star_frac`
+    and `star_chi2`, a star column where more than `star_frac` of the
+    exposures are beyond `nsig` and the survivors' reduced chi2 is still
+    above `star_chi2`; with `star_bias_nsig` (and `bias_samples`), a star
+    column whose MEAN residual over the exposures, summed over
+    `bias_samples`, is beyond `star_bias_nsig` sigmas. Each is masked in
+    every exposure where it falls, its own shift away. The report gives the
+    binomial significance of each flagged column against the flagging rate
+    of the whole spectrum.
+
+    `within`, a (first, last) range of the grid, restricts the pass to it:
+    every mask and every array of the report then starts at `first`. The
+    sequence figure asks for one window and a margin, since the figures stage
+    runs before the correct stage and has to find what it will mask; with a
+    margin as wide as the largest shift and the widest test window, the
+    window's masks are the whole grid's.
+    """
+    part = _pieces(cube, fit, window)
+    n, m, names, parity = part["n"], part["m"], part["names"], part["parity"]
+    first, last = ((0, m) if within is None
+                   else (max(0, int(within[0])), min(m, int(within[1]))))
+    span = last - first
+    out = {name: np.zeros((2, span), dtype=bool) for name in names}
+    by_excursion = bool(excursion_nsig) and bool(excursion_samples)
+    widths = (list(range(1, int(excursion_samples) + 1)) if by_excursion
+              else [])
+    # the residual's own correlation, which BOTH tests need: the excursions to
+    # know what a window's sum is worth, the regions to know how many
+    # independent columns a window holds. Measured with a correlation length of
+    # 1 the regions came out 15% of the spectrum instead of 6% (2026-09-25).
+    by_excess = bool(excess_nsig) and bool(excess_samples)
+    by_bias = bool(bias_nsig) and bool(bias_samples)
+    if (by_excursion or by_excess or by_bias
+            or (bool(star_bias_nsig) and bool(bias_samples))) and rho is None:
+        lags = max(len(widths) - 1, int(excess_samples or 0),
+                   int(bias_samples or 0), 8)
+        rho = noise_correlation(cube, fit, window, lags, blocks=1, chunk=chunk)
+    rho = list(rho or [])
+    # per order parity and per OBSERVER column, over every exposure: how many
+    # were measured there, how many were flagged, and the z^2 of the rest
+    wanted = bool(column_frac) and bool(column_chi2)
+    # and, for the excess-RMS test, the chi2 of EVERY measured sample of the
+    # column, not only of what survived the flagging: what is being looked for
+    # is the scatter itself. Beyond excess_clip a sample is a cosmic ray rather
+    # than a region, and the per-sample flagging is what deals with it.
+    all_z2 = np.zeros((2, span))
+    all_n = np.zeros((2, span), dtype=np.int32)
+    # et, pour le biais coherent, la somme SIGNEE: ce qui est ancre dans le
+    # referentiel de l'observateur s'y ajoute alors que l'etoile, qui bouge
+    # avec le BERV, s'y moyenne
+    all_z = np.zeros((2, span))
+    bias_n = np.zeros((2, span), dtype=np.int32)
+    # the same, in the STAR's frame: each row carried by its own shift
+    by_star = bool(star_frac) and bool(star_chi2) and bool(nsig)
+    by_star_bias = bool(star_bias_nsig) and bool(bias_samples)
+    if by_star or by_star_bias:
+        shift = np.rint(part["delta"]).astype(int)
+        s_seen = np.zeros((2, span), dtype=np.int32)
+        s_taken = np.zeros((2, span), dtype=np.int32)
+        s_kept = np.zeros((2, span), dtype=np.int32)
+        s_z2 = np.zeros((2, span))
+        s_sum = np.zeros((2, span))
+        s_n = np.zeros((2, span), dtype=np.int32)
+    seen = np.zeros((2, span), dtype=np.int32)
+    taken = np.zeros((2, span), dtype=np.int32)
+    kept = np.zeros((2, span), dtype=np.int32)
+    sum_z2 = np.zeros((2, span), dtype=float)
+    flagged = 0
+    for (start, stop), c0, c1, inner, z in residual_z(
+            cube, fit, window, block=block, chunk=chunk, columns=(first, last)):
+        # the grid's columns c0:c1 are the arrays' d0:d1
+        d0, d1 = c0 - first, c1 - first
+        measured = np.isfinite(z)
+        if by_excursion:
+            cut = excursions(z, widths, rho, excursion_nsig)
+        elif nsig:
+            cut = measured & (np.abs(z) > float(nsig))
+        else:
+            # the region test alone: nothing is flagged sample by sample, and
+            # every measured sample counts towards its column's scatter
+            cut = np.zeros(z.shape, dtype=bool)
+        for i, r in enumerate(range(start, stop)):
+            out[names[r]][int(parity[r])][d0:d1] = cut[i, inner]
+        flagged += int(cut[:, inner].sum())
+        if by_star or by_star_bias:
+            # star column j is observer column j + shift: z's index
+            #   j + shift - a0, inside the margin the block was read with
+            a0 = c0 - inner.start
+            for i, r in enumerate(range(start, stop)):
+                k0 = c0 + int(shift[r]) - a0
+                k1 = k0 + (c1 - c0)
+                if k0 < 0 or k1 > z.shape[1]:
+                    continue
+                zs = z[i, k0:k1]
+                ok = np.isfinite(zs)
+                p = int(parity[r])
+                s_seen[p, d0:d1] += ok
+                if by_star:
+                    gone = ok & (np.abs(zs) > float(nsig))
+                    s_taken[p, d0:d1] += gone
+                    alive = ok & ~gone
+                    s_kept[p, d0:d1] += alive
+                    s_z2[p, d0:d1] += np.where(alive, zs, 0.0) ** 2
+                if by_star_bias:
+                    steady = ok & (np.abs(zs) <= float(bias_clip))
+                    s_sum[p, d0:d1] += np.where(steady, zs, 0.0)
+                    s_n[p, d0:d1] += steady
+        if by_bias:
+            steady = measured[:, inner] & (np.abs(z[:, inner]) <= float(bias_clip))
+            signed = np.where(steady, z[:, inner], 0.0)
+            rows_parity = parity[start:stop]
+            for p in (0, 1):
+                which = np.flatnonzero(rows_parity == p)
+                if which.size:
+                    all_z[p, d0:d1] += signed[which].sum(axis=0)
+                    bias_n[p, d0:d1] += steady[which].sum(axis=0)
+        if by_excess:
+            inside = measured[:, inner] & (np.abs(z[:, inner]) <= float(excess_clip))
+            square = np.where(inside, z[:, inner] ** 2, 0.0)
+            rows_parity = parity[start:stop]
+            for p in (0, 1):
+                which = np.flatnonzero(rows_parity == p)
+                if which.size:
+                    all_z2[p, d0:d1] += square[which].sum(axis=0)
+                    all_n[p, d0:d1] += inside[which].sum(axis=0)
+        if wanted:
+            rows_parity = parity[start:stop]
+            for p in (0, 1):
+                which = np.flatnonzero(rows_parity == p)
+                if not which.size:
+                    continue
+                ok = measured[which][:, inner]
+                gone = cut[which][:, inner]
+                survivor = np.where(ok & ~gone, z[which][:, inner], np.nan)
+                seen[p, d0:d1] += ok.sum(axis=0)
+                taken[p, d0:d1] += gone.sum(axis=0)
+                kept[p, d0:d1] += np.isfinite(survivor).sum(axis=0)
+                sum_z2[p, d0:d1] += np.nansum(survivor ** 2, axis=0)
+
+    frac = np.divide(taken, seen, out=np.zeros((2, span)), where=seen > 0)
+    chi2 = np.divide(sum_z2, kept, out=np.zeros((2, span)), where=kept > 0)
+    columns = np.zeros((2, span), dtype=bool)
+    report = dict(columns=columns, frac=frac, chi2=chi2, seen=seen,
+                  n_columns=0, added=0, thresholds=None, flagged=flagged,
+                  star=None,
+                  rho=rho, widths=widths, excess=None, bias=None,
+                  variance=[window_variance(w, rho) for w in widths])
+    if by_bias:
+        mean_z = np.divide(all_z, bias_n, out=np.zeros((2, span)), where=bias_n > 0)
+        zbias = coherent_bias(mean_z, bias_n, int(bias_samples), rho,
+                              min_rows=int(column_min_rows))
+        regions = (zbias > float(bias_nsig)) & (bias_n >= int(column_min_rows))
+        added = 0
+        for name in names:
+            added += int((regions & ~out[name]).sum())
+            out[name] |= regions
+        report["bias"] = dict(mean=mean_z, z=zbias, regions=regions,
+                              n_columns=int(regions.sum()), added=added,
+                              measured=int((bias_n >= int(column_min_rows)).sum()),
+                              threshold=float(bias_nsig),
+                              samples=int(bias_samples))
+        columns = columns | regions
+    if by_excess:
+        # what stands still in the observer's frame: the columns whose scatter
+        # over the exposures is more than the noise, over a window as wide as
+        # the structures the river plots show
+        length = 1.0 + 2.0 * sum(rho) if rho else 1.0
+        column_chi2_all = np.divide(all_z2, all_n, out=np.zeros((2, span)),
+                                    where=all_n > 0)
+        windowed, excess = excess_rms(column_chi2_all, all_n,
+                                      int(excess_samples), length,
+                                      min_rows=int(column_min_rows))
+        regions = (excess > float(excess_nsig)) & (all_n >= int(column_min_rows))
+        if excess_chi2:
+            regions &= windowed > float(excess_chi2)
+        added = 0
+        for name in names:
+            added += int((regions & ~out[name]).sum())
+            out[name] |= regions
+        report["excess"] = dict(
+            chi2=column_chi2_all, windowed=windowed, excess=excess,
+            regions=regions, n_columns=int(regions.sum()), added=added,
+            length=length, measured=int((all_n >= int(column_min_rows)).sum()),
+            thresholds=(float(excess_nsig), float(excess_chi2 or 0)),
+            samples=int(excess_samples))
+        columns = columns | regions
+    if by_star or by_star_bias:
+        from scipy.stats import binom
+        star_cols = np.zeros((2, span), dtype=bool)
+        star = dict(n_frac=0, n_bias=0, added=0)
+        if by_star:
+            s_frac = np.divide(s_taken, s_seen, out=np.zeros((2, span)),
+                               where=s_seen > 0)
+            s_chi2 = np.divide(s_z2, s_kept, out=np.zeros((2, span)),
+                               where=s_kept > 0)
+            by_frac = ((s_seen >= int(column_min_rows))
+                       & (s_frac > float(star_frac))
+                       & (s_chi2 > float(star_chi2)))
+            # how unlikely each one is from the spectrum's own flagging rate
+            rate = float(s_taken.sum()) / max(float(s_seen.sum()), 1.0)
+            pval = binom.sf(s_taken - 1, np.maximum(s_seen, 1), rate)
+            star.update(frac=s_frac, chi2=s_chi2, by_frac=by_frac,
+                        n_frac=int(by_frac.sum()), rate=rate,
+                        pvalue=pval, worst_p=float(np.min(pval[by_frac]))
+                        if by_frac.any() else 1.0,
+                        median_p=float(np.median(pval[by_frac]))
+                        if by_frac.any() else 1.0,
+                        thresholds=(float(star_frac), float(star_chi2)))
+            star_cols |= by_frac
+        if by_star_bias:
+            s_mean = np.divide(s_sum, s_n, out=np.zeros((2, span)), where=s_n > 0)
+            s_zbias = coherent_bias(s_mean, s_n, int(bias_samples), rho,
+                                    min_rows=int(column_min_rows))
+            by_bias = ((s_zbias > float(star_bias_nsig))
+                       & (s_n >= int(column_min_rows)))
+            star.update(mean=s_mean, z=s_zbias, by_bias=by_bias,
+                        n_bias=int(by_bias.sum()),
+                        bias_threshold=float(star_bias_nsig),
+                        bias_samples=int(bias_samples))
+            star_cols |= by_bias
+        # each flagged star column masked in every exposure, its shift away
+        added = 0
+        for r in range(n):
+            p = int(parity[r])
+            where = np.flatnonzero(star_cols[p]) + int(shift[r])
+            where = where[(where >= 0) & (where < span)]
+            row = out[names[r]][p]
+            added += int((~row[where]).sum())
+            row[where] = True
+        star.update(columns=star_cols, n_columns=int(star_cols.sum()),
+                    measured=int((s_seen >= int(column_min_rows)).sum()),
+                    added=added)
+        report["star"] = star
+    if wanted:
+        columns = ((seen >= int(column_min_rows)) & (frac > float(column_frac))
+                   & (chi2 > float(column_chi2)))
+        added = 0
+        for name in names:
+            added += int((columns & ~out[name]).sum())
+            out[name] |= columns
+        report.update(columns=columns, n_columns=int(columns.sum()),
+                      added=added,
+                      thresholds=(float(column_frac), float(column_chi2)))
+    return out, report
