@@ -842,7 +842,7 @@ instruments:
                                 # a single pixel, so better say so
     domain:
       wave_min: 380.0           # measured on an S2D of HD10700 on 2026-10-14:
-      wave_max: 692.0   
+      wave_max: 692.0           # 71 orders, 380.5 to 691.5 nm
       wave0: 380.0
       bands:
         B: [380.0, 500.0]
