@@ -25,7 +25,12 @@ def test_the_spellings_simbad_is_asked_in():
     assert names[0] == 'TOI-1452' and len(names) == len(set(names))
 
 
-def test_the_toi_archive_finds_an_underscored_toi():
-    # 2026-10-27: TOI_1234 did not fetch the TOI table of the archive
-    for folder in ('TOI_4860', 'TOI4860_tc', 'TOI 4860'):
-        assert archive.identifiers({}, folder=folder)['toi'] == '4860'
+def test_a_host_named_after_its_toi_is_asked_for_as_the_archive_names_it():
+    # an underscored or unseparated TOI number in the folder name is asked
+    #   of the archive's confirmed planets as the host name it writes
+    for folder in ('TOI_4860', 'TOI4860_tc', 'TOI 4860', 'TOI-4860.01'):
+        assert 'TOI-4860' in archive.identifiers({}, folder=folder)['names']
+    # and a name that is not a TOI adds none
+    names = archive.identifiers({'main_id': 'GJ 699'}, folder='GL699')['names']
+    assert not any(name.startswith('TOI') for name in names)
+    assert 'Gl 699' in names

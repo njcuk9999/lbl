@@ -7,10 +7,10 @@ wavelength means the same stellar feature from one page to the next.
     python -m lbl.pca2d.figures.sample_before_after --cube <cube> --fit <fit.npz> \
         --windows 1200.3:2 1593.6:2 1669.5:5 --out sample.pdf
 
-The snippet figures show all the spectra as an image and the envelope figure
-shows their spread. Neither shows what the correction did to ONE spectrum, which
-is the thing an eye reads fastest: the flux as it arrived, the flux as it leaves,
-and the model that was taken out between them.
+The river plots of the sequence figure show all the spectra as an image. This
+shows what the correction did to ONE spectrum, which is the thing an eye reads
+fastest: the flux as it arrived, the flux as it leaves, and the model that was
+taken out between them.
 
 One page per window. The exposure drawn is the one whose correction has the
 median amplitude, so the page is representative rather than flattering: picking
@@ -100,10 +100,10 @@ def main(argv=None):
                 data[w <= 0] = 0.0
             live = live_mask(w)
             band = (g >= lo) & (g <= hi)
-            # The row with the median correction IN THIS WINDOW. It was the
-            # median over the whole spectrum, which needed the model on the
-            # whole grid; for a page about this window, this window's is the
-            # more telling choice anyway.
+            # The row with the median correction IN THIS WINDOW, not over the
+            # whole spectrum, which would need the model on the whole grid;
+            # for a page about this window, this window's is the more telling
+            # choice anyway.
             with np.errstate(invalid="ignore"):
                 amplitude = np.array([np.nanstd(np.where(live[i] & band, model[i],
                                                          np.nan))

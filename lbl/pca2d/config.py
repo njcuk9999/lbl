@@ -11,6 +11,8 @@ import re
 
 import yaml
 
+from lbl.core import astro
+
 
 class _ConfigLoader(yaml.SafeLoader):
     """yaml.SafeLoader without YAML 1.1's base-60 numbers.
@@ -64,6 +66,8 @@ def check_windows(windows, domain):
     """
     from .logger import log
 
+    if domain.get("wave_min") is None or domain.get("wave_max") is None:
+        return
     lo, hi = float(domain["wave_min"]), float(domain["wave_max"])
     for spec in windows or []:
         centre, _, width = str(spec).partition(":")
@@ -89,23 +93,36 @@ DEFAULTS = {
         # bit, and left out of the cache key, since it says nothing about
         # what the cube holds
         "workers": 4,
-        "format": "tfits",           # 'tfits' = APERO order-by-order spectra
-                                     #           (the nominal input)
-                                     # 's1d'   = the resampled s1d_v products
+        # How the spectra are read, from the instrument's LBL class
+        # (PCA2D_INPUT_FORMAT): 'tfits' = APERO order-by-order spectra, read
+        # by tfits.py with the extensions below; 's2d' or 'e2ds' = order by
+        # order through the LBL class (readers.py); 's1d' = the resampled
+        # s1d_v products
+        "format": "tfits",
+        # the t.fits extensions (PCA2D_TFITS_EXTENSIONS): flux, wave, blaze,
+        # recon and sky
+        "extensions": None,
+        # the header keywords read into the metadata when PCA2D reads the
+        # files itself, {name: [keyword, ...]} (the KW_* of the LBL class,
+        # Instrument.pca2d_header_keys)
+        "header_keys": None,
+        # bring a barycentric wavelength grid back to the observer's frame
+        # (PCA2D_TO_OBSERVER)
+        "to_observer": False,
         # The input ROOT, and not the folder of spectra: one run reads
         # <directory>/<object>/, so the same config serves every target on the
         # disk and a run needs nothing but a name. See spectra_dir().
         "directory": "data",
-        "pattern": "*t.fits",
+        "pattern": "*.fits",         # PCA2D_INPUT_PATTERN of the LBL class
         "max_files": None,           # None = all; small int for quick tests
         "object": None,              # keep only this OBJECT (None = no filter).
                                      # It is also the FOLDER: one run reads
                                      # <directory>/<object>/.
         # What to match in the headers, when the folder is not named as the
-        # observer typed the target. Barnard's star is `Gl699` in both
-        # pipelines' headers, and its two campaigns live here in GL699_SPIROU
-        # and GL699_NIRPS, since a run is one instrument and the two must not
-        # share a folder or an LBL object. None means the folder's own name.
+        # observer typed the target: two campaigns of one star on two
+        # instruments live in two folders (a run is one instrument, and two
+        # instruments must not share a folder or an LBL object) while their
+        # headers name the same star. None means the folder's own name.
         "object_header": None,
         # "auto" (the default), True or False. Coadding a night is not a
         # modelling choice, it exists so the fit holds in memory, and fitting
@@ -116,38 +133,43 @@ DEFAULTS = {
         "nightly_stack": "auto",     # coadd the exposures of each night before
                                      # the PCA. Every exposure is still
                                      # registered with its own BERV first, so
-                                     # nothing is smeared; NIRPS takes 3-4
-                                     # exposures a visit, so this makes the cube
-                                     # (and the decomposition) 3-4 times smaller
+                                     # nothing is smeared; with several
+                                     # exposures per visit this makes the cube
+                                     # (and the decomposition) that many times
+                                     # smaller (PCA2D_NIGHTLY_STACK)
         # --- 'tfits' only -------------------------------------------------
         # with stacking, each night cut into bundles of at most this BERV
-        # range (km/s), this many minutes or this many exposures: a transit
-        # sequence is not one sky, and in the observer's frame a coadd smears
-        # the star by its BERV range (nights.split_nights). 0.1 km/s since
-        # 2026-10-21: an ordinary NIRPS visit stays one row (median ranges 4
-        # to 35 m/s over twenty targets), a five-hour sequence (600 m/s) is
-        # cut. None: whole nights
+        # range (km/s), this many minutes or this many exposures: a long
+        # sequence (a transit) is not one sky, and in the observer's frame a
+        # coadd smears the star by its BERV range (nights.split_nights).
+        # 0.1 km/s keeps an ordinary visit of a few exposures (a few tens of
+        # m/s of BERV) one row and cuts a sequence of several hours (hundreds
+        # of m/s). None: whole nights
         "bundle_minutes": None,
         "bundle_berv": 0.1,
         "bundle_max": None,
         "orders": None,              # None = every order; or an explicit list
         "min_order_finite_fraction": 0.05,   # skip an order with fewer usable
-                                     # pixels than this. NIRPS loses orders
-                                     # 44-45 and 71-74 entirely to water; that
-                                     # is expected, not an error.
+                                     # pixels than this. An order inside a
+                                     # saturated water band can be lost
+                                     # entirely; that is expected, not an
+                                     # error.
         "blaze_min_frac": 0.05,      # reject pixels where the blaze has fallen
                                      # below this fraction of its order peak
     },
     "domain": {
-        "wave_min": 965.0,           # nm
-        "wave_max": 1950.0,          # nm
+        # nm, the instrument's domain (wavemin and wavemax of its LBL class)
+        "wave_min": None,
+        "wave_max": None,
         "grid_source": "magic",      # 'magic'  = build the log-uniform grid from
                                      #            wave0 + dv below (the only
                                      #            option that works for t.fits,
                                      #            which carry no common grid)
                                      # 'native' = recycle the grid stored in the
                                      #            first s1d_v file
-        "wave0": 965.0,              # nm, anchor of the magic grid
+        # nm, anchor of the magic grid: a whole number of nm at or below the
+        # instrument's wave_min (Instrument.pca2d_settings)
+        "wave0": None,
         # Where dv comes from. False: the number below. True: the finest pixel
         # step in the first spectrum, times SMART_DV_FRACTION, and THE NUMBER
         # BELOW IS NOT READ AT ALL. A float here is that fraction. The measured
@@ -156,14 +178,12 @@ DEFAULTS = {
         # km/s per pixel (500 m/s). Read only when smart_dv is false, and may
         # be null when it is true, since nothing would look at it.
         "dv": 0.5,
-        # Nominal photometric bands (MKO half-power points, nm). The PCA is
-        # fitted on these and only these; see pca.fit_bands.
-        "bands": {
-            "Y": [970.0, 1070.0],
-            "J": [1170.0, 1330.0],
-            "H": [1490.0, 1780.0],
-            "K": [2030.0, 2370.0],
-        },
+        # The photometric bands, nm, LBL's own (lbl.core.astro.bands, u to
+        # K); the instrument's layer keeps those that overlap its domain. The
+        # PCA is fitted on the part of them the grid covers, and only there
+        # (grids.band_mask).
+        "bands": {band.name: [band.minimum, band.maximum]
+                  for band in astro.bands},
     },
     # What is PUBLISHED about the target, which the pipeline never measures and
     # never needs, except to mark the periods a component must not vary at. The
@@ -205,7 +225,7 @@ DEFAULTS = {
         # to a line whatever the grid step; `window`, in samples, is derived
         # from it once dv is known (resolve_highpass). A config that sets
         # `window` and not this keeps its window, which is how a run saved
-        # before 2026-09-11 reads back, cube key included.
+        # that way reads back, cube key included.
         "width_kms": 100.0,
         "window": 201,               # samples (odd): what 100 km/s is at dv = 0.5
         "polyorder": 2,
@@ -213,10 +233,8 @@ DEFAULTS = {
                                      # 'log_sub' -> y = ln(f) - lowpass(ln f)
         "frame": "target",           # s1d only: apply before ('observer') or
                                      # after ('target') the BERV registration.
-                                     # 'target' since 2026-10-16: the
-                                     # high-pass against a template needs
-                                     # the common grid, and it became the
-                                     # default.
+                                     # 'target', because the high-pass against
+                                     # a template needs the common grid.
                                      # t.fits always filters on the destination
                                      # grid, per order -- the native sampling is
                                      # not uniform in velocity.
@@ -225,9 +243,9 @@ DEFAULTS = {
         # every deep line, and when a telluric sweeps across the core of a
         # line with the BERV this bias changes FROM ONE EXPOSURE TO THE NEXT:
         # there then remains, in the star frame, a residual that follows the
-        # BERV without being stellar. Measured on 2026-10-16 on HD 69830 at
-        # 688.85 nm: the telluric travels 0.117 nm over the 51 km/s of BERV,
-        # and its depth at the core goes from 3% to 89%, intermittently.
+        # BERV without being stellar. Over a season's BERV range a telluric
+        # line moves by a tenth of a nm, and the depth it adds at the core of
+        # a stellar line goes from nothing to most of it, intermittently.
         #
         # With this option the high-pass is done in TWO PASSES: a median
         # template of all the registered exposures, savgol on the RESIDUAL to
@@ -244,11 +262,10 @@ DEFAULTS = {
         # Epoch window, as rjd = jd - 2400000. Both default to null, i.e. keep
         # everything: excluding part of a time series is a claim about the data,
         # not a hygiene default, and it must be made in the config where it is
-        # visible. For NIRPS the first season sits before rjd 60200
-        # (2023-09-12); on Proxima it carries most of the excess velocity
-        # scatter. `quality` is hashed into the cube cache key, so setting
-        # either of these rebuilds the cube rather than silently reusing one
-        # built over a different window.
+        # visible (an instrument's commissioning season, for example).
+        # `quality` is hashed into the cube cache key, so setting either of
+        # these rebuilds the cube rather than silently reusing one built over a
+        # different window.
         # Discard a sample where the sky emission the pipeline subtracted was
         # more than this many times the stellar flux. null keeps everything.
         # Hashed into the cube cache key only when set.
@@ -256,20 +273,19 @@ DEFAULTS = {
         # Drop a sample that has a masked neighbour within this many samples on
         # BOTH sides: it survived the cuts but its neighbourhood did not, so its
         # high pass and any shift of it were built from samples that are not
-        # there. 3 is the width that was asked for. null disables the check.
+        # there. null disables the check.
         # Hashed into the cube cache key only when set.
         "isolated_window": None,
         "min_rjd": None,
         "max_rjd": None,
         "nights": None,
-        # THE SPECTROGRAPH MODE: the list of modes kept, read from
-        # HIERARCH ESO INS MODE. null keeps everything, which is the default
-        # because a single mode is the ordinary case. Of the 100 HARPS
-        # exposures of HD 10700, 8 are in EGGS (the 1.4" fibre) and want the
-        # telluric model shifted by +16 km/s where the other 92 want it at
-        # zero: another fibre, another wavelength solution, so another
-        # instrument from the point of view of a common basis. Hashed into
-        # the cube cache key when set.
+        # THE SPECTROGRAPH MODE: the list of modes kept, read from the
+        # headers' DRS mode (PCA2D_DRS_MODES of the instrument's LBL class).
+        # null keeps everything, the ordinary case of a single mode. Another
+        # mode (another fibre, another resolution) has its own wavelength
+        # solution and velocity zero point, so it is another instrument from
+        # the point of view of a common basis. Hashed into the cube cache key
+        # when set.
         "drs_modes": None,
     },
     "weights": {
@@ -285,13 +301,12 @@ DEFAULTS = {
         # SNR. 5 is low on purpose: reject the dead pixel, not sort by
         # brightness. Set to null, `ln_clip_low` takes over again.
         "min_pixel_snr": 5.0,
-        "ln_clip_low": None,         # OLD: y below this -> zero weight.
-                                     # Replaced on 2026-10-16 by
-                                     # min_pixel_snr: at -0.5 it killed the
-                                     # bottom of every line deeper than 39%
-                                     # of the continuum, 13.7% of the pixels
-                                     # on HD 10700, and LBL lost a third of
-                                     # its lines there
+        "ln_clip_low": None,         # y below this -> zero weight. Off: a
+                                     # cut on ln f removes the bottom of every
+                                     # deep line (at -0.5, every line deeper
+                                     # than 39% of the continuum), where the
+                                     # velocity content is; min_pixel_snr
+                                     # above is the cut to use
         "ln_clip_high": None,        # y above this -> zero weight (None = keep)
         "sigma_floor_frac": 0.0,     # add this (in ln units) in quadrature
         "telluric_mode": "recon",        # 'recon'     = the paired
@@ -340,25 +355,21 @@ DEFAULTS = {
         "reuse_cache": True,
         "max_memory_gb": 12.0,       # refuse to allocate a cube larger than this
                                      # rather than driving the machine to swap
+        # the windows the figures draw, centre:width in nm (PCA2D_WINDOWS of
+        # the instrument's LBL class)
+        "windows": [],
     },
     # ---------------------------------------------------------------- fit ---
     # The two-frame fit. Two component counts, never one: M in the stellar rest
     # frame and N in the observer frame, and they need not be equal.
     "twoframe": {
-        # 2 and 7 since 2026-09-09, measured on TOI-2120 with the static sky
-        # left in the data for the fit to describe. Against 5+5: the observer
-        # block explains 25.8% of the weighted variance instead of 16.5%, its
-        # first component 17.4% instead of 9.7%, and the leakage from it into
-        # the star block falls from 0.086 to 0.0116. Five star components were
-        # enough rope for the star block to help describe an observer-frame
-        # line, through the (feature, its derivative x shift) pair; two are not.
         # ZERO: the star is the per-parity spectrum `mean: star` takes out
         # with a coefficient of exactly 1, and a component in front of it would
-        # be an exponent on the flux. Measured better on every target it was
-        # measured on (config.yaml has the numbers). The paragraph above is why
-        # 2 was chosen over 5 back when there were star components at all, and
-        # is kept because raising this to look at variability still has to
-        # choose a number.
+        # be an exponent on the flux. Raised to look at the star's
+        # variability, keep it small: with many star components the star block
+        # has enough freedom to help describe an observer-frame line, through
+        # the pair (feature, its derivative times the shift), and it then
+        # takes part of what the observer block should hold.
         # THIS KEY COUNTS THE FREE COMPONENTS ONLY. What a user sets, the
         # PCA2D dict's n_star and --n-star, counts the star's spectra with the
         # template: n_star 1 is this 0, the template alone (star_spectra and
@@ -390,21 +401,17 @@ DEFAULTS = {
         # every exposure possible instead of nightly means; the weighted sums
         # accumulate in float64 whatever this says.
         "dtype": "float64",
-        # The static part of the model (twoframe --mean). "offset": the
-        # one-shot per-parity observer-frame offset of the fit behind the
-        # reports, which the correction divides out with the observer block.
+        # The static part of the model (twoframe --mean). "star", the
+        # default: one star spectrum per order parity, in the STAR's frame,
+        # taken out once before any component with a coefficient of exactly
+        # 1. The alternatives are kept for comparison: "offset", a one-shot
+        # per-parity observer-frame offset, and "full", which the correction
+        # divides out with the observer block, so that a mean spectrum of the
+        # star in the observer's frame goes back into the corrected spectra;
         # "iterate", one mean per order parity in EACH frame re-estimated at
         # every sweep with the components centred, separates the frames on a
-        # synthetic cube but does not converge yet on TOI2120 (2026-09-10: its
-        # star-frame mean moved more at every sweep and chi2 turned over after
-        # one), so it is not the default.
-        # SETTLED 2026-09-14, and the window no longer offers a choice: one
-        # star spectrum per order parity, in the STAR's frame, taken out once
-        # before any component with a coefficient of exactly 1. The observer-
-        # frame means, "offset" and "full", go back into the correction, which
-        # cost Proxima 46 m/s; "iterate" does not converge on a whole campaign.
-        # Both are still read from a config or a variant, for redoing the runs
-        # that were measured on them.
+        # synthetic cube but does not converge on real campaigns (the
+        # star-frame mean moves more at every sweep).
         "mean": "star",
         # The one-shot star-frame median of the older modes; "iterate" makes
         # its own star-frame mean, one per parity, and ignores this.
@@ -419,29 +426,29 @@ DEFAULTS = {
         # derivative of the reconstructed star carried to that exposure's BERV.
         # It exists to keep the star's own motion OUT of the observer block:
         # without it the block describes the shift, and dividing the block out
-        # of the flux writes that velocity into the corrected spectrum. Measured
-        # on TOI2120 it accounts for 41% of the variance of what the correction
-        # did to LBL's velocities. It is fitted and never divided out, since
-        # taking it out of the data would remove the signal being looked for.
-        # OFF by default since 2026-09-11, as the sanity check on what it does;
-        # `--velocity-term` or `velocity_term: true` turns it on.
+        # of the flux writes that velocity into the corrected spectrum. It is
+        # fitted and never divided out, since taking it out of the data would
+        # remove the signal being looked for. Off by default, as a check of
+        # what it does; `--velocity-term` or `velocity_term: true` turns it
+        # on.
         "velocity_term": False,
         # The shift is measured only on columns inside a photometric band whose
         # telluric transmission stays above this in 90% of the exposures. Zero
         # turns the transmission cut off and keeps the band cut. Fitting the
         # star's velocity where the flux is mostly atmosphere is fitting it to
-        # the wrong thing: unmasked, the term came out 1.8 times larger than
-        # the velocity LBL measures on the same spectra.
+        # the wrong thing, and the term then comes out larger than the
+        # velocity LBL measures on the same spectra.
         "velocity_min_transmission": 0.95,
-        # The instrument's resolving power, lambda/dlambda, per instrument in
-        # config.yaml as LBL's APPROX_RESOLUTION: the unit every Savitzky-Golay
-        # here is measured in. It turns no smoothing on by itself.
+        # The instrument's resolving power, lambda/dlambda, its LBL class's
+        # APPROX_RESOLUTION: the unit every Savitzky-Golay here is measured
+        # in. It turns no smoothing on by itself.
         "resolution": None,
         # Smooth the star's spectra per parity (--mean star) and the star
         # components P to this FWHM, in resolution elements, by LBL's own
-        # filter (pca2d.resolution). Off by default: at one element it cost
-        # TOI-2120 4 m/s, at half an element 2 (2026-09-11). The observer
-        # components are never smoothed here.
+        # filter (pca2d.resolution). Off by default: smoothing the star
+        # removes line structure that LBL then misses, and the velocities
+        # degrade with the width. The observer components are never smoothed
+        # here.
         "star_smooth": None,
         # CROSS-VALIDATION (pca2d.diagnostics.holdout_rows): "even" or "odd",
         # the nights held out of the fit. None, the nominal: all the nights.
@@ -451,7 +458,7 @@ DEFAULTS = {
         # star's block and the amplitudes are fitted, for a star whose BERV
         # barely moves and cannot tell its frame from the observer's. None,
         # the nominal: the observer components are fitted. Here and not in
-        # nominal.yaml, whose hash stamps every correction on disk.
+        # nominal.yaml, whose content stamps every correction on disk.
         "earth_basis": None,
         # with earth_basis: its amplitudes fitted and taken out FIRST, then
         # the star's spectrum estimated, so that it does not take the mean of
@@ -468,10 +475,10 @@ DEFAULTS = {
         "star_resolution": None,
         # How the star-side vectors are carried and updated: 'spline', one
         # cubic B-spline evaluated at every exposure's shifted positions and
-        # updated exactly (pca2d.splinestar), nominal since 2026-09-11: chi2
-        # falls at every sweep, the fit is faster, and on TOI-2120 the
-        # velocities tie with 'grid' (20.99 against 20.36 m/s), the samples
-        # moved by the Lanczos kernel and updated from the normal diagonal.
+        # updated exactly (pca2d.splinestar), the default: chi2 falls at every
+        # sweep and the fit is faster. 'grid': the samples moved by the
+        # Lanczos kernel and updated from the normal diagonal, an
+        # approximation that gives velocities of the same quality.
         "star_basis": "spline",
     },
     # ---------------------------------------------------------------- lbl ---
@@ -483,8 +490,8 @@ DEFAULTS = {
     "correct": {
         # exposures corrected at once, in threads (reconstruct --workers): the
         # same files as one at a time, each read, refitted and written on its
-        # own; 7.5 min for 420 SPIRou files one at a time. Here and not in
-        # nominal.yaml, whose hash is in every correction's stamp
+        # own. Here and not in nominal.yaml, whose content is in every
+        # correction's stamp
         "workers": 4,
         "n_star": 0,
         "n_earth": None,             # None = every observer component the fit has
@@ -494,12 +501,11 @@ DEFAULTS = {
         # window from one sample to excursion_elements resolution elements is
         # judged by the aggregate significance of its sum, and flagged, whole,
         # beyond excursion_nsig. The variance of that sum is measured, never
-        # assumed: at 0.5 km/s the grid oversamples a 2.3 km/s SPIRou pixel and
-        # the residual's rho_1 is 0.935, so 17 samples hold 3.5 independent
-        # measurements and a flat 3.2 sigma bump two elements wide is the 6
-        # sigma event (outliers.window_variance, noise_correlation).
-        # null until it is measured on more than one target: 6.0 and 2.0 are
-        # the values it was built for, and variants/0-7exc runs them.
+        # assumed: the grid oversamples the detector pixel, so neighbouring
+        # samples of the residual are strongly correlated and a window of n
+        # samples holds far fewer than n independent measurements
+        # (outliers.window_variance, noise_correlation). Off (null) by
+        # default; 6.0 with 2.0 elements is the setting it was designed for.
         "excursion_nsig": None,
         "excursion_elements": 2.0,
         # WHAT STANDS STILL IN THE OBSERVER'S FRAME. A leftover anchored there
@@ -509,39 +515,32 @@ DEFAULTS = {
         # 1. Averaged over excess_elements resolution elements, that average is
         # certain to sqrt(2 / (N * independent columns)), so its excess becomes
         # a significance: excess_nsig sigmas of it, and a windowed chi2 above
-        # excess_chi2, drop the region from every exposure. On TOI-2120 the
-        # 1.27 um O2 band reaches a column chi2 of 222 and 1919 nm of 63.
+        # excess_chi2, drop the region from every exposure. A saturated
+        # telluric band reaches a column chi2 of hundreds.
         # THE LOOP'S WEIGHT IS THE MASK. The loop already down-weights each
         # sample by (clip/|z|)^2 beyond the cut (twoframe.clip_weights);
         # below this fraction of its nominal weight, the sample was not
         # described by the model and becomes NaN in the corrected file. 0.5
-        # is |z| > 4.24 sigma with the clip at 3, and costs 0.388% of the
-        # samples on TOI-2120, per exposure and not in common.
+        # is |z| > 4.24 sigma with the clip at 3, a fraction of a percent of
+        # the samples, per exposure and not in common.
         "weight_floor": None,
         # THE COHERENT BIAS OVER THE EXPOSURES, the third axis and the only
         # one that neither the cut nor the excess scatter can see:
         # clip_weights compares each exposure to the OTHER EXPOSURES, so a
         # residual present in all of them is an outlier in none. The mean
-        # over the exposures, on the other hand, gains sqrt(N) = 17.8 with
-        # 316 exposures. On TOI-2120: 21.9% of the domain beyond 3 sigma,
-        # 2.8% beyond 10, and the worst regions are 1761, 1803, 1805 and
-        # 1764-1769 nm (methane and water), 4 to 6 resolution elements wide:
-        # whole badly corrected lines.
-        # NOMINAL since 2026-09-26, with nsig_cut 3.0: measured on TOI-2120
-        # at 0-7, rms 17.01 -> 14.63, per-night rms 14.57 -> 11.52, and
-        # sigma_K 1.23 -> 1.05 with K at 5.54 against 5.42, so without moving
-        # the planet's amplitude (the cut alone at 2.5 sigma gave 14.60 but
-        # dropped K to 3.67). The two axes add up because they see different
-        # things: the cut sees the accidents of one exposure, the bias what is
+        # over the exposures, on the other hand, gains sqrt(N) in
+        # significance, and reveals whole badly corrected lines (methane and
+        # water, several resolution elements wide).
+        # The two axes add up because they see different things: the cut
+        # (nsig_cut) sees the accidents of one exposure, the bias what is
         # anchored in the observer frame and that no per-exposure criterion
-        # can see.
+        # can see. A lower nsig_cut removes more but starts to bite into the
+        # star's own signal.
         "bias_nsig": 10.0,
         "bias_elements": 2.0,
         "excess_nsig": None,
         "excess_chi2": 1.25,
         "excess_elements": 2.0,
-        # 3.0 is nominal since 2026-09-26, with bias_nsig 10.0. Alone, it
-        # gains 1.37 m/s; 2.5 gained 2.41 but moved K by 1.6 sigma.
         "nsig_cut": 3.0,             # NaN beyond this many running robust sigmas
         # And then the column the exposures agree is bad. With nsig_cut set,
         # an observer column where more than column_frac of the exposures is
@@ -557,9 +556,9 @@ DEFAULTS = {
         # star_column_frac of the exposures clipped and survivors still above
         # star_column_chi2, or whose mean residual over the exposures is
         # beyond star_bias_nsig sigmas (summed over bias_elements), is masked
-        # in every exposure where it falls. Off (None) until measured on more
-        # than KIC 7847566: what another star's template, or a narrow BERV,
-        # leaves standing still on the star
+        # in every exposure where it falls. Off (None) by default: what
+        # another star's template, or a narrow BERV, leaves standing still on
+        # the star
         "star_column_frac": None,
         "star_column_chi2": None,
         "star_bias_nsig": None,
@@ -571,45 +570,38 @@ DEFAULTS = {
         # is its overlap with that derivative and a contaminant flat where the
         # star has structure moves no line. It implies a refit, and it changes
         # only how b is MEASURED: what is divided out and which samples are
-        # blanked are untouched, and so is the shrinkage below. Nominal since
-        # 2026-09-15 (config.yaml carries the measurements).
+        # blanked are untouched, and so is the shrinkage below.
         "weight": "velocity",
-        "velocity_floor": 0.05,
-        # THE DIAGNOSTICS OF THE NIGHT OF 2026-10-17 (pca2d.diagnostics),
-        # both inactive at None. q_support: divide the basis out only where
-        # the cube's transmission drops below this threshold. permute_b: a
-        # seed, each night corrected with the amplitudes of another (null
-        # test).
+        "velocity_floor": 0.05,      # what a sample with no velocity info keeps
+        # DIAGNOSTICS (pca2d.diagnostics), both inactive at None. q_support:
+        # divide the basis out only where the cube's transmission drops below
+        # this threshold. permute_b: a seed, each night corrected with the
+        # amplitudes of another (a null test).
         "q_support": None,
-        "permute_b": None,      # what a sample with no velocity info keeps
+        "permute_b": None,
         "shrink": True,              # each component only where it is significant
         "shrink_smooth": False,      # its significance averaged over an element
         "smooth_components": [],     # observer components smoothed before division
-        # SETTLED 2026-09-14, and the window no longer offers a choice: a
-        # sample is blanked in every exposure as soon as one of them gave it no
-        # weight, so the whole campaign carries ONE set of lines. 'exposure'
-        # blanks each exposure's own, and a line set that moves from epoch to
-        # epoch is scatter: 1.8 m/s on TOI-4552 with nothing divided out at
-        # all. 'none' leaves the delivered flux there, uncorrected. Both are
-        # still read from a config or a variant, for redoing those runs.
+        # A sample is blanked in every exposure as soon as one of them gave
+        # it no weight (or fewer than mask_share of them did), so the whole
+        # campaign carries ONE set of lines. 'exposure' blanks each
+        # exposure's own, and a line set that moves from epoch to epoch is
+        # scatter in the velocities. 'none' leaves the delivered flux there,
+        # uncorrected.
         "mask": "common",
+        # the fraction of exposures that must have weighted a sample for it
+        # to be kept (PCA2D_MASK_SHARE of the instrument's LBL class)
+        "mask_share": 1.0,
     },
     "lbl": {
         "prepare": True,             # write LBL's config and its run script
         "run": False,                # and run it. Hours, so it is asked for.
-        # Which LBL runs it: the conda environment its script is run in.
-        # lbl-rapide is LBL's speed branch (lbl.FAST_RECIPE makes it), the
-        # default since 2026-09-18; 'current' is the LBL environment.yml
-        # installs beside this package, which ran everything before; a path
-        # is a python.
-        "environment": "lbl-rapide",
         # LBL's DATA_DIR, its own tree. None puts it under the output ROOT,
         # <output.directory>/lbl, before a run name or a variant adds its own
         # level: the delivered object's LBL products are the same for every
         # run of a target, and hours to make, so the runs of one output root
-        # share one tree. It used to be `lbl` beside wherever the run was
-        # started, which put SMETHELLS_20's velocities in another clone's
-        # folder while its report was on the data disk (2026-09-15).
+        # share one tree, and it does not depend on the folder the run was
+        # started from.
         "directory": None,
         # The corrected object's name. {tag} becomes the run's <M>-<N>, and
         # it is in the default because without it two runs at different
@@ -650,13 +642,16 @@ DEFAULTS = {
         "steps": ["template", "mask", "compute", "compile"],
         # How the spectra get into LBL's science folders: 'symlink' costs no
         # room, 'copy' holds every spectrum a second time. A disk that cannot
-        # store a link (exFAT, as the data disks here are) gets copies
-        # whatever this says, and the run says so before it starts
-        # (lbl.link_mode).
+        # store a link (exFAT, for example) gets copies whatever this says,
+        # and the run says so before it starts (lbl.link_mode).
         "link": "symlink",
         "input_file": None,          # LBL's glob inside a science folder
-        "instrument": None,          # LBL's name for this spectrograph, which
-        "data_source": None,         # with the source selects its reader
+        # LBL's name for the instrument and its data source, as a wrap's
+        # INSTRUMENT and DATA_SOURCE: they select LBL's class, which reads the
+        # files and gives every instrument-dependent setting
+        # (Instrument.pca2d_settings)
+        "instrument": None,
+        "data_source": None,
     },
 }
 
@@ -677,7 +672,7 @@ def _deep_update(base: dict, new: dict) -> dict:
 SMART_DV_FRACTION = 0.7
 
 
-def measure_pixel_dv(directory: str, pattern: str = "*t.fits",
+def measure_pixel_dv(directory: str, pattern: str = "*.fits",
                      config: dict | None = None) -> float:
     """The smallest step between adjacent pixels, in km/s, from the first file.
 
@@ -702,12 +697,13 @@ def measure_pixel_dv(directory: str, pattern: str = "*t.fits",
     paths = sorted(glob.glob(os.path.join(directory, pattern)))
     if not paths:
         raise SystemExit("no file matching %s in %s" % (pattern, directory))
-    # An instrument read through LBL's bridge has no WaveAB extension to
+    # An instrument read through LBL's class has no wavelength extension to
     # open: its solution can be a table, a header polynomial or another
-    # per-instrument format, and that is exactly what LBL's reader class
-    # knows how to handle. So the grid is asked of it rather than guessing
-    # an extension name that does not exist (2026-10-14).
+    # format of its own, and that is exactly what LBL's reader class knows
+    # how to handle. So the grid is asked of it rather than guessing an
+    # extension name that does not exist.
     bridged = config is not None and not _readers.reads_natively(config)
+    extensions = ((config or {}).get("input") or {}).get("extensions")
     for path in paths[:20]:
         try:
             if bridged:
@@ -715,7 +711,7 @@ def measure_pixel_dv(directory: str, pattern: str = "*t.fits",
                                   dtype=np.float64)
             else:
                 with robust_open(path) as hdulist:
-                    _, e_wave, _, _ = extensions_for(hdulist)
+                    _, e_wave, _, _ = extensions_for(hdulist, extensions)
                     wave = np.asarray(hdulist[e_wave].data, dtype=np.float64)
         except Exception:                                     # noqa: BLE001
             continue
@@ -764,9 +760,9 @@ def resolve_smart_dv(cfg: dict) -> dict:
 
     A magic grid is uniform in velocity and a spectrograph is not, so one dv
     has to serve the finest pixel in the domain; anything below that is paid
-    for on every sample of every exposure and buys nothing. On SPIRou the step
-    is around 2.27 km/s, which a fixed dv of 0.5 oversamples more than fourfold
-    in every array the run allocates and every sweep the fit makes over them.
+    for on every sample of every exposure and buys nothing. A pixel of about
+    2 km/s, sampled by a fixed dv of 0.5, is oversampled fourfold in every
+    array the run allocates and every sweep the fit makes over them.
 
     `domain.dv` in the config is then DEAD: it is overwritten here, not
     combined with anything, and the run says so out loud rather than leaving a
@@ -787,7 +783,7 @@ def resolve_smart_dv(cfg: dict) -> dict:
             " comes from the file and brings its own step", "warn")
         return cfg
     step = measure_pixel_dv(spectra_dir(cfg),
-                            cfg["input"].get("pattern", "*t.fits"), cfg)
+                            cfg["input"].get("pattern") or "*.fits", cfg)
     dv = smart_dv_from_step(step, value)
     fraction = SMART_DV_FRACTION if value is True else float(value)
     was = cfg["domain"].get("dv")
@@ -815,21 +811,21 @@ def highpass_samples(width_kms, dv, polyorder=2):
     """The Savitzky-Golay window, in samples, for a width in km/s.
 
     Odd, as savgol_filter needs, and never shorter than polyorder + 2. At
-    dv = 0.5 km/s, 100 km/s is 201 samples; at SPIRou's smart step of
-    1.37 km/s it is 73, the same 100 km/s.
+    dv = 0.5 km/s, 100 km/s is 201 samples; at a step of 1.37 km/s it is 73,
+    the same 100 km/s.
     """
     n = int(round(float(width_kms) / float(dv)))
     n = max(n, int(polyorder) + 2)
     return n if n % 2 else n + 1
 
 
-def _file_highpass(user, layered, instrument=None, object_name=None, variant=None):
+def _file_highpass(user, layered, object_name=None, variant=None):
     """The `highpass` keys the configuration FILE sets, its layers merged in
     the order load_config applies them; the package DEFAULTS are not in it.
 
     A variant, the last layer, that gives the window in samples and not the
     width keeps that window: the width the layers below it set is dropped,
-    the way a run saved before width_kms reads back.
+    the way a configuration written with a window in samples reads back.
     """
     if not layered:
         layers = [user]
@@ -837,8 +833,6 @@ def _file_highpass(user, layered, instrument=None, object_name=None, variant=Non
         top = {k: v for k, v in user.items()
                if k not in ("general", "instruments", "objects")}
         layers = [user.get("general") or top]
-        if instrument:
-            layers.append((user.get("instruments") or {}).get(instrument.upper()) or {})
         if object_name:
             layers.append((user.get("objects") or {}).get(object_name) or {})
     out = {}
@@ -860,8 +854,8 @@ def resolve_highpass(cfg, file_hp=None):
     hashes it, together with the dv it came from.
 
     A config file that sets `window` and not `width_kms` keeps its window:
-    every run saved before 2026-09-11 is written that way, and reading one
-    back has to give the cube it was built with, not a new one.
+    reading a saved run written that way back has to give the cube it was
+    built with, not a new one.
     """
     from .logger import log
 
@@ -956,42 +950,29 @@ def _apply_run_overrides(cfg: dict, object_name, data_dir, out_dir) -> dict:
     return cfg
 
 
-def detect_instrument(directory: str, pattern: str = "*t.fits") -> str:
-    """Read INSTRUME from the first file that opens, and refuse to guess.
+def instrument_layer(instrument: str, data_source) -> dict:
+    """The instrument's own settings, as a layer of the configuration.
 
-    The instrument decides which FITS extensions hold the flux, the wavelength
-    solution and the blaze, and getting that wrong fails silently: reading
-    FluxA from a SPIRou file raises nothing, it returns half the light with a
-    different blaze and SNR. So it is read from the data and never offered as
-    a command-line flag.
+    They come from LBL's class for that instrument and data source
+    (Instrument.pca2d_settings: its PCA2D_* parameters, its domain, its
+    resolving power, the bands that overlap its domain), so that nothing in
+    this package depends on which instrument the spectra come from. The
+    instrument is named, as in a wrap (INSTRUMENT, DATA_SOURCE), never
+    guessed from the files: the wrong class raises no error, it reads another
+    fibre or applies another BERV and returns plausible numbers.
     """
-    import glob
+    from . import readers as _readers
 
-    from .io import robust_open
-
-    paths = sorted(glob.glob(os.path.join(directory, pattern)))
-    if not paths:
-        # THE CHICKEN AND THE EGG. The file pattern is a property of the
-        # instrument (*t.fits on APERO, *_S2D_A.fits on HARPS, *e2ds_A.fits
-        # on SOPHIE), but the instrument is read IN a file, which therefore
-        # has to be found before it is known. At this point the pattern is
-        # still that of `general`, so it is worthless for an instrument that
-        # is not the default one. INSTRUME, on the other hand, is in every
-        # FITS file: the search widens to all of them rather than refusing
-        # (2026-10-14).
-        paths = sorted(glob.glob(os.path.join(directory, "*.fits")))
-    if not paths:
-        raise SystemExit("no file matching %s in %s" % (pattern, directory))
-    for path in paths[:20]:
-        try:
-            with robust_open(path) as hdulist:
-                name = str(hdulist[0].header.get("INSTRUME", "")).strip().upper()
-        except Exception:                                     # noqa: BLE001
-            continue
-        if name:
-            return name
-    raise SystemExit("none of the first files in %s declares INSTRUME"
-                     % directory)
+    try:
+        inst = _readers.profile(str(instrument), str(data_source))
+    except Exception as exc:                                   # noqa: BLE001
+        raise SystemExit(
+            "LBL has no class for INSTRUMENT %r and DATA_SOURCE %r (%s). The"
+            " instrument and its data source are named as in a wrap: the"
+            " lbl.instrument and lbl.data_source of the configuration, or"
+            " --instrument and --data-source."
+            % (instrument, data_source, exc))
+    return copy.deepcopy(inst.pca2d_settings())
 
 
 #: the keys of a variant file that describe it rather than configure the run
@@ -1001,14 +982,11 @@ VARIANT_META = ("reuse_fit", "note")
 #: Every configuration key the window can set, in the order the window shows
 #: it, and what each one means in one line.
 #:
-#: It lives here rather than in gui.py because a report has to print it and a
-#: report must not import tkinter. The report's summary page lists all of them
-#: with the value the run actually resolved: until 2026-09-15 that page named
-#: the components and the high pass and nothing else, so a run made with
-#: correct.weight: velocity, which refits every amplitude in the correction,
-#: read on the page exactly like a run made without it. tests/test_gui.py ties
-#: this tuple to gui.ALL_OPTIONS in both directions, so a setting cannot be
-#: added to the window without appearing on the page.
+#: It lives here rather than in the window's code because a report has to
+#: print it. The report's summary page lists all of them with the value the
+#: run actually resolved, so that two runs that differ by any of these (a
+#: correction whose amplitudes are refitted in another metric, for example)
+#: do not read alike on the page.
 WINDOW_SETTINGS = (
     ("twoframe.n_star", "star-frame components with a free amplitude,"
                         " besides the star's spectrum (not adjusted in"
@@ -1026,7 +1004,6 @@ WINDOW_SETTINGS = (
     ("domain.dv", "the grid step, in km/s"),
     ("input.nightly_stack", "coadd each night: true, false, or auto"),
     ("lbl.run", "run LBL after the correction"),
-    ("lbl.environment", "which LBL: the environment its script runs in"),
     ("lbl.prepare", "write LBL's tree and its config"),
     ("lbl.before", "measure the uncorrected spectra too"),
     ("lbl.after", "measure the corrected spectra"),
@@ -1058,37 +1035,44 @@ def setting_value(config, path):
 def instrument_stem(folder, instrument):
     """The star a folder named <STAR>_<INSTRUMENT> is a campaign of, or None.
 
-    The suffix has to be the instrument the files themselves declare (NIRPS
-    may carry its mode, _NIRPS_HE or _NIRPS_HA): a name that merely ends in
-    another word is a name, and is left alone.
+    The suffix has to be the instrument's LBL name, or its first part when
+    that name carries a mode after an underscore (<NAME>_<MODE>): a name that
+    merely ends in another word is a name, and is left alone.
     """
     if not folder or not instrument:
         return None
-    match = re.match(r"^(.+?)_%s(?:_H[AE])?$" % re.escape(str(instrument)),
-                     str(folder), re.I)
+    names = {str(instrument), str(instrument).split("_")[0]}
+    pattern = "|".join(re.escape(name) for name in
+                       sorted(names, key=len, reverse=True))
+    match = re.match(r"^(.+?)_(?:%s)$" % pattern, str(folder), re.I)
     return match.group(1) if match else None
 
 
 def load_config(path: str | None, object_name: str | None = None,
                 data_dir: str | None = None, out_dir: str | None = None,
-                instrument: str | None = None, variant: dict | None = None) -> dict:
-    """The three layers of config.yaml, merged, with the instrument resolved.
+                instrument: str | None = None, variant: dict | None = None,
+                data_source: str | None = None) -> dict:
+    """The layers of a configuration, merged, with the instrument resolved.
 
-    `general`, then `instruments.<INSTRUME>`, then `objects.<object_name>`,
-    then `variant`, the content of a variants/<name>.yaml if one is named,
-    each winning over the last, all on top of the package DEFAULTS. The
-    instrument is read from the files themselves unless one is named, and the
-    extension table it carries is registered with `tfits` so every reader in
-    the package agrees on which extension is which.
+    `general`, then the instrument's own settings (instrument_layer, from
+    LBL's class), then `objects.<object_name>`, then `variant`, the content of
+    a variants/<name>.yaml if one is named, each winning over the last, all
+    on top of the package DEFAULTS. The instrument and its data source are
+    LBL's names, given here or by the configuration's lbl.instrument and
+    lbl.data_source (the object's block first); without them the layer is
+    left out, which is enough to read the parameters but not to read
+    spectra. The t.fits extensions the instrument names are handed to
+    `tfits`, so every reader in the package agrees on which extension is
+    which.
 
-    A file written in the old flat form, with `input:` and `domain:` at the top
-    level, still loads: it is treated as one more layer on top of `general`.
+    A file written in the flat form, with `input:` and `domain:` at the top
+    level, also loads: it is treated as one more layer on top of `general`.
     """
     user = {}
     if path is not None:
         if not os.path.exists(path):
             raise FileNotFoundError("config file not found: %s" % path)
-        with open(path, "r") as handle:
+        with open(path, "r", encoding="utf-8") as handle:
             user = read_yaml(handle) or {}
 
     layered = any(k in user for k in ("general", "instruments", "objects"))
@@ -1096,44 +1080,32 @@ def load_config(path: str | None, object_name: str | None = None,
     if layered and user.get("general") is None:
         cfg = _deep_update(cfg, {k: v for k, v in user.items()
                                  if k not in ("general", "instruments", "objects")})
+    if layered and user.get("instruments"):
+        from .logger import log
+        log("%s has an `instruments:` block, which is not read: an"
+            " instrument's settings are the PCA2D_* parameters of its LBL"
+            " class (lbl/instruments), and a target's go under `objects:`"
+            % path, "warn")
 
     cfg = _apply_run_overrides(cfg, object_name, data_dir, out_dir)
 
-    table = (user.get("instruments") or {}) if layered else {}
-    if table:
-        from . import tfits as _tfits
-        _tfits.register_instruments(
-            {name: dict(block.get("extensions") or {})
-             for name, block in table.items() if block.get("extensions")})
-    # Only look at the data when an object was named AND its folder is there:
-    # loading the file to read it, which the tests and the docs do, must not
-    # need a telescope. A checkout with no data under the input root resolves
-    # every layer it can and leaves the two steps that read spectra undone,
-    # rather than refusing to load at all; the callers that are about to run a
-    # stage, cli.resolve and cli.joint_members, say plainly what a missing
-    # folder means before anything else happens.
-    if instrument is None and table and object_name and has_spectra_dir(cfg):
-        instrument = detect_instrument(spectra_dir(cfg),
-                                       cfg["input"].get("pattern", "*t.fits"))
+    obj_block = ((user.get("objects") or {}).get(object_name) or {}
+                 if object_name and layered else {})
+    # the instrument as LBL names it: from the caller, else from the object's
+    # block, else from the configuration's lbl block
+    named = _deep_update(cfg.get("lbl") or {}, obj_block.get("lbl") or {})
+    instrument = instrument or named.get("instrument")
+    data_source = data_source or named.get("data_source")
     if instrument:
-        block = dict(table.get(instrument.upper()) or {})
-        block.pop("extensions", None)
-        if not block and table:
-            raise SystemExit(
-                "config.yaml has no `instruments: %s:` block. The instrument is"
-                " read from INSTRUME in the data, so add one rather than"
-                " renaming anything." % instrument)
-        cfg = _deep_update(cfg, block)
-        cfg["input"]["instrument"] = instrument.upper()
+        cfg = _deep_update(cfg, instrument_layer(instrument, data_source))
+        cfg["input"]["instrument"] = str(cfg["lbl"]["instrument"]).upper()
 
-    if object_name and layered:
-        cfg = _deep_update(cfg, (user.get("objects") or {}).get(object_name, {}))
+    if obj_block:
+        cfg = _deep_update(cfg, obj_block)
     # A folder named <STAR>_<INSTRUMENT> is that star's campaign on that
-    # spectrograph, and its headers name the star: tfiles_repo holds every
-    # campaign that way (TOI1078_NIRPS, OBJECT = TOI-1078, DRSOBJN = TOI1078),
-    # and matched on the folder's own name every file of the first joint run
-    # made from it was skipped (2026-09-18). Only when nothing names the
-    # header already: GL699_NIRPS's Gl699 stays what config.yaml says.
+    # instrument, and its headers name the star, not the folder: matched on
+    # the folder's own name, none of its files would be read. Only when
+    # nothing names the header already.
     stem = instrument_stem(object_name, cfg["input"].get("instrument"))
     if stem and not cfg["input"].get("object_header"):
         cfg["input"]["object_header"] = stem
@@ -1144,10 +1116,16 @@ def load_config(path: str | None, object_name: str | None = None,
     # last word to the command line: an object block may move the roots, a flag
     # passed to this run overrules it
     cfg = _apply_run_overrides(cfg, object_name, data_dir, out_dir)
+    # the t.fits extensions every reader of this process uses, also when a
+    # run's resolved configuration is read back; none for an instrument read
+    # through its LBL class
+    from . import tfits as _tfits
+    _tfits.use_extensions(cfg["input"].get("extensions"))
+    _tfits.use_header_keys(cfg["input"].get("header_keys"))
 
     # dv from the data, once the instrument's domain and the object's folder
-    # are both known. Only when an object was named, for the same reason the
-    # instrument is only detected then: loading the file to read it must not
+    # are both known. Only when an object was named and its folder is there:
+    # loading the file to read it, which the tests and the docs do, must not
     # need the data to be on this disk. A run saves the resolved number, so
     # every stage after this one reads a plain dv.
     if object_name and cfg["domain"].get("smart_dv") and has_spectra_dir(cfg):
@@ -1173,8 +1151,8 @@ def load_config(path: str | None, object_name: str | None = None,
             cfg["twoframe"][old] = tf[new]
 
     # the high pass's window from its width in km/s, now that dv is known
-    cfg = resolve_highpass(cfg, _file_highpass(user, layered, instrument,
-                                               object_name, variant))
+    cfg = resolve_highpass(cfg, _file_highpass(user, layered, object_name,
+                                               variant))
     return cfg
 
 
@@ -1214,7 +1192,7 @@ def update_file(path, values):
     would delete all of them, which is why this edits lines rather than
     re-writing the document. Returns the keys it wrote.
     """
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         lines = handle.read().split("\n")
     try:
         start = next(i for i, line in enumerate(lines) if line.startswith("general:"))
@@ -1265,7 +1243,7 @@ def update_file(path, values):
         if got != value and not (isinstance(got, float) and got == value):
             raise SystemExit("%s: wrote %s: %r but it reads back as %r, so the"
                              " file was left as it was" % (path, name, value, got))
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         handle.write(body)
     return written
 
@@ -1336,22 +1314,13 @@ def cache_key(config: dict) -> str:
                       "telluric_mode", "empirical_noise_box")
         },
     }
-    # Entries left unset are stripped before hashing. Without this, adding a new
-    # optional knob to `quality` changes the key of every existing config and
-    # orphans cubes that took twenty minutes to build, purely because a default
-    # of None appeared in the dictionary. A knob that is not set describes no
-    # behaviour, so it must not describe a different cube either.
-    # The epoch window is dropped from the hash when unset. Without this, adding
-    # these two knobs would change the key of every existing config and orphan
-    # cubes that took twenty minutes to build, purely because a default of None
-    # appeared in the dictionary. Only these two are treated this way: the older
-    # entries are hashed exactly as before, including their Nones, so keys
-    # computed by earlier versions still match.
-    # a name matched in the headers describes which files are read, so it is
-    # hashed when it is set; unset it describes nothing and must not re-key
-    # every cube already built
-    # the bundles only cut stacked nights: with stacking refused they describe
-    # nothing, and must not re-key a cube of single exposures either
+    # Optional entries left unset are stripped before hashing: a knob that is
+    # not set describes no behaviour, so it must not describe a different
+    # cube either, and adding one must not change the key of every cube
+    # already built (twenty minutes each). The same holds for a name matched
+    # in the headers (hashed when set, since it decides which files are read)
+    # and for the bundles, which only cut stacked nights: with stacking
+    # refused they describe nothing.
     unstacked = str(relevant["input"].get("nightly_stack")).lower() == "false"
     relevant["input"] = {k: v for k, v in relevant["input"].items()
                          if not (k == "object_header" and v is None)
@@ -1365,11 +1334,11 @@ def cache_key(config: dict) -> str:
                                    and v is None)}
     relevant["weights"] = {k: v for k, v in relevant["weights"].items()
                            if not (k == "empirical_noise_box" and v is None)}
-    # The Doppler shift that registers each spectrum became relativistic
-    # (grids.doppler) on 2026-09-10; it was the first-order 1 + v/c, 0.003
-    # pixel (1.5 m/s) off at a 30 km/s BERV. A cube registered the old way must
-    # not be reused, so the formula is in the key. An observer-frame cube
-    # applies no shift at all, and keeps its key and its telluric map.
+    # The Doppler shift that registers each spectrum is relativistic
+    # (grids.doppler); the first-order 1 + v/c is 0.003 pixel (1.5 m/s) off
+    # at a 30 km/s BERV. A cube registered with the first-order shift must not
+    # be reused, so the formula is in the key. An observer-frame cube applies
+    # no shift at all, and keeps its key and its telluric map.
     if relevant["registration"].get("frame") != "observer":
         relevant["doppler"] = "relativistic"
     blob = json.dumps(relevant, sort_keys=True, default=str).encode()

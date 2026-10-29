@@ -117,39 +117,78 @@ def busy(data_dir: str) -> list:
     """The Python processes working in this data folder (their current
     folder in it), the window's own server aside: a run started from a
     terminal reads the cubes and the corrected spectra the cleanup would
-    delete, and nothing else says it is going. [dict(pid, command)]."""
-    root = os.path.realpath(data_dir)
-    try:
-        out = subprocess.run(["lsof", "-a", "-d", "cwd", "-c", "python",
-                              "-Fpn"], capture_output=True, text=True,
-                             timeout=10).stdout
-    except (OSError, subprocess.SubprocessError):
-        return []
-    found, pid = [], None
-    for line in out.splitlines():
-        if line.startswith("p"):
-            pid = int(line[1:])
-        elif line.startswith("n") and pid is not None:
-            cwd = os.path.realpath(line[1:])
-            if pid != os.getpid() and (cwd == root
-                                       or cwd.startswith(root + os.sep)):
-                found.append(pid)
+    delete, and nothing else says it is going. [dict(pid, command)].
+
+    When this system gives no way to tell (neither psutil nor lsof), one
+    dict(pid=None, command="", unknown=True): nothing found is not nothing
+    going, and the cleanup refuses to delete on it."""
+    found = _working_in(data_dir)
+    if found is None:
+        return [dict(pid=None, command="", unknown=True)]
     procs = []
-    for pid in sorted(set(found)):
-        try:
-            command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
-                                     capture_output=True, text=True,
-                                     timeout=5).stdout.strip()
-        except (OSError, subprocess.SubprocessError):
-            command = ""
+    for pid, command in sorted(found.items()):
         # the multiprocessing helpers of a run are the run, and a window
         #   is not one; nor is an interpreter someone works in
-        if "resource_tracker" in command or ("lbl_gui" in command or "lbl-gui" in command):
+        if "resource_tracker" in command or "lbl_gui" in command \
+                or "lbl-gui" in command:
             continue
         if not is_run(command):
             continue
         procs.append(dict(pid=pid, command=command[:200]))
     return procs
+
+
+def _inside(path: str, root: str) -> bool:
+    """Whether `path` is `root` or in it, links resolved (and case ignored
+    where the system ignores it, Windows)."""
+    path = os.path.normcase(os.path.realpath(path))
+    return path == root or path.startswith(os.path.join(root, ""))
+
+
+def _working_in(data_dir: str):
+    """{pid: command line} of the Python processes, this one aside, whose
+    current folder is `data_dir` or in it; None when this system gives no
+    way to tell. psutil where it is installed (every system), lsof and ps
+    otherwise (macOS, Linux)."""
+    root = os.path.normcase(os.path.realpath(data_dir))
+    try:
+        import psutil
+    except ImportError:
+        psutil = None
+    found = {}
+    if psutil is not None:
+        for proc in psutil.process_iter(["name"]):
+            name = str(proc.info.get("name") or "").lower()
+            if proc.pid == os.getpid() or not name.startswith("python"):
+                continue
+            try:
+                if _inside(proc.cwd(), root):
+                    found[proc.pid] = " ".join(proc.cmdline())
+            except (psutil.Error, OSError):
+                # ended meanwhile, or another user's
+                continue
+        return found
+    try:
+        out = subprocess.run(["lsof", "-a", "-d", "cwd", "-c", "python",
+                              "-Fpn"], capture_output=True, text=True,
+                             timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    pid = None
+    for line in out.splitlines():
+        if line.startswith("p"):
+            pid = int(line[1:])
+        elif line.startswith("n") and pid is not None:
+            if pid != os.getpid() and _inside(line[1:], root):
+                found[pid] = ""
+    for pid in found:
+        try:
+            found[pid] = subprocess.run(
+                ["ps", "-o", "command=", "-p", str(pid)],
+                capture_output=True, text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return found
 
 
 #: interpreters a person works in: their current folder says where they
@@ -160,8 +199,8 @@ INTERACTIVE = ("ipython", "jupyter", "ipykernel", "bpython", "ptpython")
 def is_run(command: str) -> bool:
     """Whether a Python process runs something (a script, a module, code
     given with -c) rather than waits for someone (a bare python, ipython,
-    a Jupyter kernel). An ipython left in science/TOI1452 for hours stopped
-    every cleanup (2026-10-23)."""
+    a Jupyter kernel). An ipython left open in a target's folder would
+    otherwise hold back every cleanup for as long as it stays open."""
     words = str(command or "").split()
     if not words:
         return False
@@ -180,6 +219,10 @@ def delete(data_dir: str, paths: list) -> list:
     this data folder, and nothing is running in it; returns [dict(path,
     done, why)]."""
     running = busy(data_dir)
+    if any(p.get("unknown") for p in running):
+        why = ("whether a run is going in this folder cannot be told on this"
+               " system (install psutil): nothing is deleted")
+        return [dict(path=path, done=False, why=why) for path in paths]
     if running:
         why = "a run is going in this folder (pid %s): nothing is deleted" \
             % ", ".join(str(p["pid"]) for p in running)

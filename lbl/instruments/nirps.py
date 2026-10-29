@@ -103,6 +103,23 @@ class NIRPS(Instrument):
         self.param_set('HP_WIDTH', 500, source=func_name)
         # approximate mean resolution in lambda/dlambda
         self.param_set('APPROX_RESOLUTION', 80000, source=func_name)
+        # PCA2D reads the t.fits itself: they carry the telluric transmission
+        #    (Recon) and the sky emission that was subtracted (SKYCORR_SCI), which
+        #    this class does not return. The science fibre is A
+        self.param_set('PCA2D_INPUT_FORMAT', 'tfits', source=func_name)
+        self.param_set('PCA2D_TFITS_EXTENSIONS', source=func_name,
+                       value=dict(flux='FluxA', wave='WaveA',
+                                  blaze='BlazeA', recon='Recon',
+                                  sky='SKYCORR_SCI'))
+        # the files of a science folder PCA2D reads
+        self.param_set('PCA2D_INPUT_PATTERN', '*t.fits', source=func_name)
+        # several exposures are taken per visit: PCA2D coadds each night
+        self.param_set('PCA2D_NIGHTLY_STACK', True, source=func_name)
+        # the windows of the PCA2D figures (centre:width in nm): deep
+        #    tellurics (H2O, O2, CO2, CH4) near the middle of an order
+        self.param_set('PCA2D_WINDOWS', source=func_name,
+                       value=['1187.8:2', '1208.25:4', '1269.75:2',
+                              '1608.6:2', '1667.5:5', '1707.5:3'])
         # define the SNR cut off threshold
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
@@ -218,6 +235,21 @@ class NIRPS(Instrument):
         # define the airmass of the observation
         self.param_set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
+        # define the airmass at the end of the observation
+        self.param_set('KW_AIRMASS_END', 'HIERARCH ESO TEL AIRM END',
+                       source=func_name)
+        # define the seeing during the observation [arcsec]
+        self.param_set('KW_SEEING', 'HIERARCH ESO TEL AMBI FWHM START',
+                       source=func_name)
+        # define the relative humidity during the observation
+        self.param_set('KW_HUMIDITY', 'HIERARCH ESO TEL AMBI RHUM',
+                       source=func_name)
+        # define the elevation of the Sun during the observation
+        self.param_set('KW_SUN_ELEVATION', 'DRSSUNEL', source=func_name)
+        # define the instrument mode of the observation
+        self.param_set('KW_DRS_MODE', 'DRSMODE', source=func_name)
+        # define the largest BERV of the target over the year
+        self.param_set('KW_BERVMAX', 'BERVMAX', source=func_name)
         # define the human date of the observation
         self.param_set('KW_DATE', 'DATE-OBS', source=func_name)
         # define the tau_h20 of the observation
@@ -279,7 +311,10 @@ class NIRPS(Instrument):
         #    distinguish FP calibration files from FP simultaneous files
         self.param_set('KW_REF_KEY', 'DPRTYPE', source=func_name)
         # the temperature of the object
-        self.param_set('KW_TEMPERATURE', 'OBJTEMP', source=func_name)
+        # APERO writes it as OBJTEMP on the primary header and PP_TEFF on
+        #    the science extension
+        self.param_set('KW_TEMPERATURE', ['OBJTEMP', 'PP_TEFF'],
+                       source=func_name)
         # velocity of template from CCF
         self.param_set('KW_MODELVEL', 'MODELVEL', source=func_name)
 
@@ -1205,6 +1240,8 @@ class NIRPS_HA(NIRPS):
         super().param_override()
         # add keys here
         self.param_set('INSTRUMENT', 'NIRPS_HA', source=func_name)
+        # PCA2D keeps the exposures taken in this mode
+        self.param_set('PCA2D_DRS_MODES', ['HA'], source=func_name)
         # define the default mask url and filename
         self.param_set('DEFAULT_MASK_FILE', source=func_name,
                         value='mdwarf_nirps_ha.fits')
@@ -1290,6 +1327,8 @@ class NIRPS_HE(NIRPS):
         # add keys here
         # ---------------------------------------------------------------------
         self.param_set('INSTRUMENT', 'NIRPS_HE', source=func_name)
+        # PCA2D keeps the exposures taken in this mode
+        self.param_set('PCA2D_DRS_MODES', ['HE'], source=func_name)
         # define the default mask url and filename
         self.param_set('DEFAULT_MASK_FILE', source=func_name,
                         value='mdwarf_nirps_he.fits')
@@ -1811,6 +1850,11 @@ class NIRPS_HA_ESO(NIRPS_HA):
         func_name = __NAME__ + '.NIRPS_HA_ESO.override()'
         # first run the inherited method
         super().param_override()
+        # the S2D of the ESO archive, read through this class (fibre A, the
+        #    science)
+        self.param_set('PCA2D_INPUT_FORMAT', 's2d', source=func_name)
+        self.param_set('PCA2D_INPUT_PATTERN', '*_S2D_A.fits', source=func_name)
+        self.param_set('PCA2D_TFITS_EXTENSIONS', None, source=func_name)
         # ---------------------------------------------------------------------
         # set parameters to update
         # ---------------------------------------------------------------------
@@ -1855,6 +1899,14 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # TODO: Check for NIRPS ESO
         self.param_set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
+        # define the elevation of the Sun during the observation
+        self.param_set('KW_SUN_ELEVATION', None, source=func_name)
+        # define the instrument mode of the observation
+        self.param_set('KW_DRS_MODE', 'HIERARCH ESO INS MODE',
+                       source=func_name)
+        # define the largest BERV of the target over the year
+        self.param_set('KW_BERVMAX', 'HIERARCH ESO QC BERVMAX',
+                       source=func_name)
         # define the DPRTYPE of the observation
         self.param_set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
                         source=func_name)
@@ -2278,6 +2330,11 @@ class NIRPS_HE_ESO(NIRPS_HE):
         func_name = __NAME__ + '.NIRPS_HE_ESO.param_override()'
         # first run the inherited method
         super().param_override()
+        # the S2D of the ESO archive, read through this class (fibre A, the
+        #    science)
+        self.param_set('PCA2D_INPUT_FORMAT', 's2d', source=func_name)
+        self.param_set('PCA2D_INPUT_PATTERN', '*_S2D_A.fits', source=func_name)
+        self.param_set('PCA2D_TFITS_EXTENSIONS', None, source=func_name)
         # ---------------------------------------------------------------------
         # set parameters to update
         # ---------------------------------------------------------------------
@@ -2336,6 +2393,14 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # TODO: Check for NIRPS ESO
         self.param_set('KW_AIRMASS', 'HIERARCH ESO TEL AIRM START',
                         source=func_name)
+        # define the elevation of the Sun during the observation
+        self.param_set('KW_SUN_ELEVATION', None, source=func_name)
+        # define the instrument mode of the observation
+        self.param_set('KW_DRS_MODE', 'HIERARCH ESO INS MODE',
+                       source=func_name)
+        # define the largest BERV of the target over the year
+        self.param_set('KW_BERVMAX', 'HIERARCH ESO QC BERVMAX',
+                       source=func_name)
         # define the DPRTYPE of the observation
         self.param_set('KW_DPRTYPE', 'HIERARCH ESO PRO REC1 RAW1 CATG',
                         source=func_name)

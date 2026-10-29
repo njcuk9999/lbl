@@ -96,6 +96,12 @@ class HarpsN(Instrument):
         self.param_set('HP_WIDTH', 500, source=func_name)
         # approximate mean resolution in lambda/dlambda
         self.param_set('APPROX_RESOLUTION', 115000, source=func_name)
+        # the windows of the PCA2D figures (centre:width in nm): the O2 B and
+        #    gamma bands and water, near the middle of an order's blaze, and
+        #    the sodium D or magnesium b lines as stellar references
+        self.param_set('PCA2D_WINDOWS', source=func_name,
+                       value=['687.5:2.5', '630.5:2', '594.0:2.25',
+                              '650.75:2.5', '589.0:1.5', '518.0:2'])
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 8, source=func_name)
@@ -241,6 +247,21 @@ class HarpsN(Instrument):
         # define the airmass of the observation
         self.param_set('KW_AIRMASS', 'AIRMASS',
                         source=func_name)
+        # define the airmass at the end of the observation
+        self.param_set('KW_AIRMASS_END', 'HIERARCH TNG TEL AIRM END',
+                       source=func_name)
+        # define the seeing during the observation [arcsec]
+        self.param_set('KW_SEEING', 'HIERARCH TNG METEO FWHM',
+                       source=func_name)
+        # define the relative humidity during the observation
+        self.param_set('KW_HUMIDITY', 'HIERARCH TNG METEO HUMIDITY',
+                       source=func_name)
+        # define the elevation of the Sun during the observation
+        self.param_set('KW_SUN_ELEVATION', None, source=func_name)
+        # define the instrument mode of the observation
+        self.param_set('KW_DRS_MODE', None, source=func_name)
+        # define the largest BERV of the target over the year
+        self.param_set('KW_BERVMAX', None, source=func_name)
         # define the human date of the observation
         self.param_set('KW_DATE', 'DATE-OBS', source=func_name)
         # define the tau_h20 of the observation
@@ -696,6 +717,9 @@ class HarpsN_ORIG(HarpsN):
         func_name = __NAME__ + '.HARPSN_ORIG.override()'
         # first run the inherited method
         super().param_override()
+        # the e2ds of the original DRS, read through this class (fibre A,
+        #    the science)
+        self.param_set('PCA2D_INPUT_PATTERN', '*e2ds_A.fits', source=func_name)
         # ---------------------------------------------------------------------
         # set parameters to update
         # ---------------------------------------------------------------------
@@ -977,6 +1001,18 @@ class HarpsN_ESO(HarpsN):
         func_name = __NAME__ + '.HarpsN_ESO.override()'
         # first run the inherited method
         super().param_override()
+        # the S2D of the ESO archive, read through this class (fibre A, the
+        #    science)
+        self.param_set('PCA2D_INPUT_FORMAT', 's2d', source=func_name)
+        self.param_set('PCA2D_INPUT_PATTERN', '*_S2D_A.fits', source=func_name)
+        # the S2D wavelength grid is barycentric (get_berv returns 0), so
+        #    PCA2D brings it back to the observer's frame, where the
+        #    atmosphere is fixed: the two-frame fit separates the star from
+        #    the atmosphere by the BERV. Each exposure then covers an
+        #    interval shifted by its own BERV, so a sample is kept when half
+        #    of the exposures cover it rather than all of them
+        self.param_set('PCA2D_TO_OBSERVER', True, source=func_name)
+        self.param_set('PCA2D_MASK_SHARE', 0.5, source=func_name)
         # ---------------------------------------------------------------------
         # set parameters to update
         # ---------------------------------------------------------------------
@@ -1206,10 +1242,10 @@ class HarpsN_ESO(HarpsN):
         star's frame. But TAPAS describes the atmosphere, which sat in the
         observer frame, and the atmosphere did move by the header's BERV.
 
-        Measured on HD 10700 (HARPS, 2026-10-15), O2 B band: without this
-        shift the model correlates with the spectrum at -0.035, i.e. not at
-        all, and the residual offset tracks the BERV with a slope of -1.0003.
-        With it, 0.973 and a slope of 0.0000.
+        Without this shift the model does not correlate with the telluric
+        lines of the spectrum (in the O2 B band, for example), and the
+        residual offset tracks the BERV with a slope of -1; with it, the
+        correlation is close to 1 and the slope 0.
 
         :param sci_hdr: io.LBLHeader, the science header
 

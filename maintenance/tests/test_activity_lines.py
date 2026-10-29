@@ -6,12 +6,20 @@ equivalent width added to the spectrum comes back as EW_DIFF.
 """
 import numpy as np
 import pytest
+from scipy.special import erf
 
 from lbl.core import math as mp
 from lbl.science import activity_lines
 
 # He I 10830, as in the catalog
 LAM0 = 1083.3273
+
+
+def _boxcar_share(box, fwhm):
+    """The share of a gaussian line of this FWHM inside a boxcar of full
+    width `box`, centred on it"""
+    sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
+    return erf(0.5 * box / sigma / np.sqrt(2))
 
 
 def _gauss(wave, centre, fwhm):
@@ -51,7 +59,8 @@ def test_an_added_line_comes_back(ew_added):
                                    velocity=15000.0, berv=0.0)
     row = table[list(table['NAME']).index('He 1.08333')]
     # the 0.025 nm box holds 99.7% of a 0.01 nm FWHM line
-    assert row['dEW'] == pytest.approx(0.9967 * ew_added, abs=0.3)
+    assert row['dEW'] == pytest.approx(_boxcar_share(0.025, 0.01) * ew_added,
+                                       abs=0.3)
     assert row['sdEW'] < 0.3
     assert row['FRACVALID'] == 1
 
@@ -83,7 +92,8 @@ def test_the_rdb_gets_one_column_per_measure_and_line(tmp_path):
     from astropy.io import fits
     from astropy.table import Table
 
-    # two lblrv files, the second one from before the activity lines
+    # two lblrv files, the second one without an ACTIVITY extension (as
+    #   older versions of LBL wrote them)
     wavegrid, spectrum, template, blaze, rms = _orders(ew_added=25.0,
                                                        noise=1.0)
     act = activity_lines.measure(wavegrid, spectrum, template, blaze, rms,
@@ -100,7 +110,8 @@ def test_the_rdb_gets_one_column_per_measure_and_line(tmp_path):
         '{0}_{1}'.format(col, key) for key in ['He_1.08321', 'He_1.08333']
         for col in ['dEW', 'sdEW', 'FRACVALID', 'CHI2']]
     assert np.isnan(rdb['dEW_He_1.08333'][0])
-    assert rdb['dEW_He_1.08333'][1] == pytest.approx(0.9967 * 25, abs=0.3)
+    assert rdb['dEW_He_1.08333'][1] == pytest.approx(
+        _boxcar_share(0.025, 0.01) * 25, abs=0.3)
 
 
 def test_the_report_page_finds_and_draws_the_lines():

@@ -1,8 +1,9 @@
 """The pages of an LBL run report.
 
 Each function draws one page and returns it; none writes a file, `main`
-assembles them. The FIP is computed here (lbl.report.fip); the periodogram
-borrows koloa when it is installed, and is skipped without it.
+assembles them. The periodogram is lbl.report.periodogram, the false
+inclusion probability lbl.report.fip, the fit of K at published ephemerides
+lbl.report.kepfit.
 """
 import numpy as np
 
@@ -437,9 +438,9 @@ def page_periodogram(plt, table, title, known=None):
     freq = frequency_grid(time)
     power = gls(time, vrad - np.median(vrad), svrad, freq)
     # THE SPECTRAL WINDOW, and it is NOT computed with gls: gls has a
-    # floating mean, so a constant series gets exactly zero from it (seen on
-    # 2026-10-16: the page came out as a flat line). The window is the
-    # transform of the sampling itself,
+    # floating mean, so a constant series gets exactly zero from it and the
+    # window would be a flat line. The window is the transform of the
+    # sampling itself,
     #
     #     W(nu) = | sum_k w_k exp(-2i pi nu t_k) | / sum_k w_k,
     #
@@ -567,7 +568,7 @@ def _fip_axis(ax, curves=()):
 
 
 def page_fip(plt, table, title):
-    """The FIP, in its three ways of facing the outliers."""
+    """The gaussian FIP, every point taken at its error bar."""
     from lbl.report import fip as _fip
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
@@ -582,11 +583,9 @@ def page_fip(plt, table, title):
     ax.plot(1.0 / freq, _log_fip(values), lw=1.0, color='C0',
             label='gaussian, one signal')
     ax.set_xscale('log')
-    # A PROBABILITY IS READ ON ITS OWN SCALE: linear, 0 to 1, with the axis
-    # pinned to those bounds. A FIP near 1 means the signal is almost surely
-    # absent and a FIP near 0 that it is almost surely there, and the eye
-    # should see where a curve sits between the two without having to decode
-    # a stretched axis.
+    # ON A LOG SCALE (_fip_axis): a FIP near 1 means the signal is almost
+    # surely absent and a FIP near 0 that it is almost surely there, and what
+    # separates a weak detection from a strong one is the number of decades
     _fip_axis(ax, curves=[_log_fip(values)])
     _landmarks(ax)
     ax.legend(fontsize=8)
@@ -603,9 +602,10 @@ def strongest_line(spl, wave_min, wave_max, step=0.002):
     """Where the deepest line of this species sits, in nm.
 
     Found from TAPAS rather than written down, so that the figure centres
-    itself on whatever the instrument actually covers. Measured on the HARPS
-    domain the 2026-10-16: water peaks at 647.76 nm (46% deep) and the dry
-    absorbers at 687.41 nm, the saturated O2 B band.
+    itself on whatever the instrument actually covers. On the HARPS domain,
+    water peaks at 647.76 nm (46% deep) and the dry absorbers at 687.41 nm,
+    the saturated O2 B band: the values page_telluric falls back on without
+    TAPAS.
     """
     grid = np.arange(wave_min, wave_max, step)
     depth = 1.0 - np.asarray(spl(grid), dtype=float)
@@ -704,9 +704,8 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
         # the blaze peaks and the extraction is at its best, and once at the
         # very edge of its neighbour, where the throughput has fallen off and
         # the same wavelengths are far noisier. Drawing both stacks a
-        # measurement on a poor copy of itself. Measured on HARPS the
-        # 2026-10-16: the water window at 647.76 nm falls in the overlap of
-        # orders 64 and 65.
+        # measurement on a poor copy of itself. On HARPS, for example, the
+        # water window at 647.76 nm falls in the overlap of orders 64 and 65.
         chosen = _best_order(wave, low, high)
         band = ((wave > low) & (wave < high) & np.isfinite(before)
                 & (before > 0))
@@ -746,8 +745,8 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
         # choice rather than as a plotting accident
         # A THIN BAND ALONG THE BOTTOM, not a full-height wash: around a
         # strong line the gaps are many and scattered, and shading the whole
-        # panel turned the figure into a solid block that hid the curves it
-        # was meant to annotate.
+        # panel would turn the figure into a solid block that hides the curves
+        # it is meant to annotate.
         if dead:
             ax.fill_between(w, 0.0, 0.035, where=~np.isfinite(a),
                             color='0.45', transform=ax.get_xaxis_transform(),
@@ -811,8 +810,8 @@ def page_telluric_airmass(plt, table, title):
     WHAT THE LEFT PANEL CHECKS. The dry species are well mixed, so their
     column follows the airmass and the points fall on a line; not
     necessarily the line of slope 1 through zero, TAPAS being computed for a
-    reference column that an observatory at altitude does not have (La
-    Silla: 0.961 times the airmass on HD 10700). The line drawn is fitted,
+    reference column that an observatory at altitude does not have (its
+    slope is then a little below 1). The line drawn is fitted,
     slope and offset free, with the scatter about it; slope 1 through zero
     is drawn beside it for the eye. A cloud off any line says the dry fit
     failed.
@@ -988,8 +987,6 @@ def page_berv(plt, table, title):
         slope, offset = np.polyfit(berv[good], centred[good], 1)
         span = np.linspace(np.min(berv[good]), np.max(berv[good]), 10)
         axes[1].plot(span, slope * span + offset, '-', color='C3', lw=1.2)
-        # the slope is the number that matters: in m/s per km/s it says how
-        # much of the Earth's motion leaked into the measured velocity
         resid = centred[good] - (slope * berv[good] + offset)
         # THE SLOPE IS THE NUMBER TO READ: in m/s per km/s it says how much
         # of the Earth's own motion leaked into the measured velocity, and
@@ -1018,9 +1015,9 @@ def page_oafip(plt, table, title, known=None):
     is drawn from its error bar, so one bad night can either invent a signal
     or bury one, and the only defence is to clip, which is a decision made
     before the question is asked. The outlier-aware FIP instead MODELS the
-    outliers: each point carries a latent indicator saying whether it belongs
-    to the normal population or to a wider one, sampled along with everything
-    else (lbl.report.fip.oafip).
+    outliers: each point is weighted by its probability of belonging to the
+    normal population rather than to a wider one, read off its distance to
+    the median against its error bar and the jitter (lbl.report.fip.oafip).
 
     Reading the two together is the point. Where they agree, the answer does
     not depend on how the outliers were handled. Where they differ, it does,
@@ -1065,7 +1062,7 @@ def page_oafip(plt, table, title, known=None):
     axes[1].set_title('%d epochs above one half, out of %d'
                       % (int(np.sum(prob > 0.5)), prob.size), fontsize=9)
     axes[1].grid(alpha=0.3)
-    fig.suptitle('Outlier-aware false inclusion probability\\n'
+    fig.suptitle('Outlier-aware false inclusion probability\n'
                  'The outliers are modelled rather than clipped: where the'
                  ' two curves part, the answer depends on them',
                  fontsize=10)
@@ -1150,7 +1147,7 @@ def page_indicators(plt, table, title):
             ax.set_title('MAD %.3g' % scatter, fontsize=8)
     axes[-1, 0].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
     fig.suptitle('Every indicator measured beside the velocity, median'
-                 ' removed\\nA velocity that follows one of these is a line'
+                 ' removed\nA velocity that follows one of these is a line'
                  ' shape changing, not a Doppler shift', fontsize=10)
     fig.tight_layout()
     return fig
@@ -1205,14 +1202,15 @@ def activity_stats(table, key):
 
 def activity_spread(ew, sig):
     """The variability of a line beyond its error bars: the robust scatter
-    of its measures (1.4826 MAD about their median) less their median error
-    bar in quadrature, 0 when the error bars explain it. A star whose H alpha
-    follows its rotation (GJ 229, rms 15 mA for errors of 1 mA) is then not
-    red at every epoch: what stands out is what stands out from that."""
+    of its measures (the MAD about their median, scaled to a standard
+    deviation, stats.robust_sigma) less their median error bar in
+    quadrature, 0 when the error bars explain it. A star whose H alpha
+    follows its rotation, with a scatter many times its error bars, is then
+    not red at every epoch: what stands out is what stands out from that."""
     ew, sig = np.asarray(ew, dtype=float), np.asarray(sig, dtype=float)
     if ew.size < 3:
         return 0.0
-    scatter = 1.4826 * np.median(np.abs(ew - np.median(ew)))
+    scatter = _mad(ew)
     return float(np.sqrt(max(scatter ** 2 - np.median(sig) ** 2, 0.0)))
 
 
@@ -1227,7 +1225,7 @@ def page_activity(plt, table, lines, title):
     bar and the line's own variability together (activity_spread): a flare
     lights He I and the Paschen lines together, an artefact usually one line
     only. Against the error bars alone, a line that varies with the star's
-    rotation was red at every epoch.
+    rotation would be red at every epoch.
 
     :param table: dict of columns, the rdb
     :param lines: (key, name, label) of the lines on this page
@@ -1288,9 +1286,9 @@ def page_activity(plt, table, lines, title):
 
 
 def subtract_fit(table, result):
-    """A copy of the table whose velocities have the fitted candidates and
-    the known orbits taken out (lbl.report.kepfit), for the periodogram and
-    the FIP after them"""
+    """A copy of the table whose velocities have the planets fitted at their
+    ephemerides and the known orbits taken out (lbl.report.kepfit), for the
+    periodogram and the FIP after them"""
     from lbl.report import kepfit
 
     out = dict(table)
@@ -1300,17 +1298,17 @@ def subtract_fit(table, result):
     return out
 
 
-def _candidate_label(cand, k, sk):
-    """'TOI-904 b (CP): P = 10.877 d, K = 1.2 +- 0.4 m/s (3.0 sigma)'"""
-    status = cand.get('disposition')
-    return ('%s%s: P = %.6g d, K = %.2f $\\pm$ %.2f m s$^{-1}$ (%.1f$\\sigma$)'
-            % (cand.get('name', '?'), ' (%s)' % status if status else '',
-               float(cand['period']), k, sk, abs(k) / sk if sk > 0 else 0))
+def _ephemeris_label(planet, k, sk):
+    """'<name>: P = 10.877 d, K = 1.2 +- 0.4 m/s (3.0 sigma)'"""
+    return ('%s: P = %.6g d, K = %.2f $\\pm$ %.2f m s$^{-1}$ (%.1f$\\sigma$)'
+            % (planet.get('name', '?'), float(planet['period']), k, sk,
+               abs(k) / sk if sk > 0 else 0))
 
 
-def page_candidate_fit(plt, table, title, result):
-    """The velocities in time with the joint Keplerian fit of the transiting
-    planets and candidates (lbl.report.kepfit), and the residuals below."""
+def page_ephemeris_fit(plt, table, title, result):
+    """The velocities in time with the joint fit of the K of the planets at
+    their published ephemerides (lbl.report.kepfit), and the residuals
+    below."""
     from lbl.report import kepfit
 
     rjd = np.asarray(table[S.TIME], dtype=float)
@@ -1321,7 +1319,7 @@ def page_candidate_fit(plt, table, title, result):
     offset = result['offset']
     resid = vrad - kepfit.model(result, rjd + 2400000.0)
     # the model finely enough for the shortest period, across the span
-    step = min(float(c['period']) for c in result['candidates']) / 40.0
+    step = min(float(p['period']) for p in result['planets']) / 40.0
     npoint = int(min(200000, (rjd.max() - rjd.min()) / step + 2))
     grid = np.linspace(rjd.min(), rjd.max(), max(npoint, 2))
     curve = kepfit.model(result, grid + 2400000.0) - offset
@@ -1335,8 +1333,8 @@ def page_candidate_fit(plt, table, title, result):
     axes[0].axhline(0.0, color='k', lw=0.6, ls=':')
     axes[0].set_ylabel('Radial velocity, offset removed (m s$^{-1}$)')
     axes[0].legend(fontsize=8, loc='best')
-    axes[0].set_title('\n'.join(_candidate_label(c, k, sk) for c, k, sk in
-                                zip(result['candidates'], result['k'],
+    axes[0].set_title('\n'.join(_ephemeris_label(p, k, sk) for p, k, sk in
+                                zip(result['planets'], result['k'],
                                     result['sk'])), fontsize=9)
     axes[1].errorbar(rjd, resid, yerr=np.sqrt(svrad ** 2 +
                                               result['jitter'] ** 2),
@@ -1344,7 +1342,7 @@ def page_candidate_fit(plt, table, title, result):
     axes[1].axhline(0.0, color='k', lw=0.6, ls=':')
     axes[1].set_ylabel('Residual (m s$^{-1}$)')
     axes[1].set_xlabel('Reduced Julian date (RJD = BJD - 2400000, days)')
-    axes[1].set_title('rms %.2f m s$^{-1}$ before the candidates, %.2f after;'
+    axes[1].set_title('rms %.2f m s$^{-1}$ before the planets, %.2f after;'
                       ' jitter %.2f m s$^{-1}$ (added to the error bars)'
                       % (result['rms_before'], result['rms_after'],
                          result['jitter']), fontsize=9)
@@ -1356,22 +1354,22 @@ def page_candidate_fit(plt, table, title, result):
     chi2 = ''
     if result.get('chi2_after') is not None:
         chi2 = ('\nreduced $\\chi^2$ on the error bars alone: %.2f before'
-                ' the candidates, %.2f after (%d velocities, %d degrees of'
+                ' the planets, %.2f after (%d velocities, %d degrees of'
                 ' freedom); %.2f with the jitter'
                 % (result['chi2_before'], result['chi2_after'],
                    result['nfit'], result['dof'], result['chi2_jitter']))
-    fig.suptitle('%s: joint fit of the transiting planets and candidates,'
-                 ' circular, P and T0 of the catalog fixed%s%s'
-                 % (title, known, chi2), fontsize=10)
+    fig.suptitle('%s: joint fit of the K of the confirmed planets at their'
+                 ' published ephemerides, circular, P and T0 of the catalog'
+                 ' fixed%s%s' % (title, known, chi2), fontsize=10)
     fig.tight_layout()
     return fig
 
 
-def page_candidate_phase(plt, table, title, result, nbins=12):
-    """The velocities folded on each transiting planet or candidate (phase 0
-    at the transit), the offset, the known orbits and the other candidates
-    taken out, with the fitted Keplerian and the velocities binned in
-    phase."""
+def page_ephemeris_phase(plt, table, title, result, nbins=12):
+    """The velocities folded on each planet fitted at its ephemeris (phase 0
+    at the inferior conjunction), the offset, the known orbits and the other
+    planets taken out, with the fitted Keplerian and the velocities binned
+    in phase."""
     from lbl.report import kepfit
 
     rjd = np.asarray(table[S.TIME], dtype=float)
@@ -1381,12 +1379,12 @@ def page_candidate_phase(plt, table, title, result, nbins=12):
     bjd = rjd[good] + 2400000.0
     vrad, svrad = vrad[good], svrad[good]
     error = np.sqrt(svrad ** 2 + result['jitter'] ** 2)
-    ncand = len(result['candidates'])
-    fig, axes = plt.subplots(ncand, 1, squeeze=False,
-                             figsize=(10, 2.0 + 3.0 * ncand))
-    for index, cand in enumerate(result['candidates']):
+    nplanet = len(result['planets'])
+    fig, axes = plt.subplots(nplanet, 1, squeeze=False,
+                             figsize=(10, 2.0 + 3.0 * nplanet))
+    for index, planet in enumerate(result['planets']):
         ax = axes[index, 0]
-        period, t0 = float(cand['period']), float(cand['t0'])
+        period, t0 = float(planet['period']), float(planet['t0'])
         phase = np.mod((bjd - t0) / period + 0.5, 1.0) - 0.5
         folded = vrad - kepfit.model(result, bjd, skip=index)
         ax.errorbar(phase, folded, yerr=error, fmt='o', ms=2.5, lw=0.6,
@@ -1407,19 +1405,19 @@ def page_candidate_phase(plt, table, title, result, nbins=12):
                         label='binned' if ibin == 0 else None)
         grid = np.linspace(-0.5, 0.5, 400)
         ax.plot(grid, result['k'][index] * kepfit.basis(t0 + grid * period,
-                                                        cand),
+                                                        planet),
                 color='C3', lw=1.4, label='fitted Keplerian', zorder=6)
         ax.axhline(0.0, color='k', lw=0.6, ls=':')
         ax.axvline(0.0, color='0.5', lw=0.6, ls='--')
         ax.set_xlim(-0.5, 0.5)
-        ax.set_xlabel('Phase (0 = transit, T0 = %.5f BJD)' % t0)
+        ax.set_xlabel('Phase (0 = inferior conjunction, T0 = %.5f BJD)' % t0)
         ax.set_ylabel('Radial velocity (m s$^{-1}$)')
-        ax.set_title(_candidate_label(cand, result['k'][index],
+        ax.set_title(_ephemeris_label(planet, result['k'][index],
                                       result['sk'][index]), fontsize=9)
         ax.grid(alpha=0.3)
         ax.legend(fontsize=7, loc='best')
-    fig.suptitle('%s: the velocities folded on each candidate, the offset,'
-                 ' the known orbits and the other candidates taken out'
+    fig.suptitle('%s: the velocities folded on each planet, the offset,'
+                 ' the known orbits and the other planets taken out'
                  % title, fontsize=10)
     fig.tight_layout()
     return fig

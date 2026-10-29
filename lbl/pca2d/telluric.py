@@ -1,11 +1,10 @@
 """Data-driven telluric absorption map.
 
-The first run on Proxima made it obvious that this is not optional. In the
-barycentric frame the leading PCA components correlated with BERV (r = -0.68)
-and with ambient humidity (r = -0.45), and their periodograms peaked at 121.8,
-91.2, 73.0 and 45.8 days: to within the resolution these are 365.25/3, /4, /5
-and /8, i.e. harmonics of the annual cycle that drives BERV and the seasonal
-water-vapour column. Those components describe Chile, not Proxima.
+Without a telluric treatment, the leading PCA components in the barycentric
+frame correlate with BERV and with ambient humidity, and their periodograms
+peak at harmonics of the year (a third, a quarter, a fifth of it...): the
+annual cycle that drives BERV and the seasonal water-vapour column. Such
+components describe the observatory's atmosphere, not the star.
 
 The method here needs no external model. Telluric transmission follows
 Beer-Lambert,
@@ -14,10 +13,10 @@ Beer-Lambert,
 
 so at a *fixed observer-frame wavelength* the high-passed log flux should depend
 linearly on airmass with slope -tau(lambda). The stellar spectrum, by contrast,
-walks back and forth across the observer-frame grid by +-21 km/s over the year,
-so it does not produce a coherent linear airmass dependence at a fixed sample.
-Regressing every observer-frame sample against airmass therefore recovers a map
-of the telluric optical depth, straight from the science frames.
+walks back and forth across the observer-frame grid with the BERV over the
+year, so it does not produce a coherent linear airmass dependence at a fixed
+sample. Regressing every observer-frame sample against airmass therefore
+recovers a map of the telluric optical depth, straight from the science frames.
 
 The resulting tau is then applied per exposure: each spectrum gets the
 transmission it actually had, exp(-tau * airmass_n), shifted into whatever frame
@@ -30,8 +29,9 @@ Caveats, deliberately not hidden:
   * A pure airmass regression cannot see water-vapour changes at fixed airmass;
     it recovers the mean tau, not the variable part. Regressing against the
     header humidity as a second term would help and is the obvious next step.
-  * A real transmission model (molecfit, TAPAS, APERO's own telluric products)
-    remains the better answer. Use `weights.telluric_file` for that.
+  * A real transmission model (molecfit, TAPAS, a reduction pipeline's own
+    telluric products) remains the better answer. Use `weights.telluric_file`
+    for that.
 """
 
 from __future__ import annotations

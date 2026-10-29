@@ -20,7 +20,24 @@ from lbl.recipes import lbl_pca2d
 def test_true_is_the_nominal_set():
     switches, overrides = lbl_pca2d.settings(True)
     assert switches == lbl_pca2d.DEFAULTS and overrides == {}
-    assert (switches["n_star"], switches["n_earth"]) == (1, 7)
+    # n_earth is the instrument's (PCA2D_N_EARTH), resolved once it is known
+    assert (switches["n_star"], switches["n_earth"]) == (1, None)
+
+
+def test_the_instrument_gives_its_own_settings():
+    from lbl.pca2d.config import instrument_layer
+    nirps = instrument_layer("NIRPS_HE", "CADC")
+    assert nirps["twoframe"]["n_earth"] == 7
+    assert nirps["input"]["format"] == "tfits"
+    assert nirps["input"]["extensions"]["flux"] == "FluxA"
+    harps = instrument_layer("HARPS", "ESO")
+    assert harps["twoframe"]["n_earth"] == 2
+    assert harps["input"]["to_observer"] is True
+    assert harps["correct"]["mask_share"] == 0.5
+    # the bands are LBL's, those that overlap the domain
+    assert "k" in instrument_layer("SPIROU", "APERO")["domain"]["bands"]
+    assert "k" not in nirps["domain"]["bands"]
+    assert "g" in harps["domain"]["bands"]
 
 
 def test_the_figures_follow_the_report_unless_asked():
@@ -56,19 +73,25 @@ def test_the_paths_are_lbl_s_to_decide():
 
 
 def test_the_nirps_mode_follows_the_lbl_instrument():
+    from lbl.pca2d.config import instrument_layer
+    # the mode is the instrument class's (PCA2D_DRS_MODES)
+    assert instrument_layer("NIRPS_HE", "CADC")["quality"]["drs_modes"] == \
+        ["HE"]
+    assert instrument_layer("NIRPS_HA", "CADC")["quality"]["drs_modes"] == \
+        ["HA"]
+    assert instrument_layer("SPIROU", "APERO")["quality"]["drs_modes"] is None
     block = lbl_pca2d.request_block({}, "NIRPS_HE", "CADC", None)
-    assert block["quality"]["drs_modes"] == ["HE"]
     assert block["lbl"] == {"instrument": "NIRPS_HE", "data_source": "CADC"}
+    # what the PCA2D dict asks for is kept, over the instrument's
     block = lbl_pca2d.request_block({"quality": {"drs_modes": ["HA"]}},
                                     "NIRPS_HE", "CADC", "*t.fits")
     assert block["quality"]["drs_modes"] == ["HA"]
     assert block["input"]["pattern"] == "*t.fits"
-    assert "quality" not in lbl_pca2d.request_block({}, "SPIROU", "APERO", "*")
 
 
 def test_without_input_file_the_files_say_their_pattern():
     # HARPS read as ORIG: e2ds files, not the ESO archive's S2D that PCA2D
-    #   takes for HARPS by default (the run of GJ 1214, 2026-10-25)
+    #   takes for HARPS by default
     names = ["/s/HARPS.ADP.2014-09-23T11-00-52.687_e2ds_A.fits",
              "/s/HARPS.ADP.2014-09-23T11-01-18.413_e2ds_A.fits"]
     assert lbl_pca2d.files_pattern(names) == "*_e2ds_A.fits"
@@ -150,7 +173,7 @@ def test_the_stamp_is_the_settings_and_the_files(tmp_path):
 
 
 def test_a_wrap_without_pca2d_never_imports_it(tmp_path):
-    """LBL as it was: no PCA2D key, no lbl_pca2d, no lbl.pca2d."""
+    """A wrap without a PCA2D key: no lbl_pca2d, no lbl.pca2d."""
     code = (
         "import sys\n"
         "from lbl.recipes import lbl_wrap\n"
@@ -179,6 +202,45 @@ def test_n_star_counts_the_star_spectra_with_the_template():
         lbl_pca2d.settings({'twoframe.n_star': 1})
     assert 'not adjusted in depth' in describe_star(0)
     assert 'free amplitude' in describe_star(1)
-    # run folders: s<n_star>-o<n_earth>, and the older <n_star - 1>-<n_earth>
+    # run folders: s<n_star>-o<n_earth>, and <n_star - 1>-<n_earth> as older
+    #   versions named them
     assert parse_tag('s1-o7') == (1, 7) and parse_tag('0-7') == (1, 7)
     assert parse_tag('s2-o3v') == (2, 3) and parse_tag('1-3') == (2, 3)
+
+
+def test_the_metadata_keywords_are_the_instrument_s():
+    from astropy.io import fits
+    from lbl.pca2d import tfits
+    from lbl.pca2d.config import instrument_layer
+    keys = instrument_layer("NIRPS_HE", "CADC")["input"]["header_keys"]
+    assert keys["airmass_end"][0] == "HIERARCH ESO TEL AIRM END"
+    assert keys["teff"] == ["OBJTEMP", "PP_TEFF"]
+    science, primary = fits.Header(), fits.Header()
+    science["BJD"], science["BERV"] = 2460000.5, 12.3
+    primary["HIERARCH ESO TEL AIRM START"] = 1.2
+    primary["HIERARCH ESO TEL AIRM END"] = 1.4
+    primary["DRSMODE"], primary["OBJECT"] = "HE", "STAR"
+    meta = tfits.header_meta((science, primary), keys)
+    assert (meta["bjd"], meta["berv"]) == (2460000.5, 12.3)
+    assert abs(meta["airmass"] - 1.3) < 1e-12
+    assert (meta["drs_mode"], meta["object"]) == ("HE", "STAR")
+    assert meta["humidity"] != meta["humidity"]          # not written: NaN
+    # an instrument reporting one airmass gives it for both ends
+    spirou = instrument_layer("SPIROU", "APERO")["input"]["header_keys"]
+    assert spirou["airmass_end"] == spirou["airmass_start"] == ["AIRMASS"]
+    harps = instrument_layer("HARPS", "ESO")["input"]["header_keys"]
+    assert harps["drs_mode"] == ["HIERARCH ESO INS MODE"]
+
+
+def test_pdflatex_can_be_named(monkeypatch, tmp_path):
+    import os
+    from lbl.core import io
+    fake = tmp_path / "pdflatex"
+    fake.write_text("")
+    os.chmod(fake, 0o755)
+    monkeypatch.setenv("LBL_PDFLATEX", str(fake))
+    io.find_pdflatex.cache_clear()
+    try:
+        assert io.find_pdflatex() == str(fake)
+    finally:
+        io.find_pdflatex.cache_clear()

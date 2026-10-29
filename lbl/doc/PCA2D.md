@@ -4,8 +4,7 @@
 star's rest frame, plus a few components anchored in the star frame and a
 few anchored in the observer frame (residual tellurics, airglow, detector
 features). The observer-frame part is divided out of the spectra, which
-LBL then measures like any other object. Method and results:
-<https://eartigau.github.io/pca2d_preclean/>.
+LBL then measures like any other object.
 
 ## Turning it on
 
@@ -55,7 +54,7 @@ report followed by LBL's.
 | `science/<object>/` | read, never written |
 | `science/<object>_pca2d/` | the corrected spectra, same names, same format |
 | `pca2d/<object>/request.yaml` | the configuration that ran |
-| `pca2d/<object>/s<M>-o<N>/` | the fit, the figures, the report (PDF): M = n_star, N = n_earth (`<K>-<N>` before 2026-10-22, K = n_star - 1) |
+| `pca2d/<object>/s<M>-o<N>/` | the fit, the figures, the report (PDF): M = n_star, N = n_earth |
 | `pca2d/cache/` | the registered cubes, rebuildable |
 | `pca2d/components/` | the components of every fit, observer and star (below) |
 | `models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/` | the observer bases one keeps (below): no cleanup touches `models/` |
@@ -68,6 +67,12 @@ each window, the components and their share of the variance, their
 coefficients in time, against BERV, airmass and the rest, and their
 periodograms, the weight spectrum, every setting that ran; then LBL's pages
 for the corrected object.
+
+The report is typeset with pdflatex, from any TeX distribution (TeX Live,
+MiKTeX, MacTeX). LBL looks for it on the PATH, then, outside Windows, on the
+PATH of your login shell (so a window started from a desktop launcher finds
+the same one as a terminal); `LBL_PDFLATEX` set to the full path of pdflatex
+overrides both. Without it, the report is the figures bound into one PDF.
 
 Every step after it (template, mask, compute, compile, report) runs on
 `<object>_pca2d`, and the comparison follows when it was the object itself.
@@ -94,6 +99,13 @@ optical spectrographs.
 Anything else is a key of the pca2d configuration,
 `lbl/pca2d/nominal.yaml`, which holds the nominal settings and their
 reasons: as `'section.key'`, as a dict per section, or by a short name.
+What depends on the instrument (how its files are read, its domain, its
+resolving power, its number of observer components, the modes kept, the
+windows of the figures) is not in that file: it comes from the instrument's
+LBL class, its `PCA2D_*` parameters (`lbl/core/parameters.py` for the
+defaults, `lbl/instruments/*.py` for each instrument), and the photometric
+bands are LBL's (`lbl/core/astro.py`, u to K). Adding an instrument to
+PCA2D is giving its class these parameters.
 
 ```python
 rparams['PCA2D'] = dict(n_star=1, n_earth=7,
@@ -116,18 +128,19 @@ Each row of the fit is one exposure, a whole night, or a bundle of a night:
 | setting | rows |
 |---|---|
 | `nightly_stack=False` | every exposure on its own: the most information, the most memory |
-| `nightly_stack=True` (nominal for NIRPS) | every night coadded: NIRPS's three or four exposures of a visit become one row |
+| `nightly_stack=True` | every night coadded: the few exposures of a visit become one row |
 | `bundle_berv=0.1` (the default) | with stacking, each night cut into bundles of at most 0.1 km/s of BERV |
 | `bundle_minutes=20` | or of at most 20 minutes |
 | `bundle_max=6` | or of at most six exposures |
 
+The default (`nightly_stack`) is the instrument's, its `PCA2D_NIGHTLY_STACK`.
 The cube is in the observer's frame, so a coadd smears the star by the BERV
 range of what it holds, and a long sequence is not one sky either: over a
-five-hour WASP-76 transit night the BERV moves by 600 m/s and the airmass, so
-the water column, and the airglow change. The bundles keep that apart and
-still coadd what does not change. With the default 100 m/s, an ordinary NIRPS
-visit stays one row: over twenty targets, the median BERV range of a night is
-4 to 35 m/s. The limits can be combined, and a bundle closes as soon as one of
+transit night of several hours the BERV moves by hundreds of m/s and the
+airmass, so the water column, and the airglow change. The bundles keep that
+apart and still coadd what does not change. With the default 100 m/s, an
+ordinary visit of a few exposures (a few tens of m/s of BERV) stays one row.
+The limits can be combined, and a bundle closes as soon as one of
 them is reached; `bundle_berv=None` gives whole nights again. They only cut
 stacked nights: the stacking itself is `nightly_stack`'s. Every exposure is
 then corrected with its own amplitudes, solved against the fitted basis, and
@@ -139,8 +152,9 @@ In the river plots, the thick green line is where a feature fixed in the
 observer's frame falls in each row: the observer's residuals run parallel to
 it, and the star's lines stand vertical.
 
-For NIRPS, the DRS mode follows the LBL instrument (`NIRPS_HE` keeps the HE
-files). The folder is the object: the OBJECT keyword of the files is not
+The DRS modes kept are the instrument's (`PCA2D_DRS_MODES`: an LBL
+instrument named after a mode keeps that mode's files). The folder is the
+object: the OBJECT keyword of the files is not
 checked against its name.
 
 ## Running it again
@@ -157,7 +171,7 @@ that choice:
 
 | `SKIP_LBL_PCA2D` | the correction on disk |
 |---|---|
-| `None` (or not given) | kept if the settings, the input files and the instrument's nominal settings (`nominal.yaml`, its general block and the instrument's own, read without comments, windows or figures) are those it was made with, made again otherwise |
+| `None` (or not given) | kept if the settings, the input files and the nominal settings (the general block of `nominal.yaml` and the instrument's own `PCA2D_*` settings, read without comments, windows or figures) are those it was made with, made again otherwise |
 | `True` | kept even if they changed, which a warning says |
 | `False` | made again in every case, as `overwrite=True` |
 
@@ -227,13 +241,15 @@ exposure at a time, since spawned processes cannot re-read it.
 
 `lbl_pca2d` is pca2d's own command line (`lbl.pca2d.cli`), for research runs
 kept side by side under their own names, variants and joint fits, outside an
-LBL tree: `lbl_pca2d --object TOI2120 --n-star 1 --n-earth 3`. It reads
-`config.yaml` in the working directory, in the format of
-`lbl/pca2d/nominal.yaml`, and that nominal file itself when there is none.
+LBL tree: `lbl_pca2d --object STAR --instrument NIRPS_HE --data-source CADC
+--n-star 1 --n-earth 3`. It reads `config.yaml` in the working directory, in
+the format of `lbl/pca2d/nominal.yaml`, and that nominal file itself when
+there is none; the instrument and its data source are LBL's names, as in a
+wrap (or `lbl.instrument` and `lbl.data_source` in the configuration).
 
 ## The LBL window
 
-`lbl-gui`, from the lbl-pca2d-gui package, is only a front end to this: it
+`lbl_gui` (`lbl.gui`) is only a front end to this: it
 writes an ordinary wrap file, with a `PCA2D` dict when the precleaning is on
 (`DATA_DIR/gui/runs/<run>/wrap.py`), and runs it with this LBL. The file can
 be edited and run again by hand. None of the computation is in it.

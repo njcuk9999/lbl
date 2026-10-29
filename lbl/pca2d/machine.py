@@ -14,18 +14,28 @@ import subprocess
 #: Half, and not more. The other half is the operating system, the file cache
 #: the cube is read through, LBL if it is running beside this, and the window
 #: that started it. A fit allowed all of memory is a fit that gets killed with
-#: no message, which is what happened on a joint cube of ten objects on
-#: 2026-09-15: 19 GB of arrays, exit -9, forty minutes gone.
+#: no message (exit -9) by the operating system, after however long it had
+#: already run.
 DEFAULT_FRACTION = 0.5
 
 
 def total_ram_bytes():
     """The machine's physical memory, or None if it cannot be read.
 
-    sysctl on macOS, /proc/meminfo on Linux, and os.sysconf where both fail.
+    psutil where it is installed (every system, Windows included), and without
+    it os.sysconf where it knows the page count, then sysctl (macOS, BSD),
+    then /proc/meminfo (Linux).
     None rather than a guess: a guard built on an invented number is worse than
-    no guard, because it refuses runs that would have worked.
+    no guard, because it refuses runs that would have worked. The guards say
+    so when they get None (twoframe.check_memory, spill_dir).
     """
+    try:
+        import psutil
+        total = int(psutil.virtual_memory().total)
+        if total > 0:
+            return total
+    except (ImportError, OSError, RuntimeError):
+        pass
     try:
         if hasattr(os, "sysconf") and "SC_PHYS_PAGES" in os.sysconf_names:
             pages = os.sysconf("SC_PHYS_PAGES")
@@ -42,7 +52,7 @@ def total_ram_bytes():
     except (OSError, subprocess.SubprocessError):
         pass
     try:
-        with open("/proc/meminfo") as handle:
+        with open("/proc/meminfo", encoding="utf-8") as handle:
             for line in handle:
                 if line.startswith("MemTotal:"):
                     return int(line.split()[1]) * 1024

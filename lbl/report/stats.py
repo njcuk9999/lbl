@@ -5,10 +5,16 @@ else that wants them, and so that the table and the plots can never disagree.
 """
 import datetime
 import os
+from statistics import NormalDist
 
 import numpy as np
 
 from lbl.report import series as S
+
+#: the scatter of a gaussian over its median absolute deviation,
+#:    1 / Phi^-1(3/4) (about 1.4826): the MAD of a gaussian of sigma 1 is
+#:    the quantile 3/4 of the standard normal
+MAD_TO_SIGMA = 1.0 / NormalDist().inv_cdf(0.75)
 
 
 def _now():
@@ -18,7 +24,8 @@ def _now():
 
 
 def robust_sigma(values):
-    """The robust scatter: 1.4826 times the median absolute deviation.
+    """The robust scatter: the median absolute deviation times
+    MAD_TO_SIGMA, the standard deviation for a gaussian.
 
     Quoted beside the plain rms rather than instead of it. The two do not
     measure the same thing: the MAD only sees the core of the distribution,
@@ -30,7 +37,7 @@ def robust_sigma(values):
     good = values[np.isfinite(values)]
     if good.size < 2:
         return float('nan')
-    return float(1.4826 * np.median(np.abs(good - np.median(good))))
+    return float(MAD_TO_SIGMA * np.median(np.abs(good - np.median(good))))
 
 
 def _span(values):

@@ -1,5 +1,4 @@
-"""PCA2D's BERV, from LBL's instrument profile only (2026-10-27): the one
-it applies (get_berv, zero on a barycentric grid) and the observer's, which
+"""PCA2D's BERV, from LBL's instrument profile only: the one it applies (get_berv, zero on a barycentric grid) and the observer's, which
 the telluric lines follow (get_berv + get_berv_transmission), for the
 river plots' green line, the observer's frame and the bundles of a night."""
 import numpy as np
@@ -37,7 +36,8 @@ def test_the_observer_berv_whatever_frame_the_grid_is_in():
 def test_the_green_line_follows_the_observer_not_the_applied_berv():
     meta = Table(dict(berv=np.zeros(3), berv_obs=[-20.0, 0.5, 21.0]))
     assert list(sequence.observer_bervs(meta)) == [-20.0, 0.5, 21.0]
-    # a cube made before berv_obs was kept: the applied BERV
+    # a cube without a berv_obs column (made by an older version): the
+    #   applied BERV
     old = Table(dict(berv=[1.0, 2.0]))
     assert list(sequence.observer_bervs(old)) == [1.0, 2.0]
 

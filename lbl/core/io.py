@@ -12,8 +12,11 @@ Created on 2021-03-15
 import contextlib
 import copy
 import fnmatch
+import functools
 import itertools
 import os
+import shutil
+import subprocess
 import warnings
 from collections import UserDict
 from pathlib import Path
@@ -537,6 +540,51 @@ class LBLHeader(UserDict):
 # =============================================================================
 # Define functions
 # =============================================================================
+@functools.lru_cache(maxsize=1)
+def find_pdflatex() -> Optional[str]:
+    """
+    The pdflatex the reports are compiled with, or None.
+
+    Tried in order: the LBL_PDFLATEX environment variable (the full path of
+    the binary, for a TeX distribution that is not on the PATH); the PATH;
+    and, outside Windows, the PATH of the user's login shell. A program
+    started from a desktop launcher rather than from a terminal does not
+    inherit what the shell's start-up files add to the PATH, which is where
+    TeX distributions usually put themselves; asking the shell finds the
+    same pdflatex as a terminal would, without assuming any install folder.
+    On Windows the TeX installers put pdflatex on the system PATH.
+
+    :return: str or None, the path of pdflatex
+    """
+    asked = os.environ.get('LBL_PDFLATEX')
+    if asked:
+        path = shutil.which(asked) or (asked if os.path.isfile(asked)
+                                       else None)
+        if path:
+            return path
+    found = shutil.which('pdflatex')
+    if found or os.name == 'nt':
+        return found
+    shell = (os.environ.get('SHELL') or shutil.which('zsh')
+             or shutil.which('bash') or shutil.which('sh'))
+    if not shell:
+        return None
+    # a login shell first; an interactive one too, for a PATH set in the
+    #   files only interactive shells read
+    for flags in (['-l', '-c'], ['-l', '-i', '-c']):
+        try:
+            out = subprocess.run([shell] + flags + ['command -v pdflatex'],
+                                 capture_output=True, text=True, timeout=15,
+                                 stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        for line in reversed(out.stdout.splitlines()):
+            line = line.strip()
+            if line and os.path.isfile(line) and os.access(line, os.X_OK):
+                return line
+    return None
+
+
 def check_file_exists(filename: str, fkind: Optional[str] = None,
                       required: bool = True) -> bool:
     """
@@ -657,8 +705,8 @@ def model_path(model_dir: str, subdir: str, filename: str) -> str:
     """
     A file of DATA_DIR/models, in its subfolder: model_dir/subdir/filename.
     The subfolder is made if needed, and a file of that name still at the
-    top of models/ (where LBL kept them all before 2026-10-26) is moved
-    into it. An absolute filename is returned as it is.
+    top of models/ (older versions of LBL kept every model file there) is
+    moved into it. An absolute filename is returned as it is.
 
     :param model_dir: str, the models folder (MODEL_DIR)
     :param subdir: str, a key of MODEL_SUBDIRS or a model_subdir() name
@@ -691,8 +739,8 @@ MODEL_PREFIXES = (('lte', 'phoenix'), ('wave_phoenix', 'phoenix'),
 
 def sort_models(model_dir: str, instrument: str, data_source: str) -> list:
     """
-    Move the files at the top of models/ (where LBL kept them all before
-    2026-10-26) into their subfolders: the stellar models, TAPAS, the
+    Move the files at the top of models/ (where older versions of LBL kept
+    them all) into their subfolders: the stellar models, TAPAS, the
     RESPROJ tables, and this instrument's vetted depot files
     (vetted_<object>_<instrument>.fits) into template_<INSTRUMENT>_<SOURCE>.
     Anything else (a default mask, a file someone put there) is left, and

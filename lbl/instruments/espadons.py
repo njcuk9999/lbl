@@ -4,8 +4,8 @@
 ESPaDOnS (CFHT) instrument class: the intensity spectra, <odometer>i.fits,
 that CADC distributes, reduced at CFHT by Upena with Libre-ESpRIT.
 
-What these files are, and what the class makes of them (checked on AD Leo,
-files of 2005 and 2019, 2026-10-23):
+What these files are, and what the class makes of them (checked on files
+from 2005 to 2019):
 
 * ONE TABLE, ALL ORDERS END TO END. The primary HDU is (columns x samples),
   its rows named by the COLn cards: Wavelength, Star (or Intensity) and
@@ -83,6 +83,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import default
+from lbl.core.math import mad_to_sigma
 
 # =============================================================================
 # Define variables
@@ -445,7 +446,7 @@ def fit_tellurics(wave: np.ndarray, flux: np.ndarray, blaze: np.ndarray,
     #   clipped again at every step, the samples coming in and out made the
     #   steps jump and the velocity wander by +-20 m/s for a 5 m/s error
     resid = (yy - mat @ params) * np.sqrt(weight)
-    sigma = 1.4826 * np.nanmedian(np.abs(resid[use]
+    sigma = mad_to_sigma * np.nanmedian(np.abs(resid[use]
                                          - np.nanmedian(resid[use])))
     clip = np.abs(resid) < TELLURIC_CLIP * sigma
     vel, params, cov, weight, mat, yy, use, path_b = converge(

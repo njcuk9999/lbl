@@ -12,8 +12,9 @@ has seven diagonals, and it is solved exactly. Wobble (Bedell et al. 2019) fits
 a star and the tellurics this way; the velocity here stays LBL's to measure.
 
 The data and the weights are still carried into the star's frame by the
-Lanczos kernel, as before: the median star spectra, the gap guard and the
-figures do not change. Only the star's own representation and its update do.
+Lanczos kernel, as in the two-frame fit: the median star spectra, the gap
+guard and the figures are the same with either shifter. Only the star's own
+representation and its update differ.
 """
 
 import numpy as np

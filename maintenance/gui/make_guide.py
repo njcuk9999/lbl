@@ -1,20 +1,32 @@
-"""The testers' guide to LBL's lbl-pca2d branch and its window, as one
-bilingual page (English and French) in eartigau.github.io/lbl-gui/.
+"""The testers' guide to LBL with PCA2D and its window, as one bilingual
+page (English and French), written to the lbl-gui/ subfolder of the folder
+of the site that hosts it.
 
 The reference parts are read from the code, so that the page says what the
 window does: the help of every control and every PCA2D option, in both
 languages (lbl.gui.i18n), and the defaults of the options for each
 instrument (lbl.gui.lblinfo). The rest is written here.
 
-    python maintenance/gui/make_guide.py <eartigau.github.io folder>
+    python maintenance/gui/make_guide.py SITE [SHOTS [EXAMPLE]]
+        [--branch BRANCH] [--themes FOLDER]
+
+SITE the site's folder, SHOTS the tutorial's screenshots
+(tutorial_shots.py), EXAMPLE the folder of the tutorial's example run.
+--branch names the branch of LBL that the page's commands and links point
+to: by default the branch of the LBL clone that holds this script, main when
+git cannot tell. --themes is the folder of the site's shared theme.css and
+lightbox.js, copied beside the page (else the environment variable
+LBL_GUIDE_THEMES).
 
 The page is not linked from the site (not released yet): it carries a
 warning and asks search engines not to index it.
 """
+import argparse
 import datetime
 import html
 import os
 import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -23,10 +35,14 @@ sys.path.insert(0, HERE)
 from lbl.gui import __version__, i18n, lblinfo        # noqa: E402
 import guide_tutorial                                     # noqa: E402
 
-THEMES = os.path.expanduser("~/GitHubProjects/themes_outils")
-REPO = "https://github.com/njcuk9999/lbl/tree/lbl-pca2d/lbl/gui"
-ISSUES = "https://github.com/njcuk9999/lbl/issues"
 LBL_REPO = "https://github.com/njcuk9999/lbl"
+ISSUES = LBL_REPO + "/issues"
+#: the files of the site's shared style copied beside the page, and the
+#:    environment variable that gives their folder when --themes does not
+THEME_FILES = ("theme.css", "lightbox.js")
+THEMES_ENV = "LBL_GUIDE_THEMES"
+#: the conda environment the page's commands create and activate
+ENV = guide_tutorial.ENV
 #: the instruments whose PCA2D defaults are shown, and their names
 DEFAULT_FOR = (("SPIROU", "SPIRou"), ("NIRPS_HE", "NIRPS"), ("HARPS", "HARPS"))
 
@@ -148,7 +164,9 @@ def switches_reference():
 
 
 # ---------------------------------------------------------------------- page
-def page(results=None):
+def page(results=None, branch="main"):
+    """The page; `branch` is the branch of LBL its commands and links
+    name."""
     today = datetime.date.today().isoformat()
     sections = []
 
@@ -157,8 +175,7 @@ def page(results=None):
 <p><strong>LBL</strong> (line-by-line, Artigau et al. 2022) measures radial
 velocities line by line against a template of the star, and combines
 thousands of lines into one velocity per exposure, resilient to outliers.
-The <code>lbl-pca2d</code> branch adds <strong>PCA2D</strong>, a
-precleaning step: it separates what moves with the star from what stays
+This version of LBL adds <strong>PCA2D</strong>, a precleaning step: it separates what moves with the star from what stays
 fixed on the detector (telluric residuals, airglow, detector features),
 divides the latter out of the spectra, and LBL then measures the corrected
 spectra. The report shows the velocities before and after.</p>
@@ -167,16 +184,15 @@ ordinary LBL script (a <em>wrap</em>) from what you tick, runs it in the
 environment LBL is installed in, and follows it: the steps, the log, the
 reports. Nothing it does is hidden: every run keeps its wrap, which runs by
 hand as it is.</p>
-<p>One piece, one repository, one conda environment: <strong>LBL</strong>,
-branch <code>lbl-pca2d</code> (github.com/njcuk9999/lbl), holds the
-measurement, the precleaning and the window (<code>lbl/gui</code>, started
+<p>One piece, one repository, one conda environment: <strong>LBL with
+PCA2D</strong> (github.com/njcuk9999/lbl) holds the measurement, the precleaning and the window (<code>lbl/gui</code>, started
 with <code>lbl_gui</code>), with its search of the public archives.</p>
 """, """
 <p><strong>LBL</strong> (line-by-line, Artigau et al. 2022) mesure les
 vitesses radiales raie par raie contre un template de l'étoile, et combine
 des milliers de raies en une vitesse par pose, de façon robuste aux valeurs
-aberrantes. La branche <code>lbl-pca2d</code> y ajoute <strong>PCA2D</strong>,
-un prénettoyage : il sépare ce qui bouge avec l'étoile de ce qui reste fixe
+aberrantes. Cette version de LBL y ajoute <strong>PCA2D</strong>, un
+prénettoyage : il sépare ce qui bouge avec l'étoile de ce qui reste fixe
 sur le détecteur (résidus telluriques, émission du ciel, défauts du
 détecteur), divise ces derniers hors des spectres, puis LBL mesure les
 spectres corrigés. Le rapport montre les vitesses avant et après.</p>
@@ -186,8 +202,8 @@ cochez, le lance dans l'environnement où LBL est installé, et le suit : les
 étapes, le journal, les rapports. Rien n'est caché : chaque run garde son
 wrap, qui se relance tel quel à la main.</p>
 <p>Un seul morceau, un seul dépôt, un seul environnement conda :
-<strong>LBL</strong>, branche <code>lbl-pca2d</code>
-(github.com/njcuk9999/lbl), contient la mesure, le prénettoyage et la
+<strong>LBL avec PCA2D</strong> (github.com/njcuk9999/lbl) contient la
+mesure, le prénettoyage et la
 fenêtre (<code>lbl/gui</code>, lancée avec <code>lbl_gui</code>), avec sa
 recherche dans les archives publiques.</p>
 """) + '<figure class="lecture-figure">%s' % inline(
@@ -229,30 +245,29 @@ garde petit.</li>
 machine : n'importe quel navigateur récent.</li>
 </ul>""")))
 
+    # the commands, the same in both languages: the environment, and the
+    #   branch given on the command line (none to name for main, the one a
+    #   clone is on by default)
+    env_cmd = code("conda create -n %s python=3.12\nconda activate %s"
+                   % (ENV, ENV))
+    clone_cmd = code("git clone%s %s.git lbl\n"
+                     "pip install -e lbl --config-settings editable_mode=compat"
+                     % ("" if branch == "main" else " -b " + branch, LBL_REPO))
+    switch_cmd = code("cd lbl\ngit fetch origin\ngit checkout %s\ngit pull\n"
+                      "pip install -e . --config-settings editable_mode=compat"
+                      % branch)
     install_en = """
 <p><strong>1. An environment for LBL.</strong> Everything goes in one conda
-environment: the window runs the wraps with its Python.</p>
-""" + code("""
-conda create -n lbl-pca2d python=3.12
-conda activate lbl-pca2d
-""") + """
-<p><strong>2. LBL, branch <code>lbl-pca2d</code>.</strong> Installed in
-editable mode (<code>-e</code>), so that a <code>git pull</code> is all an
-update takes; <code>editable_mode=compat</code> puts the clone itself on
-Python's path, so that no other folder named <code>lbl</code> can hide
-it.</p>
-""" + code("""
-git clone -b lbl-pca2d https://github.com/njcuk9999/lbl.git lbl-pca2d
-pip install -e lbl-pca2d --config-settings editable_mode=compat
-""") + """
-<p>Already have a clone of LBL? Switch it to the branch instead:</p>
-""" + code("""
-cd lbl
-git fetch origin
-git checkout lbl-pca2d
-git pull
-pip install -e . --config-settings editable_mode=compat
-""") + """
+environment: the window runs the wraps with its Python. Any name will do;
+this guide calls it <code>%s</code>.</p>
+""" % esc(ENV) + env_cmd + """
+<p><strong>2. LBL with PCA2D.</strong> Installed in editable mode
+(<code>-e</code>), so that a <code>git pull</code> is all an update takes;
+<code>editable_mode=compat</code> puts the clone itself on Python's path, so
+that no other folder named <code>lbl</code> can hide it.</p>
+""" + clone_cmd + """
+<p>Already have a clone of LBL? Switch it to this version instead:</p>
+""" + switch_cmd + """
 <p>Check that Python finds this copy (the path printed is in your
 clone):</p>
 """ + code("""
@@ -265,35 +280,24 @@ that the command is there:</p>
 lbl_gui --help
 """) + """
 <p><strong>Installed the first test version?</strong> It was a package of its
-own (lbl-pca2d-gui) with a command <code>lbl-gui</code>, and koloa for the
-archives. Remove it, so that no older window answers instead:</p>
+own (lbl-pca2d-gui) with a command <code>lbl-gui</code>. Remove it, so that
+no older window answers instead:</p>
 """ + code("""
 pip uninstall lbl-pca2d-gui
 """)
     install_fr = """
 <p><strong>1. Un environnement pour LBL.</strong> Tout va dans un seul
-environnement conda : la fenêtre lance les wraps avec son Python.</p>
-""" + code("""
-conda create -n lbl-pca2d python=3.12
-conda activate lbl-pca2d
-""") + """
-<p><strong>2. LBL, branche <code>lbl-pca2d</code>.</strong> Installé en mode
-éditable (<code>-e</code>), pour qu'un <code>git pull</code> suffise à le
-mettre à jour ; <code>editable_mode=compat</code> met le clone lui-même dans
-le chemin de Python, pour qu'aucun autre dossier nommé <code>lbl</code> ne
-puisse le cacher.</p>
-""" + code("""
-git clone -b lbl-pca2d https://github.com/njcuk9999/lbl.git lbl-pca2d
-pip install -e lbl-pca2d --config-settings editable_mode=compat
-""") + """
-<p>Vous avez déjà un clone de LBL ? Passez-le plutôt sur la branche :</p>
-""" + code("""
-cd lbl
-git fetch origin
-git checkout lbl-pca2d
-git pull
-pip install -e . --config-settings editable_mode=compat
-""") + """
+environnement conda : la fenêtre lance les wraps avec son Python. N'importe
+quel nom convient ; ce guide l'appelle <code>%s</code>.</p>
+""" % esc(ENV) + env_cmd + """
+<p><strong>2. LBL avec PCA2D.</strong> Installé en mode éditable
+(<code>-e</code>), pour qu'un <code>git pull</code> suffise à le mettre à
+jour ; <code>editable_mode=compat</code> met le clone lui-même dans le chemin
+de Python, pour qu'aucun autre dossier nommé <code>lbl</code> ne puisse le
+cacher.</p>
+""" + clone_cmd + """
+<p>Vous avez déjà un clone de LBL ? Passez-le plutôt sur cette version :</p>
+""" + switch_cmd + """
 <p>Vérifiez que Python trouve bien cette copie (le chemin affiché est dans
 votre clone) :</p>
 """ + code("""
@@ -306,9 +310,8 @@ Vérifiez que la commande est là :</p>
 lbl_gui --help
 """) + """
 <p><strong>Vous aviez installé la première version de test ?</strong> C'était
-un paquet à part (lbl-pca2d-gui) avec une commande <code>lbl-gui</code>, et
-koloa pour les archives. Retirez-le, pour qu'aucune ancienne fenêtre ne
-réponde à la place :</p>
+un paquet à part (lbl-pca2d-gui) avec une commande <code>lbl-gui</code>.
+Retirez-le, pour qu'aucune ancienne fenêtre ne réponde à la place :</p>
 """ + code("""
 pip uninstall lbl-pca2d-gui
 """)
@@ -362,8 +365,8 @@ DATA_DIR/models/
 <p>Nothing removes <code>models/</code>: neither <code>lbl_reset</code>,
 which empties <code>templates/</code>, nor the window's cleanup. A vetted
 template is therefore kept there rather than with the templates LBL makes
-from spectra. A <code>models/</code> from before (every file at its top) is
-sorted by LBL itself at its next run.</p>
+from spectra. A <code>models/</code> that holds every file at its top level
+is sorted into these subfolders by LBL itself at its next run.</p>
 <p><strong>Which files.</strong> What the instrument's pipeline delivers,
 for example APERO's or the CADC's <code>t.fits</code> for SPIRou and NIRPS,
 ESO's telluric-corrected S2D for NIRPS, the DRS <code>e2ds</code> for HARPS
@@ -409,8 +412,8 @@ DATA_DIR/models/
 <p>Rien n'efface <code>models/</code> : ni <code>lbl_reset</code>, qui vide
 <code>templates/</code>, ni le ménage de la fenêtre. Un template validé y
 est donc gardé plutôt qu'avec les templates que LBL fait à partir des
-spectres. Un <code>models/</code> d'avant (tous les fichiers à sa racine)
-est rangé par LBL lui-même à son run suivant.</p>
+spectres. Un <code>models/</code> qui a tous ses fichiers à sa racine est
+rangé dans ces sous-dossiers par LBL lui-même à son run suivant.</p>
 <p><strong>Quels fichiers.</strong> Ce que livre le pipeline de
 l'instrument, par exemple les <code>t.fits</code> d'APERO ou de la CADC pour
 SPIRou et NIRPS, les S2D corrigés des telluriques d'ESO pour NIRPS, les
@@ -426,9 +429,9 @@ lus comme ceux d'APERO arrêtent LBL dès le premier fichier).</p>
                          both(data_en, data_fr)))
 
     launch_en = code("""
-conda activate lbl-pca2d
+conda activate %s
 lbl_gui --data-dir /path/to/DATA_DIR
-""") + """
+""" % ENV) + """
 <p>The window opens in your browser at <code>http://127.0.0.1:8765</code>;
 if that port is taken it takes the next free one and prints the address.</p>
 <div class="table-wrap"><table class="data"><tbody>
@@ -456,9 +459,9 @@ folder, <code>gui/logs/</code>: each run's and the archive search's
 (<code>archives.log</code>).</p>
 """
     launch_fr = code("""
-conda activate lbl-pca2d
+conda activate %s
 lbl_gui --data-dir /chemin/vers/DATA_DIR
-""") + """
+""" % ENV) + """
 <p>La fenêtre s'ouvre dans votre navigateur à l'adresse
 <code>http://127.0.0.1:8765</code> ; si ce port est pris, elle prend le
 suivant de libre et affiche l'adresse.</p>
@@ -600,13 +603,17 @@ the four steps they take.</p>
 <h3>What one pass does</h3>
 <p>For each spectrum, a TAPAS model of the atmosphere's transmission, with
 two exponents: one for water, one for the dry absorbers (O<sub>2</sub> and
-the others). The exponents start from the airmass (dry) and 0.5 (water) and
-are adjusted until the corrected spectrum no longer correlates with the
-telluric lines (a cross-correlation against a mask of water lines and one of
-dry lines, up to 20 iterations, to 0.001 in the exponents); for HARPS,
-HARPS-N and ESPRESSO the water exponent is then fitted again by the
-derivative method (the exponent that leaves the corrected spectrum
-smoothest). The spectrum as delivered is divided by that transmission and
+the others). The exponents are those that leave the corrected spectrum
+smoothest (the <em>derivative method</em>, for every instrument): a wrong
+exponent leaves a residual shaped like the derivative of every telluric
+line, while the star's lines weigh the same whatever the exponent, so the
+fit is made on the telluric windows of the spectrum only. Water is free for
+each spectrum, its column changing too fast for one value per night; the
+dry exponent is free too, within half to one and a half times the airmass
+(<code>TELLUCLEAN_FORCE_AIRMASS</code> fixes it to the airmass). A
+cross-correlation with masks of telluric lines is not used: its exponents
+too often end at their bounds. The spectrum as delivered is divided by that
+transmission and
 written to <code>science/&lt;object&gt;_tc/</code>; where the transmission
 is below e<sup>-1</sup> (lines deeper than 63&nbsp;%), the pixels are set to
 NaN rather than corrected.</p>
@@ -641,19 +648,15 @@ on these cleaned spectra too. Each pass takes about a second per spectrum
 written in its header (<code>TLPEH2O</code>, <code>TLPEOTR</code>), such as
 <code>telluric exponents by the derivative method: H2O 0.1538, dry 1.0410
 (airmass 1.0809), template=True</code>; <code>FALLBACK</code> (0.35) when
-the derivative's cost had nothing to go on. The derivative method is the
-only one, for every instrument, since 2026-10-27: the cross-correlation
-loop that came before it often failed. The first pass says
-<code>template=False</code>, the
-second <code>template=True</code> (its banner says
-<code>TELLUCLEAN_USE_TEMPLATE="True"</code>), with exponents that differ a
-little from the first pass's. A second pass that says
+the derivative's cost had nothing to go on. The first pass says
+<code>template=False</code>, the second <code>template=True</code> (its
+banner says <code>TELLUCLEAN_USE_TEMPLATE="True"</code>), with exponents
+that differ a little from the first pass's. A second pass that says
 <code>template=False</code> did not find the template and cleaned blind
-again; LBL now says so as a warning. That was the case of every version of
-LBL from 2026-02-24 to 2026-10-25, and until then the template was not made
-again after the second pass either (the first pass's stayed on disk): a run
-of an optical spectrograph made in that time is worth running again, with
-<em>rewrite the files already on disk</em> ticked.</p>
+again, and LBL says so as a warning. A run whose second pass says
+<code>template=False</code>, or whose template was not made again after the
+second pass, is worth running again, with <em>rewrite the files already on
+disk</em> ticked.</p>
 """
     tellu_fr = """
 <p>HARPS, HARPS-N, ESPRESSO, SOPHIE et les autres spectrographes optiques
@@ -665,14 +668,18 @@ liste des étapes du run montre les quatre étapes qu'ils prennent.</p>
 <h3>Ce que fait un passage</h3>
 <p>Pour chaque spectre, un modèle TAPAS de la transmission de l'atmosphère,
 avec deux exposants : un pour l'eau, un pour les absorbants secs
-(O<sub>2</sub> et les autres). Les exposants partent de la masse d'air
-(sec) et de 0,5 (eau), et sont ajustés jusqu'à ce que le spectre corrigé ne
-corrèle plus avec les raies telluriques (une corrélation croisée avec un
-masque de raies d'eau et un de raies sèches, au plus 20 itérations, à
-0,001 près sur les exposants) ; pour HARPS, HARPS-N et ESPRESSO,
-l'exposant de l'eau est ensuite réajusté par la méthode de la dérivée
-(l'exposant qui laisse le spectre corrigé le plus lisse). Le spectre livré
-est divisé par cette transmission et écrit dans
+(O<sub>2</sub> et les autres). Les exposants sont ceux qui laissent le
+spectre corrigé le plus lisse (la <em>méthode de la dérivée</em>, pour tous
+les instruments) : un exposant faux laisse un résidu en forme de dérivée à
+chaque raie tellurique, alors que les raies de l'étoile pèsent pareil quel
+que soit l'exposant ; l'ajustement se fait donc sur les fenêtres
+telluriques du spectre seulement. L'eau est libre pour chaque spectre, sa
+colonne changeant trop vite pour une seule valeur par nuit ; l'exposant sec
+est libre aussi, entre la moitié et une fois et demie la masse d'air
+(<code>TELLUCLEAN_FORCE_AIRMASS</code> le fixe à la masse d'air). Une
+corrélation croisée avec des masques de raies telluriques n'est pas
+utilisée : ses exposants finissent trop souvent à leurs bornes. Le spectre
+livré est divisé par cette transmission et écrit dans
 <code>science/&lt;objet&gt;_tc/</code> ; là où la transmission est sous
 e<sup>-1</sup> (raies plus profondes que 63&nbsp;%), les pixels sont mis à
 NaN plutôt que corrigés.</p>
@@ -709,19 +716,14 @@ prend environ une seconde par spectre (90 spectres HARPS de GJ 1214 :
 son en-tête (<code>TLPEH2O</code>, <code>TLPEOTR</code>), comme
 <code>telluric exponents by the derivative method: H2O 0.1538, dry 1.0410
 (airmass 1.0809), template=True</code> ; <code>FALLBACK</code> (0.35) quand
-le coût de la dérivée n'avait rien pour trancher. La méthode de la dérivée
-est la seule, pour tous les instruments, depuis le 2026-10-27 : la boucle
-de corrélation croisée qui la précédait échouait souvent. Le premier passage
-dit <code>template=False</code>, le
-second <code>template=True</code> (sa bannière dit
-<code>TELLUCLEAN_USE_TEMPLATE="True"</code>), avec des exposants un peu
-différents de ceux du premier passage. Un second passage qui dit
-<code>template=False</code> n'a pas trouvé le template et a nettoyé de
-nouveau à l'aveugle ; LBL le dit maintenant par un avertissement. C'était
-le cas de toutes les versions de LBL du 2026-02-24 au 2026-10-25, et
-jusque-là le template n'était pas non plus refait après le second passage
-(celui du premier restait sur le disque) : un run d'un spectrographe
-optique fait dans cet intervalle mérite d'être relancé, <em>réécrire les
+le coût de la dérivée n'avait rien pour trancher. Le premier passage dit
+<code>template=False</code>, le second <code>template=True</code> (sa
+bannière dit <code>TELLUCLEAN_USE_TEMPLATE="True"</code>), avec des
+exposants un peu différents de ceux du premier passage. Un second passage
+qui dit <code>template=False</code> n'a pas trouvé le template et a nettoyé
+de nouveau à l'aveugle, et LBL le dit par un avertissement. Un run dont le
+second passage dit <code>template=False</code>, ou dont le template n'a pas
+été refait après le second passage, mérite d'être relancé, <em>réécrire les
 fichiers déjà sur le disque</em> coché.</p>
 """
     sections.append(card(
@@ -949,9 +951,9 @@ et les indicateurs d'activité.</p>
 <p>Every run keeps its wrap, and the window is not needed to run it
 again:</p>
 """ + code("""
-conda activate lbl-pca2d
+conda activate %s
 python DATA_DIR/gui/runs/<run>/wrap.py
-""") + """
+""" % ENV) + """
 <p><strong>Updating.</strong> <code>git pull</code> in LBL's clone, then
 start <code>lbl_gui</code> again. The install is editable: nothing to
 reinstall unless the dependencies or the commands change (then
@@ -961,9 +963,9 @@ reinstall unless the dependencies or the commands change (then
 <p>Chaque run garde son wrap, et la fenêtre n'est pas nécessaire pour le
 relancer :</p>
 """ + code("""
-conda activate lbl-pca2d
+conda activate %s
 python DATA_DIR/gui/runs/<run>/wrap.py
-""") + """
+""" % ENV) + """
 <p><strong>Mettre à jour.</strong> <code>git pull</code> dans le clone de LBL,
 puis relancez <code>lbl_gui</code>. L'installation est éditable : rien à
 réinstaller, sauf si les dépendances ou les commandes changent (alors
@@ -989,7 +991,7 @@ while the file is missing. Measure each target against its own template in
 the meantime.</li>
 <li><strong>"Key WAVEORDN not found".</strong> The files were read with the
 wrong data source (the CADC's <code>t.fits</code> as APERO's). The window
-now reads the source from the files and refuses a mismatch; if you edited
+reads the source from the files and refuses a mismatch; if you edited
 the wrap by hand, check <code>DATA_SOURCE</code>.</li>
 <li><strong>A report says "LBL has not measured this run yet", or that the
 velocities predate the corrected spectra.</strong> LBL has not measured the
@@ -998,10 +1000,10 @@ disk</em> ticked.</li>
 <li><strong>Memory.</strong> A target with many hundreds of exposures makes
 a large cube. Nightly stacking (on by default for NIRPS, automatic
 elsewhere) coadds each night; run one heavy target at a time.</li>
-<li><strong>SOPHIE's archive does not answer.</strong> The OHP's archive
-server (atlas.obs-hp.fr) has not answered since 2026-10-24: a SOPHIE search
-waits, then says so in the search's log. Stop the search to keep what the
-other archives found.</li>
+<li><strong>SOPHIE's archive does not answer.</strong> When the OHP's
+archive server (atlas.obs-hp.fr) does not answer, a SOPHIE search waits,
+then says so in the search's log, and the other archives go on. Stop the
+search to keep what they found.</li>
 <li><strong>No LaTeX.</strong> Without <code>pdflatex</code> the reports are
 the figures bound together, with nothing missing but the typesetting.</li>
 <li><strong>The window shows nothing new after an update.</strong> Reload the
@@ -1023,8 +1025,8 @@ est refusé par la fenêtre tant que le fichier manque. Mesurez chaque cible
 contre son propre template en attendant.</li>
 <li><strong>« Key WAVEORDN not found ».</strong> Les fichiers ont été lus
 avec la mauvaise source de données (les <code>t.fits</code> de la CADC comme
-ceux d'APERO). La fenêtre lit maintenant la source dans les fichiers et
-refuse une incohérence ; si vous avez modifié le wrap à la main, vérifiez
+ceux d'APERO). La fenêtre lit la source dans les fichiers et refuse une
+incohérence ; si vous avez modifié le wrap à la main, vérifiez
 <code>DATA_SOURCE</code>.</li>
 <li><strong>Un rapport dit « LBL has not measured this run yet », ou que les
 vitesses précèdent les spectres corrigés.</strong> LBL n'a pas mesuré les
@@ -1034,10 +1036,10 @@ sur le disque</em> cochée.</li>
 un gros cube. L'empilement par nuit (actif par défaut pour NIRPS,
 automatique ailleurs) additionne chaque nuit ; lancez une cible lourde à la
 fois.</li>
-<li><strong>L'archive de SOPHIE ne répond pas.</strong> Le serveur
-d'archives de l'OHP (atlas.obs-hp.fr) ne répond plus depuis le 2026-10-24 :
-une recherche SOPHIE attend, puis le dit dans le journal de la recherche.
-Arrêtez la recherche pour garder ce que les autres archives ont trouvé.</li>
+<li><strong>L'archive de SOPHIE ne répond pas.</strong> Quand le serveur
+d'archives de l'OHP (atlas.obs-hp.fr) ne répond pas, une recherche SOPHIE
+attend, puis le dit dans le journal de la recherche, et les autres archives
+continuent. Arrêtez la recherche pour garder ce qu'elles ont trouvé.</li>
 <li><strong>Pas de LaTeX.</strong> Sans <code>pdflatex</code>, les rapports
 sont les figures assemblées, sans rien de moins que la mise en page.</li>
 <li><strong>La fenêtre ne montre rien de nouveau après une mise à
@@ -1088,7 +1090,8 @@ Ctrl+Maj+R).</li>
 
     return TEMPLATE % dict(
         sections="".join(sections), contents=contents, today=today,
-        version=esc(__version__), repo=REPO, lbl_repo=LBL_REPO)
+        version=esc(__version__), lbl_repo=LBL_REPO,
+        branch=html.escape(branch))
 
 
 TEMPLATE = """<!doctype html>
@@ -1130,14 +1133,14 @@ TEMPLATE = """<!doctype html>
         <p><span lang="en">LBL with the PCA2D precleaning, and its window &middot; testers' guide</span><span lang="fr">LBL avec le prénettoyage PCA2D, et sa fenêtre &middot; guide des testeurs</span></p>
       </div>
       <button type="button" class="home-link lang-switch" id="lang" aria-label="language"><span lang="en">Français</span><span lang="fr">English</span></button>
-      <a href="https://eartigau.github.io/" class="home-link">&larr; Home</a>
+      <a href="%(lbl_repo)s" class="home-link">&larr; LBL</a>
     </div>
   </div>
 
   <header class="hero">
     <p class="eyebrow"><span lang="en">Radial velocities &middot; line by line</span><span lang="fr">Vitesses radiales &middot; raie par raie</span></p>
     <h1>lbl-gui</h1>
-    <p class="subtitle"><span lang="en">How to install LBL's lbl-pca2d branch and its window, and how to use them, step by step.</span><span lang="fr">Comment installer la branche lbl-pca2d de LBL et sa fenêtre, et comment s'en servir, étape par étape.</span></p>
+    <p class="subtitle"><span lang="en">How to install LBL with PCA2D and its window, and how to use them, step by step.</span><span lang="fr">Comment installer LBL avec PCA2D et sa fenêtre, et comment s'en servir, étape par étape.</span></p>
   </header>
 
   <main class="layout">
@@ -1157,11 +1160,9 @@ TEMPLATE = """<!doctype html>
 
   <footer class="footer">
     <p>
-      <a href="%(repo)s" target="_blank">the window in LBL (lbl/gui)</a>
+      <a href="%(lbl_repo)s/tree/%(branch)s/lbl/gui" target="_blank">the window in LBL (lbl/gui)</a>
       &middot;
-      <a href="%(lbl_repo)s/tree/lbl-pca2d" target="_blank">LBL, branch lbl-pca2d</a>
-      &middot;
-      <a href="https://eartigau.github.io/" target="_blank">More tools</a>
+      <a href="%(lbl_repo)s/tree/%(branch)s" target="_blank">LBL, branch %(branch)s</a>
     </p>
     <p class="hint">LBL %(version)s &middot; <span lang="en">guide of</span><span lang="fr">guide du</span> %(today)s</p>
   </footer>
@@ -1272,16 +1273,37 @@ def _stamp(line):
 
 
 def machine():
-    """The machine the example ran on, as its system says (macOS)."""
-    import subprocess
+    """The machine the example ran on (taken as the one the guide is made
+    on), as its system says: its processor and its memory, the memory left
+    out when the system does not tell. The processor's name from sysctl
+    (macOS), the registry (Windows) or /proc/cpuinfo (Linux); the memory as
+    the pipeline reads it (lbl.pca2d.machine: psutil, or the system's own
+    ways)."""
+    import platform
+    from lbl.pca2d.machine import total_ram_bytes
+    cpu = ""
     try:
-        cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
-                             capture_output=True, text=True).stdout.strip()
-        mem = int(subprocess.run(["sysctl", "-n", "hw.memsize"],
-                                 capture_output=True, text=True).stdout)
-        return "%s, %d GB" % (cpu, round(mem / 2 ** 30))
+        system = platform.system()
+        if system == "Darwin":
+            cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                                 capture_output=True, text=True).stdout.strip()
+        elif system == "Windows":
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                r"HARDWARE\DESCRIPTION\System"
+                                r"\CentralProcessor\0") as key:
+                cpu = str(winreg.QueryValueEx(key, "ProcessorNameString")[0])
+        else:
+            with open("/proc/cpuinfo", encoding="utf-8") as handle:
+                cpu = next((l.split(":", 1)[1].strip() for l in handle
+                            if l.startswith("model name")), "")
     except Exception:                                     # noqa: BLE001
-        return ""
+        cpu = ""
+    cpu = cpu.strip() or platform.processor() or platform.machine()
+    mem = total_ram_bytes()
+    if not mem:
+        return cpu
+    return "%s, %d GB" % (cpu, round(mem / 2 ** 30))
 
 
 def _minutes(a, b):
@@ -1294,14 +1316,13 @@ def example_results(example, site_folder):
     velocities (lblrdb), and pages of its report drawn as images."""
     import glob
     import json
-    import subprocess
     data = os.path.join(example, "data")
     runs = sorted(glob.glob(os.path.join(data, "gui", "runs", "*", "run.json")))
     if not runs:
         return {}
     record = json.load(open(runs[-1]))
-    # the run's log, in the window's logs (or in its folder, from an older
-    #   window)
+    # the run's log: in the window's logs, else run.log in the run's own
+    #   folder (the older layout)
     folder = os.path.dirname(runs[-1])
     log = os.path.join(data, "gui", "logs", os.path.basename(folder) + ".log")
     if not os.path.exists(log):
@@ -1402,7 +1423,6 @@ def report_shots(data, site_folder):
     """Pages of the example's report as annotated images in shots/; the
     names of those made."""
     import glob
-    import subprocess
     from annotate import annotate
     pdfs = sorted(glob.glob(os.path.join(data, "reports", "*pca2d*.pdf")),
                   key=os.path.getmtime)
@@ -1442,7 +1462,48 @@ def report_shots(data, site_folder):
     return made
 
 
-def main(site, shots=None, example=None):
+def default_branch():
+    """The branch the LBL clone that holds this script is on; main when git
+    cannot tell (no git, not a clone, a detached HEAD)."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                             cwd=HERE, capture_output=True, text=True,
+                             timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return "main"
+    name = out.stdout.strip()
+    if out.returncode or not name or name == "HEAD":
+        return "main"
+    return name
+
+
+def themes_folder(given=None):
+    """The folder of the site's shared theme.css and lightbox.js: `given`
+    (--themes), else the environment variable LBL_GUIDE_THEMES. Stops with
+    what is missing and how to give it."""
+    how = ("give the folder that holds them with --themes FOLDER or the"
+           " environment variable %s" % THEMES_ENV)
+    folder = given or os.environ.get(THEMES_ENV)
+    if not folder:
+        sys.exit("make_guide: the page needs %s, the site's shared style and"
+                 " its image viewer, copied beside it: %s."
+                 % (" and ".join(THEME_FILES), how))
+    folder = os.path.abspath(os.path.expanduser(folder))
+    missing = [name for name in THEME_FILES
+               if not os.path.isfile(os.path.join(folder, name))]
+    if missing:
+        sys.exit("make_guide: %s not found in %s: %s."
+                 % (" and ".join(missing), folder, how))
+    return folder
+
+
+def main(site, shots=None, example=None, branch=None, themes=None):
+    """The guide in <site>/lbl-gui/: `shots` the folder of the tutorial's
+    screenshots, `example` that of its example run, `branch` the branch of
+    LBL the page names (default_branch() when None), `themes` the folder of
+    theme.css and lightbox.js (themes_folder())."""
+    themes = themes_folder(themes)
+    branch = branch or default_branch()
     folder = os.path.join(os.path.abspath(os.path.expanduser(site)), "lbl-gui")
     os.makedirs(folder, exist_ok=True)
     if shots:
@@ -1455,7 +1516,7 @@ def main(site, shots=None, example=None):
                                 os.path.join(target, name))
     results = example_results(example, folder) if example else {}
     with open(os.path.join(folder, "index.html"), "w") as handle:
-        handle.write(page(results))
+        handle.write(page(results, branch))
     with open(os.path.join(folder, "guide.css"), "w") as handle:
         handle.write(GUIDE_CSS.replace("%%", "%"))
     words = dict(
@@ -1472,15 +1533,44 @@ def main(site, shots=None, example=None):
     for lang, said in words.items():
         with open(os.path.join(folder, "workflow_%s.svg" % lang), "w") as handle:
             handle.write(WORKFLOW_SVG.format(**said))
-    for name in ("theme.css", "lightbox.js"):
-        shutil.copyfile(os.path.join(THEMES, name), os.path.join(folder, name))
+    for name in THEME_FILES:
+        shutil.copyfile(os.path.join(themes, name), os.path.join(folder, name))
     # the window's own icon
     static = os.path.join(HERE, "..", "..", "lbl", "gui", "static")
     # (the .ico for Safari's tabs, which take no SVG)
     for name in ("favicon.ico", "favicon.svg", "apple-touch-icon.png"):
         shutil.copyfile(os.path.join(static, name), os.path.join(folder, name))
-    print("written: %s" % os.path.join(folder, "index.html"))
+    print("written: %s (LBL branch %s)"
+          % (os.path.join(folder, "index.html"), branch))
+
+
+def cli(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Write the testers' guide of LBL with PCA2D and its"
+                    " window (one bilingual HTML page) into SITE/lbl-gui/.")
+    parser.add_argument("site", help="the site's folder; the page goes to"
+                                     " its lbl-gui/ subfolder")
+    parser.add_argument("shots", nargs="?", default=None,
+                        help="the folder of the tutorial's screenshots"
+                             " (*.webp, from tutorial_shots.py)")
+    parser.add_argument("example", nargs="?", default=None,
+                        help="the folder of the tutorial's example run (its"
+                             " data/ subfolder): durations, velocities and"
+                             " report pages for steps 9 and 10")
+    parser.add_argument("--branch", default=None,
+                        help="the branch of LBL that the page's git commands"
+                             " and links name (default: the branch of the LBL"
+                             " clone that holds this script, here %s; main"
+                             " when git cannot tell)" % default_branch())
+    parser.add_argument("--themes", default=None, metavar="FOLDER",
+                        help="the folder that holds %s, the site's shared"
+                             " style, copied beside the page (default: the"
+                             " environment variable %s)"
+                             % (" and ".join(THEME_FILES), THEMES_ENV))
+    args = parser.parse_args(argv)
+    main(args.site, args.shots, args.example, branch=args.branch,
+         themes=args.themes)
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    cli()

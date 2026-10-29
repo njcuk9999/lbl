@@ -3,7 +3,7 @@
 With output.fits_directory set, a run's folder is not a folder on the internal
 disk but a link to its place under that directory, at the same relative path:
 
-    outputs/TOI2120/2-7v                   -> <fits_directory>/outputs/TOI2120/2-7v
+    outputs/<object>/<tag>                 -> <fits_directory>/outputs/<object>/<tag>
     lbl/lblrv, lbl/lblrdb, lbl/models, ... -> <fits_directory>/lbl/...
 
 The link is made before the run writes anything, so everything it writes (the
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import filecmp
 import os
+import re
 import shutil
 
 from .logger import log
@@ -40,10 +41,10 @@ def check(config: dict, dry_run: bool = False):
 
     Stopping is the point: falling back to the local tree would do, quietly,
     exactly what this setting exists to prevent. The directory itself is
-    created when its parent is there. The parent never is: a missing
-    /Volumes/<disk> means the disk is not mounted, and creating it would put
-    the files on the internal disk under a name that looks external. A dry run
-    only warns, and creates nothing.
+    created when its parent is there. The parent never is: a missing parent
+    usually means the disk it lives on is not mounted (its mount point is
+    absent), and creating it would put the files on the internal disk under a
+    name that looks external. A dry run only warns, and creates nothing.
     """
     where = root(config)
     if not where:
@@ -67,12 +68,42 @@ def check(config: dict, dry_run: bool = False):
 
 
 def external(config: dict, local: str) -> str:
-    """Where `local` lives under the FITS directory: the same relative path."""
+    """Where `local` lives under the FITS directory: the same relative path.
+
+    A path outside the current folder keeps its whole absolute path, its
+    root dropped, and on Windows its drive made a folder of its own (D: is
+    D, a network share's \\\\server\\share is server_share): joined as it is,
+    a path with a drive would replace the FITS directory instead.
+    """
     full = os.path.abspath(local)
-    rel = os.path.relpath(full)
+    try:
+        rel = os.path.relpath(full)
+    except ValueError:
+        # Windows: no relative path from one drive to another
+        rel = os.pardir
     if rel == os.pardir or rel.startswith(os.pardir + os.sep):
-        rel = full.lstrip(os.sep)
+        drive, tail = os.path.splitdrive(full)
+        rel = tail.lstrip(os.sep + (os.altsep or ""))
+        drive = re.sub(r"[:\\/]+", "_", drive).strip("_")
+        if drive:
+            rel = os.path.join(drive, rel)
     return os.path.join(root(config), rel)
+
+
+def _symlink(target: str, local: str) -> None:
+    """Make `local` a link to the folder `target`, or stop the run saying why
+    this system will not make one (Windows makes a symbolic link only with
+    developer mode on, or for an administrator)."""
+    try:
+        os.symlink(target, local, target_is_directory=True)
+    except OSError as exc:
+        why = ("Windows makes a symbolic link only with developer mode on"
+               " (Settings, For developers) or for an administrator"
+               if os.name == "nt" else "this disk or system refuses one")
+        log("%s cannot be made a link to %s (%s): %s. Leave"
+            " output.fits_directory unset to keep the run on this disk"
+            % (local, target, exc, why), "error")
+        raise SystemExit(2)
 
 
 def _within(path: str, top: str) -> bool:
@@ -80,8 +111,10 @@ def _within(path: str, top: str) -> bool:
     probe = os.path.abspath(path)
     while not os.path.lexists(probe):
         probe = os.path.dirname(probe)
-    real, top = os.path.realpath(probe), os.path.realpath(top)
-    return real == top or real.startswith(top + os.sep)
+    # case ignored where the system ignores it (Windows)
+    real = os.path.normcase(os.path.realpath(probe))
+    top = os.path.normcase(os.path.realpath(top))
+    return real == top or real.startswith(os.path.join(top, ""))
 
 
 def _inventory(local: str, target: str):
@@ -140,7 +173,7 @@ def link_dir(config: dict, local: str) -> str:
     os.makedirs(target, exist_ok=True)
     if not os.path.isdir(local):
         os.makedirs(os.path.dirname(os.path.abspath(local)), exist_ok=True)
-        os.symlink(target, local)
+        _symlink(target, local)
         log("%s is a link to %s" % (local, target), "info")
         return target
 
@@ -157,12 +190,13 @@ def link_dir(config: dict, local: str) -> str:
     moving = local + ".__moving__"
     os.rename(local, moving)
     try:
-        os.symlink(target, local)
+        _symlink(target, local)
         missing = [rel for rel in list(files) + placed
                    if not os.path.exists(os.path.join(local, rel))]
         if missing:
             raise RuntimeError("not there through the link: %s" % missing[:3])
-    except Exception:
+    # the stop of a link refused too (SystemExit): the folder put back first
+    except BaseException:
         if os.path.islink(local):
             os.remove(local)
         os.rename(moving, local)

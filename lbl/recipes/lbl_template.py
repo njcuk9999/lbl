@@ -606,7 +606,8 @@ def run_template(inst, objname: str, objkind: str):
 
     sci_table['VSYS'] = rv0
     if planets_used is not None:
-        # the Keplerian velocity of each spectrum, for the record
+        # the Keplerian velocity of each spectrum, kept in the template's
+        #   table of spectra (VKEP)
         sci_table['VKEP'] = np.array(planets_used['velocity'])
 
     # -------------------------------------------------------------------------

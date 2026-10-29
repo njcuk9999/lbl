@@ -91,6 +91,15 @@ class Sophie(Instrument):
         self.param_set('HP_WIDTH', 500, source=func_name)
         # approximate mean resolution in lambda/dlambda
         self.param_set('APPROX_RESOLUTION', 75000, source=func_name)
+        # the e2ds of the original DRS, read through this class (fibre A,
+        #    the science)
+        self.param_set('PCA2D_INPUT_PATTERN', '*e2ds_A.fits', source=func_name)
+        # the windows of the PCA2D figures (centre:width in nm): the O2 B and
+        #    gamma bands and water, near the middle of an order's blaze, and
+        #    the sodium D or magnesium b lines as stellar references
+        self.param_set('PCA2D_WINDOWS', source=func_name,
+                       value=['687.75:2.5', '630.75:2', '594.25:2.25',
+                              '651.0:2.5', '589.0:1.5', '518.0:2'])
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
@@ -238,6 +247,19 @@ class Sophie(Instrument):
         # define the airmass of the observation
         self.param_set('KW_AIRMASS', 'HIERARCH OHP TEL AIRM START',
                         source=func_name)
+        # define the airmass at the end of the observation
+        self.param_set('KW_AIRMASS_END', 'HIERARCH OHP TEL AIRM END',
+                       source=func_name)
+        # define the seeing during the observation [arcsec]
+        self.param_set('KW_SEEING', None, source=func_name)
+        # define the relative humidity during the observation
+        self.param_set('KW_HUMIDITY', None, source=func_name)
+        # define the elevation of the Sun during the observation
+        self.param_set('KW_SUN_ELEVATION', None, source=func_name)
+        # define the instrument mode of the observation
+        self.param_set('KW_DRS_MODE', None, source=func_name)
+        # define the largest BERV of the target over the year
+        self.param_set('KW_BERVMAX', None, source=func_name)
         # define the human date of the observation
         self.param_set('KW_DATE', 'DATE', source=func_name)
         # define the tau_h20 of the observation

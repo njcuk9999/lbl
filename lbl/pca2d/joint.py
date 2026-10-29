@@ -39,7 +39,7 @@ EXPOSURE_STRIDE = 1000000
 
 
 def joint_name(objects):
-    """PROXIMA+GJ1+GJ3090: the folder and the cache key a joint run is under."""
+    """STAR_A+STAR_B+STAR_C: the folder and the cache key a joint run is under."""
     return "+".join(str(o) for o in objects)
 
 
@@ -59,10 +59,10 @@ def merge_snippets(cubes, target):
     objects share one, so the joint cube's snippet for a block is simply the
     union of its members'.
 
-    Without this the joint cube had none, and every window of the report fell
-    back to re-reading every spectrum of every object from the shared disk and
-    resampling it: 31 minutes for ONE window against a fraction of a second,
-    and an hour and a half for the figures of a three-star run (2026-09-13).
+    Without this the joint cube would have none, and every window of the
+    report would fall back on re-reading every spectrum of every object from
+    disk and resampling it: tens of minutes for ONE window against a fraction
+    of a second, and hours for the figures of a run of several stars.
     """
     from . import cache as _cache
 
@@ -125,8 +125,8 @@ def build(cubes, objects, path, config_file=None, chunk=64):
                 meta["berv_bary"] = np.asarray(meta["berv"], dtype=float)
             if "vstar" not in meta.colnames:
                 meta["vstar"] = np.zeros(len(meta))
-    # the observer's BERV (readers.observer_berv), missing from a cube made
-    #   before it was kept: its applied BERV, as the river plots then take it
+    # the observer's BERV (readers.observer_berv), missing from a cube that
+    #   does not carry it: its applied BERV, as the river plots then take it
     if any("berv_obs" in meta.colnames for meta in metas):
         for meta in metas:
             if "berv_obs" not in meta.colnames:

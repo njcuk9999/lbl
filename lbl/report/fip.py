@@ -1,11 +1,11 @@
 """The false inclusion probability, gaussian and outlier-aware, per frequency
 and (alias_aware) over intervals, alias-aware.
 
-WHY HERE AND NOT BORROWED. koloa has a far more complete FIP, but it runs
-its chains in subprocesses, which fails as soon as LBL is driven from a
-script rather than a file (seen the 2026-10-16: the outlier-aware page came
-out empty with "koloa not installed"). A report must not depend on how it
-was launched, so the calculation lives here, in numpy alone.
+WHERE IT COMES FROM. The false inclusion probability (FIP) of Hara et al.
+(2022, A&A 663, A14, https://doi.org/10.1051/0004-6361/202140543), computed
+here in numpy alone, with no sampling and no subprocess, so that the report
+gives the same answer however LBL is launched (a script, a notebook, the
+command line).
 
 WHAT A FIP IS. Over a grid of periods, the probability that a sinusoid at
 that period is NOT in the data. Near 1 the signal is almost surely absent,
@@ -18,16 +18,19 @@ THE OUTLIER-AWARE CASE. The gaussian FIP assumes every point is drawn from
 its error bar, so one bad night can either invent a signal or bury one. Here
 each point instead carries a probability of belonging to a wider population,
 and counts for less in proportion. That is a deterministic approximation of
-the mixture that koloa samples, and it answers the question the report asks:
-does the answer depend on how the outliers are treated?
+a mixture model in which each point's membership would be sampled with the
+rest, and it answers the question the report asks: does the answer depend on
+how the outliers are treated?
 
-SPEED. Every frequency of the grid (20 000 for six years of SPIRou) and every
+SPEED. Every frequency of the grid (20 000 for a six-year series) and every
 prior width of the ladder is one small linear system. They are built and
 solved together, a block of frequencies at a time, with batched Cholesky
 factorisations: the same algebra as one at a time, in a few hundredths of a
 second rather than seconds.
 """
 import numpy as np
+
+from lbl.report.stats import robust_sigma
 
 #: the ladder of prior amplitudes, in units of the robust scatter. The FIP
 #: should not depend on a single guess of how large a signal might be, so it
@@ -37,15 +40,6 @@ TAU_LADDER = (0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4)
 OUTLIER_WIDTH = 5.0
 #: the prior fraction of points that are outliers
 OUTLIER_PRIOR = 0.05
-
-
-def robust_sigma(values):
-    """1.4826 times the median absolute deviation."""
-    values = np.asarray(values, dtype=float)
-    good = values[np.isfinite(values)]
-    if good.size < 2:
-        return float('nan')
-    return float(1.4826 * np.median(np.abs(good - np.median(good))))
 
 
 def frequency_grid(time, pmin=1.1, pmax=None, oversample=10):
@@ -180,7 +174,7 @@ def fip(time, value, err, freq=None, trend=1, prior_signal=0.5,
     outlier-aware version feeds its result back in.
     """
     time = np.asarray(time, dtype=float)
-    value = np.asarray(value, dtype=float) 
+    value = np.asarray(value, dtype=float)
     err = np.asarray(err, dtype=float)
     good = (np.isfinite(time) & np.isfinite(value) & np.isfinite(err)
             & (err > 0))
@@ -244,12 +238,10 @@ def oafip(time, value, err, freq=None, trend=1, rounds=5):
 
     Each point counts for its probability of being a normal point. That
     probability is read off its distance to the median, against its error bar
-    and the jitter, and NOT off the fit, so it is the same at every round:
-    the second round is already the fixed point, and the FIP is computed once,
-    with it. The five rounds this used to make gave the same values to the bit
-    (checked on Welopoai and WASP-76, 2026-10-21) in five times the time.
-    `rounds` is kept for the callers: 1 is the plain FIP with the
-    probabilities beside it, any other value the outlier-aware one.
+    and the jitter, and NOT off the fit, so it would be the same at every
+    round of an iteration: the FIP is computed once, with it. `rounds`: 1
+    gives the plain FIP with the probabilities beside it, any other value the
+    outlier-aware one.
     """
     time = np.asarray(time, dtype=float)
     value = np.asarray(value, dtype=float)
@@ -281,7 +273,8 @@ ALIAS_PERIODS = ((0.99727, '1 d'), (365.25, '1 yr'))
 
 def alias_aware(time, value, err, freq=None, trend=1, prior_signal=0.5,
                 outlier_aware=True):
-    """The FIP of Hara et al. (2022, A&A 658, A177): over intervals one
+    """The FIP of Hara et al. (2022, A&A 663, A14,
+    https://doi.org/10.1051/0004-6361/202140543): over intervals one
     resolution element wide (1/T), the probability that NO signal has its
     frequency there, with every frequency of the grid competing for the
     same posterior. Returns dict(freq, fip, prob, best_period, best_fip).

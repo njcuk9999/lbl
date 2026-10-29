@@ -1,14 +1,14 @@
 """A star as SIMBAD knows it, for the first section of a run's report.
 
-    python -m lbl.pca2d.simbad TOI756 SMETHELLS_20 GL699_SPIROU
+    python -m lbl.pca2d.simbad NAME [NAME ...]
 
-The folder a campaign lives in is a name somebody typed (SMETHELLS_20,
-GL699_SPIROU), and the headers carry another (TIC464410508, Gl699).
-SIMBAD's ident table takes any of them (lbl.core.simbad.resolve, which
-also tries them as SIMBAD writes them: TOI_1452 as TOI-1452), and its
-answer, SIMBAD's main identifier, is what the tables are then asked about,
-all through SIMBAD's Python client (astroquery, lbl.core.simbad; CDS's
-Sesame resolver, used before, stopped answering on 2026-10-27):
+The folder a campaign lives in is a name somebody typed (a star's name,
+<STAR>_<INSTRUMENT>), and the headers carry another (a TIC number, the
+pipeline's spelling). SIMBAD's ident table takes any of them
+(lbl.core.simbad.resolve, which also tries them as SIMBAD writes them:
+TOI_1452 as TOI-1452), and its answer, SIMBAD's main identifier, is what the
+tables are then asked about, all through SIMBAD's Python client (astroquery,
+lbl.core.simbad):
 
     basic     position, spectral type, parallax, proper motion, systemic RV
     flux      B V G J H K
@@ -32,6 +32,7 @@ import urllib.parse
 
 import numpy as np
 
+from lbl.core import base
 from lbl.core import simbad as lbl_simbad
 
 PAGE = "https://simbad.cds.unistra.fr/simbad/sim-id?Ident=%s"
@@ -40,8 +41,11 @@ MAX_AGE = 30 * 86400
 #: the identifiers quoted, in this order, the first of each kind only
 KINDS = ("TOI-", "TIC ", "Gaia DR3 ", "2MASS J", "GJ ", "HD ", "HIP ", "LHS ",
          "Ross ", "G ")
-#: folder suffixes that name an instrument, not a star
-SUFFIXES = re.compile(r"_(SPIROU|NIRPS|NIRPS_HE|NIRPS_HA|HARPS)$", re.I)
+#: folder suffixes that name an instrument, not a star: LBL's names for its
+#: instruments, and their first part when a mode follows (<NAME>_<MODE>)
+SUFFIXES = re.compile(r"_(%s)$" % "|".join(sorted(
+    {re.escape(part) for name in base.INSTRUMENTS
+     for part in (name, name.split("_")[0])}, key=len, reverse=True)), re.I)
 
 
 def resolve(name):
@@ -78,7 +82,7 @@ def candidates(folder, header=None):
     if gaia and "DR" in release:
         names.append("%s %s" % (release.strip(), gaia))
     # APERO's own first: PP_OBJNS is the name its object database knows the
-    # star by (WT 351 for TOI-756), which is very often SIMBAD's
+    # star by, which is very often SIMBAD's
     for key in ("PP_OBJNS", "PP_OBJN", "OBJECT", "OBJNAME",
                 "ESO OBS TARG NAME", "DRSOBJN"):
         value = str(header.get(key) or "").strip()
@@ -118,10 +122,11 @@ def header_position(header):
     APERO's PP_RA/PP_DEC when the file has them, a Gaia position at a stated
     epoch; otherwise the telescope's.
 
-    ESO says its epoch (ESO TEL TARG EPOCH, 2000 for every NIRPS target
-    here). CFHT does not, and its OBJRA/OBJDEC are where the star was that
-    night: Barnard's star, at 10 arcsec a year, sat 194 arcsec from its J2000
-    position in a 2018 SPIRou header. The epoch is then the night's.
+    Some observatories write the epoch of the target's coordinates (ESO
+    TEL TARG EPOCH); others do not, and their OBJRA/OBJDEC are where the
+    star was that night: a star of high proper motion (Barnard's star moves
+    10 arcsec a year) can sit minutes of arc from its J2000 position. The
+    epoch is then the night's.
     """
     header = header or {}
     # APERO's, when it is there: a Gaia position at a stated epoch (JD)
@@ -230,7 +235,7 @@ def star(folder, header=None, cache=None, refresh=False):
     out = None
     if not refresh and os.path.exists(path) \
             and time.time() - os.path.getmtime(path) < MAX_AGE:
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             kept = json.load(handle)
         if kept.get("ok"):
             out = kept
@@ -252,7 +257,7 @@ def star(folder, header=None, cache=None, refresh=False):
         if out["ok"]:
             out["retrieved"] = datetime.date.today().isoformat()
             os.makedirs(cache, exist_ok=True)
-            with open(path, "w") as handle:
+            with open(path, "w", encoding="utf-8") as handle:
                 json.dump({k: v for k, v in out.items()
                            if not k.startswith("offset")}, handle, indent=1)
     if out["ok"]:

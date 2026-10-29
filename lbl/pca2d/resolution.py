@@ -19,8 +19,8 @@ C_KMS = constants.c.to("km/s").value
 
 def fwhm_samples(resolution, dv, fraction=1.0):
     """`fraction` of a resolution element, c/R, in samples of dv km/s: LBL's
-    rule, rounded and made odd, never under 3. One element is 9 samples for
-    SPIRou (R = 70 000) and 7 for NIRPS (80 000) at 0.5 km/s.
+    rule, rounded and made odd, never under 3. At 0.5 km/s, one element is
+    9 samples at R = 70 000 and 7 at R = 80 000.
     """
     n = int(np.round(float(fraction) * C_KMS / float(dv) / float(resolution)))
     n = max(n, 3)

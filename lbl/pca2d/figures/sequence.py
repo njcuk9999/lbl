@@ -83,8 +83,8 @@ CLIP_KEYS = ("clip_window", "nsig_cut", "excursion_nsig", "excursion_samples",
 #: height, 8.2 inches (texreport.figure_block). Drawn at that width and at
 #: most that height, a page is printed at its own size, its text at the size
 #: it is written at, and the river plots run across the whole page. Drawn
-#: 9.4 by 14.1 inches it was shrunk by its height to 58%: 5.5 inches of the
-#: page's 6.5, with 8.5 point titles printed at 5 (asked 2026-10-23)
+#: larger, it would be shrunk by its height to fit, narrower than the text
+#: and with its titles printed in a smaller font than they were written at
 PAGE_WIDTH, PAGE_HEIGHT = 6.6, 8.1
 
 
@@ -109,8 +109,8 @@ def parse_args(argv=None):
     # about how the amplitudes were MEASURED rather than about what is divided
     # out, and this figure draws the fit's own amplitudes: it takes them so that
     # the shared list parses, and says on the page which ones it drew. Without
-    # this, the whole figure died on "unrecognized arguments" and a report came
-    # out with no river plot at all (SMETHELLS_20, 2026-09-15).
+    # them, argparse would stop the whole figure on "unrecognized arguments"
+    # and the report would have no river plot at all.
     p.add_argument("--weight", choices=("flux", "velocity"), default="flux")
     p.add_argument("--velocity-floor", type=float, default=None)
     p.add_argument("--mask", default=None,
@@ -139,9 +139,10 @@ def _filled(block, ok):
     """`block` with its gaps at each row's own median, ready to be shifted.
 
     A shift operator has to be handed finite numbers, and which finite number
-    matters: in ln flux zero means a flux of one, which is fifty times the
-    continuum here, and the Lanczos kernel spreads it over sixteen samples on
-    either side. The row's own median is the value that disturbs nothing.
+    matters: in ln flux zero means a flux of one, which can be far from the
+    continuum level of the raw flux, and the Lanczos kernel spreads it over
+    sixteen samples on either side. The row's own median is the value that
+    disturbs nothing.
     """
     block = np.asarray(block, dtype=float)
     with np.errstate(invalid="ignore"):
@@ -151,7 +152,8 @@ def _filled(block, ok):
 
 
 #: +1 or -1: which way a feature fixed in the observer's frame runs in the
-#: star's frame as the BERV grows, checked on WASP-76's telluric lines
+#: star's frame as the BERV grows; a telluric line, fixed in the observer's
+#: frame, runs along the line this draws
 BERV_SIGN = 1.0
 #: the BERV line's colour, in no palette of these panels: not the red-blue of
 #: the images, not the gold of the samples left out, not the blue and orange
@@ -195,9 +197,9 @@ def berv_steps(track, x):
 
 def observer_bervs(meta):
     """The observer's BERV of each row [km/s], as LBL's instrument profile
-    gives it (the cube's berv_obs, readers.observer_berv); a cube made
-    before it was kept has only the BERV the fit applied, which is the same
-    on a grid in the observer's frame"""
+    gives it (the cube's berv_obs, readers.observer_berv); a cube without
+    that column has only the BERV the fit applied, which is the same on a
+    grid in the observer's frame"""
     berv = np.asarray(meta["berv"], dtype=float)
     if "berv_obs" not in getattr(meta, "colnames", []):
         return berv
@@ -218,20 +220,20 @@ def order_label(meta):
 
 def panel(ax, image, x, scale, title, cmap=None, unit="rows", ylabel=True,
           by="BERV", note=""):
-    # NOT INTERPOLATED (asked 2026-10-21): every row and every sample is a
-    # block of its own, and a row of ten nights is not smeared into the next
+    # NOT INTERPOLATED: every row and every sample is a block of its own, and
+    # a row of ten nights is not smeared into the next
     im = ax.imshow(image, aspect="auto", cmap=cmap or nan_cmap("RdBu_r"),
                    interpolation="nearest",
                    vmin=-scale, vmax=scale, origin="upper",
                    extent=[x[0], x[-1], image.shape[0] - 0.5, -0.5])
     # what the panel is on the left, its numbers on the right: on one line
-    # they ran past the panel's width once the page was printed at its size
+    # they would run past the panel's width at the size the page is printed
     ax.set_title(title, fontsize=8, loc="left")
     if note:
         ax.set_title(note, fontsize=7, loc="right", color="#5f6368")
-    # WHICH rows: a cube built with nightly stacking has one row per night, and
-    # a reader counting 259 of them for Proxima's 782 spectra had nothing on the
-    # page to tell them why (2026-09-13)
+    # WHICH rows: a cube built with nightly stacking has one row per night,
+    # not one per spectrum, and the label says which, so that the count of
+    # rows is not read as a count of spectra.
     # On ONE panel, not on every one: the label is longer than a panel is tall,
     # so five of them written down the same axis overlap each other and the
     # panels between them. The caller labels the middle image.
@@ -332,9 +334,10 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
     With `clip`, the correct stage's outlier options, and the rows' `names`
     and `parity`, panels 3 and 5 hide what it will mask (masked_samples).
 
-    It used to be the whole grid for every panel: eight full (rows x samples)
-    arrays for a page that shows a few thousand columns, five minutes and more
-    memory than the machine had. None when the window misses the grid.
+    Not the whole grid for every panel: that would be eight full (rows x
+    samples) arrays, minutes of work and gigabytes of memory, for a page
+    that shows a few thousand columns. None when the window misses
+    the grid.
     """
     block = window_block(grid, centre, width, dv)
     if block is None:
@@ -381,7 +384,7 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
 
     # the star side spelled as n_star is (config.describe_star): with a
     # template, the star's spectrum and its free components, if any; "0 star"
-    # said there was no star at all where the star was the template itself
+    # would say there is no star at all where the star is the template itself
     parity_mean = bool(np.any(means[:, a0:b0]))
     if star_mean:
         model_parts = "the star's spectrum per parity%s + %d observer%s" % (
@@ -422,17 +425,17 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
         #
         # WITHIN A GROUP, which is what a corrected file's mask is taken over:
         # one order parity of one object. Taken over every row instead, this
-        # asked a sample to be alive in rows of the OTHER parity, which never
-        # cover that wavelength at all, since orders n and n+2 do not overlap.
-        # The intersection was then empty everywhere the two parities do not
-        # meet: the three H-band windows of the joint run came out with no row
-        # to draw and vanished from the report, and the J-band ones kept only
-        # the 15-20% of columns that two orders reach (2026-09-13).
+        # would ask a sample to be alive in rows of the OTHER parity, which
+        # never cover that wavelength at all, since orders n and n+2 do not
+        # overlap. The intersection would then be empty everywhere the two
+        # parities do not meet: a window inside one order would have no row
+        # to draw, and one where two orders meet would keep only the columns
+        # both reach.
         live = live_mask(w0)
         shared = np.empty_like(w0)
-        # NOT `g`, which is this function's grid: named that, the loop replaced
-        # the grid with a group number and every window came back "too few
-        # columns" (2026-09-13, an hour after the fix above)
+        # the loop's variable is `label`, NOT `g`, which is this function's
+        # grid: named that, the loop would replace the grid with a group
+        # number and every window would come back "too few columns"
         # `share` IS THE FRACTION OF EXPOSURES that must have weighted a
         # sample, as in reconstruct.fit_weights_mask: 1.0 is the strict
         # intersection, and below it the line set stays UNIQUE but is
@@ -485,8 +488,9 @@ def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=Fa
     grid = cube_grid(cube)
     # the rows and their metadata; one column is the cheapest way to get them
     # NO cut here: the fit's own row list decides what is drawn. Re-deriving the
-    # selection ties a figure to whatever the cut was the day the fit was made,
-    # and the day it changed every existing fit stopped being drawable.
+    # selection would tie a figure to the cut as it is now rather than to the
+    # one the fit was made with, and a changed cut would leave every existing
+    # fit undrawable.
     _, _, _, meta = load_cube(cube, columns=np.arange(1), min_snr_frac=0.0)
     select = rows_of(meta, fit)
     if select is not None:
@@ -501,8 +505,9 @@ def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=Fa
             "berv": np.asarray(meta["berv"], dtype=float),
             # the observer's BERV, which the telluric lines follow in the
             #   star's frame: LBL's profile's (readers.observer_berv), not
-            #   the BERV the fit applied, zero on a barycentric grid (the
-            #   S2D of ESO and the TNG without input.to_observer)
+            #   the BERV the fit applied, zero on a barycentric grid (spectra
+            #   delivered in the barycentric frame, without
+            #   input.to_observer)
             "berv_obs": observer_bervs(meta),
             # what the rows are ordered by: with orbits, berv is the star's
             #   frame, the BERV and the companions' velocity together
@@ -547,15 +552,15 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     the model says is there, what a corrected file holds), and the two after
     them are diagnostics that a page explaining the idea does not need.
 
-    Returns the figure, or None when the window has nothing to draw. The report
-    puts it in its PDF; the site saves the same figure as SVG, so the two can
-    never show different things.
+    Returns the figure, or None when the window has nothing to draw. The
+    caller saves it: the report puts it in its PDF, and any other use of the
+    same figure shows the same thing.
 
     `only` keeps the rows of one object of a joint cube and `label` names it in
-    the title: three campaigns drawn on one axis, ordered by BERV, interleave
-    three different stars' lines, and the H-band pages of the first joint report
-    were unreadable for it. The page of all of them together is drawn as well,
-    since what the observer block does is common to them.
+    the title: several campaigns drawn on one axis, ordered by BERV, interleave
+    different stars' lines at different systemic velocities, which nobody can
+    read. The page of all of them together is drawn as well, since what the
+    observer block does is common to them.
     """
     fit, grid, dv, delta = ctx["fit"], ctx["grid"], ctx["dv"], ctx["delta"]
     parity, berv = ctx["parity"], ctx["berv"]
@@ -582,8 +587,9 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     # sits nearest: the other measures the same wavelengths at an order
     # edge, where the blaze has fallen away.
     # parity % 2, not parity: a joint cube labels its rows 2 * object + parity,
-    # so comparing the label itself to an ORDER parity of 0 or 1 kept the first
-    # object alone and left every other object's page with no row to draw
+    # so comparing the label itself to an ORDER parity of 0 or 1 would keep the
+    # first object alone and leave every other object's page with no row to
+    # draw
     if own is not None and ncov > 1 and (keep & (parity % 2 == own)).sum() >= 6:
         keep &= parity % 2 == own
         log("  %.1f-%.1f nm: two orders reach it, drawing the one"
@@ -648,16 +654,16 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
                        ylabel=r == middle, by=ctx.get("order_by", "BERV"),
                        note=note)
 
-    # THE BERV, as a thick black line through the middle of every image
-    # (asked 2026-10-21): where a feature that stands still in the OBSERVER'S
-    # frame, at the window's centre in the median row, falls in each row.
-    # Whatever runs parallel to it moves with the BERV, which is what the
-    # observer block is for; what stands vertical is the star's.
-    # ON THE PIXELS, NOT BETWEEN THEM (asked 2026-10-21): in each row the
-    # line stands on the column nearest the track, from the row's top edge to
-    # its bottom one, and steps sideways at the edge between two rows. Drawn
-    # from row centre to row centre, a few rows made long diagonals that cut
-    # across pixels the feature is not in
+    # THE BERV, as a thick line through the middle of every image: where a
+    # feature that stands still in the OBSERVER'S frame, at the window's
+    # centre in the median row, falls in each row. Whatever runs parallel to
+    # it moves with the BERV, which is what the observer block is for; what
+    # stands vertical is the star's.
+    # ON THE PIXELS, NOT BETWEEN THEM: in each row the line stands on the
+    # column nearest the track, from the row's top edge to its bottom one, and
+    # steps sideways at the edge between two rows. Drawn from row centre to
+    # row centre, a few rows would make long diagonals that cut across pixels
+    # the feature is not in
     xs, ys = berv_steps(berv_track(centre, ctx["berv_obs"][rows]), x)
     for r in range(n_img):
         axes[r].plot(xs, ys, color=BERV_LINE, lw=2.8, solid_capstyle="butt",
@@ -726,8 +732,8 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
     bar = fig.colorbar(im, ax=list(axes), fraction=0.022, pad=0.015,
                        label=r"$\ln(f/\mathrm{savgol}\,f)$")
     # laid out beside every panel so that the wavelength axes still line up;
-    # now it spans the panels it describes, and the residual stretch gets a
-    # bar of its own beside panels 4 and 5, in the same column
+    # then made to span only the panels it describes, and the residual
+    # stretch gets a bar of its own beside panels 4 and 5, in the same column
     box = bar.ax.get_position()
     span = lambda names: [axes[r].get_position() for r, (name, _) in enumerate(titles)
                           if (name in RESIDUAL_PANELS) == names]
@@ -739,9 +745,9 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
         y0, y1 = min(p.y0 for p in low), max(p.y1 for p in low)
         fig.colorbar(im_resid, cax=fig.add_axes([box.x0, y0, box.width, y1 - y0]),
                      label="residual, ln f")
-    # the star's name on its own line, big and bold and centred: with four pages
-    # per window, which star a page is about has to be readable at a glance and
-    # not found inside a sentence
+    # the star's name on its own line, big and bold and centred: with a page
+    # per star and per window, which star a page is about has to be readable
+    # at a glance and not found inside a sentence
     if label:
         fig.suptitle(label, fontsize=14, fontweight="bold",
                      y=1 - 0.04 / height)

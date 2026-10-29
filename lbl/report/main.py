@@ -113,7 +113,7 @@ def _planet_section(planets):
 
 
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
-                known_periods=None, template_file=None, candidates_of=None,
+                known_periods=None, template_file=None, ephemerides_of=None,
                 star=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
@@ -126,9 +126,10 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                           those of the orbits the template was made on)
     :param template_file: str, the template of the comparison object, to say
                           whether it was made on known orbits (PLANETS)
-    :param candidates_of: str, the object whose transiting planets and TESS
-                          candidates (candidates.yaml) have their K fitted
-                          together (PLANETS), or None for no such fit
+    :param ephemerides_of: str, the object whose confirmed planets with a
+                           published ephemeris (ephemerides.yaml) have their
+                           K fitted together (PLANETS), or None for no such
+                           fit
     :param star: str, the science object: with SIMBAD's systemic velocity
                  of it, the velocity series is coloured by the star's
                  velocity in the telluric frame rather than by the BERV
@@ -184,12 +185,13 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
             wanted.append(('Zero point from the tellurics, one exposure',
                            lambda: _zero_point_figure(plt, example, data_dir,
                                                       title)))
-    # THE TRANSITING PLANETS AND CANDIDATES of the star (candidates.yaml,
-    #   PLANETS): their K fitted together, the known orbits held fixed
-    fit = _fit_candidates(candidates_of, table, planets)
+    # THE CONFIRMED PLANETS OF THE STAR WITH A PUBLISHED EPHEMERIS
+    #   (ephemerides.yaml, PLANETS): their K fitted together at their period
+    #   and time of conjunction, the known orbits held fixed
+    fit = _fit_ephemerides(ephemerides_of, table, planets)
     if fit is not None:
         known_periods = list(known_periods or []) + [
-            float(cand['period']) for cand in fit['candidates']]
+            float(planet['period']) for planet in fit['planets']]
     if planets is not None:
         wanted.append(('Velocities folded on the known orbits',
                        lambda: figures.page_phase(plt, table, title, planets)))
@@ -198,17 +200,17 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                                                         planets)))
     if fit is not None:
         wanted += [
-            ('Joint Keplerian fit of the transiting candidates',
-             lambda: figures.page_candidate_fit(plt, table, title, fit)),
-            ('Velocities folded on the transiting candidates',
-             lambda: figures.page_candidate_phase(plt, table, title, fit))]
+            ('Joint fit of K at the published ephemerides',
+             lambda: figures.page_ephemeris_fit(plt, table, title, fit)),
+            ('Velocities folded on the planets with a published ephemeris',
+             lambda: figures.page_ephemeris_phase(plt, table, title, fit))]
     # WHAT IS TAKEN OUT for the periodogram and the FIPs: the known orbits
-    #   and the fitted candidates, when there are; they are then drawn twice,
-    #   as measured and without them, side by side
+    #   and the planets fitted at their ephemerides, when there are; they are
+    #   then drawn twice, as measured and without them, side by side
     if fit is not None:
         residual = figures.subtract_fit(table, fit)
-        after = (', known orbits and fitted candidates subtracted'
-                 if planets is not None else ', fitted candidates subtracted')
+        after = (', known orbits and fitted planets subtracted'
+                 if planets is not None else ', fitted planets subtracted')
     elif planets is not None:
         residual = figures.subtract_orbits(table, planets)
         after = ', known orbits subtracted'
@@ -288,8 +290,7 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                 log.warning(traceback.format_exc(limit=2))
                 continue
             if fig is None:
-                missing.append('%s: nothing to draw, or koloa not installed'
-                               % name)
+                missing.append('%s: nothing to draw' % name)
                 continue
             path = os.path.join(work, 'page%02d.pdf' % index)
             fig.savefig(path, bbox_inches='tight')
@@ -309,11 +310,11 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                      if planets is not None else 'BERV, velocities iterated',
                      ''))
         if fit is not None:
-            for cand, k, sk in zip(fit['candidates'], fit['k'], fit['sk']):
-                rows.append(('K of %s' % cand.get('name', '?'),
+            for planet, k, sk in zip(fit['planets'], fit['k'], fit['sk']):
+                rows.append(('K of %s' % planet.get('name', '?'),
                              '%.2f +- %.2f (%.1f sigma)'
                              % (k, sk, abs(k) / sk if sk > 0 else 0), 'm/s'))
-            rows.append(('Jitter of the candidate fit', '%.2f' % fit['jitter'],
+            rows.append(('Jitter of the K fit', '%.2f' % fit['jitter'],
                          'm/s'))
         if lines:
             chi2 = [figures.activity_stats(table, key)[2]
@@ -331,68 +332,70 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _fit_candidates(object_name, table, planets):
-    """The joint fit of the star's transiting planets and TESS candidates
-    (candidates.yaml, lbl.report.kepfit), the known orbits of the template
-    held fixed; None without object, candidates or velocities to fit"""
+def _fit_ephemerides(object_name, table, planets):
+    """The joint fit of the K of the star's confirmed planets at their
+    published ephemerides (ephemerides.yaml, lbl.report.kepfit), the known
+    orbits of the template held fixed; None without object, planets or
+    velocities to fit"""
     if not object_name:
         return None
     try:
         from lbl.report import kepfit, series
         from lbl.science import planets as kepler
-        found = kepler.candidates_for(kepler.star_names(object_name))
+        found = kepler.ephemerides_for(kepler.star_names(object_name))
         if found is None:
             return None
         known = planets['orbits'] if planets is not None else []
-        # a planet whose orbit is known is not fitted again
+        # a planet whose orbit is known (by its name) is not fitted again
         taken = {kepler.normalise(orbit.get('name', '')) for orbit in known}
-        candidates = [cand for cand in found['candidates']
-                      if kepler.normalise(cand.get('name', '')) not in taken]
-        if not candidates:
+        fitted = [planet for planet in found['planets']
+                  if kepler.normalise(planet.get('name', '')) not in taken]
+        if not fitted:
             return None
         result = kepfit.fit(series.column(table, series.TIME) + 2400000.0,
                             series.column(table, series.VELOCITY),
                             series.column(table, series.ERROR),
-                            candidates, known)
+                            fitted, known)
         result.update(star=found['star'], catalog=found['catalog'])
-        for cand, k, sk in zip(candidates, result['k'], result['sk']):
+        for planet, k, sk in zip(fitted, result['k'], result['sk']):
             log.general('report: {0}, P = {1:.6g} d: K = {2:.2f} +- {3:.2f} '
-                        'm/s'.format(cand.get('name', '?'),
-                                     float(cand['period']), k, sk))
+                        'm/s'.format(planet.get('name', '?'),
+                                     float(planet['period']), k, sk))
         return result
     except Exception as exc:                                  # noqa: BLE001
-        log.warning('report: no fit of the candidates ({0})'.format(exc))
+        log.warning('report: no fit of K at the published ephemerides '
+                    '({0})'.format(exc))
         return None
 
 
-def _candidate_section(fit):
-    """The page that says which candidates were fitted and what K they got,
-    as LaTeX"""
-    lines = [r'\subsection*{Transiting planets and candidates fitted}',
-             'Their K fitted together on the velocities (circular orbits, '
-             'period and transit epoch of \\texttt{%s} fixed, one offset, a '
-             'jitter of %.2f m/s added to the error bars%s), %d velocities. '
+def _ephemeris_section(fit):
+    """The page that says which planets had their K fitted at their
+    published ephemerides and what K they got, as LaTeX"""
+    lines = [r'\subsection*{K fitted at the published ephemerides}',
+             'The K of the confirmed planets fitted together on the '
+             'velocities (circular orbits, period and time of inferior '
+             'conjunction of \\texttt{%s} fixed, one offset, a jitter of '
+             '%.2f m/s added to the error bars%s), %d velocities. '
              'Star \\texttt{%s}:'
              % (_escape(os.path.basename(fit['catalog'])), fit['jitter'],
                 ', the known orbits held fixed' if fit['known'] else '',
                 fit['nfit'], _escape(fit['star'])),
-             r'\begin{center}\small', r'\begin{tabular}{llrrrr}',
+             r'\begin{center}\small', r'\begin{tabular}{lrrrr}',
              r'\toprule',
-             r'Name & Status & $P$ (d) & $T_0$ (BJD) & $K$ (m/s) & '
+             r'Name & $P$ (d) & $T_0$ (BJD) & $K$ (m/s) & '
              r'$K/\sigma_K$ \\', r'\midrule']
-    for cand, k, sk in zip(fit['candidates'], fit['k'], fit['sk']):
-        lines.append('%s & %s & %.6g & %.5f & %.2f $\\pm$ %.2f & %.1f \\\\'
-                     % (_escape(cand.get('name', '?')),
-                        _escape(cand.get('disposition') or ''),
-                        float(cand['period']), float(cand['t0']), k, sk,
+    for planet, k, sk in zip(fit['planets'], fit['k'], fit['sk']):
+        lines.append('%s & %.6g & %.5f & %.2f $\\pm$ %.2f & %.1f \\\\'
+                     % (_escape(planet.get('name', '?')),
+                        float(planet['period']), float(planet['t0']), k, sk,
                         abs(k) / sk if sk > 0 else 0))
     lines += [r'\bottomrule', r'\end{tabular}', r'\end{center}',
               r'\begin{itemize}']
-    for cand in fit['candidates']:
+    for planet in fit['planets']:
         lines.append(r'\item %s: ephemeris from %s'
-                     % (_escape(cand.get('name', '?')),
-                        _escape(cand.get('reference') or
-                                cand.get('source') or '?')))
+                     % (_escape(planet.get('name', '?')),
+                        _escape(planet.get('reference') or
+                                planet.get('source') or '?')))
     lines.append(r'\end{itemize}')
     return '\n'.join(lines)
 
@@ -418,8 +421,8 @@ def _zero_point_example(table, data_dir, science_dir):
     if science_dir.rstrip('/').endswith('_tc'):
         folders.insert(0, science_dir.rstrip('/')[:-3])
     for folder in folders:
-        for candidate in (name, name + '.fits'):
-            path = os.path.join(folder, candidate)
+        for filename in (name, name + '.fits'):
+            path = os.path.join(folder, filename)
             if os.path.exists(path):
                 return path
     return None
@@ -472,15 +475,19 @@ def _tapas(data_dir):
 def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
            fit=None):
     """Run pdflatex on the assembled document. None if LaTeX is not there."""
-    if shutil.which('pdflatex') is None:
-        log.warning('pdflatex not found: the report falls back to plain pages')
+    from lbl.core.io import find_pdflatex
+    pdflatex = find_pdflatex()
+    if pdflatex is None:
+        log.warning('pdflatex not found (install a TeX distribution and put '
+                    'pdflatex on the PATH, or set LBL_PDFLATEX to its full '
+                    'path): the report falls back to plain pages')
         return None
     body = [PREAMBLE,
             r'\section*{LBL report: %s}' % _escape(title),
             r'\textit{From %s}' % _escape(os.path.basename(rdb_file)),
             r'\vspace{2mm}']
     # THE VELOCITY SERIES FIRST, before the table: it is what one opens the
-    #   report for (2026-10-24)
+    #   report for
     first = [one for one in drawn if one[0] == 'The velocity series']
     if first:
         body.append(r'\begin{center}\includegraphics[width=\linewidth,'
@@ -491,7 +498,7 @@ def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
     if planets is not None:
         body.append(_planet_section(planets))
     if fit is not None:
-        body.append(_candidate_section(fit))
+        body.append(_ephemeris_section(fit))
     for name, path in drawn:
         body.append(r'\clearpage')
         body.append(r'\subsection*{%s}'
@@ -509,11 +516,11 @@ def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
     body.append(r'\end{document}')
 
     source = os.path.join(work, 'report.tex')
-    with open(source, 'w') as handle:
+    with open(source, 'w', encoding='utf-8') as handle:
         handle.write('\n'.join(body))
     for _ in range(2):          # twice, so the page numbers settle
         done = subprocess.run(
-            ['pdflatex', '-interaction=nonstopmode', '-halt-on-error',
+            [pdflatex, '-interaction=nonstopmode', '-halt-on-error',
              'report.tex'], cwd=work, capture_output=True, text=True)
     made = os.path.join(work, 'report.pdf')
     if done.returncode != 0 or not os.path.exists(made):

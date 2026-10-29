@@ -10,15 +10,20 @@ from PIL import Image, ImageDraw, ImageFont
 #:    nothing, white numbers
 MARK = (255, 84, 0)
 WIDTH = 1440
-FONT_PATHS = ("/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-              "/System/Library/Fonts/Helvetica.ttc")
 
 
 def font(size):
-    for path in FONT_PATHS:
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default(size=size)
+    """A bold sans-serif font of `size` pixels for the badges' numbers:
+    whichever one matplotlib's font manager finds on this machine (it
+    always finds one, DejaVu Sans Bold ships with matplotlib), else
+    Pillow's own default font."""
+    try:
+        from matplotlib import font_manager
+        path = font_manager.findfont(font_manager.FontProperties(
+            family="sans-serif", weight="bold"), fallback_to_default=True)
+        return ImageFont.truetype(path, size)
+    except (ImportError, OSError, ValueError):
+        return ImageFont.load_default(size=size)
 
 
 def annotate(path, marks, origin):

@@ -2,8 +2,10 @@
 handed to whoever watches it.
 
 A run is an ordinary LBL wrap (wrap.py) started with the python of the
-environment LBL is installed in, in its own process group so that Stop stops
-everything it started (LBL and PCA2D start workers of their own). Its output
+environment LBL is installed in, through a small launcher (LAUNCHER) rather
+than a shell, so that it starts the same way on Windows as on macOS and
+Linux, in its own process group so that Stop stops everything it started
+(LBL and PCA2D start workers of their own). Its output
 is cut into finished lines and redraws of a progress bar (cut_output), each
 line given the level its colour says (LBL's and PCA2D's loggers colour info,
 values, warnings and errors), and kept as a list of events that a page can
@@ -49,6 +51,47 @@ COUNTERS = (re.compile(r"\bfile (\d+) of (\d+)\b"),
             re.compile(r"\b(\d+)/(\d+) files\b"))
 #: how long a run is given to stop before it is killed [s]
 GRACE = 10.0
+#: what a run is started with, by the wrap's own interpreter (python -u -c
+#:   LAUNCHER wrap exit_file): the wrap run as `python wrap.py` runs it (its
+#:   folder first on sys.path where -c put the current one, its name as
+#:   sys.argv, as __main__), then its exit code written to exit_file whatever
+#:   happened (a normal end, a SystemExit, an exception, its traceback
+#:   printed from the wrap's frame on), where a window closed meanwhile can
+#:   still read it. Any Python 3 reads it (the wrap's interpreter need not be
+#:   the window's), and it holds no double quote and no backslash, which a
+#:   Windows command line would have to escape
+LAUNCHER = '''
+import os, runpy, sys, traceback
+wrap, exit_file = sys.argv[1], sys.argv[2]
+sys.argv = [wrap]
+if sys.path and sys.path[0] == '':
+    sys.path[0] = os.path.dirname(os.path.realpath(wrap))
+code = 1
+try:
+    runpy.run_path(wrap, run_name='__main__')
+    code = 0
+except SystemExit as exc:
+    if exc.code is None:
+        code = 0
+    elif isinstance(exc.code, int):
+        code = exc.code
+    else:
+        print(exc.code, file=sys.stderr)
+except BaseException as exc:
+    where = exc.__traceback__
+    while where is not None and where.tb_frame.f_code.co_filename != wrap:
+        where = where.tb_next
+    traceback.print_exception(type(exc), exc, where)
+finally:
+    try:
+        with open(exit_file, 'w') as handle:
+            handle.write(str(code))
+    except OSError:
+        pass
+sys.stdout.flush()
+sys.stderr.flush()
+sys.exit(code)
+'''
 
 
 def cut_output(buffer: str):
@@ -60,7 +103,6 @@ def cut_output(buffer: str):
     carriage return, i.e. it is one draw of a bar that the next segment
     replaces; `rest` is what is not terminated yet, to be put in front of the
     next chunk (a pipe hands its output over wherever it happened to fill).
-    (Ported from pca2d-preclean's window.)
     """
     segments = []
     start = i = 0
@@ -170,6 +212,11 @@ class Job:
         level = level_of(text)
         plain = strip(text)
         with self.cond:
+            # the draw already on show (shown while the run was quiet, before
+            #   the carriage return that ends it came): nothing new
+            if transient and self.transient and self.events \
+                    and self.events[-1]["text"] == plain:
+                return
             op = "replace" if self.transient and self.events else "add"
             self.events.append(dict(n=len(self.events), op=op,
                                     text=plain, level=level))
@@ -250,17 +297,18 @@ class Job:
         """run.json, what the history reads back."""
         out = self.summary()
         out.pop("events", None)
-        with open(os.path.join(self.folder, "run.json"), "w") as handle:
+        with open(os.path.join(self.folder, "run.json"), "w",
+                  encoding="utf-8") as handle:
             json.dump(out, handle, indent=1, default=str)
 
 
 class Runner:
     """The queue: runs start in the order they were asked for, one at a
-    time (a PCA2D fit can take most of a laptop's memory).
+    time (a PCA2D fit can take most of a machine's memory).
 
     A run does not depend on the window: its output goes to a file
     (run.raw) that the window follows, and its exit code to another (exit),
-    written by the shell that starts it. Closing the window leaves a run
+    written by the launcher that runs it. Closing the window leaves a run
     going; opening it again on the same data folder finds it (adopt), and
     the runs still queued with it.
     """
@@ -300,7 +348,7 @@ class Runner:
         for path in glob.glob(os.path.join(data_dir, runs_folder, "*",
                                            "run.json")):
             try:
-                with open(path) as handle:
+                with open(path, encoding="utf-8") as handle:
                     record = json.load(handle)
             except (OSError, ValueError):
                 continue
@@ -369,22 +417,22 @@ class Runner:
         if job.state != "running" or not job.pid:
             return False
         job.stopping = True
-        job.note("stopping: SIGTERM to the run and everything it started",
-                 "warn")
         try:
-            os.killpg(job.pid, signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
+            sent = stop_group(job.pid)
+        except (OSError, subprocess.SubprocessError):
             return False
+        job.note("stopping: %s to the run and everything it started" % sent,
+                 "warn")
 
         def escalate():
             time.sleep(GRACE)
             if _alive(job.pid):
-                job.note("still running after %.0f s: SIGKILL" % GRACE,
-                         "warn")
                 try:
-                    os.killpg(job.pid, signal.SIGKILL)
-                except (ProcessLookupError, PermissionError):
-                    pass
+                    sent = stop_group(job.pid, hard=True)
+                except (OSError, subprocess.SubprocessError):
+                    return
+                job.note("still running after %.0f s: %s" % (GRACE, sent),
+                         "warn")
         threading.Thread(target=escalate, daemon=True).start()
         return True
 
@@ -407,20 +455,19 @@ class Runner:
                 self.wake.set()
 
     def _run(self, job: Job) -> None:
-        env = dict(os.environ, PYTHONUNBUFFERED="1")
+        # the output in UTF-8 whatever the system's own encoding (Windows
+        #   writes a pipe or a file in its code page otherwise), which is
+        #   what _follow decodes; progress bars drawn (pca2d.progress), the
+        #   window redrawing a carriage-returned line in place
+        env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8",
+                   LBL_PROGRESS_BARS="1")
         job.state = "running"
         job.started = time.time()
         job.note("started: %s %s" % (job.python, os.path.basename(job.wrap)))
         raw = open(os.path.join(job.folder, "run.raw"), "ab")
         try:
-            # the shell writes the exit code where a window that was closed
-            #   meanwhile can still read it; the run is the session leader of
-            #   its own group, so that Stop reaches what it starts
-            proc = subprocess.Popen(
-                ["/bin/sh", "-c", '"$0" -u "$1"; echo $? > "$2"',
-                 job.python, job.wrap, os.path.join(job.folder, "exit")],
-                cwd=job.cwd, env=env, stdout=raw, stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL, start_new_session=True)
+            proc = launch(job.python, job.wrap,
+                          os.path.join(job.folder, "exit"), job.cwd, env, raw)
         except OSError as exc:
             raw.close()
             job.note("could not start: %s" % exc, "error")
@@ -445,7 +492,8 @@ class Runner:
         from .history import run_log
         log_path = run_log(job.folder)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(raw_path, "rb") as raw, open(log_path, "w") as log:
+        with open(raw_path, "rb") as raw, \
+                open(log_path, "w", encoding="utf-8") as log:
             while True:
                 chunk = raw.read(65536)
                 if chunk:
@@ -465,17 +513,23 @@ class Runner:
                         for text, transient in segments:
                             job.add(text, transient, log)
                     break
+                # a bar's draw ends only with the carriage return of the
+                #   next one: while the run is quiet, the draw it is on is
+                #   shown as it stands (replaced as the next one comes),
+                #   rather than one draw late
+                if rest:
+                    job.add(rest, True)
                 time.sleep(0.2)
             if rest:
                 job.add(rest, False, log)
         if proc is not None:
             proc.wait()
         code = None
-        # a run stopped by a signal never reaches the line that writes the
-        #   exit file: no need to wait for it
+        # a run stopped is killed before its launcher writes the exit file:
+        #   no need to wait for it
         for _ in range(1 if job.stopping else 10):
             try:
-                with open(exit_path) as handle:
+                with open(exit_path, encoding="utf-8") as handle:
                     code = int(handle.read().strip())
                 break
             except (OSError, ValueError):
@@ -510,8 +564,8 @@ def _log_of(folder: str) -> str:
 
 
 def _steps_of(wrap) -> list:
-    """The steps of a run started before its steps were kept (run.json
-    without them): planned again from its wrap, read and never run."""
+    """The steps of a run whose run.json does not hold them: planned again
+    from its wrap, read and never run."""
     try:
         from . import wrapgen, wrapload
         rparams = wrapload.read(wrap)["rparams"]
@@ -529,12 +583,78 @@ def _recipe_kind(banner: str) -> str:
     return word
 
 
+def launch(python: str, wrap: str, exit_file: str, cwd: str, env: dict,
+           output):
+    """Start a wrap with `python` through LAUNCHER, its output (both
+    streams) into the file `output`, in a process group of its own that
+    Stop reaches as a whole: a new session on macOS and Linux (whose leader
+    it is), a new process group on Windows. Returns the Popen."""
+    if os.name == "nt":
+        group = dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:
+        group = dict(start_new_session=True)
+    return subprocess.Popen([python, "-u", "-c", LAUNCHER, wrap, exit_file],
+                            cwd=cwd, env=env, stdout=output,
+                            stderr=subprocess.STDOUT,
+                            stdin=subprocess.DEVNULL, **group)
+
+
+def stop_group(pid: int, hard: bool = False) -> str:
+    """Stop the process group a run leads (launch), and say what was sent.
+
+    macOS and Linux: SIGTERM to the group, or SIGKILL when `hard`. Windows:
+    Ctrl+Break to the group, which ends a console program as SIGTERM does
+    (a run reached through no console shared with the window cannot be sent
+    one, and is killed at once instead), or when `hard` the whole tree
+    killed by taskkill, a Windows command.
+    """
+    if os.name != "nt":
+        os.killpg(pid, signal.SIGKILL if hard else signal.SIGTERM)
+        return "SIGKILL" if hard else "SIGTERM"
+    if not hard:
+        try:
+            os.kill(pid, signal.CTRL_BREAK_EVENT)
+            return "Ctrl+Break"
+        except OSError:
+            pass
+    subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)],
+                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, timeout=30)
+    return "taskkill /T /F"
+
+
 def _alive(pid) -> bool:
+    """Whether a process is still there. On Windows os.kill ends any process
+    it is given whatever the signal (console events aside), so it is never
+    used to look there: psutil, or the process's exit code read through
+    the Windows API when psutil is not installed."""
     try:
-        os.kill(int(pid), 0)
-        return True
-    except (OSError, TypeError, ValueError):
+        pid = int(pid)
+    except (TypeError, ValueError):
         return False
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+    try:
+        import psutil
+        return psutil.pid_exists(pid)
+    except ImportError:
+        pass
+    import ctypes
+    kernel32 = ctypes.windll.kernel32
+    # PROCESS_QUERY_LIMITED_INFORMATION; STILL_ACTIVE while it runs
+    handle = kernel32.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) \
+            and code.value == 259
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def new_id(name: str) -> str:
@@ -549,7 +669,7 @@ def reports_since(data_dir: str, since: float) -> list:
     out = []
     for pattern in ("reports/*.pdf", "pca2d/*/*/*.pdf", "pca2d/*/*/*/*.pdf"):
         for path in glob.glob(os.path.join(data_dir, pattern)):
-            if "/superseded/" in path:
+            if "superseded" in os.path.normpath(path).split(os.sep):
                 continue
             try:
                 if os.path.getmtime(path) >= since:

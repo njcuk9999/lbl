@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 The weights of an exposure refitted at correction time are the fit's: the
-bottom of a deep line keeps its weight when its SNR is enough (it lost it to
-an old depth threshold, and mask: exposure then blanked it in every
-corrected file).
+bottom of a deep line keeps its weight when its SNR is enough. A threshold
+on the depth alone would drop it, and mask: exposure would then blank it in
+every corrected file.
 
 Created on 2026-10-23
 
@@ -26,15 +26,15 @@ def test_a_deep_line_keeps_its_weight_where_its_snr_is_enough():
                                   dict(min_pixel_snr=5.0))
     assert np.all(w[:, 190:210] > 0)
     assert np.all(w[:, 300:310] == 0)
-    # the old depth threshold, only when a configuration asks for it
+    # the depth threshold, only when a configuration asks for it
     old = reconstruct.refit_weights(values, good, sigma, None,
                                     dict(min_pixel_snr=None, ln_clip_low=-0.5))
     assert np.all(old[:, 190:210] == 0)
 
 
 def test_a_rejected_exposure_is_named_with_what_happens_to_it(monkeypatch):
-    # 2026-10-27: "this exposure was rejected by the MAD cut" once per file,
-    #   without the file, and "its coefficients are zeros" with a refit on
+    # the message names the file (its BJD and BERV), the cut, and what
+    #   happens to it: fitted again with a refit, zeros without
     from astropy.table import Table
     from lbl.pca2d import reconstruct
     said = []

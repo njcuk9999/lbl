@@ -76,7 +76,8 @@ DEFAULTS['SKIP_LBL_MASK'] = False
 DEFAULTS['SKIP_LBL_COMPUTE'] = False
 DEFAULTS['SKIP_LBL_COMPILE'] = False
 #: NEITHER TRUE NOR FALSE BY DEFAULT: the PCA2D correction is redone only if
-#: the settings, the input files or nominal.yaml have changed. True keeps the
+#: the settings, the input files, nominal.yaml or the instrument's PCA2D
+#: settings (its LBL class) have changed. True keeps the
 #: one on disk even then, False always redoes it (lbl_pca2d.correct)
 DEFAULTS['SKIP_LBL_PCA2D'] = None
 
@@ -204,7 +205,7 @@ def main(runparams: dict):
             #   template step below keeps a template already on disk (unless
             #   OVERWRITE), so the first pass's would have stayed, and the
             #   mask, the velocities and PCA2D would have measured the second
-            #   pass's spectra against it (GJ 1214, 2026-10-25)
+            #   pass's spectra against it
             lbl_template.main(instrument=instrument, data_dir=data_dir,
                               data_source=data_source,
                               data_type=data_type,
@@ -230,7 +231,7 @@ def main(runparams: dict):
         # <object>_tc_pca2d. Its corrected spectra are a science object of
         # their own, <object>_pca2d, and every step below measures that one.
         # Without a PCA2D key nothing of it is even imported, and the steps
-        # run once, on the object, exactly as they always did.
+        # run once, on the object.
         if runparams.get('PCA2D') not in (None, False) and \
                 data_type == 'SCIENCE':
             from lbl.recipes import lbl_pca2d
@@ -309,9 +310,8 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                blaze_corr, blaze_file):
     """Template, mask, compute, compile and report, as asked, on one object.
 
-    The body of the loop as it always was, made a function so that a PCA2D
-    run can measure the delivered object and then the corrected one. Returns
-    the report's PDF, or None.
+    A function of its own so that a PCA2D run can measure the delivered
+    object and then the corrected one. Returns the report's PDF, or None.
     """
     lbl_report = None
     # ---------------------------------------------------------------------
@@ -404,9 +404,9 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                                      template_file=_template_of(
                                          data_dir, object_comparison,
                                          instrument),
-                                     # PLANETS: the K of its transiting
-                                     #   planets and candidates fitted
-                                     candidates_of=(object_science if
+                                     # PLANETS: the K of its confirmed
+                                     #   planets of known ephemeris fitted
+                                     ephemerides_of=(object_science if
                                                     runparams.get('PLANETS')
                                                     else None),
                                      # its systemic velocity colours the

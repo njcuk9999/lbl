@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 """The velocities a run produced, added to that run's own report.
 
-A run ends with LBL, and until now its velocities lived in an rdb somewhere
-under lbl/lblrdb and were looked at by hand with `python -m lbl.pca2d.lblscan`.
-That is the wrong way round: a correction is worth what it does to the
-velocities, so the numbers belong in the document the run leaves behind, beside
+A run ends with LBL, whose velocities are written to an rdb under the LBL
+tree's lblrdb folder. A correction is worth what it does to the velocities,
+so the numbers belong in the document the run leaves behind, beside
 the river plots that show what was subtracted. Every star of the run gets a
 page, joint runs included, and when lbl.before was on (the delivered spectra
 measured too) each page is the comparison rather than one curve on its own.

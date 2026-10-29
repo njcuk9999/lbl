@@ -100,6 +100,22 @@ class Spirou(Instrument):
         self.param_set('HP_WIDTH', 500, source=func_name)
         # approximate mean resolution in lambda/dlambda
         self.param_set('APPROX_RESOLUTION', 70000, source=func_name)
+        # PCA2D reads the t.fits itself: they carry the telluric transmission
+        #    (Recon) and the sky emission that was subtracted (OHLine), which
+        #    this class does not return. The science fibre is AB (A and B
+        #    together)
+        self.param_set('PCA2D_INPUT_FORMAT', 'tfits', source=func_name)
+        self.param_set('PCA2D_TFITS_EXTENSIONS', source=func_name,
+                       value=dict(flux='FluxAB', wave='WaveAB',
+                                  blaze='BlazeAB', recon='Recon',
+                                  sky='OHLine'))
+        # the files of a science folder PCA2D reads
+        self.param_set('PCA2D_INPUT_PATTERN', '*t.fits', source=func_name)
+        # the windows of the PCA2D figures (centre:width in nm): deep
+        #    tellurics (H2O, O2, CO2, CH4) near the middle of an order
+        self.param_set('PCA2D_WINDOWS', source=func_name,
+                       value=['1204.3:2', '1213:4', '1264.25:2', '1601.6:2',
+                              '1667.75:5', '1707.5:3', '2196.2:2', '2465:5'])
         # define the SNR cut off threshold
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
@@ -213,6 +229,20 @@ class Spirou(Instrument):
         self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
         self.param_set('KW_AIRMASS', 'AIRMASS', source=func_name)
+        # define the airmass at the end of the observation
+        self.param_set('KW_AIRMASS_END', None, source=func_name)
+        # define the seeing during the observation [arcsec]: the guider's own
+        #    estimate first, which is what the fibre saw; the weather mast's
+        #    describes the site
+        self.param_set('KW_SEEING', ['SGSSEE', 'WMSEEMED'], source=func_name)
+        # define the relative humidity during the observation
+        self.param_set('KW_HUMIDITY', 'RELHUMID', source=func_name)
+        # define the elevation of the Sun during the observation
+        self.param_set('KW_SUN_ELEVATION', 'DRSSUNEL', source=func_name)
+        # define the instrument mode of the observation
+        self.param_set('KW_DRS_MODE', 'DRSMODE', source=func_name)
+        # define the largest BERV of the target over the year
+        self.param_set('KW_BERVMAX', 'BERVMAX', source=func_name)
         # define the human date of the observation
         self.param_set('KW_DATE', 'DATE-OBS', source=func_name)
         # define the tau_h20 of the observation
@@ -276,7 +306,10 @@ class Spirou(Instrument):
         #    distinguish FP calibration files from FP simultaneous files
         self.param_set('KW_REF_KEY', 'DPRTYPE', source=func_name)
         # the temperature of the object
-        self.param_set('KW_TEMPERATURE', 'OBJTEMP', source=func_name)
+        # APERO writes it as OBJTEMP on the primary header and PP_TEFF on
+        #    the science extension
+        self.param_set('KW_TEMPERATURE', ['OBJTEMP', 'PP_TEFF'],
+                       source=func_name)
         # velocity of template from CCF
         self.param_set('KW_MODELVEL', 'MODELVEL', source=func_name)
 

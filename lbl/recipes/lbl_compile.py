@@ -144,8 +144,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # Step 3: Produce RDB file (.rdb and .fits)
     # -------------------------------------------------------------------------
     # the activity lines of each spectrum are columns of the rdb
-    #   (lbl.science.activity_lines): a science rdb compiled before them is
-    #   compiled again
+    #   (lbl.science.activity_lines): a science rdb without these columns
+    #   is compiled again
     science = inst.params['DATA_TYPE'] == 'SCIENCE'
     outdated = science and not activity_lines.rdb_has_activity(rdbfile1)
     if os.path.exists(rdbfile1) and inst.params['SKIP_DONE'] and not outdated:

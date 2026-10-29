@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """Everything a run produced, as ONE multipage PDF.
 
-    python -m lbl.pca2d.figures.bundle --config outputs/TOI2120/1-3v/resolved_config.yaml \
-        --cube cache/cube_tfits_<key> --outdir outputs/TOI2120/1-3v
+    python -m lbl.pca2d.figures.bundle --config outputs/<object>/<tag>/resolved_config.yaml \
+        --cube cache/cube_tfits_<key> --outdir outputs/<object>/<tag>
 
 Scattering forty PDFs across three directories makes them hard to look at in
 order, hard to send, and easy to compare across runs by accident: two files
-with the same name in two directories are one careless click apart. A run now
+with the same name in two directories are one careless click apart. A run
 leaves one document.
 
 It opens with what was actually run, not what a config file says today: the
@@ -39,30 +39,24 @@ try:
 except ImportError:                                           # pragma: no cover
     # PYPDF ONLY BINDS. Without it every figure is still drawn and the LaTeX
     # report (texreport) still holds them all; only the bound copy is missing.
-    # LBL installed before pypdf was one of its dependencies has none, and
-    # the figures stage stopped on this import (2026-10-21).
+    # An installation without pypdf must not stop the figures stage here.
     PdfReader = PdfWriter = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# No sys.path edit here. There was one, pointing at the pca2d/ directory rather
-# than at the repository, so it never made `import pca2d` work (the install
-# does that); what it did do was put pca2d/ at the head of the path of the whole
-# pipeline, since the CLI imports this module in-process. From then on the name
-# `lbl` meant pca2d/lbl.py and not the LBL package, and a full run died at its
-# last stage with "attempted relative import with no known parent package".
+# No sys.path edit here. The CLI imports this module in-process, so a path
+# edit made here would apply to the whole pipeline: with the pca2d/ directory
+# at the head of the path, the name `lbl` would mean pca2d/lbl.py and not the
+# LBL package, and every relative import of the package would fail ("attempted
+# relative import with no known parent package"). The install is what makes
+# the package importable.
 
 from lbl.pca2d.config import cache_key, load_config, spectra_dir  # noqa: E402
 from lbl.pca2d.logger import log                              # noqa: E402
 
 #: what a figure says when it drew less than it was asked for. Reported even
 #: though the figure succeeded: a page that is not there is not an error anybody
-#: notices, and three of them went unseen on the joint run of 2026-09-12.
+#: notices.
 SKIPPED = re.compile(r"\bskipped\b|\bnot drawn\b|\bnothing to draw\b")
-
-#: default windows, the ones this campaign looks at
-WINDOWS = ["1200.3:2", "1220:4", "1267:2", "1593.6:2", "1669.5:5", "1700.5:3",
-           "2196.2:2", "2450:5"]
-
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__,
@@ -72,7 +66,9 @@ def parse_args(argv=None):
     p.add_argument("--outdir", required=True,
                    help="the fit's output directory; fit.npz is read from it"
                         " and the bundle is written into it")
-    p.add_argument("--windows", nargs="+", default=WINDOWS)
+    p.add_argument("--windows", nargs="*", default=None,
+                   help="centre:width in nm; default: the configuration's"
+                        " output.windows (the instrument's PCA2D_WINDOWS)")
     p.add_argument("--source-dir", default=None)
     p.add_argument("--out", default=None,
                    help="default: <outdir>/<object>_<tag>.pdf")
@@ -111,12 +107,11 @@ def text_pages(pdf, title, body, per_page=62, size=7.0):
 def clear_figures(folder):
     """Remove the report's figures of a previous run of this stage.
 
-    Not the AppleDouble files macOS writes beside every file on an exFAT
-    disk: `._name.pdf` goes when `name.pdf` does, and removing it afterwards
-    raised FileNotFoundError on a joint run that had done nothing wrong
-    (2026-09-17, on irrisor). A file that another process took in the
-    meantime is not a reason to lose a stage either: the point is an empty
-    folder, and what is already gone is gone.
+    Not the hidden files whose names start with a dot: on some file systems
+    every file has a companion `._name.pdf` that goes when `name.pdf` does,
+    and removing it afterwards would raise FileNotFoundError. A file that
+    another process took in the meantime is not a reason to lose a stage
+    either: the point is an empty folder, and what is already gone is gone.
     """
     if not os.path.isdir(folder):
         return 0
@@ -135,9 +130,10 @@ def clear_figures(folder):
 def object_name(config, args):
     """What to call this run.
 
-    `input.object` when it is set, and otherwise the config file's own stem,
-    which is how these are named. NOT the source directory's basename: that is
-    `tfiles` for every target here, so a bundle would come out called tfiles.
+    `input.object` when it is set, and otherwise the output directory's
+    parent or the config file's own stem. The source directory's basename
+    only as a last resort: it is often the same for every target (`tfiles`,
+    say), and a bundle would come out called that.
     """
     named = config["input"].get("object")
     if named:
@@ -145,8 +141,8 @@ def object_name(config, args):
     # outputs/<object>/<tag> is where this is being written, so the parent of
     # the output directory names the object. Tried before the config file's
     # stem, which is "config" whenever the generic config.yaml is used
-    # directly, and before the source directory's basename, which is "tfiles"
-    # for every target.
+    # directly, and before the source directory's basename, which is often
+    # the same for every target.
     parent = os.path.basename(os.path.dirname(os.path.normpath(args.outdir)))
     if parent and parent not in ("", ".", "outputs"):
         return parent
@@ -215,8 +211,8 @@ def settings_block(config):
     # Every setting the window can change, all of them, whether or not it was
     # touched. A report that names only the settings that differ from some
     # default makes the reader guess what the default was; a report that names
-    # only the ones above made a (dF/dv)^2 run indistinguishable from a flux
-    # run on its own front page.
+    # only the ones above cannot tell a (dF/dv)^2 run from a flux run on its
+    # own front page.
     from ..config import WINDOW_SETTINGS, setting_value
     keys = [path for path, _what in WINDOW_SETTINGS]
     kw = max(len(k) for k in keys)
@@ -235,8 +231,8 @@ def settings_block(config):
     if command:
         block += "\n\nTHE COMMAND THIS RUN WAS GIVEN\n  " + command
     else:
-        block += ("\n\nTHE COMMAND THIS RUN WAS GIVEN\n  not recorded: the run"
-                  " predates provenance.command (2026-09-15)")
+        block += ("\n\nTHE COMMAND THIS RUN WAS GIVEN\n  not recorded: the"
+                  " run's configuration has no provenance.command")
     return block
 
 
@@ -247,9 +243,9 @@ def periodogram_args(py, script, fit_path, out, config):
     That is what makes the figure a check rather than a picture: a basis
     component varying at a planet's period subtracts that planet out of the
     spectra, the velocities come back cleaner BECAUSE the signal is gone, and
-    nothing in the residuals looks wrong. No period was ever passed before
-    2026-09-12, so the question the figure exists to answer was never put to it.
-    The periods are published values, per object, under objects.<NAME>.target.
+    nothing in the residuals looks wrong. Without the periods, the question
+    the figure exists to answer is never put to it. The periods are
+    published values, per object, under objects.<NAME>.target.
     """
     known = config.get("target") or {}
     argv = [py, script, "--fit", fit_path, "--out", out]
@@ -265,9 +261,9 @@ def periodogram_args(py, script, fit_path, out, config):
 def run(cmd, failures):
     """Run one diagnostic, and say so if it fails rather than dying.
 
-    The second argument is the list of failures to append to. It was called
-    `log` until it shadowed the logger of that name, which every call in here
-    then went through, so a failing figure raised TypeError instead of being
+    The second argument is the list of failures to append to. It is not
+    called `log`: that would shadow the logger every call in here goes
+    through, and a failing figure would raise TypeError instead of being
     written to the bundle's last page.
     """
     log("   " + " ".join(os.path.basename(c) if c.endswith(".py") else c
@@ -279,10 +275,10 @@ def run(cmd, failures):
         log("      failed, see the bundle's last page")
     else:
         # A figure that SUCCEEDS can still have drawn less than it was asked
-        # for, and its own report of that was thrown away with the rest of its
-        # output, since only a non-zero exit was ever shown. Three windows of
-        # the joint run were skipped for "too few rows" and nobody saw it: the
-        # report simply had three pages fewer than windows (2026-09-13).
+        # for (a window skipped for "too few rows", say), and it says so only
+        # in its own output, which nothing else shows when it exits with no
+        # error: the report would just have fewer pages than windows. Those
+        # lines are picked out of its output and reported.
         for line in (r.stdout or "").splitlines():
             if SKIPPED.search(line):
                 log("   " + line.split("| ", 1)[-1].strip(), "warn")
@@ -311,11 +307,17 @@ def main(argv=None):
     # actually have divided out, and panels 3 and 5 in yellow what they will
     # have masked (imported here: cli imports this module)
     from ..cli import clip_args, shrink_args
-    run([py, d("sequence.py"), "--cube", args.cube, "--fit", fit_path,
-         "--windows", *args.windows, "--source-dir",
-         args.source_dir or spectra_dir(config),
-         "--out", os.path.join(tmp, "sequence.pdf"), *shrink_args(config),
-         *clip_args(config, quiet=True)], failures)
+    windows = (args.windows if args.windows is not None
+               else (config.get("output") or {}).get("windows") or [])
+    if windows:
+        run([py, d("sequence.py"), "--cube", args.cube, "--fit", fit_path,
+             "--windows", *windows, "--source-dir",
+             args.source_dir or spectra_dir(config),
+             "--out", os.path.join(tmp, "sequence.pdf"), *shrink_args(config),
+             *clip_args(config, quiet=True)], failures)
+    else:
+        log("  no wavelength window for this instrument (its PCA2D_WINDOWS):"
+            " no sequence figure", "warn")
     run([py, d("weight_spectrum.py"), "--cube", args.cube, "--fit", fit_path,
          "--out", os.path.join(tmp, "weights.pdf")], failures)
     # which exposures each row of the fit holds: the nights, and the BERV
@@ -333,12 +335,10 @@ def main(argv=None):
     run([py, d("ancillary_time.py"), "--cube", args.cube, "--fit", fit_path,
          "--title", str(obj), "--out", os.path.join(tmp, "ancillary.pdf")], failures)
     # Only scripts that take --windows are used, so the cube is loaded once per
-    # script and not once per window. The per-window ones cost a full cube read
-    # each: on 321 exposures that is 4.1 GB and a minute and a half, and with
-    # three of them over eight windows the bundle spent an hour and a half
-    # reading the same file twenty-four times. plot_snippet, star_frame_envelope
-    # and compare_template are what went; sequence.py shows the whole chain for
-    # every window in one read, and the stacks show the rest.
+    # script and not once per window. A script run once per window costs a
+    # full cube read each time, gigabytes for a large campaign, multiplied by
+    # the number of windows; sequence.py shows the whole chain for every
+    # window in one read, and the stacks show the rest.
     per_window = []
 
     # ---- the front matter ----------------------------------------------
@@ -385,8 +385,8 @@ def main(argv=None):
     order.append(("Correlations", os.path.join(args.outdir, "correlations.pdf")))
     order.append(("Coefficient periodogram", os.path.join(tmp, "periodogram.pdf")))
     order.append(("Weight spectrum", os.path.join(tmp, "weights.pdf")))
-    # no "one exposure, before and after" pages any more: the sequence's own
-    # flux panel shows exposures before and after, in every window
+    # no "one exposure, before and after" pages: the sequence's own flux
+    # panel shows exposures before and after, in every window
     order.extend(per_window)
 
     page = 0
@@ -448,7 +448,7 @@ def main(argv=None):
     clear_figures(old)
     texreport.write_manifest(folder, {
         "object": obj, "tag": tag, "cube": args.cube,
-        "windows": [str(w) for w in args.windows],
+        "windows": [str(w) for w in windows],
         "figures": texreport.keep_figures(order, folder),
         "failures": [{"what": f[0], "why": f[1],
                       "skipped": bool(len(f) > 2 and f[2])} for f in failures],
@@ -457,7 +457,7 @@ def main(argv=None):
     })
 
     # A run leaves ONE document. The figures the fit itself wrote into the
-    # output directory are now pages of it, and leaving them beside it is how
+    # output directory are pages of it, and leaving them beside it is how
     # a directory fills with forty files that disagree about which run they
     # came from. The CSVs stay: they are data, not pages.
     if not args.keep:

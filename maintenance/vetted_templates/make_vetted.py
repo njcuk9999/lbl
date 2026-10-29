@@ -1,6 +1,6 @@
 """
 The depot files of LBL's vetted templates, from the APERO s1dv templates the
-selection chose (choose.py, selection.json).
+selection chose (select_vetted_stars.py, selection.json).
 
 One file per star and instrument, vetted_<OBJECT>_<instrument>.fits, next to
 tapas_lbl.fits in LBL's model repository (MODEL_REPO_URL): the template's
@@ -28,10 +28,14 @@ SCI_COLUMNS = ("Filename", "BERV", "BJD", "USED")
 
 
 def depot_name(objname: str, instrument: str) -> str:
+    """The depot file name lbl.core.vetted downloads for this star"""
     return 'vetted_{0}_{1}.fits'.format(objname, instrument.lower())
 
 
 def make(apero_path: str, entry: dict, out_path: str):
+    """Write the depot file of one entry of selection.json, from its APERO
+    template: the primary header with the APERO keys of KEEP and the
+    vetting keys (VET*), the TEMPLATE table and the SCI_TABLE of spectra"""
     with fits.open(apero_path) as hdul:
         head0 = hdul[0].header
         spec = hdul[1].data
@@ -56,6 +60,8 @@ def make(apero_path: str, entry: dict, out_path: str):
     header['VETSRC'] = ('{0}/{1}'.format(entry['tree'], entry['file']),
                         'APERO tree and template')
     header['VETDATE'] = (datetime.date.today().isoformat(), 'made on')
+    # the template's columns, the flux columns in single precision (the
+    #   wavelength stays in double: it carries m/s-level shifts)
     table = Table()
     table['wavelength'] = np.asarray(spec['wavelength'], dtype=np.float64)
     for col in ('flux', 'eflux', 'rms'):
@@ -72,6 +78,7 @@ def make(apero_path: str, entry: dict, out_path: str):
 
 
 def main(apero_dir: str, selection: str, out_dir: str):
+    """One depot file per entry of selection.json's "chosen" list"""
     os.makedirs(out_dir, exist_ok=True)
     chosen = json.load(open(selection))['chosen']
     for entry in chosen:

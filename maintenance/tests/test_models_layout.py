@@ -1,8 +1,9 @@
-"""DATA_DIR/models in subfolders (2026-10-26): LBL's downloads by kind
-(phoenix, tellurics, resproj, masks), the vetted templates in
+"""DATA_DIR/models in subfolders: LBL's downloads by kind (phoenix,
+tellurics, resproj, masks), the vetted templates in
 template_<INSTRUMENT>_<SOURCE>, the PCA2D observer bases one keeps in
-pca2d_<INSTRUMENT>_<SOURCE>. A models/ from before, every file at its top,
-is sorted the first time a file is looked for.
+pca2d_<INSTRUMENT>_<SOURCE>. Older versions of LBL kept every file at the
+top of models/; such a folder is sorted the first time a file is looked
+for.
 
     PYTHONPATH=<this checkout> python -m pytest \
         maintenance/tests/test_models_layout.py
@@ -164,8 +165,8 @@ def test_a_models_folder_from_before_is_sorted_at_once(tmp_path):
 
 def test_the_science_template_is_not_looked_for_beside_a_vetted_one(
         tmp_path):
-    # lbl_compute on 2026-10-26: the science template was taken as the
-    #   comparison's path with the object's name, which put it in
+    # the science template is looked for in templates/, not built from the
+    #   comparison's path with the object's name, which would put it in
     #   models/template_SPIROU_CADC beside the vetted template
     from lbl.science import general
 
@@ -199,8 +200,8 @@ def test_the_science_template_is_not_looked_for_beside_a_vetted_one(
 
 
 def test_a_basis_in_any_subfolder_of_models_is_found(tmp_path):
-    # the user put a NIRPS basis in models/template_NIRPS_HE_CADC
-    #   (2026-10-27): LBL and the window look in every subfolder
+    # a basis put in another subfolder of models/ (here
+    #   template_NIRPS_HE_CADC): LBL and the window look in every subfolder
     from lbl.gui import lblinfo
     data_dir = str(tmp_path)
     folder = os.path.join(data_dir, 'models', 'template_NIRPS_HE_CADC')
@@ -225,8 +226,8 @@ def test_a_basis_in_any_subfolder_of_models_is_found(tmp_path):
 
 
 def test_a_missing_blaze_falls_back_to_the_default_of_the_setup(tmp_path):
-    # models/default-blaze/blaze_<INSTRUMENT>_<SOURCE>.fits (2026-10-27,
-    #   NIRPS_HE ESO's first)
+    # models/default-blaze/blaze_<INSTRUMENT>_<SOURCE>.fits, used when the
+    #   blaze a file names is not in calib/
     import types
     from lbl.core.base_classes import LblException
     from lbl.instruments.default import Instrument

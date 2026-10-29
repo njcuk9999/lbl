@@ -129,7 +129,7 @@ def register(wave_obs, values, good, berv, target_berv, grid,
              spline_order=3, mask_threshold=0.999):
     """Resample onto the common grid in the frame set by target_berv.
 
-    APERO's s1d_v wavelengths are in the observer frame: a stellar feature sits
+    The input wavelengths are in the observer frame: a stellar feature sits
     at lambda_obs = lambda_bary / D(BERV), D the relativistic Doppler factor
     sqrt((1 + v/c) / (1 - v/c)) (grids.doppler), i.e. a spectrum taken at high
     BERV has its stellar lines pushed blueward. Mapping each sample to
@@ -148,10 +148,9 @@ def register(wave_obs, values, good, berv, target_berv, grid,
     good = np.asarray(good)
 
     # THE SPLINE REQUIRES INCREASING ABSCISSAE, and a wavelength solution
-    # is not always increasing. Measured on 2026-10-14: 5 of the 60 ESPRESSO
-    # exposures of tau Ceti have, at the blue edge of their bluest order, 177
+    # is not always increasing: at the edge of an order, some exposures have
     # pixels whose wavelength GOES BACKWARD before moving forward again, and
-    # scipy stopped on "x must be increasing". Sorting them puts these pixels
+    # scipy stops on "x must be increasing". Sorting them puts these pixels
     # back at the wavelength their solution gives them, which is the only
     # honest reading of what it says; order_quality has already removed them
     # from the mask, so they weigh on nothing, but the spline still needs an
@@ -207,9 +206,10 @@ def telluric_ramp(transmission, t_zero=0.5, t_one=1.0):
 def photon_sigma(flux, s1d_weight, snr_band, snr_pixel_scale=1.0):
     """Per-pixel sigma of the log flux, from a photon-noise model.
 
-    APERO's s1d eflux column is all zeros in these files, so the noise has to be
-    reconstructed. The number of detected photons in an s1d bin scales as
-    flux * weight (the weight column is the accumulated blaze contribution), so
+    An s1d whose eflux column carries no usable error (all zeros) leaves the
+    noise to be reconstructed. The number of detected photons in an s1d bin
+    scales as flux * weight (the weight column is the accumulated blaze
+    contribution), so
         sigma_ln = sigma_flux / flux ∝ 1 / sqrt(flux * weight).
     The proportionality constant is fixed per spectrum by forcing the median
     sigma_ln over the band to equal 1 / (snr_band * snr_pixel_scale), using the
@@ -271,16 +271,16 @@ def empirical_sigma(values, good, box=201):
     photon-noise model.
 
     This exists because that model can be badly wrong in exactly the place it
-    matters. At the red end of the SPIRou domain the formal sigma of ln f is
-    the smallest in the whole spectrum, 0.0035, because the flux there is tiny
-    and the photon error on a near-zero flux in the log is tiny; the actual
-    dispersion is the largest, 0.127. Those columns therefore received about
-    fifty times more weight than they deserved, and a first fit on TOI-2120 put
-    97.8 per cent of its star-block power into the 6.4 per cent of columns
-    beyond 2350 nm, with components living on four to eight effective pixels.
+    matters. Where the flux is tiny, at the edge of a domain, the formal sigma
+    of ln f can be the smallest in the whole spectrum, because the photon
+    error on a near-zero flux in the log is tiny, while the actual dispersion
+    there is the largest. Those columns then receive many times more weight
+    than they deserve, and a fit can put most of its star-block power into a
+    few per cent of the columns, with components living on a handful of
+    effective pixels.
 
     Measured on the high-passed values, where a real spectral line is resolved
-    over many samples at dv = 0.5 km/s and contributes little to the
+    over many samples of the grid and contributes little to the
     sample-to-sample difference, while noise contributes all of it.
     """
     s = running_abs_diff(values, good, box) / (2.0 / np.sqrt(np.pi))
@@ -301,12 +301,11 @@ def highpass_against_template(values, good, template, window, polyorder,
     NEXT, and leaves in the star frame a residual that follows the BERV
     without being stellar.
 
-    Measured on 2026-10-16 on HD 69830, line at 688.85 nm: sweeping the
-    BERV from -25 to +25 km/s, the telluric travels 0.117 nm, i.e. several
-    line widths, and its depth at the core goes from 3% to 89%. The local
-    smooth therefore changes intermittently, and not linearly in BERV,
-    which makes it invisible to a simple correlation (0.036 over the
-    campaign).
+    Over a BERV range of a few tens of km/s, a telluric next to a stellar
+    line travels several line widths, and its depth at the line core can go
+    from a few per cent to nearly saturated. The local smooth therefore
+    changes intermittently, and not linearly in BERV, which makes it
+    invisible to a simple correlation over the campaign.
 
     THE METHOD. The spectra being already in the star frame and on a common
     grid:
@@ -352,8 +351,7 @@ def highpass_against_template(values, good, template, window, polyorder,
     #
     # On an IDENTICAL support the formula would simplify, the savgol being
     # linear: (s - t) - sg(s - t) + t - sg(t) = s - sg(s), i.e. the
-    # ordinary high-pass. Checked on 2026-10-16: the two then agree to
-    # 2e-16.
+    # ordinary high-pass. The two then agree to rounding (2e-16).
     #
     # BUT THE SUPPORTS DIFFER. The exposure has masked pixels where a
     # saturated telluric eats the core of one of its lines; the median
@@ -361,16 +359,16 @@ def highpass_against_template(values, good, template, window, polyorder,
     # median erases it. The residual is therefore filtered on a support
     # with holes and the template on a full support, the two filters no
     # longer cancel, and the stellar line is returned from the FULL template
-    # instead of being rebuilt from an exposure with holes. Measured on a
-    # line of 1.2 in ln with ten pixels masked at its core: 0.2365 of
-    # difference between the two formulas, against 2e-16 without a mask.
+    # instead of being rebuilt from an exposure with holes. On a synthetic
+    # line of 1.2 in ln with ten pixels masked at its core, the two formulas
+    # differ by 0.2365, against 2e-16 without a mask.
     #
     # WHAT MATTERS IS THAT THE LOST PIXELS MOVE. A fixed mask would only
     # make a constant bias, which the PCA would absorb; it is the MOVEMENT
-    # of the hole with the BERV that injects a signal. Measured on
-    # 2026-10-16 on a SYNTHETIC spectrum kept identical, of which only the
-    # ten-pixel mask moves around the core of a line of 1.2 in ln, by
-    # recording one pixel of the neighbouring continuum:
+    # of the hole with the BERV that injects a signal. On a SYNTHETIC
+    # spectrum kept identical, of which only the ten-pixel mask moves around
+    # the core of a line of 1.2 in ln, one pixel of the neighbouring
+    # continuum reads:
     #
     #     mask shift           classic      vs template
     #              -30 px       0.078476       0.078364

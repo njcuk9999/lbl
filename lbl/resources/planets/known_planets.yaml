@@ -6,9 +6,16 @@
 # go in personal_planet_catalog.yaml, which says how to enter them and is
 # searched first.
 #
-# 1816 stars with at least one complete orbit (2317 orbits); 342 of
+# Taken out on 2026-10-29, the sources not all being reachable to remake
+# the file: the 20 planets the NASA Exoplanet Archive flags as
+# controversial (pl_controv_flag), the 43 orbits whose transit epoch
+# came from the TESS or Kepler project tables (ExoFOP, KOI), and the
+# orbit of TOI-1266 d, from a paper that did not publish it as
+# confirmed.
+#
+# 1783 stars with at least one complete orbit (2257 orbits); 336 of
 # them carry their APERO name (1871 objects in APERO's lists).
-# 167 planets of these stars have no complete orbit and are listed under
+# 156 planets of these stars have no complete orbit and are listed under
 # `not_used`, with why.
 #
 # Each orbit is, whenever one exists, ONE PAPER'S complete Keplerian solution
@@ -845,25 +852,6 @@ stars:
     planets:
     - {name: DMPP-4 b, period: 3.4982, k: 4.43, e: 0.0, omega: 200.0, t0: 2457139.9, source: 'NASA Exoplanet
         Archive, one paper', reference: Barnes et al. 2023 (2023MNRAS.524.5196B)}
-  DS_TUC_A:
-    apero: DS_TUC_A
-    names: [DS_TUC_A, '** R  348A', '**R348A', 1RXS J233939.1-691148, 1RXSJ233939.1-691148, 1SWASP J233939.48-691144.8,
-      1SWASPJ233939.48-691144.8, 2MASS J23393949-6911448, 2MASSJ23393949-6911448, 2RE J2339-691, 2RE J233930-691132,
-      2REJ2339-691, 2REJ233930-691132, ASAS J233939-6911.7, ASAS J233939-6911.8, ASASJ233939-6911.7, ASASJ233939-6911.8,
-      CCDM J23397-6912A, CCDMJ23397-6912A, CD-69  2106, CD-692106, CPC 21.1  4434, CPC21.14434, CPD-69  3329,
-      CPD-693329, CSI-69  3329 41, CSI-69332941, DS Tuc, DS Tuc A, DS-Tuc-A, DSTucA, EUVE J2339-69.2,
-      EUVEJ2339-69.2, GSC 09339-00551, GSC09339-00551, Gaia DR1 6387058407186674560, Gaia DR2 6387058411482257536,
-      Gaia DR3 6387058411482257536, GaiaDR16387058407186674560, GaiaDR26387058411482257536, GaiaDR36387058411482257536,
-      HD 222259, HD 222259 A, HD 222259A, HD-222259A, HD222259, HD222259A, HD_222259A, HIC 116748, HIC116748,
-      HIP 116748, HIP 116748 A, HIP116748, IDS 23339-6945 A, IDS23339-6945A, PPM 366565, PPM366565, RBS  2033,
-      RBS2033, RE J2339-691, RE J233931-691114, REJ2339-691, REJ233931-691114, SAO 255538, SAO255538,
-      SRS  20462, SRS20462, TIC 410214986, TIC410214986, TOI-200, TOI-200 A, TYC 9339-551-1, TYC9339-551-1,
-      UCAC4 105-117266, UCAC4105-117266, V* DS Tuc, V* DS Tuc A, V*DSTuc, V*DSTucA, WDS J23397-6912A,
-      WDSJ23397-6912A, WISE J233939.64-691145.4, WISEA J233939.64-691145.2, WISEAJ233939.64-691145.2,
-      WISEJ233939.64-691145.4, '[FS2003] 1202', '[FS2003]1202', uvby98 100222259, uvby98100222259]
-    planets:
-    - {name: DS Tuc Ab, period: 8.13822304107, k: 3.2, e: 0.0, omega: 90.0, t0: 2460903.986925, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/ds_tuc_ab--7077'}
   EPIC 219388192 A:
     apero: null
     names: [CWW 89, CWW 89 A, EPIC 219388192, TOI-7497]
@@ -1069,8 +1057,6 @@ stars:
       WISEA J001825.70+440126.9, WISEAJ001825.70+440126.9, WISEJ001825.71+440126.8, Zkh   5, Zkh 5, Zkh5,
       '[GKL99] 9', '[GKL99]9', '[GS83]  66', '[GS83] 66', '[GS83]66', '[RHG95]    60', '[RHG95] 60', '[RHG95]60']
     planets:
-    - {name: GJ 15 Ab, period: 11.4432, k: 2.85, e: 0.075, omega: 5.0, t0: 2455783.63, source: 'NASA Exoplanet
-        Archive, one paper', reference: Rosenthal et al. 2021 (2021ApJS..255....8R)}
     - {name: GJ 15 Ac, period: 7555.0, k: 2.5, e: 0.27, omega: 300.0, tp: 2460730.0, source: K exoplanet.eu;
         tp exoplanet.eu, reference: 'http://exoplanet.eu/catalog/gj_15_ac--6633'}
   HIP19394:
@@ -1650,10 +1636,6 @@ stars:
         Archive, one paper', reference: Robertson & Mahadevan 2014 (2014ApJ...793L..24R)}
     - {name: GJ 667 Cc, period: 28.1, k: 1.9, e: 0.27, omega: 140.0, tp: 2454462.0, source: 'NASA Exoplanet
         Archive, one paper', reference: Robertson & Mahadevan 2014 (2014ApJ...793L..24R)}
-    not_used:
-    - {name: GJ 667 Ce, why: no epoch in double precision, period: 62.24, k: 0.92}
-    - {name: GJ 667 Cf, why: no epoch in double precision, period: 39.026, k: 1.08}
-    - {name: GJ 667 Cg, why: no epoch in double precision, period: 256.2, k: 0.95}
   GJ674:
     apero: GJ674
     names: [GJ674, 1RXS J172839.7-465335, 1RXSJ172839.7-465335, 2MASS J17283991-4653424, 2MASSJ17283991-4653424,
@@ -3252,8 +3234,6 @@ stars:
     planets:
     - {name: HD 110113 b, period: 2.54047309, k: 2.15, e: 0.093, omega: 331.0, t0: 2459103.603217, source: K
         exoplanet.eu; t0 and P NASA Kokori et al. 2023, reference: 'http://exoplanet.eu/catalog/hd_110113_b--7559'}
-    - {name: HD 110113 c, period: 6.7418795628, k: 3.38, e: 0.045, omega: 300.0, t0: 2458576.159251, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/hd_110113_c--7560'}
   HD 110537:
     apero: null
     names: [Gaia DR3 3681795018676501120, HIP 62039, TIC 51739133]
@@ -3757,8 +3737,6 @@ stars:
     apero: null
     names: [Gaia DR3 6009538585839374336, HD 140901, HIP 77358, TIC 179348425]
     planets:
-    - {name: HD 140901 Ab, period: 9.02378, k: 5.424, e: 0.472, omega: 107.605, tp: 2450907.038, source: 'NASA
-        Exoplanet Archive, one paper', reference: Feng et al. 2022 (2022ApJS..262...21F)}
     - {name: HD 140901 Ac, period: 7417.50547, k: 15.206, e: 0.607, omega: 298.368, tp: 2447736.308, source: 'NASA
         Exoplanet Archive, one paper', reference: Feng et al. 2022 (2022ApJS..262...21F)}
   HD 141399:
@@ -3904,22 +3882,6 @@ stars:
     planets:
     - {name: HD 147379 Ab, period: 86.78, k: 5.83, e: 0.07, omega: 97.22, tp: 2455468.26, source: 'NASA
         Exoplanet Archive, one paper', reference: Hobson et al. 2018 (2018A&A...618A.103H)}
-  HD147513:
-    apero: HD147513
-    names: [HD147513, '** RAG    8A', '**RAG8A', 1RXS J162401.2-391143, 1RXSJ162401.2-391143, 2EUVE J1623-39.1,
-      2EUVEJ1623-39.1, 2MASS J16240128-3911346, 2MASSJ16240128-3911346, CD-38 10983, CD-3810983, CPC 18  8107,
-      CPC188107, CPD-38  6407, CPD-386407, EUVE J1623-39.1, EUVEJ1623-39.1, FK5 3295, FK53295, GC 22030,
-      GC22030, GCRV  9426, GCRV9426, GEN# +1.00147513, GEN#+1.00147513, GJ   620.1 A, GJ  9559, GJ620.1A,
-      GJ9559, GSC 07853-00621, GSC07853-00621, Gaia DR2 6018047019138644480, Gaia DR3 6018047019138644480,
-      GaiaDR26018047019138644480, GaiaDR36018047019138644480, HD 147513, HD 147513 A, HIC  80337, HIC80337,
-      HIP  80337, HIP 80337, HIP80337, HR  6094, HR6094, IRAS 16206-3904, IRAS16206-3904, N30 3671, N303671,
-      NSV  7680, NSV7680, PLX 3717, PLX 3717.00, PLX3717, PLX3717.00, PPM 295007, PPM295007, SAO 207622,
-      SAO207622, SKY# 29568, SKY#29568, SPOCS  704, SPOCS704, SRS  43479, SRS43479, TD1 19107, TD119107,
-      TIC 350673608, TIC350673608, TYC 7853-621-1, TYC7853-621-1, UBV   13878, UBV M  21376, UBV13878,
-      UBVM21376, WDS J16240-3912A, WDSJ16240-3912A, WEB 13592, WEB13592, uvby98 100147513, uvby98100147513]
-    planets:
-    - {name: HD 147513 Ab, period: 528.4, k: 29.3, e: 0.26, omega: 282.0, tp: 2451123.0, source: 'NASA
-        Exoplanet Archive, one paper', reference: Mayor et al. 2004 (2004A&A...415..391M)}
   HD 14787:
     apero: null
     names: [Gaia DR3 24570756281835392, HIP 11130, TIC 380966347]
@@ -3934,19 +3896,6 @@ stars:
         Exoplanet Archive, one paper', reference: Ment et al. 2018 (2018AJ....156..213M)}
     - {name: HD 148164 c, period: 5062.0, k: 54.28, e: 0.125, omega: 152.0, tp: 2464193.0, source: 'NASA
         Exoplanet Archive, one paper', reference: Ment et al. 2018 (2018AJ....156..213M)}
-  HD148427:
-    apero: HD148427
-    names: [HD148427, 2MASS J16282814-1323587, 2MASSJ16282814-1323587, AKARI-IRC-V1 J1628281-132358, AKARI-IRC-V1J1628281-132358,
-      BD-13  4437, BD-134437, GC 22141, GC22141, GEN# +1.00148427, GEN#+1.00148427, GSC 05639-00555, GSC05639-00555,
-      Gaia DR1 4330532855027975552, Gaia DR2 4330532859324207360, Gaia DR3 4330532859324207360, GaiaDR14330532855027975552,
-      GaiaDR24330532859324207360, GaiaDR34330532859324207360, HD 148427, HIC  80687, HIC80687, HIP  80687,
-      HIP 80687, HIP80687, IRAS 16257-1317, IRAS16257-1317, NAME Timir, NAMETimir, PPM 231736, PPM231736,
-      SAO 159932, SAO159932, SKY# 29692, SKY#29692, SPOCS  708, SPOCS708, TIC 413853880, TIC413853880,
-      TYC 5639-555-1, TYC5639-555-1, WISE J162828.11-132358.5, WISEA J162828.11-132358.5, WISEAJ162828.11-132358.5,
-      WISEJ162828.11-132358.5, YZC 11  5701, YZC115701, uvby98 100148427, uvby98100148427]
-    planets:
-    - {name: HD 148427 b, period: 331.9, k: 25.1, e: 0.12, omega: 267.2, tp: 2457969.0, source: 'NASA
-        Exoplanet Archive, one paper', reference: Piccinini et al. 2026 (2026A&A...707A.104P)}
   HD 148797:
     apero: null
     names: [Gaia DR3 5928516226857454464, TIC 221567884]
@@ -4134,17 +4083,6 @@ stars:
     planets:
     - {name: HD 158038 Ab, period: 521.0, k: 33.9, e: 0.291, omega: 335.0, tp: 2455491.0, source: 'NASA
         Exoplanet Archive, one paper', reference: Johnson et al. 2011 (2011ApJS..197...26J)}
-  HD 158259:
-    apero: null
-    names: [Gaia DR3 1416050859226670848, HIP 85268, TIC 188768068]
-    planets:
-    - {name: HD 158259 b, period: 2.1779407, k: 1.051, e: 0.0, omega: 90.0, t0: 2460338.523071, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/hd_158259_b--7359'}
-    not_used:
-    - {name: HD 158259 c, why: no epoch in double precision, period: 3.432, k: 2.261}
-    - {name: HD 158259 d, why: no epoch in double precision, period: 5.1980814, k: 1.907}
-    - {name: HD 158259 e, why: no epoch in double precision, period: 7.951, k: 1.857}
-    - {name: HD 158259 f, why: no epoch in double precision, period: 12.028, k: 1.633}
   HD 158996:
     apero: null
     names: [Gaia DR3 1709691004385812864, HIP 84769, TIC 288268410]
@@ -4287,12 +4225,6 @@ stars:
     planets:
     - {name: HD 167042 b, period: 417.67, k: 30.52, e: 0.01, omega: 54.4, tp: 2452935.5, source: 'NASA
         Exoplanet Archive, one paper', reference: Teng et al. 2023 (2023PASJ...75.1030T)}
-  HD 16760 A:
-    apero: null
-    names: [Gaia DR3 334156706263100416, HD 16760, HIP 12638, TIC 433140046]
-    planets:
-    - {name: HD 16760 Ab, period: 466.47, k: 407.71, e: 0.084, omega: 242.9, tp: 2453337.0, source: 'NASA
-        Exoplanet Archive, one paper', reference: Sato et al. 2009 (2009ApJ...703..671S)}
   HD 167665:
     apero: null
     names: [HIP 89844]
@@ -4614,8 +4546,6 @@ stars:
     apero: null
     names: [Gaia DR3 6473033932942902528, HIP 99212, TIC 366989877, TOI-1054]
     planets:
-    - {name: HD 190622 b, period: 15.5077855, k: 1.92, e: 0.055, omega: 35.0, t0: 2460122.700139, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/hd_190622_b--8672'}
     - {name: HD 190622 c, period: 315.7, k: 20.79, e: 0.081, omega: 1.0, tp: 2458950.9, source: K exoplanet.eu;
         tp exoplanet.eu, reference: 'http://exoplanet.eu/catalog/hd_190622_c--8673'}
   HD190647:
@@ -5070,10 +5000,6 @@ stars:
     - {name: HD 219134 c, period: 6.76458, k: 1.697, e: 0.062, omega: 70.0, t0: 2457474.04591, source: 'NASA
         Exoplanet Archive, one paper', reference: Gillon et al. 2017 (2017NatAs...1E..56G)}
     - {name: HD 219134 d, period: 46.71, k: 4.4, e: 0.0, omega: 0.0, tp: 2449964.0, source: 'NASA Exoplanet
-        Archive, one paper', reference: Vogt et al. 2015 (2015ApJ...814...12V)}
-    - {name: HD 219134 f, period: 22.7931, k: 1.87, e: 0.063, omega: 0.0, t0: 2455210.72, source: 'NASA
-        Exoplanet Archive, one paper', reference: Harada et al. 2025 (2025AJ....170..343H)}
-    - {name: HD 219134 g, period: 94.2, k: 1.8, e: 0.0, omega: 0.0, tp: 2449972.0, source: 'NASA Exoplanet
         Archive, one paper', reference: Vogt et al. 2015 (2015ApJ...814...12V)}
     - {name: HD 219134 h, period: 2090.0, k: 5.7, e: 0.05, omega: 150.0, t0: 2456803.0, source: 'NASA
         Exoplanet Archive, one paper', reference: Harada et al. 2025 (2025AJ....170..343H)}
@@ -5607,8 +5533,6 @@ stars:
     planets:
     - {name: HD 33844 b, period: 551.4, k: 33.5, e: 0.15, omega: 211.0, tp: 2454609.0, source: 'NASA Exoplanet
         Archive, one paper', reference: Wittenmyer et al. 2016 (2016ApJ...818...35W)}
-    - {name: HD 33844 c, period: 916.0, k: 25.4, e: 0.13, omega: 71.0, tp: 2454544.0, source: 'NASA Exoplanet
-        Archive, one paper', reference: Wittenmyer et al. 2016 (2016ApJ...818...35W)}
   HD 35759:
     apero: null
     names: [Gaia DR3 287622247440034688, HIP 25883, TIC 286954708]
@@ -5979,12 +5903,6 @@ stars:
     planets:
     - {name: HD 5319 c, period: 877.0, k: 18.53, e: 0.109, omega: 245.0, tp: 2463445.0, source: 'NASA
         Exoplanet Archive, one paper', reference: Ment et al. 2018 (2018AJ....156..213M)}
-  HD 5388:
-    apero: null
-    names: [Gaia DR3 4981024829037160320, HIP 4311, TIC 101936170]
-    planets:
-    - {name: HD 5388 b, period: 777.0, k: 41.7, e: 0.4, omega: 324.0, tp: 2454570.0, source: 'NASA Exoplanet
-        Archive, one paper', reference: Santos et al. 2010 (2010A&A...512A..47S)}
   HD 55696:
     apero: null
     names: [Gaia DR3 5565208310497615232, HIP 34801, TIC 22598327]
@@ -6245,8 +6163,6 @@ stars:
     apero: null
     names: [Gaia DR3 5528196343926579968, HIP 42282, TIC 180661948]
     planets:
-    - {name: HD 73526 b, period: 188.9, k: 82.7, e: 0.29, omega: 196.0, tp: 2452856.0, source: 'NASA Exoplanet
-        Archive, one paper', reference: Wittenmyer et al. 2014 (2014ApJ...780..140W)}
     - {name: HD 73526 c, period: 379.1, k: 65.1, e: 0.28, omega: 272.0, tp: 2453300.0, source: 'NASA Exoplanet
         Archive, one paper', reference: Wittenmyer et al. 2014 (2014ApJ...780..140W)}
   HD 73534:
@@ -6955,12 +6871,6 @@ stars:
         Exoplanet Archive, one paper', reference: Hébrard et al. 2016 (2016A&A...588A.145H)}
     - {name: HIP 65407 c, period: 67.3, k: 41.5, e: 0.12, omega: -19.0, tp: 2457047.0, source: 'NASA Exoplanet
         Archive, one paper', reference: Hébrard et al. 2016 (2016A&A...588A.145H)}
-  HIP 65891:
-    apero: null
-    names: [Gaia DR3 5870273893372957440, HD 117253, TIC 68418284]
-    planets:
-    - {name: HIP 65891 b, period: 1079.55726, k: 63.884, e: 0.128, omega: 359.295, tp: 2454944.155, source: 'NASA
-        Exoplanet Archive, one paper', reference: Feng et al. 2022 (2022ApJS..262...21F)}
   HIP 67522:
     apero: null
     names: [Gaia DR3 6113920619134019456, HD 120411, TIC 166527623, TOI-6551]
@@ -7034,12 +6944,6 @@ stars:
     planets:
     - {name: HIP 86221 Ab, period: 2.224, k: 129.6, e: 0.086, omega: 208.93, tp: 2457947.283, source: 'NASA
         Exoplanet Archive, one paper', reference: Paredes et al. 2021 (2021AJ....162..176P)}
-  HIP 90988 A:
-    apero: null
-    names: [Gaia DR3 6703673951620872192, HD 170707, HIP 90988, TIC 404598466]
-    planets:
-    - {name: HIP 90988 Ab, period: 455.73816, k: 40.452, e: 0.081, omega: 264.199, tp: 2454979.213, source: 'NASA
-        Exoplanet Archive, one paper', reference: Feng et al. 2022 (2022ApJS..262...21F)}
   HIP 91258:
     apero: null
     names: [Gaia DR3 2159653734187847168, TIC 383675945]
@@ -7114,18 +7018,6 @@ stars:
     planets:
     - {name: HS Psc b, period: 3.986, k: 268.0, e: 0.27, omega: 176.25, t0: 2458486.422, source: 'NASA
         Exoplanet Archive, one paper', reference: Tran et al. 2024 (2024AJ....167..193T)}
-  IC4651NO9122:
-    apero: IC4651NO9122
-    names: [IC4651NO9122, 2MASS J17245007-4956561, 2MASSJ17245007-4956561, CD-49 11404, CD-4911404, CDM4911404,
-      CDM49_11404, Cl* IC 4651    EGG      58, Cl* IC 4651    MEI    9122, Cl* IC 4651    MMU    9122,
-      Cl*IC4651EGG58, Cl*IC4651MEI9122, Cl*IC4651MMU9122, GEN# +3.46510027, GEN#+3.46510027, GSC 08349-03909,
-      GSC08349-03909, Gaia DR2 5949553973093167104, Gaia DR3 5949553973093167104, GaiaDR25949553973093167104,
-      GaiaDR35949553973093167104, IC 4651   27, IC 4651 9122, IC465127, RAVE J172450.1-495656, RAVE J172450.2-495656,
-      RAVEJ172450.1-495656, RAVEJ172450.2-495656, TIC 214416505, TIC214416505, TYC 8349-3909-1, TYC8349-3909-1,
-      uvby98 346510027, uvby98346510027]
-    planets:
-    - {name: IC 4651 9122 b, period: 734.0, k: 89.5, e: 0.18, omega: 118.5, tp: 2454605.6, source: 'NASA
-        Exoplanet Archive, one paper', reference: Leão et al. 2018 (2018A&A...620A.139L)}
   K2-100:
     apero: null
     names: [2MASS J08382429+2006217, EPIC 211990866, Gaia DR3 664337230586013312, TIC 307733361, TYC 1398-142-1,
@@ -7331,8 +7223,6 @@ stars:
     planets:
     - {name: K2-18 b, period: 32.939623, k: 3.55, e: 0.2, omega: -5.7, t0: 2457264.39144, source: 'NASA
         Exoplanet Archive, one paper', reference: Sarkis et al. 2018 (2018AJ....155..257S)}
-    not_used:
-    - {name: K2-18 c, why: no epoch in double precision; eccentric with no omega, period: 8.962, k: 4.63}
   K2-180:
     apero: null
     names: [2MASS J08255135+1014491, EPIC 211319617, Gaia DR3 600750922666388992, TIC 366411016, WISE
@@ -7520,10 +7410,6 @@ stars:
         t0 and P NASA Rodriguez et al. 2018, reference: 'http://exoplanet.eu/catalog/k2_266_ab--6764'}
     - {name: K2-266 Ac, period: 7.814, k: 0.119, e: 0.042, omega: 87.0, t0: 2457946.651, source: K exoplanet.eu;
         t0 and P NASA Rodriguez et al. 2018, reference: 'http://exoplanet.eu/catalog/k2_266_ac--6765'}
-    - {name: K2-266 Ad, period: 14.69808003166, k: 3.17, e: 0.047, omega: 87.0, t0: 2459267.668855, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_266_ad--6766'}
-    - {name: K2-266 Ae, period: 19.48348329613, k: 2.53, e: 0.043, omega: 89.0, t0: 2459263.380209, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_266_ae--6767'}
   K2-267 A:
     apero: null
     names: [EPIC 246851721, Gaia DR3 3393939030531019520, K2-267, TIC 411839167, TOI-2461]
@@ -7625,13 +7511,6 @@ stars:
         exoplanet.eu; t0 and P NASA de Leon et al. 2021, reference: 'http://exoplanet.eu/catalog/k2_307_c--9191'}
     not_used:
     - {name: K2-307 b, why: no K (and no mass measured in radial velocity), period: 15.28078}
-  K2-308:
-    apero: null
-    names: [2MASS J05132138+1624510, EPIC 246865365, Gaia DR3 3393982701757444352, TIC 411697517, WISE
-        J051321.40+162451.1]
-    planets:
-    - {name: K2-308 b, period: 3.38631713618, k: 250.0, e: 0.0, omega: 90.0, t0: 2459174.356092, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_308_b--7162'}
   V1298TAU:
     apero: V1298TAU
     names: [V1298TAU, '*V1298 Tau', 1RXS J040518.6+200919, 1RXSJ040518.6+200919, 1SWASP J040519.59+200925.5,
@@ -7748,12 +7627,6 @@ stars:
     planets:
     - {name: K2-370 b, period: 2.1408093, k: 5.6, e: 0.0, omega: 90.0, t0: 2457860.71859, source: 'NASA
         Exoplanet Archive, one paper', reference: Sozzetti et al. 2024 (2024MNRAS.535..531S)}
-  K2-371:
-    apero: null
-    names: [Gaia DR3 602466302541172736, TIC 366622912, TOI-515]
-    planets:
-    - {name: K2-371 b, period: 3.11489307594, k: 700.0, e: 0.0, omega: 90.0, t0: 2458493.283904, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_371_b--9042'}
   K2-372:
     apero: null
     names: [Gaia DR3 602348482997667840, TIC 333800257]
@@ -7870,12 +7743,6 @@ stars:
     planets:
     - {name: K2-39 b, period: 4.60543, k: 14.4, e: 0.0, omega: 90.0, t0: 2456980.8236, source: 'NASA Exoplanet
         Archive, one paper', reference: Van Eylen et al. 2016 (2016AJ....152..143V)}
-  K2-390:
-    apero: null
-    names: [Gaia DR3 2435650050614494336, TIC 9030119, TOI-4549]
-    planets:
-    - {name: K2-390 b, period: 3.3129214, k: 10.17, e: 0.0, omega: 90.0, t0: 2460231.218276, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_390_b--9062'}
   K2-391:
     apero: null
     names: [Gaia DR3 2439325924144650368, TIC 9054633]
@@ -7894,12 +7761,6 @@ stars:
     planets:
     - {name: K2-393 b, period: 10.41144, k: 2.02, e: 0.0, omega: 90.0, t0: 2457739.3987, source: K exoplanet.eu;
         t0 and P NASA Zink et al. 2019, reference: 'http://exoplanet.eu/catalog/k2_393_b--9065'}
-  K2-394:
-    apero: null
-    names: [Gaia DR3 3406132644545570432, TIC 436575927, TOI-6977]
-    planets:
-    - {name: K2-394 b, period: 5.0957983, k: 2.39, e: 0.0, omega: 90.0, t0: 2460250.885968, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_394_b--9066'}
   K2-395:
     apero: null
     names: [Gaia DR3 3310124801036651008, TIC 245946724]
@@ -7950,12 +7811,6 @@ stars:
     planets:
     - {name: K2-402 b, period: 17.27474, k: 2.0, e: 0.0, omega: 90.0, t0: 2457920.428634, source: K exoplanet.eu;
         t0 and P NASA Zink et al. 2021, reference: 'http://exoplanet.eu/catalog/k2_402_b--9080'}
-  K2-403:
-    apero: null
-    names: [Gaia DR3 3867810120985878272, TIC 365007485, TOI-6877]
-    planets:
-    - {name: K2-403 b, period: 33.5920255, k: 5.81, e: 0.0, omega: 90.0, t0: 2459521.373701, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_403_b--9081'}
   K2_404:
     apero: K2_404
     names: [K2_404, 2MASS J10411801+1211284, 2MASSJ10411801+1211284, EPIC 248861279, EPIC248861279, Gaia
@@ -7964,12 +7819,6 @@ stars:
     planets:
     - {name: K2-404 b, period: 13.115365, k: 2.95, e: 0.0, omega: 90.0, t0: 2457917.8369, source: K exoplanet.eu;
         t0 and P NASA Christiansen et al. 2022, reference: 'http://exoplanet.eu/catalog/k2_404_b--9082'}
-  K2-405:
-    apero: null
-    names: [Gaia DR3 3871908447498807296, TIC 149496868, TOI-5116]
-    planets:
-    - {name: K2-405 b, period: 3.4355113, k: 7.72, e: 0.0, omega: 90.0, t0: 2459578.653916, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/k2_405_b--9083'}
   K2-406 A:
     apero: null
     names: [Gaia DR3 6214868495365748096, K2-406, TIC 292202337]
@@ -8232,15 +8081,6 @@ stars:
         Archive, one paper', reference: Balsalobre-Ruza et al. 2025 (2025A&A...694A..15B)}
     - {name: KOBE-1 c, period: 29.671, k: 3.5, e: 0.0, omega: 90.0, t0: 2459448.2, source: 'NASA Exoplanet
         Archive, one paper', reference: Balsalobre-Ruza et al. 2025 (2025A&A...694A..15B)}
-  KOI-134:
-    apero: null
-    names: [Gaia DR3 2079971473693847168, TIC 271772050]
-    planets:
-    - {name: KOI-134 b, period: 67.5952229, k: 44.941, e: 0.05, omega: 227.0, t0: 2454984.727745, source: 'K
-        from M sin i and M star, exoplanet.eu; t0 and P NASA Q1-Q16 KOI Table', reference: 'http://exoplanet.eu/catalog/koi_134_b--11076'}
-    not_used:
-    - {name: KOI-134 c, why: no K (and no mass measured in radial velocity); no epoch in double precision,
-      period: 33.95}
   KPS-1:
     apero: null
     names: [Gaia DR3 1055895483267019392, TIC 99834717]
@@ -8443,8 +8283,6 @@ stars:
     planets:
     - {name: Kepler-1662 b, period: 134.47850876, k: 8.417, e: 0.0, omega: 90.0, t0: 2455002.282355, source: 'K
         from M sin i and M star, exoplanet.eu; t0 and P NASA Holczer et al. 2016', reference: 'http://exoplanet.eu/catalog/kepler_1662_b--4396'}
-    - {name: Kepler-1662 c, period: 284.060953, k: 1.386, e: 0.0, omega: 90.0, t0: 2455033.83937, source: 'K
-        from M sin i and M star, exoplanet.eu; t0 and P NASA Q1-Q12 KOI Table', reference: 'http://exoplanet.eu/catalog/kepler_1662_c--5541'}
   Kepler-167 A:
     apero: null
     names: [2MASS J19303802+3820434, Gaia DR3 2051933102555095936, K00490, KIC 3239945, KOI-490, Kepler-167,
@@ -8465,8 +8303,6 @@ stars:
     apero: null
     names: [Gaia DR3 2081875484241210240, KOI-4772, TIC 185335907]
     planets:
-    - {name: Kepler-1705 b, period: 9.0194714, k: 1.544, e: 0.033, omega: 35.0, t0: 2454972.9234, source: 'K
-        from M sin i and M star, exoplanet.eu; t0 and P NASA Q1-Q16 KOI Table', reference: 'http://exoplanet.eu/catalog/kepler_1705_b--5179'}
     - {name: Kepler-1705 c, period: 11.28, k: 1.739, e: 0.028, omega: 322.0, t0: 2455207.396, source: 'K
         from M sin i and M star, exoplanet.eu; t0 and P NASA Leleu et al. 2021', reference: 'http://exoplanet.eu/catalog/kepler_1705_c--5171'}
   Kepler-18:
@@ -8562,8 +8398,6 @@ stars:
         Exoplanet Archive, one paper', reference: Bonomo et al. 2023 (2023A&A...677A..33B)}
     - {name: Kepler-37 d, period: 39.7922622, k: 0.44, e: 0.0, omega: 90.0, t0: 2455008.24982, source: 'NASA
         Exoplanet Archive, one paper', reference: Bonomo et al. 2023 (2023A&A...677A..33B)}
-    - {name: Kepler-37 e, period: 51.2069, k: 1.6, e: 0.0, omega: 90.0, t0: 2455028.73, source: K exoplanet.eu;
-        t0 and P NASA Q1-Q8 KOI Table, reference: 'http://exoplanet.eu/catalog/kepler_37_e--7356'}
   Kepler-39:
     apero: null
     names: [2MASS J19475046+4602034, Gaia DR3 2080168561154800384, K00423, KIC 9478990, KOI-423, TIC 272836943,
@@ -8960,8 +8794,6 @@ stars:
     planets:
     - {name: Kepler-90 g, period: 210.73514, k: 1.422, e: 0.0, omega: 90.0, t0: 2454979.97608, source: 'K
         from M sin i and M star, exoplanet.eu; t0 and P NASA Shaw et al. 2025', reference: 'http://exoplanet.eu/catalog/kepler_90_g--1442'}
-    - {name: Kepler-90 h, period: 331.5972732, k: 16.61, e: 0.0, omega: 90.0, t0: 2454973.498929, source: 'K
-        from M sin i and M star, exoplanet.eu; t0 and P NASA Q1-Q17 DR25 KOI Table', reference: 'http://exoplanet.eu/catalog/kepler_90_h--1436'}
     not_used:
     - {name: Kepler-90 b, why: no K (and no mass measured in radial velocity), period: 7.008151}
     - {name: Kepler-90 c, why: no K (and no mass measured in radial velocity), period: 8.719375}
@@ -9753,8 +9585,6 @@ stars:
         Archive, one paper', reference: Polanski et al. 2024 (2024ApJS..272...32P)}
     - {name: TOI-1136 d, period: 12.51861, k: 2.27, e: 0.042, omega: -67.0, t0: 2458686.0628, source: K
         exoplanet.eu; t0 and P NASA Polanski et al. 2024, reference: 'http://exoplanet.eu/catalog/toi_1136_d--8457'}
-    - {name: TOI-1136 e, period: 18.79554696537, k: 0.78, e: 0.055, omega: -70.0, t0: 2458697.755807,
-      source: K exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_1136_e--8458'}
     - {name: TOI-1136 f, period: 26.317822, k: 1.74, e: 0.001, omega: -45.0, t0: 2458699.3777, source: 'e
         and omega NASA Beard et al. 2024 (exoplanet.eu: a limit); K exoplanet.eu; t0 and P NASA Polanski
         et al. 2024', reference: 'http://exoplanet.eu/catalog/toi_1136_f--8459'}
@@ -9830,14 +9660,6 @@ stars:
     planets:
     - {name: TOI-1231 b, period: 24.245586, k: 5.6, e: 0.087, omega: 176.0, t0: 2458685.1163, source: 'NASA
         Exoplanet Archive, one paper', reference: Burt et al. 2021 (2021AJ....162...87B)}
-  TOI-1232:
-    apero: null
-    names: [Gaia DR3 5289147737059634560, TIC 364395234]
-    planets:
-    - {name: TOI-1232 b, period: 14.25456231912, k: 56.1, e: 0.065, omega: 97.4, t0: 2460938.773643, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_1232_b--11898'}
-    not_used:
-    - {name: TOI-1232 c, why: no epoch in double precision, period: 30.356, k: 11.61}
   TYC_4384M1735M1:
     apero: TYC_4384M1735M1
     names: [TYC_4384M1735M1, 2MASS J10085177+6916357, 2MASSJ10085177+6916357, ASCC   80588, ASCC 80588,
@@ -9943,8 +9765,6 @@ stars:
         Exoplanet Archive, one paper', reference: Cloutier et al. 2024 (2024MNRAS.527.5464C)}
     - {name: TOI-1266 c, period: 18.801611, k: 1.23, e: 0.0, omega: 90.0, t0: 2459648.8471, source: 'NASA
         Exoplanet Archive, one paper', reference: Cloutier et al. 2024 (2024MNRAS.527.5464C)}
-    - {name: TOI-1266 d, period: 32.34, k: 1.63, e: 0.0, omega: 90.0, t0: 2459671.1, source: 'NASA Exoplanet
-        Archive, one paper', reference: Cloutier et al. 2024 (2024MNRAS.527.5464C)}
   TOI-1268:
     apero: null
     names: [Gaia DR3 1675923009431370880, TIC 142394656]
@@ -10054,14 +9874,6 @@ stars:
     planets:
     - {name: TOI-139 b, period: 11.07085, k: 2.43, e: 0.0, omega: 90.0, t0: 2458334.8906, source: K exoplanet.eu;
         t0 and P NASA Mistry et al. 2023, reference: 'http://exoplanet.eu/catalog/toi_139_b--8655'}
-  TOI-1408:
-    apero: null
-    names: [Gaia DR3 2275130045974715904, TIC 364186197]
-    planets:
-    - {name: TOI-1408 b, period: 4.4247042, k: 178.0, e: 0.0023, omega: 170.0, t0: 2460661.181674, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_1408_b--8807'}
-    - {name: TOI-1408 c, period: 2.2222094, k: 3.138, e: 0.1353, omega: 286.3, t0: 2460479.047419, source: 'K
-        from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_1408_c--10265'}
   TOIM1410:
     apero: TOIM1410
     names: [TOIM1410, 2MASS J22193198+4233369, 2MASSJ22193198+4233369, Gaia DR1 1958584561052294784, Gaia
@@ -10125,12 +9937,6 @@ stars:
     planets:
     - {name: TOI-1439 b, period: 27.644, k: 7.0, e: 0.157, omega: 110.0, t0: 2458703.4747, source: 'NASA
         Exoplanet Archive, one paper', reference: Polanski et al. 2024 (2024ApJS..272...32P)}
-  TOI-1443:
-    apero: null
-    names: [Gaia DR3 2289567870599358080, TIC 237232044]
-    planets:
-    - {name: TOI-1443 b, period: 23.5407467, k: 1.4, e: 0.0, omega: 90.0, t0: 2460623.584541, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_1443_b--9231'}
   TOI-1444:
     apero: null
     names: [Gaia DR3 2274696151198328960, TIC 258514800]
@@ -10309,8 +10115,6 @@ stars:
     apero: null
     names: [Gaia DR3 1651911084230149248, TIC 441739020]
     planets:
-    - {name: TOI-1670 b, period: 10.9836724, k: 4.6, e: 0.59, omega: 163.6, t0: 2460468.361028, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_1670_b--8140'}
     - {name: TOI-1670 c, period: 40.750145, k: 30.1, e: 0.067, omega: 108.0, t0: 2459402.88333, source: 'NASA
         Exoplanet Archive, one paper', reference: Lubin et al. 2023 (2023ApJ...959L...5L)}
   PM_J04343P4302:
@@ -10399,16 +10203,6 @@ stars:
     planets:
     - {name: TOI-1742 b, period: 21.269084, k: 2.25, e: 0.3, omega: 37.0, t0: 2458725.3518, source: 'NASA
         Exoplanet Archive, one paper', reference: Polanski et al. 2024 (2024ApJS..272...32P)}
-  TOI-1749 A:
-    apero: null
-    names: [Gaia DR3 2253774094189458432, TIC 233602827, TOI-1749]
-    planets:
-    - {name: TOI-1749 Ab, period: 2.38889109008, k: 13.09, e: 0.0, omega: 131.0, t0: 2458684.359912, source: 'e
-        = 0 (exoplanet.eu: a limit); K from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_1749_ab--8390'}
-    - {name: TOI-1749 Ac, period: 4.48913668478, k: 1.169, e: 0.007, omega: 103.0, t0: 2459763.323055,
-      source: 'K from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_1749_ac--8391'}
-    - {name: TOI-1749 Ad, period: 9.04469815594, k: 1.893, e: 0.015, omega: 217.0, t0: 2458688.778881,
-      source: 'K from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_1749_ad--8392'}
   TOI-1751:
     apero: null
     names: [Gaia DR3 1629404184289170688, TIC 287080092]
@@ -10727,25 +10521,8 @@ stars:
         Exoplanet Archive, one paper', reference: Polanski et al. 2024 (2024ApJS..272...32P)}
     - {name: TOI-2076 c, period: 21.015327, k: 1.2, e: 0.0, omega: 90.0, t0: 2458748.68944, source: K
         exoplanet.eu; t0 and P NASA Polanski et al. 2024, reference: 'http://exoplanet.eu/catalog/toi_2076_c--7924'}
-    - {name: TOI-2076 d, period: 35.1257472, k: 1.6, e: 0.0, omega: 90.0, t0: 2459675.93251, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_2076_d--7925'}
     not_used:
     - {name: TOI-2076 e, why: no K (and no mass measured in radial velocity), period: 3.0223445}
-  UCAC4_716M056861:
-    apero: UCAC4_716M056861
-    names: [UCAC4_716M056861, 2MASS J17371272+5301326, 2MASSJ17371272+5301326, Gaia DR2 1416730563570869376,
-      Gaia DR3 1416730563570869376, GaiaDR21416730563570869376, GaiaDR31416730563570869376, TIC 321669174,
-      TIC321669174, TOI-2081, UCAC4 716-056861, UCAC4716-056861, WISE J173712.60+530132.2, WISE J173712.61+530132.2,
-      WISEA J173712.60+530132.2, WISEAJ173712.60+530132.2, WISEJ173712.60+530132.2, WISEJ173712.61+530132.2]
-    planets:
-    - {name: TOI-2081 b, period: 10.50543617136, k: 1.72, e: 0.0, omega: 90.0, t0: 2459757.444606, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_2081_b--8240'}
-  TOI-2088:
-    apero: null
-    names: [Gaia DR3 1656835487573730048, TIC 441765914]
-    planets:
-    - {name: TOI-2088 b, period: 124.72987003126, k: 0.26, e: 0.0, omega: 90.0, t0: 2459517.9957, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_2088_b--9252'}
   TOI-2093:
     apero: null
     names: [Gaia DR3 2251459209896210816, TIC 402898317]
@@ -10912,14 +10689,6 @@ stars:
         Exoplanet Archive, one paper', reference: Rice et al. 2023 (2023AJ....166..266R)}
     not_used:
     - {name: TOI-2202 c, why: no epoch in double precision, period: 24.6744, k: 29.3}
-  TOI-2211:
-    apero: null
-    names: [Gaia DR3 6796762076358897408, HD 195755, HIP 101503, TIC 212253390]
-    planets:
-    - {name: TOI-2211 b, period: 3.09268584419, k: 1.363, e: 0.0, omega: 90.0, t0: 2459038.102648, source: 'K
-        from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_2211_b--12088'}
-    not_used:
-    - {name: TOI-2211 c, why: no epoch in double precision; eccentric with no omega, period: 15.611, k: 2.52}
   TOI-2236:
     apero: null
     names: [Gaia DR3 4613145315172329984, TIC 394722182]
@@ -11435,12 +11204,6 @@ stars:
     planets:
     - {name: TOI-3331 Ab, period: 2.0180231, k: 360.0, e: 0.0, omega: 90.0, t0: 2459371.653, source: 'NASA
         Exoplanet Archive, one paper', reference: Yee et al. 2022 (2022AJ....164...70Y)}
-  TOI-3362:
-    apero: null
-    names: [Gaia DR3 5351820556994135296, HD 300730, TIC 464300749, TIC-464300749]
-    planets:
-    - {name: TOI-3362 b, period: 18.0953159, k: 338.0, e: 0.72, omega: 60.6, t0: 2460031.240934, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_3362_b--7973'}
   TOI-3364:
     apero: null
     names: [Gaia DR3 5409268527708808320, TIC 280655495]
@@ -11749,12 +11512,6 @@ stars:
         Exoplanet Archive, one paper', reference: Castro-González et al. 2026 (2026arXiv260905413C)}
     - {name: TOI-426 c, period: 235.8, k: 45.9, e: 0.0, omega: 90.0, t0: 2459798.2, source: 'NASA Exoplanet
         Archive, one paper', reference: Castro-González et al. 2026 (2026arXiv260905413C)}
-  TOI-4308:
-    apero: null
-    names: [Gaia DR3 6565868036138018304, TIC 144193715]
-    planets:
-    - {name: TOI-4308 b, period: 9.1512776, k: 2.11, e: 0.0, omega: 90.0, t0: 2460163.674868, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_4308_b--8613'}
   TOI-431:
     apero: null
     names: [Gaia DR3 2908664557091200768, HIP 26013, TIC 31374837]
@@ -11807,12 +11564,6 @@ stars:
     planets:
     - {name: TOI-4377 b, period: 4.378081, k: 96.2, e: 0.045, omega: -0.73, t0: 2458602.1245, source: 'NASA
         Exoplanet Archive, one paper', reference: Pereira et al. 2024 (2024MNRAS.527.6332P)}
-  TOI-4379:
-    apero: null
-    names: [Gaia DR3 6027376203516634112, TIC 97766057]
-    planets:
-    - {name: TOI-4379 b, period: 3.25352993759, k: 119.0, e: 0.0, omega: 90.0, t0: 2459363.367887, source: 'e
-        = 0 (exoplanet.eu: a limit); K exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_4379_b--10289'}
   TOI-4406:
     apero: null
     names: [Gaia DR3 4910452812646300544, TIC 206541859]
@@ -11863,15 +11614,6 @@ stars:
         Exoplanet Archive, one paper', reference: Livesey et al. 2026 (2026arXiv260825208L)}
     not_used:
     - {name: TOI-4468 c, why: no K (and no mass measured in radial velocity), period: 7.0139}
-  TOI4479:
-    apero: TOI4479
-    names: [TOI4479, 2MASS J21042315+2439153, 2MASSJ21042315+2439153, APASS 45733754, APASS45733754, GAIAEDR31841177820379504768,
-      GAIA_EDR3_1841177820379504768, Gaia DR2 1841177820379504768, Gaia DR3 1841177820379504768, Gaia
-        EDR3 1841177820379504768, GaiaDR21841177820379504768, GaiaEDR31841177820379504768, TIC 126606859,
-      TIC126606859, TOI 4479, TOI-4479, UCAC4 574-119666, UCAC4574-119666, WISE J210423.23+243913.8, WISEJ210423.23+243913.8]
-    planets:
-    - {name: TOI-4479 b, period: 1.1589032912, k: 7.12, e: 0.0, omega: 90.0, t0: 2459420.759562, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_4479_b--8239'}
   GJ806:
     apero: GJ806
     names: [GJ806, 2MASS J20450403+4429562, 2MASSJ20450403+4429562, AC +44   871, AC+44871, ASCC  436187,
@@ -11987,13 +11729,6 @@ stars:
     planets:
     - {name: TOI-4633 Ac, period: 271.9445, k: 11.5, e: 0.117, omega: -21.0, t0: 2458864.8265, source: 'NASA
         Exoplanet Archive, one paper', reference: Eisner et al. 2024 (2024AJ....167..241E)}
-  TOI-4641:
-    apero: null
-    names: [Gaia DR3 114340658009875072, HIP 13224, TIC 436873727]
-    planets:
-    - {name: TOI-4641 b, period: 22.09339217881, k: 221.343, e: 0.0, omega: 90.0, t0: 2460239.908686,
-      source: 'e = 0 (exoplanet.eu: a limit); K from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP',
-      reference: 'http://exoplanet.eu/catalog/toi_4641_b--8872'}
   TOI4666:
     apero: TOI4666
     names: [TOI4666, 2MASSJ03450956-3903470, 2MASS_J03450956-3903470, GAIADR24855422771071903232, GAIA_DR2_4855422771071903232,
@@ -12360,10 +12095,6 @@ stars:
         Exoplanet Archive, one paper', reference: Brinkman et al. 2023 (2023AJ....165...88B)}
     - {name: TOI-561 c, period: 10.778838, k: 1.98, e: 0.023, omega: 219.0, t0: 2459238.46284, source: 'NASA
         Exoplanet Archive, one paper', reference: Piotto et al. 2024 (2024MNRAS.535.2763P)}
-    - {name: TOI-561 d, period: 25.71268, k: 3.36, e: 0.111, omega: -131.0, t0: 2459318.9711, source: 'NASA
-        Exoplanet Archive, one paper', reference: Piotto et al. 2024 (2024MNRAS.535.2763P)}
-    - {name: TOI-561 e, period: 77.03, k: 2.19, e: 0.079, omega: 143.0, t0: 2458538.18, source: 'NASA
-        Exoplanet Archive, one paper', reference: Lacedelli et al. 2022 (2022MNRAS.511.4551L)}
     not_used:
     - {name: TOI-561 f, why: no epoch in double precision, period: 433.0, k: 1.88}
   TOI-5616:
@@ -12499,12 +12230,6 @@ stars:
     planets:
     - {name: TOI-5800 b, period: 2.6278838, k: 5.4, e: 0.3, omega: -36.0, t0: 2459771.7145, source: 'NASA
         Exoplanet Archive, one paper', reference: Naponiello et al. 2025 (2025A&A...701A..79N)}
-  TOI-5803:
-    apero: null
-    names: [Gaia DR3 2700166125618717696, TIC 466382581]
-    planets:
-    - {name: TOI-5803 b, period: 5.3829728, k: 4.31, e: 0.0, omega: 90.0, t0: 2460550.945001, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_5803_b--8614'}
   TOI-5806 A:
     apero: null
     names: [Gaia DR3 1780750207505594496, TIC 283621618, TOI-5806]
@@ -12815,17 +12540,6 @@ stars:
     planets:
     - {name: TOI-7394 b, period: 1.252995, k: 562.2, e: 0.0271, omega: 24.9, t0: 2460556.90137, source: 'NASA
         Exoplanet Archive, one paper', reference: Premnath et al. 2026 (2026AJ....172...92P)}
-  TOI-7510:
-    apero: null
-    names: [Gaia DR3 6652378156475401216, TIC 118798035]
-    planets:
-    - {name: TOI-7510 b, period: 11.53172727214, k: 4.93, e: 0.057, omega: 95.9, t0: 2460847.17609, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_7510_b--11557'}
-    - {name: TOI-7510 c, period: 22.57099907595, k: 28.4, e: 0.0091, omega: 187.0, t0: 2460830.759391,
-      source: 'e and omega NASA Almenara et al. 2025 (exoplanet.eu: a limit); K exoplanet.eu; t0 and P
-        NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_7510_c--11558'}
-    - {name: TOI-7510 d, period: 48.86217278727, k: 31.8, e: 0.04, omega: 338.0, t0: 2460794.945415, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_7510_d--11559'}
   TOI756:
     apero: TOI756
     names: [TOI756, 2MASS J12482523-4528140, 2MASSJ12482523-4528140, GALAH 170418003201148, GALAH170418003201148,
@@ -12952,8 +12666,6 @@ stars:
     apero: null
     names: [Gaia DR3 2993658970584498048, TIC 34077285, TOI-880]
     planets:
-    - {name: TOI-880 Ab, period: 2.57359428214, k: 1.593, e: 0.0, omega: 90.0, t0: 2460663.874669, source: 'K
-        from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/toi_880_ab--9278'}
     - {name: TOI-880 Ac, period: 6.3872703, k: 8.613, e: 0.0, omega: 90.0, t0: 2459403.67511, source: 'K
         from M sin i and M star, exoplanet.eu; t0 and P NASA Zhang et al. 2025', reference: 'http://exoplanet.eu/catalog/toi_880_ac--11132'}
     not_used:
@@ -12987,12 +12699,6 @@ stars:
     planets:
     - {name: TOI-912 b, period: 4.6780691, k: 4.29, e: 0.58, omega: -169.0, t0: 2458628.4061, source: 'NASA
         Exoplanet Archive, one paper', reference: Lacedelli et al. 2026 (2026A&A...705A.260L)}
-  TOI-913:
-    apero: null
-    names: [Gaia DR3 5772195974332632192, TIC 407126408]
-    planets:
-    - {name: TOI-913 b, period: 11.09936463697, k: 2.159, e: 0.0, omega: 90.0, t0: 2460833.983615, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/toi_913_b--8606'}
   TOI942:
     apero: TOI942
     names: [TOI942, 2MASS J05063588-2014441, 2MASSJ05063588-2014441, Gaia DR1 2974906864191976704, Gaia
@@ -13154,12 +12860,6 @@ stars:
         Exoplanet Archive, one paper', reference: Murphy et al. 2024 (2024NatAs...8.1562M)}
     - {name: WASP-107 c, period: 1066.0, k: 9.3, e: 0.27, omega: 246.0, t0: 2458924.0, source: 'NASA Exoplanet
         Archive, one paper', reference: Wu et al. 2026 (2026ApJ...996L..28W)}
-  WASP-108 A:
-    apero: null
-    names: [Gaia DR3 6084610486697803008, TIC 404340025, TOI-834, WASP-108]
-    planets:
-    - {name: WASP-108 Ab, period: 2.67555212374, k: 117.8, e: 0.0, omega: 90.0, t0: 2458597.038666, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/wasp_108_ab--2321'}
   WASP-110:
     apero: null
     names: [Gaia DR3 6678937478314860160, TIC 425817867, TOI-6681]
@@ -13298,12 +12998,6 @@ stars:
     planets:
     - {name: WASP-135 b, period: 1.4013794, k: 346.0, e: 0.0, omega: 90.0, t0: 2455230.9902, source: 'NASA
         Exoplanet Archive, one paper', reference: Spake et al. 2016 (2016PASP..128b4401S)}
-  WASP-136 A:
-    apero: null
-    names: [Gaia DR3 2441013811932929280, HD 224861, TIC 176220787, TOI-2380, WASP-136]
-    planets:
-    - {name: WASP-136 Ab, period: 5.21536178778, k: 162.286, e: 0.0, omega: 90.0, t0: 2459092.524257,
-      source: 'K from M sin i and M star, exoplanet.eu; t0 and P NASA ExoFOP', reference: 'http://exoplanet.eu/catalog/wasp_136_ab--4009'}
   WASP-138:
     apero: null
     names: [Gaia DR3 2498515516990171392, TIC 35857242]
@@ -14662,8 +14356,6 @@ stars:
       WISEA J160102.51+331804.6, WISEAJ160102.51+331804.6, rho Cr, rho CrB, rho Crb, rhoCrB, uvby98 100143761,
       uvby98100143761]
     planets:
-    - {name: rho CrB b, period: 39.849, k: 67.488, e: 0.046, omega: 270.1, tp: 2455499.084, source: 'NASA
-        Exoplanet Archive, one paper', reference: Zhao et al. 2026 (2026ApJS..282...71Z)}
     - {name: rho Crb c, period: 102.036, k: 3.891, e: 0.048, omega: 244.4, tp: 2455480.216, source: 'NASA
         Exoplanet Archive, one paper', reference: Zhao et al. 2026 (2026ApJS..282...71Z)}
     - {name: rho Crb e, period: 12.949, k: 1.14, e: 0.126, omega: -0.6, t0: 2455498.5, source: 'NASA Exoplanet

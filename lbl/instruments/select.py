@@ -404,7 +404,7 @@ def make_all_directories(inst: Union[InstrumentsType],
     # make the model directory
     model_dir = io.make_dir(data_dir, 'models', 'Model')
     # its files in their subfolders (io.MODEL_SUBDIRS), those of a models/
-    #   from before 2026-10-26 moved there
+    #   laid out by an older LBL moved there
     io.sort_models(model_dir, inst.params['INSTRUMENT'],
                    inst.params['DATA_SOURCE'])
     # -------------------------------------------------------------------------

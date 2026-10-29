@@ -1,9 +1,11 @@
 """The series of a run, read from its .rdb, and what is needed to plot it.
 
-THIS MODULE IS THE SHARED POINT WITH KOLOA, in both directions: LBL uses it
-for its report, and koloa can import it to read an LBL .rdb without
-restating the format. It depends only on numpy, so that neither of the two
-drags the other along.
+The one place where the report learns the .rdb format: the names of the
+columns it uses (time, velocity, error, telluric exponents, BERV, airmass),
+how to read the file into a dictionary of columns, and how to find the
+spectrum behind a row. Any other code that reads an LBL .rdb can import it
+rather than restate the format; it depends only on numpy (and on
+lbl.core.simbad for the systemic velocity, imported when asked for).
 """
 import functools
 import os
@@ -24,9 +26,9 @@ FILENAME = 'FILENAME'
 #: a truncated report is better than a report that refuses to come out.
 #: Several names depending on the instrument, the first one present counts:
 #: APERO (SPIRou, NIRPS) writes BERV, the HARPS DRS HIERARCH ESO DRS BERV,
-#: the ESPRESSO one HIERARCH ESO QC BERV. With the ESO name alone, none of
-#: the 48 rdb of 2026-10-24 had a BERV for the report (its BERV page was
-#: missing).
+#: the ESPRESSO one HIERARCH ESO QC BERV, the HARPS-N and SOPHIE DRS their
+#: TNG and OHP equivalents: with a single name, the BERV page would be
+#: missing for every instrument but one.
 BERV = ('BERV', 'HIERARCH ESO QC BERV', 'HIERARCH ESO DRS BERV',
         'HIERARCH TNG QC BERV', 'HIERARCH TNG DRS BERV',
         'HIERARCH OHP DRS BERV')
@@ -76,7 +78,7 @@ def read_rdb(path):
     strings. The rdb format puts a line of dashes under the header, which is
     skipped.
     """
-    with open(path, 'r') as handle:
+    with open(path, 'r', encoding='utf-8') as handle:
         lines = [line.rstrip('\n') for line in handle if line.strip()]
     if len(lines) < 3:
         raise ValueError('%s holds no rows' % path)

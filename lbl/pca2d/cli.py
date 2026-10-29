@@ -1,11 +1,13 @@
 """The one command.
 
-    pca2d-preclean --object TOI-2120
+    lbl_pca2d --object NAME --instrument INSTRUMENT --data-source SOURCE
 
 That is the whole interface. The object names a folder under the input root,
-the instrument is read from the INSTRUME keyword of the files there, and
-`config.yaml` supplies everything else in three layers: what is general, what
-belongs to that spectrograph, and what belongs to that target.
+the instrument and its data source are LBL's names for them (as a wrap's
+INSTRUMENT and DATA_SOURCE, or lbl.instrument and lbl.data_source in the
+configuration), and everything else comes in layers: the configuration's
+general block, what belongs to that instrument (the PCA2D_* parameters of
+its LBL class), and what belongs to that target (`objects:`).
 
 Two roots, both in the config and both overridable for one run:
 
@@ -46,11 +48,9 @@ STAGES = ("cube", "fit", "figures", "correct", "lbl")
 
 
 #: The settings the window can change that are CONFIG keys, and the flag each
-#: one travels under. Without these, a value typed in the window reached
-#: nothing: only n_star and n_earth had flags, so changing the high pass, the
-#: shrinkage or the metric and pressing Run ran the configuration's own values
-#: and said nothing about it (2026-09-15). A flag also means a run's own log
-#: records what it was asked, which a config file edited afterwards does not.
+#: one travels under, so that every value set in the window reaches the run.
+#: A flag also means a run's own log records what it was asked, which a
+#: config file edited afterwards does not.
 SETTING_FLAGS = (
     ("--weight", "correct.weight", str,
      "the metric the correction's amplitudes are measured in: 'flux', every"
@@ -61,8 +61,6 @@ SETTING_FLAGS = (
     ("--iters", "twoframe.iters", int, "sweeps at most"),
     ("--shrink", "correct.shrink", "bool",
      "divide each observer component out only where it is significant"),
-    # the residual clip travelled under no flag at all until 2026-09-25, so a
-    # run asked for one on the command line took the configuration's value
     ("--nsig-cut", "correct.nsig_cut", float,
      "NaN every sample whose residual, panel 5, is beyond this many running"
      " robust sigmas; 0 or nothing leaves them all in"),
@@ -73,15 +71,14 @@ SETTING_FLAGS = (
     ("--excursion-elements", "correct.excursion_elements", float,
      "how wide those windows go, in resolution elements of the instrument"),
     ("--weight-floor", "correct.weight_floor", float,
-     "NaN la ou la boucle a deprecie l'echantillon sous cette fraction de son"
-     " poids nominal: le poids du fit est le masque"),
+     "NaN where the loop down-weighted the sample below this fraction of its"
+     " nominal weight: the fit's weight is the mask"),
     ("--bias-nsig", "correct.bias_nsig", float,
-     "retirer de toutes les poses les colonnes dont le residu MOYEN sur les"
-     " poses depasse ce nombre de sigmas: ce qui est ancre dans le referentiel"
-     " de l'observateur et a un signe"),
+     "drop from every exposure the columns whose MEAN residual over the"
+     " exposures exceeds this many sigmas: what is anchored in the observer's"
+     " frame and has a sign"),
     ("--bias-elements", "correct.bias_elements", float,
-     "la largeur sur laquelle cette moyenne est sommee, en elements de"
-     " resolution"),
+     "the width over which that mean is summed, in resolution elements"),
     ("--excess-nsig", "correct.excess_nsig", float,
      "drop from every exposure the observer columns whose scatter over the"
      " exposures is this many sigmas above the noise"),
@@ -107,18 +104,12 @@ SETTING_FLAGS = (
      "or of at most this BERV range, in km/s"),
     ("--bundle-max", "input.bundle_max", int,
      "or of at most this many exposures"),
-    # The LBL page of the window, which travelled under no flag at all: a copy
-    # asked for there, or another LBL folder, reached nothing, and the run
-    # linked into the configuration's own tree (2026-09-16).
+    # the LBL page of the window
     ("--lbl-dir", "lbl.directory", str,
      "LBL's own tree (its DATA_DIR). Default: <output root>/lbl"),
     ("--lbl-link", "lbl.link", ("symlink", "copy"),
      "how the spectra get into LBL's science folders"),
     ("--lbl-run", "lbl.run", "bool", "run LBL, which is hours"),
-    ("--lbl-env", "lbl.environment", str,
-     "which LBL runs: a conda environment by name (default lbl-rapide, LBL's"
-     " speed branch), 'current' for the one installed beside this package,"
-     " or a path to a python"),
     ("--lbl-prepare", "lbl.prepare", "bool",
      "write LBL's config and its run script"),
     ("--lbl-before", "lbl.before", "bool", "measure the delivered spectra too"),
@@ -193,7 +184,7 @@ def apply_setting_flags(config, args):
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
-        prog="pca2d-preclean", description=__doc__,
+        prog="lbl_pca2d", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--object", default=None, metavar="NAME",
                    help="the target, and the name of its directory under"
@@ -225,9 +216,13 @@ def parse_args(argv=None):
                    help="comma-separated subset of %s, in this order"
                         % ",".join(STAGES))
     p.add_argument("--instrument", default=None,
-                   help="override the INSTRUME keyword. Almost never right:"
-                        " reading the wrong extensions raises no error, it"
-                        " returns different photons")
+                   help="LBL's name for the instrument, as a wrap's"
+                        " INSTRUMENT (default: lbl.instrument of the config)."
+                        " It selects LBL's class, which reads the files and"
+                        " gives every instrument-dependent setting")
+    p.add_argument("--data-source", default=None,
+                   help="the data source, as a wrap's DATA_SOURCE (default:"
+                        " lbl.data_source of the config)")
     p.add_argument("--n-star", type=int, default=None,
                    help="the star's spectra, the template included: 1 is the"
                         " template alone, not adjusted in depth; 2 adds one"
@@ -311,14 +306,14 @@ def load_variant(config_path, name):
     if not os.path.exists(path):
         log("no variant %s: there is no %s" % (name, path), "error")
         raise SystemExit(2)
-    with open(path, "r") as handle:
+    with open(path, "r", encoding="utf-8") as handle:
         return read_yaml(handle) or {}
 
 
 def name_variant(config, name, variant, out_dir=None):
     """Where a variant's products go and what its LBL object is called, unless
-    its file says: beside the nominal's, under the variant's name, the way
-    outputs/_star_spl and TOI2120_PCA2D_1-3_star_spl were named. Returns the
+    its file says: beside the nominal's, under the variant's name
+    (outputs/_<variant> and <OBJECT>_PCA2D_<tag>_<variant>). Returns the
     output root the nominal's runs are under, where a reused fit is found."""
     root = config["output"]["directory"]
     if variant is None:
@@ -385,8 +380,8 @@ def older_run(root, label, stamp):
     """`label` when a run of that exact name is already on disk and is this
     one, else None.
 
-    This one means: made by a command that hashed the same, or made before
-    2026-09-18, when names began to carry a hash and nothing recorded one.
+    This one means: made by a command that hashed the same, or made by a
+    version of PCA2D that did not record a hash.
     Anything else is another run that happened to be given the same name,
     and the hash is what keeps the two apart.
     """
@@ -411,8 +406,8 @@ def reused_fit(root, base, object_name, tag):
     """The run folder a correction-only variant takes its fit from.
 
     `reuse_fit: nominal` is the unnamed root; anything else names a run, and
-    a named run's folder is `_<name>`, which since 2026-09-18 carries a hash
-    after the name it was given. So a name matches the folder called exactly
+    a named run's folder is `_<name>`, which carries a hash after the name
+    it was given. So a name matches the folder called exactly
     that, or the one called that plus a hash; a hash on its own matches the
     folder that ends with it; and a path is taken as given. The newest of
     what matches, since a scenario run twice is the same scenario.
@@ -462,8 +457,8 @@ def check_reused_fit(plan):
 def run_tag(config):
     """s<M>-o<N>, and `v` when the velocity term is on: the name of a run,
     M the star's spectra with the template (n_star), N the observer
-    components. Before 2026-10-22 runs were <K>-<N>, K the free star
-    components alone (M - 1): the letters keep the two apart."""
+    components. The letters keep it apart from the older <K>-<N> tags, where
+    K counted the free star components alone (M - 1)."""
     from .config import star_spectra
     return "s%d-o%d%s" % (star_spectra(config["twoframe"]["n_star"]),
                           config["twoframe"]["n_earth"],
@@ -477,14 +472,14 @@ def without_object(config):
 
     BOTH names of it: the folder and the name matched in the headers. They say
     which object a cube is of, never how it is built, so a target whose folder
-    is named otherwise than its headers (GL699_SPIROU for OBJECT = Gl699) is
-    built the same way as one whose folder is not. Left in, it gave that target
-    a different shared key and a joint run refused the whole set.
+    is named otherwise than its headers (<STAR>_<INSTRUMENT>) is built the
+    same way as one whose folder is not. Left in, it would give that target a
+    different shared key and a joint run would refuse the whole set.
 
     And the star's orbits (registration.orbits): they place ITS star's frame,
     one star at a time, and change nothing of the grid the rows share. Left
-    in, the one member with a known planet (GJ_1028 among TOI-904's
-    companions, 2026-10-21) refused the whole set.
+    in, one member with a known planet would make a joint run refuse the
+    whole set.
     """
     other = copy.deepcopy(config)
     other["input"]["object"] = ""
@@ -505,6 +500,7 @@ def joint_members(args, variant):
     for name in args.objects:
         cfg = load_config(args.config, object_name=name, data_dir=args.data_dir,
                           out_dir=args.out_dir, instrument=args.instrument,
+                          data_source=getattr(args, "data_source", None),
                           variant=variant)
         if getattr(args, "no_fits_dir", False):
             cfg["output"]["fits_directory"] = None
@@ -590,7 +586,7 @@ def joint_plan(args, variant):
     # corrections without a word.
     # every member's known periods, not the first member's: one shared basis
     # must not vary at ANY of these stars' planet periods, and config is a copy
-    # of member 0's, which would have marked only Proxima's
+    # of member 0's, which would mark only the first star's
     periods = []
     for member in members:
         for p in ((member["config"].get("target") or {}).get("planets") or []):
@@ -605,10 +601,9 @@ def joint_plan(args, variant):
             "warn")
     # Its own LBL objects, so a joint measurement is never taken for a solo one
     # AND never for another joint one: the tag is the component counts, which
-    # two joint runs of different object sets share. PROXIMA+GJ1+GJ3090 and
-    # PROXIMA+GJ1+GJ3090+GL699_NIRPS both came out as PROXIMA_PCA2D_0-3_joint,
-    # so the second was handed the first's science folder, and would have been
-    # measured on the first's spectra had they still been there (2026-09-14).
+    # two joint runs of different object sets share. Without a stamp of the
+    # set, A+B+C and A+B+C+D would both be A_PCA2D_<tag>_joint, and the second
+    # would be handed the first's science folder and measured on its spectra.
     import hashlib as _hash
     stamp = _hash.sha1("+".join(sorted(args.objects)).encode()).hexdigest()[:4]
     config["lbl"]["suffix"] = "%s_joint%d%s" % (config["lbl"].get("suffix")
@@ -650,7 +645,9 @@ def resolve(args):
     variant = load_variant(args.config, name)
     config = load_config(args.config, object_name=args.object,
                          data_dir=args.data_dir, out_dir=args.out_dir,
-                         instrument=args.instrument, variant=variant)
+                         instrument=args.instrument,
+                         data_source=getattr(args, "data_source", None),
+                         variant=variant)
     if getattr(args, "no_fits_dir", False):
         config["output"]["fits_directory"] = None
     elif getattr(args, "fits_dir", None):
@@ -739,9 +736,7 @@ def refuse_to_overwrite_the_reused_fit(outdir, fitdir, name, root):
     on, under the same names, while its own LBL object stays separate: that
     run's velocities would no longer be the velocities of the files on disk.
     It happens with an explicit --out-dir, which overrides the `_<name>`
-    folder name_variant gives a variant (2026-09-25: variants/0-7chi2 with
-    --out-dir outputs overwrote 19 of TOI2120 0-7's corrected spectra before
-    it was stopped).
+    folder name_variant gives a variant.
     """
     if os.path.abspath(outdir) != os.path.abspath(fitdir):
         return
@@ -807,7 +802,7 @@ def build_member_cube(plan, member, build_main):
 
     path = os.path.join(plan["outdir"],
                         "cube_config_%s.yaml" % member["object"])
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         yaml.safe_dump(member["config"], handle, sort_keys=False,
                        default_flow_style=False)
     log("  %-10s %d spectra of its own" % (member["object"],
@@ -842,11 +837,9 @@ def run_joint_cube(plan, build_main):
         build_member_cube(plan, member, build_main)
     # Checked NOW, and not only when the loop decided what to build: the loop
     # skips a member whose cube is already there, and an hour later, when the
-    # last member is finally built, that cube can be gone. It was, on
-    # 2026-09-15: a cache emptied from the window's cleanup page while the run
-    # was going took two members' cubes with it, and the joint build died in
-    # np.load on GL205's grid.npy. There is one thing to do about it, which is
-    # to build it again.
+    # last member is finally built, that cube can be gone (a cache emptied
+    # from the window's cleanup page while the run was going). There is one
+    # thing to do about it, which is to build it again.
     for member in plan["members"]:
         why = cube_ready(member["cube"])
         if why is None:
@@ -935,11 +928,11 @@ def check_cubes(plan, wanted):
     """The cube half of check_inputs, kept apart because it is the older half.
 
     Returns the stage list to run. A cube that is not there is put back on the
-    list of things to build, loudly: a user deleted their cache on 2026-09-15,
-    started a run with the cube stage unticked because it had always been
-    cached before, and got a FileNotFoundError out of np.load after the fit
-    stage had already announced itself. There is exactly one thing to do about
-    a missing cube, and it is to build it; the only choice is whether that is
+    list of things to build, loudly: a cache deleted since the last run, with
+    the cube stage unticked because it had always been cached before, would
+    otherwise end in a FileNotFoundError out of np.load after the fit stage
+    had already announced itself. There is exactly one thing to do about a
+    missing cube, and it is to build it; the only choice is whether that is
     said out loud or found out from a traceback.
     """
     if not any(stage in wanted for stage in NEEDS_CUBE):
@@ -967,11 +960,11 @@ def rebuild_missing_cubes(plan, stage_name):
     check_inputs looks before anything runs, and the cube stage builds what was
     missing then. This is about the interval SINCE: a cache emptied while the
     run was going, from the window's cleanup page or --clean-cache or another
-    run, takes cubes out from under the stage about to read them. It happened
-    on 2026-09-15, between a joint run's member loop and its own joint build,
-    and came out as a FileNotFoundError in np.load with 20 minutes of building
-    behind it. There is one thing to do about a missing cube and it is to build
-    it; the only choice is whether that is said or found out from a traceback.
+    run, takes cubes out from under the stage about to read them (between a
+    joint run's member loop and its own joint build, for example), which would
+    come out as a FileNotFoundError in np.load. There is one thing to do about
+    a missing cube and it is to build it; the only choice is whether that is
+    said or found out from a traceback.
     """
     gone = missing_cubes(plan)
     if not gone:
@@ -1039,10 +1032,10 @@ def say_lbl_tree(plan, dry_run=False):
     block = plan["config"].get("lbl") or {}
     tree = lbl_directory(plan["config"])
     log("LBL tree    %s" % tree, "value")
-    # which LBL, here and not after the fit: an environment that is not on
-    # this machine found hours in is hours lost. Asking touches no file, so
-    # a dry run is told too, and only a real run is stopped.
-    code = splbl.chosen(plan["config"])
+    # whether LBL can be imported, here and not after the fit: finding out
+    # hours in is hours lost. Asking touches no file, so a dry run is told
+    # too, and only a real run is stopped.
+    code = splbl.chosen()
     if code["ok"]:
         log(splbl.say_chosen(code), "value")
     elif block.get("run", False):
@@ -1111,13 +1104,13 @@ def run_cube(plan):
     argv = [plan["written_config"]]
     if not cfg["output"]["use_cache"]:
         argv.append("--no-cache")
-    # LE REPERE DEMANDE EST RESPECTE. build.main ramene registration.frame a
-    # 'observer' sauf si on le lui interdit, parce que c'est le reglage de
-    # presque tous les runs et qu'un frame laisse par megarde dans un fichier
-    # de config coutait vingt minutes de cube inutile. Mais quand la config
-    # resolue demande vraiment un autre repere, c'est un choix et non un
-    # oubli: le passe-haut contre un template median, par exemple, n'a de
-    # sens que si les raies stellaires sont co-incidentes.
+    # THE REQUESTED FRAME IS RESPECTED. build.main brings registration.frame
+    # back to 'observer' unless told not to, because that is the setting of
+    # almost every run and a frame left by mistake in a config file cost
+    # twenty minutes of useless cube. But when the resolved config really
+    # asks for another frame, it is a choice and not an oversight: the
+    # high-pass against a median template, for example, only makes sense if
+    # the stellar lines are co-incident.
     if (cfg.get("registration") or {}).get("frame", "observer") != "observer":
         argv.append("--allow-any-frame")
     build_main(argv)
@@ -1199,12 +1192,11 @@ def run_correct(plan):
         # whatever the cube's rows are
         mode = list(mode) + ["--refit"]
     if "--config" not in mode:
-        # LA CONFIGURATION PART TOUJOURS, PAS SEULEMENT POUR REAJUSTER. Elle
-        # dit par quel lecteur les spectres ont ete lus, donc quelle extension
-        # porte le flux a remplacer: sans elle, un instrument qui passe par le
-        # pont de LBL retombe sur la table d'APERO et la correction s'arrete
-        # sur « unsupported INSTRUME 'HARPS' ». Vu le 2026-10-14 avec
-        # correct.weight: flux, le seul chemin qui ne reajuste pas.
+        # THE CONFIGURATION ALWAYS GOES ALONG, NOT ONLY TO REFIT. It says by
+        # which reader the spectra were read, hence which extension carries
+        # the flux to replace: without it, an instrument read through its
+        # LBL class could not be written back (correct.weight: flux is the
+        # only path that does not refit).
         mode = list(mode) + ["--config", plan["written_config"]]
     if "--refit" in mode:
         log("the fit's rows are nights: every exposure of every fitted night is"
@@ -1227,7 +1219,7 @@ def run_correct(plan):
             path = os.path.join(plan["outdir"],
                                 "cube_config_%s.yaml" % target["object"])
             if not os.path.exists(path):
-                with open(path, "w") as handle:
+                with open(path, "w", encoding="utf-8") as handle:
                     yaml.safe_dump(target["config"], handle, sort_keys=False,
                                    default_flow_style=False)
             target_mode[target_mode.index("--config") + 1] = path
@@ -1309,8 +1301,8 @@ def clip_args(cfg, quiet=False):
         out += ["--excursion-nsig", str(float(excursion)),
                 "--excursion-samples", str(int(samples))]
     if floor:
-        say("et mettant a NaN ce que la boucle a deprecie sous %.2f de son"
-            " poids nominal: le poids du fit est le masque" % float(floor),
+        say("and setting to NaN what the loop down-weighted below %.2f of its"
+            " nominal weight: the fit's weight is the mask" % float(floor),
             "info")
         out += ["--weight-floor", str(float(floor))]
     bias = corr.get("bias_nsig")
@@ -1331,9 +1323,9 @@ def clip_args(cfg, quiet=False):
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         wide = element_samples(resolution, cfg["domain"]["dv"],
                                corr.get("bias_elements") or 2.0)
-        say("et retirant de toutes les poses les colonnes dont le residu MOYEN"
-            " sur les poses, somme sur %d echantillons, depasse %.0f sigmas:"
-            " ce qui est ancre dans le referentiel de l'observateur"
+        say("and dropping from every exposure the columns whose MEAN residual"
+            " over the exposures, summed over %d samples, exceeds %.0f sigmas:"
+            " what is anchored in the observer's frame"
             % (wide, float(bias)), "info")
         out += ["--bias-nsig", str(float(bias)),
                 "--bias-samples", str(int(wide))]
@@ -1425,8 +1417,8 @@ def shrink_args(cfg):
     #   each component by its significance in THIS star's data, which is
     #   what makes sense for a basis fitted on them; a basis learned on other
     #   stars was established there, and this star's spectra cannot judge
-    #   it (on TOI-904, 51 spectra, it dropped all seven components at
-    #   99.9% of the columns: nothing was divided out). Its MASK keeps each
+    #   it (on a star with few spectra the shrinkage drops every component
+    #   almost everywhere, and nothing is divided out). Its MASK keeps each
     #   component where the training constrained it.
     frozen = bool((cfg.get("twoframe") or {}).get("earth_basis"))
     if corr.get("shrink") and frozen:
@@ -1453,8 +1445,8 @@ def shrink_args(cfg):
     if out and resolution:
         out += ["--resolution", str(float(resolution))]
     # said only when the shrinkage is on: `out` also holds the mask and the
-    #   weight, and a frozen basis divided out in full was announced as
-    #   shrunk right after being announced as not (KIC 7847566, 2026-10-23)
+    #   weight, and a frozen basis divided out in full must not be announced
+    #   as shrunk
     if "--shrink" in out or which:
         log("each observer component divided out only where it is significant,"
             " all exposures together%s%s"
@@ -1489,11 +1481,10 @@ def _velocity_pages(plan):
 def _check_lbl_tree(directory):
     """Refuse to launch LBL on a tree in which a folder is a DEAD link.
 
-    WHAT HAPPENED on 2026-10-15 at 22:55. outputs/lbl/ held ten links to
-    /Volumes/irrisor, an external disk that was not mounted. LBL stopped
-    after 1.9 seconds on a FileExistsError while trying to create its log
-    folder, and the night's log said nothing more: the four steps before
-    had succeeded, so the chain looked as if it had gone to the end.
+    A tree whose folders are links to an external disk that is not mounted
+    makes LBL stop within seconds on a FileExistsError while trying to
+    create its log folder, and the log says nothing more: the steps before
+    have succeeded, so the chain looks as if it had gone to the end.
 
     The trap is that Path.exists() FOLLOWS the link: a broken link does not
     exist for it, so LBL's io.make_dir goes into its "create" branch, and
@@ -1533,8 +1524,8 @@ def run_lbl(plan):
         log("lbl.prepare and lbl.run are both off, so nothing to do here",
             "warn")
         return
-    # the LBL that measures (lbl.environment), asked once for every object
-    code = splbl.chosen(cfg)
+    # the LBL that measures, asked once for every object
+    code = splbl.chosen()
     log(splbl.say_chosen(code) if code["ok"] else
         "%s. The files below are still written. %s"
         % (splbl.say_chosen(code), splbl.how_to_get(code)),
@@ -1626,7 +1617,7 @@ def main(argv=None):
         raise SystemExit(2)
 
     started = time.time()
-    log("pca2d-preclean", "info")
+    log("lbl_pca2d", "info")
     if args.objects:
         args.objects = [o.strip() for o in str(args.objects).split(",") if o.strip()]
         args.object = args.object or args.objects[0]
@@ -1702,7 +1693,7 @@ def main(argv=None):
     plan["config"]["provenance"]["run_hash"] = run_hash(sys.argv[1:])
     log("code        pca2d %s" % code_stamp(plan["config"]["provenance"]), "value")
     import yaml
-    with open(plan["written_config"], "w") as fh:
+    with open(plan["written_config"], "w", encoding="utf-8") as fh:
         yaml.safe_dump(plan["config"], fh, sort_keys=False,
                        default_flow_style=False)
     log("resolved configuration written to %s" % plan["written_config"], "info")

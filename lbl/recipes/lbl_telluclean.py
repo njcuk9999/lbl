@@ -138,9 +138,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # template filename: the comparison's, which lbl_wrap sets to
     #   <object>_tc for the second pass (the template made from the first
     #   pass's cleaned spectra); the science object's own name is never that
-    #   template's, and with it the second pass ran without a template. The
-    #   first pass uses none: not looked for (a vetted comparison would be
-    #   downloaded for nothing)
+    #   template's, so looking under it would leave the second pass without
+    #   a template. The first pass uses none: not looked for (a vetted
+    #   comparison would be downloaded for nothing)
     template_file = ''
     if inst.params['TELLUCLEAN_USE_TEMPLATE']:
         template_file = inst.template_file(template_dir, 'comparison',

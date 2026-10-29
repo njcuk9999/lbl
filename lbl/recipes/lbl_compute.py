@@ -334,8 +334,8 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
     # If output file exists then get the model velocity from here, when the
     #   files on disk are kept (SKIP_DONE): written again, they are made
     #   with a model velocity of their own, not with one an earlier run may
-    #   have got wrong (a model CCF on the edge of its scan, GJ 1214,
-    #   2026-10-25: rewriting kept the -278 km/s of the files it replaced)
+    #   have got wrong (e.g. a model CCF that peaked on the edge of its
+    #   scan), which rewriting would otherwise carry over
     if lblrv_exists and inst.params['SKIP_DONE'] and \
             not np.isfinite(run.model_velocity):
         lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
@@ -351,7 +351,7 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
                                         required=False)
         # check hash of science file
         hash_identical = io.check_hash(science_file, lblrv_hash)
-        # a science lblrv file from before the activity lines is made again
+        # a science lblrv file without the activity lines is made again
         if (hash_identical and inst.params['DATA_TYPE'] == 'SCIENCE'
                 and not activity_lines.has_activity(lblrv_file)):
             log.general('\t\tLBL.fits file has no activity lines, '

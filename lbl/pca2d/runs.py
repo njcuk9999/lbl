@@ -1,6 +1,6 @@
 """Every run an output root holds, read from what the runs left in it.
 
-    python -m lbl.pca2d.runs /Volumes/irrisor/pca2d_preclean/corrected
+    python -m lbl.pca2d.runs /path/to/output_root
 
 A run writes `resolved_config.yaml` into its own folder before its first
 stage: every setting as it ended up, the command it was given word for word,
@@ -48,8 +48,8 @@ def report_pdf(folder, config):
     """The compilation PDF of a run, or None.
 
     `<object>_<tag>_<hash>.pdf` as cli and texreport name it, the object
-    being the joint set for a joint run; `<object>_<tag>.pdf` for a run from
-    before the names carried a hash.
+    being the joint set for a joint run; `<object>_<tag>.pdf` for a run whose
+    name carries no hash.
     """
     from .naming import report_name
 
@@ -65,8 +65,8 @@ def report_pdf(folder, config):
 
 
 def run_hash(provenance):
-    """Which run this is: the hash its name carries, or the one its own
-    command gives, for a run from before the names carried one."""
+    """Which run this is: the hash its name carries, or, for a run whose
+    name carries none, the one its own command gives."""
     from .naming import run_hash as hashed
 
     recorded = (provenance or {}).get("run_hash")
@@ -88,7 +88,7 @@ def one(folder):
 
     path = os.path.join(folder, NAME)
     try:
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             config = yaml.safe_load(handle) or {}
     except Exception:                                          # noqa: BLE001
         config = {}
@@ -113,7 +113,7 @@ def one(folder):
 
 
 def _from_disk(path):
-    """When a run started, for one that predates provenance.started: when its
+    """When a run started, for one with no provenance.started: when its
     resolved configuration was written, which is the same moment."""
     import datetime
 

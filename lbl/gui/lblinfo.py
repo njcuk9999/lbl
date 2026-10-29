@@ -3,7 +3,8 @@
 Nothing here is a copy of LBL's tables: the instruments and their data
 sources come from lbl.instruments.select, the PCA2D switches and their short
 names from lbl.recipes.lbl_pca2d, their defaults from lbl/pca2d/nominal.yaml
-merged over the code's own, their descriptions from the tables of
+merged over the code's own and under the instrument's (the PCA2D_*
+parameters of its LBL class), their descriptions from the tables of
 lbl/doc/PCA2D.md, and the observer bases from DATA_DIR/pca2d/components and
 DATA_DIR/models/pca2d_<INSTRUMENT>_<SOURCE> (lbl.pca2d.basis). A new option
 in LBL shows up here without a line changed.
@@ -56,7 +57,7 @@ def lbl_home() -> str:
         # A FOLDER NAMED lbl ON THE PYTHON PATH, without __init__.py (an old
         #   clone in a home folder that PYTHONPATH lists): Python takes it
         #   for a namespace package before it asks the finder of an editable
-        #   install, and LBL is hidden (2026-10-26)
+        #   install, and LBL is hidden
         raise SystemExit(
             "LBL is hidden by a folder named lbl on the Python path (%s): "
             "reinstall LBL with 'pip install -e <your clone> --config-settings"
@@ -127,29 +128,28 @@ def _merge(base: dict, extra: dict) -> dict:
     return out
 
 
-def nominal_block(instrument: str) -> str:
-    """nominal.yaml's instrument block for an LBL instrument (NIRPS_HE and
-    NIRPS_HA share NIRPS's)."""
-    upper = str(instrument).upper()
-    if upper.startswith("NIRPS"):
-        return "NIRPS"
-    if upper == "HARPSN":
-        return "HARPN"
-    return upper
-
-
 @functools.lru_cache(maxsize=16)
-def pca2d_defaults(instrument: str) -> dict:
+def pca2d_defaults(instrument: str, source: str = None) -> dict:
     """The PCA2D configuration as it stands before a wrap changes it: the
-    code's defaults, nominal.yaml's general block, then its instrument's."""
+    code's defaults, nominal.yaml's general block, then the instrument's own
+    settings (the PCA2D_* parameters of its LBL class, for `source`, or for
+    the first data source LBL has for it when none is given)."""
     import yaml
     from lbl.pca2d.config import DEFAULTS as CODE_DEFAULTS
+    from lbl.pca2d.config import instrument_layer
     path = os.path.join(lbl_home(), "pca2d", "nominal.yaml")
     with open(path) as handle:
         nominal = yaml.safe_load(handle) or {}
     merged = _merge(CODE_DEFAULTS, nominal.get("general") or {})
-    block = (nominal.get("instruments") or {}).get(nominal_block(instrument))
-    return _merge(merged, block or {})
+    if not source:
+        sources = list((_select().InstDict.get(str(instrument).upper())
+                        or {}).keys())
+        source = sources[0] if sources else None
+    try:
+        layer = instrument_layer(instrument, source) if source else {}
+    except SystemExit:
+        layer = {}
+    return _merge(merged, layer)
 
 
 def _value_at(config: dict, path: str):
@@ -220,18 +220,22 @@ GROUPS = (
 )
 
 
-def pca2d_options(instrument: str) -> list:
+def pca2d_options(instrument: str, source: str = None) -> list:
     """The options of a wrap's PCA2D dict, as the window lays them out:
     [dict(key, path, default, kind, group, description)]. `path` is the
     configuration key a short name stands for (None for the recipe's own
     switches), `default` what the run does when the window leaves it out."""
     from lbl.recipes import lbl_pca2d
-    config = pca2d_defaults(instrument)
+    config = pca2d_defaults(instrument, source)
     described = doc_descriptions()
     from lbl.pca2d.config import WINDOW_SETTINGS
     window = dict(WINDOW_SETTINGS)
     rows = {}
     for key, default in lbl_pca2d.DEFAULTS.items():
+        # a switch the instrument sets (n_earth) takes its value there
+        mirror = lbl_pca2d.SWITCH_PATHS.get(key)
+        if default is None and mirror:
+            default = _value_at(config, mirror)
         rows[key] = dict(key=key, path=None, default=default)
     for key, path in lbl_pca2d.ALIASES.items():
         if key in rows or key in ("cache_directory", "windows", "high_pass",

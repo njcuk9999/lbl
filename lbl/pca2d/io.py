@@ -1,4 +1,4 @@
-"""Reading NIRPS s1d_v spectra and the header quantities we care about."""
+"""Reading APERO s1d_v spectra and the header quantities we care about."""
 
 from __future__ import annotations
 
@@ -11,25 +11,6 @@ from astropy.io import fits
 
 from .grids import doppler
 from .logger import log
-
-
-# Header keys pulled into the metadata table. Missing keys become NaN / ''.
-META_KEYS = {
-    "bjd": "BJD",
-    "mjdmid": "MJDMID",
-    "berv": "BERV",
-    "bervmax": "BERVMAX",
-    "exptime": "EXPTIME",
-    "airmass_start": "ESO TEL AIRM START",
-    "airmass_end": "ESO TEL AIRM END",
-    "seeing": "ESO TEL AMBI FWHM START",
-    "humidity": "ESO TEL AMBI RHUM",
-    "sun_elevation": "DRSSUNEL",
-    "drs_mode": "DRSMODE",
-    "dprtype": "DPRTYPE",
-}
-
-_STRING_KEYS = {"drs_mode", "dprtype"}
 
 
 def header_float(header, key, default=np.nan) -> float:
@@ -167,16 +148,12 @@ def read_spectrum(path: str, wave_min: float, wave_max: float, pad_kms: float = 
         flux = np.asarray(data["flux"], dtype=np.float64)[keep]
         s1d_weight = np.asarray(data["weight"], dtype=np.float64)[keep]
 
+        # the metadata by the instrument's keywords (its KW_* parameters,
+        #   input.header_keys), as for a t.fits
+        from .tfits import header_meta
         meta = {"filename": os.path.basename(path)}
-        for name, key in META_KEYS.items():
-            if name in _STRING_KEYS:
-                meta[name] = str(header.get(key, "")).strip()
-            else:
-                meta[name] = header_float(header, key)
-        meta["object"] = str(header.get("OBJECT", "")).strip()
-        meta["drsobjn"] = str(header.get("DRSOBJN", "")).strip()
+        meta.update(header_meta([header]))
         meta["snr_band"] = band_snr(header, wave_min, wave_max)
-        meta["airmass"] = 0.5 * (meta["airmass_start"] + meta["airmass_end"])
         with np.errstate(invalid="ignore"):
             finite = np.isfinite(flux)
             meta["median_flux"] = float(np.median(flux[finite])) if finite.any() else np.nan
@@ -186,10 +163,10 @@ def read_spectrum(path: str, wave_min: float, wave_max: float, pad_kms: float = 
 
 
 def magic_grid(path: str, wave_min: float, wave_max: float) -> np.ndarray:
-    """Recycle the NIRPS s1d_v wavelength grid, cropped to the band.
+    """Recycle the APERO s1d_v wavelength grid, cropped to the band.
 
-    The s1d_v files are all sampled on the same log-uniform "magic grid": a
-    constant 0.5 km/s step running from 965 to 1950 nm. Reusing that grid rather
+    The s1d_v files of an instrument are all sampled on the same log-uniform
+    "magic grid": a constant velocity step over the instrument's domain. Reusing that grid rather
     than synthesising a fresh one has two virtues. A spectrum with BERV = 0 is
     then resampled onto exactly its own sample positions, so the spline is the
     identity there instead of applying a small systematic smoothing; and the

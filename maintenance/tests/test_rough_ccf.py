@@ -1,10 +1,10 @@
 """The rough CCF of a model (lbl.science.general.rough_ccf_rv) on a template
 with no data on part of the domain: the model is 0 there (its spline's
-outside), and those zeros once made the CCF peak on the edge of its scan.
-GJ 1214 with HARPS, 2026-10-25: the template of the PCA2D-corrected spectra
-had nothing below ~550 nm, the model velocity came out at -260 km/s, every
-line window was placed that far from its line, and the errors were four
-times larger."""
+outside), and those zeros can make the CCF peak on the edge of its scan. A
+template of corrected spectra with nothing in the blue (a faint red star in
+the visible) then gets a model velocity of hundreds of km/s, every line
+window is placed that far from its line, and the errors grow several
+times."""
 from types import SimpleNamespace
 
 import numpy as np

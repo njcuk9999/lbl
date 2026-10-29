@@ -20,7 +20,7 @@ GUI_LOGS = os.path.join("gui", "logs")
 
 def run_log(folder: str) -> str:
     """The log of the run whose folder is gui/runs/<run>: gui/logs/<run>.log
-    (a run.log left in its folder by an older window is moved there)."""
+    (a run.log found in the run's own folder is moved there)."""
     logs = os.path.join(os.path.dirname(os.path.dirname(folder)), "logs")
     path = os.path.join(logs, os.path.basename(folder.rstrip(os.sep)) + ".log")
     old = os.path.join(folder, "run.log")
@@ -37,7 +37,7 @@ def window_runs(data_dir: str) -> list:
     out = []
     for path in glob.glob(os.path.join(data_dir, GUI_RUNS, "*", "run.json")):
         try:
-            with open(path) as handle:
+            with open(path, encoding="utf-8") as handle:
                 record = json.load(handle)
         except (OSError, ValueError):
             continue

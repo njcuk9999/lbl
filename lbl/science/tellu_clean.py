@@ -327,14 +327,13 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     # ESO S2D files of HARPS, HARPS-N and ESPRESSO, the transmission has to be
     # evaluated at the wavelengths the ground sees, not the ones the barycentre
     # does. get_berv is zero for those classes, which is the right answer for
-    # the velocities and the reason this shift was never applied; the BERV of
-    # the header is what the atmosphere moved by.
+    # the velocities but says nothing of the atmosphere; the BERV of the
+    # header (BERV_TRANS) is what the atmosphere moved by.
     #
-    # Measured on HD 10700 (HARPS, 2026-10-15), O2 B band 686-690 nm: with the
-    # barycentric grid the model correlates with the spectrum at -0.035, i.e.
-    # not at all, and the cleaning divided by at most 2.7 where the model asks
-    # for 7.5. Shifted here, the correlation is 0.973 and the residual offset
-    # against the BERV goes from a slope of -1.0003 to 0.0000.
+    # Left on the barycentric grid, the model is off the telluric lines by
+    # the BERV (tens of km/s, many resolution elements): it no longer
+    # correlates with the spectrum, the cleaning removes only part of the
+    # absorption, and the residual moves with the BERV.
     #
     # doppler_shift(wave, +berv) maps barycentric wavelengths onto the ones the
     # observer sees: at a BERV of +23.74 km/s it moves 688 nm by -23.74 km/s.
@@ -347,29 +346,22 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # THE EXPONENTS, BY THE DERIVATIVE METHOD, FOR EVERY INSTRUMENT
     #
-    # The derivative method of telluric_fit (tellu_tools.optimize_exponents,
-    # called by predict_abso.py) keeps the exponents that make the CORRECTED
+    # The derivative method keeps the exponents that make the CORRECTED
     # spectrum smoothest, i.e. that minimise the weighted scatter of its
     # pixel-to-pixel gradient on the telluric windows. A wrong exponent leaves
     # a derivative-shaped residual at every telluric line; stellar lines
     # contribute the same whatever the exponent, so the criterion depends on
-    # the tellurics alone (lbl.science.tellu_derivative).
-    #
-    # IT REPLACES THE CCF LOOP for good (2026-10-27), which cross-correlated
-    # the spectrum with TAPAS line masks and extrapolated each exponent from a
-    # polynomial fitted on its first iterations. That extrapolation often
-    # failed: on 100 HARPS exposures of HD 10700 (2026-10-15), 37% ended at
-    # water = 0.0100 and 64% at dry = 0.0500, its lower bounds, where there is
-    # always water above a telescope and an airmass of 1.08 asks for about
-    # 1.1; and it degraded the spectrum (gradient scatter in the 593-595 nm
-    # water band: raw 344.8, the loop 359.6, the derivative 304.1). It ran
-    # only on the instruments that had not been switched to the derivative
-    # (TELLUCLEAN_DERIVATIVE_WATER): every instrument now cleans the same way.
+    # the tellurics alone (lbl.science.tellu_derivative). Unlike an
+    # extrapolation of the CCF amplitude of TAPAS line masks against the
+    # exponent, it does not run onto lower bounds where there is always water
+    # above a telescope, and it does not leave the spectrum rougher than it
+    # was.
     #
     # Water is free per file, the water column changing too fast for a
     # nightly model; the dry absorbers are free too (fixed to the airmass they
-    # impose a systematic 4% error, La Silla sitting above part of the column
-    # TAPAS assumes), unless TELLUCLEAN_FORCE_AIRMASS fixes them to it.
+    # impose a systematic error of a few percent, an observatory's altitude
+    # removing part of the column TAPAS assumes), unless
+    # TELLUCLEAN_FORCE_AIRMASS fixes them to it.
     #
     # AND THE FIT SEES THE SPECTRUM DIVIDED BY THE TEMPLATE: that is APERO's
     # logic, and it is where the constraint comes from. template_vector is
@@ -395,8 +387,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     else:
         # THE LOG MUST SAY WHETHER IT IS A FALLBACK. At four decimals, the
         # 1e-7 mark is invisible, and an exposure at the fallback shows
-        # "0.3500" exactly like an exposure that converges to 0.35: I
-        # counted zero fallbacks in a batch that had thirteen (2026-10-16).
+        # "0.3500" exactly like an exposure that converges to 0.35.
         # ONE LINE PER SPECTRUM, with the exponents applied (its header's
         #   KW_TAU_H2O and KW_TAU_OTHERS) and which pass it is (template)
         if tellu_derivative.is_fallback(expo_water):
@@ -422,9 +413,8 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     # AND SHIFT IT THE SAME WAY, for the same reason as above: this is the
     # transmission that is actually divided out of the science data, so a
     # grid left in the barycentric frame here would undo the fit done in the
-    # observer frame. The loop above was corrected without this line once
-    # (2026-10-15) and nothing changed in the written files, which is how the
-    # omission showed up.
+    # observer frame: the exponents would be right, but the transmission
+    # divided out of the files would miss the telluric lines.
     wave_trans = np.array(wavemap)
     if berv_trans:
         wave_trans = mp.doppler_shift(wave_trans, berv_trans)
@@ -435,8 +425,9 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
                             spl_others, spl_water, kwidth=kwidth, ex_gau=ex_gau,
                             dv_abso=dv_abso, wave0=wave0, wave1=wave1)
     # -------------------------------------------------------------------------
-    # all absorption deeper than exp(-1) ~ 30% is considered too deep to
-    #     be corrected. We set values there to NaN
+    # a transmission below exp(TELLUCLEAN_TRANSMISSION_THRESHOLD) (exp(-1),
+    #     about 37%, so lines more than about 63% deep) is considered too
+    #     deep to be corrected. We set values there to NaN
     thres_mask = abso_e2ds < np.exp(trans_threshold)
     # set masked values to NaN
     abso_e2ds[thres_mask] = np.nan

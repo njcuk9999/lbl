@@ -92,6 +92,16 @@ class Espresso(Instrument):
         self.param_set('HP_WIDTH', 256, source=func_name)
         # approximate mean resolution in lambda/dlambda
         self.param_set('APPROX_RESOLUTION', 140000, source=func_name)
+        # the S2D, read through this class (fibre A, the science)
+        self.param_set('PCA2D_INPUT_FORMAT', 's2d', source=func_name)
+        self.param_set('PCA2D_INPUT_PATTERN', '*_S2D_A.fits', source=func_name)
+        # the windows of the PCA2D figures (centre:width in nm): the O2 A,
+        #    B and gamma bands and water, near the middle of an order's
+        #    blaze, and the sodium D and magnesium b lines as stellar
+        #    references
+        self.param_set('PCA2D_WINDOWS', source=func_name,
+                       value=['765.25:4', '688.25:2.5', '720.0:3', '631.25:3',
+                              '589.0:1.5', '518.0:2'])
         # define the SNR cut off threshold
         # Question: Espresso value?
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
@@ -232,6 +242,32 @@ class Espresso(Instrument):
                          'HIERARCH ESO TEL3 AIRM START',
                          'HIERARCH ESO TEL4 AIRM START'],
                         source=func_name)
+        # define the airmass at the end of the observation
+        self.param_set('KW_AIRMASS_END', source=func_name,
+                       value=['HIERARCH ESO TEL1 AIRM END',
+                              'HIERARCH ESO TEL2 AIRM END',
+                              'HIERARCH ESO TEL3 AIRM END',
+                              'HIERARCH ESO TEL4 AIRM END'])
+        # define the seeing during the observation [arcsec]
+        self.param_set('KW_SEEING', source=func_name,
+                       value=['HIERARCH ESO TEL1 AMBI FWHM START',
+                              'HIERARCH ESO TEL2 AMBI FWHM START',
+                              'HIERARCH ESO TEL3 AMBI FWHM START',
+                              'HIERARCH ESO TEL4 AMBI FWHM START'])
+        # define the relative humidity during the observation
+        self.param_set('KW_HUMIDITY', source=func_name,
+                       value=['HIERARCH ESO TEL1 AMBI RHUM',
+                              'HIERARCH ESO TEL2 AMBI RHUM',
+                              'HIERARCH ESO TEL3 AMBI RHUM',
+                              'HIERARCH ESO TEL4 AMBI RHUM'])
+        # define the elevation of the Sun during the observation
+        self.param_set('KW_SUN_ELEVATION', None, source=func_name)
+        # define the instrument mode of the observation
+        self.param_set('KW_DRS_MODE', 'HIERARCH ESO INS MODE',
+                       source=func_name)
+        # define the largest BERV of the target over the year
+        self.param_set('KW_BERVMAX', 'HIERARCH ESO QC BERVMAX',
+                       source=func_name)
         # define the human date of the observation
         self.param_set('KW_DATE', 'DATE', source=func_name)
         # define the tau_h20 of the observation
@@ -616,10 +652,10 @@ class Espresso(Instrument):
         star's frame. But TAPAS describes the atmosphere, which sat in the
         observer frame, and the atmosphere did move by the header's BERV.
 
-        Measured on HD 10700 (HARPS, 2026-10-15), O2 B band: without this
-        shift the model correlates with the spectrum at -0.035, i.e. not at
-        all, and the residual offset tracks the BERV with a slope of -1.0003.
-        With it, 0.973 and a slope of 0.0000.
+        Without this shift the model does not correlate with the telluric
+        lines of the spectrum (in the O2 B band, for example), and the
+        residual offset tracks the BERV with a slope of -1; with it, the
+        correlation is close to 1 and the slope 0.
 
         :param sci_hdr: io.LBLHeader, the science header
 

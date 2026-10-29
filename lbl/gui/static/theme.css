@@ -1,12 +1,10 @@
 /*
- * Shared base theme for eartigau's tools.
- * See DESIGN_SYSTEM.md in this folder for the rationale behind each piece.
- * Copy this whole file as a starting point for a new tool's stylesheet,
- * then add page-specific rules after it. Pairs with banner-snippet.html
- * (markup) and lightbox.js (click-to-enlarge behavior).
- *
- * Proven in production at https://eartigau.github.io/vroommisator/
- * (source: github.com/eartigau/vroommisator, docs/styles.css).
+ * The window's base theme: the dark palette's tokens, the fonts (Space
+ * Grotesk for text, IBM Plex Mono for numbers and code), the banner and its
+ * pill links, the hero, a grid of cards, code blocks, image frames and
+ * galleries with a click-to-enlarge lightbox, stat tiles, the footer, and
+ * the breakpoints that fold the grid on narrow screens. app.css comes after
+ * it with the window's own rules and its light theme.
  */
 
 :root {
@@ -53,7 +51,7 @@ body {
 .orb-a {
   width: 320px;
   height: 320px;
-  background: #26a1ff; /* keep this one blue across all tools */
+  background: #26a1ff; /* a blue glow, top left */
   top: -60px;
   left: -80px;
 }
@@ -61,7 +59,7 @@ body {
 .orb-b {
   width: 420px;
   height: 420px;
-  background: #6ce2ad; /* ok to retint per-tool for a bit of identity */
+  background: #6ce2ad; /* a green glow, bottom right */
   right: -140px;
   bottom: -140px;
 }

@@ -21,7 +21,7 @@ from scipy import signal
 from scipy.special import factorial
 from scipy.interpolate import InterpolatedUnivariateSpline as IUVSpline
 from scipy.interpolate._fitpack_impl import splev as _fitpack_splev
-from scipy.special import erf
+from scipy.special import erf, erfinv
 
 from lbl.core import base
 from lbl.core import base_classes
@@ -55,6 +55,10 @@ __authors__ = base.__authors__
 # get speed of light
 speed_of_light_ms = constants.c.value
 speed_of_light = speed_of_light_ms / 1000.0
+# the ratio of a Gaussian's sigma to its median absolute deviation,
+#    1 / Phi^-1(3/4) = 1 / (sqrt(2) erfinv(1/2)) = 1.4826...: a MAD times
+#    this is a robust estimate of sigma
+mad_to_sigma = 1.0 / (np.sqrt(2.0) * erfinv(0.5))
 
 
 # =============================================================================

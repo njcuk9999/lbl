@@ -1,11 +1,11 @@
 /*
- * The LBL window's own rules, after the shared theme (theme.css, from
- * themes_outils). Two themes on the same tokens: dark (the shared theme's)
- * and light (data-theme="light", the default). The banner, the wrap and the
- * log stay dark in both. The series colours are a validated categorical
- * palette for each surface (dataviz validator: 8 slots adjacent-pair safe,
- * the first 3 all-pairs; on white, slots 3 to 5 are under 3:1 contrast and
- * always come with the legend, the table's swatches and a tooltip).
+ * The LBL window's own rules, after the base theme (theme.css). Two themes
+ * on the same tokens: dark (the base theme's) and light (data-theme="light",
+ * the default). The banner, the wrap and the log stay dark in both. The
+ * series colours are a categorical palette checked for each surface: its 8
+ * slots stay apart from their neighbours, the first 3 from every other; on
+ * white, slots 3 to 5 are under 3:1 contrast and always come with the
+ * legend, the table's swatches and a tooltip.
  */
 :root {
   --bg: #08111f;
@@ -574,8 +574,8 @@ h2 .info { vertical-align: 3px; }
 }
 .log-jump:hover { opacity: 1; background: rgba(98, 194, 255, 0.22); }
 .log-jump:disabled { opacity: 0.2; cursor: default; background: rgba(10, 20, 36, 0.9); }
-/* a line's level is lv-*: a bare .info is the (i) of the helps, a 16 px
-   circle, and the log's green lines once took it (one letter per line) */
+/* a line's level is lv-*, never a bare .info: that class is the (i) of the
+   helps, a 16 px circle that would squeeze a line to one letter per row */
 .log .lv-info { color: var(--good); }
 .log .lv-value { color: var(--value); }
 .log .lv-warn { color: var(--warn); }
@@ -699,7 +699,7 @@ h2 .info { vertical-align: 3px; }
 .launch.small-launch { font-size: 1rem; padding: 10px 24px; }
 
 /* a ring that turns on its own centre (a glyph like ◐ does not: its box is
-   not square, and it wobbled) */
+   not square, so it wobbles) */
 .ring {
   display: inline-block;
   box-sizing: border-box;

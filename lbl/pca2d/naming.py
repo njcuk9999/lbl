@@ -10,12 +10,12 @@ than impossible.
 
 The command, and not a handful of settings: the roots a run reads and writes
 and every LBL setting change what it produces as surely as the component
-counts do, and hashing ten keys left two different runs under one name. What
-is taken out of it, so that the name means the same on both sides and a run
-resumed is the same run:
+counts do, and a hash of a few chosen keys would leave two different runs
+under one name. What is taken out of it, so that the name means the same on
+both sides and a run resumed is the same run:
 
-    the program's own name   `pca2d-preclean` in the window, nothing on the
-                             command line: the flags are what matter
+    the program's own name   `lbl_pca2d`, or whatever a front end calls it:
+                             the flags are what matter
     the name itself          or it would hash the name it is computing
     the targets' order       the same set in another order is the same
                              reduction
@@ -23,16 +23,15 @@ resumed is the same run:
                              --clean-cache: a run that died in its LBL stage
                              and is resumed with `--stages lbl` is the same
                              run, and must land in the folder it left
-                             (2026-09-18, TOI2120 earth3 on rali)
     --lbl-before             whether the DELIVERED spectra are measured. It
                              cannot change what the corrected ones give, and
                              every scenario after a target's first passes
                              false, which would otherwise split runs that
                              belong together
 
-The window hashes the command it shows (`gui.build_command`); the pipeline
-hashes its own `sys.argv`. Both give the same six characters for the same
-run.
+A front end that builds the command hashes the command it shows; the
+pipeline hashes its own `sys.argv`. Both give the same six characters for the
+same run.
 """
 
 from __future__ import annotations
@@ -53,8 +52,8 @@ IGNORED_ALONE = ("--dry-run", "--rebuild-cube", "--clean-cache")
 def normalised(argv):
     """The command line a name is hashed from, as a list."""
     argv = list(argv or [])
-    # whatever comes before the first flag is how this program was called:
-    # `pca2d-preclean` from the window, nothing from the command line itself
+    # whatever comes before the first flag is how this program was called
+    # (`lbl_pca2d`, or a front end's name for it), not what the run is
     while argv and not argv[0].startswith("-"):
         argv.pop(0)
     out = []
@@ -104,8 +103,7 @@ def report_name(object_name, tag, run_hash=None):
 
     The hash is what tells two runs of the same targets and the same counts
     apart once their PDFs are side by side in a folder, or attached to a
-    message (asked for on 2026-09-18). A run from before the hash existed
-    has none, and keeps the shorter name.
+    message. Without a hash the stem is the shorter <object>_<tag>.
     """
     stem = "%s_%s" % (object_name, tag)
     return "%s_%s" % (stem, run_hash) if run_hash else stem

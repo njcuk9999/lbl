@@ -1,33 +1,34 @@
 """Reading APERO `t.fits` spectra: one row per diffraction order.
 
-Layout of a NIRPS t.fits (APERO 0.7.x, the file LBL is fed):
+Layout of a t.fits (the file LBL is fed), with the extension names of the
+instrument's LBL class (PCA2D_TFITS_EXTENSIONS):
 
-    PRIMARY       ESO + APERO header, no data
-    FluxA         (75, 4088)  telluric-CORRECTED extracted flux, blaze still in
-    WaveA         (75, 4088)  wavelength solution, nm, OBSERVER frame
-    BlazeA        (75, 4088)  blaze
-    Recon         (75, 4088)  the telluric transmission that was divided out
-    SKYCORR_SCI   (75, 4088)  sky model, not used here
-    SKYCORR_CAL   (75, 4088)  sky model, not used here
+    PRIMARY       telescope + APERO header, no data
+    flux          (orders, pixels)  telluric-CORRECTED extracted flux, blaze
+                                    still in
+    wave          (orders, pixels)  wavelength solution, nm, OBSERVER frame
+    blaze         (orders, pixels)  blaze
+    recon         (orders, pixels)  the telluric transmission divided out
+    sky           (orders, pixels)  the sky emission that was subtracted
 
 Three things about this format drive everything below.
 
 1. There is no single wavelength grid. Each order carries its own solution, and
-   consecutive orders overlap by 2-5 nm, so part of the spectrum is measured
+   consecutive orders overlap by a few nm, so part of the spectrum is measured
    twice at two different samplings. Orders n and n+2, on the other hand, never
-   overlap (measured: the gap runs from 4 to 22 nm across the array). So the
-   whole echellogram collapses onto exactly two non-redundant spectra on a
-   common grid -- the even orders and the odd orders -- and that is what we
-   build. Two rows per exposure instead of 75, with nothing thrown away.
+   overlap. So the whole echellogram collapses onto exactly two non-redundant
+   spectra on a common grid -- the even orders and the odd orders -- and that
+   is what we build. Two rows per exposure instead of one per order, with
+   nothing thrown away.
 
 2. The sampling is not uniform in velocity: within an order the step drifts, and
    between orders it jumps. Anything with a fixed pixel width -- the high-pass,
    above all -- has to be applied *after* resampling onto the log-uniform
    destination grid, never on the native pixels.
 
-3. BERV, BJD and the per-order extraction SNR live in the FluxA header, not in
-   PRIMARY. The observing conditions (airmass, humidity) live in PRIMARY. Both
-   have to be consulted.
+3. BERV, BJD and the per-order extraction SNR live in the header of the flux
+   extension, not in PRIMARY. The observing conditions (airmass, humidity)
+   live in PRIMARY. Both have to be consulted.
 """
 
 from __future__ import annotations
@@ -47,112 +48,97 @@ from .logger import log
 C_KMS = constants.c.to("km/s").value
 
 # ---------------------------------------------------------------------------
-# Which extensions to read, per instrument
+# Which extensions to read
 # ---------------------------------------------------------------------------
-# This table is the one place in the project that names a FITS extension, and
-# getting it wrong is the failure mode with no symptom.
+# Getting an extension name wrong is the failure mode with no symptom: a file
+# can carry each fibre separately as well as the combined science flux, and
+# reading another fibre raises no error at all. It returns a real array of
+# part of the light, with a different blaze and a different SNR, and every
+# number downstream looks plausible and is wrong. So the names are never
+# guessed from the file: they are the instrument's, set in its LBL class
+# (PCA2D_TFITS_EXTENSIONS) and handed over by the configuration
+# (input.extensions), here or through use_extensions.
 #
-# A SPIRou t.fits carries FluxA and FluxB as well as FluxAB. Those are the two
-# polarimetric fibres taken separately; the science flux, the one LBL works
-# with, is AB. Reading "FluxA" from a SPIRou file raises no error at all: it
-# returns a real array of half the light, with a different blaze and a different
-# SNR, and every number downstream looks plausible and is wrong.
-#
-# The instrument is read from the FILE, never from the configuration, so a
-# mislabelled config cannot select the wrong fibre.
-INSTRUMENTS = {
-    # `sky` is the pipeline's model of the atmospheric emission that was
-    # subtracted: OH airglow for SPIRou, the sky-fibre correction for NIRPS. It
-    # is not used to model anything, only to find samples where that emission
-    # was so much brighter than the star that whatever fraction of it the
-    # subtraction got wrong swamps the spectrum.
-    "NIRPS": dict(flux="FluxA", wave="WaveA", blaze="BlazeA", recon="Recon",
-                  sky="SKYCORR_SCI"),
-    "SPIROU": dict(flux="FluxAB", wave="WaveAB", blaze="BlazeAB", recon="Recon",
-                   sky="OHLine"),
-}
+# `sky` is the pipeline's model of the atmospheric emission that was
+# subtracted. It is not used to model anything, only to find samples where
+# that emission was so much brighter than the star that whatever fraction of
+# it the subtraction got wrong swamps the spectrum.
 
-def register_instruments(table):
-    """Add or replace instrument blocks, from the config rather than from here.
+#: the extensions of the instrument being read, as a resolved configuration
+#: sets them (config.load_config): flux, wave, blaze, recon, sky
+EXTENSIONS = {}
 
-    The two below are what this package was written against; a spectrograph is
-    added by putting an `instruments:` block in config.yaml, never by editing
-    this file. Registering the same name twice replaces it.
+
+def use_extensions(extensions):
+    """The extensions every reader of this process uses from now on."""
+    EXTENSIONS.clear()
+    EXTENSIONS.update(dict(extensions or {}))
+
+
+def _extensions(extensions=None):
+    """The extensions asked for, else those in use, else a clear error."""
+    ext = dict(extensions or EXTENSIONS)
+    missing = [key for key in ("flux", "wave", "blaze", "recon")
+               if not ext.get(key)]
+    if missing:
+        raise ValueError(
+            "no t.fits extension name for %s: they are the instrument's, set"
+            " by PCA2D_TFITS_EXTENSIONS in its LBL class, and an instrument"
+            " without them is read through that class instead"
+            % ", ".join(missing))
+    return ext
+
+
+def extensions_for(hdulist, extensions=None):
+    """(flux, wave, blaze, recon) extension names of this file's instrument.
+
+    `hdulist` is the open file; the names are checked against it, so that a
+    file of another layout stops here rather than being read wrongly.
     """
-    for name, extensions in (table or {}).items():
-        INSTRUMENTS[str(name).upper()] = dict(extensions)
-
-
-#: NIRPS names, kept as module constants so that code and tests written before
-#: the table existed still mean what they meant.
-EXT_FLUX = INSTRUMENTS["NIRPS"]["flux"]
-EXT_WAVE = INSTRUMENTS["NIRPS"]["wave"]
-EXT_BLAZE = INSTRUMENTS["NIRPS"]["blaze"]
-EXT_RECON = INSTRUMENTS["NIRPS"]["recon"]
-
-
-def instrument_of(hdulist):
-    """The instrument that wrote this file, as a key of INSTRUMENTS.
-
-    INSTRUME lives on the science extension for some products and on PRIMARY
-    for others, so both are consulted. Raises rather than guessing: a file whose
-    instrument cannot be established must stop the run, because every choice
-    below depends on it.
-    """
-    for hdu in hdulist:
-        value = hdu.header.get("INSTRUME")
-        if value:
-            key = str(value).strip().upper()
-            if key in INSTRUMENTS:
-                return key
-            raise ValueError("unsupported INSTRUME %r; known: %s"
-                             % (value, ", ".join(sorted(INSTRUMENTS))))
-    raise ValueError("no INSTRUME keyword; cannot tell which extensions to read")
-
-
-def extensions_for(hdulist):
-    """(flux, wave, blaze, recon) extension names for this file's instrument."""
-    ext = INSTRUMENTS[instrument_of(hdulist)]
+    ext = _extensions(extensions)
+    names = {str(hdu.name).upper() for hdu in hdulist}
+    absent = [ext[key] for key in ("flux", "wave", "blaze", "recon")
+              if str(ext[key]).upper() not in names]
+    if absent:
+        raise ValueError("this file has no %s extension (it has %s)"
+                         % (", ".join(absent), ", ".join(sorted(names))))
     return ext["flux"], ext["wave"], ext["blaze"], ext["recon"]
 
 
-def sky_extension_for(hdulist):
+def sky_extension_for(hdulist, extensions=None):
     """Name of the sky-emission extension, or None if this file has none."""
-    name = INSTRUMENTS[instrument_of(hdulist)].get("sky")
+    name = _extensions(extensions).get("sky")
     return name if name and name in [h.name for h in hdulist] else None
 
-# Header keys pulled into the metadata table. Looked up in the FluxA header
-# first, then in PRIMARY: APERO writes its own keywords (BERV, BJD, EXTSNxxx)
-# only on the science extension.
-# Each entry is a list of candidate keywords, tried in order and first hit
-# wins. NIRPS is at La Silla and writes the ESO hierarchical set; SPIRou is at
-# CFHT and writes its own. Rather than a second per-instrument table, the
-# candidates simply sit side by side: a keyword that is absent costs one failed
-# dictionary lookup, and a file that carries neither yields NaN, which is the
-# honest answer.
-META_KEYS = {
-    "bjd": ["BJD"],
-    "mjdmid": ["MJDMID", "MJDATE"],
-    "berv": ["BERV"],
-    "bervmax": ["BERVMAX"],
-    "exptime": ["EXPTIME"],
-    # NIRPS brackets the exposure, SPIRou reports one value for it
-    "airmass_start": ["ESO TEL AIRM START", "AIRMASS"],
-    "airmass_end": ["ESO TEL AIRM END", "AIRMASS"],
-    # SGSSEE is the SPIRou guider's own seeing estimate, which is what the fibre
-    # actually saw; the weather-mast values (WMSEE*) describe the site instead
-    # and are often flagged -9999.9 when the mast is down
-    "seeing": ["ESO TEL AMBI FWHM START", "SGSSEE", "WMSEEMED"],
-    "humidity": ["ESO TEL AMBI RHUM", "RELHUMID"],
-    "sun_elevation": ["DRSSUNEL"],
-    "drs_mode": ["DRSMODE"],
-    "dprtype": ["DPRTYPE"],
-}
+# Header keys pulled into the metadata table: the instrument's, from the KW_*
+# parameters of its LBL class (Instrument.pca2d_header_keys), handed over by
+# the configuration (input.header_keys), here or through use_header_keys. Each
+# is a list of keywords tried in order, the first the header has winning; they
+# are looked up in the header of the flux extension first, then in PRIMARY:
+# APERO writes its own keywords (BERV, BJD, EXTSNxxx) only on the science
+# extension, the telescope's on PRIMARY. A keyword absent from both, or an
+# instrument that does not write it, yields NaN (or ''), the honest answer.
 
-#: values both pipelines use to mean "not measured"; kept out of the metadata
+#: the metadata read from the headers, in the order of the metadata table
+META_NAMES = ("bjd", "mjdmid", "berv", "bervmax", "exptime", "airmass_start",
+              "airmass_end", "seeing", "humidity", "sun_elevation",
+              "drs_mode", "dprtype", "object", "drsobjn")
+
+#: the keywords of the instrument being read, as a resolved configuration
+#: sets them (config.load_config): {metadata name: [keyword, ...]}
+HEADER_KEYS = {}
+
+
+def use_header_keys(header_keys):
+    """The header keywords every reader of this process uses from now on."""
+    HEADER_KEYS.clear()
+    HEADER_KEYS.update(dict(header_keys or {}))
+
+
+#: values headers use to mean "not measured"; kept out of the metadata
 #: rather than allowed to pose as a seeing of -9999 arcsec
 _SENTINELS = (-9999.0, -9999.9, -999.0)
-_STRING_KEYS = {"drs_mode", "dprtype"}
+_STRING_KEYS = {"drs_mode", "dprtype", "object", "drsobjn"}
 
 PARITY_NAMES = ("even", "odd")
 
@@ -164,32 +150,16 @@ def _get(headers, key, default=np.nan):
     return default
 
 
-def read_tfits(path: str):
-    """Read one t.fits into plain arrays plus a metadata dict.
-
-    Nothing is cropped or resampled here; that is resample_exposure()'s job.
-    """
-    with robust_open(path) as hdulist:
-        e_flux, e_wave, e_blaze, e_recon = extensions_for(hdulist)
-        primary = hdulist[0].header
-        science = hdulist[e_flux].header
-        flux = np.asarray(hdulist[e_flux].data, dtype=np.float64)
-        wave = np.asarray(hdulist[e_wave].data, dtype=np.float64)
-        blaze = np.asarray(hdulist[e_blaze].data, dtype=np.float64)
-        recon = np.asarray(hdulist[e_recon].data, dtype=np.float64)
-        e_sky = sky_extension_for(hdulist)
-        sky = (np.asarray(hdulist[e_sky].data, dtype=np.float64)
-               if e_sky else None)
-
-    headers = (science, primary)
-    n_orders = flux.shape[0]
-    snr = np.array([header_float(science, "EXTSN%03d" % o) for o in range(n_orders)])
-    snr[~(snr > 0)] = np.nan
-
-    meta = {"filename": os.path.basename(path)}
-    for name, keys in META_KEYS.items():
+def header_meta(headers, header_keys=None) -> dict:
+    """The metadata of a spectrum, read from its headers (in the order
+    given) with the instrument's keywords: `header_keys`, else those in use
+    (use_header_keys). Numbers are NaN where no keyword is found or the
+    header says the value was not measured; strings are ''."""
+    keys = dict(header_keys or HEADER_KEYS)
+    meta = {}
+    for name in META_NAMES:
         value = None
-        for key in keys:
+        for key in keys.get(name) or ():
             # default=None, NOT the np.nan _get falls back to: a NaN would end
             # the search on the first candidate that happens to be absent
             value = _get(headers, key, default=None)
@@ -199,15 +169,43 @@ def read_tfits(path: str):
             meta[name] = str(value if value is not None else "").strip()
         else:
             number = header_float({"k": value}, "k")
-            if number is not None and any(abs(number - s) < 1e-6 for s in _SENTINELS):
+            if number is not None and any(abs(number - s) < 1e-6
+                                          for s in _SENTINELS):
                 number = float("nan")
             meta[name] = number
-    meta["object"] = str(_get(headers, "OBJECT", "")).strip()
-    # APERO's own name for the target, upper case and without the form's
-    # spelling: what cube.same_object falls back on when OBJECT was typed
-    # otherwise
-    meta["drsobjn"] = str(_get(headers, "DRSOBJN", "")).strip()
     meta["airmass"] = 0.5 * (meta["airmass_start"] + meta["airmass_end"])
+    return meta
+
+
+def read_tfits(path: str, extensions=None, header_keys=None):
+    """Read one t.fits into plain arrays plus a metadata dict.
+
+    `extensions` are the instrument's extension names (input.extensions of
+    the configuration) and `header_keys` its header keywords
+    (input.header_keys), else those in use (use_extensions,
+    use_header_keys). Nothing is cropped or resampled here; that is
+    resample_exposure()'s job.
+    """
+    with robust_open(path) as hdulist:
+        e_flux, e_wave, e_blaze, e_recon = extensions_for(hdulist, extensions)
+        primary = hdulist[0].header
+        science = hdulist[e_flux].header
+        flux = np.asarray(hdulist[e_flux].data, dtype=np.float64)
+        wave = np.asarray(hdulist[e_wave].data, dtype=np.float64)
+        blaze = np.asarray(hdulist[e_blaze].data, dtype=np.float64)
+        recon = np.asarray(hdulist[e_recon].data, dtype=np.float64)
+        e_sky = sky_extension_for(hdulist, extensions)
+        sky = (np.asarray(hdulist[e_sky].data, dtype=np.float64)
+               if e_sky else None)
+
+    headers = (science, primary)
+    n_orders = flux.shape[0]
+    # APERO writes the extracted SNR of every order as EXTSN<order>
+    snr = np.array([header_float(science, "EXTSN%03d" % o) for o in range(n_orders)])
+    snr[~(snr > 0)] = np.nan
+
+    meta = {"filename": os.path.basename(path)}
+    meta.update(header_meta(headers, header_keys))
     return dict(flux=flux, wave=wave, blaze=blaze, recon=recon, sky=sky,
                 snr=snr, meta=meta)
 
@@ -232,10 +230,9 @@ def order_quality(payload: dict, config: dict):
     cut is what keeps the order edges out: the extracted flux there is a small
     number divided by a small blaze, and splining it is asking for trouble.
 
-    Whole orders drop out of NIRPS in the deep water bands (44-45, ~1370-1400
-    nm) and beyond ~1850 nm (71-74), where nothing survives the telluric
-    correction. That is expected and is not an error; they are simply skipped
-    and the destination grid keeps a gap there.
+    Whole orders can drop out in the deep water bands, where nothing
+    survives the telluric correction. That is expected and is not an error;
+    they are simply skipped and the destination grid keeps a gap there.
     """
     inp = config["input"]
     blaze_frac = float(inp.get("blaze_min_frac", 0.0) or 0.0)
@@ -251,12 +248,12 @@ def order_quality(payload: dict, config: dict):
         & np.isfinite(blaze) & (blaze > 0)
         & np.isfinite(recon) & (recon > 0)
     )
-    # Samples the sky drowned. On TOI-2120 the OH airglow reaches 1447 per cent
-    # of the stellar flux at 1669.23 nm, so a one per cent error in subtracting
-    # it leaves fourteen per cent of the star. No fixed basis vector can absorb
-    # that: the airglow varies exposure to exposure, on minutes. Down-weighting
-    # would still let its noise in, so these samples are removed outright. At a
-    # ratio of 4 this costs 0.21 per cent of the samples of a SPIRou spectrum.
+    # Samples the sky drowned. On a faint star the OH airglow can reach ten
+    # times the stellar flux, so a one per cent error in subtracting it leaves
+    # a tenth of the star. No fixed basis vector can absorb that: the airglow
+    # varies exposure to exposure, on minutes. Down-weighting would still let
+    # its noise in, so these samples are removed outright. At a ratio of 4
+    # this costs a fraction of a per cent of the samples.
     max_sky = config["quality"].get("max_sky_ratio")
     sky = payload.get("sky")
     if max_sky and sky is not None and sky.shape == flux.shape:
@@ -266,12 +263,11 @@ def order_quality(payload: dict, config: dict):
 
     # A WAVELENGTH SOLUTION THAT RUNS BACKWARDS IS NOT A SOLUTION. The
     # resampling is a spline, which requires increasing abscissae, and scipy
-    # stops on "x must be increasing". Measured on 2026-10-14: 5 of the 60
-    # ESPRESSO exposures of tau Ceti have, at the blue edge of their bluest
-    # order, 177 pixels whose wavelength DECREASES before rising again. This
-    # is not a numerical oscillation (the step back is 0.00026 nm against a
-    # median step of 0.00062) but a piece of solution that does not hold.
-    # These pixels are rejected, as a negative flux is rejected, rather than
+    # stops on "x must be increasing". A solution can have, at the blue edge
+    # of its bluest order, pixels whose wavelength DECREASES before rising
+    # again: not a numerical oscillation (the step back is a sizeable
+    # fraction of a pixel) but a piece of solution that does not hold. These
+    # pixels are rejected, as a negative flux is rejected, rather than
     # stopping the campaign or silently reordering them.
     rising = np.ones_like(good)
     forward = np.diff(wave, axis=1) > 0
@@ -361,13 +357,12 @@ def _overlap_blaze(w_shift, blaze_order, ok, grid, start, stop,
     NaN.
 
     THE BLAZE FIRST, THE FLUX WHEN IT SAYS NOTHING. On an APERO t.fits the
-    blaze describes the order's response and answers on its own. On an ESO
-    S2D it is ONE everywhere, because LBL's class does not deblaze: it then
-    separates nothing, and the median flux does. Measured on 2026-10-14 on
-    an ESPRESSO S2D, zone common to orders 0 and 2: 16036 against 11749,
-    that is the red edge of order 0 against the blue edge of order 2, and
-    the first one wins. Comparing fluxes is only valid between two orders of
-    the SAME exposure at the SAME place, which is exactly the case here.
+    blaze describes the order's response and answers on its own. On a
+    product that is already deblazed it is ONE everywhere (LBL's class does
+    not deblaze it): it then separates nothing, and the median flux does,
+    the order near the middle of its blaze carrying more flux than the one
+    at its edge. Comparing fluxes is only valid between two orders of the
+    SAME exposure at the SAME place, which is exactly the case here.
     """
     if stop < start:
         return None
@@ -454,20 +449,19 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
             # blaze collapses and the flux is noisy, and the other starts
             # there.
             #
-            # Measured on 2026-10-14 on SPIRou: the RAW wavelengths of 14
-            # pairs overlap by up to 5.4 nm (orders 0 to 13), but once the
-            # edges are eroded and the bad-quality pixels set aside
-            # (order_quality, erode_edges) there is a 7 nm GAP left between
-            # order 0 (964.6-982.2 nm valid) and order 2 (989.3-1007.7): the
-            # raw overlap falls entirely within what is already rejected.
-            # This branch therefore does not trigger on SPIRou nor on HARPS
-            # (zero overlap); it is there for geometries to come.
+            # On most echelles the raw wavelengths of orders n and n+2 can
+            # overlap at the blue end, but once the edges are eroded and the
+            # bad-quality pixels set aside (order_quality, erode_edges) a gap
+            # is left: the raw overlap falls entirely within what is already
+            # rejected, and this branch does not trigger. It matters for an
+            # instrument whose orders are cut into slices, where two
+            # consecutive orders of a slice share the same parity.
             overlap_hi = min(stop - 1, last_stop[parity])
             # THE TWO MEASUREMENTS OVER THE SAME ZONE, that of the overlap.
             # An order averaged over its whole width and another taken on
             # its edge cannot be compared: the first would always win. So
             # the previous one is asked again what it carries HERE, with its
-            # own wavelengths and its own mask (2026-10-14).
+            # own wavelengths and its own mask.
             here = _overlap_blaze(w_shift, blaze[order], ok, grid,
                                   start, overlap_hi, flux[order])
             before = None
@@ -562,7 +556,7 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
         # scatter you can actually see in the data is not a better measurement,
         # it is a weight that will pull the fit into whatever is making that
         # scatter. See preprocess.empirical_sigma for what this costs and why
-        # the red end of SPIRou made it necessary.
+        # a thermal background makes it necessary.
         box = config["weights"].get("empirical_noise_box")
         if box:
             emp = prep.empirical_sigma(seg_values, keep, int(box))

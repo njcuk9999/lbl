@@ -21,7 +21,7 @@ import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "..", "..", "lbl", "gui", "static")
-UA = {"User-Agent": "lbl-gui-references/1.0 (personal research tool)"}
+UA = {"User-Agent": "lbl-gui-references/1.0 (+https://github.com/njcuk9999/lbl)"}
 
 
 def get_json(url):

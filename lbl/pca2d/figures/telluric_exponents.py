@@ -13,8 +13,8 @@ them.
 WHAT PAGE 2 CHECKS. The dry species are well mixed in the atmosphere, so
 their column follows the airmass and the cloud of points must fall on a
 line. BUT NOT NECESSARILY ON THE y = x LINE: TAPAS is computed for a
-reference column, and an observatory at altitude has less of it (La Silla
-is at 2400 m), which moves the intercept without touching the slope. The
+reference column, and an observatory at altitude has less of it above it,
+which moves the intercept without touching the slope. The
 fitted line is therefore drawn with ITS slope and ITS offset, both free,
 and the slope 1 through zero is recalled beside it for the eye. The
 residual is taken against the fitted line, which is the model being
@@ -25,7 +25,11 @@ shipped configuration does, the cloud is exactly on the line and the
 residual is zero: the page then says so rather than suggesting a
 measurement.
 
-    python telluric_exponents.py --science DIR --out PAGE.pdf
+    python -m lbl.pca2d.figures.telluric_exponents --science DIR \
+        --instrument INSTRUMENT --data-source SOURCE --out PAGE.pdf
+
+The header keywords are the instrument's, from its LBL class (KW_TAU_H2O,
+KW_TAU_OTHERS, KW_BJD, KW_AIRMASS, KW_DRS_MODE).
 """
 from __future__ import annotations
 
@@ -40,17 +44,30 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from astropy.io import fits  # noqa: E402
 from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
+from lbl.core.math import mad_to_sigma
 
 RJD0 = 2400000.0
 #: the deviation below which the dry component is taken as not fitted at all
 FIXED_TOL = 1e-9
 
 
-def read_exponents(directory, modes=None):
-    """(rjd, water, dry, airmass, mode) of each cleaned spectrum in the
-    directory.
+def _first(header, keys, default=None):
+    """The value of the first of `keys` (a keyword, a list of them, or None)
+    that the header has."""
+    if keys is None:
+        return default
+    for key in (keys if isinstance(keys, (list, tuple)) else [keys]):
+        if key and key in header:
+            return header[key]
+    return default
 
-    `modes` filters on HIERARCH ESO INS MODE: two modes of the same
+
+def read_exponents(directory, keys, modes=None):
+    """(rjd, water, dry, airmass, mode) of each cleaned spectrum in the
+    directory. `keys` are the instrument's header keywords, {KW_*: keyword
+    or list}, as its LBL class sets them.
+
+    `modes` filters on the instrument mode (KW_DRS_MODE): two modes of the same
     spectrograph are two instruments, and mixing them on one figure suggests
     a dispersion that is only the difference between the two.
     """
@@ -60,17 +77,18 @@ def read_exponents(directory, modes=None):
             header = fits.getheader(path)
         except Exception:                                     # noqa: BLE001
             continue
-        if "TLPEH2O" not in header:
+        water = _first(header, keys.get("KW_TAU_H2O"))
+        if water is None:
             continue
-        mode = str(header.get("HIERARCH ESO INS MODE", "")).strip()
+        mode = str(_first(header, keys.get("KW_DRS_MODE"), "")).strip()
         if modes and mode not in modes:
             continue
-        bjd = header.get("HIERARCH ESO QC BJD")
+        bjd = _first(header, keys.get("KW_BJD"))
         rows.append((
             float(bjd) - RJD0 if bjd is not None else np.nan,
-            float(header["TLPEH2O"]),
-            float(header.get("TLPEOTR", np.nan)),
-            float(header.get("HIERARCH ESO TEL AIRM START", np.nan)),
+            float(water),
+            float(_first(header, keys.get("KW_TAU_OTHERS"), np.nan)),
+            float(_first(header, keys.get("KW_AIRMASS"), np.nan)),
             mode,
         ))
     if not rows:
@@ -96,7 +114,7 @@ def robust_sigma(values):
     good = values[np.isfinite(values)]
     if good.size < 2:
         return float("nan")
-    return float(1.4826 * np.median(np.abs(good - np.median(good))))
+    return float(mad_to_sigma * np.median(np.abs(good - np.median(good))))
 
 
 def dry_is_fixed(data):
@@ -181,10 +199,9 @@ def draw(data, out):
         axes[1].grid(alpha=0.3)
 
         # THE HISTOGRAM OF THE RESIDUAL, to see the dispersion at a glance.
-        # Measured on 2026-10-16 on the 92 exposures of the HAM mode, the dry
-        # component fitted freely: the dry/airmass ratio is 0.961 with a MAD
-        # of 0.026, that is, the dry column follows the airmass to within
-        # 2.6%. The width of this histogram IS that dispersion.
+        # With the dry component fitted freely, its width IS how closely the
+        # dry column follows the airmass, and the MAD in its title is that
+        # dispersion.
         good = np.isfinite(resid)
         if good.sum() > 3:
             ax_hist.hist(resid[good], bins=max(8, int(np.sqrt(good.sum()))),
@@ -223,19 +240,30 @@ def parse_args(argv=None):
     parser.add_argument("--science", required=True,
                         help="the directory of the CLEANED spectra"
                              " (<OBJECT>_tc)")
+    parser.add_argument("--instrument", required=True,
+                        help="LBL's name for the instrument (INSTRUMENT)")
+    parser.add_argument("--data-source", required=True,
+                        help="its data source (DATA_SOURCE)")
     parser.add_argument("--out", required=True)
-    parser.add_argument("--modes", default="HARPS",
-                        help="the modes kept, separated by commas;"
-                             " empty to keep them all")
+    parser.add_argument("--modes", default=None,
+                        help="the instrument modes kept (KW_DRS_MODE),"
+                             " separated by commas; all of them when not"
+                             " given")
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
     modes = [m for m in args.modes.split(",") if m] if args.modes else None
-    data = read_exponents(args.science, modes)
+    from lbl.pca2d import readers
+    inst = readers.profile(args.instrument, args.data_source)
+    keys = {name: inst.params[name] if name in inst.params else None
+            for name in ("KW_TAU_H2O", "KW_TAU_OTHERS", "KW_BJD",
+                         "KW_AIRMASS", "KW_DRS_MODE")}
+    data = read_exponents(args.science, keys, modes)
     if data is None:
-        raise SystemExit("no spectrum carrying TLPEH2O in %s" % args.science)
+        raise SystemExit("no spectrum carrying %s in %s"
+                         % (keys["KW_TAU_H2O"], args.science))
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     draw(data, args.out)
     print("%d exposures -> %s" % (len(data["rjd"]), args.out))

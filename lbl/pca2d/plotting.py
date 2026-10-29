@@ -86,28 +86,23 @@ def order_bounds(path):
             _, e_wave, _, _ = extensions_for(hdulist)
             wave = np.asarray(hdulist[e_wave].data, dtype=float)
     except Exception:                                         # noqa: BLE001
-        # A VISIBLE SPECTRUM HAS NO APERO EXTENSION, and the table only
-        # knows SPIRou and NIRPS: it raised, the caller swallowed the
-        # exception, and the parity was NEVER chosen. The two parities then
-        # stayed stacked on the same page, which puts two different sets of
-        # orders side by side and tilts what should be vertical. Seen on
-        # 2026-10-15 on the 626-630 nm window of HD 10700, 174 lines drawn
-        # instead of 87.
-        #
-        # So this goes through LBL's bridge, which can read any instrument,
-        # exactly as the cube read it.
+        # A SPECTRUM THAT IS NOT AN APERO t.fits HAS NO SUCH EXTENSION. Had
+        # this stopped here, the parity would never be chosen and the two
+        # parities would stay stacked on the same page, two different sets
+        # of orders side by side. So this goes through LBL's class, which
+        # can read any instrument, exactly as the cube read it.
         from astropy.io import fits
 
         from . import readers as _readers
         name = str(fits.getheader(path).get("INSTRUME", "")).strip().upper()
-        # THE SOURCE IS MEASURED, NOT GUESSED. An instrument has several
-        # reading classes (HARPS: ORIG, ESO, ESSP) and they do not read the
-        # same file: one wants header polynomials that this file does not
-        # have. So the ones LBL declares are tried and the first that
-        # returns a grid is kept, which is also the only way to know it
-        # without the run's configuration.
+        # THE SOURCE IS MEASURED, NOT GUESSED. An instrument can have several
+        # reading classes, and they do not read the same file: one wants
+        # header polynomials that this file does not have. So the ones LBL
+        # declares are tried and the first that returns a grid is kept,
+        # which is also the only way to know it without the run's
+        # configuration.
         wave = None
-        for source in _readers.KNOWN.get(name, ()):
+        for source in _readers.sources_of(name):
             try:
                 wave = np.atleast_2d(np.asarray(
                     _readers.read(path, name, source)["wave"], dtype=float))
@@ -271,7 +266,7 @@ def source_directory(cube_path):
         return None
     try:
         from .config import read_yaml, spectra_dir
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             cfg = read_yaml(fh) or {}
         # the object's own folder: input.directory is the root it hangs from,
         # and a lookup in the root found no file, so no water row, on every
@@ -365,7 +360,7 @@ def write_correlation_table(rho, comps, labels, path):
     """The same numbers as plot_correlations, machine-readable."""
     import csv
 
-    with open(path, "w", newline="") as fh:
+    with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(["component", "quantity", "spearman_rho"])
         for i, (name, _) in enumerate(comps):
@@ -439,6 +434,7 @@ def raw_log_flux_window(cube_dir, source_dir, names, parities, grid, a0, b0):
     import numpy as np
 
     from . import cache as _cache
+    from . import readers as _readers
     from . import tfits as sptf
     from .config import load_config, spectra_dir
 
@@ -455,7 +451,10 @@ def raw_log_flux_window(cube_dir, source_dir, names, parities, grid, a0, b0):
         stored = {}
         for name in sorted({os.path.basename(str(v)) for v in names}):
             try:
-                payload = sptf.read_tfits(os.path.join(directory, name))
+                # as the cube read it: a t.fits by tfits, anything else
+                #   through the instrument's LBL class
+                payload = _readers._read_any(os.path.join(directory, name),
+                                             config)
             except Exception:                                 # noqa: BLE001
                 continue
             stored[name] = sptf.raw_block(payload, grid, a0, b0, config)
@@ -468,7 +467,7 @@ def raw_log_flux_window(cube_dir, source_dir, names, parities, grid, a0, b0):
         if block is not None:
             # a snippet's two rows are the two ORDER parities, which is what the
             # detector has. A joint cube labels its rows 2 * object + parity, so
-            # the label itself runs 0..2N-1 and indexed raw it walked off the end
-            # of the block at the first row of the second object (2026-09-13).
+            # the label itself runs 0..2N-1, and indexed raw it would walk off
+            # the end of the block at the first row of the second object.
             out[i] = block[int(parities[i]) % block.shape[0]]
     return out

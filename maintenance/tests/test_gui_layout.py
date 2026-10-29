@@ -1,6 +1,6 @@
 """The data source a folder's files say by their layout (targets.py), and
-the wrap that refuses another: the CADC's t.fits run as APERO stopped LBL on
-the first one (2026-10-24)."""
+the wrap that refuses another: the CADC's t.fits run as APERO's stop LBL on
+the first one."""
 import numpy as np
 from astropy.io import fits
 
@@ -69,9 +69,10 @@ def test_the_commented_wrap_reads_back(tmp_path):
     assert found["MYKEY"] == 3
 
 
-def test_an_old_window_wrap_is_written_commented():
-    # the page can post a wrap made before the comments were: same values,
-    #   so the window's own, commented, is written; one edited by hand stays
+def test_a_bare_window_wrap_is_written_commented():
+    # the page can post the window's wrap without its comments: same
+    #   values, so the window's own, commented, is written; one edited by
+    #   hand stays as it is
     rparams = dict(INSTRUMENT="SPIROU", DATA_SOURCE="CADC", DATA_DIR="/x",
                    DATA_TYPES=["SCIENCE"], OBJECT_SCIENCE=["A"],
                    OBJECT_COMPARISON=["A"], OBJECT_TEFF=[3500],
@@ -104,8 +105,8 @@ def test_the_joint_fit_is_the_default_for_several_targets_only(tmp_path):
 
 def test_a_local_harps_folder_gets_its_files_pattern(tmp_path):
     # HARPS read as ORIG: LBL's default ('*.fits') says nothing of the
-    #   files, and PCA2D then took the ESO archive's *_S2D_A.fits (GJ 1214,
-    #   2026-10-25); the wrap names the e2ds
+    #   files, and PCA2D would take the ESO archive's *_S2D_A.fits and find
+    #   no e2ds; the wrap names them
     from lbl.gui import wrapgen
     folder = tmp_path / "science" / "GJ1214"
     folder.mkdir(parents=True)

@@ -118,9 +118,9 @@ def note_page(pdf_path, title, text):
 def draw(members, args):
     # PER STAR AND PER NIGHT. A joint cube's members are every star's, and two
     #   stars observed the same night share its label: taken by the night
-    #   alone they made one "night" whose BERV median mixed both stars
-    #   (2026-10-24). Each star's own cube coadds its own exposures, so a
-    #   night here is a star's night
+    #   alone they would make one "night" whose BERV median mixes both stars.
+    #   Each star's own cube coadds its own exposures, so a night here is a
+    #   star's night
     stars_of = row_objects(args.cube)
     stars = np.array([stars_of.get(os.path.basename(str(r)), "")
                       for r in members["row"]])
@@ -236,7 +236,7 @@ def main(argv=None):
     title = "The rows of the fit: nights and BERV bundles"
     if members is None:
         note_page(args.out, title, "this cube keeps no list of the exposures in"
-                  " each row (it was built before members.csv existed)")
+                  " each row (no members.csv with BERVs)")
         log("  not drawn: no members.csv with BERVs in %s" % args.cube, "warn")
         return 0
     groups = [str(g) for g in members["group"]]

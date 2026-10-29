@@ -1,10 +1,10 @@
 """The generalised Lomb-Scargle periodogram (Zechmeister & Kuerster 2009,
-floating mean, weighted) and its frequency grid, for the report's
-periodogram page.
+A&A 496, 577, https://doi.org/10.1051/0004-6361:200811296: floating mean,
+weighted) and its frequency grid, for the report's periodogram page.
 
-FROM KOLOA (github.com/eartigau/koloa, 584b4d2, module periodogram): these
-functions only, kept as they were there, so that LBL's report does not
-depend on koloa (its periodogram page vanished without it).
+The power at each frequency is built from weighted sums over the points
+(_gls_sums), all frequencies at once as matrix products, then combined as
+in eq. 5 of the paper (_gls_power): numpy only.
 """
 from typing import Dict, Optional
 
