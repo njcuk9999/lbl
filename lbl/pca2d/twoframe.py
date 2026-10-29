@@ -179,11 +179,11 @@ def parse_args(argv=None):
     p.add_argument("--max-mad-rounds", type=int, default=None,
                    help="how many times to reject and refit at most")
     p.add_argument("--holdout", choices=("even", "odd"), default=None,
-                   help="VALIDATION CROISEE: tenir hors du fit les nuits de"
-                        " rang pair ou impair (pca2d.diagnostics). Elles"
-                        " gardent leur place, sans poids, et l'etape correct"
-                        " les corrige par le reajustement de leurs amplitudes"
-                        " contre une base qui ne les a jamais vues")
+                   help="CROSS-VALIDATION: hold out of the fit the nights of"
+                        " even or odd rank (pca2d.diagnostics). They keep"
+                        " their place, with no weight, and the correct step"
+                        " corrects them by refitting their amplitudes against"
+                        " a basis that has never seen them")
     p.add_argument("--replot", action="store_true",
                    help="regenerate the figures from <outdir>/fit.npz and exit,"
                         " without loading a cube or refitting")
@@ -1101,13 +1101,13 @@ def update_earth(data, w, P, Q, a, b, shifter, delta, chunk, alpha=None,
 _LOAD_BLOCK_BYTES = 256 * 1024 * 1024
 
 
-#: LE SEUIL PAR PIXEL, EN SNR. Un pixel dont le bruit est sous ce rapport
-#: n'apporte rien au fit; au-dessus, il compte par son poids 1/sigma^2, et le
-#: fond d'une raie profonde reste donc dans le jeu. 5 est bas exprès: le but
-#: est d'ecarter le pixel mort, pas de trier par brillance. Mesure du
-#: 2026-10-16 sur HD 10700 (voir docs/harps_tc_result.md): l'ancien seuil de
-#: profondeur laissait 13.7% de NaN dans les spectres corriges et coutait a
-#: LBL le tiers de ses raies.
+#: THE PER-PIXEL THRESHOLD, IN SNR. A pixel whose noise is below this ratio
+#: brings nothing to the fit; above it, it counts by its weight 1/sigma^2,
+#: and the bottom of a deep line therefore stays in. 5 is low on purpose: the
+#: aim is to set aside the dead pixel, not to sort by brightness. Measured on
+#: 2026-10-16 on HD 10700 (see docs/harps_tc_result.md): the old depth
+#: threshold left 13.7% of NaN in the corrected spectra and cost LBL a third
+#: of its lines.
 DEFAULT_MIN_PIXEL_SNR = 5.0
 
 
@@ -1697,13 +1697,12 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
     vote in the median template and contributes a row of mostly-noise
     coefficients, so it is cheaper to drop it than to carry it.
 
-    `min_pixel_snr` est le seuil par PIXEL, en SNR, et il a remplace le
-    2026-10-16 un seuil de PROFONDEUR (`ln_clip_low`, qui valait -0.5 par
-    defaut ici et qu'aucun appelant ne passait). L'ancien tuait tout pixel
-    sous exp(-0.5) = 0.607 du continu, donc le fond de toute raie plus
-    profonde que 39%, c'est-a-dire l'endroit le plus riche en contenu de
-    vitesse. Passer `ln_clip_low` et `min_pixel_snr=None` retrouve l'ancien
-    comportement.
+    `min_pixel_snr` is the per-PIXEL threshold, in SNR, and on 2026-10-16
+    it replaced a DEPTH threshold (`ln_clip_low`, which defaulted to -0.5
+    here and which no caller passed). The old one killed every pixel below
+    exp(-0.5) = 0.607 of the continuum, hence the bottom of every line
+    deeper than 39%, that is the place richest in velocity content. Passing
+    `ln_clip_low` and `min_pixel_snr=None` restores the old behaviour.
 
     `with_sigma` returns the photon sigma of every sample too (NaN where the
     weight is zero), fifth: (grid, data, weights, meta, sigma). The weights
@@ -1778,25 +1777,24 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
                (lambda arr: np.array(arr[:, sl], dtype=dtype))
         d_blk = take(data)
         s_blk = take(sigma)
-        # over="ignore": le carre d'une sigma proche du maximum du type
-        # deborde et rend un poids nul, ce qui est la bonne reponse (un
-        # echantillon dont l'incertitude sature le type ne pese rien) mais
-        # numpy le signalait 45 fois par campagne. L'ARITHMETIQUE EST LAISSEE
-        # TELLE QUELLE: ecrire (1/s)^2 au lieu de 1/s^2 eviterait le
-        # debordement mais changerait le dernier bit de tous les autres
-        # poids, et tests/test_blocked_load.py compare les deux chemins de
-        # chargement bit pour bit, a juste titre. Vu le 2026-10-14 sur
-        # ESPRESSO, dont les recouvrements d'ordres laissent des echantillons
-        # au bord mourant d'un ordre.
+        # over="ignore": the square of a sigma close to the dtype's maximum
+        # overflows and gives a zero weight, which is the right answer (a
+        # sample whose uncertainty saturates the dtype weighs nothing) but
+        # numpy reported it 45 times per campaign. THE ARITHMETIC IS LEFT AS
+        # IT IS: writing (1/s)^2 instead of 1/s^2 would avoid the overflow
+        # but would change the last bit of every other weight, and
+        # tests/test_blocked_load.py compares the two loading paths bit for
+        # bit, rightly so. Seen on 2026-10-14 on ESPRESSO, whose order
+        # overlaps leave samples at the dying edge of an order.
         with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
             wb = np.where(np.isfinite(s_blk) & (s_blk > 0), 1.0 / s_blk ** 2, 0.0)
         wb[~np.isfinite(d_blk)] = 0.0
-        # LE SEUIL PAR PIXEL, et c'est ICI qu'il agit: le cube ne garde que
-        # data et sigma bruts, jamais les poids, donc ils sont refaits a chaque
-        # lecture. Il porte sur le SNR du pixel (1/sigma) et non sur sa
-        # profondeur, pour ne pas jeter le fond des raies profondes, qui est
-        # l'endroit le plus riche en contenu de vitesse. min_pixel_snr a None
-        # rend la main a ln_clip_low, l'ancien seuil de profondeur.
+        # THE PER-PIXEL THRESHOLD, and it is HERE that it acts: the cube
+        # keeps only raw data and sigma, never the weights, so they are
+        # rebuilt at every read. It applies to the pixel's SNR (1/sigma) and
+        # not to its depth, so as not to throw away the bottom of deep lines,
+        # which is the place richest in velocity content. min_pixel_snr at
+        # None hands control back to ln_clip_low, the old depth threshold.
         if min_pixel_snr is not None:
             with np.errstate(invalid="ignore", divide="ignore"):
                 wb[~(1.0 / s_blk >= float(min_pixel_snr))] = 0.0
@@ -2690,12 +2688,12 @@ def clip_weights(w0, residual, clip=3.0, min_spectra=20, sparse=False,
 
 
 def _clip_triplet(w):
-    """(rangees, colonnes, facteur) de ce que le dernier balayage a deprecie.
+    """(rows, columns, factor) of what the last sweep down-weighted.
 
-    Le facteur est le rapport du poids clipe au poids d'origine: 1 la ou la
-    boucle n'a rien change, moins la ou elle a doute. Vide quand le fit n'a pas
-    clipe du tout, et vide aussi pour des poids denses, que seuls les petits
-    cubes des tests produisent.
+    The factor is the ratio of the clipped weight to the original weight: 1
+    where the loop changed nothing, less where it had doubts. Empty when the
+    fit did not clip at all, and empty too for dense weights, which only the
+    tests' small cubes produce.
     """
     if w is None or not hasattr(w, "ptr"):
         return (np.empty(0, np.int32), np.empty(0, np.int32),
@@ -2987,12 +2985,12 @@ def main(argv=None):
     spill = spill_dir(rows, columns, args.dtype, args.cube, args.outdir)
     grid, data, w, meta = load_cube(args.cube, min_snr_frac=args.min_snr_frac,
                                     dtype=np.dtype(args.dtype), spill=spill)
-    # LA VALIDATION CROISEE, AVANT TOUTE MOYENNE. Les nuits tenues a l'ecart
-    # perdent leur poids ici, donc avant les moyennes par parite, l'etoile
-    # moyenne et le premier balayage: la base ne doit rien en apprendre, pas
-    # meme leur contribution au spectre moyen. Elles gardent leur place dans
-    # chaque tableau, comme une ligne rejetee par la coupure MAD, et sortent
-    # marquees `rejected` dans fit.npz.
+    # THE CROSS-VALIDATION, BEFORE ANY MEAN. The nights held out lose their
+    # weight here, so before the per-parity means, the mean star and the
+    # first sweep: the basis must learn nothing from them, not even their
+    # contribution to the mean spectrum. They keep their place in every
+    # array, like a row rejected by the MAD cut, and come out marked
+    # `rejected` in fit.npz.
     held = None
     if getattr(args, "holdout", None):
         from .diagnostics import holdout_rows
@@ -3467,8 +3465,8 @@ def main(argv=None):
         prev_chi2, flat = None, 0
         hit = 0.0
         a_prev = b_prev = None      # carried between iterations, see the clip step
-        # ce que le dernier balayage aura deprecie, pour la correction: None
-        # tant que la boucle n'a pas clipe (balayage 0, ou clip desactive)
+        # what the last sweep will have down-weighted, for the correction:
+        # None as long as the loop has not clipped (sweep 0, or clip off)
         last_clip = None
         # A sweep on a few hundred exposures takes minutes. There is no bar
         # over the sweeps: each phase INSIDE a sweep has its own, labelled
@@ -3507,14 +3505,13 @@ def main(argv=None):
                 # used to hold
                 w, hit = clip_weights(w0, resid_prev, clip=args.clip,
                                       sparse=True, desc="re-weighting, clip")
-                # CE QUE LA BOUCLE A CONCLU, garde pour la correction. Le
-                # facteur etait recalcule et jete a chaque balayage, donc les
-                # fichiers corriges ne savaient rien de ce que l'ajustement
-                # avait renonce a decrire: un echantillon juge indigne de
-                # contraindre le modele etait quand meme livre a LBL, corrige
-                # par un modele qu'il n'avait pas aide a construire
-                # (2026-09-25). Creux: 763 041 echantillons sur 197 millions
-                # sur TOI-2120.
+                # WHAT THE LOOP CONCLUDED, kept for the correction. The
+                # factor was recomputed and thrown away at every sweep, so
+                # the corrected files knew nothing of what the fit had given
+                # up describing: a sample judged unfit to constrain the
+                # model was still handed to LBL, corrected by a model it had
+                # not helped build (2026-09-25). Sparse: 763 041 samples out
+                # of 197 million on TOI-2120.
                 last_clip = w
 
             # ---- E-step: coefficients for both blocks at fixed bases --------
@@ -3814,8 +3811,8 @@ def main(argv=None):
         means, axis=0, weights=[np.sum(parity == g) for g in parity_groups])
     npz_path = os.path.join(args.outdir, "fit.npz")
     from .provenance import stamp as code_stamp
-    # le facteur du dernier balayage, en (rangee, colonne, facteur): ce que la
-    # correction lit pour masquer sous correct.weight_floor
+    # the last sweep's factor, as (row, column, factor): what the correction
+    # reads to mask below correct.weight_floor
     clip_rows, clip_cols, clip_factor = _clip_triplet(last_clip)
     np.savez_compressed(npz_path, bjd=bjd, a=a, b=b, P=P, Q=Q, alpha=alpha,
                         clip_rows=clip_rows, clip_cols=clip_cols,

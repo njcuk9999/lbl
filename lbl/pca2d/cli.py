@@ -73,15 +73,14 @@ SETTING_FLAGS = (
     ("--excursion-elements", "correct.excursion_elements", float,
      "how wide those windows go, in resolution elements of the instrument"),
     ("--weight-floor", "correct.weight_floor", float,
-     "NaN la ou la boucle a deprecie l'echantillon sous cette fraction de son"
-     " poids nominal: le poids du fit est le masque"),
+     "NaN where the loop down-weighted the sample below this fraction of its"
+     " nominal weight: the fit's weight is the mask"),
     ("--bias-nsig", "correct.bias_nsig", float,
-     "retirer de toutes les poses les colonnes dont le residu MOYEN sur les"
-     " poses depasse ce nombre de sigmas: ce qui est ancre dans le referentiel"
-     " de l'observateur et a un signe"),
+     "drop from every exposure the columns whose MEAN residual over the"
+     " exposures exceeds this many sigmas: what is anchored in the observer's"
+     " frame and has a sign"),
     ("--bias-elements", "correct.bias_elements", float,
-     "la largeur sur laquelle cette moyenne est sommee, en elements de"
-     " resolution"),
+     "the width over which that mean is summed, in resolution elements"),
     ("--excess-nsig", "correct.excess_nsig", float,
      "drop from every exposure the observer columns whose scatter over the"
      " exposures is this many sigmas above the noise"),
@@ -1111,13 +1110,13 @@ def run_cube(plan):
     argv = [plan["written_config"]]
     if not cfg["output"]["use_cache"]:
         argv.append("--no-cache")
-    # LE REPERE DEMANDE EST RESPECTE. build.main ramene registration.frame a
-    # 'observer' sauf si on le lui interdit, parce que c'est le reglage de
-    # presque tous les runs et qu'un frame laisse par megarde dans un fichier
-    # de config coutait vingt minutes de cube inutile. Mais quand la config
-    # resolue demande vraiment un autre repere, c'est un choix et non un
-    # oubli: le passe-haut contre un template median, par exemple, n'a de
-    # sens que si les raies stellaires sont co-incidentes.
+    # THE REQUESTED FRAME IS RESPECTED. build.main brings registration.frame
+    # back to 'observer' unless told not to, because that is the setting of
+    # almost every run and a frame left by mistake in a config file cost
+    # twenty minutes of useless cube. But when the resolved config really
+    # asks for another frame, it is a choice and not an oversight: the
+    # high-pass against a median template, for example, only makes sense if
+    # the stellar lines are co-incident.
     if (cfg.get("registration") or {}).get("frame", "observer") != "observer":
         argv.append("--allow-any-frame")
     build_main(argv)
@@ -1199,12 +1198,12 @@ def run_correct(plan):
         # whatever the cube's rows are
         mode = list(mode) + ["--refit"]
     if "--config" not in mode:
-        # LA CONFIGURATION PART TOUJOURS, PAS SEULEMENT POUR REAJUSTER. Elle
-        # dit par quel lecteur les spectres ont ete lus, donc quelle extension
-        # porte le flux a remplacer: sans elle, un instrument qui passe par le
-        # pont de LBL retombe sur la table d'APERO et la correction s'arrete
-        # sur « unsupported INSTRUME 'HARPS' ». Vu le 2026-10-14 avec
-        # correct.weight: flux, le seul chemin qui ne reajuste pas.
+        # THE CONFIGURATION ALWAYS GOES ALONG, NOT ONLY TO REFIT. It says by
+        # which reader the spectra were read, hence which extension carries
+        # the flux to replace: without it, an instrument that goes through
+        # LBL's bridge falls back on APERO's table and the correction stops
+        # on "unsupported INSTRUME 'HARPS'". Seen on 2026-10-14 with
+        # correct.weight: flux, the only path that does not refit.
         mode = list(mode) + ["--config", plan["written_config"]]
     if "--refit" in mode:
         log("the fit's rows are nights: every exposure of every fitted night is"
@@ -1309,8 +1308,8 @@ def clip_args(cfg, quiet=False):
         out += ["--excursion-nsig", str(float(excursion)),
                 "--excursion-samples", str(int(samples))]
     if floor:
-        say("et mettant a NaN ce que la boucle a deprecie sous %.2f de son"
-            " poids nominal: le poids du fit est le masque" % float(floor),
+        say("and setting to NaN what the loop down-weighted below %.2f of its"
+            " nominal weight: the fit's weight is the mask" % float(floor),
             "info")
         out += ["--weight-floor", str(float(floor))]
     bias = corr.get("bias_nsig")
@@ -1331,9 +1330,9 @@ def clip_args(cfg, quiet=False):
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         wide = element_samples(resolution, cfg["domain"]["dv"],
                                corr.get("bias_elements") or 2.0)
-        say("et retirant de toutes les poses les colonnes dont le residu MOYEN"
-            " sur les poses, somme sur %d echantillons, depasse %.0f sigmas:"
-            " ce qui est ancre dans le referentiel de l'observateur"
+        say("and dropping from every exposure the columns whose MEAN residual"
+            " over the exposures, summed over %d samples, exceeds %.0f sigmas:"
+            " what is anchored in the observer's frame"
             % (wide, float(bias)), "info")
         out += ["--bias-nsig", str(float(bias)),
                 "--bias-samples", str(int(wide))]
@@ -1375,12 +1374,12 @@ def clip_args(cfg, quiet=False):
 
 
 def diagnostic_args(cfg):
-    """Les tests de diagnostic de l'etape correct (pca2d.diagnostics): le
-    support tellurique et la permutation des amplitudes entre nuits.
+    """The diagnostic tests of the correct step (pca2d.diagnostics): the
+    telluric support and the permutation of the amplitudes between nights.
 
-    A part de shrink_args, qui part aussi vers la figure de sequence: ces deux
-    options ne sont pas des corrections a dessiner mais des questions posees
-    aux fichiers, et la figure ne les connait pas."""
+    Separate from shrink_args, which also goes to the sequence figure: these
+    two options are not corrections to draw but questions asked of the
+    files, and the figure does not know them."""
     corr = cfg.get("correct") or {}
     out = []
     if corr.get("q_support"):
@@ -1487,23 +1486,22 @@ def _velocity_pages(plan):
 
 
 def _check_lbl_tree(directory):
-    """Refuser de lancer LBL sur un arbre dont un dossier est un lien MORT.
+    """Refuse to launch LBL on a tree in which a folder is a DEAD link.
 
-    CE QUI S'EST PASSE le 2026-10-15 a 22h55. outputs/lbl/ portait dix liens
-    vers /Volumes/irrisor, un disque externe qui n'etait pas monte. LBL s'est
-    arrete au bout de 1.9 seconde sur une FileExistsError en voulant creer son
-    dossier de log, et le journal de la nuit ne disait rien de plus: les
-    quatre etapes d'avant avaient reussi, donc la chaine avait l'air d'etre
-    allee au bout.
+    WHAT HAPPENED on 2026-10-15 at 22:55. outputs/lbl/ held ten links to
+    /Volumes/irrisor, an external disk that was not mounted. LBL stopped
+    after 1.9 seconds on a FileExistsError while trying to create its log
+    folder, and the night's log said nothing more: the four steps before
+    had succeeded, so the chain looked as if it had gone to the end.
 
-    Le piege est que Path.exists() SUIT le lien: un lien casse n'existe pas
-    pour lui, donc io.make_dir de LBL passe dans sa branche "creer", et le
-    mkdir echoue parce que le nom, lui, est bien pris. Les deux moities du
-    test portent sur des choses differentes.
+    The trap is that Path.exists() FOLLOWS the link: a broken link does not
+    exist for it, so LBL's io.make_dir goes into its "create" branch, and
+    the mkdir fails because the name, for its part, is indeed taken. The
+    two halves of the test are about different things.
 
-    On regarde donc ici, une fois, avant de donner l'arbre a LBL, et on dit
-    quel lien et vers quoi plutot que de laisser LBL mourir sur un message qui
-    ne nomme pas la cause.
+    So we look here, once, before handing the tree to LBL, and say which
+    link and to what rather than letting LBL die on a message that does not
+    name the cause.
     """
     broken = []
     try:

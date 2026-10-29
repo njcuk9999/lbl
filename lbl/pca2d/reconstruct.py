@@ -143,17 +143,17 @@ def parse_args(argv=None):
                         " pipeline passes the instrument's resolution element"
                         " times correct.excursion_elements")
     p.add_argument("--weight-floor", type=float, default=None,
-                   help="NaN la ou la BOUCLE a deprecie l'echantillon sous"
-                        " cette fraction de son poids nominal: le poids du fit"
-                        " est le masque (clipped_weights_mask). 0.5 = |z| >"
-                        " 4.24 sigma avec le clip a 3")
+                   help="NaN where the LOOP down-weighted the sample below"
+                        " this fraction of its nominal weight: the fit's"
+                        " weight is the mask (clipped_weights_mask). 0.5 ="
+                        " |z| > 4.24 sigma with the clip at 3")
     p.add_argument("--bias-nsig", type=float, default=None,
-                   help="avec --bias-samples: retirer de toutes les poses les"
-                        " colonnes dont le residu MOYEN sur les poses depasse"
-                        " ce nombre de sigmas (outliers.coherent_bias)")
+                   help="with --bias-samples: drop from every exposure the"
+                        " columns whose MEAN residual over the exposures"
+                        " exceeds this many sigmas (outliers.coherent_bias)")
     p.add_argument("--bias-samples", type=int, default=None,
-                   help="la largeur sur laquelle cette moyenne est sommee, en"
-                        " echantillons de grille")
+                   help="the width over which that mean is summed, in grid"
+                        " samples")
     p.add_argument("--excess-nsig", type=float, default=None,
                    help="with --excess-samples: drop from every exposure the"
                         " observer columns whose chi2 over the exposures is this"
@@ -236,13 +236,14 @@ def parse_args(argv=None):
                         " line set is still ONE for the whole campaign, decided"
                         " by a majority rather than unanimously")
     p.add_argument("--permute-b", type=int, default=None, metavar="SEED",
-                   help="TEST NUL (pca2d.diagnostics): chaque nuit recoit les"
-                        " amplitudes observateur d'une AUTRE nuit, tiree avec"
-                        " cette graine. Ce n'est pas une correction")
+                   help="NULL TEST (pca2d.diagnostics): each night receives"
+                        " the observer amplitudes of ANOTHER night, drawn with"
+                        " this seed. This is not a correction")
     p.add_argument("--q-support", type=float, default=None, metavar="T",
-                   help="ne diviser la base observateur que la ou la"
-                        " transmission tellurique du cube descend sous T sur au"
-                        " moins une pose (pca2d.diagnostics). Demande --cube")
+                   help="divide out the observer basis only where the"
+                        " cube's telluric transmission drops below T in at"
+                        " least one exposure (pca2d.diagnostics). Needs"
+                        " --cube")
     p.add_argument("--overwrite", action="store_true")
     p.add_argument("--workers", type=int, default=1,
                    help="exposures corrected at once, in threads (1: one after"
@@ -680,21 +681,21 @@ def star_support(model):
 
 
 def clipped_weights_mask(cube, fit_path, floor=0.5):
-    """Les echantillons que la BOUCLE a deprecies sous `floor`: nom -> (2, grille).
+    """The samples the LOOP down-weighted below `floor`: name -> (2, grid).
 
-    Le poids de la boucle EST le masque (2026-09-25): un echantillon ecoute a
-    moins de la moitie de son poids nominal n'est pas une demi-mesure, c'est
-    une mesure que le modele n'a pas decrite, et la livrer a LBL corrigee par
-    un modele qu'elle n'a pas aide a construire n'a pas de sens.
+    The loop's weight IS the mask (2026-09-25): a sample listened to at less
+    than half its nominal weight is not half a measurement, it is a
+    measurement the model did not describe, and handing it to LBL corrected
+    by a model it did not help build makes no sense.
 
-    PAR POSE, et non commun a toutes, parce que c'est ce que la chose est: sur
-    TOI-2120 le facteur tombe sous 0.5 pour 0.388% des echantillons, 2415 par
-    pose, et au-dela de 20% des poses il ne reste que 13 colonnes sur 577 000.
-    Ce sont des accidents locaux, pas des regions, et les masquer partout
-    reviendrait a jeter 316 fois trop. Le jeu de raies commun, lui, continue de
-    venir de fit_weights_mask.
+    PER EXPOSURE, and not common to all, because that is what the thing is:
+    on TOI-2120 the factor falls below 0.5 for 0.388% of the samples, 2415
+    per exposure, and beyond 20% of the exposures only 13 columns out of
+    577 000 remain. These are local accidents, not regions, and masking them
+    everywhere would throw away 316 times too much. The common line set, for
+    its part, still comes from fit_weights_mask.
 
-    Un facteur de 0.5 est |z| > clip * sqrt(2), soit 4.24 sigma a clip = 3.
+    A factor of 0.5 is |z| > clip * sqrt(2), i.e. 4.24 sigma at clip = 3.
     """
     fit = np.load(fit_path)
     if "clip_factor" not in getattr(fit, "files", []):
@@ -760,21 +761,21 @@ def fit_weights_mask(cube, mode="exposure", share=1.0):
                    else np.zeros(w.shape[0], dtype=int))
         for i, name in enumerate(names):
             names_of.setdefault(str(objects[i]), set()).add(name)
-        # `share` EST LA FRACTION DE POSES QU'IL FAUT POUR GARDER UN
-        # ECHANTILLON, et 1.0 est l'intersection stricte, celle d'avant.
+        # `share` IS THE FRACTION OF EXPOSURES NEEDED TO KEEP A SAMPLE, and
+        # 1.0 is the strict intersection, the one from before.
         #
-        # Pourquoi en faire un reglage: l'intersection exige l'accord de
-        # TOUTES les poses, ce qui est peu couteux quand elles couvrent le
-        # meme intervalle, et tres couteux quand elles ne le couvrent pas.
-        # Mesure le 2026-10-15 sur tau Ceti: 21.7% de pixels a NaN avec la
-        # grille livree, 43.0% avec input.to_observer, ou chaque pose est
-        # decalee de son propre BERV et ou l'intersection de 85 intervalles
-        # decales est bien plus petite que chacun d'eux.
+        # Why make it a setting: the intersection requires the agreement of
+        # ALL exposures, which is cheap when they cover the same interval,
+        # and very expensive when they do not. Measured on 2026-10-15 on tau
+        # Ceti: 21.7% of pixels NaN with the delivered grid, 43.0% with
+        # input.to_observer, where each exposure is shifted by its own BERV
+        # and where the intersection of 85 shifted intervals is much smaller
+        # than each of them.
         #
-        # Baisser le seuil ne rend pas un masque par pose (mask: exposure,
-        # essaye: 693 m/s, parce que chaque pose garde alors un AUTRE jeu de
-        # raies): le jeu reste UNIQUE pour la campagne, il est seulement
-        # decide a la majorite plutot qu'a l'unanimite.
+        # Lowering the threshold does not give a per-exposure mask (mask:
+        # exposure, tried: 693 m/s, because each exposure then keeps a
+        # DIFFERENT set of lines): the set stays ONE for the campaign, it is
+        # only decided by majority rather than unanimously.
         fraction = float(share)
         for group in names_of.values():
             if fraction >= 1.0:
@@ -832,22 +833,23 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
 
     with sptf.robust_open(path) as hdulist:
         out = fits.HDUList([h.copy() for h in hdulist])
-    # LE FICHIER CORRIGE EST DU MEME FORMAT QUE L'ORIGINAL. C'est une copie
-    # dont on remplace le flux, et rien d'autre: un t.fits reste un t.fits,
-    # un S2D de l'ESO reste un S2D, lisible par ce qui lisait le premier.
-    # Reste a savoir OU est le flux, et le nom change d'un instrument a
-    # l'autre: FluxAB sur SPIRou, SCIDATA sur HARPS. La table d'extensions ne
-    # connait qu'APERO, donc pour les instruments lus par le pont c'est le
-    # pont qui repond, et la grille vient de la classe de LBL plutot que
-    # d'une extension dont le nom n'existe pas ici (2026-10-14).
+    # THE CORRECTED FILE HAS THE SAME FORMAT AS THE ORIGINAL. It is a copy
+    # whose flux is replaced, and nothing else: a t.fits stays a t.fits, an
+    # ESO S2D stays an S2D, readable by whatever read the first one. What
+    # remains is knowing WHERE the flux is, and the name changes from one
+    # instrument to the next: FluxAB on SPIRou, SCIDATA on HARPS. The
+    # extension table knows only APERO, so for the instruments read by the
+    # bridge it is the bridge that answers, and the grid comes from LBL's
+    # class rather than from an extension whose name does not exist here
+    # (2026-10-14).
     bridged = config is not None and not _readers.reads_natively(config)
     if bridged:
         payload = _readers.read_any(path, config)
         e_flux = payload["meta"].get("flux_extension")
         if e_flux is None:
             raise SystemExit(
-                "%s: impossible de retrouver l'extension du flux, donc rien"
-                " n'est ecrit plutot que d'ecrire au mauvais endroit"
+                "%s: cannot find the flux extension, so nothing is written"
+                " rather than writing in the wrong place"
                 % os.path.basename(path))
         flux = np.asarray(out[e_flux].data, dtype=np.float64)
         wave = np.atleast_2d(np.asarray(payload["wave"], dtype=np.float64))
@@ -889,8 +891,8 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
     # measurement of no flux and would be believed.
     masked = 0
     if max_sky and not bridged:
-        # aucun spectrographe du visible ne livre l'emission du ciel par pose:
-        # il n'y a pas d'extension a lire, et max_sky est sans objet
+        # no visible spectrograph delivers the sky emission per exposure:
+        # there is no extension to read, and max_sky does not apply
         e_sky = sptf.sky_extension_for(out)
         if e_sky:
             sky = np.asarray(out[e_sky].data, dtype=np.float64)
@@ -970,17 +972,17 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
     stem = stem[:-len("t.fits")] if stem.endswith("t.fits") else stem.rsplit(".", 1)[0]
     new = os.path.join(outdir, "%st_%d-%d.fits" % (stem, k, j))
     if bridged:
-        # LBL retrouve ses petits par le nom du fichier: sa classe HARPS_ESO
-        # cherche des *_S2D_A.fits, et un fichier appele ..._S2D_At_0-7.fits
-        # ne serait plus lu par personne. On garde donc le suffixe que
-        # l'instrument attend et on met la signature avant lui.
+        # LBL finds its files by their name: its HARPS_ESO class looks for
+        # *_S2D_A.fits, and a file called ..._S2D_At_0-7.fits would no
+        # longer be read by anyone. So the suffix the instrument expects is
+        # kept and the signature goes before it.
         base, _, tail = stem.rpartition("_")
         if base and tail:
             new = os.path.join(outdir, "%s_%d-%d_%s.fits" % (base, k, j, tail))
     if keep_name:
-        # LE NOM DE LA SOURCE, TEL QUEL: le dossier science/<objet>_pca2d dit
-        # deja ce que sont ces fichiers, et LBL les trouve avec le motif de
-        # l'instrument, comme ceux de science/<objet>_tc
+        # THE SOURCE'S NAME, AS IS: the folder science/<object>_pca2d already
+        # says what these files are, and LBL finds them with the
+        # instrument's pattern, like those of science/<object>_tc
         new = os.path.join(outdir, os.path.basename(path))
     os.makedirs(outdir, exist_ok=True)
     if os.path.exists(new) and not overwrite:
@@ -1046,13 +1048,13 @@ def night_index(coeffs):
 
 
 def night_row_names(cube):
-    """Le nom que le cube donne a chaque nuit: {nuit: nom de sa ligne}.
+    """The name the cube gives each night: {night: name of its row}.
 
-    Sur un cube empile par nuit, la ligne d'une nuit porte le nom de sa
-    PREMIERE pose (meta.fits, colonne filename), et tout ce qui est calcule par
-    ligne (les coupures du residu, le plancher de la boucle) est range sous ce
-    nom. La nuit est floor(BJD - 0.5), la convention de night_index et du
-    constructeur du cube. Les deux parites d'une nuit partagent le meme nom.
+    On a cube stacked per night, a night's row carries the name of its FIRST
+    exposure (meta.fits, filename column), and everything computed per row
+    (the residual's cuts, the loop's floor) is stored under that name. The
+    night is floor(BJD - 0.5), the convention of night_index and of the cube
+    builder. The two parities of a night share the same name.
     """
     from astropy.table import Table
     meta = Table.read(os.path.join(cube, "meta.fits"))
@@ -1080,15 +1082,14 @@ def member_row_names(cube):
 
 
 def cut_key(path, row, names_by_night, members=None):
-    """Sous quel nom chercher les coupures d'une pose.
+    """Under which name to look up an exposure's cuts.
 
-    Sans cube empile (names_by_night None), le nom du fichier lui-meme: chaque
-    pose a sa ligne. Avec, le nom de la ligne de SA nuit, retrouvee par le BJD
-    de la ligne de coefficients que rows_by_night lui a donnee. Avant le
-    2026-10-17, c'etait toujours le nom du fichier, si bien que seule la
-    premiere pose de chaque nuit recevait les coupures (mesure: GJ 1, 2658
-    echantillons coupes sur la premiere pose et 0 sur les autres; Proxima
-    7790 contre 0).
+    Without a stacked cube (names_by_night None), the file's own name: each
+    exposure has its row. With one, the name of the row of ITS night, found
+    from the BJD of the coefficient row that rows_by_night gave it. Before
+    2026-10-17, it was always the file name, so that only the first exposure
+    of each night received the cuts (measured: GJ 1, 2658 samples cut on the
+    first exposure and 0 on the others; Proxima 7790 against 0).
     """
     own = os.path.basename(path)
     if members:
@@ -1233,14 +1234,14 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
     if not n_written or not good.any():
         return None, None
 
-    # LE MEME PASSE-HAUT QUE LE CUBE, et pas un autre. Avec
-    # highpass.against_template, resample_exposure rend du ln(flux) brut et
-    # laisse le filtre a la seconde passe; il faut donc la refaire ici, avec
-    # LE MEME template, sans quoi on retranche des composantes ajustees sur un
-    # residu passe-haut a un spectre qui ne l'est pas. Vu le 2026-10-16: les
-    # valeurs sortaient de mediane +10.14 au lieu de +0.017, et le bruit des
-    # spectres corriges doublait (0.0148 contre 0.0075) pendant que les river
-    # plots, eux, restaient propres.
+    # THE SAME HIGH-PASS AS THE CUBE, and not another one. With
+    # highpass.against_template, resample_exposure returns raw ln(flux) and
+    # leaves the filter to the second pass; so it has to be redone here, with
+    # THE SAME template, otherwise components fitted on a high-passed
+    # residual are subtracted from a spectrum that is not. Seen on
+    # 2026-10-16: the values came out with a median of +10.14 instead of
+    # +0.017, and the noise of the corrected spectra doubled (0.0148 against
+    # 0.0075) while the river plots, for their part, stayed clean.
     if (config.get("highpass") or {}).get("against_template"):
         from . import cube as _cube
         from . import preprocess as _prep
@@ -1428,12 +1429,12 @@ def correct_many(model, args):
         pairs = [(args.file, None)]
     covered = []
     shifter = None
-    # LA CONFIGURATION SERT AUSSI A ECRIRE, PAS SEULEMENT A REAJUSTER. Elle dit
-    # par quel lecteur le spectre a ete lu, donc quelle extension porte le flux
-    # a remplacer et dans quel repere sont ses longueurs d'onde. Elle n'etait
-    # chargee que sous --refit, si bien qu'une correction sans reajustement
-    # (correct.weight: flux) retombait sur la table d'extensions d'APERO et
-    # s'arretait sur « unsupported INSTRUME 'HARPS' » (2026-10-14).
+    # THE CONFIGURATION IS ALSO USED TO WRITE, NOT ONLY TO REFIT. It says by
+    # which reader the spectrum was read, hence which extension carries the
+    # flux to replace and in which frame its wavelengths are. It was loaded
+    # only under --refit, so that a correction without a refit
+    # (correct.weight: flux) fell back on APERO's extension table and
+    # stopped on "unsupported INSTRUME 'HARPS'" (2026-10-14).
     if getattr(args, "weight", "flux") == "velocity":
         # measuring b in another metric means measuring it again
         args.refit = True
@@ -1478,24 +1479,24 @@ def correct_many(model, args):
     else:
         log("  no --cube: samples the fit gave no weight to keep their flux,"
             " which panel 3 of the sequence figure does not show", "warn")
-    # ce que la BOUCLE a deprecie sous le plancher: un masque par pose, lu du
-    # fit lui-meme et non recalcule ici
+    # what the LOOP down-weighted below the floor: a mask per exposure, read
+    # from the fit itself and not recomputed here
     floor = getattr(args, "weight_floor", None)
     floored_by_file = None
     if floor:
         fit_path = os.path.join(os.path.dirname(os.path.abspath(args.fits)),
                                 "fit.npz")
         if not getattr(args, "cube", None) or not os.path.exists(fit_path):
-            raise SystemExit("--weight-floor a besoin de --cube et du fit"
-                             " a cote de %s" % args.fits)
+            raise SystemExit("--weight-floor needs --cube and the fit"
+                             " beside %s" % args.fits)
         floored_by_file = clipped_weights_mask(args.cube, fit_path, floor)
         if floored_by_file is None:
-            log("  le fit ne porte pas le facteur de la boucle (fit d'avant"
-                " 2026-09-26): --weight-floor ne peut rien masquer", "warn")
+            log("  the fit does not carry the loop's factor (fit from before"
+                " 2026-09-26): --weight-floor cannot mask anything", "warn")
         else:
             total = sum(int(v.sum()) for v in floored_by_file.values())
-            log("  la boucle a deprecie %d echantillons sous %.2f de leur poids"
-                " nominal, soit %.0f par pose: ils deviennent NaN"
+            log("  the loop down-weighted %d samples below %.2f of their"
+                " nominal weight, i.e. %.0f per exposure: they become NaN"
                 % (total, float(floor), total / max(len(floored_by_file), 1)),
                 "value")
     clipped_by_file = None
@@ -1576,9 +1577,9 @@ def correct_many(model, args):
                len(clipped_by_file)), "value")
         drift = clip_report.get("bias")
         if drift:
-            log("  %d des %d colonnes mesurees portent un residu MOYEN"
-                " significatif sur les poses, %.2f%% du domaine; c'est %d"
-                " echantillons de plus sur les %d poses"
+            log("  %d of the %d measured columns carry a significant MEAN"
+                " residual over the exposures, %.2f%% of the domain; that is"
+                " %d more samples over the %d exposures"
                 % (drift["n_columns"], drift["measured"],
                    100.0 * drift["n_columns"] / max(drift["measured"], 1),
                    drift["added"], len(clipped_by_file)), "value")
@@ -1679,10 +1680,10 @@ def correct_many(model, args):
                 % (j + 1, " (smoothed)" if j in smooth_which else "",
                    100 * np.mean(kept > 0.9), 100 * np.mean(kept == 0),
                    float(kept.mean())), "value")
-    # LE SUPPORT TELLURIQUE (diagnostic). Applique a la base que l'on DIVISE,
-    # pas a celle contre laquelle le reajustement resout: comme le
-    # retrecissement, il change ce qui sort des fichiers, pas la mesure des
-    # amplitudes.
+    # THE TELLURIC SUPPORT (diagnostic). Applied to the basis that is
+    # DIVIDED out, not to the one the refit solves against: like the
+    # shrinkage, it changes what comes out of the files, not the measurement
+    # of the amplitudes.
     q_support = getattr(args, "q_support", None)
     if q_support:
         if not getattr(args, "cube", None):
@@ -1719,7 +1720,7 @@ def correct_many(model, args):
             " does to a velocity is its overlap with the star's derivative"
             % (velocity_fwhm, float(model["dv"]),
                float(getattr(args, "velocity_floor", VELOCITY_FLOOR))), "info")
-    # sur un cube empile par nuit, les coupures sont rangees par nuit
+    # on a cube stacked per night, the cuts are stored per night
     names_by_night = None
     members = None
     if args.by_night and getattr(args, "cube", None) and (
@@ -1775,8 +1776,8 @@ def correct_many(model, args):
         # mask; on a cube of nights the cube's rows are not this file
         alive = mask_for(mask_mode, own_alive, alive_by_file,
                          os.path.basename(path))
-        # LES COUPURES DE LA NUIT, PAS CELLES DU FICHIER: sur un cube empile
-        # elles sont rangees sous le nom de la ligne de la nuit (cut_key)
+        # THE NIGHT'S CUTS, NOT THOSE OF THE FILE: on a stacked cube they
+        # are stored under the name of the night's row (cut_key)
         key = cut_key(path, row, names_by_night, members)
         clipped = (clipped_by_file.get(key)
                    if clipped_by_file is not None else None)
@@ -1785,8 +1786,8 @@ def correct_many(model, args):
             if floored is not None:
                 clipped = floored if clipped is None else (clipped | floored)
         if permute is not None:
-            # les amplitudes d'une autre nuit ne sont connues qu'une fois
-            # toutes les poses reajustees: on garde, on ecrit apres
+            # the amplitudes of another night are known only once all
+            # exposures are refitted: keep now, write afterwards
             prepared.append((path, row, alive, clipped))
             continue
         new, touched, total = correct_file(
@@ -1812,9 +1813,9 @@ def correct_many(model, args):
             " null test, not a correction" % (permute, len(prepared),
                                               len(set(nights))), "warn")
         n_earth_fit = int(model["n_earth"])
-        # LES AMPLITUDES D'ORIGINE, FIGEES AVANT D'EN ECRIRE UNE SEULE: sinon
-        # une pose servie apres son donneur recevrait ce que le donneur a deja
-        # recu d'un troisieme
+        # THE ORIGINAL AMPLITUDES, FROZEN BEFORE WRITING A SINGLE ONE:
+        # otherwise an exposure served after its donor would receive what
+        # the donor already received from a third one
         original = np.array([[float(r["b%d" % (j + 1)]) for j in range(n_earth_fit)]
                              for _, r, _, _ in prepared])
         for i, (path, row, alive, clipped) in enumerate(prepared):

@@ -436,16 +436,16 @@ def page_periodogram(plt, table, title, known=None):
         return None
     freq = frequency_grid(time)
     power = gls(time, vrad - np.median(vrad), svrad, freq)
-    # LA FENETRE SPECTRALE, et elle ne se calcule PAS avec gls: celle-ci est a
-    # moyenne flottante, donc une serie constante lui donne exactement zero
-    # (vu le 2026-10-16: la page sortait une ligne plate). La fenetre est la
-    # transformee de l'echantillonnage lui-meme,
+    # THE SPECTRAL WINDOW, and it is NOT computed with gls: gls has a
+    # floating mean, so a constant series gets exactly zero from it (seen on
+    # 2026-10-16: the page came out as a flat line). The window is the
+    # transform of the sampling itself,
     #
-    #     W(nu) = | somme_k w_k exp(-2i pi nu t_k) | / somme_k w_k,
+    #     W(nu) = | sum_k w_k exp(-2i pi nu t_k) | / sum_k w_k,
     #
-    # qui vaut 1 a frequence nulle et dit ou l'echantillonnage, a lui seul,
-    # fabrique de la puissance. Un pic de la serie qui tombe sur un pic de la
-    # fenetre est un alias, pas un signal.
+    # which is 1 at zero frequency and tells where the sampling, on its own,
+    # makes up power. A peak of the series that falls on a peak of the
+    # window is an alias, not a signal.
     weight = 1.0 / np.asarray(svrad, dtype=float) ** 2
     weight = weight / np.sum(weight)
     phase = np.exp(-2j * np.pi * np.outer(np.asarray(freq, dtype=float),

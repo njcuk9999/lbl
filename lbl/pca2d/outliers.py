@@ -124,30 +124,33 @@ def window_variance(width, rho):
 
 
 def coherent_bias(mean, count, width, rho, min_rows=10):
-    """(le Z du residu MOYEN sur les poses, colonne par colonne et sur `width`).
+    """(the Z of the MEAN residual over the exposures, column by column and
+    over `width`).
 
-    Le troisieme axe, et le seul que ni la coupure ni l'exces de dispersion ne
-    peuvent voir (2026-09-26). clip_weights compare chaque pose aux AUTRES
-    POSES a la meme longueur d'onde, donc un residu present dans toutes les
-    poses n'est aberrant pour aucune: sur la bande O2 a 1267 nm son |z| median
-    reste a 0.67, comme sur une region temoin. La coupure locale en lambda ne
-    le voit pas non plus tant qu'il reste sous son seuil dans chaque pose.
+    The third axis, and the only one that neither the cut nor the excess
+    scatter can see (2026-09-26). clip_weights compares each exposure to the
+    OTHER EXPOSURES at the same wavelength, so a residual present in all the
+    exposures is an outlier in none: on the O2 band at 1267 nm its median
+    |z| stays at 0.67, as on a control region. The local cut in lambda does
+    not see it either as long as it stays below its threshold in each
+    exposure.
 
-    Ce qui le revele est la MOYENNE sur les poses: l'etoile se deplace avec le
-    BERV et s'y moyenne, ce qui est ancre dans le referentiel de l'observateur
-    s'y ajoute. Avec N poses la moyenne gagne sqrt(N) = 17.8 contre le bruit,
-    donc un biais de 0.2 sigma ressort a 3.5.
+    What reveals it is the MEAN over the exposures: the star moves with the
+    BERV and averages out in it, what is anchored in the observer frame
+    adds up in it. With N exposures the mean gains sqrt(N) = 17.8 against
+    the noise, so a bias of 0.2 sigma comes out at 3.5.
 
-        Z(j) = |somme de la moyenne sur la fenetre| / sqrt(V(w) / N)
+        Z(j) = |sum of the mean over the window| / sqrt(V(w) / N)
 
-    avec V(w) la variance mesuree d'une somme de w echantillons correles
-    (window_variance) et N le nombre de poses de la colonne. Chaque colonne de
-    la fenetre porte le verdict de la fenetre, donc une region sort entiere.
+    with V(w) the measured variance of a sum of w correlated samples
+    (window_variance) and N the number of exposures of the column. Each
+    column of the window carries the window's verdict, so a region comes
+    out whole.
 
-    Sur TOI-2120: 21.9% du domaine au-dela de 3 sigma, 2.8% au-dela de 10, et
-    les pires regions sont 1761, 1803, 1805 et 1764-1769 nm (methane et eau
-    vers 1.76-1.81 um), larges de 35 a 51 echantillons, soit 4 a 6 elements de
-    resolution: des raies entieres mal corrigees, pas des accidents.
+    On TOI-2120: 21.9% of the domain beyond 3 sigma, 2.8% beyond 10, and
+    the worst regions are 1761, 1803, 1805 and 1764-1769 nm (methane and
+    water around 1.76-1.81 um), 35 to 51 samples wide, i.e. 4 to 6
+    resolution elements: whole lines poorly corrected, not accidents.
     """
     mean = np.atleast_2d(np.asarray(mean, dtype=float))
     count = np.atleast_2d(np.asarray(count))
@@ -640,9 +643,9 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     # than a region, and the per-sample flagging is what deals with it.
     all_z2 = np.zeros((2, span))
     all_n = np.zeros((2, span), dtype=np.int32)
-    # et, pour le biais coherent, la somme SIGNEE: ce qui est ancre dans le
-    # referentiel de l'observateur s'y ajoute alors que l'etoile, qui bouge
-    # avec le BERV, s'y moyenne
+    # and, for the coherent bias, the SIGNED sum: what is anchored in the
+    # observer frame adds up in it while the star, which moves with the
+    # BERV, averages out in it
     all_z = np.zeros((2, span))
     bias_n = np.zeros((2, span), dtype=np.int32)
     # the same, in the STAR's frame: each row carried by its own shift

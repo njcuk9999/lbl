@@ -1,25 +1,29 @@
-"""Les exposants telluriques de LBL: l'eau, le sec, et le sec contre la masse d'air.
+"""The telluric exponents of LBL: water, the dry component, and the dry
+component against the airmass.
 
-`lbl_telluclean` ajuste deux exposants par pose et les ecrit dans l'en-tete du
-spectre nettoye: TLPEH2O pour l'eau, TLPEOTR pour tout le reste (O2, CO2, CH4
-ensemble, et non par espece chimique). Cette page les montre.
+`lbl_telluclean` fits two exponents per exposure and writes them in the
+header of the cleaned spectrum: TLPEH2O for water, TLPEOTR for everything
+else (O2, CO2, CH4 together, and not per chemical species). This page shows
+them.
 
-    page 1  les deux series temporelles, l'eau et le sec, et la masse d'air
-            sous elles pour comparaison
-    page 2  le sec CONTRE la masse d'air, et le residu en dessous
+    page 1  the two time series, water and the dry component, and the
+            airmass below them for comparison
+    page 2  the dry component AGAINST the airmass, and the residual below
 
-CE QUE LA PAGE 2 VERIFIE. Les especes seches sont bien melangees dans
-l'atmosphere, donc leur colonne suit la masse d'air et le nuage doit tomber sur
-une droite. MAIS PAS FORCEMENT SUR LA PREMIERE BISSECTRICE: TAPAS est calcule
-pour une colonne de reference, et un observatoire en altitude en a moins (La
-Silla est a 2400 m), ce qui deplace l'ordonnee a l'origine sans toucher a la
-pente. La droite ajustee est donc tracee avec SA pente et SON offset, les deux
-libres, et la pente 1 passant par zero est rappelee a cote pour l'oeil. Le
-residu est pris contre la droite ajustee, qui est le modele qu'on teste.
+WHAT PAGE 2 CHECKS. The dry species are well mixed in the atmosphere, so
+their column follows the airmass and the cloud of points must fall on a
+line. BUT NOT NECESSARILY ON THE y = x LINE: TAPAS is computed for a
+reference column, and an observatory at altitude has less of it (La Silla
+is at 2400 m), which moves the intercept without touching the slope. The
+fitted line is therefore drawn with ITS slope and ITS offset, both free,
+and the slope 1 through zero is recalled beside it for the eye. The
+residual is taken against the fitted line, which is the model being
+tested.
 
-Si le sec a ete FIXE a la masse d'air a l'ajustement, ce que la configuration
-livree fait, le nuage est exactement sur la droite et le residu est nul: la
-page le dit alors plutot que de laisser croire a une mesure.
+If the dry component was FIXED to the airmass in the fit, which the
+shipped configuration does, the cloud is exactly on the line and the
+residual is zero: the page then says so rather than suggesting a
+measurement.
 
     python telluric_exponents.py --science DIR --out PAGE.pdf
 """
@@ -38,16 +42,17 @@ from astropy.io import fits  # noqa: E402
 from matplotlib.backends.backend_pdf import PdfPages  # noqa: E402
 
 RJD0 = 2400000.0
-#: l'ecart sous lequel on considere que le sec n'a pas ete ajuste du tout
+#: the deviation below which the dry component is taken as not fitted at all
 FIXED_TOL = 1e-9
 
 
 def read_exponents(directory, modes=None):
-    """(rjd, eau, sec, masse d'air, mode) de chaque spectre nettoye du dossier.
+    """(rjd, water, dry, airmass, mode) of each cleaned spectrum in the
+    directory.
 
-    `modes` filtre sur HIERARCH ESO INS MODE: deux modes d'un meme
-    spectrographe sont deux instruments, et les melanger sur une figure fait
-    croire a une dispersion qui n'est que la difference des deux.
+    `modes` filters on HIERARCH ESO INS MODE: two modes of the same
+    spectrograph are two instruments, and mixing them on one figure suggests
+    a dispersion that is only the difference between the two.
     """
     rows = []
     for path in sorted(glob.glob(os.path.join(directory, "*.fits"))):
@@ -80,11 +85,12 @@ def read_exponents(directory, modes=None):
 
 
 def robust_sigma(values):
-    """L'ecart-type ROBUSTE: 1.4826 fois l'ecart absolu median.
+    """The ROBUST standard deviation: 1.4826 times the median absolute
+    deviation.
 
-    Partout plutot que l'ecart-type: une pose aberrante suffit a rendre une
-    dispersion illisible, et le facteur fait coincider les deux sur une
-    gaussienne, donc le chiffre se lit comme un sigma.
+    Used everywhere rather than the standard deviation: one outlying
+    exposure is enough to make a dispersion unreadable, and the factor makes
+    the two coincide on a Gaussian, so the number reads as a sigma.
     """
     values = np.asarray(values, dtype=float)
     good = values[np.isfinite(values)]
@@ -94,7 +100,7 @@ def robust_sigma(values):
 
 
 def dry_is_fixed(data):
-    """Le sec a-t-il ete fixe a la masse d'air plutot qu'ajuste?"""
+    """Was the dry component fixed to the airmass rather than fitted?"""
     good = np.isfinite(data["dry"]) & np.isfinite(data["airmass"])
     if not good.any():
         return False
@@ -103,11 +109,11 @@ def dry_is_fixed(data):
 
 
 def fit_line(x, y):
-    """(pente, ordonnee a l'origine) des moindres carres, les DEUX libres.
+    """(slope, intercept) of the least squares, BOTH free.
 
-    L'ordonnee est libre parce qu'un observatoire en altitude voit moins de
-    colonne seche que la reference de TAPAS: cet offset est physique et doit
-    pouvoir apparaitre au lieu d'etre absorbe par la pente.
+    The intercept is free because an observatory at altitude sees less dry
+    column than the TAPAS reference: this offset is physical and must be
+    able to show up instead of being absorbed by the slope.
     """
     good = np.isfinite(x) & np.isfinite(y)
     if good.sum() < 3:
@@ -120,30 +126,31 @@ def fit_line(x, y):
 def draw(data, out):
     fixed = dry_is_fixed(data)
     with PdfPages(out) as pdf:
-        # ---- page 1: les series temporelles
+        # ---- page 1: the time series
         fig, axes = plt.subplots(3, 1, figsize=(9, 8), sharex=True)
         axes[0].plot(data["rjd"], data["water"], "o", ms=4, color="C0")
-        axes[0].set_ylabel("exposant H2O")
-        axes[0].set_title("la colonne d'eau, ajustee pose par pose"
+        axes[0].set_ylabel("H2O exponent")
+        axes[0].set_title("the water column, fitted exposure by exposure"
                           " (TLPEH2O)", fontsize=10)
         axes[1].plot(data["rjd"], data["dry"], "o", ms=4, color="C1")
-        axes[1].set_ylabel("exposant sec")
-        axes[1].set_title("tout le reste d'un bloc, non par espece chimique"
-                          " (TLPEOTR)%s"
-                          % ("   FIXE a la masse d'air" if fixed else ""),
+        axes[1].set_ylabel("dry exponent")
+        axes[1].set_title("everything else as one block, not per chemical"
+                          " species (TLPEOTR)%s"
+                          % ("   FIXED to the airmass" if fixed else ""),
                           fontsize=10)
         axes[2].plot(data["rjd"], data["airmass"], "o", ms=4, color="0.4")
-        axes[2].set_ylabel("masse d'air")
+        axes[2].set_ylabel("airmass")
         axes[2].set_xlabel("rjd")
         for ax in axes:
             ax.grid(alpha=0.3)
-        fig.suptitle("Les exposants telluriques de lbl_telluclean, %d poses"
+        fig.suptitle("The telluric exponents of lbl_telluclean, %d exposures"
                      % len(data["rjd"]))
         fig.tight_layout()
         pdf.savefig(fig)
         plt.close(fig)
 
-        # ---- page 2: le sec contre la masse d'air, le residu, l'histogramme
+        # ---- page 2: the dry exponent against the airmass, the residual,
+        # the histogram
         fig = plt.figure(figsize=(11, 7))
         gs = fig.add_gridspec(2, 2, height_ratios=[2, 1], width_ratios=[3, 1],
                               hspace=0.05, wspace=0.25)
@@ -151,33 +158,33 @@ def draw(data, out):
         axes.append(fig.add_subplot(gs[1, 0], sharex=axes[0]))
         ax_hist = fig.add_subplot(gs[:, 1])
         x, y = data["airmass"], data["dry"]
-        axes[0].plot(x, y, "o", ms=5, color="C1", label="les poses")
+        axes[0].plot(x, y, "o", ms=5, color="C1", label="the exposures")
         span = np.linspace(np.nanmin(x) * 0.98, np.nanmax(x) * 1.02, 10)
         axes[0].plot(span, span, "k--", lw=1.0,
-                     label="pente 1 par l'origine")
+                     label="slope 1 through the origin")
         slope, intercept = fit_line(x, y)
         if np.isfinite(slope):
             axes[0].plot(span, slope * span + intercept, "-", lw=1.4,
                          color="C3",
-                         label="ajuste: %.3f x airmass %+.3f"
+                         label="fitted: %.3f x airmass %+.3f"
                                % (slope, intercept))
             resid = y - (slope * x + intercept)
         else:
             resid = np.full_like(y, np.nan)
-        axes[0].set_ylabel("exposant sec")
+        axes[0].set_ylabel("dry exponent")
         axes[0].legend(fontsize=8)
         axes[0].grid(alpha=0.3)
         axes[1].plot(x, resid, "o", ms=5, color="C3")
         axes[1].axhline(0.0, color="k", lw=1.0, ls=":")
-        axes[1].set_xlabel("masse d'air")
-        axes[1].set_ylabel("residu")
+        axes[1].set_xlabel("airmass")
+        axes[1].set_ylabel("residual")
         axes[1].grid(alpha=0.3)
 
-        # L'HISTOGRAMME DU RESIDU, pour voir la dispersion d'un coup d'oeil.
-        # Mesure du 2026-10-16 sur les 92 poses du mode HAM, le sec ajuste
-        # librement: le rapport sec/masse d'air vaut 0.961 avec un MAD de
-        # 0.026, c'est-a-dire que la colonne seche suit la masse d'air a 2.6%
-        # pres. La largeur de cet histogramme EST cette dispersion.
+        # THE HISTOGRAM OF THE RESIDUAL, to see the dispersion at a glance.
+        # Measured on 2026-10-16 on the 92 exposures of the HAM mode, the dry
+        # component fitted freely: the dry/airmass ratio is 0.961 with a MAD
+        # of 0.026, that is, the dry column follows the airmass to within
+        # 2.6%. The width of this histogram IS that dispersion.
         good = np.isfinite(resid)
         if good.sum() > 3:
             ax_hist.hist(resid[good], bins=max(8, int(np.sqrt(good.sum()))),
@@ -187,23 +194,26 @@ def draw(data, out):
                 ax_hist.axhline(sign * spread, color="k", lw=0.9, ls="--")
             ax_hist.axhline(float(np.median(resid[good])), color="k", lw=1.0)
             ax_hist.set_title("MAD %.4f" % spread, fontsize=9)
-        ax_hist.set_xlabel("poses")
+        ax_hist.set_xlabel("exposures")
         ax_hist.grid(alpha=0.3)
         ax_hist.set_ylim(axes[1].get_ylim())
         plt.setp(axes[0].get_xticklabels(), visible=False)
         if fixed:
-            note = ("LE SEC EST FIXE a la masse d'air a l'ajustement: le nuage"
-                    " est sur la droite par CONSTRUCTION\net le residu est nul."
-                    " Cette page verifie la contrainte, elle ne la mesure pas.")
+            note = ("THE DRY EXPONENT IS FIXED to the airmass in the fit: the"
+                    " cloud is on the line by CONSTRUCTION\nand the residual"
+                    " is zero. This page checks the constraint, it does not"
+                    " measure it.")
         else:
-            note = ("le sec est AJUSTE librement; residu contre la droite"
-                    " ajustee: MAD %.4f (rms brut %.4f)\nune ordonnee a"
-                    " l'origine non nulle est attendue, l'observatoire etant"
-                    " en altitude"
+            note = ("the dry exponent is FITTED freely; residual against the"
+                    " fitted line: MAD %.4f (raw rms %.4f)\na nonzero"
+                    " intercept is expected, the observatory being at"
+                    " altitude"
                     % (robust_sigma(resid), float(np.nanstd(resid, ddof=1))))
-        fig.suptitle("Le sec contre la masse d'air\n%s" % note, fontsize=10)
-        # pas de tight_layout: le gridspec de cette page porte deja ses
-        # espacements, et tight_layout les ecrase en prevenant qu'il le fait
+        fig.suptitle("The dry exponent against the airmass\n%s" % note,
+                     fontsize=10)
+        # no tight_layout: the gridspec of this page already carries its
+        # spacings, and tight_layout overrides them while warning that it
+        # does so
         pdf.savefig(fig)
         plt.close(fig)
 
@@ -211,11 +221,12 @@ def draw(data, out):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--science", required=True,
-                        help="le dossier des spectres NETTOYES (<OBJET>_tc)")
+                        help="the directory of the CLEANED spectra"
+                             " (<OBJECT>_tc)")
     parser.add_argument("--out", required=True)
     parser.add_argument("--modes", default="HARPS",
-                        help="les modes gardes, separes par des virgules;"
-                             " vide pour tout garder")
+                        help="the modes kept, separated by commas;"
+                             " empty to keep them all")
     return parser.parse_args(argv)
 
 
@@ -224,10 +235,10 @@ def main(argv=None):
     modes = [m for m in args.modes.split(",") if m] if args.modes else None
     data = read_exponents(args.science, modes)
     if data is None:
-        raise SystemExit("aucun spectre portant TLPEH2O dans %s" % args.science)
+        raise SystemExit("no spectrum carrying TLPEH2O in %s" % args.science)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     draw(data, args.out)
-    print("%d poses -> %s" % (len(data["rjd"]), args.out))
+    print("%d exposures -> %s" % (len(data["rjd"]), args.out))
 
 
 if __name__ == "__main__":

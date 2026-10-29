@@ -1,23 +1,24 @@
-"""Le rapport d'un run LBL: ce qu'il a fait, en figures.
+"""The report of an LBL run: what it did, in figures.
 
-Ecrit a la toute fin, apres `compile`, un PDF par run dans <DATA_DIR>/reports.
-Pilote par le parametre REPORT du wrapper, vrai par defaut.
+Written at the very end, after `compile`, one PDF per run in
+<DATA_DIR>/reports. Driven by the REPORT parameter of the wrapper, true by
+default.
 
-Ce que le rapport montre:
+What the report shows:
 
-    la SEQUENCE des vitesses, par instrument, avec ses barres d'erreur
-    le PERIODOGRAMME de la serie et celui de la fenetre
-    le FIP resistant aux aberrantes, dans ses trois versions (sans coupure,
-        coupure douce, coupure dure), parce que ce qui compte est de voir ce
-        que le nettoyage fait a la reponse et non la seule reponse nettoyee
-    la QUALITE DE LA CORRECTION TELLURIQUE, si elle a ete appliquee: pour la
-        meilleure, la mediane et la pire pose en colonne d'eau, puis la meme
-        chose en colonne seche
+    the SEQUENCE of the velocities, per instrument, with its error bars
+    the PERIODOGRAM of the series and that of the window
+    the outlier-resistant FIP, in its three versions (no cut, soft cut,
+        hard cut), because what matters is to see what the cleaning does
+        to the answer and not only the cleaned answer
+    the QUALITY OF THE TELLURIC CORRECTION, if it was applied: for the
+        best, the median and the worst exposure in water column, then the
+        same in dry column
 
-LES ROUTINES VIENNENT DE KOLOA (periodogrammes, FIP, coupures robustes)
-plutot que d'etre reecrites ici: elles y sont testees et maintenues. Le
-rapport est donc optionnel au sens fort, c'est-a-dire qu'il se saute tout
-seul et sans bruit si koloa n'est pas installe, et le run n'en souffre pas.
+THE ROUTINES COME FROM KOLOA (periodograms, FIP, robust cuts) rather than
+being rewritten here: they are tested and maintained there. The report is
+therefore optional in the strong sense, that is, it skips itself quietly
+if koloa is not installed, and the run does not suffer from it.
 """
 from lbl.report.main import make_report
 

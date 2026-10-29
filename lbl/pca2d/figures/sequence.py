@@ -433,11 +433,11 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
         # NOT `g`, which is this function's grid: named that, the loop replaced
         # the grid with a group number and every window came back "too few
         # columns" (2026-09-13, an hour after the fix above)
-        # `share` EST LA FRACTION DE POSES qui doit avoir pondere un
-        # echantillon, comme dans reconstruct.fit_weights_mask: 1.0 est
-        # l'intersection stricte, et en dessous le jeu de raies reste UNIQUE
-        # mais decide a la majorite. Les panneaux doivent cacher exactement ce
-        # que les fichiers corriges cachent, sinon ils montrent autre chose.
+        # `share` IS THE FRACTION OF EXPOSURES that must have weighted a
+        # sample, as in reconstruct.fit_weights_mask: 1.0 is the strict
+        # intersection, and below it the line set stays UNIQUE but is
+        # decided by majority. The panels must hide exactly what the
+        # corrected files hide, otherwise they show something else.
         share = float(correct.get("mask_share") or 1.0)
         for label in np.unique(group):
             rows_here = group == label
