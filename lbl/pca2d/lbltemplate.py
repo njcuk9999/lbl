@@ -5,10 +5,10 @@ the star: fitted to every exposure at once, in the barycentric frame, with the
 observer block already describing the atmosphere. That is what LBL's template
 step spends its time estimating. Each order parity gets its own: the star block
 plus that parity's weighted mean of what the fit left (star_coverage), since
-LBL measures an order against the template of its parity. Written by LBL's own writer, in LBL's template
-format and under the name LBL looks for, it takes the place of that step for
-the corrected object, which is what makes pca2d a front end to LBL rather than
-a stage in front of it.
+LBL measures an order against the template of its parity. Written by LBL's own
+writer, in LBL's template format and under the name LBL looks for, it takes the
+place of that step for the corrected object, which is what makes pca2d a front
+end to LBL rather than a stage in front of it.
 
 The further star components, when the fit has any, are directions in which the
 star's spectrum varies. LBL already projects every line's residual on vectors
@@ -46,8 +46,9 @@ from .plotting import live_mask
 from .twoframe import (LanczosShifter, carried_means, cube_grid, fit_means,
                        fit_templates, load_cube, row_parity, star_model)
 
-#: what changes a template beyond the fit it came from, in its PCA2FIT stamp:
-#: 2 adds each parity's residual mean (star_coverage)
+#: the template rule, in its PCA2FIT stamp beside the fit it came from, so that
+#: a template made by another rule is made again. 2: the star block plus each
+#: parity's residual mean (star_coverage)
 TEMPLATE_VERSION = 2
 
 #: the header keyword of a template written here. A template without it was
@@ -99,19 +100,20 @@ def star_coverage(cube, fit, chunk=16, block=40000):
     not. Under the default --mean offset the block is one spectrum for both
     parities, while the two sample a line at different places on the order and
     so at different resolutions, and LBL measures each order against the
-    template of its own parity. On TOI-2120 LBL's own template differs between
-    parities at line scales by 0.014 in ln f, a third of the line structure,
-    and against a template whose parities were one spectrum LBL's velocity
-    errors came out 20% larger. The velocity term is not in the model
-    subtracted: its mean over the exposures moves both parities by the same
-    velocity, which LBL takes as an offset.
+    template of its own parity. LBL's own template can differ between parities
+    at line scales by a sizeable fraction of the line structure, and against a
+    template whose parities are one spectrum LBL's velocity errors come out
+    larger. The velocity term is not in the model subtracted: its mean over
+    the exposures moves both parities by the same velocity, which LBL takes as
+    an offset.
 
     The cube is read `block` columns at a time, each with a margin wider than
     the largest shift and the Lanczos kernel, so that the columns kept from it
-    are computed exactly as from the whole cube. The whole of it in float32 is
-    2.9 GB on TOI-2120, and the lbl stage makes this template while the next
-    run's fit holds its own copy: the machine swapped until one sweep of that
-    fit took ten times as long. `block=None` reads it whole.
+    are computed exactly as from the whole cube. The whole of it in float32
+    can be several GB, and the lbl stage can make this template while the
+    next run's fit holds its own copy: reading it whole would push the
+    machine into swap and slow that fit many times over. `block=None` reads
+    it whole.
 
     Returns (grid, rows that saw each sample (2, M), their summed weight
     (2, M), rows per parity (2,), residual mean (2, M), NaN where unseen).
@@ -324,9 +326,9 @@ def _aliased(source):
 def _divided_in_place(source):
     """Whether a numba kernel divides the residual itself, element by element.
 
-    LBL's speed branch moved the line loop into lbl/core/fastmath.py and kept
-    the division exactly (its commits are bit-identical): `diff_seg[i] /=`
-    inside the loop over the tables, with no alias left to find.
+    LBL's compiled line loop, in lbl/core/fastmath.py, does the same division
+    explicitly: `diff_seg[i] /=` inside the loop over the tables, with no
+    alias to find.
     """
     import re
     return bool(re.search(r"^\s*diff_seg\[\w+\]\s*/=", source, re.M))
@@ -344,8 +346,8 @@ def resproj_divides_in_place(package_dir=None):
     back, so the velocities are untouched). Read from LBL's own source, so a
     fixed LBL stops being warned about.
 
-    `package_dir` is the folder of the LBL package to read, the one that will
-    run (lbl.chosen); None is the one this process imports. Its speed branch
+    `package_dir` is the folder of the LBL package to read; None is the one
+    this process imports, which is the LBL that runs. Its compiled line loop
     does the same division in lbl/core/fastmath.py, which is read too.
     """
     import inspect
@@ -360,7 +362,7 @@ def resproj_divides_in_place(package_dir=None):
                            _divided_in_place)):
             path = os.path.join(package_dir, rel)
             if os.path.exists(path):
-                with open(path) as handle:
+                with open(path, encoding="utf-8") as handle:
                     found = found or test(handle.read())
         return found
     except Exception:                                          # noqa: BLE001
@@ -385,14 +387,14 @@ def stamp(path):
 def star_fwhm(fit):
     """The FWHM, in samples, the fit smoothed its star side to (fit.npz
     star_fwhm, from twoframe.star_smooth); 0 when it did not, or when the fit
-    predates the key."""
+    carries no such key."""
     files = list(getattr(fit, "files", fit.keys()))
     return int(fit["star_fwhm"]) if "star_fwhm" in files else 0
 
 
 def template_stamp(fit_path):
     """PCA2FIT: the fit's stamp and the template rule, so that a template made
-    from the same fit by an older rule is made again."""
+    from the same fit by another rule is made again."""
     # a template made from a smoothed star carries the width in its stamp, so
     # one is never taken for the other and the smoothed one is made afresh
     fwhm = star_fwhm(np.load(fit_path))
@@ -472,8 +474,9 @@ def place(made, slot):
 def strpca_from(fit, template, mask, models_dir, prefix, run=""):
     """write_strpca from the files a run leaves: its fit, its template, LBL's mask.
 
-    What run_lbl.py calls between LBL's mask step and its velocities, since the
-    rest frame the tables are written in is the one that mask measured.
+    What a run's LBL wrap script (run_lbl.py, from lbl.write_runner) calls
+    between LBL's mask step and its velocities, since the rest frame the
+    tables are written in is the one that mask measured.
     """
     if not os.path.exists(mask):
         raise SystemExit("no LBL mask at %s, and the STRPCA tables are written in"

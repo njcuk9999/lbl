@@ -35,8 +35,8 @@ from .progress import bar as _bar
 
 def object_key(name) -> str:
     """An object name reduced to what identifies it: upper case, letters and
-    digits only, so 'Proxima', 'PROXIMA', 'TOI-2120' and 'TOI 2120' are two
-    names and not four."""
+    digits only, so 'Star', 'STAR', 'Abc-123' and 'ABC 123' are two names and
+    not four."""
     return re.sub(r"[^0-9A-Z]", "", str(name or "").upper())
 
 
@@ -44,20 +44,16 @@ def one_object(meta: dict, inp: dict) -> dict:
     """A CAMPAIGN IS ONE OBJECT, HENCE ONE VELOCITY.
 
     `meta["object"]` comes from the header, and an observer writes whatever
-    they want: the hundred HARPS exposures of HD 10700 carry HD10700,
-    tau-Cet or HR509 depending on the year, for the SAME star. Everything
-    that groups by object then took them for three targets, and each one
-    got its own systemic velocity, its own common mask and its own SNR
-    threshold.
+    they want: an archive campaign can carry a catalogue name, a common name
+    and a Bright Star number for the SAME star depending on the year.
+    Everything that groups by object would then take them for several
+    targets, and each one would get its own systemic velocity, its own
+    common mask and its own SNR threshold. A stellar line then jumps from
+    one block of observations to the next in the river plot, with no
+    relation at all to the BERV, only because the name changes.
 
-    Measured on 2026-10-15 on the stellar line at 685.7 nm, median shift
-    per spelling: HD10700 -0.93 km/s, tau-Cet -16.55, HR509 -89.04. The
-    line jumped from one block of observations to the next in the river
-    plot, with no relation at all to the BERV (slope -0.17, correlation
-    -0.09), only because the name changes.
-
-    The campaign's name is the one the user asked for, not the one the
-    header carries: the user is the one who decides what a target is.
+    The campaign's name is the one the user gives, not the one the header
+    carries: the user is the one who decides what a target is.
     """
     wanted = inp.get("object")
     if wanted:
@@ -67,16 +63,18 @@ def one_object(meta: dict, inp: dict) -> dict:
 
 
 def same_object(meta: dict, wanted) -> bool:
-    """Whether a file's OBJECT, or APERO's DRSOBJN, names the object asked for.
+    """Whether a file's OBJECT, or the pipeline's DRSOBJN, names the object
+    wanted.
 
     Compared as object_key, never as typed. OBJECT is what somebody typed into
-    an observing form: 'Proxima' on the files APERO calls PROXIMA, which an
-    exact comparison with the folder's name skipped one by one.
+    an observing form, and can differ in case and punctuation from the name
+    the reduction pipeline or the folder uses, which an exact comparison would
+    skip one file at a time.
 
     SEVERAL NAMES ARE ACCEPTED. `wanted` can be a list, because an archive
-    does not cover five years without a change of spelling: the HARPS
-    exposures of tau Ceti are OBJECT = HD10700 in 2003 and tau-Cet in 2004,
-    and no normalisation brings a catalogue name close to a Bayer name.
+    rarely covers several years without a change of spelling: the same star
+    can be written with its catalogue name one year and its Bayer name the
+    next, and no normalisation brings a catalogue name close to a Bayer name.
     Giving both is the only honest answer; guessing it would be a bad one,
     because it would one day mix up two stars.
     """
@@ -97,8 +95,8 @@ C_KMS = constants.c.to("km/s").value
 # (rows x samples) for nothing the fit can use: the data are photon counts
 # carrying five or six significant digits, every weighted sum accumulates in
 # float64 whatever this says, and on a few hundred exposures the difference is
-# gigabytes and whether the fit holds in memory at all. It was in the config
-# long enough to be asked for; nobody has a reason to change it.
+# gigabytes and whether the fit holds in memory at all. Not a configuration
+# setting: nobody has a reason to change it.
 CUBE_DTYPE = np.dtype("float32")
 
 
@@ -138,10 +136,11 @@ def _load_cache(path: str):
 def _save_cache(path: str, grid, data, sigma, trans, meta):
     """Write the cube as separate .npy files rather than one compressed npz.
 
-    A full-domain NIRPS cube is several GB. np.savez_compressed on that spends
-    minutes in zlib for a file that barely compresses -- the payload is float32
-    noise -- and has to hold the whole thing in memory twice. Plain .npy files
-    write at disk speed and can be memory-mapped later if it ever comes to that.
+    A full-domain cube of a few hundred exposures is several GB.
+    np.savez_compressed on that spends minutes in zlib for a file that barely
+    compresses (the payload is float32 noise) and has to hold the whole thing
+    in memory twice. Plain .npy files write at disk speed and can be
+    memory-mapped later if it ever comes to that.
     """
     tmp = path + ".partial"
     shutil.rmtree(tmp, ignore_errors=True)
@@ -188,7 +187,7 @@ def destination_grid(config: dict, files: list[str]):
             raise ValueError(
                 "domain.dv is null and nothing has measured it. It is measured"
                 " from the data only when domain.smart_dv is on AND the run"
-                " names an object, as `pca2d-preclean --object NAME` does;"
+                " names an object, as `lbl_pca2d --object NAME` does;"
                 " reading a config straight into this stage does not. Put a"
                 " number in domain.dv or go through the one command.")
         grid = grids.magic_grid(dom["wave0"], dom["dv"], dom["wave_min"], dom["wave_max"])
@@ -339,11 +338,11 @@ class _Coadder:
             # 1/sqrt(sum of the weights), and the cube is float32: below a
             # weight of 1e-77 the sigma exceeds 3.4e38 and becomes inf on
             # conversion. An inf is not wrong (it weighs zero) but it
-            # contaminates every sum that meets it, and numpy complained 45
-            # times per campaign. Seen on 2026-10-14 on ESPRESSO, whose
-            # orders overlap enough that a sample receives only the dying
-            # edge of an order. What does not fit in the cube's type is
-            # therefore declared dead, which is the same thing said plainly.
+            # contaminates every sum that meets it, and numpy warns each time.
+            # It happens where orders overlap enough that a sample receives
+            # only the dying edge of an order. What does not fit in the
+            # cube's type is therefore declared dead, which is the same thing
+            # said plainly.
             biggest = float(np.finfo(self.sigma.dtype).max)
             live = self._sw[parity] > 1.0 / (biggest * biggest)
             with np.errstate(invalid="ignore", divide="ignore"):
@@ -409,10 +408,9 @@ def _merge_meta(rows):
     return merged
 
 
-#: the formats where each ORDER is a row, which _build_tfits can read: an
-#: APERO t.fits, an ESO archive S2D (HARPS, HARPS-N, ESPRESSO), an e2ds from
-#: the original DRS (HARPS, SOPHIE). What they have in common is not the
-#: name but the shape, and the shape is what decides the builder.
+#: the formats where each ORDER is a row, which _build_tfits can read: a
+#: t.fits, an archive S2D, an e2ds. What they have in common is not the name
+#: but the shape, and the shape is what decides the builder.
 ORDER_FORMATS = frozenset({"tfits", "s2d", "e2ds"})
 
 #: the formats already stitched onto a single grid, which _build_s1d can read
@@ -446,12 +444,11 @@ def build_cube(config: dict):
 
     grid, _ = destination_grid(config, files)
     # WHAT `format` DECIDES: one spectrum per ORDER or a spectrum already
-    # stitched. The names are those of the files (APERO t.fits, ESO S2D,
-    # e2ds from the HARPS and SOPHIE DRS), but the only thing that changes
-    # here is the dimension: _build_tfits walks through the orders,
-    # _build_s1d through a single grid. The name also serves to label the
-    # cached cube, so that a listing of the folder says which instrument it
-    # comes from (2026-10-14).
+    # stitched. The names are those of the file formats (t.fits, S2D, e2ds,
+    # s1d), but the only thing that changes here is the dimension:
+    # _build_tfits walks through the orders, _build_s1d through a single
+    # grid. The name also serves to label the cached cube, so that a listing
+    # of the folder says which format it comes from.
     fmt = str(inp.get("format", "tfits"))
     snippets = {}
     if fmt in ORDER_FORMATS:
@@ -625,8 +622,9 @@ def _prepare_exposure(path, config, grid, blocks):
         return out
 
     # each exposure is registered with its OWN BERV before it is coadded:
-    # within a night the BERV moves by up to 0.5 km/s, a whole destination
-    # pixel, and stacking first would smear every stellar line by that much
+    # within a night the BERV moves by up to about 0.5 km/s, of the order of
+    # a destination pixel, and stacking first would smear every stellar line
+    # by that much
     values, sig, tr, good, n_orders, segments = sptf.resample_exposure(
         payload, grid, config)
     if n_orders == 0 or not good.any():
@@ -749,7 +747,7 @@ def _parity_agreement(values, sigma, good):
 
 
 # --------------------------------------------------------------------------
-# s1d path (unchanged in substance; rows are exposures, parity is always 0)
+# s1d path (rows are exposures, parity is always 0)
 # --------------------------------------------------------------------------
 def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
     dom = config["domain"]
@@ -906,8 +904,7 @@ def template_path(config):
 #: the template the second pass has just built, waiting to be written with
 #: the cube. IT CANNOT BE WRITTEN RIGHT AWAY: _save_cache builds the cube in
 #: a .partial folder then deletes the final folder before renaming, so a
-#: file placed there beforehand would be swept away (seen on 2026-10-16:
-#: the template was built, announced in the log, and absent from the disk).
+#: file placed there beforehand would be swept away.
 _PENDING_TEMPLATE = None
 #: the coadder's members, [(exposure, row name, group)], saved with the cube
 _PENDING_MEMBERS = None
@@ -950,11 +947,10 @@ def _highpass_against_template(coadd, held, grid, config):
     NEXT, and leaves a residual that follows the BERV without being
     stellar.
 
-    Measured on 2026-10-16 on HD 69830, line at 688.85 nm: as the BERV
-    covers its 51 km/s, the telluric travels 0.117 nm, several line widths,
-    and its depth at the core goes from 3% to 89%. The effect being
-    intermittent, a simple correlation with the BERV does not see it (0.036
-    over the campaign).
+    As the BERV covers its range over a campaign, a telluric next to a
+    stellar line can travel several line widths, and its depth at the line
+    core can go from a few per cent to nearly saturated. The effect being
+    intermittent, a simple correlation with the BERV does not see it.
 
     THE TEMPLATE IS BUILT IN THE STAR FRAME, then brought back down into
     each exposure's frame. The cube itself does not change frame: the
@@ -986,10 +982,10 @@ def _highpass_against_template(coadd, held, grid, config):
     # THE TEMPLATE IS WRITTEN NEXT TO THE CUBE, because the `correct` stage
     # must apply EXACTLY the same high-pass: it resamples the same spectra
     # and subtracts the components fitted here, so a different filter on
-    # either side compares things that are not on the same scale. Seen on
-    # 2026-10-16: without it `correct` received raw ln(flux) (median
-    # +10.14) where the cube carried a high-passed residual (median
-    # +0.017), and the noise of the corrected spectra doubled.
+    # either side compares things that are not on the same scale: without
+    # it `correct` would receive raw ln(flux) where the cube carries a
+    # high-passed residual, and the corrected spectra would come out far
+    # noisier.
     _stash_template(config, template)
 
     n_used = 0
@@ -1058,17 +1054,16 @@ def _highpass_one(values, sig, good, segments, berv, template, grid, config):
 def _quality_reason(meta, wave, quality):
     """Return why this exposure should be rejected, or None to keep it.
 
-    The four 2025-04-11 frames in this dataset motivated making these checks
-    explicit: they carry a *negative* median flux and negative or 'NaN'
-    per-order SNR across the whole band, i.e. the extraction failed. Before
-    these cuts existed they were dropped only by accident, when the string
-    'NaN' in EXTSN crashed a numpy call.
+    The checks are explicit because a frame whose extraction failed can
+    carry a *negative* median flux and negative or 'NaN' per-order SNR
+    across the whole band. Without these cuts such a frame would be dropped
+    only by accident, if a string 'NaN' in its header SNR crashed a numpy
+    call, or not at all.
     """
     if np.size(wave) < 10:
         return "no coverage in the requested band"
     # A WAVELENGTH SOLUTION THAT GOES BACKWARD MAKES THE EXPOSURE UNUSABLE,
-    # and not only for pca2d. Measured on 2026-10-14: 5 of the 60 ESPRESSO
-    # exposures of tau Ceti have, at the blue edge of their bluest order, 177
+    # and not only for pca2d. Some exposures have, at the edge of an order,
     # pixels whose wavelength decreases before moving forward again. pca2d
     # can drop them from the mask and sort its abscissae, but LBL reads the
     # SAME files and stops on them in lbl_template, so an exposure corrected
@@ -1107,26 +1102,21 @@ def _quality_reason(meta, wave, quality):
     # A LIST of nights, where the window above is a range. What it is for: a
     # joint fit assumes the atmosphere belongs to the night, which only holds for
     # stars observed on the SAME nights, and the nights two campaigns share are
-    # not a contiguous range (GJ 1 and GJ 3090 share 47, scattered through two
-    # seasons of 147 and 99). Integer rjd, the same night label pca2d.scan uses.
+    # not a contiguous range (a few dozen shared nights can be scattered through
+    # seasons of a hundred or more). Nights are given as integer rjd.
     nights = quality.get("nights")
     if nights:
         if int(np.floor(rjd)) not in {int(n) for n in nights}:
             return "rjd %.2f is not one of the %d nights asked for" % (
                 rjd, len(nights))
-    # THE SPECTROGRAPH MODE, when a campaign mixes two. Measured on
-    # 2026-10-15 on the 100 HARPS exposures of HD 10700: 8 are in EGGS mode,
-    # the high-efficiency 1.4" fibre, and they are EXACTLY the 8 whose
-    # telluric fit fails, the water exponent there falling between 0.004
-    # and 0.047 against 0.30 for the HARPS exposures.
-    #
-    # IT IS NOT A VELOCITY SHIFT, contrary to what this comment first said:
-    # the TAPAS model falls in its place on these exposures, local minimum
-    # between 0 and +3 km/s for 7 of the 8. Nor is it the resolution (from
-    # 115000 to 60000, the water only rises from 0.0039 to 0.0089), and the
-    # tellurics are indeed present there, as deep as in the HARPS exposures.
-    # What is wrong remains to be found; they are set aside because their
-    # correction is plainly wrong, not because it is understood.
+    # THE SPECTROGRAPH MODE, when a campaign mixes two. An instrument with a
+    # second observing mode (a high-efficiency fibre, a lower resolution) can
+    # deliver exposures whose telluric fit fails although the tellurics are
+    # present, as deep as in the other mode, and the transmission model falls
+    # in its place: neither a velocity shift nor the change of resolution
+    # explains it. quality.drs_modes keeps only the modes listed, so that such
+    # exposures can be set aside because their correction is plainly wrong,
+    # without waiting for the cause to be understood.
     modes = quality.get("drs_modes")
     if modes:
         mode = str(meta.get("drs_mode", "") or "").strip()
@@ -1143,10 +1133,10 @@ def _quality_reason(meta, wave, quality):
 def build_weights(config: dict, grid, data, sigma, meta, trans=None, chunk=64):
     """Turn per-pixel sigmas into PCA weights, applying every rejection rule.
 
-    Done in row blocks. At full NIRPS coverage a single float64 temporary the
-    size of the cube is 5 GB, so `variance = sigma.astype(float) ** 2` written
-    the obvious way is the difference between a run that works and one that
-    swaps.
+    Done in row blocks. On a wide domain and a few hundred exposures a single
+    float64 temporary the size of the cube is several GB, so
+    `variance = sigma.astype(float) ** 2` written the obvious way is the
+    difference between a run that works and one that swaps.
     """
     wcf = config["weights"]
     weights = np.zeros(data.shape, dtype=np.float32)
@@ -1180,14 +1170,13 @@ def build_weights(config: dict, grid, data, sigma, meta, trans=None, chunk=64):
         # sigma is the photon sigma of the log-flux (preprocess.photon_sigma),
         # so 1/sigma IS the local SNR, and the threshold reads as an SNR.
         #
-        # WHAT THE OLD CRITERION COST, measured on 2026-10-16 on HD 10700:
-        # ln_clip_low = -0.5 killed every pixel below exp(-0.5) = 0.607 of
-        # the continuum, that is the bottom of EVERY line deeper than 39%.
-        # At the bottom of Na D2 at 589.15 nm, the lost pixels had a median
-        # depth of 0.340 against 0.712 for the kept ones. The corrected
-        # spectra had 13.7% NaN against 0.07% in the delivered ones, and LBL
-        # lost a third of its lines there (7860 instead of 11134) with a
-        # per-line error of 340 m/s instead of 145.
+        # WHAT A CLIP ON DEPTH COSTS (weights.ln_clip_low, the alternative
+        # below): ln_clip_low = -0.5 kills every pixel below exp(-0.5) =
+        # 0.607 of the continuum, that is the bottom of EVERY line deeper
+        # than 39%. The corrected spectra then carry NaN at the core of every
+        # deep line, where the delivered ones had none, and LBL loses a large
+        # share of its lines, with a larger per-line error on those that
+        # remain.
         if wcf.get("min_pixel_snr") is not None:
             with np.errstate(invalid="ignore", divide="ignore"):
                 snr = 1.0 / np.sqrt(variance)

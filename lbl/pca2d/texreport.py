@@ -4,29 +4,32 @@
     python -m lbl.pca2d.texreport --run <run folder>       # write it again, now
     python -m lbl.pca2d.texreport --run <run folder> --lbl-dir <LBL tree>
 
-The report a run left was the figures it drew, bound one after another with a
-page of monospace text in front: a compilation of matplotlib outputs, which is
-what it looked like (2026-09-16). This writes a report instead, from
-templates/report.tex:
+The figures stage binds the figures it draws one after another, with a page of
+monospace text in front: a compilation of matplotlib outputs. This writes a
+report instead, from templates/report.tex:
 
     abstract          what was run and what it did to the velocities, in words
     lists             the contents, and every figure by a short name
-    1 Summary         the gains and losses of every star, one table each,
+    velocity series   each star's series as LBL's report draws it, when LBL
+                      has measured it
+    the stars         SIMBAD's description of each star beside APERO's, and
+                      its known planets
+    Summary           the gains and losses of every star, one table each,
                       every row saying which way it went
-    2 Velocities      per star: the time series (points, no lines), the same
+    Velocities        per star: the time series (points, no lines), the same
                       points against BERV, d2v as an activity indicator, what
                       the correction changed, and the periodograms
-    3 The run         every setting, the command, the code, the fit's numbers
-    4 The correction  the figures of the figures stage, each with a caption
-    5 Not drawn       what did not build, and why
+    The run           every setting, the command, the code, the fit's numbers
+    The correction    the figures of the figures stage, each with a caption
+    Not drawn         what did not build, and why
     A Parameters      the resolved configuration, verbatim
 
 It is written twice in a run's life: at the figures stage, when there are no
 velocities yet, and after LBL, when there are. Both times from what is on disk:
 the figures the figures stage keeps in <run>/report/figures, listed in
-<run>/report/manifest.json, and LBL's rdb files. A run from before the report
-existed has neither folder nor manifest; its bound PDF is cut along its own
-bookmarks instead, so `--run` works on it too.
+<run>/report/manifest.json, and LBL's rdb files. A run that has neither folder
+nor manifest has its bound PDF cut along its own bookmarks instead, so `--run`
+works on it too.
 
 Nothing here is fatal to a run. Without pdflatex, or when it fails, the bound
 PDF the figures stage wrote stays the report and the run says why.

@@ -1,5 +1,5 @@
-"""The diagnostic tests from the night of 2026-10-17: what decides WHY a
-correction costs on a bright target, and not what corrects.
+"""Diagnostic tests: what decides WHY a correction costs on a bright
+target, and not what corrects.
 
 Three questions, each an option disabled by default, hence with no effect
 on the nominal run:
@@ -17,7 +17,7 @@ on the nominal run:
   any exposure. If the injected noise comes from the clean columns, that
   is where it disappears.
 
-Pure functions, tested in tests/test_diagnostics.py.
+Pure functions, without side effects.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def night_derangement(nights, seed):
         raise ValueError("a permutation between nights needs two nights")
     rng = np.random.default_rng(int(seed))
     order = list(range(unique.size))
-    for i in range(unique.size - 1, 0, -1):      # Sattolo: j < i, strictement
+    for i in range(unique.size - 1, 0, -1):      # Sattolo: j < i, strictly
         j = int(rng.integers(0, i))
         order[i], order[j] = order[j], order[i]
     target = dict(zip(unique.tolist(), unique[order].tolist()))
@@ -71,11 +71,12 @@ def night_derangement(nights, seed):
 
 
 def support_columns(trans, threshold):
-    """Les colonnes ou l'atmosphere absorbe: transmission sous `threshold`
-    sur au moins une ligne du cube.
+    """The columns where the atmosphere absorbs: transmission below
+    `threshold` on at least one row of the cube.
 
-    Une colonne sans aucune transmission connue (NaN partout) n'est pas du
-    support: on n'y sait rien de l'atmosphere, et la base n'y est pas divisee.
+    A column with no known transmission at all (NaN everywhere) is not
+    support: nothing is known there about the atmosphere, and the basis is
+    not divided there.
     """
     trans = np.asarray(trans)
     if trans.ndim != 2:
@@ -85,7 +86,7 @@ def support_columns(trans, threshold):
                          % (threshold,))
     with np.errstate(invalid="ignore"):
         lowest = np.full(trans.shape[1], np.inf)
-        # par blocs de lignes: le cube est un memmap de plusieurs Go
+        # in blocks of rows: the cube is a memmap of several GB
         for start in range(0, trans.shape[0], 64):
             block = np.asarray(trans[start:start + 64], dtype=np.float32)
             block = np.where(np.isfinite(block), block, np.inf)

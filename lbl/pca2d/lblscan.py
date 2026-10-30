@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """LBL velocities of runs that differ only in their component counts, in one PDF.
 
-    python -m lbl.pca2d.lblscan --object TOI2120 \
-        --tags 1-2v 1-3v 1-4v 2-2v 2-3v 2-4v 3-3v \
-        --suffix _PCA2D_{tag}_P2 --out outputs/TOI2120/lbl_scan.pdf
+    python -m lbl.pca2d.lblscan --object NAME \
+        --tags s2-o2v s2-o3v s2-o4v s3-o2v s3-o3v s3-o4v s4-o3v \
+        --suffix _PCA2D_{tag} --out outputs/NAME/lbl_scan.pdf
 
 A scan changes one count at a time, and the scans are read from the tags:
 every star count that two runs or more share is an observer scan, and every
@@ -39,14 +39,14 @@ from matplotlib.backends.backend_pdf import PdfPages
 from scipy.stats import spearmanr
 
 from .logger import log
+from lbl.core.math import mad_to_sigma
 
 #: delivered and corrected: slots 1 and 2 of the validated colour-blind safe
 #: categorical palette the report's flux traces use (figures.sequence)
 BEFORE, AFTER = "#2a78d6", "#eb6834"
-#: a run's tag: star components, observer components, v for the velocity term
-#: a run's tag: s<M>-o<N>[v] since 2026-10-22, M the star's spectra with
-#: the template (n_star), N the observer components; <K>-<N>[v] before, K the
-#: free star components alone (M - 1)
+#: a run's tag: s<M>-o<N>[v], M the star's spectra with the template (n_star),
+#: N the observer components, v for the velocity term; also read in the short
+#: form <K>-<N>[v], K the free star components alone (M - 1)
 TAG = re.compile(r"^s(\d+)-o(\d+)(v?)$")
 OLD_TAG = re.compile(r"^(\d+)-(\d+)(v?)$")
 #: the numbers every run is summarised by, in the order they are shown
@@ -92,7 +92,7 @@ def velocity_stats(t, v, e):
     d = v - np.median(v)
     nt = nightly(t, v, e)
     return {"n": d.size, "rms": float(np.std(d)),
-            "robust": float(1.4826 * np.median(np.abs(d - np.median(d)))),
+            "robust": float(mad_to_sigma * np.median(np.abs(d - np.median(d)))),
             "median_error": float(np.median(e)),
             "nightly_rms": float(np.std(nt[1] - np.median(nt[1]))),
             "nights": int(nt.shape[1])}
@@ -112,8 +112,8 @@ def amplitude_at(t, v, e, period):
     K = float(np.hypot(p[0], p[1]))
     dof = max(len(ph) - 3, 1)
     # the reduced chi^2, and nothing else: dividing it by the mean weight as
-    # well scaled the error by the noise itself, which the tests, at a noise
-    # of 1 m/s, never saw (TOI-782: 16 m/s where 2.2 was right, 2026-09-17)
+    # well would scale the error by the noise itself, which a test at a noise
+    # of 1 m/s cannot see
     scale = float(np.sum(w * (v - A @ p) ** 2) / dof)
     var = (p[0] ** 2 * cov[0, 0] + p[1] ** 2 * cov[1, 1]
            + 2 * p[0] * p[1] * cov[0, 1])
@@ -123,11 +123,12 @@ def amplitude_at(t, v, e, period):
 def signal_stats(t, v, e, periods=(), degree=2):
     """What a correction did to a star that MOVES, which the rms cannot say.
 
-    On TOI-1452, whose binary companion gives 412 m/s of curvature over one
-    season, the correction absorbed 45% of that curve and the raw rms fell by a
-    third, from 100 to 68 m/s, while the scatter within a night and the error per
-    exposure both got worse. A figure of merit that rewards eating astrophysics
-    is not a figure of merit, so this reports, beside the rms:
+    A correction can absorb part of a long-term astrophysical trend (the
+    curvature a companion on a long orbit draws over a season): the raw rms
+    then falls while the scatter within a night and the error per exposure do
+    not improve, or get worse. A lower rms alone is therefore not a figure of
+    merit, since it rewards eating astrophysics, so this reports, beside the
+    rms:
 
       drift        peak-to-peak of a low-order polynomial in time, which is what
                    a companion on a long orbit looks like over one campaign
@@ -135,7 +136,7 @@ def signal_stats(t, v, e, periods=(), degree=2):
       in_night     what one night's exposures disagree by, which no signal of
                    months can touch, and the cleanest measure of a correction
       amplitudes   K at each period the target is KNOWN to have
-                   (config.yaml, objects.<NAME>.target.planets)
+                   (target.planets in the configuration)
 
     A correction that shrinks `drift` or any amplitude is removing signal,
     whatever it does to the rms.
@@ -159,7 +160,7 @@ def signal_stats(t, v, e, periods=(), degree=2):
 # -------------------------------------------------------------------- the runs
 def parse_tag(tag):
     """(n_star, observer components) of a run's tag, n_star the star's spectra
-    with the template: s1-o7 -> (1, 7), and the older 0-7 -> (1, 7)."""
+    with the template: s1-o7 -> (1, 7), and the short form 0-7 -> (1, 7)."""
     m = TAG.match(str(tag))
     if m:
         return int(m.group(1)), int(m.group(2))
@@ -744,7 +745,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--object", required=True)
-    p.add_argument("--tags", nargs="+", default=None, help="the runs, e.g. 1-3v 2-3v")
+    p.add_argument("--tags", nargs="+", default=None, help="the runs, e.g. s2-o3v s3-o3v")
     p.add_argument("--compare", nargs="+", default=None, metavar="NAME=LABEL",
                    help="instead of a scan report, the compilation of these LBL"
                         " objects against the original (the object's own)")

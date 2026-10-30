@@ -2,11 +2,12 @@
 basis (tellurics left by the DRS, airglow, the instrument), which another
 star can use FROZEN, and each star's own spectrum and components.
 
-WHY. A star whose BERV barely moves over its run (TOI-904: 2.3 km/s in 75
-days) cannot tell its own frame from the observer's: whatever is fixed on the
-detector is fixed on the star as well. A basis learned on stars whose BERV
-does move, where the two frames separate, is brought in frozen: the new star
-fits only its own spectrum and components, and the amplitudes of the basis.
+WHY. A star whose BERV barely moves over its run (a few km/s over the
+whole campaign) cannot tell its own frame from the observer's: whatever is
+fixed on the detector is fixed on the star as well. A basis learned on stars
+whose BERV does move, where the two frames separate, is brought in frozen:
+the new star fits only its own spectrum and components, and the amplitudes
+of the basis.
 
 THE FOLDERS. DATA_DIR/pca2d/components/, where every fit writes, and
 DATA_DIR/models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/, where one keeps the
@@ -72,8 +73,8 @@ KEPT = 'models'
 def component_file(kind: str, label: str, instrument: str,
                    data_dir: str) -> str:
     """<DATA_DIR>/pca2d/components/PCA2D_<Kind>_<label>_<instrument>.fits,
-    kind 'observer' or 'star', the instrument in lower case as in LBL's
-    templates (nirps_he, spirou)"""
+    kind 'observer' or 'star', the instrument in lower case as LBL writes
+    it in the names of its templates"""
     return os.path.join(data_dir, FOLDER, 'PCA2D_{0}_{1}_{2}.fits'.format(
         kind.capitalize(), label, (instrument or 'unknown').lower()))
 
@@ -127,10 +128,11 @@ def observer_files(data_dir: str, instrument: str = '',
 def basis_path(name: str, data_dir: str = None, instrument: str = '',
                data_source: str = '') -> str:
     """The file of an observer basis: name may be a path, a file name
-    (PCA2D_Observer_2026a_nirps_he), or the output name alone (2026a, for
-    this instrument). A name is looked for in the subfolders of models/
-    (kept_folders' order: this instrument's and DATA_SOURCE's first), then
-    in components; the components path when it is in neither."""
+    (PCA2D_Observer_<output>_<instrument>), or the output name alone
+    (<output>, for this instrument). A name is looked for in the
+    subfolders of models/ (kept_folders' order: this instrument's and
+    DATA_SOURCE's first), then in components; the components path when it
+    is in neither."""
     if os.path.exists(name) or name.endswith('.fits') and os.sep in name:
         return os.path.abspath(name)
     if data_dir is None:
@@ -198,7 +200,7 @@ def save(run_dir: str, name: str, data_dir: str, objects: list,
     :param data_dir: str, LBL's DATA_DIR
     :param objects: list of str, the stars of the fit, in its order (a joint
                     fit numbers them 0, 1, ... in its parity groups)
-    :param instrument: str, LBL's instrument (NIRPS_HE, SPIROU...)
+    :param instrument: str, LBL's instrument (its INSTRUMENT parameter)
     :param config: dict, the fit's configuration (for the high-pass)
     :param data_source: str, LBL's DATA_SOURCE (the pipeline that reduced
                         the training spectra)

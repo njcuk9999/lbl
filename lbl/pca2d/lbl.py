@@ -23,8 +23,8 @@ amplitude along them.
 
 Symlinks by default (lbl.link), not copies: a few hundred t.fits are a few
 tens of gigabytes, they already exist twice (delivered and corrected), and a
-third copy would buy nothing. A disk that cannot hold a link at all, exFAT as
-the data disks here are, gets copies instead, and the run says so and how much
+third copy would buy nothing. A disk that cannot hold a link at all (an exFAT
+disk, for example) gets copies instead, and the run says so and how much
 before it starts rather than failing at this stage after the fit (link_mode).
 Nothing here writes into the input tree.
 
@@ -40,61 +40,38 @@ What it leaves beside the run's other outputs:
 Running LBL takes hours, so the stage prepares by default and runs only when
 asked: `lbl.run: true` in the config, or --run-lbl on the command line.
 
-Which LBL runs it is `lbl.environment`: a conda environment by name, and
-`lbl-rapide` by default, LBL's speed branch in an environment of its own
-(FAST_RECIPE). `current` is the LBL installed beside this package by
-environment.yml, which is what every run used until 2026-09-18. The template
-writer and the profile check still use that one, in this process: they read
-and write files, and the speed branch changed neither format.
+LBL runs in this process: PCA2D is part of LBL, and the LBL that measures is
+the one installed in the environment PCA2D runs in.
 """
 
 from __future__ import annotations
 
-import functools
-import json
 import os
-import shutil
-import subprocess
 import sys
-import tempfile
 
 import yaml
 
 from .logger import log
 
-#: LBL's name for a spectrograph is not always its INSTRUME, and the pairing
-#: with a data source is what selects the class that reads the files: NIRPS is
-#: NIRPS_HA or NIRPS_HE depending on the mode it was observed in, which LBL
-#: expects the caller to know rather than reading it from the header. So the
-#: pairing lives in config.yaml, per instrument, and this is only the fallback
-#: for a spectrograph whose block does not say.
-FALLBACK = {
-    # CADC, and not APERO, even for an APERO reduction: LBL's CADC classes are
-    # the ones that read the named fibre extensions (FluxAB / WaveAB / BlazeAB
-    # for SPIRou, FluxA / WaveA / BlazeA for NIRPS), which is where the
-    # wavelength solution of a t.fits is. Its APERO classes read the primary
-    # header's wavelength polynomials, which these files do not carry there.
-    "SPIROU": ("SPIROU", "CADC"),
-    "NIRPS": ("NIRPS_HE", "CADC"),
-}
-
 STEPS = ("telluclean", "template", "mask", "compute", "compile")
 
-#: Where the target's effective temperature is written, in the order they are
-#: tried. APERO puts OBJTEMP on the primary header and PP_TEFF on the science
-#: extension, with PP_TEFFS saying where the DRS got it. LBL needs the number
-#: and does not read it from anywhere itself: it stops with "Teff is require.
-#: Please add OBJECT_TEFF to config". It is in the file, so read it there.
-TEFF_KEYS = ("OBJTEMP", "PP_TEFF", "OBJ_TEMP", "TEFF")
+def teff_keys(config: dict) -> list:
+    """Where the target's effective temperature is written, in the order they
+    are tried: the KW_TEMPERATURE of the instrument's LBL class (in
+    input.header_keys). LBL needs the number and does not read it from
+    anywhere itself: it stops with "Teff is require. Please add OBJECT_TEFF
+    to config". When the file has it, it is read there."""
+    keys = ((config.get("input") or {}).get("header_keys") or {}).get("teff")
+    return list(keys or [])
 
 
-def teff_from_header(path: str):
-    """(teff, keyword) from the first of TEFF_KEYS that carries a number."""
+def teff_from_header(path: str, keys):
+    """(teff, keyword) from the first of `keys` that carries a number."""
     from .io import robust_open
 
     try:
         with robust_open(path) as hdulist:
-            for key in TEFF_KEYS:
+            for key in keys:
                 for hdu in hdulist:
                     value = hdu.header.get(key)
                     if value in (None, "", "None"):
@@ -121,15 +98,20 @@ def resolve_teff(config: dict, files) -> tuple:
     doing deliberately and not by accident.
     """
     asked = (config.get("lbl") or {}).get("teff", "auto")
-    header, key = (teff_from_header(files[0]) if files else (None, None))
+    keys = teff_keys(config)
+    header, key = (teff_from_header(files[0], keys) if files
+                   else (None, None))
 
     if isinstance(asked, str) and asked.strip().lower() == "auto":
         if header is None:
-            log("lbl.teff is `auto` and none of %s is in the header of %s."
-                " LBL needs a Teff to choose the stellar model its mask comes"
-                " from: put a number in lbl.teff."
-                % (", ".join(TEFF_KEYS), os.path.basename(files[0]) if files
-                   else "the spectra"), "warn")
+            log("lbl.teff is `auto` and %s in the header of %s. LBL needs a"
+                " Teff to choose the stellar model its mask comes from: put a"
+                " number in lbl.teff."
+                % ("none of %s is" % ", ".join(keys) if keys else
+                   "the instrument names no keyword for it (KW_TEMPERATURE),"
+                   " so nothing is",
+                   os.path.basename(files[0]) if files else "the spectra"),
+                "warn")
             return None, "nowhere"
         return header, "%s in the header" % key
     if asked is None:
@@ -176,221 +158,51 @@ def _what_lbl_resolves_to():
     return getattr(spec, "origin", None) if spec else None
 
 
-#: lbl.environment's word for the interpreter this package runs in, and the
-#: LBL environment.yml installs beside it (LBL main)
-CURRENT = "current"
-#: lbl.environment when nothing says otherwise
-DEFAULT_ENVIRONMENT = "lbl-rapide"
-#: how that environment is made, said wherever it is missing. LBL's speed
-#: branch: main plus [LBL.SPEED] commits, numba kernels and single-open FITS
-#: I/O, every one of which says in its message that the outputs do not change
-FAST_RECIPE = ("git clone -b test-speed-260918-110104"
-               " https://github.com/njcuk9999/lbl.git lbl-rapide\n"
-               "conda create -n lbl-rapide python=3.12\n"
-               "conda activate lbl-rapide\n"
-               "pip install -e ./lbl-rapide")
-
-#: What another interpreter is asked, from a folder with no `lbl` in it.
-#: `python -c` puts its working directory first on the path, and the root of
-#: this repository holds an `lbl/` folder, the examples' LBL tree: an LBL
-#: installed in place (pip install -e) is found through a finder hook that
-#: comes after the path, so that folder won, as an empty namespace package,
-#: the first time this was asked from there.
-PROBE = ("import os, lbl\n"
-         "where = getattr(lbl, '__file__', None)\n"
-         "if not where:\n"
-         "    raise SystemExit('the name lbl is %s, a folder and not the LBL"
-         " package' % list(lbl.__path__))\n"
-         "print(getattr(lbl, '__version__', 'unknown'))\n"
-         "print(os.path.dirname(os.path.abspath(where)))\n")
-
-
-def asked_environment(config: dict) -> str:
-    """lbl.environment, as written, or the default."""
-    asked = (config.get("lbl") or {}).get("environment")
-    return str(asked).strip() if asked not in (None, "") else DEFAULT_ENVIRONMENT
-
-
-def conda_prefix(name: str):
-    """The folder of the conda environment called `name`, or None.
-
-    Looked for beside the environment this runs in first, which is where
-    `conda create -n` puts it and costs nothing, then in conda's own envs
-    folder, and only then asked of conda, which takes a second.
-    """
-    if os.path.basename(sys.prefix) == name:
-        return sys.prefix
-    roots = []
-    parent = os.path.dirname(sys.prefix)
-    if os.path.basename(parent) == "envs":
-        roots.append(parent)
-    roots.append(os.path.join(sys.prefix, "envs"))     # when this is base
-    conda = os.environ.get("CONDA_EXE")
-    if conda:
-        roots.append(os.path.join(os.path.dirname(os.path.dirname(conda)),
-                                  "envs"))
-    roots.append(os.path.expanduser(os.path.join("~", ".conda", "envs")))
-    for root in roots:
-        if os.path.isdir(os.path.join(root, name)):
-            return os.path.join(root, name)
-    conda = conda or shutil.which("conda")
-    if not conda:
-        return None
-    try:
-        out = subprocess.run([conda, "env", "list", "--json"],
-                             capture_output=True, text=True, timeout=60)
-        prefixes = json.loads(out.stdout).get("envs", [])
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return None
-    return next((p for p in prefixes if os.path.basename(p) == name), None)
-
-
-def python_in(prefix: str):
-    """The python of the environment at `prefix`, or None if it has none."""
-    for rel in (os.path.join("bin", "python"), "python.exe"):
-        path = os.path.join(prefix, rel)
-        if os.path.isfile(path) and os.access(path, os.X_OK):
-            return path
-    return None
-
-
-def interpreter(config: dict) -> tuple:
-    """(python, what it is) for LBL's script, from lbl.environment.
-
-    `current` is the interpreter this package runs in. A path is a python, or
-    the folder of an environment. Any other word is a conda environment by
-    name. python is None when it names nothing on this machine, and `what`
-    then says what was looked for.
-    """
-    asked = asked_environment(config)
-    if asked.lower() == CURRENT:
-        return sys.executable, "the environment pca2d-preclean runs in"
-    if os.sep in asked or asked.startswith("~"):
-        path = os.path.expanduser(asked)
-        python = python_in(path) if os.path.isdir(path) else (
-            path if os.path.isfile(path) and os.access(path, os.X_OK) else None)
-        return python, ("%s" % path if python else
-                        "%s, which is not a python nor an environment's folder"
-                        % path)
-    prefix = conda_prefix(asked)
-    if prefix is None:
-        return None, "the conda environment %s, which is not on this machine" \
-            % asked
-    python = python_in(prefix)
-    return python, ("the conda environment %s" % asked if python else
-                    "the conda environment %s, which has no python (%s)"
-                    % (asked, prefix))
-
-
-def environment_for(python: str) -> dict:
-    """The process environment `python` is started with: this one, less
-    PYTHONPATH and PYTHONHOME when it is another environment's.
-
-    The window starts the pipeline with this repository first on PYTHONPATH
-    (gui.App), and the repository holds an `lbl/` folder, the examples' LBL
-    tree. An LBL installed in place is found through a finder hook that
-    comes after the path, so in lbl-rapide that folder was `lbl`, as an empty
-    namespace package, and `from lbl.recipes import lbl_wrap` could not work.
-    The runner finds pca2d by itself (write_runner), after LBL.
-    """
-    env = dict(os.environ)
-    if python != sys.executable:
-        for key in ("PYTHONPATH", "PYTHONHOME"):
-            env.pop(key, None)
-    return env
-
-
-@functools.lru_cache(maxsize=None)
-def probe(python: str) -> tuple:
-    """(True, LBL's version, its package folder) as `python` imports LBL, or
-    (False, why, None).
-
-    This process's own interpreter is answered by available(), as it always
-    was; another is asked, which costs the two seconds of importing LBL once
-    per run.
-    """
-    if python == sys.executable:
-        ok, detail = available()
-        if not ok:
-            return False, detail, None
+def chosen(config: dict = None) -> dict:
+    """The LBL that measures: the package PCA2D is part of, in the
+    environment it is installed in (LBL's installation steps say how to make
+    it). {ok, detail, where}: detail is LBL's version when ok and why not
+    otherwise; where is the folder of the LBL package."""
+    _ = config
+    ok, detail = available()
+    where = None
+    if ok:
         import lbl
-        return True, detail, os.path.dirname(os.path.abspath(lbl.__file__))
-    try:
-        out = subprocess.run([python, "-c", PROBE], capture_output=True,
-                             text=True, timeout=300, cwd=tempfile.gettempdir(),
-                             env=environment_for(python))
-    except (OSError, subprocess.SubprocessError) as exc:
-        return False, str(exc), None
-    lines = out.stdout.strip().splitlines()
-    if out.returncode != 0 or len(lines) < 2:
-        tail = (out.stderr.strip().splitlines() or ["exit %d" % out.returncode])
-        return False, tail[-1], None
-    return True, lines[-2], lines[-1]
-
-
-def chosen(config: dict) -> dict:
-    """Which LBL measures: the python lbl.environment names and what it imports.
-
-    {asked, python, what, ok, detail, where}: detail is LBL's version when ok
-    and why not otherwise; where is the folder of the LBL package it imports.
-    """
-    asked = asked_environment(config)
-    python, what = interpreter(config)
-    if python is None:
-        return dict(asked=asked, python=None, what=what, ok=False,
-                    detail=what, where=None)
-    ok, detail, where = probe(python)
-    return dict(asked=asked, python=python, what=what, ok=ok, detail=detail,
-                where=where)
+        where = os.path.dirname(os.path.abspath(lbl.__file__))
+    return dict(ok=ok, detail=detail, where=where)
 
 
 def say_chosen(code: dict) -> str:
-    """One line for the log: which LBL, from where, run by which python."""
+    """One line for the log: which LBL, from where."""
     if code["ok"]:
-        return ("LBL %s from %s, run by %s: %s (lbl.environment: %s)"
-                % (code["detail"], code["where"], code["python"], code["what"],
-                   code["asked"]))
-    return ("lbl.environment is %s, and %s" % (code["asked"], (
-        "%s cannot import LBL: %s" % (code["python"], code["detail"])
-        if code["python"] else "that is %s" % code["what"])))
+        return "LBL %s from %s" % (code["detail"], code["where"])
+    return "LBL cannot be imported: %s" % code["detail"]
 
 
 def how_to_get(code: dict) -> str:
-    """What to do about a chosen LBL that is not there."""
-    fix = ("--lbl-env %s (lbl.environment: %s) runs the LBL installed beside"
-           " this package instead" % (CURRENT, CURRENT))
-    if code["asked"] == DEFAULT_ENVIRONMENT:
-        return ("%s is LBL's speed branch, in an environment of its own, made"
-                " once with\n\n%s\n\nor %s."
-                % (DEFAULT_ENVIRONMENT, "\n".join("    " + line for line in
-                                                   FAST_RECIPE.splitlines()),
-                   fix))
-    return fix[0].upper() + fix[1:] + "."
+    """What to do about an LBL that cannot be imported."""
+    _ = code
+    return ("Run PCA2D in the environment LBL is installed in, as LBL's"
+            " installation steps describe.")
 
 
 def profile(config: dict) -> tuple:
     """(instrument, data_source) as LBL spells them, and where they came from.
 
-    Read from the instrument's own block in config.yaml, because that is where
-    everything else about a spectrograph is written and because choosing this
-    wrongly is not an error: LBL would read the files with another instrument's
+    The configuration's lbl.instrument and lbl.data_source, as a wrap names
+    them (INSTRUMENT, DATA_SOURCE), never guessed from the files: choosing
+    this wrongly is not an error, LBL would read the files with another
     class and return velocities.
     """
     block = config.get("lbl") or {}
-    instrume = str(config["input"].get("instrument") or "").upper()
     name = block.get("instrument")
     source = block.get("data_source")
     if name and source:
-        return str(name), str(source), "config.yaml"
-    fallback = FALLBACK.get(instrume)
-    if not fallback:
-        raise SystemExit(
-            "no LBL profile for INSTRUME %r. Add `lbl: {instrument: ..., "
-            "data_source: ...}` to its block in config.yaml: LBL's name for a"
-            " spectrograph is not always the one in the header, and NIRPS is"
-            " NIRPS_HA or NIRPS_HE by the mode it was observed in."
-            % (instrume or "unset"))
-    return str(name or fallback[0]), str(source or fallback[1]), "the fallback table"
+        return str(name), str(source), "the configuration"
+    raise SystemExit(
+        "no LBL instrument for this run: lbl.instrument and lbl.data_source"
+        " name it in the configuration, or --instrument and --data-source on"
+        " the command line, as a wrap's INSTRUMENT and DATA_SOURCE do")
 
 
 def object_names(config: dict, object_name: str, tag: str) -> tuple:
@@ -402,10 +214,10 @@ def object_names(config: dict, object_name: str, tag: str) -> tuple:
 def corrected_files(corrdir: str) -> list:
     """The corrected spectra in a folder, and nothing that merely looks like one.
 
-    A name starting with a dot is skipped. The corrected folders can live on an
-    exFAT disk, where macOS writes a `._name` AppleDouble file beside anything
-    that carries extended attributes: it ends in .fits too, holds none of a
-    spectrum, and would otherwise be linked into LBL's science folder.
+    A name starting with a dot is skipped. On a disk that cannot store
+    extended attributes, some systems write a `._name` file beside every file
+    that carries them: it ends in .fits too, holds none of a spectrum, and
+    would otherwise be linked into LBL's science folder.
     """
     if not os.path.isdir(corrdir):
         return []
@@ -416,9 +228,9 @@ def corrected_files(corrdir: str) -> list:
 def can_link(folder: str) -> bool:
     """Whether `folder` can hold a symbolic link, found out by making one.
 
-    Not read off the filesystem's name: macOS mounts exFAT through fskit and
-    a network share can be anything, and the only answer that is certainly
-    right is the one the disk gives. The probe is made in the folder itself,
+    Not read off the filesystem's name: the same filesystem can be mounted
+    in different ways and a network share can be anything, and the only
+    answer that is certainly right is the one the disk gives. The probe is made in the folder itself,
     which is created if it has to be, and removed whatever happens.
     """
     import tempfile
@@ -456,6 +268,14 @@ def link_mode(data_dir: str, asked: str = "symlink") -> tuple:
     science = os.path.join(data_dir, "science")
     if can_link(science):
         return "symlink", None
+    # on Windows the refusal is usually the system's, not the disk's
+    if os.name == "nt":
+        return "copy", ("no symbolic link could be made in %s (Windows makes"
+                        " one only with developer mode on, in Settings, For"
+                        " developers, or for an administrator), so the"
+                        " spectra are COPIED into it: each one will be on"
+                        " that disk twice. Developer mode avoids that"
+                        % science)
     return "copy", ("%s cannot hold a symbolic link (an exFAT disk cannot), so"
                     " the spectra are COPIED into it: each one will be on that"
                     " disk twice. An LBL folder on a disk that takes links, the"
@@ -487,16 +307,21 @@ def link_spectra(files, target: str, mode: str = "symlink") -> tuple:
         if os.path.lexists(destination):
             # ... unless it is a link to something that is no longer there. The
             # rule below is for a file that is already right; a DANGLING link is
-            # not right, and keeping it makes LBL die on it much later. One
-            # such folder, left by a run whose corrected spectra had since been
-            # deleted, cost 8 h 40 of LBL before it was reached (2026-09-14).
+            # not right, and keeping it makes LBL die on it much later, after
+            # hours of work (a folder left by a run whose corrected spectra
+            # have since been deleted).
             if os.path.islink(destination) and not os.path.exists(destination):
                 os.unlink(destination)
             else:
                 kept += 1
                 continue
         if mode == "copy":
-            shutil.copy2(path, destination)
+            # the content and the dates, not the permissions: a read-only
+            #   original would make a copy LBL's cleanup cannot delete on
+            #   Windows
+            shutil.copyfile(path, destination)
+            stats = os.stat(path)
+            os.utime(destination, (stats.st_atime, stats.st_mtime))
         else:
             os.symlink(os.path.abspath(path), destination)
         linked += 1
@@ -609,16 +434,15 @@ def runparams(config: dict, data_dir: str, instrument: str, data_source: str,
     return params
 
 
-RUNNER = '''#!%(shebang)s
-"""Run LBL on %(object)s, as delivered and as pca2d-preclean corrected it (%(tag)s).
+RUNNER = '''#!/usr/bin/env python
+"""Run LBL on %(object)s, as delivered and as PCA2D corrected it (%(tag)s).
 
-Written by pca2d-preclean, and left here to be read, edited and re-run by
-hand: an ordinary LBL wrap script, with one of the runparams dicts LBL users
-know per object. The settings that are not about which object is which live
-in %(config)s. It is run by the python of the LBL it was written for
-(lbl.environment):
+Written by lbl_pca2d, and left here to be read, edited and re-run by hand:
+an ordinary LBL wrap script, with one of the runparams dicts LBL users know
+per object. The settings that are not about which object is which live in
+%(config)s. Run it in the environment LBL is installed in:
 
-    %(python)s %(script)s
+    python %(script)s
 """
 
 from lbl.recipes import lbl_wrap
@@ -648,15 +472,13 @@ def _block(name, comment, params, upper=True):
 
 
 def write_runner(path: str, runs: list, strpca, object_name: str, tag: str,
-                 config_file: str, python: str = None) -> str:
+                 config_file: str) -> str:
     """The wrap script: one runparams dict per object, spelled one key a line.
 
     `runs` is [(NAME, comment, params)], in the order they are run. `strpca`,
     when not None, is lbltemplate.strpca_from's arguments: the object named
     AFTER then runs its mask alone first, the tables are written in the rest
     frame that mask measured, and its velocities are measured with them.
-    `python` is the interpreter it is written for, its first line, so that
-    ./run_lbl.py is run by the LBL it was meant for.
     """
     # UPPER CASE, and not a style choice: lbl_wrap reads runparams['INSTRUMENT']
     # and every other key by that exact spelling, so a lower-case dict fails on
@@ -680,8 +502,6 @@ def write_runner(path: str, runs: list, strpca, object_name: str, tag: str,
                      '"RESPROJ_TABLES") or {}, **strpca_from(**STRPCA))']
         main.append("    lbl_wrap.main(%s)" % name)
     body = RUNNER % {
-        "shebang": python or "/usr/bin/env python",
-        "python": python or "python",
         "object": object_name,
         "tag": tag,
         "script": os.path.abspath(path),
@@ -689,7 +509,7 @@ def write_runner(path: str, runs: list, strpca, object_name: str, tag: str,
         "blocks": "".join(blocks),
         "main": "\n".join(main) if main else "    pass",
     }
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         handle.write(body)
     os.chmod(path, 0o755)
     return path
@@ -702,10 +522,9 @@ def check_profile(instrument: str, data_source: str, config_file: str,
     Two seconds against hours. The pairing of instrument and data source picks
     the class that reads the files, and the wrong one does not fail on the
     first line: it downloads a few hundred megabytes of stellar models, sorts
-    every exposure, and dies at the reference file, which is what happened the
-    first time this was pointed at SPIRou with LBL's APERO class instead of its
-    CADC one. What is read here is the wavelength solution, because that is the
-    thing the two classes disagree about.
+    every exposure, and dies at the reference file. What is read here is the
+    wavelength solution, because that is what two classes of one instrument
+    (two data sources) disagree about.
     """
     try:
         from lbl.instruments import select
@@ -714,11 +533,10 @@ def check_profile(instrument: str, data_source: str, config_file: str,
     try:
         # THE INSTRUMENT AND THE SOURCE ARE PASSED EXPLICITLY, NOT THROUGH
         # THE YAML. LBL's YAML reader skips 'None' values (select.py: "skip
-        # Nones"), and that is precisely the source name of ESPRESSO, SOPHIE,
-        # CARMENES and CORALIE in its own table. Read through the file, it
-        # disappeared, and the check failed on "Data source must be defined"
-        # for the instruments that work best. Seen on 2026-10-14 on
-        # ESPRESSO.
+        # Nones"), and 'None' is the source name of the instruments that have
+        # a single data source in its table. Read through the file, it would
+        # disappear, and the check would fail on "Data source must be
+        # defined".
         args = select.parse_args(
             ["INSTRUMENT", "DATA_DIR", "DATA_SOURCE", "DATA_TYPE", "INPUT_FILE"],
             dict(config_file=os.path.abspath(config_file),
@@ -795,17 +613,17 @@ def _warn_case_collisions(data_dir, objects):
     """Say which products of a previous run LBL will reread through a case
     collision, because LBL itself will not say so.
 
-    WHAT HAPPENED on 2026-10-15. The macOS filesystem does not distinguish
-    case, while LBL names its products after the object. A previous run on
-    HD10700_tc thus left a template, a mask and an .rdb that the run on
-    HD10700_TC took for its own:
+    A case-insensitive filesystem (the default on some operating systems)
+    does not distinguish STAR_tc from STAR_TC, while LBL names its products
+    after the object. A previous run on one thus leaves a template, a mask
+    and an .rdb that a run on the other takes for its own:
 
         Template ... exists. Skipping template creation.
-        File lbl_HD10700_TC_HD10700_TC.rdb exists, we will read it.
+        File lbl_STAR_TC_STAR_TC.rdb exists, we will read it.
 
-    The second line is the worst: LBL had just computed 99 fresh velocities,
-    and it compiled a 74-line table from another run's file, without
-    flagging anything abnormal.
+    The second line is the worst: LBL has just computed fresh velocities,
+    and it compiles a table from another run's file, without flagging
+    anything abnormal.
 
     Nothing is touched: erasing another run's product would be worse. The
     file, the object that claims it and the one that wrote it are named, so
@@ -849,7 +667,7 @@ def _warn_case_collisions(data_dir, objects):
 
 def prepare(plan, code=None) -> dict:
     """Stage both objects, make the star template, write LBL's config and the
-    script that runs it. `code` is chosen(config), found here if not given."""
+    script that runs it. `code` is chosen(), found here if not given."""
     config = plan["config"]
     block = config.get("lbl") or {}
     object_name = config["input"]["object"]
@@ -857,7 +675,7 @@ def prepare(plan, code=None) -> dict:
     from .config import lbl_directory
     data_dir = lbl_directory(config)
     before, after = object_names(config, object_name, plan["tag"])
-    code = code or chosen(config)
+    code = code or chosen()
 
     log("LBL profile: instrument %s, data source %s, from %s"
         % (instrument, data_source, where), "value")
@@ -907,8 +725,8 @@ def prepare(plan, code=None) -> dict:
 
     document = config_document(config, data_dir, instrument, data_source, teff)
     config_file = os.path.join(plan["outdir"], "lbl_config.yaml")
-    with open(config_file, "w") as handle:
-        handle.write("# LBL's own configuration, written by pca2d-preclean.\n"
+    with open(config_file, "w", encoding="utf-8") as handle:
+        handle.write("# LBL's own configuration, written by lbl_pca2d.\n"
                      "# Every key here is one LBL knows; it refuses any other.\n")
         yaml.safe_dump(document, handle, sort_keys=False,
                        default_flow_style=False)
@@ -954,7 +772,7 @@ def prepare(plan, code=None) -> dict:
         placed = bool(star) and star["status"] in ("copied", "same", "replaced")
         runs.append(("AFTER", (
             "The corrected spectra, measured against the fit's star template,"
-            " which pca2d-preclean put where LBL looks for it (%s): LBL's"
+            " which PCA2D put where LBL looks for it (%s): LBL's"
             " template step finds it there and skips."
             % os.path.basename(star["slot"])) if placed else (
             "The corrected spectra, measured against the template LBL builds"
@@ -969,7 +787,7 @@ def prepare(plan, code=None) -> dict:
                 % (n_star, ", ".join("STRPCA%d" % k for k in range(2, n_star + 1))),
                 "value")
             from .lbltemplate import resproj_divides_in_place
-            # the LBL that will run, which is not this process's own
+            # the LBL that will run, this process's own
             aliased = resproj_divides_in_place(code["where"])
             if dtemp_table(block, teff) and aliased:
                 log("DTEMP is the first RESPROJ table and the STRPCA ones come"
@@ -980,44 +798,50 @@ def prepare(plan, code=None) -> dict:
             if n_star >= 3 and aliased:
                 log("the LBL that runs divides the residual in place for"
                     " each RESPROJ table (frac_diff_seg = diff_seg in"
-                    " lbl/science/general.py, diff_seg[i] /= in the speed"
-                    " branch's lbl/core/fastmath.py), so every table after the"
+                    " lbl/science/general.py, diff_seg[i] /= in"
+                    " lbl/core/fastmath.py), so every table after the"
                     " first is projected on a residual divided twice: STRPCA2"
                     " is right and STRPCA3..%d are not, until that is a copy"
                     % n_star, "warn")
 
     script = write_runner(os.path.join(plan["outdir"], "run_lbl.py"), runs,
-                          strpca, object_name, plan["tag"], config_file,
-                          python=code["python"])
+                          strpca, object_name, plan["tag"], config_file)
 
     if runs and runs[0][2]["RUN_LBL_MASK"] and teff is None:
         log("no Teff, and the mask step is on. LBL stops on that rather than"
-            " guessing, so either the spectra have to carry one of %s or"
-            " lbl.teff has to be a number." % ", ".join(TEFF_KEYS), "warn")
+            " guessing, so either the spectra have to carry it (%s) or"
+            " lbl.teff has to be a number."
+            % (", ".join(teff_keys(config)) or "KW_TEMPERATURE"), "warn")
 
     log("LBL config   %s" % config_file, "value")
     log("LBL script   %s" % script, "value")
     return {"config_file": config_file, "script": script, "objects": objects,
             "data_dir": data_dir, "readable": ok, "star": star,
-            "strpca": strpca is not None, "python": code["python"],
-            "code": code}
+            "strpca": strpca is not None, "code": code}
 
 
 def run(script: str, code: dict = None) -> None:
-    """Run the script that was just written, by the LBL lbl.environment chose.
+    """Run the script that was just written, in this process.
 
-    `code` is chosen(config); without one it is this interpreter's LBL, as it
-    was before there was a choice.
+    PCA2D is part of LBL, so the LBL that measures is the one this process
+    imports. The script's command line is its own name alone, so that LBL
+    does not read the arguments PCA2D was started with.
     """
-    code = code or chosen({"lbl": {"environment": CURRENT}})
+    import runpy
+
+    code = code or chosen()
     if not code["ok"]:
         raise SystemExit("lbl.run is on, but %s. %s"
                          % (say_chosen(code), how_to_get(code)))
-    log("running LBL %s from %s, with %s. This is hours, and LBL prints its"
-        " own progress." % (code["detail"], code["where"], code["python"]),
-        "info")
-    result = subprocess.run([code["python"], script],
-                            env=environment_for(code["python"]))
-    if result.returncode != 0:
-        raise SystemExit("LBL exited %d; the script that ran is %s"
-                         % (result.returncode, script))
+    log("running %s. This is hours, and LBL prints its own progress."
+        % say_chosen(code), "info")
+    saved = sys.argv
+    sys.argv = [script]
+    try:
+        runpy.run_path(script, run_name="__main__")
+    except SystemExit as exc:
+        if exc.code not in (None, 0):
+            raise SystemExit("LBL exited %s; the script that ran is %s"
+                             % (exc.code, script))
+    finally:
+        sys.argv = saved

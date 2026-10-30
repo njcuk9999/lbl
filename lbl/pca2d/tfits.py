@@ -1,33 +1,34 @@
 """Reading APERO `t.fits` spectra: one row per diffraction order.
 
-Layout of a NIRPS t.fits (APERO 0.7.x, the file LBL is fed):
+Layout of a t.fits (the file LBL is fed), with the extension names of the
+instrument's LBL class (PCA2D_TFITS_EXTENSIONS):
 
-    PRIMARY       ESO + APERO header, no data
-    FluxA         (75, 4088)  telluric-CORRECTED extracted flux, blaze still in
-    WaveA         (75, 4088)  wavelength solution, nm, OBSERVER frame
-    BlazeA        (75, 4088)  blaze
-    Recon         (75, 4088)  the telluric transmission that was divided out
-    SKYCORR_SCI   (75, 4088)  sky model, not used here
-    SKYCORR_CAL   (75, 4088)  sky model, not used here
+    PRIMARY       telescope + APERO header, no data
+    flux          (orders, pixels)  telluric-CORRECTED extracted flux, blaze
+                                    still in
+    wave          (orders, pixels)  wavelength solution, nm, OBSERVER frame
+    blaze         (orders, pixels)  blaze
+    recon         (orders, pixels)  the telluric transmission divided out
+    sky           (orders, pixels)  the sky emission that was subtracted
 
 Three things about this format drive everything below.
 
 1. There is no single wavelength grid. Each order carries its own solution, and
-   consecutive orders overlap by 2-5 nm, so part of the spectrum is measured
+   consecutive orders overlap by a few nm, so part of the spectrum is measured
    twice at two different samplings. Orders n and n+2, on the other hand, never
-   overlap (measured: the gap runs from 4 to 22 nm across the array). So the
-   whole echellogram collapses onto exactly two non-redundant spectra on a
-   common grid -- the even orders and the odd orders -- and that is what we
-   build. Two rows per exposure instead of 75, with nothing thrown away.
+   overlap. So the whole echellogram collapses onto exactly two non-redundant
+   spectra on a common grid -- the even orders and the odd orders -- and that
+   is what we build. Two rows per exposure instead of one per order, with
+   nothing thrown away.
 
 2. The sampling is not uniform in velocity: within an order the step drifts, and
    between orders it jumps. Anything with a fixed pixel width -- the high-pass,
    above all -- has to be applied *after* resampling onto the log-uniform
    destination grid, never on the native pixels.
 
-3. BERV, BJD and the per-order extraction SNR live in the FluxA header, not in
-   PRIMARY. The observing conditions (airmass, humidity) live in PRIMARY. Both
-   have to be consulted.
+3. BERV, BJD and the per-order extraction SNR live in the header of the flux
+   extension, not in PRIMARY. The observing conditions (airmass, humidity)
+   live in PRIMARY. Both have to be consulted.
 """
 
 from __future__ import annotations

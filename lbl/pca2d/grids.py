@@ -5,15 +5,15 @@ pipeline rather than of any particular input file:
 
   * the "magic grid": a log-uniform wavelength grid with a constant velocity
     step, defined analytically by an anchor wavelength and that step. APERO's
-    NIRPS s1d_v products are sampled on exactly this grid with wave0 = 965 nm
-    and dv = 0.5 km/s, so building it from those two numbers reproduces the s1d
-    sampling to 5e-13 nm and needs no file on disk. That matters for the t.fits
-    path, where there is no s1d grid to recycle;
+    s1d_v products are sampled on exactly this kind of grid, so building it
+    from those two numbers reproduces the s1d sampling to 5e-13 nm and needs
+    no file on disk. That matters for the t.fits path, where there is no s1d
+    grid to recycle;
 
-  * the nominal photometric bands. The PCA is fitted on those and only those:
-    between the bands the atmosphere is opaque, the blaze has collapsed, or
-    both, and columns like that contribute nothing but noise and telluric
-    residuals to the eigenvectors.
+  * the mask of the photometric bands (LBL's, lbl.core.astro.bands). The PCA
+    is fitted on those and only those: between the bands the atmosphere is
+    opaque, the blaze has collapsed, or both, and columns like that
+    contribute nothing but noise and telluric residuals to the eigenvectors.
 """
 
 from __future__ import annotations
@@ -24,16 +24,6 @@ from astropy import constants
 from .logger import log
 
 C_KMS = constants.c.to("km/s").value
-
-# MKO half-power points, in nm. K is included on purpose even though NIRPS
-# stops at 1.95 um: the same configuration has to serve an instrument that
-# does reach K, and a band that falls outside the grid is simply dropped.
-DEFAULT_BANDS = {
-    "Y": [970.0, 1070.0],
-    "J": [1170.0, 1330.0],
-    "H": [1490.0, 1780.0],
-    "K": [2030.0, 2370.0],
-}
 
 
 def magic_grid(wave0: float, dv: float, wave_min: float, wave_max: float) -> np.ndarray:
@@ -108,9 +98,9 @@ def band_mask(grid: np.ndarray, bands: dict, names=None):
     """Boolean mask of the grid columns inside the requested bands.
 
     Returns (mask, used) where `used` lists the bands that actually intersect
-    the grid. A band that misses the grid entirely -- K on NIRPS -- is reported
-    and ignored rather than treated as an error, because the same config is
-    meant to be reusable across instruments.
+    the grid. A band that misses the grid entirely is reported and ignored
+    rather than treated as an error, because the same bands (LBL's, u to K)
+    serve every instrument.
     """
     grid = np.asarray(grid, dtype=np.float64)
     mask = np.zeros(grid.size, dtype=bool)

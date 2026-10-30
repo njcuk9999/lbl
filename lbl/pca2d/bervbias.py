@@ -7,11 +7,11 @@ BERV:
 
     V_tot = vrad / 1000 - BERV        (km/s; vrad from LBL in m/s)
 
-and not the BERV alone, which is V_tot only for a star at rest (asked for on
-2026-09-16: on SMETHELLS_20, at +2.6 km/s, it hardly matters; a star at
-+-30 km/s may never bring its lines onto the tellurics at all). Superposed,
-V_tot = 0, the blend is symmetric and nothing moves; far apart, nothing is
-blended; in between, the pull is the derivative of a Gaussian:
+and not the BERV alone, which is V_tot only for a star at rest (for a star
+at a few km/s it hardly matters; a star at +-30 km/s may never bring its
+lines onto the tellurics at all). Superposed, V_tot = 0, the blend is
+symmetric and nothing moves; far apart, nothing is blended; in between, the
+pull is the derivative of a Gaussian:
 
     v(V_tot) = c + amp * V_tot * exp(-0.5 * (V_tot / sigma)**2)
 
@@ -22,49 +22,46 @@ odd in V_tot, zero at 0, extreme at V_tot = +-sigma, where it is worth
 The width is fitted and quoted as the FWHM of that Gaussian, 2 sqrt(2 ln 2)
 sigma, the number a blend of two lines has a known value for.
 
-(written `amp*np.exp(-0.5*BERV/sigma)*BERV` when it was asked for, on
-2026-09-16: the square is what makes the bias die away on both sides; taken
-as written it grows without bound on one side). A straight line against
-BERV, which the report drew before, has no such shape and no meaning here.
-The functions below take V_tot, from `total_velocity`, wherever they say
-`berv`: the shape is the same whatever the axis is called.
+The square in the exponent is what makes the bias die away on both sides;
+without it the curve would grow without bound on one side. A straight line
+against BERV has no such shape and no meaning here. The functions below take
+V_tot, from `total_velocity`, wherever they say `berv`: the shape is the
+same whatever the axis is called.
 
 `amp` is signed, and the fit explores both signs: its prior is symmetric and
 half the walkers start on each side. `amp` and `fwhm` are what the fit is
 for; `c`, the velocities' arbitrary
 zero, and `jitter`, the scatter LBL's error bars do not account for, are
 fitted beside them and marginalised. Without the jitter the posterior would be
-as narrow as LBL's error bars are optimistic: 13 m/s against 44 m/s of scatter
-on SMETHELLS_20. The sampler is Goodman and Weare's affine-invariant stretch
-move, emcee's algorithm, in a few lines of numpy: emcee is not in the
-pipeline's environment, and four parameters do not need it.
+as narrow as LBL's error bars are optimistic, and those can be several times
+smaller than the scatter of the velocities. The sampler is Goodman and Weare's
+affine-invariant stretch move, emcee's algorithm, in a few lines of numpy:
+emcee is not one of LBL's dependencies, and four parameters do not need it.
 
     amp       uniform within +-1e4 (m/s)/(km/s), signed, since a bias pulls
-              either way. A flat prior, asked for on 2026-09-16 in place of
-              the modified Jeffreys 1/(|amp| + a0) it had until then: the
-              Jeffreys one favours small amplitudes, and so the narrow widths
-              whose bias would need a large one. On SMETHELLS_20 the delivered
-              bias barely moves (-68.7 to -70.9 m/s, 7.0 to 7.2 sigma) and the
-              corrected upper limit rises from 24.9 to 33.6 m/s (32.3 to 33.6
-              over three seeds, 33.0 on a chain of 12 000 steps): what the
-              data say, without the prior's pull toward zero
-    fwhm      Gaussian, 5 +- 1.5 km/s, within 1 to 10 km/s (asked for on
-              2026-09-17: the width of the Gaussian whose derivative the
-              bias is, the blend of a stellar and a telluric line at a
-              resolution of 70 000 to 80 000, is known to that precision).
-              It replaced a log-uniform sigma over 1 to 60 km/s, which let a
-              bias that is not there hide in the narrowest widths with a
-              large amplitude, and let a slow drift of the velocities pass
-              for a bias tens of km/s wide (GL725B: sigma 33 km/s)
+              either way. Flat rather than a modified Jeffreys
+              1/(|amp| + a0): that one favours small amplitudes, and so the
+              narrow widths whose bias would need a large one. A detected
+              bias barely depends on the choice, but the upper limit on an
+              undetected one is pulled toward zero by the Jeffreys prior;
+              the flat one gives what the data say
+    fwhm      Gaussian, 5 +- 1.5 km/s, within 1 to 10 km/s: the width of the
+              Gaussian whose derivative the bias is, the blend of a stellar
+              and a telluric line at a resolution of 70 000 to 80 000, is
+              known to that precision. A wide, uninformative prior on the
+              width (log-uniform in sigma over tens of km/s) would let a bias
+              that is not there hide in the narrowest widths with a large
+              amplitude, and let a slow drift of the velocities pass for a
+              bias tens of km/s wide
     c         uniform, m/s: the DC level, the velocity far from the tellurics,
               which is not the median when the exposures sit more on one side
               of V_tot = 0 than the other
     slope     uniform within +-1e3 m/s per year: the DC level's drift over
-              the campaign, c + slope * (t - t_mid), when the times are given
-              (asked for on 2026-09-17). V_tot follows the season, and on a
-              star whose V_tot spans a few km/s a drift of the velocities
-              passes for a bias: GL725B corrected, Delta BIC +8.4 with the
-              DC level held constant, -5.2 with it drifting
+              the campaign, c + slope * (t - t_mid), when the times are
+              given. V_tot follows the season, and on a star whose V_tot
+              spans a few km/s a drift of the velocities passes for a bias
+              when the DC level is held constant: the Delta BIC can then
+              favour a bias that letting the level drift explains away
     jitter    log-uniform over 1e-3 to 1e4 m/s
 """
 
@@ -92,7 +89,7 @@ MIN_NEAR = 12
 #: it would describe the prior; an upper limit on the peak is what is said
 DETECTED = 3.0
 UNITS = ("(m/s)/(km/s)", "km/s", "m/s", "m/s")
-C_KMS = 299792.458
+C_KMS = constants.c.to("km/s").value
 #: |V_tot| below which the star's lines sit on the telluric lines, within
 #: about one resolution element: the exposures the report lists by date
 CLOSE_KMS = 4.0
@@ -389,9 +386,9 @@ def fit(berv, v, e, t=None, walkers=32, steps=2500, burn=1000, seed=0):
     start = centre + scale * rng.normal(size=(walkers, ndim))
     # half the walkers start on the other sign: a bias pulls either way, and
     # an ensemble that starts on one side only explores the other if it
-    # happens to wander there. On SMETHELLS_20 the mirrored half rejoins the
-    # delivered bias's negative mode within 500 steps, and the corrected
-    # posterior keeps both signs, P(amp > 0) = 0.15 either way
+    # happens to wander there. Where the data favour one sign, the mirrored
+    # half rejoins that mode within the burn-in; where they do not, the
+    # posterior keeps both signs
     start[walkers // 2:, 0] *= -1
     start[:, 1] = np.clip(start[:, 1], FWHM_MIN + 1e-3, FWHM_MAX - 1e-3)
     chain, acceptance = stretch(

@@ -1,4 +1,4 @@
-"""Everything pca2d-preclean keeps between runs, in one labelled place.
+"""Everything PCA2D keeps between runs, in one labelled place.
 
     <output.cache_directory>/          `cache/` by default
         README.txt                     what this is, and that deleting it is safe
@@ -15,13 +15,12 @@ exactly that, saying what it removes and how much room that gives back.
 from __future__ import annotations
 
 import os
-import shutil
 
 from .logger import log
 from .progress import size
 
 README = """\
-This is pca2d-preclean's cache: intermediates it rebuilds from the spectra
+This is the PCA2D cache: intermediates lbl_pca2d rebuilds from the spectra
 whenever they are missing. Nothing in it is a result.
 
     cube_<format>_<key>/      one registered cube per configuration that
@@ -30,7 +29,7 @@ whenever they are missing. Nothing in it is a result.
                               drawing the figures does not reopen every spectrum
     telluric_<key>.npz        telluric optical depth per unit airmass
 
-Deleting any of it is safe. `pca2d-preclean --object NAME --clean-cache` does
+Deleting any of it is safe. `lbl_pca2d --object NAME --clean-cache` does
 it for you and lists what it removed; with --dry-run it only lists.
 """
 
@@ -48,7 +47,7 @@ def ensure(config: dict) -> str:
     os.makedirs(directory, exist_ok=True)
     readme = os.path.join(directory, "README.txt")
     if not os.path.exists(readme):
-        with open(readme, "w") as handle:
+        with open(readme, "w", encoding="utf-8") as handle:
             handle.write(README)
     return directory
 
@@ -91,10 +90,9 @@ def clean(config: dict, dry_run: bool = False) -> tuple:
                               size(nbytes)), "warn")
         if dry_run:
             continue
-        if os.path.islink(path) or os.path.isfile(path):
-            os.remove(path)
-        else:
-            shutil.rmtree(path)
+        # read-only files too (lbl.core.io.remove_path)
+        from lbl.core.io import remove_path
+        remove_path(path)
     log("%s %d cache entries, %s" % ("would free" if dry_run else "freed",
                                      len(found), size(total)), "value")
     return len(found), total

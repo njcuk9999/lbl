@@ -2,7 +2,7 @@
 """Build and cache a registered data cube. No PCA, no frame choice made here.
 
 This is the only way new data enters the project, and it is the `cube` stage
-of `pca2d-preclean`. The two-frame fit in `pca2d/twoframe.py` reads a cube from
+of `lbl_pca2d`. The two-frame fit in `pca2d/twoframe.py` reads a cube from
 `cache/` and cannot make one.
 
 The cube is written to `cache/cube_<format>_<hash>/`, the hash covering every
