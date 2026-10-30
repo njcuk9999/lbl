@@ -146,15 +146,15 @@ class NIRPS(Instrument):
         self.param_set('READ_OUT_NOISE', 30, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                            'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                            'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
