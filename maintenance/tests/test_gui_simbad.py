@@ -28,3 +28,11 @@ def test_the_spectral_types_read():
     assert simbad.teff_of_type("dM5.0") == 3060
     assert simbad.teff_of_type("M3.5Ve") == 3270
     assert simbad.teff_of_type("G8III") is None
+
+
+def test_a_fetched_star_gets_the_teff_of_its_spectral_type():
+    from lbl.gui.fetch import stars
+    found = stars.stellar_teff(dict(sptype='M2V'))
+    assert found['teff'] == 3560.0
+    assert 'spectral type' in found['source']
+    assert stars.stellar_teff(dict(sptype=None)) == dict(teff=None, source=None)

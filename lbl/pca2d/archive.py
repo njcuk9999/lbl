@@ -10,8 +10,8 @@ literature (pl_controv_flag = 1) is left out.
 A star is found by the identifiers SIMBAD gives it (pca2d.simbad): its TIC
 number above all, then its Gaia DR3, HD and HIP numbers and its names, since
 some hosts carry no TIC in the archive. A host the archive names after its
-TESS object of interest (TOI-1234) is also found by the folder's name, in
-any spelling (TOI_1234_tc, TOI1234...).
+TOI number (TOI-1234) is also found by the folder's name, in any spelling
+(TOI_1234_tc, TOI1234...).
 
 Nothing here is needed to run anything. Each answer is kept under
 ~/.pca2d/exoplanets for a week, so that writing a report again does not

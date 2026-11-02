@@ -9,7 +9,7 @@
 # Taken out on 2026-10-29, the sources not all being reachable to remake
 # the file: the 20 planets the NASA Exoplanet Archive flags as
 # controversial (pl_controv_flag), the 43 orbits whose transit epoch
-# came from the TESS or Kepler project tables (ExoFOP, KOI), and the
+# came from the surveys' project tables (ExoFOP, KOI), and the
 # orbit of TOI-1266 d, from a paper that did not publish it as
 # confirmed.
 #

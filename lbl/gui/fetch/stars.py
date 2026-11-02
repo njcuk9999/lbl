@@ -5,11 +5,10 @@ across the sky, and its effective temperature.
 - resolve(name): SIMBAD's main identifier of the star, its other
   identifiers (the archives' exposures are matched against their
   catalogue numbers), its J2000 position, its proper motion (the archives
-  are asked around where the star was when it was observed), its
-  spectral type and its TIC number, kept on disk once asked;
+  are asked around where the star was when it was observed) and its
+  spectral type, kept on disk once asked;
 - stellar_teff(ident): the best guess at its effective temperature, which
-  a fetched folder keeps for the wrap (LBL's OBJECT_TEFF): the TESS Input
-  Catalog's (v8, at MAST) when the star has a TIC number, else that of its
+  a fetched folder keeps for the wrap (LBL's OBJECT_TEFF): that of its
   spectral type;
 - teff_from_spectral_type(sptype): the Teff of a dwarf of that spectral
   type, from the table of Pecaut & Mamajek (2013, ApJS 208, 9) as Mamajek
@@ -21,15 +20,13 @@ SIMBAD is asked through LBL's own client (lbl.core.simbad).
 import json
 import os
 import re
-import urllib.parse
-import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from lbl.core import simbad
 from .log import log
-from .paths import USER_AGENT, cache
+from .paths import cache
 
 
 # =============================================================================
@@ -67,19 +64,12 @@ SPT_TEFF: List[Tuple[str, int]] = [
 CLASSES = 'OBAFGKML'
 
 
-#: where SIMBAD's answers about a star are kept, and the TIC's Teff
+#: where SIMBAD's answers about a star are kept
 SIMBAD_CACHE = cache('simbad')
 
 
-TIC_CACHE = cache('tic')
-
-
 #: the keys a star kept on disk must have to be read back
-_KEPT = ('main', 'aliases', 'ra', 'dec', 'pmra', 'pmdec', 'sptype', 'tic')
-
-
-#: MAST's API, which serves the TESS Input Catalog
-MAST = 'https://mast.stsci.edu/api/v0/invoke'
+_KEPT = ('main', 'aliases', 'ra', 'dec', 'pmra', 'pmdec', 'sptype')
 
 
 # =============================================================================
@@ -105,8 +95,7 @@ def resolve(name: str, refresh: bool = False) -> Dict[str, Any]:
     :return: dict, name (as given), main (SIMBAD's main identifier),
              aliases (every identifier), ra, dec (J2000, deg), pmra, pmdec
              (its proper motion [mas/yr], None when SIMBAD has none or
-             could not say), sptype (SIMBAD's spectral type), tic (its TIC
-             identifier, or None)
+             could not say), sptype (SIMBAD's spectral type)
 
     :raises ValueError: SIMBAD does not know the star
     :raises OSError: SIMBAD could not be asked
@@ -128,9 +117,7 @@ def resolve(name: str, refresh: bool = False) -> Dict[str, Any]:
     aliases = found['ids']
     out = dict(name=name, main=found['main'], aliases=aliases,
                ra=_float(found['ra']), dec=_float(found['dec']),
-               pmra=None, pmdec=None, sptype=found['sptype'],
-               tic=next((alias for alias in aliases
-                         if alias.startswith('TIC ')), None))
+               pmra=None, pmdec=None, sptype=found['sptype'])
     # the proper motion: without it the star is looked for where it was in
     #   2000, and the exposures of a fast mover are missed
     try:
@@ -188,58 +175,15 @@ def teff_from_spectral_type(sptype: Any) -> Optional[float]:
     return float(np.interp(code, codes, temps))
 
 
-def tic_teff(tic: Any, timeout: float = 30.0) -> Optional[float]:
-    """
-    The effective temperature the TESS Input Catalog (v8, at MAST) gives a
-    star, kept on disk once asked
-
-    :param tic: str or int, its TIC number ('TIC 77612635' will do)
-    :param timeout: float [s]
-
-    :return: float [K], or None (none in the TIC, or MAST did not answer)
-    """
-    number = int(str(tic).replace('TIC', '').strip())
-    path = os.path.join(TIC_CACHE, f'{number}.json')
-    if os.path.exists(path):
-        try:
-            with open(path, encoding='utf-8') as handle:
-                return _float(json.load(handle).get('teff'))
-        except (OSError, ValueError, AttributeError):
-            pass
-    request = dict(service='Mast.Catalogs.Filtered.Tic', format='json',
-                   params=dict(columns='ID,Teff', filters=[dict(
-                       paramName='ID', values=[str(number)])]))
-    body = urllib.parse.urlencode(dict(request=json.dumps(request))).encode()
-    try:
-        with urllib.request.urlopen(urllib.request.Request(
-                MAST, data=body, headers={'User-Agent': USER_AGENT}),
-                timeout=timeout) as response:
-            rows = json.loads(response.read()).get('data', [])
-    except (OSError, ValueError):
-        return None
-    row = next((row for row in rows if row.get('ID') == number), None)
-    if row is None:
-        return None
-    teff = _float(row.get('Teff'))
-    os.makedirs(TIC_CACHE, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as handle:
-        json.dump(dict(teff=teff), handle)
-    return teff
-
-
 def stellar_teff(ident: Dict[str, Any]) -> Dict[str, Any]:
     """
-    The best guess at the effective temperature of a star: the TESS Input
-    Catalog's, else its spectral type's
+    The best guess at the effective temperature of a star: its spectral
+    type's
 
-    :param ident: dict, the star (resolve): tic and sptype
+    :param ident: dict, the star (resolve): sptype
 
     :return: dict, teff [K] and source (None where there is none)
     """
-    if ident.get('tic'):
-        teff = tic_teff(ident['tic'])
-        if teff:
-            return dict(teff=teff, source='TESS Input Catalog v8')
     teff = teff_from_spectral_type(ident.get('sptype'))
     if teff is not None:
         return dict(teff=teff,

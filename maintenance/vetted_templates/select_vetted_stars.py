@@ -5,7 +5,7 @@ out
   - fast rotators: v_eq = 2 pi R / P_rot above 2 km/s, from PUBLISHED
     ROTATION PERIODS
     (prot_match.py: Shan+ 2024 best periods first, then MEarth, Diez Alonso+
-    2019, TESS), R from the same catalog or from Teff (Mann+ 2015, solar
+    2019, Lambier+ 2025), R from the same catalog or from Teff (Mann+ 2015, solar
     metallicity). v_eq is an upper bound on v sin i;
   - without a period, the median of SIMBAD's high-resolution v sin i above
     4 km/s (APOGEE, R ~ 22 500, and the old compilations left out: they put

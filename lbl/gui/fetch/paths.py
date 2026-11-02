@@ -15,7 +15,7 @@ USER_AGENT = 'LBL (github.com/njcuk9999/lbl)'
 
 
 def cache(*parts: str) -> str:
-    """a path in the cache: cache('tic') is ~/.cache/lbl/gui/tic, or
+    """a path in the cache: cache('simbad') is ~/.cache/lbl/gui/simbad, or
     <LBL_GUI_CACHE>/tic"""
     base = os.environ.get('LBL_GUI_CACHE') or os.path.join(
         os.path.expanduser('~'), '.cache', 'lbl', 'gui')
