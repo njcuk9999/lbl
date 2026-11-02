@@ -1,8 +1,9 @@
 """The pages of an LBL run report.
 
 Each function draws one page and returns it; none writes a file, `main`
-assembles them. The FIP is computed here (lbl.report.fip); the periodogram
-borrows koloa when it is installed, and is skipped without it.
+assembles them. The periodogram is lbl.report.periodogram, the false
+inclusion probability lbl.report.fip, the fit of K at published ephemerides
+lbl.report.kepfit.
 """
 import numpy as np
 
@@ -567,7 +568,7 @@ def _fip_axis(ax, curves=()):
 
 
 def page_fip(plt, table, title):
-    """The FIP, in its three ways of facing the outliers."""
+    """The gaussian FIP, every point taken at its error bar."""
     from lbl.report import fip as _fip
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
@@ -582,11 +583,9 @@ def page_fip(plt, table, title):
     ax.plot(1.0 / freq, _log_fip(values), lw=1.0, color='C0',
             label='gaussian, one signal')
     ax.set_xscale('log')
-    # A PROBABILITY IS READ ON ITS OWN SCALE: linear, 0 to 1, with the axis
-    # pinned to those bounds. A FIP near 1 means the signal is almost surely
-    # absent and a FIP near 0 that it is almost surely there, and the eye
-    # should see where a curve sits between the two without having to decode
-    # a stretched axis.
+    # ON A LOG SCALE (_fip_axis): a FIP near 1 means the signal is almost
+    # surely absent and a FIP near 0 that it is almost surely there, and what
+    # separates a weak detection from a strong one is the number of decades
     _fip_axis(ax, curves=[_log_fip(values)])
     _landmarks(ax)
     ax.legend(fontsize=8)
@@ -603,9 +602,10 @@ def strongest_line(spl, wave_min, wave_max, step=0.002):
     """Where the deepest line of this species sits, in nm.
 
     Found from TAPAS rather than written down, so that the figure centres
-    itself on whatever the instrument actually covers. Measured on the HARPS
-    domain the 2026-10-16: water peaks at 647.76 nm (46% deep) and the dry
-    absorbers at 687.41 nm, the saturated O2 B band.
+    itself on whatever the instrument actually covers. On the HARPS domain,
+    water peaks at 647.76 nm (46% deep) and the dry absorbers at 687.41 nm,
+    the saturated O2 B band: the values page_telluric falls back on without
+    TAPAS.
     """
     grid = np.arange(wave_min, wave_max, step)
     depth = 1.0 - np.asarray(spl(grid), dtype=float)

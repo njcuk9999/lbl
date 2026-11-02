@@ -586,7 +586,7 @@ def order_correction(model, correction, n_earth, order, wave):
     names = list(model["means"].keys())
     grid = model["grid"]
     mean = model["means"][names[group_of(model, order, len(names))]]
-    # where the fit had data: its own weight sums, and, as before, wherever the
+    # where the fit had data: its own weight sums, and also wherever the
     # observer mean is not zero. A fit that keeps no observer mean (--mean
     # star) has one that is zero everywhere, and the mean alone would then
     # leave nothing to correct.
@@ -615,14 +615,14 @@ def refit_weights(values, good, sigma, trans, weights=None):
     read from the cube (twoframe.load_cube), sample by sample. 1/sigma^2
     where the sample is good; zero under the pixel SNR threshold
     (weights.min_pixel_snr, 1/sigma being the SNR of the log flux), or, when
-    a configuration asks for it, under the old DEPTH threshold
+    a configuration asks for it, under the DEPTH threshold
     (weights.ln_clip_low); the telluric ramp; the grid's edges.
 
-    THE DEPTH THRESHOLD WAS STILL HERE, at -0.5, after the fit had dropped it
-    on 2026-10-16: the bottom of every line deeper than 39% of its
-    continuum had no weight in the refit, and with mask: exposure, the mask
-    a refit file writes, it was NaN in every corrected file (74% of the line
-    cores near 517.35 nm on HD 189733, HARPS, 2026-10-23)."""
+    THE DEPTH THRESHOLD IS OFF UNLESS ASKED FOR, as in the fit, and the two
+    must agree: at -0.5 it gives no weight to the bottom of every line
+    deeper than 39% of its continuum, and with mask: exposure, the mask a
+    refit file writes, those line cores would be NaN in every corrected
+    file."""
     weights = weights or {}
     sigma = np.asarray(sigma, dtype=float)
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -649,8 +649,8 @@ def mask_for(mode, own_alive, alive_by_file, name):
     `none` blanks nothing. `common` blanks every sample any exposure left
     unweighted, the same set for all of them, and it says so even in the refit
     path: that path computes a mask from the exposure's own weights, and
-    leaving it in charge made the option do nothing at all on a nightly-stacked
-    target, where every file goes through it (2026-09-12). `exposure` blanks
+    leaving it in charge would make the option do nothing at all on a
+    nightly-stacked target, where every file goes through it. `exposure` blanks
     what that exposure lost, the refit's own mask when it has one.
     """
     if mode == "none":
@@ -667,9 +667,9 @@ def star_support(model):
     star component at all.
 
     A fit with n_star 0 stores an empty P, and np.any over the first axis of an
-    empty array gives a scalar, which broke the refit of every exposure on
-    2026-09-12. There is nothing to guard then: gap_guard falls back on the
-    weights' own support.
+    empty array gives a scalar, which the refit of every exposure cannot use.
+    There is nothing to guard then: gap_guard falls back on the weights' own
+    support.
     """
     # not atleast_2d: an empty P of one dimension becomes (1, 0) under it, and
     # the answer would be an empty vector rather than "there is no support"
@@ -682,17 +682,17 @@ def star_support(model):
 def clipped_weights_mask(cube, fit_path, floor=0.5):
     """The samples the LOOP down-weighted below `floor`: name -> (2, grid).
 
-    The loop's weight IS the mask (2026-09-25): a sample listened to at less
+    The loop's weight IS the mask: a sample listened to at less
     than half its nominal weight is not half a measurement, it is a
     measurement the model did not describe, and handing it to LBL corrected
     by a model it did not help build makes no sense.
 
     PER EXPOSURE, and not common to all, because that is what the thing is:
-    on TOI-2120 the factor falls below 0.5 for 0.388% of the samples, 2415
-    per exposure, and beyond 20% of the exposures only 13 columns out of
-    577 000 remain. These are local accidents, not regions, and masking them
-    everywhere would throw away 316 times too much. The common line set, for
-    its part, still comes from fit_weights_mask.
+    the factor falls below 0.5 for a fraction of a percent of an exposure's
+    samples, and hardly ever in the same column for more than a few
+    exposures. These are local accidents, not regions, and masking them
+    everywhere would throw away hundreds of times too much. The common line
+    set, for its part, still comes from fit_weights_mask.
 
     A factor of 0.5 is |z| > clip * sqrt(2), i.e. 4.24 sigma at clip = 3.
     """
@@ -728,10 +728,10 @@ def fit_weights_mask(cube, mode="exposure", share=1.0):
     With mode "common" every exposure gets the same mask, the samples EVERY
     exposure weighted: a file otherwise blanks its own, so each epoch is
     measured on its own set of lines and the set moves from one to the next.
-    On TOI-4552 that alone cost 1.8 m/s of rms with no correction applied at
-    all, while the error per exposure did not move: a line set that moves is
-    not lost information, it is scatter. The common mask costs 3.6 points more
-    of each exposure there, 6.7 on Proxima.
+    That alone adds scatter to the velocities with no correction applied at
+    all, while the error per exposure does not move: a line set that moves is
+    not lost information, it is scatter. The common mask costs a few percent
+    more of each exposure's samples in exchange.
 
     Exactly what panel 3 of the sequence figure shows and nothing else: the
     weights the fit read from the cube (twoframe.load_cube, with the figure's
@@ -749,9 +749,9 @@ def fit_weights_mask(cube, mode="exposure", share=1.0):
     if str(mode) == "common":
         # one set of lines per CAMPAIGN, and a joint cube holds several of them.
         # Intersected over all of them instead, a sample lost by one night of the
-        # faintest star was blanked in every exposure of the brightest: on
-        # PROXIMA+GJ1+GJ3090 that took the H band of a corrected Proxima file
-        # from 9.9% NaN to 17.1% (2026-09-13). Each object keeps its own.
+        # faintest star would be blanked in every exposure of the brightest,
+        # nearly doubling the NaN of its corrected files in the worst bands.
+        # Each object keeps its own.
         names_of = {}
         # an astropy Table or a FITS record array, depending on the caller
         columns = (list(getattr(meta, "colnames", None) or [])
@@ -761,20 +761,20 @@ def fit_weights_mask(cube, mode="exposure", share=1.0):
         for i, name in enumerate(names):
             names_of.setdefault(str(objects[i]), set()).add(name)
         # `share` IS THE FRACTION OF EXPOSURES NEEDED TO KEEP A SAMPLE, and
-        # 1.0 is the strict intersection, the one from before.
+        # 1.0 is the strict intersection.
         #
         # Why make it a setting: the intersection requires the agreement of
         # ALL exposures, which is cheap when they cover the same interval,
-        # and very expensive when they do not. Measured on 2026-10-15 on tau
-        # Ceti: 21.7% of pixels NaN with the delivered grid, 43.0% with
-        # input.to_observer, where each exposure is shifted by its own BERV
-        # and where the intersection of 85 shifted intervals is much smaller
-        # than each of them.
+        # and very expensive when they do not: with input.to_observer each
+        # exposure is shifted by its own BERV, the intersection of many
+        # shifted intervals is much smaller than each of them, and the share
+        # of NaN pixels can double against the delivered grid.
         #
         # Lowering the threshold does not give a per-exposure mask (mask:
-        # exposure, tried: 693 m/s, because each exposure then keeps a
-        # DIFFERENT set of lines): the set stays ONE for the campaign, it is
-        # only decided by majority rather than unanimously.
+        # exposure, which degrades the velocities badly because each
+        # exposure then keeps a DIFFERENT set of lines): the set stays ONE
+        # for the campaign, it is only decided by majority rather than
+        # unanimously.
         fraction = float(share)
         for group in names_of.values():
             if fraction >= 1.0:
@@ -833,14 +833,14 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
     with sptf.robust_open(path) as hdulist:
         out = fits.HDUList([h.copy() for h in hdulist])
     # THE CORRECTED FILE HAS THE SAME FORMAT AS THE ORIGINAL. It is a copy
-    # whose flux is replaced, and nothing else: a t.fits stays a t.fits, an
-    # ESO S2D stays an S2D, readable by whatever read the first one. What
-    # remains is knowing WHERE the flux is, and the name changes from one
-    # instrument to the next: FluxAB on SPIRou, SCIDATA on HARPS. The
-    # extension table knows only APERO, so for the instruments read by the
-    # bridge it is the bridge that answers, and the grid comes from LBL's
-    # class rather than from an extension whose name does not exist here
-    # (2026-10-14).
+    # whose flux is replaced, and nothing else: a t.fits stays a t.fits, a
+    # pipeline's 2D product stays that product, readable by whatever read
+    # the first one. What remains is knowing WHERE the flux is, and the
+    # extension's name changes from one instrument and pipeline to the
+    # next. The extension table knows only APERO's products, so for the
+    # instruments read by the bridge it is the bridge that answers, and the
+    # grid comes from LBL's class rather than from an extension whose name
+    # does not exist here.
     bridged = config is not None and not _readers.reads_natively(config)
     if bridged:
         payload = _readers.read_any(path, config)
@@ -853,8 +853,9 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
         flux = np.asarray(out[e_flux].data, dtype=np.float64)
         wave = np.atleast_2d(np.asarray(payload["wave"], dtype=np.float64))
     else:
-        # the same instrument table the reader uses; a SPIRou file must have
-        # its AB extensions corrected, not the single-fibre A that also exists
+        # the same extension table the reader uses; a file that holds both a
+        # fibre-combined (AB) flux and a single-fibre (A) one must have the
+        # AB extensions corrected, the ones the reader reads
         e_flux, e_wave, _, _ = sptf.extensions_for(out)
         flux = np.asarray(out[e_flux].data, dtype=np.float64)
         wave = np.asarray(out[e_wave].data, dtype=np.float64)
@@ -971,10 +972,11 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
     stem = stem[:-len("t.fits")] if stem.endswith("t.fits") else stem.rsplit(".", 1)[0]
     new = os.path.join(outdir, "%st_%d-%d.fits" % (stem, k, j))
     if bridged:
-        # LBL finds its files by their name: its HARPS_ESO class looks for
-        # *_S2D_A.fits, and a file called ..._S2D_At_0-7.fits would no
-        # longer be read by anyone. So the suffix the instrument expects is
-        # kept and the signature goes before it.
+        # LBL finds its files by their name: an instrument class may look
+        # for a fixed suffix such as *_S2D_A.fits, and a file called
+        # ..._S2D_At_0-7.fits would no longer be read by anyone. So the
+        # suffix the instrument expects is kept and the signature goes
+        # before it.
         base, _, tail = stem.rpartition("_")
         if base and tail:
             new = os.path.join(outdir, "%s_%d-%d_%s.fits" % (base, k, j, tail))
@@ -1065,7 +1067,7 @@ def night_row_names(cube):
 
 def member_row_names(cube):
     """{exposure: the name of its cube row}, from the cube's members.csv, or
-    None for a cube written before there was one.
+    None for a cube without one.
 
     The exact membership, as the coadder recorded it: what an exposure is
     matched by once a night is cut into bundles (nights.split_nights), where
@@ -1085,10 +1087,10 @@ def cut_key(path, row, names_by_night, members=None):
 
     Without a stacked cube (names_by_night None), the file's own name: each
     exposure has its row. With one, the name of the row of ITS night, found
-    from the BJD of the coefficient row that rows_by_night gave it. Before
-    2026-10-17, it was always the file name, so that only the first exposure
-    of each night received the cuts (measured: GJ 1, 2658 samples cut on the
-    first exposure and 0 on the others; Proxima 7790 against 0).
+    from the BJD of the coefficient row that rows_by_night gave it. The
+    file's own name would match only the first exposure of each night, the
+    one whose name the row carries, and the others would receive none of
+    the cuts.
     """
     own = os.path.basename(path)
     if members:
@@ -1136,7 +1138,7 @@ def rows_by_night(model, args, config=None):
             row["berv"] = float(meta["berv"])  # this exposure, not the row
             if "vstar" in row.colnames:
                 # 0 for a star with no orbits: a joint member beside one that
-                #   has some (TOI904 beside GJ_1028, 2026-10-21)
+                #   has some
                 row["vstar"] = float(meta.get("vstar", 0.0))
             out.append((path, row))
             continue
@@ -1212,12 +1214,12 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
               floor=VELOCITY_FLOOR, fwhm=None):
     """This exposure's own coefficients, against the campaign's fixed basis.
 
-    The alternative, which this replaces, was to hand every exposure of a night
-    the night's coefficients and change only its BERV. That is defensible for
-    the star, which does not vary over three hours, and wrong for everything
-    the observer block describes: OH and O2 airglow rise and fall through a
-    night by factors, and the water column moves with the airmass. A visit of
-    four exposures was being corrected with one sky amplitude.
+    The alternative is to hand every exposure of a night the night's
+    coefficients and change only its BERV. That is defensible for the star,
+    which does not vary over three hours, and wrong for everything the
+    observer block describes: OH and O2 airglow rise and fall through a night
+    by factors, and the water column moves with the airmass. A visit of
+    several exposures would be corrected with one sky amplitude.
 
     The basis P and Q is NOT refitted, only the amplitudes a and b. Refitting
     the basis per exposure would be a different method, and a single spectrum
@@ -1237,10 +1239,10 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
     # highpass.against_template, resample_exposure returns raw ln(flux) and
     # leaves the filter to the second pass; so it has to be redone here, with
     # THE SAME template, otherwise components fitted on a high-passed
-    # residual are subtracted from a spectrum that is not. Seen on
-    # 2026-10-16: the values came out with a median of +10.14 instead of
-    # +0.017, and the noise of the corrected spectra doubled (0.0148 against
-    # 0.0075) while the river plots, for their part, stayed clean.
+    # residual are subtracted from a spectrum that is not: the values would
+    # be raw log fluxes, far from zero, and the noise of the corrected
+    # spectra would double, while the river plots, made from the cube, stay
+    # clean and show nothing of it.
     if (config.get("highpass") or {}).get("against_template"):
         from . import cube as _cube
         from . import preprocess as _prep
@@ -1278,8 +1280,8 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
     # transmission and blanks the grid edges, and the transmission ramp in
     # particular matters here: it is near zero exactly where the atmosphere is
     # opaque, which is where the observer block does most of its work. Leaving
-    # it out shifted the refitted amplitude by tens of per cent against the
-    # fit's own, which is a method difference masquerading as a measurement.
+    # it out would shift the refitted amplitude by tens of per cent against the
+    # fit's own, a method difference masquerading as a measurement.
     w = refit_weights(values, good, sigma, trans, config.get("weights"))
     # and, as the fit does, nothing whose Lanczos taps reach a hole in the star
     # basis: the model there is built partly from samples the fit never
@@ -1414,8 +1416,7 @@ def correct_many(model, args):
         names = [os.path.basename(str(v)) for v in model["coeffs"]["filename"]]
         # A JOINT FIT holds every star's exposures, and each star is corrected
         #   from its own folder: there the others' files are not missing, they
-        #   are another star's (TOI1452's 2513613t.fits said "missing" in
-        #   TOI5579's folder, 2026-10-24). Each folder corrects what it holds
+        #   are another star's. Each folder corrects what it holds
         if getattr(args, "cube", None) and len(_cube_objects(args.cube)) > 1:
             here = [n for n in names
                     if os.path.exists(os.path.join(args.source_dir, n))]
@@ -1430,10 +1431,10 @@ def correct_many(model, args):
     shifter = None
     # THE CONFIGURATION IS ALSO USED TO WRITE, NOT ONLY TO REFIT. It says by
     # which reader the spectrum was read, hence which extension carries the
-    # flux to replace and in which frame its wavelengths are. It was loaded
-    # only under --refit, so that a correction without a refit
-    # (correct.weight: flux) fell back on APERO's extension table and
-    # stopped on "unsupported INSTRUME 'HARPS'" (2026-10-14).
+    # flux to replace and in which frame its wavelengths are. Loaded only
+    # under --refit, a correction without a refit (correct.weight: flux)
+    # would fall back on APERO's extension table and stop on any instrument
+    # that table does not know.
     if getattr(args, "weight", "flux") == "velocity":
         # measuring b in another metric means measuring it again
         args.refit = True
@@ -1490,8 +1491,8 @@ def correct_many(model, args):
                              " beside %s" % args.fits)
         floored_by_file = clipped_weights_mask(args.cube, fit_path, floor)
         if floored_by_file is None:
-            log("  the fit does not carry the loop's factor (fit from before"
-                " 2026-09-26): --weight-floor cannot mask anything", "warn")
+            log("  the fit does not carry the loop's factor (no clip_factor"
+                " in its archive): --weight-floor cannot mask anything", "warn")
         else:
             total = sum(int(v.sum()) for v in floored_by_file.values())
             log("  the loop down-weighted %d samples below %.2f of their"
@@ -1739,7 +1740,7 @@ def correct_many(model, args):
     workers = int(getattr(args, "workers", 1) or 1)
     if workers > 1 and permute is None:
         # IN THREADS, NOT PROCESSES: every exposure reads the same model and
-        # the same per-file masks (half a gigabyte for 420 SPIRou files),
+        # the same per-file masks (half a gigabyte for a few hundred files),
         # which threads share and processes would each copy; the reading,
         # the resampling and the solving are numpy, scipy and FITS, which
         # let go of the interpreter. Nothing shared is written: each exposure
@@ -1930,14 +1931,15 @@ def main(argv=None):
         log("correcting: removing %d star + %d Earth components -> t_%d-%d.fits"
               % (k, j, k, j))
         # not `return correct_many(...)`: this is a console_script entry
-        # point, so the count of files written would become the exit status.
-        # 316 corrected spectra exited 316.
+        # point, so the count of files written would become the exit status,
+        # and any nonzero count reads as a failure.
         correct_many(model, args)
         return None
     row = exposure_row(model["coeffs"], args.file, model.get("max_mad", 0.0),
                        plotted=True)
     log("  BJD %.5f   BERV %+.4f km/s   star shift %+.2f samples"
-          % (row["bjd"], row["berv"], -row["berv"] / model["dv"]))
+          % (row["bjd"], row["berv"],
+             -float(pixel_shift(float(row["berv"]), model["dv"]))))
     wave, recon, parity = reconstruct(model, row, args.kernel_halfwidth, args.file)
     good = np.isfinite(recon)
     log("  rebuilt %d of %d samples (%.1f%%) over %d orders"

@@ -23,7 +23,7 @@ per column, since at one column the water can be significant and the oxygen
 not. The pixels themselves keep their weight: where the correction goes to
 zero, the file keeps its flux as delivered.
 
-Two Savitzky-Golay variants, each over one resolution element (2026-09-11):
+Two Savitzky-Golay variants, each over one resolution element:
 
   * the significance smoothed, z^2 averaged over the element before the factor
     is taken, so a telluric line is judged over its width rather than pixel

@@ -1,9 +1,9 @@
 """Grouping exposures into observing nights, and coadding them.
 
 Averaging the exposures of a night before the PCA is the cheapest speed-up
-available: NIRPS visits a target three or four times in a row, so the cube
-shrinks by that factor and the decomposition -- whose cost is linear in the
-number of rows -- shrinks with it.
+available: an instrument that takes several exposures per visit makes the
+cube that many times smaller, and the decomposition -- whose cost is linear
+in the number of rows -- shrinks with it.
 
 It is only legitimate because the coadd happens *after* registration. Every
 exposure is splined onto the destination grid using its own BERV, which moves
@@ -12,9 +12,9 @@ turns. Coadding first and registering afterwards would smear the stellar lines
 by that much; registering first and coadding afterwards does not.
 
 The night an exposure belongs to is taken from its timestamp, read out of the
-filename when it is there. Opening 782 t.fits headers on this dataset costs
-four minutes of pure I/O, which is as much as reading the pixels; the filename
-carries the same information for free. The rule is the usual one: everything
+filename when it is there. Opening hundreds of headers costs minutes of pure
+I/O, as much as reading the pixels; the filename carries the same
+information for free. The rule is the usual one: everything
 before UT noon belongs to the night that started the previous day.
 """
 
@@ -29,7 +29,8 @@ from astropy.io import fits
 
 from .logger import log
 
-# NIRPS.2023-01-20T08:42:08.941t.fits  /  NIRPS_2023-01-20T08_42_08_941_pp_...
+# <INSTRUMENT>.2023-01-20T08:42:08.941t.fits or
+# <INSTRUMENT>_2023-01-20T08_42_08_941_pp_...
 _STAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})T(\d{2})[:_](\d{2})[:_](\d{2})")
 
 
@@ -143,11 +144,11 @@ def split_nights(stamps, labels, bundle, bervs=None):
     number of exposures (bundle_max). A night that fits in one bundle keeps
     its plain label; one that does not gets <night>#00, <night>#01...
 
-    WHY. Coadding a night is what lets NIRPS's three or four exposures of a
-    visit be fitted as one row. A transit sequence is sixty of them over five
-    hours, and its night's mean is not any one sky: the airmass, so the water
-    column, and the airglow change within it. Bundles keep what changes and
-    still coadd what does not (asked for on 2026-10-21, on WASP-76).
+    WHY. Coadding a night is what lets the few exposures of a visit be
+    fitted as one row. A transit sequence is dozens of them over hours, and
+    its night's mean is not any one sky: the airmass, so the water column,
+    and the airglow change within it. Bundles keep what changes and still
+    coadd what does not.
     """
     if not bundle:
         return list(labels)

@@ -1,7 +1,9 @@
 """
-Where PCA2D's river-plot windows (output.windows of nominal.yaml) fall in
-the orders of each instrument, and better ones: deep in the tellurics, in
-the middle of an order's blaze.
+Where PCA2D's river-plot windows (the instrument's PCA2D_WINDOWS parameter,
+in its class of lbl/instruments) fall in the orders of each instrument, and
+better ones: deep in the tellurics, in the middle of an order's blaze. The
+windows it proposes, as centre:width in nm, are what goes into that
+instrument's PCA2D_WINDOWS (param_override of its class).
 
 For each instrument, the wavelength and the blaze of every order come from
 a real file, read as PCA2D reads it (lbl.pca2d.readers); the tellurics from
@@ -14,14 +16,13 @@ within SEARCH nm of a configured one, inside the instrument's PCA2D domain,
 is scored, and the best with a throughput of at least BLAZE_FLOOR is
 proposed.
 
-THE BLAZE, NOT THE MIDDLE OF THE ORDER (2026-10-25). The first placement
-used the order's geometric centre, which is not where its blaze peaks: on
-HARPS the sodium window, 588.25-589.75 nm, had a "centrality" of 0.62 and
-sat on the red flank of order 56, its blaze falling from 0.75 to 0.45 of
-the peak (586.6 nm). A river plot drawn there shows a noisier spectrum than
-the method gives, which misleads on its quality. A window on a stellar line
-that cannot reach BLAZE_FLOOR is now moved to the middle of its order's
-blaze, and says so.
+THE BLAZE, NOT THE MIDDLE OF THE ORDER. An order's geometric centre is not
+where its blaze peaks: on HARPS, a sodium window at 588.25-589.75 nm sits on
+the red flank of order 56, its blaze falling from 0.75 to 0.45 of the peak
+(586.6 nm). A river plot drawn there shows a noisier spectrum than the
+method gives, which misleads on its quality. A window on a stellar line
+that cannot reach BLAZE_FLOOR is therefore moved to the middle of its
+order's blaze, and the tool says so.
 
     python order_windows.py <DATA_DIR/models, with tellurics/tapas_lbl.fits> \
         INSTRUMENT:SOURCE:file [INSTRUMENT:SOURCE:file ...]
@@ -30,7 +31,6 @@ import os
 import sys
 
 import numpy as np
-import yaml
 from astropy.io import fits
 
 
@@ -121,25 +121,24 @@ def tellurics(tapas, lo, hi):
     return float(np.mean(part < ABSORBED)), float(part.min())
 
 
-def domain(instrument):
-    """the instrument's PCA2D domain [nm] and its windows, from nominal.yaml"""
-    import os
-    import lbl.pca2d
-    nominal = yaml.safe_load(open(os.path.join(os.path.dirname(
-        lbl.pca2d.__file__), 'nominal.yaml')))
-    family = {'NIRPS_HE': 'NIRPS', 'NIRPS_HA': 'NIRPS', 'HARPSN': 'HARPN'}.get(
-        instrument, instrument)
-    mine = (nominal.get('instruments') or {}).get(family) or {}
-    general = nominal.get('general') or nominal
-    dom = dict((general.get('domain') or {}), **(mine.get('domain') or {}))
-    windows = ((mine.get('output') or {}).get('windows')
-               or (general.get('output') or {}).get('windows') or [])
+def domain(instrument, source=None):
+    """the instrument's PCA2D domain [nm] and its windows (PCA2D_WINDOWS),
+    from LBL's class for this instrument and data source (its first data
+    source when none is given: the windows are the instrument's own)"""
+    from lbl.instruments import select
+    from lbl.pca2d import config
+    if source is None:
+        source = next(iter(select.InstDict[instrument]))
+    layer = config.instrument_layer(instrument, source)
+    dom = layer.get('domain') or {}
+    windows = (layer.get('output') or {}).get('windows') or []
     return (float(dom.get('wave_min', 0)), float(dom.get('wave_max', 1e9)),
             [tuple(float(x) for x in str(w).split(':')) for w in windows])
 
 
 def main(models, *specs):
-    # models/tellurics/ since 2026-10-26, the top of models/ before
+    # TAPAS in models/tellurics/, or at the top of models/ where older
+    #   versions of LBL kept it
     tapas = os.path.join(models, 'tellurics', 'tapas_lbl.fits')
     if not os.path.exists(tapas):
         tapas = os.path.join(models, 'tapas_lbl.fits')
@@ -152,7 +151,7 @@ def main(models, *specs):
     tapas = (wave[order], trans[order])
     for spec in specs:
         # INSTRUMENT:SOURCE:file[:OTHER], OTHER an instrument whose windows
-        #   to start from (HARPS-N has none of its own)
+        #   to start from (for an instrument that has none of its own)
         parts = spec.split(':')
         instrument, source = parts[0], parts[1]
         seeds = None
@@ -162,7 +161,7 @@ def main(models, *specs):
         else:
             path = ':'.join(parts[2:])
         spans = orders(instrument, source, path, models)
-        wmin, wmax, windows = domain(instrument)
+        wmin, wmax, windows = domain(instrument, source)
         if seeds:
             windows = domain(seeds)[2]
         print('\n%s (%s): %d orders, %.1f-%.1f nm; PCA2D domain %.0f-%.0f nm'
@@ -177,8 +176,8 @@ def main(models, *specs):
             #   visible: 5 to 8 nm an order on HARPS), never under MIN_WIDTH
             widths = sorted({max(MIN_WIDTH, round(width * f * 4) / 4)
                              for f in (1.0, 0.75, 0.5)}, reverse=True)
-            # by nearness: the windows were moved since KEEP was written
-            #   (589.3 is now 589.0, 517.5 is 518.0)
+            # a configured window is on a stellar line of KEEP when its
+            #   centre is within 1 nm of the line's
             keep = next((reach for line, reach in KEEP.items()
                          if abs(line - centre) < 1.0), None)
             if keep is not None:

@@ -2,7 +2,17 @@
 most spectra in each bin), matched by position (SIMBAD's J2000 coordinates,
 nearest within 30 arcsec) in Shan+2024 (CARMENES, best periods), Newton+
 2016 and 2018 (MEarth, photometric), Diez Alonso+ 2019 (CARMENES,
-photometric), Lu+ 2022 (ZTF, photometric) and Lambier+ 2025 (TESS)."""
+photometric), Lu+ 2022 (ZTF, photometric) and Lambier+ 2025 (TESS).
+
+Reads candidates_simbad.json (vet_simbad.py) and vsini_rows.json
+(vsini_rows.py), whose objects are the candidates; writes prot_match.json:
+"coords" (per object, SIMBAD's RA, Dec [deg]) and "prot" (per object and
+catalog, P [d] or None, R [R_sun] when the catalog gives one, the catalog's
+note or flag, and the match separation [arcsec]). select_vetted_stars.py
+reads the catalogs in its own order of preference.
+
+    python prot_match.py
+"""
 import json
 import numpy as np
 from astropy import units as u

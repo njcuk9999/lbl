@@ -18,12 +18,12 @@ the fit gave no weight, when correct.nsig_cut is set in config.yaml; null
 leaves every sample in.
 
 A SAMPLE IS THE WRONG UNIT. One sample beyond 3 sigma is not an event: 0.27%
-of pure noise is, and 1% of these residuals were, which is what asking for
-correct.nsig_cut 3 threw away (2026-09-25). What is not noise is a run of
-samples leaning the same way, a bump as wide as a line rather than a spike, so
-the unit is the EXCURSION: every window from one sample up to
-correct.excursion_elements resolution elements, each judged by the aggregate
-significance of its sum,
+of pure noise is, and a per-sample cut at 3 sigma (correct.nsig_cut 3) on
+these residuals throws away about 1% of the samples, most of them noise. What
+is not noise is a run of samples leaning the same way, a bump as wide as a
+line rather than a spike, so the unit is the EXCURSION: every window from one
+sample up to correct.excursion_elements resolution elements, each judged by
+the aggregate significance of its sum,
 
     Z(w) = |sum of z over the window| / sqrt(V(w))
 
@@ -32,16 +32,16 @@ Six sigma there is not six sigma on one sample: four samples at three sigma
 each make six when the noise is independent, which is the point.
 
 V(w) IS MEASURED, NEVER w. The grid oversamples the spectrograph on purpose
-(0.5 km/s against a SPIRou pixel of 2.3 and a resolution element of 4.3), and
-the Lanczos registration and the high pass correlate neighbours further, so
-neighbouring samples are anything but independent and sqrt(w) would inflate
-every excursion into a detection. The exact variance of a sum of w correlated
-samples is
+(a step of 0.5 km/s against a detector pixel of a few km/s and a resolution
+element of about 4), and the Lanczos registration and the high pass correlate
+neighbours further, so neighbouring samples are anything but independent and
+sqrt(w) would inflate every excursion into a detection. The exact variance of
+a sum of w correlated samples is
 
     V(w) = w + 2 * sum over k of (w - k) * rho_k
 
 with rho_k the autocorrelation of the residual at lag k, measured on the run's
-own cube by noise_correlation. On TOI-2120 (SPIRou, 0.5 km/s) rho_1 is about
+own cube by noise_correlation. On a 0.5 km/s grid rho_1 is typically about
 0.9, so V(17) is near 90 rather than 17: a window of two resolution elements
 holds about three independent measurements, not seventeen.
 
@@ -59,15 +59,14 @@ It goes for every exposure rather than for the few that happened to be caught.
     frac    the fraction of exposures flagged in that column, > correct.column_frac
     chi2    the reduced chi2 of the SURVIVORS, > correct.column_chi2
 
-Both, not either. What each threshold means, measured rather than assumed
-(scratchpad/null_chi2.py, 4096 columns of 321 rows of pure Gaussian noise, at
-the 3 sigma per-sample clip): the survivors' reduced chi2 is 0.973, not 1,
-because the clip takes the tails with it (expected_chi2 below is the closed
-form). Its median over columns was 0.979 and its highest 1.271, so 1.5 is well
-clear of noise. The clipped fraction reached 2.2% at most, so the 10% of
-column_frac cannot be met by noise alone: it is what keeps a column with a
-handful of genuinely bad exposures, whose survivors are clean, from being
-thrown away whole.
+Both, not either. What each threshold means, simulated rather than assumed
+(4096 columns of 321 rows of pure Gaussian noise, at the 3 sigma per-sample
+clip): the survivors' reduced chi2 is 0.973, not 1, because the clip takes
+the tails with it (expected_chi2 below is the closed form). Its median over
+columns is 0.979 and its highest 1.27, so 1.5 is well clear of noise. The
+clipped fraction reaches about 2% at most, so the 10% of column_frac cannot
+be met by noise alone: it is what keeps a column with a handful of genuinely
+bad exposures, whose survivors are clean, from being thrown away whole.
 """
 
 from __future__ import annotations
@@ -80,6 +79,7 @@ import numpy as np
 from astropy import constants
 
 from .grids import pixel_shift
+from lbl.core.math import mad_to_sigma
 
 #: the light speed the resolution element is measured with, km/s
 C_KMS = constants.c.to("km/s").value
@@ -129,17 +129,17 @@ def coherent_bias(mean, count, width, rho, min_rows=10):
     over `width`).
 
     The third axis, and the only one that neither the cut nor the excess
-    scatter can see (2026-09-26). clip_weights compares each exposure to the
-    OTHER EXPOSURES at the same wavelength, so a residual present in all the
-    exposures is an outlier in none: on the O2 band at 1267 nm its median
-    |z| stays at 0.67, as on a control region. The local cut in lambda does
-    not see it either as long as it stays below its threshold in each
+    scatter can see. clip_weights compares each exposure to the OTHER
+    EXPOSURES at the same wavelength, so a residual present in all the
+    exposures is an outlier in none: on a poorly corrected O2 band its
+    median |z| stays at 0.67, that of pure noise. The local cut in lambda
+    does not see it either as long as it stays below its threshold in each
     exposure.
 
     What reveals it is the MEAN over the exposures: the star moves with the
     BERV and averages out in it, what is anchored in the observer frame
-    adds up in it. With N exposures the mean gains sqrt(N) = 17.8 against
-    the noise, so a bias of 0.2 sigma comes out at 3.5.
+    adds up in it. With N exposures the mean gains sqrt(N) against the
+    noise: with about 300 of them, a bias of 0.2 sigma comes out at 3.5.
 
         Z(j) = |sum of the mean over the window| / sqrt(V(w) / N)
 
@@ -148,10 +148,8 @@ def coherent_bias(mean, count, width, rho, min_rows=10):
     column of the window carries the window's verdict, so a region comes
     out whole.
 
-    On TOI-2120: 21.9% of the domain beyond 3 sigma, 2.8% beyond 10, and
-    the worst regions are 1761, 1803, 1805 and 1764-1769 nm (methane and
-    water around 1.76-1.81 um), 35 to 51 samples wide, i.e. 4 to 6
-    resolution elements: whole lines poorly corrected, not accidents.
+    What it finds is typically whole telluric lines poorly corrected (water,
+    methane), several resolution elements wide, not accidents.
     """
     mean = np.atleast_2d(np.asarray(mean, dtype=float))
     count = np.atleast_2d(np.asarray(count))
@@ -295,7 +293,7 @@ def _nanmedian_rows(boxes):
     values to the bit (NaN where a row has none, the mean of the two middle
     values for an even count), without the masked-array sort numpy takes for
     small arrays. running_stats calls it thousands of times per correction,
-    which was 25 of the 36 s of residual_outliers on Welopoai's cube."""
+    and numpy's version would be most of the cost of residual_outliers."""
     try:
         import bottleneck
     except ImportError:                                       # pragma: no cover
@@ -332,7 +330,7 @@ def running_stats(values, window, step=None, min_valid=0.5, origin=0):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             mc = _nanmedian_rows(boxes)
-            sc = 1.4826 * _nanmedian_rows(np.abs(boxes - mc[:, None]))
+            sc = mad_to_sigma * _nanmedian_rows(np.abs(boxes - mc[:, None]))
         ok = (count >= min_valid * window) & np.isfinite(sc) & (sc > 0)
         if ok.sum() < 2:
             continue
@@ -375,9 +373,9 @@ def _pieces(cube, fit, window):
 #: appaired or vetted template) differs from it by what the two stars do
 #: not share, metallicity first: line depths off by a few percent, the same
 #: in every exposure, still in the star's frame. Expected, and not a defect:
-#: the rejection takes it out before testing (star_static), where it was
-#: clipped sample by sample and, summed over the exposures by the
-#: star-frame bias test, masked whole lines (2026-10-24). Estimated on the
+#: the rejection takes it out before testing (star_static); left in, it
+#: would be clipped sample by sample and, summed over the exposures by the
+#: star-frame bias test, would mask whole lines. Estimated on the
 #: samples clear of tellurics only (transmission at least STATIC_CLEAR), so
 #: that a telluric residual standing still in both frames at a narrow BERV
 #: is never taken for the star's, and only where at least STATIC_SHARE of
@@ -472,11 +470,12 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
     out is comparable from one exposure and one wavelength to the next AND
     within a line: the core of a deep line has fewer photons and a larger
     sigma of its log flux. Divided by the running sigma alone, which the
-    continuum around it sets, the core of Na D (5% of the continuum) came out
-    at 4 to 5 sigmas in every exposure of GJ 229 and was masked
-    (2026-10-23). The running sigma is now a scale only: where the photon
-    sigmas are right it is 1. The cube is read `block` columns at a time, each with a margin
-    covering the largest shift, the Lanczos kernel and half the window, so
+    continuum around it sets, the core of a deep line such as Na D (5% of
+    the continuum) would come out at 4 to 5 sigmas in every exposure and be
+    masked. The running sigma is a scale only: where the photon sigmas are
+    right it is 1. The cube is read `block` columns at a time, each with a
+    margin covering the largest shift, the Lanczos kernel and half the
+    window, so
     every column comes out as from the whole cube; `block=None` reads it whole,
     and `blocks` stops after that many (for a measurement rather than a pass).
     `columns` restricts the pass to a (first, last) range of the grid, which is
@@ -583,21 +582,20 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
         `excursion_nsig`, the whole window (excursions, window_variance). `rho`
         is the noise's autocorrelation; it is measured here when not given.
       * otherwise every sample beyond `nsig` robust sigmas on its own, which
-        is what correct.nsig_cut asked for before the excursions existed.
+        is what correct.nsig_cut alone asks for.
 
     Then, with `column_frac` and `column_chi2`, every exposure also loses the
     columns the exposures disagree on as a body: more than `column_frac` of
     them flagged there and the survivors' reduced chi2 still above
     `column_chi2`, over at least `column_min_rows` exposures of that parity.
 
-    THE SAME IN THE STAR'S FRAME (2026-10-22). Each exposure's z carried to
-    the star's frame by its own shift (to the nearest sample), where what
-    the star's spectrum does not describe stands still. What another star's
-    template (OBJECT_COMPARISON) describes differently, its metallicity
-    first, is expected and is taken out of the residual before any test
-    (residual_z, star_static): on TOI-5579, TOI-4860 and TOI-1452 against
-    vetted templates it had 35% of 1275-1307 nm masked, 3% without it
-    (2026-10-24). Then: with `star_frac`
+    THE SAME IN THE STAR'S FRAME. Each exposure's z carried to the star's
+    frame by its own shift (to the nearest sample), where what the star's
+    spectrum does not describe stands still. What another star's template
+    (OBJECT_COMPARISON) describes differently, its metallicity first, is
+    expected and is taken out of the residual before any test (residual_z,
+    star_static): left in, it would mask whole stretches of spectrum where
+    the two stars' line depths differ. Then: with `star_frac`
     and `star_chi2`, a star column where more than `star_frac` of the
     exposures are beyond `nsig` and the survivors' reduced chi2 is still
     above `star_chi2`; with `star_bias_nsig` (and `bias_samples`), a star
@@ -625,8 +623,9 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
               else [])
     # the residual's own correlation, which BOTH tests need: the excursions to
     # know what a window's sum is worth, the regions to know how many
-    # independent columns a window holds. Measured with a correlation length of
-    # 1 the regions came out 15% of the spectrum instead of 6% (2026-09-25).
+    # independent columns a window holds. Taken as independent (a correlation
+    # length of 1), the samples would make every window look more significant
+    # than it is, and the regions would come out more than twice as wide.
     by_excess = bool(excess_nsig) and bool(excess_samples)
     by_bias = bool(bias_nsig) and bool(bias_samples)
     if (by_excursion or by_excess or by_bias

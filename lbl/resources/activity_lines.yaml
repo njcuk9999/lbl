@@ -11,7 +11,7 @@
 #   wave         centre [nm], IN VACUUM like every wavelength here: NIST ASD
 #                (Ritz, from the energy levels), the gA-weighted mean of the
 #                components within the line (H I fine structure, the He I
-#                triplets); read 2026-10-22
+#                triplets)
 #   width        width of the measuring window [nm]: the full width of a boxcar,
 #                the FWHM of a gaussian
 #   function     boxcar or gaussian
@@ -30,7 +30,8 @@
 # References:
 #   NIST Atomic Spectra Database (Kramida, Ralchenko, Reader and the NIST ASD
 #     Team), https://doi.org/10.18434/T4W30F, queried through
-#     https://physics.nist.gov/PhysRefData/ASD/lines_form.html
+#     https://physics.nist.gov/PhysRefData/ASD/lines_form.html (accessed
+#     2026-10-22)
 #   Gomes da Silva et al. 2011, A&A 534, A30,
 #     https://doi.org/10.1051/0004-6361/201116971 (https://arxiv.org/abs/1109.0321)
 #   Schofer et al. 2019, A&A 623, A44,

@@ -1462,8 +1462,8 @@ def figure_phase(before, after, planets, path, most=4):
 
 def figure_periodograms(before, after, planets, path):
     lines = planet_lines(planets)
-    # down to the shortest known period, which may be under a day
-    # (TOI-4552 b, 0.301 d), with the grid made finer to match
+    # down to the shortest known period, which may be under a day (an
+    # ultra-short-period planet), with the grid made finer to match
     pmin = min([1.1] + [0.8 * p for _l, p in lines])
     samples = 6000 if pmin >= 1.1 else int(6000 * 1.1 / pmin)
     rows = [("velocity", "v", "e")]
@@ -1552,11 +1552,11 @@ def figure_periodograms(before, after, planets, path):
 def find_tree(config, outdir, given=None):
     """The LBL tree this run's rdb files are in, or None.
 
-    lbl.directory in full since 2026-09-16. Before, it was `lbl`, relative to
-    wherever the run was started, which for the window is the configuration's
-    folder: that one is read off the recorded command, then the working
-    directory, then the output root. The first that holds an lblrdb folder
-    wins.
+    lbl.directory when it is an absolute path. A relative one (`lbl` by
+    default) is relative to wherever the run was started, which for the
+    window is the configuration's folder: that one is read off the recorded
+    command, then the working directory, then the output root. The first
+    that holds an lblrdb folder wins.
     """
     if given:
         return os.path.abspath(given)
@@ -1591,14 +1591,15 @@ def planets_of(outdir, config, star, joint=False):
     """The published periods of one star, from its OWN configuration.
 
     A joint run's configuration is its first member's, target included, so
-    it answers for that member only: read for the others, it gave GJ1
-    Proxima's four planets. A member's own is its cube_config beside the run,
+    it answers for that member only: read for the others, it would give each
+    of them the first member's planets. A member's own is its cube_config
+    beside the run,
     else its `objects:` block in the configuration file the run was given.
     Nothing, rather than another star's periods, when neither says.
     """
     member = os.path.join(outdir, "cube_config_%s.yaml" % star)
     if os.path.exists(member):
-        with open(member) as handle:
+        with open(member, encoding="utf-8") as handle:
             target = (yaml.safe_load(handle) or {}).get("target") or {}
         return [float(p) for p in target.get("planets") or []]
     if not joint or str(star) == str(stars_first(config)):
@@ -1607,7 +1608,7 @@ def planets_of(outdir, config, star, joint=False):
     command = (config.get("provenance") or {}).get("command") or ""
     found = re.search(r"--config\s+(\S+)", command)
     if found and os.path.exists(found.group(1)):
-        with open(found.group(1)) as handle:
+        with open(found.group(1), encoding="utf-8") as handle:
             layered = yaml.safe_load(handle) or {}
         block = ((layered.get("objects") or {}).get(star) or {})
         target = block.get("target") or {}
@@ -1616,32 +1617,36 @@ def planets_of(outdir, config, star, joint=False):
 
 
 def known_planets(outdir, config, star, joint, facts, folder):
-    """(planets, status) of one star: the NASA Exoplanet Archive's, and any
-    period its configuration gives that the archive does not.
+    """(planets, status) of one star: the NASA Exoplanet Archive's confirmed
+    planets, and any period its configuration gives that the archive does
+    not.
 
     Each planet is a dictionary (name, short, period in days, t0 in BJD or
-    None, k in m/s or None, source, disposition), shortest period first. The
-    archive's answer is kept beside the report, and used again when the
-    archive cannot be reached; `status` says which it was.
+    None, k in m/s or None, source), shortest period first. The archive's
+    answer is kept beside the report, and used again when the archive cannot
+    be reached; `status` says which it was. Only confirmed planets are used:
+    an entry whose source is "TOI" (a TESS object of interest, a candidate)
+    is left out, whichever file it was read from.
     """
     from . import archive
 
     kept = os.path.join(folder, "planets_%s.json" % slug(star))
     got = archive.planets(facts or {}, folder=star)
     if got.get("ok") and not got.get("stale"):
-        with open(kept, "w") as handle:
+        with open(kept, "w", encoding="utf-8") as handle:
             json.dump(got, handle, indent=1)
     elif not got.get("planets") and os.path.exists(kept):
-        with open(kept) as handle:
+        with open(kept, encoding="utf-8") as handle:
             got = dict(json.load(handle), stale=True)
-    planets = [dict(p) for p in got.get("planets") or []]
+    planets = [dict(p) for p in got.get("planets") or []
+               if p.get("source") != "TOI"]
     for period in planets_of(outdir, config, star, joint):
         if not any(abs(p["period"] - period) < archive.SAME_PERIOD * period
                    for p in planets):
             planets.append({"name": "%.6g d" % period,
                             "short": "%.4g d" % period, "period": period,
                             "t0": None, "k": None,
-                            "source": "configuration", "disposition": ""})
+                            "source": "configuration"})
     planets.sort(key=lambda p: p["period"])
     return planets, got
 
@@ -1686,9 +1691,9 @@ def first_header(config, star):
 
     The primary header, and over it the first extension that carries APERO's
     PP_ keys: the object as APERO's database has it, each value with its
-    source. PP_RV is in m/s whatever its comment says: NIRPS files label it
-    [km/s] and hold GJ 1 at 25534 and Proxima at -22400, which are SIMBAD's
-    25.534 and -22.4 km/s. It is given in km/s as PP_RV_KMS.
+    source. PP_RV is in m/s whatever its header comment says: a file can
+    label it [km/s] and still hold a star's SIMBAD systemic velocity times a
+    thousand. It is given in km/s as PP_RV_KMS.
     """
     from astropy.io import fits
 
@@ -1724,10 +1729,10 @@ def star_facts(star, config, folder):
     kept = os.path.join(folder, "simbad_%s.json" % slug(star))
     facts = simbad.star(star, header)
     if facts.get("ok"):
-        with open(kept, "w") as handle:
+        with open(kept, "w", encoding="utf-8") as handle:
             json.dump(facts, handle, indent=1)
     elif os.path.exists(kept):
-        with open(kept) as handle:
+        with open(kept, encoding="utf-8") as handle:
             facts = json.load(handle)
         facts["stale"] = True
     facts["header"] = {k: header.get(k) for k in header
@@ -1863,13 +1868,14 @@ def star_table(star, facts, planets):
         "J %s \\muted{(headers)}" % tex(header["ESO OCS TARG JMAG"])
         if header.get("ESO OCS TARG JMAG") else "n/a"))
     known, status = planets if isinstance(planets, tuple) else (
-        [{"name": "%.6g d" % p, "period": p, "source": "configuration",
-          "disposition": ""} for p in planets], {"ok": True})
+        [{"name": "%.6g d" % p, "period": p, "source": "configuration"}
+         for p in planets], {"ok": True})
+    # the source of each: "configuration" for a period the configuration
+    #   gives, else the archive's (confirmed planets only)
     said = "; ".join(
-        "%s, %s d \\muted{(%s%s)}" % (
+        "%s, %s d \\muted{(%s)}" % (
             tex(p["name"]), number(p["period"], 6 if p["period"] < 10 else 4),
-            tex(p["source"]), ", " + tex(p["disposition"])
-            if p.get("disposition") and p["source"] == "TOI" else "")
+            tex(p.get("source") or "confirmed"))
         for p in known)
     where = ("the NASA Exoplanet Archive, read on %s" % tex(status["retrieved"])
              if status.get("retrieved") else "")
@@ -1897,7 +1903,8 @@ def star_table(star, facts, planets):
 
 
 def star_label(facts):
-    """'Smethells 20, M1Ve, 50.7 pc' for the abstract, or ''."""
+    """'<SIMBAD name>, <spectral type>, <distance> pc' for the abstract, or
+    ''."""
     if not facts.get("ok"):
         return ""
     parts = [facts["main_id"].replace("NAME ", "")]
@@ -1990,8 +1997,7 @@ def summary_table(star, numbers):
         vb, va = b["d2v_sigma"] / 1e3, a["d2v_sigma"] / 1e3
         # lower is better: a scatter that falls is telluric noise the
         # correction took out of the line width, one that rises is noise it
-        # put in (asked for on 2026-09-17; it was flagged as a change either
-        # way until then)
+        # put in
         word = verdict(vb, va, tolerance=0.1)
         rows.append("d2v robust sigma ($10^3$ m$^2$/s$^2$) & %s & %s & & %s \\\\"
                     % (number(vb, 1), number(va, 1), mark(word)))
@@ -2053,11 +2059,11 @@ def summary_table(star, numbers):
                 " & & \\\\" % (number(numbers["removed"])
                                if np.isfinite(numbers["removed"])
                                else "none: the rms grew"))
-    # FIXED WIDTHS (asked 2026-10-23): with `rrr` a cell such as "726.5
-    #   $\\pm$ 141.9 (3.3$\\sigma$)" set its column's width, and TOI-904's
-    #   table ran 73 pt past the margin. Each column now has its share of the
-    #   line and its cells wrap: 0.86 of \\linewidth, plus 12 pt of padding
-    #   per column, is less than the line
+    # FIXED WIDTHS: with `rrr` a long cell such as "726.5 $\\pm$ 141.9
+    #   (3.3$\\sigma$)" sets its column's width, and the table can run past
+    #   the margin. Each column has its share of the line and its cells wrap:
+    #   0.86 of \\linewidth, plus 12 pt of padding per column, is less than
+    #   the line
     left = ">{\\raggedright\\arraybackslash}p{%s\\linewidth}"
     right = ">{\\raggedleft\\arraybackslash}p{%s\\linewidth}"
     columns = (left % "0.33" + right % "0.19" + right % "0.19"
@@ -2329,9 +2335,9 @@ def velocity_section(star, before, after, numbers, folder, stale):
                         bervbias.MIN_NEAR))
     if before.get("dtemp") is None:
         parts.append("\n\\muted{No temperature projection in these"
-                     " velocities: this run's LBL had no DTEMP table. Runs from"
-                     " 2026-09-16 measure the one nearest the star's Teff"
-                     " (lbl.dtemp).}\n")
+                     " velocities: this run's LBL had no DTEMP table. With"
+                     " one, LBL measures the projection on the model nearest"
+                     " the star's Teff (lbl.dtemp).}\n")
     name = tex(star)
     drawn = [
         (figure_time(before, after, os.path.join(figures, base + "-time.pdf")),
@@ -2438,8 +2444,8 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " dotted grey ones, the power a peak needs for a false-alarm"
          " probability of 1\\%%, 0.1\\%% and $10^{-4}$ (Baluev's approximation"
          " over the periods shown, the higher of the two series' levels);"
-         " green ones, named, the known planets and TESS candidates"
-         " (NASA Exoplanet Archive), and any period the configuration gives."
+         " green ones, named, the known planets (confirmed planets of the"
+         " NASA Exoplanet Archive), and any period the configuration gives."
          " A known planet should keep its peak; a peak at a"
          " year or its harmonics is the Earth's; one shared with d2v or the"
          " temperature is the star's activity."
@@ -2448,8 +2454,9 @@ def velocity_section(star, before, after, numbers, folder, stale):
         (figure_phase(before, after, numbers.get("planets_known"),
                       os.path.join(figures, base + "-phase.pdf")),
          "%s: the velocities folded at the known planets' periods" % name,
-         "The velocities folded at the period of each known planet or TESS"
-         " candidate (NASA Exoplanet Archive, or the configuration), delivered"
+         "The velocities folded at the period of each known planet (a"
+         " confirmed planet of the NASA Exoplanet Archive, or a period the"
+         " configuration gives), delivered"
          " on the left and corrected on the right, on one scale; phase 0 is"
          " the transit when the archive gives one, the first exposure"
          " otherwise. Each series is less its straight line in time (fitted"
@@ -2506,8 +2513,9 @@ def run_section(config, manifest, folder):
                      % (tex_break(path), tex_break(value), tex(what)))
     parts.append("\\bottomrule\n\\end{longtable}\n")
     provenance = config.get("provenance") or {}
-    command = provenance.get("command") or "not recorded (before 2026-09-15)"
-    with open(os.path.join(folder, "command.txt"), "w") as handle:
+    command = (provenance.get("command")
+               or "not recorded (the configuration has no provenance.command)")
+    with open(os.path.join(folder, "command.txt"), "w", encoding="utf-8") as handle:
         handle.write(wrap_lines(command, 90))
     parts.append("\\subsection{The command and the code}\n"
                  "The command this run was given:\n{\\footnotesize"
@@ -2522,9 +2530,10 @@ def run_section(config, manifest, folder):
 def run_rows(outdir, cube=None):
     """The run's summary rows, for a run whose report folder has none.
 
-    The figures stage records them since 2026-09-16; before, they were only
-    printed on the bound PDF's first page. They are worked out again from the
-    run's configuration and its fit, less the cube, which nothing recorded.
+    The figures stage records them in the manifest; a run without them has
+    them only on the bound PDF's first page. They are worked out again from
+    the run's configuration and its fit, less the cube, which neither of
+    them names.
     """
     import types
 
@@ -2664,11 +2673,12 @@ def failure_section(manifest):
 def parameters_appendix(config, folder):
     body = yaml.safe_dump({k: v for k, v in config.items()},
                           sort_keys=False, default_flow_style=False, width=90)
-    with open(os.path.join(folder, "parameters.yaml"), "w") as handle:
+    with open(os.path.join(folder, "parameters.yaml"), "w", encoding="utf-8") as handle:
         handle.write(wrap_lines(body, 96))
     return ("\\appendix\n\\section{The parameters, as resolved}\n"
             "Every key of the configuration this run used, after the defaults,"
-            " the instrument, the object and the command line were merged.\n"
+            " the instrument's settings (the PCA2D\\_* parameters of its LBL"
+            " class), the object and the command line were merged.\n"
             "{\\scriptsize\\verbatiminput{parameters.yaml}}\n")
 
 
@@ -2704,12 +2714,13 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
     outdir = os.path.abspath(outdir)
     pdflatex = find_pdflatex()
     if pdflatex is None:
-        log("no pdflatex on this machine, so the report stays the bound PDF of"
-            " the figures. A TeX installation (MacTeX, or BasicTeX) gives the"
-            " full report", "warn")
+        log("no pdflatex found, so the report stays the bound PDF of the"
+            " figures. For the full report, install a TeX distribution (TeX"
+            " Live, MiKTeX or MacTeX) and put its pdflatex on the PATH, or"
+            " set LBL_PDFLATEX to the full path of pdflatex", "warn")
         return None
     if config is None:
-        with open(os.path.join(outdir, "resolved_config.yaml")) as handle:
+        with open(os.path.join(outdir, "resolved_config.yaml"), encoding="utf-8") as handle:
             config = yaml.safe_load(handle)
     folder = os.path.join(outdir, "report")
     os.makedirs(os.path.join(folder, "figures"), exist_ok=True)
@@ -2789,7 +2800,7 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
             planets[star] = known_planets(outdir, config, star, joint,
                                           facts[star], folder)
     # THE VELOCITY SERIES FIRST, right after the contents: what one opens a
-    #   report for (2026-10-24)
+    #   report for
     body = series_section(series, folder)
     body.append("\\section{The star%s}\n" % ("s" if len(stars) > 1 else ""))
     body.append("As SIMBAD describes %s, found from the names in the"
@@ -2864,12 +2875,12 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
         abstract.append("\\watch{Some velocities predate the corrected spectra;"
                         " see their section.}")
 
-    with open(TEMPLATE) as handle:
+    with open(TEMPLATE, encoding="utf-8") as handle:
         document = handle.read()
     now = datetime.datetime.now().astimezone()
     fill = {
         "TITLE": tex(" + ".join(stars)),
-        "SUBTITLE": tex("pca2d-preclean run %s%s" % (
+        "SUBTITLE": tex("PCA2D run %s%s" % (
             tag, ", %s" % run_name.lstrip("_") if run_name.startswith("_")
             else "")),
         # the date, and under it the time to the second: two reports of one
@@ -2883,7 +2894,7 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
     }
     for key, value in fill.items():
         document = document.replace("<<%s>>" % key, value)
-    with open(os.path.join(folder, name + ".tex"), "w") as handle:
+    with open(os.path.join(folder, name + ".tex"), "w", encoding="utf-8") as handle:
         handle.write(document)
     if not compile_tex(folder, name, pdflatex):
         return None

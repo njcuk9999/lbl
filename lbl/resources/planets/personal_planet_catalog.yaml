@@ -16,7 +16,8 @@
 #
 #   DATA_DIR/personal_planet_catalog.yaml        one data directory (optional)
 #   lbl/resources/planets/personal_planet_catalog.yaml   this file, every run
-#   lbl/resources/planets/known_planets.yaml     the published orbits
+#   lbl/resources/planets/known_planets.yaml     the published orbits of
+#                                                confirmed planets
 #
 # HOW TO ENTER AN ORBIT
 # ---------------------
@@ -50,24 +51,21 @@
 # - Check with:
 #     python -c "from lbl.science import planets; print(planets.orbits_for(['TOI6478']))"
 # =============================================================================
-stars:
-
-  # THE EXAMPLE. Welopoai Aa (TYC 3980-1081-1), an M4 dwarf 8 pc away, and the
-  # white dwarf of its inner binary, Welopoai Ab. The radial-velocity
-  # Keplerian of Artigau et al. 2026, "Welopoai: a peculiar triple system 8 pc
-  # from the Sun", A&A (manuscript aa61214-26): P = 3590 (+12 -13) d,
-  # K = 8441.4 +- 4.7 m/s, e = 0.1898, omega = 5.6615 rad, inferior
-  # conjunction JD 2459475.87 +- 0.68 (omega_RV + nu = 90 deg).
-  TYC_3980M1081M1:
-    names: [TYC_3980M1081M1, Welopoai, Welopoai Aa, TYC 3980-1081-1,
-            TYC3980-1081-1,
-            IRAS 21500+5903, 2MASS J21513828+5917383,
-            Gaia DR2 2202703050388170880]
-    planets:
-      - name: Welopoai Ab
-        period: 3590.0
-        k: 8441.4
-        e: 0.1898
-        omega: 324.379
-        t0: 2459475.87
-        reference: Artigau et al. 2026, A&A, aa61214-26 (RV Keplerian)
+# AN EXAMPLE, to copy below `stars:` and fill in (a star with one companion
+# on an eccentric orbit, its solution taken from a paper):
+#
+#   stars:
+#     STAR_APERO_NAME:
+#       names: [STAR_APERO_NAME, Star Name, 2MASS J00000000+0000000]
+#       planets:
+#         - name: Star Name b
+#           period: 3590.0
+#           k: 8441.4
+#           e: 0.19
+#           omega: 324.4
+#           t0: 2459475.87
+#           reference: Author et al. year, journal, volume, page
+#
+# This file ships empty: LBL's own catalogs hold published orbits only.
+# =============================================================================
+stars: {}

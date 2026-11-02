@@ -345,8 +345,8 @@ def objective(sp, trans, noise=None):
 
 
 #: the dry exponent free within this range of the airmass: the dry column
-#:    follows it (0.961 times it on HD 10700, MAD 0.026), and an unbounded
-#:    fit sank to 1e-27 on a blind pass of Gliese 229 (2026-10-27)
+#:    follows it to a few percent (fit_exponents), and an unbounded fit can
+#:    sink to zero on a blind pass, without a template
 DRY_RANGE = (0.5, 1.5)
 
 
@@ -361,24 +361,16 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     never a dry night. By fitting ln(alpha), alpha stays strictly positive
     whatever the simplex does, and a relative variation counts as much at
     the top as at the bottom of the range, which is the right metric for a
-    column that varies by a factor of several.
+    column that varies by a factor of several. A fit in linear lets some
+    exposures fall to zero or near it; in logarithm none does.
 
-    Measured on 2026-10-15 on 100 exposures of HD 10700: in linear, one
-    exposure fell exactly to zero and nine stayed below 0.05; in logarithm,
-    none.
-
-    `free_dry` is TRUE by default since 2026-10-16. The dry component does
-    follow the airmass, but not with the coefficient 1 that TAPAS assumes:
-    measured on the 92 exposures of the HAM mode of HD 10700, fitted freely
-    on the dry bands, it is 0.961 times the airmass with a MAD of 0.026.
-    These 4% less column are what an altitude of 2400 m gives, TAPAS being
-    computed for a reference column that is not that of La Silla.
-
-    Fixing it therefore amounted to imposing a systematic error of 4% on all
-    the dry absorption. Free, the fit is stable: the residual against the
-    fitted line has a MAD of 0.031, and slope and intercept can be read
-    separately (0.980 and -0.019 in least squares), which is exactly the
-    expected shape of an altitude offset.
+    `free_dry` is TRUE by default. The dry component does follow the
+    airmass, but not with the coefficient 1 that TAPAS assumes: TAPAS is
+    computed for a reference column, and the altitude of an observatory
+    removes part of it (about 4% at 2400 m, a dry exponent of 0.96 times
+    the airmass). Fixing it to the airmass would impose that systematic
+    error on all the dry absorption; free, it is fitted with a scatter of a
+    few percent around the airmass.
 
     `fallback` and `flat_span` carry the safeguard on the exposures without
     signal, described at the sweep below. It is HERE and not only in
@@ -429,45 +421,33 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     # enough to decide, and it gives the simplex a starting point on the
     # right side.
     #
-    # Measured on 2026-10-15 on two exposures of HD 10700 taken the same
-    # night:
+    # An exposure without signal has no minimum at all: its cost RISES from
+    # the smallest exponent on, so the simplex would push it to zero. Since
+    # there is always water, this is a fit failure, and `fallback` is
+    # returned rather than an invented value.
     #
-    #                        alpha=0.005   alpha=2.0   variation   minimum
-    #     working exposure       340.1       408.0       41%       interior
-    #     collapsing exposure     17.76       18.23      2.6%      monotonic
-    #
-    # The second has no minimum at all: its cost RISES from the smallest
-    # value on, so the simplex pushes it to zero. Since there is always
-    # water, this is a fit failure, and `fallback` is returned rather than
-    # an invented value.
-    #
-    # THE SWEEP GOES DOWN TO 0.002, and this detail matters. A version that
-    # stopped at 0.02 sent 19 exposures out of 100 to the fallback: the 8 of
-    # the EGGS mode (another frame, see below), one at SNR 6.6, and ELEVEN
-    # perfectly healthy exposures. Those eleven, swept down to 0.002, show a
-    # clear and INTERIOR minimum, from 0.2 to 1.0, with 25 to 45% variation:
-    # the safeguard broke them instead of measuring them, because their cost
-    # contrast (1.6 to 2.2) is weaker than that of the easy exposures (2.7)
-    # and the edge of the sweep fell on the wrong side.
+    # THE SWEEP GOES DOWN TO 0.002, and this detail matters: an exposure
+    # whose cost has a weak contrast still has a clear, INTERIOR minimum
+    # (anywhere from 0.2 to 1.0), but a sweep that stopped at 0.02 can find
+    # its lowest cost on its first point and take it for an edge, sending a
+    # healthy exposure to the fallback.
     scan = np.array([0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.35, 0.6,
                      1.0, 1.6, 2.5])
     # the sweep only moves the water; the dry component stays at its
     # starting value, which is enough to locate the dip in water. BOTH
-    # parameters are passed when the dry component is free, otherwise
-    # cost() reads a missing p[1] (bug seen on 2026-10-16: free_dry=True
-    # raised IndexError right from the sweep).
+    # parameters are always passed, as cost() reads p[1] when the dry
+    # component is free.
     dry0 = np.log(max(float(airmass), 1e-3))
     costs = np.array([cost([np.log(a), dry0]) for a in scan])
     if not np.all(np.isfinite(costs)):
         return float(fallback) + FALLBACK_MARK, float(airmass)
-    # WHAT "NOTHING TO GO ON" IS, since the cost is in units of the noise
-    #   (2026-10-27): a minimum on an edge of the scan, or a curve flat to
-    #   `flat_span` (0.1%), numerically. The 5% this guard asked of the
-    #   former cost sent every HARPS spectrum of GJ 1214 to the fallback
-    #   although each had an interior minimum (spans 0.5 to 1.6%); a flat
-    #   flux without tellurics, at the same noise, is no flat curve but a
-    #   minimum at the scan's first point (spans 3 to 4%, and 73 to 116% at
-    #   Gliese 229's), which the edge test catches
+    # WHAT "NOTHING TO GO ON" IS, the cost being in units of the noise: a
+    #   minimum on an edge of the scan, or a curve flat to `flat_span`
+    #   (0.1%), numerically. A faint star can have a real interior minimum
+    #   with a span of only 0.5 to 2%, so the span alone cannot ask for
+    #   more; a flat flux without tellurics, at the same noise, is no flat
+    #   curve but a minimum at the scan's first point (spans of a few
+    #   percent or more), which the edge test catches
     span = (costs.max() - costs.min()) / max(abs(costs.min()), 1e-30)
     jbest = int(np.argmin(costs))
     flat = span < flat_span
@@ -475,11 +455,8 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     if flat or on_edge:
         # THE FALLBACK MUST BE RECOGNISABLE. `fallback` is 0.35, which is
         # ALSO a point of the sweep: an exposure that really converges to
-        # 0.35 then returns the same number as an exposure that failed, and
-        # neither the log nor the header can tell them apart. Seen on
-        # 2026-10-16 on HD 69830, where I counted 18% fallback whereas
-        # several of these exposures clearly converged to 0.35 (variation
-        # 39 to 42%).
+        # 0.35 would return the same number as an exposure that failed, and
+        # neither the log nor the header could tell them apart.
         #
         # So the value is shifted by an epsilon that is physically invisible
         # (0.35 against 0.3500001, i.e. three ten-millionths of the exponent)
@@ -504,17 +481,16 @@ def fit_campaign(frames, spl_water, spl_dry, resolution=115000.0,
     exponents, one per exposure.
 
     WHY A SAFEGUARD. There is always water, so an exponent that collapses
-    is a failure. Measured on 2026-10-15 on HD 10700: the exposures that
-    drift are those with a low SNR, and their cost curve is FLAT (17.76 to
-    17.94 between alpha 0.005 and 0.8, i.e. 1% variation, whereas an
-    exposure that works shows a clear minimum at 0.3). The criterion simply
-    has nothing to decide with: forcing them would only invent a value.
+    is a failure. The exposures that drift are those with a low SNR, and
+    their cost curve is FLAT (about 1% variation over the sweep, where an
+    exposure that works shows a clear minimum): the criterion simply has
+    nothing to decide with, and forcing them would only invent a value.
 
     These exposures therefore get the campaign MEDIAN, which is the best
-    estimate available for them, and says so. `floor` is the threshold
-    below which the fit is considered not to have succeeded: 0.05 on HARPS,
-    well below the 5th percentile of the exposures that converge (0.15) and
-    well above what the failures give (less than 0.01).
+    estimate available for them. `floor` is the threshold below which the
+    fit is considered not to have succeeded: 0.05, well below the exponents
+    of the exposures that converge in the visible (5th percentile about
+    0.15) and well above what the failures give (less than 0.01).
     """
     out = np.full(len(frames), np.nan)
     for i, (wave_ground, sp, airmass) in enumerate(frames):
