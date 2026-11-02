@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 """Rebuild or correct an exposure from a two-frame fit, on its own wavelengths.
 
-The `correct` stage of `pca2d-preclean`. Reads `twoframe_components.fits` and
+The `correct` stage of `lbl_pca2d`. Reads `twoframe_components.fits` and
 puts the model back where the data came from: order by order, on the t.fits
 file's native wavelengths, with each order taking the means of *its own
 parity*.
 
-    python -m lbl.pca2d.reconstruct --fits outputs/TOI2120/1-3v/twoframe_components.fits \
-        --file data/TOI2120/2811170t.fits --out model.fits --plot model.pdf
+    python -m lbl.pca2d.reconstruct \
+        --fits outputs/<object>/<run>/twoframe_components.fits \
+        --file data/<object>/<odometer>t.fits --out model.fits --plot model.pdf
     python -m lbl.pca2d.reconstruct --correct --all --cube cache/cube_tfits_<key> \
-        --fits outputs/TOI2120/1-3v/twoframe_components.fits \
-        --source-dir data/TOI2120 --corrected-dir outputs/TOI2120/1-3v/corrected
+        --fits outputs/<object>/<run>/twoframe_components.fits \
+        --source-dir data/<object> --corrected-dir outputs/<object>/<run>/corrected
 
 WHAT THE NUMBERS ARE. The cube was high-passed in the log, so every quantity
 here is `ln f - savgol(ln f)`: zero in the continuum, negative in a line. The
@@ -32,13 +33,13 @@ block and its mean `mu[p]` do not move.
 WHAT A CORRECTED FILE HOLDS is panel 3 of the sequence figure, exactly: the
 flux with the observer block and its per-parity mean divided out, and NaN
 wherever the fit gave the sample no weight (fit_weights_mask). The star block
-stays, T_p included. tests/test_panel3_is_the_correction.py holds them together.
+stays, T_p included.
 
 THE PARITY WRAPPING is the part that is easy to get wrong. A t.fits row set is
 split into even and odd orders, and `mu_earth` was fitted once per parity, so
 order k must take `mean_even` if k is even and `mean_odd` if it is odd. Using
 one mean for both puts a static even-minus-odd offset into every reconstructed
-order, which is exactly the artefact the two-frame fit was fixed to avoid. The
+order, which is exactly the artefact the per-parity means are there to avoid. The
 star and Earth *components* have no parity: they are single vectors over the
 whole grid, and only the means are per parity.
 """
@@ -272,9 +273,9 @@ def load_model(path):
             "grid": np.asarray(basis["wavelength"], dtype=np.float64),
             "template": np.asarray(basis["template"], dtype=np.float64),
             # (n_star, M) even with no star component at all: an empty list
-            # gives a one-dimensional array, and everything downstream asks the
-            # basis how many columns it has. The refit of every exposure died
-            # on that, twice, on 2026-09-12.
+            # gives a one-dimensional array, and everything downstream (the
+            # refit of every exposure first) asks the basis how many columns
+            # it has.
             "P": (np.array([basis["star_pc%d" % (k + 1)] for k in range(n_star)],
                            dtype=np.float64) if n_star else
                   np.zeros((0, len(basis["wavelength"])), dtype=np.float64)),
@@ -293,15 +294,15 @@ def load_model(path):
         model["means"] = {nm.split("_", 1)[1]: np.asarray(basis[nm], dtype=np.float64)
                           for nm in names}
         # the star-frame mean of each parity, from a --mean iterate fit; None
-        # from an older one, which has the single `template` instead
+        # from any other, which has the single `template` instead
         names = [c for c in basis.columns.names if c.startswith("template_")]
         model["templates"] = ({nm.split("_", 1)[1]:
                                np.asarray(basis[nm], dtype=np.float64)
                                for nm in names} or None)
         # where the fit had data, from its own weight sums per parity: the
-        # correction may touch a grid sample only there. It used to be read off
-        # the observer mean (mean != 0), which a fit that keeps no observer
-        # mean (--mean star) has at zero everywhere.
+        # correction may touch a grid sample only there. Not read off the
+        # observer mean (mean != 0), which a fit that keeps no observer mean
+        # (--mean star) has at zero everywhere.
         sums = [c for c in basis.columns.names if c.startswith("weight_sum_")]
         model["support"] = (np.any([np.asarray(basis[c], dtype=np.float64) > 0
                                     for c in sums], axis=0) if sums else None)
@@ -335,9 +336,7 @@ def exposure_row(coeffs, filename, max_mad=0.0, refit=False,
 
     An exposure the fit's MAD cut rejected is said BY NAME, with its date,
     its BERV and the cut, and with what happens to it here, which depends
-    on the correction (2026-10-27: a bare "this exposure was rejected" was
-    printed once per file, and said its coefficients were zeros while the
-    nominal correction refits them):
+    on the correction:
 
         refit      its coefficients are fitted again on its own spectrum,
                    and its observer components divided out as for any other
@@ -492,8 +491,8 @@ def _field(row, name):
     """row[name] as a float, None when the row has no such field.
 
     Not `name in row`: on a FITS or astropy table row that asks whether the
-    name is one of the row's VALUES, which it never is, and the PCASTR_V card
-    it used to guard was never written to a corrected file.
+    name is one of the row's VALUES, which it never is, and a card guarded
+    that way (PCASTR_V) would never be written to a corrected file.
     """
     try:
         return float(row[name])
@@ -559,10 +558,10 @@ def mean_divided(model, n_earth):
 
     Not whether one would have been ADDED: the nominal, `mean: star`, keeps no
     observer mean at all, so its means are zero everywhere and order_correction
-    adds nothing. The card used to say bool(n_earth), which read True on every
-    nominal file while no mean of the kind existed. A provenance card that has
-    to be interpreted is worse than no card, because it is read by whoever was
-    not there when the run was made.
+    adds nothing. bool(n_earth) would read True on every nominal file while
+    no mean of the kind exists. A provenance card that has to be interpreted
+    is worse than no card, because it is read by whoever was not there when
+    the run was made.
     """
     if not n_earth:
         return False
@@ -579,8 +578,8 @@ def order_correction(model, correction, n_earth, order, wave):
     subtracted from this order's parity before solving for them, whenever any
     observer component is divided out: panel 3 of the sequence figure, "what a
     corrected file holds", is the data minus that mean minus the observer
-    block, and a file that kept the mean kept a static observer-frame pattern
-    the panel shows removed (2026-09-10, the stripes at 1267 nm). It belongs
+    block, and a file that kept the mean would keep a static observer-frame
+    pattern the panel shows removed (stripes along the telluric bands). It belongs
     to the observer block, so a file that divides none of it out, t_k-0,
     keeps it.
     """

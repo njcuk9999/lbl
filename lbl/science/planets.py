@@ -11,10 +11,10 @@ by its name and by every synonym the catalogs give it:
     lbl/resources/planets/personal_planet_catalog.yaml
                                               your own solutions, for every
                                               run of this LBL
-    lbl/resources/planets/known_planets.yaml  the published ones (exoplanet.eu,
-                                              with the NASA Exoplanet
-                                              Archive's transit epochs and
-                                              APERO's names), made by
+    lbl/resources/planets/known_planets.yaml  the published orbits of
+                                              confirmed planets (exoplanet.eu
+                                              and the NASA Exoplanet Archive,
+                                              with APERO's names), made by
                                               maintenance/planets/
                                               build_known_planets.py
 
@@ -27,6 +27,12 @@ the two composed relativistically, and the template is made in one pass. If
 not, the template iterates on the velocities of the spectra as it always has.
 Either way the velocities LBL reports are corrected for the BERV only: the
 orbits set where the template is built, and where compute starts.
+
+The report reads one more catalog, lbl/resources/planets/ephemerides.yaml
+(made by the same script): the confirmed planets of the NASA Exoplanet
+Archive with a published ephemeris (period and time of inferior conjunction),
+whether their K is known or not, whose K it fits on the velocities of the run
+(ephemerides_for, lbl.report.kepfit).
 
 Created on 2026-10-21
 
@@ -54,8 +60,9 @@ PLANET_DIR = os.path.join(os.path.dirname(os.path.dirname(
 PUBLISHED = os.path.join(PLANET_DIR, 'known_planets.yaml')
 #: the name of a personal catalog, in DATA_DIR or beside the published one
 PERSONAL = 'personal_planet_catalog.yaml'
-#: the transiting planets and TESS candidates with an ephemeris, K or not
-CANDIDATES = os.path.join(PLANET_DIR, 'candidates.yaml')
+#: the confirmed planets with a published ephemeris (period and time of
+#:  inferior conjunction), K known or not, for the report's fit of their K
+EPHEMERIDES = os.path.join(PLANET_DIR, 'ephemerides.yaml')
 #: what LBL appends to an object's name (telluric cleaning, PCA2D): the star
 #:  is what is left once they are taken off
 SUFFIXES = re.compile(r'(_tc|_pca2d[0-9A-Za-z._+-]*)+$')
@@ -106,7 +113,7 @@ def star_names(objname: str, header_names: Optional[List[str]] = None
 def _yaml_load(path: str) -> dict:
     """A catalog, or an empty dict if the file is empty"""
     loader = getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
-    with open(path, 'r') as handle:
+    with open(path, 'r', encoding='utf-8') as handle:
         content = yaml.load(handle, Loader=loader)
     return content or dict()
 
@@ -317,31 +324,31 @@ def orbits_for(names: List[str], data_dir: Optional[str] = None
                 skipped=skipped)
 
 
-def candidates_for(names: List[str]) -> Optional[Dict]:
+def ephemerides_for(names: List[str]) -> Optional[Dict]:
     """
-    The transiting planets and TESS candidates of the object that have an
-    ephemeris (period and transit epoch), from candidates.yaml, for the
+    The confirmed planets of the object that have a published ephemeris
+    (period and time of inferior conjunction), from ephemerides.yaml, for the
     report's fit of their K. None if the catalog does not know the object or
     gives it none.
 
     :param names: list of str, the names of the object
 
-    :return: dict (star, catalog, candidates), or None
+    :return: dict (star, catalog, planets), or None
     """
-    if not os.path.exists(CANDIDATES):
+    if not os.path.exists(EPHEMERIDES):
         return None
-    found = _find_in(CANDIDATES, names)
+    found = _find_in(EPHEMERIDES, names)
     if found is None:
         return None
-    candidates = []
-    for candidate in found['entry'].get('candidates') or []:
-        values = [candidate.get(key) for key in ('period', 't0')]
+    planets = []
+    for planet in found['entry'].get('planets') or []:
+        values = [planet.get(key) for key in ('period', 't0')]
         if all(value is not None and np.isfinite(float(value))
-               for value in values) and float(candidate['period']) > 0:
-            candidates.append(candidate)
-    if not candidates:
+               for value in values) and float(planet['period']) > 0:
+            planets.append(planet)
+    if not planets:
         return None
-    return dict(star=found['star'], catalog=CANDIDATES, candidates=candidates)
+    return dict(star=found['star'], catalog=EPHEMERIDES, planets=planets)
 
 
 # =============================================================================

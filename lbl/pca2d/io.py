@@ -1,4 +1,4 @@
-"""Reading NIRPS s1d_v spectra and the header quantities we care about."""
+"""Reading APERO s1d_v spectra and the header quantities we care about."""
 
 from __future__ import annotations
 

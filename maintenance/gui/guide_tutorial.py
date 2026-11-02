@@ -8,6 +8,10 @@ both languages or none (a screenshot, a command), or a pair (English,
 French).
 """
 
+#: the conda environment the guide's commands name (any name will do; the
+#:    install step of make_guide.py says so)
+ENV = "lbl"
+
 #: the example, as the screenshots show it
 EXAMPLE = dict(target="Gliese229", spectra=214, nights=207, snr=157,
                berv="-21.3 &rarr; 21.2", span=42.4, teff=3660,
@@ -195,20 +199,20 @@ lbl-data/
          "<p>Dans un terminal, activez l'environnement et lancez la fenêtre"
          " sur ce dossier :</p>"),
         code("""
-conda activate lbl-pca2d
+conda activate %s
 lbl_gui --data-dir ~/lbl-data
-"""),
+""" % ENV),
         callout("see",
                 "<p>One line in the terminal, which then waits (leave it"
                 " open):</p>" + code("lbl_gui 0.67.008 at http://127.0.0.1:8765/"
-                                     " (LBL from .../lbl-pca2d/lbl); Ctrl+C"
+                                     " (LBL from .../lbl/lbl); Ctrl+C"
                                      " to stop")
                 + "<p>and the window opens in your browser. If it does not,"
                 " open <code>http://127.0.0.1:8765/</code> yourself.</p>",
                 "<p>Une ligne dans le terminal, qui attend ensuite (laissez-le"
                 " ouvert) :</p>" + code("lbl_gui 0.67.008 at"
                                         " http://127.0.0.1:8765/ (LBL from"
-                                        " .../lbl-pca2d/lbl); Ctrl+C to stop")
+                                        " .../lbl/lbl); Ctrl+C to stop")
                 + "<p>et la fenêtre s'ouvre dans votre navigateur. Sinon,"
                 " ouvrez vous-même <code>http://127.0.0.1:8765/</code>.</p>"),
     ]))
@@ -383,14 +387,14 @@ lbl_gui --data-dir ~/lbl-data
                "<strong>A correction already on disk</strong>: redone only if"
                " the request changed (the default). Leave it.",
                "<strong>Observer components</strong> (n_earth): how many"
-               " patterns fixed on the detector are fitted. 3 by default;"
+               " patterns fixed on the detector are fitted. 7 by default;"
                " leave it for a first run."],
               ["<strong>PCA2D actif</strong> (coché par défaut). Décoché, le"
                " run est LBL seul, sur les spectres livrés.",
                "<strong>Une correction déjà sur le disque</strong> : refaite"
                " seulement si la demande a changé (le défaut). Laissez-le.",
                "<strong>Composantes de l'observateur</strong> (n_earth) :"
-               " combien de motifs fixes sur le détecteur sont ajustés. 3 par"
+               " combien de motifs fixes sur le détecteur sont ajustés. 7 par"
                " défaut ; gardez-le pour un premier run."]),
         ("<p>Every option has a (i) that says what it does, and its default"
          " under its name. The reference at the end of this page lists them"
@@ -550,13 +554,13 @@ lbl_gui --data-dir ~/lbl-data
         callout("tip",
                 "<p>While a search goes, <em>Stop the search</em> takes the"
                 " place of <em>Search</em>: an archive that does not answer"
-                " no longer holds the others up. Under the results, <em>What"
+                " does not hold the others up. Under the results, <em>What"
                 " the search and the fetch are doing</em> says who was asked,"
                 " what each archive answered and in how long, and why a file"
                 " was not fetched.</p>",
                 "<p>Pendant une recherche, <em>Arrêter la recherche</em> prend"
                 " la place de <em>Chercher</em> : une archive qui ne répond"
-                " pas ne retient plus les autres. Sous les résultats, <em>Ce"
+                " pas ne retient pas les autres. Sous les résultats, <em>Ce"
                 " que font la recherche et le téléchargement</em> dit qui a"
                 " été interrogé, ce que chaque archive a répondu et en combien"
                 " de temps, et pourquoi un fichier n'a pas été récupéré.</p>"),

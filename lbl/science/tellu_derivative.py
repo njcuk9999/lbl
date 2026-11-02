@@ -1,8 +1,4 @@
-"""The H2O exponent by the DERIVATIVE, the method of telluric_fit.
-
-Taken from papier_helium/referee/tellu_derivative.py and from
-telluric_fit/tellu_tools.py:2413 (optimize_exponents, called by
-predict_abso.py), carried over from WINERED to the visible.
+"""The telluric exponents (H2O and the dry absorbers) by the DERIVATIVE.
 
 THE PRINCIPLE. The spectrum is divided by the modelled transmission and the
 exponent kept is the one that makes the corrected spectrum the SMOOTHEST,
@@ -11,12 +7,11 @@ pixel-to-pixel gradient. A wrong exponent leaves at each telluric line a
 residual shaped like a DERIVATIVE, which inflates that dispersion; the
 stellar lines contribute the same amount to it whatever the exponent, so
 the criterion depends only on the tellurics, even where they are a
-minority. This is what makes it stable where the polynomial extrapolation
-of LBL collapses onto its bounds.
+minority. Unlike an extrapolation of the CCF amplitude of the telluric
+lines against the exponent, it has no reason to run onto its bounds.
 
-THE FORMULATION IS THAT OF THE CODE THAT WORKS, and two details in it are
-essential (measured on 2026-10-15, a first version that ignored them hit
-the bound on 35% of the exposures):
+Two details of the formulation are essential; without them the fit ends on
+its bounds for a large share of the exposures:
 
     the OPTICAL DEPTH, tau = -ln(T), carried on a UNIFORM log grid, then
     exponentiated: tau is multiplied by the exponent, which is linear,
@@ -24,11 +19,11 @@ the bound on 35% of the exposures):
     irregular grid of the spectrum mixes the two operations;
 
     the CONVOLUTION to the resolution of the instrument, AFTER the power and
-    BEFORE the division. TAPAS is much finer than the spectrograph (2.6
-    km/s on HARPS), and lines that are too narrow cannot cancel broadened
-    lines.
+    BEFORE the division. TAPAS is much finer than the spectrograph (a
+    resolution element of 2.6 km/s at R = 115 000), and lines that are too
+    narrow cannot cancel broadened lines.
 
-WHAT IS FREE, for the optical (instruction of 2026-10-15):
+WHAT IS FREE, for the optical:
 
     H2O             free PER FILE: the water column changes too fast for
                     a per-night model. And there is ALWAYS water: an
@@ -40,31 +35,39 @@ WHAT IS FREE, for the optical (instruction of 2026-10-15):
                     split that TAPAS gives in LBL (ABSO_WATER and
                     ABSO_OTHERS).
     the velocity    NOT free: the model is evaluated in the OBSERVER frame
-                    (the ground), where the atmosphere is, and not on the
-                    barycentric grid as LBL does (docs/tapas_frame.md).
+                    (the ground), where the atmosphere is; a barycentric
+                    wave solution is shifted back to it by the BERV before
+                    the fit (tellu_clean.correct_tellu, BERV_TRANS).
 """
 import numpy as np
 from astropy import constants
 
 C = constants.c.to("km/s").value
-FWHM2SIG = 2.3548
-#: the smooth weights of telluric_fit.tellu_tools.get_transmission_weights
+#: the FWHM of a Gaussian over its sigma, 2 sqrt(2 ln 2)
+FWHM_PER_SIGMA = 2 * np.sqrt(2 * np.log(2))
+#: the 0-1 weights of the transmission (transmission_weights): a sigmoid of
+#:    width transition_sigma centred on a transmission of depth_max, and
+#:    zero where the transmission is under depth_saturated and on the wings
+#:    of those lines, until it rises back above reject_saturated
 WEIGHTS = dict(depth_max=0.6, depth_saturated=0.5, reject_saturated=0.8,
                transition_sigma=0.02)
+#: the gradient pixels this many sigmas from its median lose half their
+#:    weight, and all of it a few sigmas further (a sigmoid)
 OUTLIER_SIGMA = 6.0
 #: the step of the model grid, in km/s
 STEP_KMS = 0.25
 
-#: the water bands of the HARPS domain, measured on TAPAS on 2026-10-15:
-#: elsewhere water does not exceed 1% depth and the fit got drowned by the
-#: stellar lines
-WATER_BANDS_HARPS = ((586.0, 600.0), (644.0, 664.0), (686.0, 696.0))
+#: the water bands of the visible (380 to 700 nm), read on TAPAS: elsewhere
+#: water does not exceed 1% depth, and a fit there is drowned by the stellar
+#: lines. A reference for water_mask; the fit itself takes its windows from
+#: TAPAS (telluric_windows)
+WATER_BANDS_VISIBLE = ((586.0, 600.0), (644.0, 664.0), (686.0, 696.0))
 
 #: THE DRY BANDS: ONLY WHERE IT CONSTRAINS SOMETHING.
 #:
 #: The dry component is not water and is not measured in the same places.
-#: Surveyed on TAPAS in 5 nm windows on 2026-10-16, the only windows of the
-#: HARPS domain where it exceeds 5% depth:
+#: Read on TAPAS in 5 nm windows, the only windows of the visible (380 to
+#: 700 nm) where it exceeds 5% depth:
 #:
 #:     575-585 nm   6%     marginal
 #:     625-635 nm   70%    O2 gamma, and water is only 9% there
@@ -77,7 +80,9 @@ WATER_BANDS_HARPS = ((586.0, 600.0), (644.0, 664.0), (686.0, 696.0))
 #: Fitting it over the whole domain costs about fifty times more in
 #: computation for information that only comes from the red, and adds the
 #: noise of the blue half to a measurement that half does not constrain.
-DRY_BANDS_HARPS = ((625.0, 635.0), (685.0, 690.0))
+#: A reference, like WATER_BANDS_VISIBLE: the fit takes its windows from
+#: TAPAS (telluric_windows)
+DRY_BANDS_VISIBLE = ((625.0, 635.0), (685.0, 690.0))
 
 #: THE FALLBACK MARK. The fallback value (0.35) falls exactly on a point of
 #: the sweep, so an exposure that converges to 0.35 and an exposure that
@@ -88,16 +93,16 @@ DRY_BANDS_HARPS = ((625.0, 635.0), (685.0, 690.0))
 FALLBACK_MARK = 1e-7
 
 
-#: THE WINDOWS THE FIT SEES, read from TAPAS rather than hard-coded: the
-#: 5 nm windows where water (exponent 1, at the resolution of the
-#: instrument) exceeds 15% depth, or the dry component 25%. Surveyed on
-#: 2026-10-25 from 380 to 790 nm, they give back on the HARPS domain the
-#: bands above (585-600, 645-660, 625-635, 685-695 nm) and add for
-#: ESPRESSO 695-740 (water) and 755-770 (A band). Without them, the
-#: objective covered the whole spectrum: the minimum stayed in the same
-#: place, but its variation fell below the 5% of the safeguard (0.5 to 7%,
-#: against 7 to 54% on the windows) and almost all exposures went to the
-#: fallback (HD 189733: 382 out of 382, Gliese 229: 385 out of 428).
+#: THE WINDOWS THE FIT SEES, read from TAPAS rather than hard-coded, so that
+#: they follow any instrument's domain: the 5 nm windows where water
+#: (exponent 1, at the resolution of the instrument) exceeds 15% depth, or
+#: the dry component 25%. From 380 to 700 nm they give back the bands above
+#: (585-600, 645-660, 625-635, 685-695 nm); further red they add 695-740
+#: (water) and 755-770 nm (O2 A band). Over the whole spectrum, the minimum
+#: of the objective stays in the same place, but its variation is diluted
+#: by the stellar lines and the noise of the pixels without tellurics,
+#: which do not depend on the exponent, and the sweep's safeguard sends
+#: most exposures to the fallback.
 WINDOW_NM = 5.0
 WINDOW_WATER_DEPTH = 0.15
 WINDOW_DRY_DEPTH = 0.25
@@ -143,7 +148,7 @@ def band_mask(wave, bands):
     return out
 
 
-def water_mask(wave, bands=WATER_BANDS_HARPS):
+def water_mask(wave, bands=WATER_BANDS_VISIBLE):
     """The pixels of the water bands, where the H2O exponent is fitted."""
     wave = np.asarray(wave, dtype=float)
     out = np.zeros(wave.shape, dtype=bool)
@@ -157,8 +162,8 @@ def _spans_of(wave, gap_nm=1.0):
 
     Returns a list of (start, end), skipping the gaps wider than `gap_nm`.
     This is what lets model_grid build the model only where it will be
-    used: on HARPS the three water bands only take up 40% of the interval
-    they span.
+    used: the three water bands of the visible only take up 40% of the
+    interval they span.
     """
     wave = np.asarray(wave, dtype=float)
     wave = np.sort(wave[np.isfinite(wave)])
@@ -177,20 +182,19 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
     tau rather than T, because tau is what gets multiplied by the exponent.
 
     `bands` restricts the grid to the useful intervals only. Without it the
-    grid covers wave_min to wave_max CONTINUOUSLY, and on HARPS the three
-    water bands only take up 40% of that interval: 60% of the convolution,
-    which is the most expensive item once the propagation is vectorised,
-    goes in the bin. Measured on 2026-10-16: 206293 grid points for 82340
-    useful ones.
+    grid covers wave_min to wave_max CONTINUOUSLY, and the three water
+    bands of the visible only take up 40% of that interval: 60% of the
+    convolution, the most expensive step of the fit, would be spent where
+    no pixel is fitted.
 
     Each piece is widened by the half-width of the kernel on either side,
     otherwise the convolution would be wrong on its own edges; the pieces
     that overlap after widening are merged. The result is numerically the
-    same as the continuous grid, except at the edges, which are now correct
-    by construction.
+    same as the continuous grid inside the pieces, and correct at their
+    edges by construction.
     """
     step = np.arctanh(step_kms / C)
-    sig_pix = np.arctanh(C / resolution / FWHM2SIG / C) / step
+    sig_pix = np.arctanh(C / resolution / FWHM_PER_SIGMA / C) / step
     half = int(5 * sig_pix)
     x = np.arange(-half, half + 1)
     kernel = np.exp(-0.5 * (x / sig_pix) ** 2)
@@ -200,11 +204,10 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
         # the pieces, widened by the kernel and merged when they touch
         margin = (half + 1) * step
         # THE PIECES FALL ON THE CONTINUOUS GRID, not beside it: each start
-        # is rounded down to the grid point below. Without this the two
-        # grids differ by a fraction of a step, np.interp samples the same
-        # function at shifted places, and the model moves by 2e-3 in
-        # places, which is not an error but makes the comparison with the
-        # former version impossible to read.
+        # is rounded down to the grid point below, so that the pieces sample
+        # the same wavelengths as the continuous grid would. Otherwise the
+        # two grids differ by a fraction of a step and np.interp samples the
+        # model at shifted places (differences of 2e-3 in transmission).
         base = np.log(wave_min)
         spans = []
         for low, high in sorted(bands):
@@ -252,24 +255,17 @@ def transmission(model, wave_ground, alpha_water, alpha_dry):
 
 def transmission_weights(trans, depth_max, depth_saturated, reject_saturated,
                          transition_sigma):
-    """The 0-1 weights of telluric_fit: a sigmoid on the depth, and the
+    """The 0-1 weights of the transmission: a sigmoid on the depth, and the
     saturated lines and their wings set to zero.
 
-    THE PROPAGATION IS VECTORISED, and that is the only change: a double
-    Python loop over 24500 pixels, called 580 times per fit, took 14.2 s of
-    the 16.6 s of a fit (86% of the time, measured with the profiler on
-    2026-10-16). The version below gives the SAME result, checked on 200
-    random draws, on the edge cases (all saturated, nothing saturated, a
-    single pixel, empty array, alternation) and on TAPAS, in 73 times less
-    time.
-
-    THE RULE, unchanged: sweeping in one direction, contamination is
+    THE RULE: sweeping in one direction, contamination is
     ENTERED at each saturated pixel and LEFT at the first pixel that rises
     back above `reject_saturated`; a pixel is contaminated if it is so in
     either of the two directions. In other words a pixel is contaminated
     when the last event met before it is a SATURATED pixel and not a return
     above the threshold, which a cumulative maximum of the event indices
-    gives in one pass.
+    gives in one pass, without a Python loop over the pixels (this function
+    is called hundreds of times per fit).
     """
     w_depth = 1.0 / (1.0 + np.exp(-(trans - depth_max) / transition_sigma))
     n = len(trans)
@@ -290,7 +286,9 @@ def transmission_weights(trans, depth_max, depth_saturated, reject_saturated,
 
 
 def weighted_nanstd(data, weights):
-    """The weighted dispersion of telluric_fit."""
+    """The weighted standard deviation of `data` (with the unbiased
+    weighted variance, for reliability weights); inf with fewer than 32
+    usable points."""
     ok = np.isfinite(data) & np.isfinite(weights) & (weights > 0)
     d, w = data[ok], weights[ok]
     if d.size < 32:
@@ -323,15 +321,14 @@ def gradient_noise(trans, noise=None):
 
 def objective(sp, trans, noise=None):
     """The weighted dispersion of the gradient of the corrected spectrum, IN
-    UNITS OF ITS NOISE (2026-10-27).
+    UNITS OF ITS NOISE.
 
     Dividing by the transmission also divides the noise: a pixel of noise
     sigma becomes sigma / T, and without accounting for it every increase
     of the exponent inflates the noise of the deep lines. On a faint star
-    this noise outweighed the telluric lines being removed: the cost rose
-    monotonically with the exponent, with no minimum, and the water fell to
-    the fallback (the 6 HARPS exposures of GJ 1214, at the bottom of the
-    sweep). The gradient is therefore divided by its noise
+    this noise outweighs the telluric lines being removed: the cost rises
+    monotonically with the exponent, with no minimum, and the water falls
+    to the fallback. The gradient is therefore divided by its noise
     (gradient_noise), which follows the division by the transmission and,
     with `noise`, the photon noise of the exposure."""
     grad = np.gradient(sp / np.clip(trans, 1e-3, None))

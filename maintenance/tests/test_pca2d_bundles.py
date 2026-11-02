@@ -3,7 +3,8 @@
 A transit sequence is sixty exposures over five hours, and its night's mean is
 not one sky. The bundles cut a night by time, BERV range or count; the cube
 records which exposure went into which row, and the correct stage matches an
-exposure to its row by that, since its night alone no longer says.
+exposure to its row by that, since its night alone does not say which
+bundle it belongs to.
 
     PYTHONPATH=<this checkout> python -m pytest \
         maintenance/tests/test_pca2d_bundles.py
@@ -151,7 +152,7 @@ def test_two_bundles_of_one_night_are_two_rows(tmp_path, monkeypatch):
                    "e4t.fits": 0.9}
 
 
-def test_whole_nights_match_as_they_always_did(tmp_path, monkeypatch):
+def test_whole_nights_match_by_membership_or_by_night(tmp_path, monkeypatch):
     """By membership or by night, a cube of whole nights gives the same row."""
     members = {"e1t.fits": "e1t.fits", "e2t.fits": "e1t.fits",
                "f1t.fits": "f1t.fits"}
@@ -176,21 +177,22 @@ def test_whole_nights_match_as_they_always_did(tmp_path, monkeypatch):
         [float(r["b1"]) for _, r in by_night] == [0.2, 0.2, 0.4]
 
 
-def _nominal(instrument):
+def _nominal(instrument, data_source):
     from lbl.pca2d import config as spconfig
     path = os.path.join(os.path.dirname(spconfig.__file__), "nominal.yaml")
-    return spconfig, spconfig.load_config(path, instrument=instrument)
+    return spconfig, spconfig.load_config(path, instrument=instrument,
+                                          data_source=data_source)
 
 
 def test_the_default_is_100_m_per_s_of_berv():
-    _, cfg = _nominal("NIRPS")
+    _, cfg = _nominal("NIRPS_HE", "CADC")
     assert cfg["input"]["bundle_berv"] == 0.1
     assert cfg["input"]["bundle_minutes"] is None
     assert cfg["input"]["bundle_max"] is None
 
 
 def test_unset_bundles_do_not_rekey_the_cubes():
-    spconfig, cfg = _nominal("NIRPS")
+    spconfig, cfg = _nominal("NIRPS_HE", "CADC")
     for name in ("bundle_minutes", "bundle_berv", "bundle_max"):
         cfg["input"][name] = None
     key = spconfig.cache_key(cfg)
@@ -202,7 +204,7 @@ def test_unset_bundles_do_not_rekey_the_cubes():
 
 
 def test_bundles_do_not_rekey_a_cube_of_single_exposures():
-    spconfig, cfg = _nominal("NIRPS")
+    spconfig, cfg = _nominal("NIRPS_HE", "CADC")
     cfg["input"]["nightly_stack"] = False
     key = spconfig.cache_key(cfg)
     cfg["input"]["bundle_berv"] = 0.05
@@ -212,7 +214,7 @@ def test_bundles_do_not_rekey_a_cube_of_single_exposures():
 def test_the_berv_line_runs_where_the_observer_frame_goes():
     """A feature fixed in the observer's frame sits at +BERV in the star's
     (the barycentric correction adds it), relativistically: the line of the
-    river plots, checked against WASP-76's telluric residuals."""
+    river plots, which telluric residuals follow."""
     from lbl.pca2d.figures.sequence import berv_track
     c = constants.c.to("km/s").value
     berv = np.array([-10.0, 0.0, 10.0])

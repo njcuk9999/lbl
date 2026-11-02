@@ -1,12 +1,9 @@
 """Read a spectrum from any instrument, through LBL.
 
-"Anything that goes through LBL can be sent to PCA2D" (2026-10-14). LBL
-already reads fifteen instrument/source combinations: SPIRou and NIRPS in
-APERO, CADC and ESO, HARPS and HARPS-N in ORIG, ESO and ESSP, ESPRESSO,
-CARMENES, SOPHIE, CORALIE, MAROON-X, EXPRES, NEID, plus a generic class.
-Reimplementing that reading here would mean maintaining it twice and
-diverging; and since pca2d is meant to end up in LBL, it is better to take
-that path now.
+Anything that goes through LBL can be sent to PCA2D. LBL already reads every
+instrument and data source it supports (lbl.instruments.select.InstDict),
+plus a generic class. Reimplementing that reading here would mean
+maintaining it twice and diverging, so PCA2D asks LBL's class.
 
     read(path, instrument, data_source) -> the same dict as tfits.read_tfits
 
@@ -21,12 +18,12 @@ What LBL gives natively and what has to be drawn from it:
 What LBL does not give, and what is done about it:
 
     recon   the telluric transmission. APERO writes it in the t.fits
-            (Recon); HARPS and the others do not have it, and LBL computes
-            it itself from its TAPAS model (lbl/science/tellu_clean.py, the
+            (Recon); other pipelines do not, and LBL computes it itself
+            from its TAPAS model (lbl/science/tellu_clean.py, the
             file tapas_lbl.fits that it downloads). `tapas_transmission`
             below evaluates it on the spectrum's grid, which gives pca2d the
             same object as APERO's Recon.
-    sky     the sky emission. No visible spectrograph delivers it per
+    sky     the sky emission. Most pipelines do not deliver it per
             exposure; quality.max_sky_ratio then does not apply and the sky
             mask is left to the instrument. None, and the rest of the
             pipeline takes that into account.
@@ -36,9 +33,9 @@ What LBL does not give, and what is done about it:
 THE TWO PARITIES. pca2d reduces each exposure to two spectra, the even orders
 and the odd orders, because on an echelle orders n and n+1 overlap while n and
 n+2 never touch: the whole spectrum thus fits on two rows with no redundancy.
-The rule is kept for all instruments (decided on 2026-10-14), but it is
-CHECKED by `parity_is_safe`, which measures the actual overlap and warns when
-the assumption does not hold.
+The rule is kept for all instruments, but it is CHECKED by `parity_is_safe`,
+which measures the actual overlap and warns when the assumption does not
+hold.
 """
 
 from __future__ import annotations
@@ -48,27 +45,15 @@ import os
 import warnings
 
 import numpy as np
+from lbl.core.math import mad_to_sigma
 
-#: what LBL calls the instruments, and the associated data source, as
-#: select.InstDict spells them. What is not here is not refused: the pair is
-#: passed as it is to LBL, which will say what it thinks of it.
-KNOWN = {
-    "SPIROU": ("APERO", "CADC"),
-    "NIRPS_HA": ("APERO", "CADC", "ESO"),
-    "NIRPS_HE": ("APERO", "CADC", "ESO"),
-    "HARPS": ("ORIG", "ESO", "ESSP"),
-    "HARPSN": ("ORIG", "ESO", "ESSP"),
-    "ESPRESSO": ("None",),
-    "CARMENES": ("None",),
-    "SOPHIE": ("None",),
-    "CORALIE": ("None",),
-    "MAROONX": ("RED", "BLUE"),
-    "EXPRES": ("ORIG", "ESSP"),
-    "NEID": ("ESSP",),
-}
-#: GENERIC exists as a class in LBL but not in its instrument/source table:
-#: it is configured by hand, so pca2d does not list it here. It can still be
-#: used by passing its name directly to `instrument`.
+def sources_of(name):
+    """The data sources LBL has a class for, for the instrument it calls
+    `name` (lbl.instruments.select.InstDict), in its order; () when it knows
+    no such instrument."""
+    from lbl.instruments import select
+
+    return tuple((select.InstDict.get(str(name).upper()) or {}).keys())
 
 
 def instrument(name, data_source, config_file=None):
@@ -81,9 +66,8 @@ def instrument(name, data_source, config_file=None):
     from lbl.instruments import select
 
     # DATA_TYPE SCIENCE, as a wrap gives it to LBL's recipes: pca2d reads
-    #   science spectra only, and the profiles of SPIRou, NIRPS and
-    #   CARMENES give a BERV for science alone (get_berv), zero otherwise
-    #   (a SPIRou t.fits read with no DATA_TYPE had BERV 0, 2026-10-27)
+    #   science spectra only, and several profiles give a BERV for science
+    #   alone (get_berv), zero otherwise
     kwargs = dict(instrument=str(name), data_source=str(data_source),
                   data_type='SCIENCE')
     if config_file:
@@ -147,8 +131,8 @@ def _lbl_root():
 def _lbl_science(name):
     """A module of lbl.science, even when the data folder masks it.
 
-    THE TRAP, measured on 2026-10-14: this repository holds an `lbl/` folder
-    that is an LBL DATA tree (calib, masks, models, science...). As soon as
+    THE TRAP: a working folder can hold an `lbl/` folder that is an LBL DATA
+    tree (calib, masks, models, science...). As soon as
     the repository's root is on sys.path, `import lbl` finds this folder
     before the installed package and turns it into a namespace package:
     lbl.__file__ is None and `from lbl.science import tellu_clean` fails with
@@ -251,7 +235,7 @@ def order_snr(flux, header_snr=None, n_orders=None):
             continue
         level = float(np.median(row[good]))
         step = np.diff(row[good])
-        noise = 1.4826 * float(np.median(np.abs(step - np.median(step))))
+        noise = mad_to_sigma * float(np.median(np.abs(step - np.median(step))))
         # the difference of two neighbours has sqrt(2) times the noise of one
         out[i] = level / (noise / np.sqrt(2.0)) if noise > 0 else np.nan
     return out if n_orders is None else out[:n_orders]
@@ -262,9 +246,9 @@ def parity_is_safe(wave, tolerance=0.0):
 
     pca2d puts the even orders on one row and the odd ones on the other, which
     assumes that two orders of the same parity never measure the same
-    wavelength. That is true on SPIRou and NIRPS; elsewhere it has to be
-    checked rather than hoped for, because an overlap would write two
-    measurements into the same column of the grid.
+    wavelength. That is true of most echelles, but it has to be checked
+    rather than hoped for, because an overlap would write two measurements
+    into the same column of the grid.
     """
     wave = np.atleast_2d(np.asarray(wave, dtype=float))
     worst = 0.0
@@ -296,19 +280,15 @@ def berv_of(inst, header, from_header=None):
 
     NOT THE HEADER'S. The question is not "what was the barycentric motion",
     which the header always gives, but "is it still to be applied", which
-    depends on the format. A SPIRou t.fits is in the observer frame and it
-    must be applied; an ESO S2D carries WAVEDATA_VAC_BARY, an ALREADY
-    corrected grid, and applying it a second time shifts the spectrum by the
-    whole BERV.
+    depends on the format. A spectrum on a grid in the observer frame needs
+    it applied; a product whose grid is ALREADY barycentric (a
+    WAVEDATA_VAC_BARY, for example) does not, and applying it a second time
+    shifts the spectrum by the whole BERV.
 
     LBL has already settled this, class by class: its get_berv reads the
-    header for SPIRou and returns zero for HARPS, HARPS-N, ESPRESSO and
-    SOPHIE. So the question is put to it rather than answered here, and the
-    day a format changes convention, LBL is the one that will know.
-
-    Measured on 2026-10-14 on tau Ceti: taking the header's BERV, the
-    exposures at the most negative BERV came out 1.3 and 4 km/s away from
-    the group, and the rms of LBL's velocities was 1311 m/s.
+    header for a grid in the observer frame and returns zero for a
+    barycentric one. So the question is put to it rather than answered here,
+    and the day a format changes convention, LBL is the one that will know.
     """
     try:
         value = inst.get_berv(header)          # LBL returns m/s
@@ -325,10 +305,10 @@ def berv_of(inst, header, from_header=None):
 def observer_berv(inst, header):
     """The observer's BERV in km/s, from LBL's instrument profile, as its
     recipes take it: get_berv, what is left to apply to reach the star's
-    frame (the whole BERV for a grid in the observer's frame: APERO's
-    t.fits, HARPS's e2ds), plus get_berv_transmission, what the telluric
-    lines are shifted by on a grid that is already barycentric (the S2D of
-    ESO and of the TNG, whose get_berv is zero; lbl_telluclean). One of the
+    frame (the whole BERV for a grid in the observer's frame), plus
+    get_berv_transmission, what the telluric lines are shifted by on a grid
+    that is already barycentric (whose get_berv is zero; lbl_telluclean).
+    One of the
     two is zero for every profile. The telluric lines move with it in the
     star's frame, whatever frame the file is in: the river plots' green line
     follows it, and the observer's frame (input.to_observer) and the
@@ -344,9 +324,9 @@ def observer_berv(inst, header):
 
 def as_science(inst, path):
     """The profile as a recipe runs it on this spectrum: OBJECT_SCIENCE its
-    object, the folder it is in, when the profile has none (HARPS's
-    get_berv reads it: no BERV for an FP; without it, it raised, and the
-    BERV was read from the header instead), DATA_TYPE SCIENCE
+    object, the folder it is in, when the profile has none (a get_berv can
+    read it, to give no BERV for an FP; without it, it raises, and the BERV
+    would be read from the header instead), DATA_TYPE SCIENCE
     (instrument())"""
     try:
         if not inst.params.get("OBJECT_SCIENCE"):
@@ -359,7 +339,7 @@ def as_science(inst, path):
 
 
 @functools.lru_cache(maxsize=8)
-def _profile(name, data_source):
+def profile(name, data_source):
     """LBL's instrument profile, made once per instrument and source"""
     return instrument(name, data_source)
 
@@ -372,7 +352,7 @@ def profile_of(config, inst=None):
     block = config.get("lbl") or {}
     name = block.get("instrument") or (config.get("input") or {}).get(
         "instrument")
-    return _profile(str(name), str(block.get("data_source") or "ESO"))
+    return profile(str(name), str(block.get("data_source")))
 
 
 def profile_header(inst, path):
@@ -399,8 +379,7 @@ def flux_extension(path, flux):
     RETURN THE CORRECTED SPECTRUM IN THE ORIGINAL FORMAT. The corrected file
     is a copy of the original whose flux is replaced; that still requires
     knowing which extension to replace, and it does not have the same name
-    everywhere: FluxAB on a SPIRou t.fits, SCIDATA on an ESO S2D. LBL does not
-    name it: its default class calls fits.getdata(file) with no extension,
+    everywhere (FluxAB, SCIDATA...). LBL does not name it: its default class calls fits.getdata(file) with no extension,
     which returns the FIRST one that holds data.
 
     So this name is not guessed, it is FOUND AGAIN: the extension whose data
@@ -517,13 +496,11 @@ def read(path, instrument_name, data_source, config_file=None,
 
     def key(name, default=None):
         """A keyword by its LBL name, which each class translates for its
-        instrument: KW_BERV is BERV on APERO, HIERARCH ESO QC BERV on ESO,
-        HIERARCH TNG QC BERV on HARPS-N and HIERARCH OHP DRS BERV on SOPHIE.
+        instrument (KW_BERV, KW_AIRMASS...).
 
-        AN ENTRY CAN BE A LIST. ESPRESSO gives four keywords for the
-        airmass, one per VLT unit telescope, of which only one is filled,
-        depending on the UT that observed: `header[list]` would raise. So
-        the first one that is there is taken (2026-10-14).
+        AN ENTRY CAN BE A LIST: an instrument fed by several telescopes
+        gives one keyword per telescope, of which only one is filled, and
+        `header[list]` would raise. So the first one that is there is taken.
         """
         try:
             wanted = inst.params[name]
@@ -568,13 +545,12 @@ def read(path, instrument_name, data_source, config_file=None,
         return np.nan
 
     airmass = key("KW_AIRMASS", 1.0)
-    # TIME AND EXPOSURE DO NOT COME FROM LBL'S TABLE. Measured on 2026-10-14
-    # on a HARPS S2D: the HARPS class points KW_MJDATE AND KW_EXPTIME at the
-    # same keyword, HIERARCH ESO QC BJD, because LBL only needs a time axis
-    # and does not care about the exposure time. pca2d uses them differently:
-    # mjdate is a MODIFIED date and exptime weights. The real keywords are
-    # there (MJD-OBS = 52859.31, EXPTIME = 60.0 s), so they are read first
-    # and LBL's table is only a last resort.
+    # TIME AND EXPOSURE DO NOT COME FROM LBL'S TABLE FIRST. A class can point
+    # KW_MJDATE and KW_EXPTIME at the same keyword (a BJD), because LBL only
+    # needs a time axis and does not use the exposure time. pca2d uses them
+    # differently: mjdate is a MODIFIED date and exptime weights. The FITS
+    # keywords (MJD-OBS, EXPTIME) are therefore read first and LBL's table is
+    # only a last resort.
     mjd = number(plain("MJD-OBS"), key("KW_MJDATE"))
     # a header that gives only a BJD: it is brought back to an MJD rather
     # than letting 2.45 million days pass for a modified date
@@ -595,9 +571,8 @@ def read(path, instrument_name, data_source, config_file=None,
     #
     # THE RULE IS LBL'S, AND IT IS UNIFORM. Each LBL class answers a single
     # question with its get_berv: "what is left to apply to reach the star
-    # frame". A SPIRou t.fits is in the observer frame and the answer is the
-    # header's BERV; an ESO S2D carries an already barycentric grid and the
-    # answer is zero. LBL does not treat these two cases differently
+    # frame". For a grid in the observer frame the answer is the header's
+    # BERV; for an already barycentric grid it is zero. LBL does not treat these two cases differently
     # afterwards: it calls get_berv once (science/general.py, "instrument
     # specific berv --> use instrument method") and everything else is
     # common.
@@ -608,10 +583,10 @@ def read(path, instrument_name, data_source, config_file=None,
     # the header therefore adds no rule, it removes one: pca2d no longer has
     # to know which instrument delivers which frame, LBL knows it for it.
     #
-    # WHAT `to_observer` CHANGES, AND WHAT IT DOES NOT. Checked on 2026-10-15
-    # to the pixel: with or without it, the stellar line falls at the SAME
-    # wavelength (380.455648 nm on the first exposure of tau Ceti), so the
-    # STAR frame is the same and the physics is unchanged. What changes is
+    # WHAT `to_observer` CHANGES, AND WHAT IT DOES NOT. With or without it,
+    # a stellar line falls at the SAME wavelength in the star's frame, to the
+    # pixel, so the STAR frame is the same and the physics is unchanged.
+    # What changes is
     # the OBSERVER frame: without the option it is the barycentric grid, the
     # same for all exposures, and the model's observer block then has nothing
     # to hold on to; with it, it is the actual frame of the telescope, and
@@ -637,16 +612,10 @@ def read(path, instrument_name, data_source, config_file=None,
             # lambda_observer = lambda_bary / doppler(BERV), relativistic
             wave = wave / _doppler(obs_berv)
             berv = float(obs_berv)
-    # the start and end of the exposure have no name in LBL: they are looked
-    # for under the known spellings, and failing that the airmass it gives
-    air_start = number(plain("HIERARCH ESO TEL AIRM START"),
-                       plain("HIERARCH TNG TEL AIRM START"),
-                       plain("HIERARCH OHP TEL AIRM START"),
-                       plain("AIRMASS"), airmass)
-    air_end = number(plain("HIERARCH ESO TEL AIRM END"),
-                     plain("HIERARCH TNG TEL AIRM END"),
-                     plain("HIERARCH OHP TEL AIRM END"),
-                     plain("AIRMASS"), airmass)
+    # the start and end of the exposure, by the class's keywords (KW_AIRMASS,
+    # KW_AIRMASS_END): an instrument that reports one value gives it for both
+    air_start = number(airmass)
+    air_end = number(key("KW_AIRMASS_END"), airmass)
     meta = {
         "filename": os.path.basename(path),
         "bjd": float(bjd),
@@ -654,18 +623,15 @@ def read(path, instrument_name, data_source, config_file=None,
         "mjdate": float(mjd),
         "berv": berv,
         "berv_obs": obs_berv,
-        "bervmax": float(number(key("KW_BERVMAX"),
-                                plain("HIERARCH ESO QC BERVMAX"))),
+        "bervmax": float(number(key("KW_BERVMAX"))),
         "exptime": float(number(plain("EXPTIME"), key("KW_EXPTIME"))),
         "airmass_start": float(air_start),
         "airmass_end": float(air_end),
         "airmass": float(airmass if airmass is not None else np.nan),
-        "seeing": float(number(plain("HIERARCH ESO TEL AMBI FWHM START"),
-                               plain("HIERARCH TNG METEO FWHM"))),
-        "humidity": float(number(plain("HIERARCH ESO TEL AMBI RHUM"),
-                                 plain("HIERARCH TNG METEO HUMIDITY"))),
-        "sun_elevation": float("nan"),
-        "drs_mode": str(plain("HIERARCH ESO INS MODE", "") or "").strip(),
+        "seeing": float(number(key("KW_SEEING"))),
+        "humidity": float(number(key("KW_HUMIDITY"))),
+        "sun_elevation": float(number(key("KW_SUN_ELEVATION"))),
+        "drs_mode": str(key("KW_DRS_MODE", "") or "").strip(),
         "dprtype": str(key("KW_DPRTYPE", "") or "").strip(),
         "object": str(key("KW_OBJNAME", "") or "").strip(),
         "instrument": str(instrument_name),
@@ -691,34 +657,26 @@ def read(path, instrument_name, data_source, config_file=None,
 
 #: what a header writes when the measurement did not take place, and which
 #: must become NaN rather than pass for a number. The first three are those
-#: of tfits.read_tfits (the CFHT weather mast); -1 is ESO's for a missing
-#: seeing, seen on 2026-10-14 on a HARPS S2D.
+#: of tfits.read_tfits (a weather mast that is down); -1 is written by some
+#: observatories for a missing seeing.
 SENTINELS = (-9999.0, -9999.9, -999.0, -1.0)
-
-
-#: the instruments that pca2d reads with its own reader, because APERO's
-#: t.fits carry things that LBL does not return (the sky in OHLine, the
-#: transmission in Recon, the SNR per order in the header) and this reader
-#: makes use of them. Everything else goes through LBL.
-NATIVE = ("SPIROU", "NIRPS", "NIRPS_HA", "NIRPS_HE")
 
 
 def reads_natively(config):
     """Should these spectra be read with tfits, or go through LBL?
 
-    APERO is read natively (the t.fits carries the sky and the
-    transmission); HARPS, SOPHIE, ESPRESSO and the others go through LBL.
-    `input.reader` decides when one or the other is to be forced.
+    An APERO t.fits is read by tfits (input.format 'tfits', from the
+    instrument's LBL class): it carries things LBL's class does not return
+    (the sky emission, the telluric transmission, the SNR per order in the
+    header) and that reader makes use of them. Everything else goes through
+    LBL. `input.reader` decides when one or the other is to be forced.
     """
     asked = str((config.get("input") or {}).get("reader") or "auto").lower()
     if asked in ("tfits", "native"):
         return True
     if asked in ("lbl", "bridge"):
         return False
-    instrument = str((config.get("input") or {}).get("instrument") or "").upper()
-    source = str((config.get("lbl") or {}).get("data_source") or "").upper()
-    # an APERO t.fits: our reader draws more from it than LBL gives
-    return instrument in NATIVE and source in ("", "APERO", "CADC")
+    return str((config.get("input") or {}).get("format") or "") == "tfits"
 
 
 def star_frame(payload, config, path=None):
@@ -775,25 +733,27 @@ def _read_any(path, config, inst=None):
     """read_any, without the star's frame"""
     if reads_natively(config):
         from . import tfits as sptf
-        payload = sptf.read_tfits(path)
+        inp = config.get("input") or {}
+        payload = sptf.read_tfits(path, inp.get("extensions"),
+                                  inp.get("header_keys"))
         # the BERV from LBL's instrument profile, as its recipes take it,
         #   rather than as tfits reads the header (the same BERV keyword for
         #   APERO, but one extraction for every reader); tfits' own when the
         #   profile cannot be had (a configuration without its lbl block)
         meta = payload["meta"]
         try:
-            profile = as_science(profile_of(config, inst), path)
-            header = profile_header(profile, path)
-            applied = berv_of(profile, header, meta.get("berv"))
+            prof = as_science(profile_of(config, inst), path)
+            header = profile_header(prof, path)
+            applied = berv_of(prof, header, meta.get("berv"))
             if np.isfinite(applied):
                 meta["berv"] = applied
-            meta["berv_obs"] = observer_berv(profile, header)
+            meta["berv_obs"] = observer_berv(prof, header)
         except Exception:                                      # noqa: BLE001
             meta.setdefault("berv_obs", meta.get("berv", np.nan))
         return payload
     block = config.get("lbl") or {}
     name = block.get("instrument") or (config.get("input") or {}).get("instrument")
-    source = block.get("data_source") or "ESO"
+    source = block.get("data_source")
     models = (config.get("output") or {}).get("model_directory")
     observer = bool((config.get("input") or {}).get("to_observer"))
     return read(path, name, source, model_dir=models, inst=inst,

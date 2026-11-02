@@ -10,8 +10,8 @@ const $ = (id) => document.getElementById(id);
 const SERIES = ['--series-1', '--series-2', '--series-3', '--series-4',
                 '--series-5', '--series-6', '--series-7', '--series-8'];
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const SCATTER_COLOURED = 3;   // the palette's all-pairs cap (dataviz validator)
-const HIST_COLOURED = 8;      // its adjacent-pair cap
+const SCATTER_COLOURED = 3;   // colours that stay apart from every other (scatter)
+const HIST_COLOURED = 8;      // colours that stay apart from their neighbours (stacks)
 
 const DEFAULTS = {
   lang: 'en', theme: 'light', tab: 'targets', data_dir: '', instrument: '', source: '',
@@ -72,8 +72,8 @@ function el(tag, attrs, ...children) {
     else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v === true ? '' : v);
   });
-  // flattened all the way: a list of [link, ' '] pairs was written out as
-  //   text, every link as its address (the Runs tab's reports)
+  // flattened all the way, so that a list of [link, ' '] pairs (the Runs
+  //   tab's reports) is appended as nodes, not written out as text
   children.flat(Infinity).forEach((child) => {
     if (child === null || child === undefined || child === false) return;
     node.append(child instanceof Node ? child : document.createTextNode(String(child)));
@@ -102,7 +102,7 @@ function mjdDate(mjd) {
 }
 function when(seconds) {
   if (!seconds) return '';
-  // the machine's own time, not UTC: a run started at 14:44 said 18:44
+  // the machine's own time, not UTC (which toISOString would give)
   const date = new Date(seconds * 1000);
   const pad = (n) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -122,9 +122,18 @@ function span(seconds) {
 function fileLink(path, text) {
   return el('a', { href: `/file?path=${encodeURIComponent(path)}`, target: '_blank', text: text || t('open') });
 }
+/* the server's paths are the system's: / on macOS and Linux, \ on Windows
+   (and either one there), so a path is cut on both */
+const flatPath = (path) => String(path ?? '').replace(/\\/g, '/');
+const baseName = (path) => String(path ?? '').split(/[\\/]/).pop();
+/* a folder's child, written with the separator the folder is written with */
+function childPath(folder, name) {
+  const dir = String(folder ?? '').replace(/[\\/]+$/, '');
+  return `${dir}${dir.includes('\\') && !dir.includes('/') ? '\\' : '/'}${name}`;
+}
 function relative(path) {
-  const root = (S.data_dir || '').replace(/\/$/, '') + '/';
-  return path && path.startsWith(root) ? path.slice(root.length) : path;
+  const root = flatPath(S.data_dir || '').replace(/\/$/, '') + '/';
+  return path && flatPath(path).startsWith(root) ? path.slice(root.length) : path;
 }
 
 // ── tooltip (data-tip) ──────────────────────────────────────────────────
@@ -428,7 +437,7 @@ async function archiveFetch() {
   const chosen = rows.filter((row) => archiveChosen.has(row.id));
   const total = chosen.reduce((sum, row) => sum + (row.size_mb || 0), 0);
   // more than a few GB: said, and asked
-  if (total > BIG_FETCH_MB && !(await confirmBox(t('archive_big', megabytes(total), `${S.data_dir}/science`)))) return;
+  if (total > BIG_FETCH_MB && !(await confirmBox(t('archive_big', megabytes(total), childPath(S.data_dir, 'science'))))) return;
   ARCHIVE = await api.post('/api/archive/fetch', { data_dir: S.data_dir, ids: chosen.map((row) => row.id) });
   drawArchive();
   pollArchive();
@@ -653,7 +662,8 @@ function toggle(name) {
 }
 
 // the instrument follows the ticked targets when they are all of one other
-//   family than the one chosen (SPIRou spectra run as NIRPS_HE, 2026-10-23)
+//   family than the one chosen: spectra run as another instrument make a
+//   template of the wrong one
 const family = (name) => String(name || '').toUpperCase().split('_')[0].replace(/[^A-Z0-9]/g, '');
 // ── the instrument and the data source: detected, or chosen by hand ─────
 // What the ticked targets' files say: their archive's reader when fetched,
@@ -955,7 +965,7 @@ function drawTimeline(names) {
     if (mjd >= lo && mjd <= hi) years.push(mjd);
   }
   // every year when they fit, else every 2nd, 5th or 10th: a label is
-  //   about 32 px wide (21 years of Gliese 229 ran into one another)
+  //   about 32 px wide (two decades of labels would run into one another)
   const room = inner.x1 - inner.x0;
   const every = [1, 2, 5, 10, 20].find((k) => (years.length / k) * 32 <= room) || 50;
   const shown = years.filter((m) => Number(mjdDate(m).slice(0, 4)) % every === 0);
@@ -1197,7 +1207,8 @@ function simbadTeff(name) {
 }
 async function askSimbad(names, refresh = false) {
   // a target the scan has not read yet waits: its headers' OBJECT is one
-  //   of the names SIMBAD is asked (Gliese1214's folder, GJ1214's headers)
+  //   of the names SIMBAD is asked (a folder's name can be one SIMBAD
+  //   does not know)
   names = names.filter((n) => TARGETS.some((row) => row.name === n));
   if (!names.length || !S.data_dir) return;
   names.forEach((n) => { simbadAsked.add(n); SIMBAD[n] = { state: 'asking' }; });
@@ -1448,7 +1459,7 @@ async function pollQueue() {
   },
   el('div', { class: 'row spread' }, el('span', { class: 'title', text: job.name }), el('span', { class: `badge ${job.state}`, text: t(`state_${job.state}`) })),
   el('div', { class: 'meta', text: [job.stage, job.counter, job.state === 'running' ? took(job.started) : (job.ended ? took(job.started, job.ended) : '')].filter(Boolean).join(' · ') }),
-  job.reports && job.reports.length ? el('div', { class: 'meta' }, job.reports.slice(-3).map((p) => [fileLink(p, p.split('/').pop()), ' '])) : null))
+  job.reports && job.reports.length ? el('div', { class: 'meta' }, job.reports.slice(-3).map((p) => [fileLink(p, baseName(p)), ' '])) : null))
     : [el('p', { class: 'hint small', text: t('queue_empty') })]));
   if (!selectedJob) {
     const running = jobs.find((job) => job.state === 'running') || jobs[jobs.length - 1];
@@ -1558,8 +1569,8 @@ async function loadRuns() {
       el('td', {}, el('span', { class: `badge ${run.state}`, text: t(`state_${run.state}`) })),
       el('td', { class: 'mono', text: when(run.started || run.created) }),
       el('td', { class: 'mono', text: run.started ? took(run.started, run.ended) : '' }),
-      el('td', {}, (run.reports || []).map((p) => [fileLink(p, p.split('/').pop()), ' '])),
-      el('td', {}, fileLink(run.log, run.log ? run.log.split('/').pop() : 'log'), ' ', fileLink(run.wrap, 'wrap.py')))));
+      el('td', {}, (run.reports || []).map((p) => [fileLink(p, baseName(p)), ' '])),
+      el('td', {}, fileLink(run.log, run.log ? baseName(run.log) : 'log'), ' ', fileLink(run.wrap, 'wrap.py')))));
   table($('runs_reports'), ['col_name', 'col_date', 'col_bytes'],
     (data.reports || []).map((report) => el('tr', {},
       el('td', {}, fileLink(report.path, report.name)),
@@ -1611,7 +1622,9 @@ async function measure() {
         el('td', { class: 'num', text: item.files })))))));
   });
   if (busy.length) {
-    parts.unshift(el('div', { class: 'message warning' }, t('busy', busy.map((p) => `pid ${p.pid}: ${p.command}`).join(' \u00B7 '))));
+    // unknown: the server has no way to tell whether a run is going
+    parts.unshift(el('div', { class: 'message warning' }, busy.some((p) => p.unknown) ? t('busy_unknown')
+      : t('busy', busy.map((p) => `pid ${p.pid}: ${p.command}`).join(' \u00B7 '))));
   }
   $('cleanup').replaceChildren(...parts);
   cleanupSelection();

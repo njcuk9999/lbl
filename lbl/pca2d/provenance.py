@@ -47,27 +47,28 @@ def stamp(version=None):
     return v["commit"][:12] + ("+" if v["dirty"] else "")
 
 
+#: the package's own dotted name, lbl.pca2d
+PACKAGE = __name__.rsplit(".", 1)[0]
 #: modules a run never needs: the command itself, which is already running, and
 #: the window, which would bring tkinter into a run that has no screen
-#: the package's own dotted name, lbl.pca2d since it moved into LBL
-PACKAGE = __name__.rsplit(".", 1)[0]
 NOT_A_STAGE = tuple("%s.%s" % (PACKAGE, name) for name in ("cli", "gui", "__main__"))
 
 
 def freeze(package=PACKAGE, skip=NOT_A_STAGE):
     """Load every module of the package NOW. Returns the source fingerprint.
 
-    A stage imports what it needs when it starts, and a run lasts hours. On
-    2026-09-16 the code was edited while a joint run was fitting: config.py had
-    been loaded at 10:06, lbl.py was loaded for the first time at 10:52, and
-    the new lbl.py asked the old config.py for a function it did not have. The
-    run died at the LBL stage with a traceback whose lines did not match its
-    line numbers, since Python prints the file as it is on disk NOW.
+    A stage imports what it needs when it starts, and a run lasts hours. If
+    the code is edited on disk while a run is going, a module first loaded
+    late in the run is the new version while the ones loaded at its start are
+    the old one, and the two need not agree: a new module can ask an old one
+    for a function it does not have, and the traceback then shows lines that
+    do not match its line numbers, since Python prints the file as it is on
+    disk NOW.
 
     Loaded together at the start, the run is one version of the code from its
     first line to its last, whatever happens on disk meanwhile. About a second
     for the package's forty modules. A module that fails to load here is left
-    to fail where it is used, as it did before.
+    to fail where it is used, as it would without this.
     """
     import importlib
 

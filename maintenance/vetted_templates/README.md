@@ -15,19 +15,22 @@ Savitzky-Golay columns (`lbl/core/vetted.py`). Both are kept in
 from the run's spectra, and `lbl_reset` or a cleanup of `templates/` leaves
 them. The list LBL reads is `lbl/resources/vetted_templates.yaml`.
 
-## How they were chosen (2026-10-23)
+## How they are chosen
 
-Every APERO `Template_s1dv_*` of the UdeM LBL trees (maestria:
-`/cosmos99/{nirps,spirou}/lbl-data/*/templates`, 1405 templates) was read for
-its number of spectra (`FTTTEMPN`) and Teff (`PP_TEFF`). In each 100 K bin,
-the star with the most spectra was taken, passing over:
+The APERO `Template_s1dv_*` files of the LBL data trees the selection is
+made from (1405 templates for the current list) are read for their number
+of spectra (`FTTTEMPN`) and Teff (`PP_TEFF`), one row per template in
+`template_catalog.json`. In each 100 K bin, the star with the most spectra
+is taken, passing over:
 
 1. young accreting stars (SIMBAD types TT\*, Or\*, Y\*O, Y\*?, Ae\*);
 2. fast rotators, from **published rotation periods**: `v_eq = 2 pi R / P`
    above 2 km/s (an upper bound on v sin i). Periods from Shan+ 2024 (A&A
    684, A9, best periods) first, then MEarth (Newton+ 2016, 2018), Diez
    Alonso+ 2019 and Lambier+ 2025, matched by position; R from the same
-   catalog, or from Teff (Mann+ 2015);
+   catalog, or from Teff with the relation of
+   [Mann et al. 2015](https://doi.org/10.1088/0004-637X/804/1/64) (Table 1,
+   as reprinted in the [2016 erratum](https://doi.org/10.3847/0004-637X/819/1/87));
 3. without a period: a median high-resolution v sin i above 4 km/s (APOGEE's
    and the old compilations' left out: they put GJ 411 at 50 to 58 km/s);
 4. without a period: lines measurably broadened, an H-band autocorrelation
@@ -54,10 +57,16 @@ over, and why, is in `selection.json` (`dropped`).
 
 ## Remaking them
 
+Each script reads and writes JSON files in the current folder; the
+templates themselves are copied into `apero/`, named
+`<INSTRUMENT>_<APERO file name>`.
+
 ```
-python vet_simbad.py; python vsini_rows.py; python prot_match.py  # SIMBAD, VizieR
-python linewidth.py                                               # the templates fetched
-python choose.py                                                  # selection.json
+python vet_simbad.py      # template_catalog.json -> candidates_simbad.json (SIMBAD)
+python vsini_rows.py      # -> vsini_rows.json (SIMBAD mesRot)
+python prot_match.py      # -> prot_match.json (VizieR rotation catalogs)
+python linewidth.py       # apero/*.fits -> linewidth.json
+python select_vetted_stars.py                                     # -> selection.json
 python make_vetted.py <APERO templates> selection.json <depot>    # the depot files
 ```
 

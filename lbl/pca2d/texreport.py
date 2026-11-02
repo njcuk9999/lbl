@@ -56,6 +56,7 @@ from matplotlib.ticker import FuncFormatter, MaxNLocator
 from . import bervbias
 from .lblscan import AFTER, BEFORE, amplitude_at, nightly, rdb_rows, velocity_stats
 from .logger import log
+from lbl.core.math import mad_to_sigma
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "templates", "report.tex")
@@ -64,10 +65,6 @@ MANIFEST = "manifest.json"
 #: so they are not taken as figures when an old bundle is cut up
 TEXT_SECTIONS = ("Front matter", "Parameters", "What did not build",
                  "The velocities LBL measured")
-#: where a TeX installation puts pdflatex when the window's PATH does not
-#: know it: a program started from the Dock does not read the shell's profile
-TEX_HOMES = ("/Library/TeX/texbin", "/usr/texbin", "/opt/homebrew/bin",
-             "/usr/local/bin", "/usr/bin")
 #: ink, for everything that is not data (dataviz: text never wears a series
 #: colour); the two series colours are lblscan's, validated as a pair
 INK, MUTED, GRID = "#1f1f1f", "#5f6368", "#e3e3e3"
@@ -75,10 +72,9 @@ INK, MUTED, GRID = "#1f1f1f", "#5f6368", "#e3e3e3"
 #: size it was written at: A4 less two 2.2 cm margins
 WIDTH = 6.6
 #: how the report's figures write their text. Matplotlib's default is a
-#: Type 3 font and a Unicode minus sign, and a viewer showed the amp axis of
-#: the posterior as 20, 10, 0, 10, 20 (2026-09-16): the minus signs were in
-#: the drawing but not in the PDF's text. Embedded TrueType, and the minus
-#: sign every keyboard has
+#: Type 3 font and a Unicode minus sign, which can be in the drawing but not
+#: in the PDF's text, so that a viewer shows a signed axis as 20, 10, 0, 10,
+#: 20. Embedded TrueType, and the minus sign every keyboard has
 STYLE = {"pdf.fonttype": 42, "ps.fonttype": 42, "axes.unicode_minus": False}
 #: tick labels that carry their sign, for the axes where the sign is the point
 SIGNED = FuncFormatter(lambda value, _pos: "0" if abs(value) < 1e-9
@@ -143,13 +139,13 @@ ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 def tex(text) -> str:
     """`text` as LaTeX prints it, whatever it holds.
 
-    Object names carry underscores (SMETHELLS_20), run names plus signs and
-    paths every character there is, and one unescaped one stops the document.
-    A character nothing here knows becomes a question mark rather than an
+    Object names carry underscores, run names plus signs and paths every
+    character there is, and one unescaped one stops the document. A
+    character nothing here knows becomes a question mark rather than an
     error: a report with one odd glyph is still a report. Terminal colours
-    and other control characters are dropped: a skipped figure's reason came
-    from a coloured log line, and its escape stopped pdflatex on a joint run
-    (2026-09-17, "Unicode character ^^[ (U+001B)").
+    and other control characters are dropped: a skipped figure's reason can
+    come from a coloured log line, and its escape sequence stops pdflatex
+    ("Unicode character ^^[ (U+001B)").
     """
     out = []
     for ch in ANSI_ESCAPE.sub("", str(text)):
@@ -171,8 +167,8 @@ def tex(text) -> str:
 def tex_break(text) -> str:
     """tex(), with a place to break after every _ / + - . in it.
 
-    A run's suffix (_PCA2D_{tag}_GL406_3b7955) is one word to LaTeX, and one
-    word wider than its column runs over the next one.
+    A run's suffix (_PCA2D_<tag>_<star>_<hash>) is one word to LaTeX, and
+    one word wider than its column runs over the next one.
     """
     out = tex(text)
     for mark in (r"\_", "/", "+", "-", "."):
@@ -181,19 +177,11 @@ def tex_break(text) -> str:
 
 
 def find_pdflatex():
-    """The pdflatex this machine has, or None."""
-    found = shutil.which("pdflatex")
-    if found:
-        return found
-    for home in TEX_HOMES:
-        path = os.path.join(home, "pdflatex")
-        if os.access(path, os.X_OK):
-            return path
-    for path in sorted(glob.glob("/usr/local/texlive/*/bin/*/pdflatex"),
-                       reverse=True):
-        if os.access(path, os.X_OK):
-            return path
-    return None
+    """The pdflatex the report is compiled with, or None: LBL's own lookup
+    (lbl.core.io.find_pdflatex: LBL_PDFLATEX, the PATH, the login shell's
+    PATH)."""
+    from lbl.core.io import find_pdflatex as _find
+    return _find()
 
 
 def slug(text) -> str:
@@ -243,14 +231,14 @@ def read_manifest(folder):
     path = os.path.join(folder, MANIFEST)
     if not os.path.exists(path):
         return None
-    with open(path) as handle:
+    with open(path, encoding="utf-8") as handle:
         return json.load(handle)
 
 
 def write_manifest(folder, manifest):
     os.makedirs(folder, exist_ok=True)
     tmp = os.path.join(folder, MANIFEST + ".tmp")
-    with open(tmp, "w") as handle:
+    with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=1)
     os.replace(tmp, os.path.join(folder, MANIFEST))
 
@@ -330,9 +318,9 @@ def comparisons(config, stars):
     """{star: the template LBL measured it against}. Another star's when the
     fit took one as the star's spectrum (twoframe.star_templates, one entry
     per member in the members' order, LBL_Template_<name>_<instrument>.fits),
-    else the star's own. Read as the star's own, a star measured against a
-    vetted template had no velocities in its report: lbl_TOI3750_TOI3750.rdb
-    for lbl_TOI3750_VETTED_GL846.rdb (2026-10-24)."""
+    else the star's own. Read as the star's own, a star measured against
+    another template would find no velocities: its rdb is
+    lbl_<star>_<template>.rdb, not lbl_<star>_<star>.rdb."""
     entries = list((config.get("twoframe") or {}).get("star_templates") or [])
     instrument = str((config.get("input") or {}).get("instrument") or "")
     tail = "_%s.fits" % instrument.lower()
@@ -373,11 +361,11 @@ def text_column(table, name):
 def snr_column(table):
     """(name, values) of the SNR the headers carry, or (None, None).
 
-    APERO writes the extracted SNR of one order, EXTSN060 for NIRPS and
-    EXTSN035 for SPIRou, and that measured one is quoted first; a column
-    called SNR only when there is none. Never SNRGOAL: SPIRou's headers carry
-    the SNR the observation was asked to reach, and a GL725B report quoted
-    its 150.0 as the median SNR.
+    APERO writes the extracted SNR of one order, EXTSN<order> (which order
+    depends on the instrument), and that measured one is quoted first; a
+    column called SNR only when there is none. Never SNRGOAL: a header can
+    carry the SNR the observation was asked to reach, which is a target set
+    before the exposure, not a measurement of it.
     """
     names = [n.strip() for n in table.colnames]
     for pattern in (r"EXTSN\d+", r"SNR(?!GOAL)\w*"):
@@ -449,7 +437,7 @@ def robust_sigma(x):
     x = x[np.isfinite(x)]
     if x.size < 2:
         return np.nan
-    return float(1.4826 * np.median(np.abs(x - np.median(x))))
+    return float(mad_to_sigma * np.median(np.abs(x - np.median(x))))
 
 
 def inliers(x, nsig=5.0):
@@ -769,10 +757,10 @@ def _named(fig, name):
     """The star's name above everything in the figure.
 
     A joint report holds the same figures once per star, and a figure seen
-    on its own, or on a page whose caption is on the next, said nothing of
-    whose velocities it drew (2026-09-17). The figure is made taller by a
-    band, everything already in it keeps its size and moves down, and the
-    name goes in the band.
+    on its own, or on a page whose caption is on the next, would say nothing
+    of whose velocities it draws. The figure is made taller by a band,
+    everything already in it keeps its size and moves down, and the name
+    goes in the band.
     """
     width, height = fig.get_size_inches()
     total = height + NAME_BAND
@@ -996,9 +984,9 @@ def figure_berv(before, after, path):
 def amp_range(*fits):
     """One amp axis for every fit shown side by side.
 
-    Each posterior on its own axis made the delivered one look as wide as
-    the corrected one, which spans four times more: two panels meant to be
-    compared are drawn on the same scale.
+    Each posterior on its own axis would make a narrow one look as wide as
+    one that spans several times more: two panels meant to be compared are
+    drawn on the same scale.
     """
     ends = np.array([np.percentile(f["samples"][:, 0], [0.5, 99.5])
                      for f in fits])

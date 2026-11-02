@@ -23,8 +23,8 @@ derivatives of all three (USE_SAVGOL_TEMPLATE). Here the s1d gives the grid
 and flux; the e2ds, when there is one, gives flux_even and flux_odd, each
 order put on the s1d grid and scaled to the s1d's level over it. The e2ds is
 moved first onto the s1d's frame: its reference wavelength solution is not
-the s1d's (GL 514: 1.1 km/s apart), the offset measured order by order and
-its median applied. Without an e2ds, flux_even and flux_odd are the s1d.
+the s1d's (they can be about a km/s apart), the offset measured order by
+order and its median applied. Without an e2ds, flux_even and flux_odd are the s1d.
 
 Created on 2026-10-22
 
@@ -34,7 +34,6 @@ import os
 from typing import Optional
 
 import numpy as np
-from astropy import constants
 from astropy.io import fits
 from astropy.table import Table
 from numpy.polynomial import chebyshev
@@ -47,8 +46,6 @@ from lbl.core import math as mp
 # =============================================================================
 __NAME__ = 'lbl.science.template_import.py'
 log = io.log
-#: the speed of light [km/s]
-C_KMS = constants.c.to('km/s').value
 #: the velocities searched for the e2ds's offset from the s1d [km/s]
 OFFSET_RANGE = np.arange(-5.0, 5.001, 0.02)
 
@@ -81,8 +78,10 @@ def _order_offset(wave: np.ndarray, flux: np.ndarray, s1d_wave: np.ndarray,
     wave, flux = wave[good], flux[good] / np.nanmedian(flux[good])
     corr = np.full(len(OFFSET_RANGE), np.nan)
     for it, dv in enumerate(OFFSET_RANGE):
-        model = np.interp(wave * (1 + dv / C_KMS), s1d_wave, s1d_flux,
-                          left=np.nan, right=np.nan)
+        # the order's wavelengths moved by dv (relativistic Doppler; dv > 0
+        #   to the red)
+        model = np.interp(mp.doppler_shift(wave, -1000.0 * dv), s1d_wave,
+                          s1d_flux, left=np.nan, right=np.nan)
         ok = np.isfinite(model)
         if np.sum(ok) > 500:
             corr[it] = np.corrcoef(flux[ok], model[ok])[0, 1]
@@ -124,7 +123,7 @@ def apero_to_lbl(s1d_file: str, out_file: str, approx_resolution: float,
                                           flux[good])
                             for o in range(e2ds.shape[0])])
         offset = float(np.nanmedian(offsets))
-        ewave = ewave * (1 + offset / C_KMS)
+        ewave = mp.doppler_shift(ewave, -1000.0 * offset)
         log.general('APERO e2ds template on the s1d frame: moved by {0:+.2f} '
                     'km/s (median of {1} orders, rms {2:.2f})'.format(
                         offset, int(np.isfinite(offsets).sum()),

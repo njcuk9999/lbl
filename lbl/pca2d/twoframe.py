@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 """Two-frame (star + observer) weighted PCA, by block coordinate descent.
 
-The `fit` stage of `pca2d-preclean`. The blocks are updated one at a time, with
+The `fit` stage of `lbl_pca2d`. The blocks are updated one at a time, with
 the coefficients of both solved *jointly* per spectrum, so the fit decides which
-frame a feature belongs to rather than the analyst choosing a registration. The
-design history is section 11 of NOTES.md in spectropca_per_obj.
+frame a feature belongs to rather than the analyst choosing a registration.
 
     python -m lbl.pca2d.twoframe --cube cache/cube_tfits_<key> \
         --outdir outputs/<object>/<M>-<N> --config <resolved_config.yaml>
@@ -14,8 +13,7 @@ Working frame is the OBSERVER frame, so the weights (photon noise, telluric
 ramp) never move. The star basis is carried into each spectrum's frame by an
 exact Lanczos translation: on the log-uniform grid a Doppler shift is a
 translation of atanh(v/c) / (dv/c) samples (grids.pixel_shift), and the
-operator's adjoint is the same taps scattered rather than gathered (NOTES.md
-11.3).
+operator's adjoint is the same taps scattered rather than gathered.
 """
 
 from __future__ import annotations
@@ -39,6 +37,7 @@ from astropy.io import fits
 from astropy.table import Table
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy.fft import irfft, next_fast_len, rfft
+from lbl.core.math import mad_to_sigma
 
 C_KMS = constants.c.to("km/s").value
 PARITY_NAMES = ("even", "odd")
@@ -56,7 +55,7 @@ def parse_args(argv=None):
     p.add_argument("--cube", default=None,
                    help="observer-frame cube, log_sub high-pass (build with registration.frame: observer)")
     p.add_argument("--order", choices=["star_first", "earth_first"], default=None,
-                   help="which block is updated first; star_first for a reason, see 11.7")
+                   help="which block is updated first in each sweep")
     p.add_argument("--iters", type=int, default=None)
     p.add_argument("--patience", type=int, default=None,
                    help="sweeps in a row allowed to be worse than the best before"
@@ -65,8 +64,8 @@ def parse_args(argv=None):
                    help="which iterate the fit keeps: the one of lowest chi2"
                         " (default) or the last one run. The soft clip changes"
                         " the weights every sweep, so successive chi2 are not"
-                        " strictly comparable, and the velocity term was still"
-                        " converging when the best chi2 was reached")
+                        " strictly comparable, and the velocity term may still"
+                        " be converging when the best chi2 is reached")
     p.add_argument("-k", "--n-star", type=int, default=None,
                    help="M, components in the STELLAR rest frame")
     p.add_argument("-j", "--n-earth", type=int, default=None,
@@ -92,7 +91,7 @@ def parse_args(argv=None):
                         " (pca2d.splinestar), which is the default and the only"
                         " one the window offers; 'grid', samples carried by the"
                         " Lanczos kernel and updated from the normal diagonal,"
-                        " kept for redoing the runs made on it")
+                        " kept for comparison")
     p.add_argument("--resolution", type=float, default=None,
                    help="the instrument's resolving power, lambda/dlambda: the"
                         " unit --star-smooth is measured in")
@@ -101,12 +100,12 @@ def parse_args(argv=None):
                         " resolution elements, by LBL's template filter; the"
                         " observer components are not. Off by default")
     p.add_argument("--star-resolution", type=float, default=None,
-                   help="the older spelling: smooth the star to one resolution"
-                        " element of this resolving power")
+                   help="an alternative spelling: smooth the star to one"
+                        " resolution element of this resolving power")
     p.add_argument("--velocity-term", dest="velocity_term",
                    action="store_true", default=None,
                    help="fit one velocity per exposure beside the components;"
-                        " off by default since 2026-09-11 (twoframe.velocity_term)")
+                        " off by default (twoframe.velocity_term)")
     p.add_argument("--no-velocity-term", dest="velocity_term",
                    action="store_false", default=None,
                    help="do not fit one velocity per exposure. The observer"
@@ -114,13 +113,14 @@ def parse_args(argv=None):
                         " correction divides it out of the flux; kept only so"
                         " the two can be compared")
     p.add_argument("--shift", choices=["lanczos", "fft"], default=None,
-                   help="shift operator; fft is kept only for comparison (NOTES 11.3)")
+                   help="shift operator; fft is kept only for comparison"
+                        " (FourierShifter)")
     p.add_argument("-a", "--kernel-halfwidth", type=int, default=None,
                    help="Lanczos support in samples")
     p.add_argument("--chunk", type=int, default=None,
                    help="spectra per carry block; default keeps the (chunk, K, M)"
-                        " buffer near 128 MB, which is what stops the K=10 run"
-                        " from swapping")
+                        " buffer near 128 MB, which is what keeps a fit with"
+                        " many star components from swapping")
     p.add_argument("--no-gap-guard", dest="gap_guard", action="store_false", default=None,
                    help="keep samples whose tap window reaches into a hole in the"
                         " basis support (see gap_guard); only useful to measure"
@@ -139,8 +139,8 @@ def parse_args(argv=None):
                         " and the observer's, re-estimated at every sweep from"
                         " the residual of everything else, the components"
                         " centred so static content can live only in the"
-                        " means. It converges on synthetic data and on a"
-                        " 70 nm slice, and did not on a whole TOI-2120 cube")
+                        " means. It converges on synthetic data and on short"
+                        " slices of spectrum, but not reliably on a full cube")
     p.add_argument("--no-template", dest="template", action="store_false", default=None,
                    help="skip the star-frame median template. The star block"
                         " then spends its first component rebuilding the mean"
@@ -157,12 +157,9 @@ def parse_args(argv=None):
                    help="solve a separate coefficient vector for each parity"
                         " row. The two rows of an exposure are one measurement,"
                         " so this is only meaningful as a diagnostic")
-    # --max-mad is kept as an alias so every existing command, config and log
-    # line still means exactly what it meant. The name was wrong, not the
-    # number: the cut is in robust sigmas, 1.4826 x MAD, so the default of 10
-    # has always been 14.83 plain MADs. Renaming without changing the value is
-    # deliberate; changing the value would make every fit already on disk
-    # incomparable with the next one.
+    # --max-mad is an alias of --max-sigma, so that commands and configurations
+    # written with it keep their meaning. The cut is in robust sigmas,
+    # 1.4826 x MAD, and not in MADs: the default of 10 is 14.83 plain MADs.
     # LBL's own values, so the two steps of the chain bin the same way; see
     # lbl/recipes/lbl_template.py, "bin cube by BERV (to give equal weighting
     # to epochs)". 0 restores the plain median over all spectra.
@@ -233,12 +230,12 @@ def _resolve(args):
 class FourierShifter:
     """Translation by a fractional number of samples, via a Fourier phase ramp.
 
-    KEPT FOR COMPARISON ONLY -- see NOTES.md 11.3, amendment of 2026-08-24, and
-    `--shift fft`. A phase ramp is a valid translation only for a band-limited,
-    gap-free signal. The spectra qualify (7.5 samples per FWHM); the weight maps
-    do not, being a mask with a step edge at each of ~22 gaps per row. Shifting w
-    this way drives 0.63% of samples negative, and the exact diag(S^T W S) under
-    a global operator is flat straight through a gap rather than gapped.
+    KEPT FOR COMPARISON ONLY, `--shift fft`. A phase ramp is a valid
+    translation only for a band-limited, gap-free signal. The spectra qualify
+    (7.5 samples per FWHM); the weight maps do not, being a mask with a step
+    edge at each of ~22 gaps per row. Shifting w this way drives 0.63% of
+    samples negative, and the exact diag(S^T W S) under a global operator is
+    flat straight through a gap rather than gapped.
     """
 
     banded = False
@@ -285,10 +282,10 @@ class LanczosShifter:
 
     so S[m, j] = c_{j - m + base} and the adjoint is a scatter with the *same*
     taps, exact by construction. Nothing here relies on unitarity, which is what
-    11.3 originally wanted the FFT for and which the FFT does not actually
-    deliver on real input at fractional shift anyway.
+    the FFT would be wanted for and which it does not actually deliver on real
+    input at fractional shift anyway.
 
-    Two properties the FFT does not have, both measured in NOTES.md 11.3:
+    Two properties the FFT does not have:
 
       * a gap contaminates only +-a samples, exactly zero beyond, against a 61 px
         span with a 1/k tail for the FFT;
@@ -338,8 +335,9 @@ class LanczosShifter:
         Written as one contraction over a sliding-window view rather than as 2a
         accumulating passes. The taps are a contiguous, overlapping band, so the
         window view costs nothing to build and the sum becomes a single matmul
-        over the tap axis. Measured 1.7x faster on the 421782-column grid, and
-        bit-identical: the same 16 products in the same order.
+        over the tap axis. Close to twice as fast on a grid of a few hundred
+        thousand columns, and bit-identical: the same 16 products in the same
+        order.
         """
         off = self.pad - sign * base
         taps = c if sign > 0 else c[::-1]
@@ -390,10 +388,11 @@ class LanczosShifter:
 
         The rows are independent, and after the sliding-window rewrite of
         `_apply` the work is a matmul that releases the GIL, so a thread pool
-        helps: measured 5.6x on ten cores for a 421782-column grid, with an
-        identical result since each row writes its own slice. Before that
-        rewrite the same pool bought only 2.5x, the loop then being limited by
-        allocating sixteen temporaries per row rather than by arithmetic.
+        helps, about five times on ten cores for a grid of a few hundred
+        thousand columns, with an identical result since each row writes its
+        own slice. Written as 2a accumulating passes, the loop would be limited
+        by allocating sixteen temporaries per row rather than by arithmetic,
+        and the same pool would buy much less.
         """
         out = np.empty((pix.size, prepared.shape[0], self.n))
         if not prepared.shape[0]:
@@ -462,16 +461,17 @@ def equilibrated_solve(amat, bvec, ridge=1e-12):
 
     The design's columns do not have comparable norms. P and Q are orthonormal,
     so theirs are 1; the velocity column is d/dpix of the reconstructed star,
-    whose amplitude is the star's own divided by the width of a line, which on
-    SPIRou is a factor of ten away. The normal matrix then has diagonal entries
-    spread over two decades and a condition number to match, without a single
-    pair of columns being collinear: it is a scaling problem, not a degeneracy.
+    whose amplitude is the star's own divided by the width of a line, which at
+    the grid's usual sampling is a factor of ten away. The normal matrix then
+    has diagonal entries spread over two decades and a condition number to
+    match, without a single pair of columns being collinear: it is a scaling
+    problem, not a degeneracy.
 
     So each column is scaled to unit diagonal, the system is solved, and the
     scaling is undone on the coefficients. In exact arithmetic that is the same
     solution to the digit; in floating point it is the difference between a
     condition number of 400 and one of 8. It also makes the ridge mean the same
-    thing for every column, which it did not when one column dominated the
+    thing for every column, which it would not if one column dominated the
     trace.
     """
     diag = np.diag(amat).copy()
@@ -502,17 +502,18 @@ def velocity_column(star_row, mask=None):
     exposure, and never a measured spectrum. The reconstruction is the sum of
     every exposure that went into the basis, so its derivative is as clean as
     the basis; np.gradient of a single observed spectrum would be a derivative
-    of its noise, and at SPIRou SNR per sample that is most of what it would
-    be. The column would then be noise, alpha would fit noise against noise,
-    and the term would inject exactly the velocity error it exists to prevent.
+    of its noise, and at the SNR per sample of a typical exposure that is most
+    of what it would be. The column would then be noise, alpha would fit noise
+    against noise, and the term would inject exactly the velocity error it
+    exists to prevent.
 
     WHERE IT IS ALLOWED TO SPEAK. With `mask` given the column is zero outside
     it, which is how the shift is estimated from clean stellar lines only: the
     columns inside a photometric band whose telluric transmission stays high
     across the campaign. Estimating it anywhere else means fitting the star's
     velocity to a place where the flux is mostly atmosphere and the star model
-    is least trustworthy, and it showed: against LBL the unmasked term came out
-    1.8 times too large.
+    is least trustworthy: unmasked, the term is found empirically to come out
+    nearly twice as large as what LBL measures.
 
     Masked in the model too, and not only in the solve. A term fitted under one
     model and removed under another is how a residual acquires a shape nobody
@@ -527,7 +528,8 @@ def velocity_column(star_row, mask=None):
 def joint_coeffs(data, w, P, Q, shifter, delta, chunk=64, exposure=None,
                  velocity_from=None, velocity_mask=None, desc=None,
                  star_mean=None):
-    """Step 1 of 11.2: solve [a_n ; b_n ; alpha_n] together, per spectrum.
+    """Step 1 of the block descent: solve [a_n ; b_n ; alpha_n] together, per
+    spectrum.
 
     B_n = [ S_n P^T , Q^T ] is M x (K+J); the off-diagonal blocks of
     B_n^T W_n B_n are the cross-frame overlaps and are the whole point.
@@ -576,8 +578,9 @@ def joint_coeffs(data, w, P, Q, shifter, delta, chunk=64, exposure=None,
     and the observer block has seven free vectors and an amplitude per exposure
     with which to describe it. It does. Dividing that block out of the flux
     then moves the star's lines, which is a velocity written into the corrected
-    spectrum by the correction itself; measured on TOI2120 it accounts for 41%
-    of the variance of what the correction changed in LBL's velocities. And
+    spectrum by the correction itself, and found empirically to account for a
+    large share (up to about half) of the variance of what the correction
+    changes in LBL's velocities. And
     when the star has a real signal, the observer block absorbs the planet and
     the correction subtracts it: the thing being looked for, removed by the
     tool meant to clear the way to it.
@@ -680,17 +683,17 @@ def star_support(w, delta, shifter, chunk=64, floor_frac=1e-2):
 def gap_guard(w, delta, a, verbose=True, live=None):
     """Zero the weight wherever the carried star basis would reach into a hole.
 
-    `live` is the STAR frame's support, star_support. Until 2026-09-10 it was
-    taken as w.sum(axis=0) > 0, which on an observer-frame cube is the
-    observer frame's support: an OH core masked in every exposure is a hole
-    there and never one in the star frame, where the exposures at other BERVs
-    see it. The guard then cut a hole 2a wide into every row at the star
-    column equal to the OH line's observer column, mstep zeroed the basis
-    there, and the first column past it, just above mstep's floor, grew a
-    spike: the vertical lines in the report's panels 2, 4 and 5, each touching
-    an OH river at the BERV where the two frames coincide. Without `live` the
-    old rule is kept, for a cube registered in the star's frame, where the two
-    supports are the same.
+    `live` is the STAR frame's support, star_support, and not
+    w.sum(axis=0) > 0, which on an observer-frame cube is the observer
+    frame's support: an OH core masked in every exposure is a hole there and
+    never one in the star frame, where the exposures at other BERVs see it.
+    With the observer's support the guard would cut a hole 2a wide into every
+    row at the star column equal to the OH line's observer column, mstep
+    would zero the basis there, and the first column past it, just above
+    mstep's floor, would grow a spike: vertical lines in the report's panels
+    2, 4 and 5, each touching an OH river at the BERV where the two frames
+    coincide. Without `live`, w.sum(axis=0) > 0 is used, for a cube
+    registered in the star's frame, where the two supports are the same.
 
     This is what it takes to run the two-frame model over a domain that is
     mostly holes. The M-step side is already safe: `diag_normal` reports an
@@ -705,12 +708,13 @@ def gap_guard(w, delta, a, verbose=True, live=None):
     The exact fix is to stop using those samples: a sample is admissible only if
     its whole tap window lands on constrained basis samples. Note this acts on
     the weights, never on the operator, so the forward map, its adjoint and
-    `diag_normal` stay the same object -- which matters, because an operator
-    that is not its own adjoint is what NOTES.md 11.9 spent a day diagnosing.
+    `diag_normal` stay the same object, which matters: an operator whose
+    adjoint is not the transpose of its forward map breaks the descent in ways
+    that are hard to trace.
 
     Apodising the taps at the hole edge, or renormalising them over the live
     subset, would retain those samples instead of dropping them. It is not worth
-    it here: on the 965-1950 nm NIRPS domain the holes are a few dozen wide
+    it here: on a near-infrared domain the holes are a few dozen wide
     blocks, so the rim is a fraction of a percent of the data, and the price
     would be a shift operator whose adjoint has to be rederived.
     """
@@ -765,9 +769,9 @@ def workspace(shape, dtype, spill=None, tag="tmp"):
     os.makedirs(spill, exist_ok=True)
     path = os.path.join(spill, "%s-%s-%s-%d.dat" % (SPILL_NAME, tag, _host(),
                                                     os.getpid()))
-    # A new file reads as zeros already, and writing them was one more pass
-    # over the whole of it, a slow one on a machine that is paging. What the
-    # writing also did was claim the disk space; without it a disk that fills
+    # A new file reads as zeros already, and writing them would be one more
+    # pass over the whole of it, a slow one on a machine that is paging. Writing
+    # them would also claim the disk space; without it a disk that fills
     # during the fit kills the process at its next write, so the space is
     # checked here instead, where there is still something useful to say.
     need = int(np.prod(shape)) * np.dtype(dtype).itemsize
@@ -792,11 +796,10 @@ def sweep_spill(spill):
     """Remove the mapped files of fits on this machine that have ended.
 
     A fit removes its own files when it finishes, and one that is killed, by
-    the kernel or by a Stop, cannot: on 2026-09-16 a stopped run had left
-    11.5 GB in cache/spill. The file names carry the machine and the process,
-    so only files of this machine whose process is gone are touched; a folder
-    shared with another machine keeps that machine's files whatever their
-    number says.
+    the kernel or by a Stop, cannot, and leaves gigabytes behind in the spill
+    folder. The file names carry the machine and the process, so only files
+    of this machine whose process is gone are touched; a folder shared with
+    another machine keeps that machine's files whatever their number says.
     """
     import re
 
@@ -896,8 +899,8 @@ def model_residual(data, P, Q, a, b, shifter, delta, chunk, alpha=None,
         model = star_model(...) + b @ Q
         chi2 = np.sum(w * (data - model) ** 2)
 
-    allocates five arrays of (rows, columns) for one number, and on the cube
-    that the kernel killed on 2026-09-15 that is five times 19 GB. A chunk of
+    allocates five arrays of (rows, columns) for one number, and on a large
+    joint cube that is five times tens of GB. A chunk of
     rows at a time it is five times a chunk, and the sum is float64 either way.
     """
     rows, cols = data.shape
@@ -958,30 +961,29 @@ def mstep(residual, weights, coeffs, basis, floor_frac=1e-2, chunk=64):
 
     `denominator > 0` is not a sufficient guard. With an honest banded operator
     the star-frame weight really does fall to ~1e-15 of nominal inside a telluric
-    gap (that is the whole point of NOTES 11.3), and dividing by it puts a huge
-    spike in the eigenvector: it drove cond(A) from 6 to 5e10 the first time this
-    ran, and a 1e-8 floor still left max|v|/rms at 196 against 17 for the input.
-    The FFT operator never tripped this only because its smearing filled the gaps
-    back in with fictitious weight.
+    gap (which is what an exact banded operator says there), and dividing by it
+    puts a huge spike in the eigenvector: without a floor cond(A) goes from
+    about 6 to some 1e10, and a 1e-8 floor still leaves max|v|/rms an order of
+    magnitude above the input's. The FFT operator does not trip on this only
+    because its smearing fills the gaps back in with fictitious weight.
 
     floor_frac = 1e-2 costs essentially nothing here, because the denominator is
     strongly bimodal: constrained samples sit within a factor of ~1.3 of the
-    maximum (median 6.4e4 against max 8.7e4) and only **0.11%** of samples fall
-    below 1% of it. Measured counts below a given fraction of the max, out of
-    38696 samples: 1e-8 -> 29, 1e-4 -> 36, 1e-2 -> 44, 1e-1 -> 46. There is no
+    maximum and only about **0.1%** of samples fall below 1% of it, while a
+    floor six decades lower still drops two thirds as many. There is no
     population in between to lose; the spikes come entirely from the handful of
     samples sitting just above whatever floor is chosen.
 
     The floor is a fraction of the **median** of the positive denominators, not
-    of their maximum. Over the 1500-1600 nm band those two differ by a factor
-    1.3 and the choice is immaterial, which is why the original spelling was
-    fine. Over 965-1950 nm they do not: the per-order extraction SNR runs from
-    108 to 294, so the weight alone spans a factor of seven before the telluric
-    ramp and the per-column exposure count are applied, and a floor set at 1% of
-    the global maximum would silently delete legitimately constrained samples at
-    the blue end of Y. What the floor has to separate is real data from
-    numerical residue, and residue sits at ~1e-15 of nominal; the typical
-    constrained weight is the right yardstick for that, the largest one is not.
+    of their maximum. Over a narrow band those two differ by a factor 1.3 and
+    the choice is immaterial. Over a domain of an octave they do not: the
+    per-order extraction SNR can vary by a factor of about three across it, so
+    the weight alone spans a factor of seven before the telluric ramp and the
+    per-column exposure count are applied, and a floor set at 1% of the global
+    maximum would silently delete legitimately constrained samples at the
+    faint end. What the floor has to separate is real data from numerical
+    residue, and residue sits at ~1e-15 of nominal; the typical constrained
+    weight is the right yardstick for that, the largest one is not.
     """
     basis = basis.copy()
     # NOTE: `residual` is consumed in place. Every caller passes a freshly built
@@ -1028,9 +1030,9 @@ def update_star(data, w, P, Q, a, b, shifter, delta, chunk, alpha=None,
 
     The normal equation wants sum_n c^2 S_n^T W_n S_n; we use its diagonal. With
     a banded operator that matrix has bandwidth 2a and the diagonal is a fair
-    approximation to it; with the FFT it is dense and the diagonal is not (11.3).
-    Either way the diagonal is now computed exactly by `diag_normal` rather than
-    approximated by a shifted weight map, and needs no clipping.
+    approximation to it; with the FFT it is dense and the diagonal is not. With
+    the Lanczos operator the diagonal is computed exactly by `diag_normal`
+    rather than approximated by a shifted weight map, and needs no clipping.
 
     With `star_fwhm`, one resolution element in samples, every updated vector is
     smoothed to it by LBL's template filter and made orthonormal again: the star
@@ -1105,22 +1107,21 @@ _LOAD_BLOCK_BYTES = 256 * 1024 * 1024
 #: THE PER-PIXEL THRESHOLD, IN SNR. A pixel whose noise is below this ratio
 #: brings nothing to the fit; above it, it counts by its weight 1/sigma^2,
 #: and the bottom of a deep line therefore stays in. 5 is low on purpose: the
-#: aim is to set aside the dead pixel, not to sort by brightness. Measured on
-#: 2026-10-16 on HD 10700 (see docs/harps_tc_result.md): the old depth
-#: threshold left 13.7% of NaN in the corrected spectra and cost LBL a third
-#: of its lines.
+#: aim is to set aside the dead pixel, not to sort by brightness. A DEPTH
+#: threshold instead (weights.ln_clip_low) removes the bottom of every deep
+#: line, where the velocity information is: it leaves a large share of NaN in
+#: the corrected spectra and can cost LBL a sizeable fraction of its lines.
 DEFAULT_MIN_PIXEL_SNR = 5.0
 
 
 def read_cube_files(path, dtype=np.float64, columns=None, lazy=False):
     """Read a cached cube, in either of the two formats `cube.py` has written.
 
-    Until 2026-08-26 the cache was a single compressed `.npz`. It is now a
-    directory holding `grid.npy`, `data.npy`, `sigma.npy`, an optional
-    `trans.npy` and `meta.fits`: a full-domain t.fits cube is several GB, and
-    `savez_compressed` on that spends minutes in zlib for a payload that is
-    float32 noise and does not compress. Both are read here so the older caches
-    on disk stay usable.
+    The cache is a directory holding `grid.npy`, `data.npy`, `sigma.npy`, an
+    optional `trans.npy` and `meta.fits`: a full-domain t.fits cube is several
+    GB, and `savez_compressed` on that would spend minutes in zlib for a
+    payload that is float32 noise and does not compress. A cube saved as a
+    single compressed `.npz`, the other format, is read as well.
     """
     # With `columns`, only those grid columns are read, through a memory map:
     # a figure of one window then reads its few thousand columns rather than
@@ -1183,8 +1184,8 @@ def group_names(n_groups):
     One object has two, the even orders and the odd ones. A joint fit of
     several objects has two per object, labelled 2 * index + parity
     (pca2d.joint), and they all need a column of their own: naming them all
-    "all", as this did until 2026-09-12, wrote one mean and dropped the rest,
-    or refused the file outright for using a name twice.
+    "all" would write one mean and drop the rest, or have the file refused
+    outright for using a name twice.
     """
     if n_groups <= 1:
         return ["all"]
@@ -1197,9 +1198,9 @@ def row_parity(meta, n_rows):
     """Which half of the echellogram each cube row came from.
 
     A t.fits cube carries two rows per exposure, the even orders and the odd
-    ones (NOTES.md 13.2). An s1d cube, and any cube built before 2026-08-26,
-    has one row per exposure and no `parity` column; those get a single group,
-    so everything downstream can be written once.
+    ones. An s1d cube, or any cube without a `parity` column, has one row per
+    exposure; those get a single group, so everything downstream can be
+    written once.
     """
     if "parity" in getattr(meta, "colnames", []):
         return np.asarray(meta["parity"], dtype=int)
@@ -1224,7 +1225,7 @@ def parity_means(data, w, parity):
     Not a refinement: with a t.fits cube a single global mean leaves a static
     even-minus-odd offset in the residual, which is the order overlaps not being
     at the same resolution, and it is the largest coherent structure in the
-    cube. In the main pipeline it took the whole of PC1 (NOTES.md 13.9). It is
+    cube, and left in it takes the whole of the first component. It is
     fixed in the instrument frame, so the observer-frame mean is exactly where
     it belongs and removing it per parity kills it outright.
     """
@@ -1246,10 +1247,10 @@ def parity_means(data, w, parity):
 def fit_means(blob, meta, n_rows, n_pixels):
     """The mean spectrum a saved fit removed, as (means, group_per_row).
 
-    `means[group]` is what was subtracted from each cube row. Since 2026-08-26
-    a fit.npz stores one mean per order parity and the parity of every row;
-    older files store a single `mean`, which is read back as one group so the
-    caller needs no special case.
+    `means[group]` is what was subtracted from each cube row. A fit.npz stores
+    one mean per order parity and the parity of every row; a file with a
+    single `mean` instead is read back as one group so the caller needs no
+    special case.
     """
     files = list(getattr(blob, "files", []))
     if "means" in files:
@@ -1272,7 +1273,7 @@ def fit_means(blob, meta, n_rows, n_pixels):
 def fit_templates(blob, meta, n_rows, n_pixels):
     """The star-frame means a saved fit holds, as (templates, group_per_row).
 
-    One per parity from a --mean iterate fit (`templates`); from an older fit
+    One per parity from a --mean iterate fit (`templates`); from any other fit
     the single `template`, zero unless its one-shot median was used, as one
     group, so a caller needs no special case.
     """
@@ -1291,8 +1292,8 @@ def mean_rows(means, group, n_rows):
     """`means[group]` as a broadcast view when there is only one group.
 
     With a single mean this is a zero-copy view; fancy-indexing it instead
-    would allocate a full (N, M) array, which on the 764 x 92426 cube of
-    section 11 is 565 MB of pure waste.
+    would allocate a full (N, M) array, which on a cube of several hundred
+    rows by a hundred thousand columns is hundreds of MB of pure waste.
     """
     if means.shape[0] == 1:
         return np.broadcast_to(means[0], (n_rows, means.shape[1]))
@@ -1354,15 +1355,16 @@ MEAN_SWEEP_ROUNDS = 1
 MEAN_STAR_NORMAL = "diag"
 #: where the means start. "template": the star-frame median of each parity
 #: first and the observer mean of what it leaves, component zero of each block
-#: as NOTES 11.13 found it has to be; "zero": the observer mean alone. Measured
-#: on the synthetic cube of tests/test_parity_means_iterate.py on 2026-09-10:
-#: from "template" chi2 descends at every sweep, each frame's mean correlates
-#: 1.00 with its truth, the smeared star stays out of the observer mean (-0.07)
-#: and the observer component follows the telluric depth (-1.00). From "zero"
-#: the fit turns over after one sweep, the observer component follows the BERV
-#: (+0.97) and the smeared star is still in the observer mean (+0.22): the trap
-#: of NOTES 11.12 again. "diag" against "lumped", and one against three rounds
-#: per sweep, changed nothing from "template".
+#: as it has to be; "zero": the observer mean alone. On a synthetic cube whose
+#: star and tellurics are known: from "template" chi2 descends at every sweep,
+#: each frame's mean correlates 1.00 with its truth, the smeared star stays out
+#: of the observer mean (-0.07) and the observer component follows the
+#: telluric depth (-1.00). From "zero" the fit turns over after one sweep, the
+#: observer component follows the BERV (+0.97) and the smeared star is still in
+#: the observer mean (+0.22): the observer block has taken the star smeared
+#: over the BERV, and the star block spends itself undoing it (see
+#: star_frame_template). "diag" against "lumped", and one against three rounds
+#: per sweep, change nothing from "template".
 MEAN_INIT = "template"
 
 
@@ -1384,8 +1386,9 @@ def update_means(data, w, T, O, group, shifter, delta, chunk, resid=None,
     that sits in the observer mean shows up in the residual as soon as the
     star-frame mean holds the star, and the next observer step takes it back
     out. One mean per parity in both frames, never shared: the even and the odd
-    orders see the same star and the same sky at different resolutions, far
-    more so on NIRPS, and a shared mean would hand that difference to whichever
+    orders see the same star and the same sky at different resolutions, more
+    so on some instruments than on others, and a shared mean would hand that
+    difference to whichever
     block could reach it.
 
     Returns the rms of the two steps, which is how convergence is judged.
@@ -1490,8 +1493,8 @@ def restore_means(data, T, O, T_to, O_to, group, shifter, delta, chunk, w=None):
 def _per_row(meta):
     """meta's n_exposures, or None when the rows are single exposures.
 
-    A cube written before nightly stacking existed has no such column, and one
-    that was not stacked has it all ones; both mean "the rows ARE exposures".
+    A cube with no such column, and one that was not stacked and has it all
+    ones, both mean "the rows ARE exposures".
     """
     names = getattr(meta, "colnames", None) or getattr(meta, "files", None) or []
     if "n_exposures" not in names:
@@ -1518,16 +1521,15 @@ def count_exposures(meta, rows=None):
 def exposures_label(names, keep, per_row=None, unit="nights"):
     """'316 exposures' for the rows `keep` selects, counted as exposures.
 
-    What a figure says about how many points went into it. The correlation
-    matrix used to print keep.sum(), which on a t.fits cube is 632 for 316
-    exposures, two rows each, and a reader rightly asks where the other half
-    of the data came from. Without file names only rows can be counted, and
-    the label says rows.
+    What a figure says about how many points went into it. keep.sum() would
+    count rows, which on a t.fits cube is twice the exposures, two rows each,
+    and a reader rightly asks where the other half of the data came from.
+    Without file names only rows can be counted, and the label says rows.
 
     On a nightly-stacked cube a "file name" is a NIGHT, not an exposure, and
-    calling 458 of them exposures invited exactly the reading it was meant to
-    prevent: GL699 has 1976 spectra and this label said 458, so the figure
-    looked like it had thrown three quarters of the campaign away. `per_row`
+    calling the nights exposures invites exactly the reading it is meant to
+    prevent: a campaign of a few thousand spectra coadded into a few hundred
+    nights would look like it had thrown most of its data away. `per_row`
     is meta's n_exposures; when it says the rows hold more spectra than there
     are rows, the label says so, in the words the sequence figures already use.
     """
@@ -1558,8 +1560,8 @@ def cube_shape(path):
     said in words. cli.check_cubes looks for one before any stage announces
     itself and puts the cube stage back when it is gone, but this module is
     also run on its own with --cube, and then nothing has looked: a cache
-    emptied between two runs used to arrive here as a bare FileNotFoundError
-    out of np.load, three frames deep, after the fit had already timed itself.
+    emptied between two runs would otherwise arrive here as a bare
+    FileNotFoundError out of np.load, three frames deep.
     """
     missing = None
     if os.path.isdir(path):
@@ -1593,23 +1595,19 @@ def memory_needed(rows, columns, dtype, margin=1.05):
     float64, so those temporaries are float64 whatever the cube is stored as,
     and they are the reason a float32 cube still costs 16 bytes a sample.
 
-    Measured: the read alone peaks at 3.2 GB on the TOI-2120 cube (642 x 577002
-    float32) and this says 3.0 for it; the sweeps take it to 5.8, which is why
-    that run fits in half of a 17 GB machine and the ten-object joint cube,
-    37.9 GB by the same count, was killed by the kernel on 2026-09-15.
+    Checked against a fit's measured peak: the read alone takes about half of
+    this count, and the sweeps bring the resident memory to within a few
+    percent of it.
 
     NOT counted: the model is carried in chunks of rows (`chunk`, hundreds of
     MB) and the bases are (K, columns), tens of MB.
 
-    Since 2026-09-16 that count is what the fit actually holds. Until then it
-    also held a copy of the weights, the data copied back out of its mapped
-    file by the gap guard, and in every sweep the clip's float64 weights with
-    two more copies for their medians. A joint fit this count put at 11.7 GB,
-    with 8.5 allowed, went to mapped files as it should and then held 11 GB
-    of memory beside them, most of it in swap. The weights are no
-    longer copied, the clip stores only the samples it changed
+    That count is what the fit actually holds, and it stays so only because
+    nothing else of that shape is: the weights are never copied, the gap
+    guard works on them in place, the clip stores only the samples it changed
     (ClippedWeights), and the star spectra, the medians and the means are
-    taken a block at a time (tests/test_low_memory.py).
+    taken a block at a time. One more copy of a (rows, columns) array beside
+    a fit that went to mapped files would put it back in swap.
     """
     item = np.dtype(dtype).itemsize
     return rows * columns * (2 * item + 8) * float(margin) / 1e9
@@ -1620,8 +1618,8 @@ def spill_dir(rows, columns, dtype, cube, outdir, fraction=None):
 
     Half of the machine, never more, and the arithmetic does not change either
     way: the same numbers in the same order, either in memory or on a mapped
-    file the kernel pages. A run that does not fit used to be killed with exit
-    -9 and nothing said; it now runs, more slowly, and says why.
+    file the kernel pages. A run that does not fit would otherwise be killed
+    with exit -9 and nothing said; this way it runs, more slowly, and says why.
     """
     from .machine import DEFAULT_FRACTION, describe
 
@@ -1652,10 +1650,10 @@ def spill_dir(rows, columns, dtype, cube, outdir, fraction=None):
 def check_memory(rows, columns, dtype, fraction=None):
     """Refuse a fit that cannot fit, BEFORE it has read anything.
 
-    The alternative is what happened on 2026-09-15: a joint cube of ten
-    objects, 19 GB of arrays on a machine with 17, twenty-six minutes of cube
-    and eleven of preparation, and then exit -9 from the kernel with nothing
-    said. A number and a list of ways out cost a second.
+    The alternative is a joint cube of many objects, more arrays than the
+    machine has memory, half an hour of cube and ten minutes of preparation,
+    and then exit -9 from the kernel with nothing said. A number and a list
+    of ways out cost a second.
     """
     from .machine import DEFAULT_FRACTION, describe
 
@@ -1751,11 +1749,10 @@ def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
     # ONE PASS, IN COLUMN BLOCKS, and neither sigma nor the transmission ever
     # resident. Read whole, a cube costs four arrays of its own size at the
     # peak (data, sigma, transmission, weights), and that peak is what a kernel
-    # kills on: a ten-object joint cube asked 38 GB of a 17 GB machine on
-    # 2026-09-15 and died with nothing said. Block by block the peak is the two
-    # arrays that survive the read, plus one block of each of the others. The
-    # arithmetic per column is untouched, so the answer is the same to the bit
-    # (tests/test_blocked_load.py holds the two side by side).
+    # kills on: a large joint cube can ask twice the machine's memory and die
+    # with nothing said. Block by block the peak is the two arrays that survive
+    # the read, plus one block of each of the others. The arithmetic per column
+    # is untouched, so the answer is the same to the bit as a whole read.
     n_rows = len(rows) if rows is not None else data.shape[0]
     n_cols = data.shape[1]
     # in memory, or mapped onto a file under `spill` when they will not fit

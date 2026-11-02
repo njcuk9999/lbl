@@ -74,9 +74,10 @@ def test_a_range_of_the_grid_gets_the_whole_grid_s_masks(tmp_path):
 
 
 def test_a_deep_line_core_is_not_an_outlier_of_its_own_noise():
-    """GJ 229, Na D: the core of a deep line has fewer photons, so a larger
-    sigma of its log flux. Scaled by each sample's sigma, it is not clipped;
-    scaled by the running sigma of the continuum around it, it was."""
+    """The core of a deep line (Na D in an M dwarf) has fewer photons, so a
+    larger sigma of its log flux. Scaled by each sample's sigma, it is not
+    clipped; scaled by the running sigma of the continuum around it, it
+    would be."""
     rng = np.random.default_rng(4)
     m = 2001
     sigma = np.full((50, m), 0.01)
@@ -85,7 +86,7 @@ def test_a_deep_line_core_is_not_an_outlier_of_its_own_noise():
     z = outliers.scaled_z(resid, sigma, 201)
     core = np.abs(z[:, 990:1010])
     assert (core > 3).mean() < 0.01
-    # the old way, the running sigma alone
+    # the running sigma alone would clip it
     med, sig = outliers.running_stats(resid, 201)
     old = np.abs((resid - med) / sig)[:, 990:1010]
     assert (old > 3).mean() > 0.3
