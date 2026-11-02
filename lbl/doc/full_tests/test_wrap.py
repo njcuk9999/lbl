@@ -503,7 +503,6 @@ def expres():
     rparams['OBJECT_SCIENCE'] = ['SUN']
     rparams['OBJECT_COMPARISON'] = ['SUN']
     rparams['OBJECT_TEFF'] = [5772]
-    rparams['BLAZE_CORRECTED'] = True
     # what to run and skip if already on disk
     rparams['RUN_LBL_TELLUCLEAN'] = True
     rparams['RUN_LBL_TEMPLATE'] = True

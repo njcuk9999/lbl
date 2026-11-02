@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SOPHIE instrument class here: instrument specific settings
+EXPRES instrument class here: instrument specific settings
 
 Created on 2023-06-21
 
@@ -36,10 +36,26 @@ Time = base.AstropyTime
 Instrument = default.Instrument
 LblException = base_classes.LblException
 log = io.log
+# the columns of the optimal extraction that hold the barycentric wavelengths:
+#   Excalibur's, valid where the laser frequency comb calibrates the order,
+#   and the classical solution, valid over the whole order
+EXCALIBUR_COLUMN = 'bary_excalibur'
+CLASSIC_COLUMN = 'bary_wavelength'
+# the extension of the exposure meter and the barycentric correction
+BARY_EXTENSION = 'EXPOSURE METER + BARY_CORR'
+# the barycentric correction (as a redshift) and the time at the flux-weighted
+#   midpoint of the exposure [JD], in the header of BARY_EXTENSION
+BARY_REDSHIFT_KEY = 'wtd_mdpt_bc'
+BARY_MIDPOINT_KEY = 'wtd_mdpt'
+# the barycentric time of the exposure [MJD], in the header of the extraction
+BARY_MJD_KEY = 'BARYMJD'
+# the domain of the spectrograph [nm], on which the bands are chosen
+BAND_WAVEMIN = 379.66
+BAND_WAVEMAX = 822.36
 
 
 # =============================================================================
-# Define SOPHIE class
+# Define EXPRES class
 # =============================================================================
 class Expres(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -50,9 +66,10 @@ class Expres(Instrument):
         self.default_template_name = 'LBL_Template_{0}_expres.fits'
         self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_expres.fits'
         self.default_sample_wave_name = 'sample_wave_grid_expres.fits'
-        # define wave limits in nm
-        self.wavemin = 379.66
-        self.wavemax = 822.36
+        # define wave limits in nm: the domain of the Excalibur wavelengths,
+        #   barycentric, over the year
+        self.wavemin = 492.0
+        self.wavemax = 727.0
         # set parameters for instrument
         self.params = params
         # override params
@@ -61,11 +78,11 @@ class Expres(Instrument):
         self.update_from_args(args)
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC PARAMETERS
+    # EXPRES SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for EXPRES parameters
         (update default params)
 
         :return: None - updates self.params
@@ -79,7 +96,9 @@ class Expres(Instrument):
         self.param_set('EARTH_LOCATION', 'lowell')
         # define the default science input files
         self.param_set('INPUT_FILE', '*.fits', source=func_name)
-        # The input science data are blaze corrected
+        # The flux LBL receives is in electrons with the blaze still in it:
+        #   the 'spectrum' column is relative to the flat, and multiplied here
+        #   by the 'blaze' column (load_science_file)
         self.param_set('BLAZE_CORRECTED', False, source=func_name)
         # define the mask table format
         self.param_set('REF_TABLE_FMT', 'csv', source=func_name)
@@ -94,6 +113,11 @@ class Expres(Instrument):
         self.param_set('HP_WIDTH', 500, source=func_name)
         # approximate mean resolution in lambda/dlambda
         self.param_set('APPROX_RESOLUTION', 150000, source=func_name)
+        # the windows of the PCA2D figures (centre:width in nm): those of
+        #    HARPS, the one near sodium at the blaze peak of its EXPRES order
+        self.param_set('PCA2D_WINDOWS', source=func_name,
+                       value=['687.75:2.5', '630.75:2', '594.25:2.25',
+                              '651.0:2.5', '588.5:1.5', '519.0:2'])
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
@@ -220,13 +244,14 @@ class Expres(Instrument):
         # define wave degree key in header
         self.param_set('KW_WAVEDEGN', None, source=func_name)
         # define the key that gives the mid exposure time in MJD
-        self.param_set('KW_MID_EXP_TIME', 'TELMJD', source=func_name)
+        #   (set by load_header from the flux-weighted midpoint)
+        self.param_set('KW_MID_EXP_TIME', 'MJDMID', source=func_name)
         # define the start time of the observation
-        self.param_set('KW_MJDATE', 'TELMJD', source=func_name)
+        self.param_set('KW_MJDATE', 'MJDMID', source=func_name)
         # define snr keyword
         self.param_set('KW_SNR', None, source=func_name)
-        # define berv keyword
-        self.param_set('KW_BERV', None, source=func_name)
+        # define berv keyword [km/s] (set by load_header)
+        self.param_set('KW_BERV', 'BERV', source=func_name)
         # define the Blaze calibration file
         self.param_set('KW_BLAZE_FILE', None, source=func_name)
         # define the exposure time of the observation
@@ -250,8 +275,8 @@ class Expres(Instrument):
         self.param_set('KW_SNRGOAL', 'HIERARCH ESO OBS SN ', source=func_name)
         # define the SNR in chosen order
         self.param_set('KW_EXT_SNR', None, source=func_name)
-        # define the barycentric julian date
-        self.param_set('KW_BJD', 'MIDPOINT', source=func_name)
+        # define the barycentric julian date (set by load_header)
+        self.param_set('KW_BJD', 'BJD', source=func_name)
         # define the reference header key (must also be in rdb table) to
         #    distinguish FP calibration files from FP simultaneous files
         self.param_set('KW_REF_KEY', None, source=func_name)
@@ -262,7 +287,7 @@ class Expres(Instrument):
         self.param_set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
-    # SOPHIE SPECIFIC METHODS
+    # EXPRES SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
                     extnum: int = 0, extname: str = None) -> io.LBLHeader:
@@ -279,8 +304,55 @@ class Expres(Instrument):
         """
         # get header
         hdr = io.load_header(filename, kind, extnum, extname)
+        # the time and the barycentric correction are in the other extensions
+        #   of a science file: put them where LBL looks for them
+        if extnum == 0 and extname is None and self._is_calibrated(filename):
+            hdr = self._add_barycentric_keys(hdr, filename)
         # return the LBL Header class
         return io.LBLHeader.from_fits(hdr, filename)
+
+    @staticmethod
+    def _is_calibrated(filename: str) -> bool:
+        """
+        Whether a file has what a measurement needs: the wavelengths of the
+        extraction and the barycentric correction. The pipeline delivers
+        some exposures as the extraction alone.
+
+        :param filename: str, the absolute path to the file
+
+        :return: bool, True if the file holds both
+        """
+        with fits.open(filename) as hdulist:
+            names = [hdu.name.upper() for hdu in hdulist]
+            if 'OPTIMAL' not in names or BARY_EXTENSION not in names:
+                return False
+            columns = hdulist['OPTIMAL'].columns.names
+            return EXCALIBUR_COLUMN in columns and CLASSIC_COLUMN in columns
+
+    def _add_barycentric_keys(self, hdr: fits.Header,
+                              filename: str) -> fits.Header:
+        """
+        Add to a primary header the keys of the mid exposure time, the
+        barycentric date and the BERV, from the other extensions of the file
+
+        :param hdr: fits.Header, the primary header of the science file
+        :param filename: str, the absolute path to the science file
+
+        :return: fits.Header, the updated header
+        """
+        with fits.open(filename) as hdulist:
+            hdr_ext = hdulist['OPTIMAL'].header
+            hdr_bary = hdulist[BARY_EXTENSION].header
+        # the flux-weighted midpoint is what the velocity refers to
+        midpoint = Time(float(hdr_bary[BARY_MIDPOINT_KEY]), format='jd')
+        hdr[self.params['KW_MID_EXP_TIME']] = midpoint.mjd
+        barymjd = Time(float(hdr_ext[BARY_MJD_KEY]), format='mjd')
+        hdr[self.params['KW_BJD']] = barymjd.jd
+        # the ratio of barycentric to observed wavelengths, as a velocity
+        ratio = 1.0 + float(hdr_bary[BARY_REDSHIFT_KEY])
+        berv = mp.speed_of_light * (ratio ** 2 - 1) / (ratio ** 2 + 1)
+        hdr[self.params['KW_BERV']] = berv
+        return hdr
 
     def mask_file(self, model_directory: str, mask_directory: str,
                   required: bool = True) -> str:
@@ -386,11 +458,17 @@ class Expres(Instrument):
 
         :return: tuple, data (np.ndarray) and header (io.LBLHeader)
         """
-        # load the first extension of each
+        # load the optimal extraction
         data_array = io.load_fits(science_file,
                                   kind='science fits file',
                                   extname='optimal')
-        sci_data = data_array['spectrum']
+        # the spectrum is relative to the flat: in electrons, which is what
+        #   LBL's noise model expects, with its blaze
+        sci_data = np.array(data_array['spectrum'], dtype=float)
+        sci_data = sci_data * np.array(data_array['blaze'], dtype=float)
+        # only the pixels Excalibur calibrates are measured
+        excalibur = np.array(data_array[EXCALIBUR_COLUMN], dtype=float)
+        sci_data[~np.isfinite(excalibur)] = np.nan
         sci_hdr = self.load_header(science_file, kind='science fits file')
         # return data and header
         return sci_data, sci_hdr
@@ -436,6 +514,12 @@ class Expres(Instrument):
         abspath = os.path.join(abspath, basename)
         # look for files
         files = glob.glob(abspath)
+        # an exposure without wavelengths cannot be measured
+        for filename in list(files):
+            if not self._is_calibrated(filename):
+                log.warning('Skipping {0}: no wavelength solution or '
+                            'barycentric correction'.format(filename))
+                files.remove(filename)
         # deal with no files found
         if len(files) == 0:
             emsg = 'No science objects found for {0}. Search string={1}'
@@ -496,13 +580,11 @@ class Expres(Instrument):
         if self.params['BLAZE_CORRECTED']:
             # blaze corrected
             return np.ones_like(sci_image), True
-        # get blaze file from science header
-        blaze_file = sci_hdr.get_hkey(self.params['KW_BLAZE_FILE'])
-        # construct absolute path: the blaze the header names, else the
-        #   default blaze of the setup (Instrument.blaze_path)
-        abspath = self.blaze_path(calib_directory, blaze_file)
-        # read blaze file (data and header)
-        blaze = io.load_fits(abspath, kind='blaze fits file')
+        # the blaze is a column of the science file
+        data_array = io.load_fits(science_file, kind='science fits file',
+                                  extname='optimal')
+        blaze = np.array(data_array['blaze'], dtype=float)
+        blaze[blaze <= 0] = np.nan
         # deal with normalizing per order
         if normalize:
             # get the blaze parameters (may be instrument specific)
@@ -528,9 +610,6 @@ class Expres(Instrument):
         """
         # get the wave centers for each order
         wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
         # find the 'diffraction' order for a given 'on-detector' order
         dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
         dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
@@ -577,18 +656,44 @@ class Expres(Instrument):
 
         :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
         """
+        # deal with only having a header
+        if science_filename is None:
+            science_filename = header.filename
         # ---------------------------------------------------------------------
-        # get header
-        wavemap = io.load_fits(science_filename, 'wave fits file',
-                               extname='optimal')['bary_excalibur']
+        # load the barycentric wavelengths [Angstrom]
+        data_array = io.load_fits(science_filename, 'wave fits file',
+                                  extname='optimal')
+        wavemap = np.array(data_array[CLASSIC_COLUMN], dtype=float)
+        excalibur = np.array(data_array[EXCALIBUR_COLUMN], dtype=float)
+        # ---------------------------------------------------------------------
+        # LBL splines each order, so the wave map must be finite and increasing
+        #   everywhere, even where no flux is measured
+        xpix = np.arange(wavemap.shape[1])
+        xcen = wavemap.shape[1] // 2
+        for order_num in range(wavemap.shape[0]):
+            # fill the edges the classical solution leaves out
+            good = np.isfinite(wavemap[order_num])
+            if not good.all() and np.sum(good) > 10:
+                coeffs = np.polyfit(xpix[good] - xcen,
+                                    wavemap[order_num][good], 7)
+                wavemap[order_num][~good] = np.polyval(coeffs,
+                                                       xpix[~good] - xcen)
+            # use Excalibur where it exists, the classical solution joined to
+            #   it on either side
+            valid = np.where(np.isfinite(excalibur[order_num]))[0]
+            if len(valid) < 10:
+                continue
+            first, last = valid[0], valid[-1]
+            left = excalibur[order_num][first] - wavemap[order_num][first]
+            right = excalibur[order_num][last] - wavemap[order_num][last]
+            wavemap[order_num][:first] += left
+            wavemap[order_num][last + 1:] += right
+            inside = np.arange(first, last + 1)
+            wavemap[order_num][inside] = excalibur[order_num][inside]
         # ---------------------------------------------------------------------
         # EXPRES wave solution is in Angstrom - convert to nm for consistency
+        #   (it is in vacuum, as LBL's are)
         wavemap = wavemap / 10.0
-        # ---------------------------------------------------------------------
-        # TODO: check this
-        # # EXPRES wave solution is in air - convert to vacuum
-        # n_index = mp.air_index(wavemap)
-        # wavemap = wavemap * n_index
         # ---------------------------------------------------------------------
         # return wave solution map
         return wavemap
@@ -612,17 +717,22 @@ class Expres(Instrument):
 
         :return:
         """
-        # get BERV header key
-        hdr_key = self.params['KW_BERV']
-        # BERV depends on whether object is FP or not
+        # the wave solution is already barycentric: nothing is left to apply
+        _ = sci_hdr
+        return 0.0
+
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s: the
+        wave solution is barycentric, the atmosphere is in the observer frame
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
         if self.params['OBJECT_SCIENCE'] in ['FP', 'LFC', 'SUN']:
-            berv = 0.0
-        elif hdr_key is None:
-            berv = 0.0
-        else:
-            berv = sci_hdr.get_hkey(hdr_key, dtype=float) * 1000
-        # return the berv measurement (in m/s)
-        return berv
+            return 0.0
+        return sci_hdr.get_hkey(self.params['KW_BERV'], dtype=float) * 1000
 
     def populate_sci_table(self, filename: str, tdict: dict,
                            sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
@@ -782,15 +892,17 @@ class Expres(Instrument):
         """
         # ---------------------------------------------------------------------
         # define regions, and blue/red band ends
-        bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
+        #   those of the whole spectrograph: a band Excalibur covers in part,
+        #   such as g, is measured on that part
+        bout = astro.choose_bands(astro.bands, BAND_WAVEMIN, BAND_WAVEMAX)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
         # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
+        region_names = ['', '_0-3960', '_3960-7920']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
+        region_low = [0, 0, 3960]
         # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        region_high = [7920, 3960, 7920]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -851,8 +963,10 @@ class Expres(Instrument):
         data_array = io.load_fits(props['FILENAME'],
                                   kind='science fits file',
                                   extname='optimal')
-        # we push the image into the data arrays "spectrum" column
-        data_array['spectrum'] = image
+        # we push the image into the data arrays "spectrum" column, relative
+        #   to the flat again (load_science_file multiplies it by the blaze)
+        data_array['spectrum'] = image / np.array(data_array['blaze'],
+                                                  dtype=float)
         # adding extensions that are not the flux after telluric correction
         #   (error propagation, wavelength grid)
         datalist = [None, data_array]
