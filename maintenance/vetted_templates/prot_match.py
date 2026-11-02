@@ -12,13 +12,18 @@ from astroquery.vizier import Vizier
 
 sim = json.load(open("candidates_simbad.json"))["simbad"]
 rows_v = json.load(open("vsini_rows.json"))
+# the candidates SIMBAD resolved, and their coordinates
 names = [n for n in rows_v if sim.get(n)]
 s = Simbad()
 t = s.query_objects([sim[n]["query"] for n in names])
 coords = {}
 for n, row in zip(names, t):
     coords[n] = (float(row["ra"]), float(row["dec"]))
+# every row of each catalog, with VizieR's computed J2000 position
 v = Vizier(row_limit=-1, columns=["**", "_RAJ2000", "_DEJ2000"])
+# per catalog: (VizieR table, period column, radius column or None, note
+#   column or None); ZTF22 is matched for comparison only, the selection
+#   (select_vetted_stars.ORDER) does not use it
 cats = {
     "Shan24": ("J/A+A/684/A9/tablec1", "Pbest", "Rstar", "r_Pbest"),
     "MEarthN": ("J/ApJ/821/93/table1", "Per", "Rad", "Type"),
@@ -40,6 +45,7 @@ for row in rp:
             rotper.setdefault(str(row["Karmn"]).strip(), val)
 cand = SkyCoord([coords[n][0] for n in names] * u.deg, [coords[n][1] for n in names] * u.deg)
 out = {n: {} for n in names}
+# each candidate matched to its nearest catalog row, kept within 30 arcsec
 for key, (table, pcol, rcol, ncol) in cats.items():
     try:
         tab = v.get_catalogs(table)[0]
@@ -58,6 +64,7 @@ for key, (table, pcol, rcol, ncol) in cats.items():
             p = float(p)
         except (TypeError, ValueError):
             p = np.nan
+        # in the catalog but without a period: recorded, with its note
         if np.ma.is_masked(p) or not np.isfinite(p) or p <= 0:
             out[n][key] = dict(P=None, note=str(tab[ncol][i]) if ncol else "", sep=round(float(d), 1))
             continue

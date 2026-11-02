@@ -1,7 +1,7 @@
 # LBL's VETTED TEMPLATES: in each 100 K bin of 3000-4200 K and for each
 # instrument, the star whose APERO template holds the most spectra, among
-# slow rotators that are not young (maintenance/vetted_templates: choose.py and
-# its README). A wrap names one as OBJECT_COMPARISON = 'VETTED_<object>';
+# slow rotators that are not young (maintenance/vetted_templates:
+# select_vetted_stars.py and its README). A wrap names one as OBJECT_COMPARISON = 'VETTED_<object>';
 # LBL downloads <file> from MODEL_REPO_URL and makes it one of its
 # templates (lbl.core.vetted). teff [K] is APERO's PP_TEFF (teff_ref its
 # source), nfiles the spectra in the template, prot [d] a published
@@ -25,7 +25,7 @@ NIRPS_HE:
   file: vetted_GL166C_nirps_he.fits
 - object: TOI210
   teff: 3264
-  teff_ref: Stassun et al. 2019 (via nirps-client@maestria)
+  teff_ref: 2019AJ....158..138S
   nfiles: 214
   simbad: TOI-210
   prot: null

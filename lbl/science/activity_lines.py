@@ -153,8 +153,9 @@ def _side_level(wave: np.ndarray, ratio: np.ndarray, noise: np.ndarray,
     band = band & np.isfinite(ratio) & np.isfinite(noise)
     if np.sum(band) < MIN_SIDE_PIX:
         return None
-    # error of a median of gaussian noise
-    error = 1.2533 * np.median(noise[band]) / np.sqrt(np.sum(band))
+    # error of a median of gaussian noise: sqrt(pi / 2) times that of the
+    #   mean
+    error = np.sqrt(np.pi / 2) * np.median(noise[band]) / np.sqrt(np.sum(band))
     return np.mean(wave[band]), np.median(ratio[band]), error
 
 

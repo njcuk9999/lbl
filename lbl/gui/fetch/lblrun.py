@@ -1,78 +1,65 @@
 """
-LBL velocities of a star from the public spectra of the archives: the
-spectra fetched, and lbl-rapide (the branch of LBL made faster; Artigau
-et al. 2022) run on them.
+The public spectra of a star that LBL reads, as the archives have them, and
+how each file is fetched into a data folder.
 
-koloa never imports LBL: LBL needs versions of its own (Python 3.12,
-numpy 2.3, numba, astropy 7), in an environment of its own (lbl-rapide by
-default). koloa writes the parameters of the run in a short script, as one
-writes a wrap file, and runs it with that Python, in a process of its own.
-The rdb LBL makes is kept in the folder of the star, under its name, one
-file per dataset koloa knows (archives/GJ_436/lbl/GJ_436_HARPSN_lbl.rdb;
-SOPHIE and SOPHIE+ apart), to be given to the analysis as a file; the
-names of their datasets are in labels.json beside them.
-
-    koloa "GJ 436" --lbl HARPSN SOPHIE --archives archives --lbl-dir lbl_data
-
-An instrument is one or more groups, a run of LBL each (its template, its
-mask): the spectra of one setting (SOPHIE's HR and HE apart). Each class
-of LBL has a folder of its own in lbl-dir (lbl-dir/HARPSN_ESO,
-lbl-dir/SOPHIE_None), with the models of LBL shared between them
-(lbl-dir/models, a few hundred MB, fetched by LBL the first time).
+groups(target, inst) gives the runs of LBL an instrument's spectra of a
+star make: one per setting (SOPHIE's HR and HE, NIRPS's HE and HA, HARPS's
+HAM and EGGS, ESPRESSO's modes and binnings apart), each with the LBL
+instrument and data source that read it, its file pattern (INPUT_FILE),
+the parameters the wrap must set, its spectra (their id in the archive and
+their name in the folder) and the function that fetches one of them
+(get(one, science, calib): '' when it is there, else why not). The
+window's archive search (lbl.gui.archives) shows them and fetches the ones
+ticked.
 
 The instruments:
 
 HARPSN: the espdr S2D_A files of the archive of the TNG (blaze corrected,
 on a barycentric wavelength grid: LBL's HARPSN ESO source, no calibration
-file), 10 MB each, of the exposures koloa keeps of the star from their
-CCFs (koloa.tng.series: those on the star, with its mask, the companion of
-a binary left out by its velocity); the telluric lines cleaned by LBL
-first.
+file), about 10 MB each once gunzipped, of the exposures on the star
+(tng.espdr_files); the telluric lines are cleaned by LBL.
 
-SOPHIE: the e2ds of the archive of the OHP (1.3 MB each once kept), of the exposures
-koloa keeps from the table of its CCFs (koloa.observatories.sophie: past
-their year of embargo, a programme still protected left out), HR and HE
-apart; the archive puts the blaze beside the spectrum in one file: koloa
-writes it as the calibration file LBL reads (calib/<seq>_blaze_A.fits,
-named in the header). SOPHIE and SOPHIE+ (the fibres of June 2011) are
-two datasets of the rdb.
+SOPHIE: the e2ds of the archive of the OHP, of the exposures on the star
+(observatories.sophie_spectra), HR and HE apart; the archive puts the
+blaze beside the spectrum in one file, which is split here: the spectrum
+as the science file, the blaze as the calibration file LBL reads
+(calib/<seq>_blaze_A.fits, named in the header).
 
-SPIROU: the t.fits of APERO at the CADC (the telluric lines taken out by
-APERO; 18 MB each), those public, pointed at where the star was; LBL's
-SPIROU CADC source reads their blaze in them.
+SPIROU: APERO's t.fits at the CADC (the telluric lines taken out by APERO;
+18 MB each), those public, pointed at where the star was; LBL's SPIROU
+CADC source reads their blaze in them.
 
-NIRPS: the 2D spectra of ESO (in the ancillary tar of each product, its
-files fetched alone by Range requests): the S2D with its blaze divided by
-ESO's model of the telluric lines (S2D_TELL_SPECTRUM_A: the S2D of ESO are
-not corrected for them, and LBL does not clean them for NIRPS), the lines
-deeper than TELLURIC_FLOOR left out, and the blaze of the night as the
-calibration file the header names; HE and HA apart (LBL's NIRPS_HE and
-NIRPS_HA ESO).
+NIRPS: ESO's 2D spectra (in the ancillary tar of each product, its files
+fetched alone by HTTP Range requests): the S2D with its blaze divided by
+ESO's model of the telluric lines (S2D_TELL_SPECTRUM_A: ESO's S2D are not
+corrected for them, and LBL does not clean them for NIRPS), the pixels
+whose transmission is below TELLURIC_FLOOR left out, and the blaze of the
+night as the calibration file the header names; HE and HA apart (LBL's
+NIRPS_HE and NIRPS_HA ESO).
 
 HARPS: the e2ds of ESO's HARPS pipeline (the DRS that made its archive:
-the ANCILLARY.HARPSTAR tar of each spectrum, its e2ds fetched alone by Range
-requests, 1.4 MB), LBL's HARPS ORIG source. ESO does not distribute the
-blaze of the night it names (HIERARCH ESO DRS BLAZE FILE): koloa writes one
-under that name, the smooth envelope of each order of the night's first
-spectrum (empirical_blaze), which LBL normalises per order and whose
-residual its line-by-line fit absorbs; the telluric lines cleaned by LBL
-first. HAM and EGGS apart; HARPS03 and HARPS15 (the fibres of June 2015)
-are two datasets.
+the ANCILLARY.HARPSTAR tar of each spectrum, its e2ds fetched alone by
+Range requests, 1.4 MB), LBL's HARPS ORIG source. ESO does not distribute
+the blaze of the night the header names (HIERARCH ESO DRS BLAZE FILE): one
+is written under that name, the smooth envelope of each order of the
+night's first spectrum (empirical_blaze), which LBL normalises per order
+and whose residual its line-by-line fit absorbs; the telluric lines are
+cleaned by LBL. HAM and EGGS apart.
 
-ESPRESSO: the S2D_A of ESO (blaze corrected, 65 MB each), a run per mode
-and binning (HR 2x1, UHR...), the telluric lines cleaned by LBL first;
-ESPRESSO18 and ESPRESSO19 (the intervention of 2019) are two datasets.
+ESPRESSO: ESO's S2D_A (blaze corrected, 65 MB each), a run per mode and
+binning (HR 2x1, UHR...), the telluric lines cleaned by LBL.
 
-Created on 2026-10-14
+The exposures of every archive are matched to the star by where the
+telescope pointed, then those whose target name is that of another star of
+a catalogue the star is in (the companion of a binary) are left out
+(_named): they would spoil LBL's template.
 
-@author: artigau
-
-FROM KOLOA (github.com/eartigau/koloa, 584b4d2, module lblrun): only the part
-LBL's window uses to find and fetch public spectra, kept as it was there.
+Files written here carry what was done to them in their header, under
+HIERARCH LBL: TELL FLOOR (a NIRPS spectrum divided by ESO's telluric
+model) and BLAZE (a HARPS blaze made from a spectrum).
 """
 import gzip
 import io
-import json
 import os
 import re
 import shutil

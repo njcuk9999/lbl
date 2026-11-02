@@ -156,8 +156,8 @@ def test_a_basis_of_another_instrument_is_refused(data_dir):
 
 
 def test_spectra_of_another_instrument_are_refused(data_dir):
-    # SPIRou spectra run as NIRPS_HE made a NIRPS template of them and
-    #   stopped on the first lblrv file (2026-10-23)
+    # SPIRou spectra run as NIRPS_HE would make a NIRPS template of them
+    #   and stop on the first lblrv file
     built = wrapgen.build(_state(data_dir, instruments={"STAR": "SPIROU"}))
     assert any("SPIROU" in e and "NIRPS_HE" in e for e in built["errors"])
     for header in ("NIRPS", "?", "", "NIRPS/SPIROU"):
@@ -278,7 +278,7 @@ def test_a_wrap_loaded_and_written_again_keeps_what_it_said(data_dir, tmp_path):
 
 
 def test_a_frozen_basis_sets_n_earth_unless_it_is_chosen(data_dir):
-    # put in any subfolder of models/ (2026-10-27: one in template_...)
+    # a kept basis is found in any subfolder of models/, template_... too
     folder = data_dir / "models" / "template_NIRPS_HE_CADC"
     folder.mkdir(parents=True)
     head = fits.Header()
@@ -298,7 +298,7 @@ def test_a_frozen_basis_sets_n_earth_unless_it_is_chosen(data_dir):
 
 
 def test_small_rv_shift_is_on_unless_unticked(data_dir):
-    # the template in one pass on BERV alone, by default (2026-10-27)
+    # the template in one pass on BERV alone, by default
     from lbl.core import parameters
     assert parameters.params["SMALL_RV_SHIFT"] is True
     built = wrapgen.build(_state(data_dir))
@@ -309,8 +309,8 @@ def test_small_rv_shift_is_on_unless_unticked(data_dir):
 
 
 def test_a_systemic_velocity_the_headers_do_not_really_give_is_none():
-    # 2026-10-27: APERO's PP_RV with PP_RVS = 'header' is SPIRou's OBJRV
-    #   copied (578 km/s for KIC 7847566), and ESO writes -99999 for none
+    # APERO's PP_RV with PP_RVS = 'header' is SPIRou's OBJRV copied (it
+    #   can be hundreds of km/s off), and ESO writes -99999 for none
     from lbl.gui import targets
     copied = fits.Header({"PP_RV": 578000.0, "PP_RVS": "header"})
     assert targets._vsys([copied]) is None
@@ -325,7 +325,7 @@ def test_a_systemic_velocity_the_headers_do_not_really_give_is_none():
 
 
 def test_harpn_spectra_run_as_harpsn(data_dir):
-    # the TNG writes INSTRUME = HARPN; LBL calls it HARPSN (2026-10-27)
+    # the TNG writes INSTRUME = HARPN; LBL calls it HARPSN
     built = wrapgen.build(_state(data_dir, instrument="HARPSN", source="ESO",
                                  instruments={"STAR": "HARPN"}))
     assert not any("HARPN spectra" in e for e in built["errors"])

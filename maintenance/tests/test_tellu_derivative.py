@@ -1,7 +1,7 @@
-"""The telluric exponents by the derivative method alone (the CCF loop is
-gone, 2026-10-27): its cost is the scatter of the corrected spectrum's
-gradient IN UNITS OF ITS NOISE, which follows the division by the
-transmission. A synthetic atmosphere of known exponents, no TAPAS file."""
+"""The telluric exponents by the derivative method: its cost is the
+scatter of the corrected spectrum's gradient IN UNITS OF ITS NOISE, which
+follows the division by the transmission. A synthetic atmosphere of known
+exponents, no TAPAS file."""
 import numpy as np
 from astropy import constants
 
@@ -57,8 +57,9 @@ def test_the_noise_follows_the_division():
 
 
 def test_a_faint_star_has_its_exponents():
-    # GJ 1214 on HARPS (2026-10-27): every exposure fell back to 0.35, the
-    #   noise the division amplified hiding the minimum of the former cost
+    # a faint star keeps its exponents: the noise the division by the
+    #   transmission amplifies, counted in the cost, does not hide its
+    #   minimum or send it to the fallback
     spl_water, spl_dry = _atmosphere()
     for counts in (900.0, 40000.0):            # SNR 30 and 200 per pixel
         wave, sp, noise = _spectrum(spl_water, spl_dry, 0.5, 1.15, counts)

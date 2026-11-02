@@ -13,8 +13,8 @@ def test_the_names_asked_follow_apero_and_the_headers():
 
 
 def test_a_measurement_far_from_the_spectral_type_is_left_out():
-    # NLTT 5556, an M4.5V (3110 K): 3000 K from its paper, a catalogue's
-    #   4500 K twice (SIMBAD's mesFe_H, 2026-10-25)
+    # an M4.5V (3110 K): one measurement at 3000 K, and a catalogue's
+    #   4500 K listed twice, too far from what the spectral type says
     answer = simbad.summarise("LP 991-84", "M4.5V", [3000.0, 4500.0, 4500.0])
     assert (answer["teff"], answer["n"], answer["n_all"]) == (3000, 1, 3)
     # no measurement: the spectral type's (Pecaut & Mamajek 2013)

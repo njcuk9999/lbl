@@ -6,19 +6,24 @@ default.
 
 What the report shows:
 
-    the SEQUENCE of the velocities, per instrument, with its error bars
-    the PERIODOGRAM of the series and that of the window
-    the outlier-resistant FIP, in its three versions (no cut, soft cut,
-        hard cut), because what matters is to see what the cleaning does
-        to the answer and not only the cleaned answer
+    the SEQUENCE of the velocities, with their error bars, coloured by the
+        star's velocity in the telluric frame (or by the BERV)
+    the PERIODOGRAM of the series and that of the window, with the
+        alias-aware false inclusion probability (FIP) below them
+    the FIP, gaussian and outlier-aware, side by side, because what matters
+        is to see whether the answer depends on how the outliers are
+        treated, and not only the cleaned answer
+    with PLANETS, the velocities folded on the known orbits, and the K of
+        the confirmed planets with a published ephemeris fitted on them
+    the INDICATORS and the ACTIVITY LINES measured beside the velocity
     the QUALITY OF THE TELLURIC CORRECTION, if it was applied: for the
         best, the median and the worst exposure in water column, then the
         same in dry column
 
-THE ROUTINES COME FROM KOLOA (periodograms, FIP, robust cuts) rather than
-being rewritten here: they are tested and maintained there. The report is
-therefore optional in the strong sense, that is, it skips itself quietly
-if koloa is not installed, and the run does not suffer from it.
+The calculations are LBL's own (lbl.report.periodogram, lbl.report.fip,
+lbl.report.stats, lbl.report.kepfit), on numpy and scipy. A page that cannot
+be drawn is skipped and named on a last page, and the run never suffers from
+it.
 """
 from lbl.report.main import make_report
 

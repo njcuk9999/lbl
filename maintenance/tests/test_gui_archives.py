@@ -1,6 +1,6 @@
 """The archive search's fetch (archives.py): where a group's spectra go,
 that nothing there is moved or overwritten, and that the wrap reads what a
-folder came from. the fetch's getters are stood in for: no archive is asked."""
+folder came from. The fetch's getters are stood in for: no archive is asked."""
 import json
 import os
 import time
@@ -8,14 +8,14 @@ import time
 from lbl.gui import archives, wrapgen
 
 
-def _fake_fetch(monkeypatch, lblrun, tmp_path):
-    """lbl.gui.fetch's lblrun and stars stood in for, its cache in tmp_path:
+def _fake_fetch(monkeypatch, spectra, tmp_path):
+    """lbl.gui.fetch's spectra and stars stood in for, its cache in tmp_path:
     nothing is asked of an archive, nor of SIMBAD or the TIC"""
     import sys
     import types
     from lbl.gui import fetch
     stars = types.SimpleNamespace(stellar_teff=lambda ident: dict(teff=None))
-    for name, module in (("lblrun", lblrun), ("stars", stars)):
+    for name, module in (("spectra", spectra), ("stars", stars)):
         monkeypatch.setitem(sys.modules, "lbl.gui.fetch." + name, module)
         monkeypatch.setattr(fetch, name, module, raising=False)
     monkeypatch.setenv("LBL_GUI_CACHE", str(tmp_path / "cache"))
@@ -95,11 +95,10 @@ def test_two_readers_found_together_get_two_folders(tmp_path, monkeypatch):
     found = {"NIRPS": [_group(["n.fits"])],
              "ESPRESSO": [_group(["e.fits"], lbl="ESPRESSO", source="None")]}
     fake = types.SimpleNamespace(
-        _ident=lambda target: dict(main="HD 225213"),
+        identify=lambda target: dict(main="HD 225213"),
         groups=lambda target, inst, root, ident: found.get(inst, []),
         INSTRUMENTS={k: dict(label=k, archive=k, size=1.0) for k in
                      archives.INSTRUMENTS})
-    import sys
     _fake_fetch(monkeypatch, fake, tmp_path)
     box = archives.Archives()
     box.start_search("GJ 1", ["NIRPS", "ESPRESSO"], str(tmp_path))
@@ -114,9 +113,8 @@ def test_two_readers_found_together_get_two_folders(tmp_path, monkeypatch):
 
 
 def test_a_search_stops_and_drops_a_late_answer(tmp_path, monkeypatch):
-    # an archive that does not answer (SOPHIE's, 2026-10-24) and one that
-    #   does: stopped, the search keeps what came and drops what comes late
-    import sys
+    # an archive that does not answer and one that does: stopped, the
+    #   search keeps what came and drops what comes late
     import threading
     import types
     release = threading.Event()
@@ -126,7 +124,7 @@ def test_a_search_stops_and_drops_a_late_answer(tmp_path, monkeypatch):
             release.wait(5)
         return [_group(["%s.fits" % inst], lbl=inst, source="None")]
     fake = types.SimpleNamespace(
-        _ident=lambda target: dict(main="V* AD Leo"), groups=groups,
+        identify=lambda target: dict(main="V* AD Leo"), groups=groups,
         INSTRUMENTS={k: dict(label=k, archive=k, size=1.0) for k in
                      archives.INSTRUMENTS})
     _fake_fetch(monkeypatch, fake, tmp_path)
@@ -153,7 +151,6 @@ def test_a_search_stops_and_drops_a_late_answer(tmp_path, monkeypatch):
 def test_several_stars_at_once_and_none_out_of_reach(tmp_path, monkeypatch):
     # two stars, two instruments, every request at once; a star SOPHIE's
     #   telescope never sees is not asked for there
-    import sys
     import types
     asked = []
     places = {"GJ 1": dict(main="HD 225213", ra=1.38, dec=-37.7),
@@ -164,7 +161,7 @@ def test_several_stars_at_once_and_none_out_of_reach(tmp_path, monkeypatch):
         return [dict(_group(["%s.fits" % inst], lbl=inst, source="None"),
                      obj=target.replace(" ", ""))]
     fake = types.SimpleNamespace(
-        _ident=lambda target: places[target], groups=groups,
+        identify=lambda target: places[target], groups=groups,
         INSTRUMENTS={k: dict(label=k, archive=k, size=1.0) for k in
                      archives.INSTRUMENTS})
     _fake_fetch(monkeypatch, fake, tmp_path)

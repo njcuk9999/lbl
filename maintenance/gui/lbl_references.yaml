@@ -2,9 +2,9 @@
 # (lbl_references.py makes lbl/gui/static/references.json from this).
 #
 # (arXiv ids quoted: a bare 2406.10380 is a number, and loses its 0)
-# Read paper by paper on 2026-10-24: every paper citing Artigau et al. 2022
-# (OpenAlex, and the LBL paper itself), its LaTeX source from arXiv, the
-# sentences that name LBL. A paper is listed only when its own text says that
+# Read paper by paper: every paper citing Artigau et al. 2022 (OpenAlex, and
+# the LBL paper itself), its LaTeX source from arXiv, the sentences that name
+# LBL. A paper is listed only when its own text says that
 # velocities in it were measured with LBL; `evidence` is that sentence, as
 # the paper words it (LaTeX taken out). Papers that only cite LBL, compare to
 # it, or name another "line-by-line" (bisectors, LBLRTM, per-line CCFs) are

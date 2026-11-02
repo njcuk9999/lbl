@@ -1,4 +1,4 @@
-"""The screenshots of the step-by-step guide (eartigau.github.io/lbl-gui),
+"""The screenshots of the step-by-step guide (make_guide.py),
 taken in a running window and annotated: a frame around what to fill or
 click, a numbered badge, an arrow from one to the other. The numbers are
 the ones the guide's text explains, in both languages.
@@ -13,6 +13,8 @@ fr or en, PHASE one of
     running   the run going: its steps and its log
     archive   the archive search, searched and not fetched
     done      the runs and their report
+    plots     the plots of the ticked target alone
+    pca2d     the PCA2D tab alone
 
 Needs playwright (with the Google Chrome installed on the machine) and
 Pillow, in an environment of their own.

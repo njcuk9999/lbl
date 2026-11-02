@@ -117,17 +117,17 @@ def test_a_closed_window_finds_its_runs_again(tmp_path):
     assert "later" in (tmp_path / "gui" / "logs" / "b.log").read_text()
 
 
-def test_an_older_run_log_is_moved_into_the_logs(tmp_path):
+def test_a_run_log_in_its_run_folder_is_moved_into_the_logs(tmp_path):
     from lbl.gui import history
     folder = tmp_path / "gui" / "runs" / "old"
     folder.mkdir(parents=True)
-    (folder / "run.log").write_text("from an older window\n")
+    (folder / "run.log").write_text("left in the run folder\n")
     (folder / "run.json").write_text(json.dumps(dict(id="old", name="old",
                                                      state="done")))
     record = history.window_runs(str(tmp_path))[0]
     assert record["log"] == str(tmp_path / "gui" / "logs" / "old.log")
     assert (tmp_path / "gui" / "logs" / "old.log").read_text().startswith(
-        "from an older window")
+        "left in the run folder")
 
 
 def _line(text, level="I"):

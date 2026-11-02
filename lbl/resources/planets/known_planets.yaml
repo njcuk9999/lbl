@@ -6,9 +6,16 @@
 # go in personal_planet_catalog.yaml, which says how to enter them and is
 # searched first.
 #
-# 1816 stars with at least one complete orbit (2317 orbits); 342 of
+# Taken out on 2026-10-29, the sources not all being reachable to remake
+# the file: the 20 planets the NASA Exoplanet Archive flags as
+# controversial (pl_controv_flag), the 43 orbits whose transit epoch
+# came from the TESS or Kepler project tables (ExoFOP, KOI), and the
+# orbit of TOI-1266 d, from a paper that did not publish it as
+# confirmed.
+#
+# 1783 stars with at least one complete orbit (2257 orbits); 336 of
 # them carry their APERO name (1871 objects in APERO's lists).
-# 167 planets of these stars have no complete orbit and are listed under
+# 156 planets of these stars have no complete orbit and are listed under
 # `not_used`, with why.
 #
 # Each orbit is, whenever one exists, ONE PAPER'S complete Keplerian solution
@@ -845,25 +852,6 @@ stars:
     planets:
     - {name: DMPP-4 b, period: 3.4982, k: 4.43, e: 0.0, omega: 200.0, t0: 2457139.9, source: 'NASA Exoplanet
         Archive, one paper', reference: Barnes et al. 2023 (2023MNRAS.524.5196B)}
-  DS_TUC_A:
-    apero: DS_TUC_A
-    names: [DS_TUC_A, '** R  348A', '**R348A', 1RXS J233939.1-691148, 1RXSJ233939.1-691148, 1SWASP J233939.48-691144.8,
-      1SWASPJ233939.48-691144.8, 2MASS J23393949-6911448, 2MASSJ23393949-6911448, 2RE J2339-691, 2RE J233930-691132,
-      2REJ2339-691, 2REJ233930-691132, ASAS J233939-6911.7, ASAS J233939-6911.8, ASASJ233939-6911.7, ASASJ233939-6911.8,
-      CCDM J23397-6912A, CCDMJ23397-6912A, CD-69  2106, CD-692106, CPC 21.1  4434, CPC21.14434, CPD-69  3329,
-      CPD-693329, CSI-69  3329 41, CSI-69332941, DS Tuc, DS Tuc A, DS-Tuc-A, DSTucA, EUVE J2339-69.2,
-      EUVEJ2339-69.2, GSC 09339-00551, GSC09339-00551, Gaia DR1 6387058407186674560, Gaia DR2 6387058411482257536,
-      Gaia DR3 6387058411482257536, GaiaDR16387058407186674560, GaiaDR26387058411482257536, GaiaDR36387058411482257536,
-      HD 222259, HD 222259 A, HD 222259A, HD-222259A, HD222259, HD222259A, HD_222259A, HIC 116748, HIC116748,
-      HIP 116748, HIP 116748 A, HIP116748, IDS 23339-6945 A, IDS23339-6945A, PPM 366565, PPM366565, RBS  2033,
-      RBS2033, RE J2339-691, RE J233931-691114, REJ2339-691, REJ233931-691114, SAO 255538, SAO255538,
-      SRS  20462, SRS20462, TIC 410214986, TIC410214986, TOI-200, TOI-200 A, TYC 9339-551-1, TYC9339-551-1,
-      UCAC4 105-117266, UCAC4105-117266, V* DS Tuc, V* DS Tuc A, V*DSTuc, V*DSTucA, WDS J23397-6912A,
-      WDSJ23397-6912A, WISE J233939.64-691145.4, WISEA J233939.64-691145.2, WISEAJ233939.64-691145.2,
-      WISEJ233939.64-691145.4, '[FS2003] 1202', '[FS2003]1202', uvby98 100222259, uvby98100222259]
-    planets:
-    - {name: DS Tuc Ab, period: 8.13822304107, k: 3.2, e: 0.0, omega: 90.0, t0: 2460903.986925, source: K
-        exoplanet.eu; t0 and P NASA ExoFOP, reference: 'http://exoplanet.eu/catalog/ds_tuc_ab--7077'}
   EPIC 219388192 A:
     apero: null
     names: [CWW 89, CWW 89 A, EPIC 219388192, TOI-7497]

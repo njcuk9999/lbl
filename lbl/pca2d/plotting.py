@@ -439,6 +439,7 @@ def raw_log_flux_window(cube_dir, source_dir, names, parities, grid, a0, b0):
     import numpy as np
 
     from . import cache as _cache
+    from . import readers as _readers
     from . import tfits as sptf
     from .config import load_config, spectra_dir
 
@@ -455,7 +456,10 @@ def raw_log_flux_window(cube_dir, source_dir, names, parities, grid, a0, b0):
         stored = {}
         for name in sorted({os.path.basename(str(v)) for v in names}):
             try:
-                payload = sptf.read_tfits(os.path.join(directory, name))
+                # as the cube read it: a t.fits by tfits, anything else
+                #   through the instrument's LBL class
+                payload = _readers._read_any(os.path.join(directory, name),
+                                             config)
             except Exception:                                 # noqa: BLE001
                 continue
             stored[name] = sptf.raw_block(payload, grid, a0, b0, config)
@@ -468,7 +472,7 @@ def raw_log_flux_window(cube_dir, source_dir, names, parities, grid, a0, b0):
         if block is not None:
             # a snippet's two rows are the two ORDER parities, which is what the
             # detector has. A joint cube labels its rows 2 * object + parity, so
-            # the label itself runs 0..2N-1 and indexed raw it walked off the end
-            # of the block at the first row of the second object (2026-09-13).
+            # the label itself runs 0..2N-1, and indexed raw it would walk off
+            # the end of the block at the first row of the second object.
             out[i] = block[int(parities[i]) % block.shape[0]]
     return out

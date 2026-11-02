@@ -45,7 +45,7 @@
    "bin": 3200,
    "object": "TOI210",
    "teff": 3264.0,
-   "teff_ref": "Stassun et al. 2019 (via nirps-client@maestria)",
+   "teff_ref": "2019AJ....158..138S",
    "nfiles": 214,
    "tree": "nirps_he_online",
    "file": "Template_s1dv_TOI210_sc1d_v_file_A.fits",

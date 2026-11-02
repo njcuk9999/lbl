@@ -23,15 +23,17 @@ Without that key nothing here is imported and LBL is what it was.
              DATA_DIR/pca2d/cache/              the cubes, rebuildable
 
 The dict takes the component counts, a few switches, and any key of the
-pca2d configuration (lbl/pca2d/nominal.yaml): by the short names of the
-pca2d window, as 'section.key', or as a nested dict per section. Everything
-not given is the nominal set, the one every comparison of the project ran on.
+pca2d configuration (lbl/pca2d/nominal.yaml, and the instrument's own
+settings, the PCA2D_* parameters of its LBL class): by the short names of
+the pca2d window, as 'section.key', or as a nested dict per section.
+Everything not given is the nominal set.
 
     n_star       the star's spectra, the template included (1): 1 is the
                  template alone, not adjusted in depth; 2 adds one
                  star-frame component with a free amplitude, never divided
                  out; 0 is not a fit
-    n_earth      observer-frame components fitted and divided out (7)
+    n_earth      observer-frame components fitted and divided out (the
+                 instrument's PCA2D_N_EARTH)
     compare      LBL measures the delivered object too, first, so that the
                  report sets the two series side by side (True)
     figures      the river plots and the other figures of the correction
@@ -51,7 +53,8 @@ velocities measured on one correction with a template made from another.
 The wrap's SKIP_LBL_PCA2D overrides that choice:
 
     None     (or not given) the above: made again only if the settings, the
-             input files or nominal.yaml changed
+             input files, nominal.yaml or the instrument's PCA2D settings
+             changed
     True     the correction on disk is kept even if they changed, which a
              warning says
     False    made again whatever is on disk, as overwrite=True
@@ -87,9 +90,12 @@ LblException = base_classes.LblException
 #: what the corrected object is called, after the object it comes from
 SUFFIX = '_pca2d'
 #: the switches of this recipe, and what they are when not given
-DEFAULTS = dict(n_star=1, n_earth=7, figures=True, overwrite=False,
+DEFAULTS = dict(n_star=1, n_earth=None, figures=True, overwrite=False,
                 name=None, joint=False, compare=True, output_name=None,
                 input_name=None)
+#: the switches that stand for a key of the pca2d configuration, which gives
+#: their value when they are not set (None above)
+SWITCH_PATHS = dict(n_earth='twoframe.n_earth')
 #: the short names, as the pca2d window spells them, and the key of the
 #: pca2d configuration each one is
 ALIASES = {
@@ -123,8 +129,6 @@ ALIASES = {
 #: keys this recipe sets itself: where the spectra are and where things go
 MANAGED = ('input.directory', 'input.object', 'output.directory',
            'output.fits_directory')
-#: LBL's NIRPS modes, and the DRS mode the files of each one carry
-NIRPS_MODES = {'NIRPS_HE': 'HE', 'NIRPS_HA': 'HA'}
 #: {corrected object: its pca2d run folder}, for the report after LBL
 RUNS = dict()
 
@@ -141,17 +145,17 @@ def nominal_path() -> str:
 
 def read_nominal() -> dict:
     from lbl.pca2d.config import read_yaml
-    with open(nominal_path()) as handle:
+    with open(nominal_path(), encoding="utf-8") as handle:
         return read_yaml(handle) or {}
 
 
 def known_keys(nominal: dict) -> dict:
     """{section: set of keys} that the pca2d configuration knows: its code
-    defaults, the nominal file's general block and every instrument block."""
+    defaults (which hold every key an instrument's settings can set) and
+    the nominal file's general block."""
     from lbl.pca2d.config import DEFAULTS as CODE_DEFAULTS
     known = {}
     blocks = [CODE_DEFAULTS, nominal.get('general') or {}]
-    blocks += list((nominal.get('instruments') or {}).values())
     for block in blocks:
         for section, values in block.items():
             if isinstance(values, dict):
@@ -216,7 +220,8 @@ def settings(pca2d, report=True) -> tuple:
                 ', '.join(sorted(unknown)), ', '.join(DEFAULTS),
                 ', '.join(sorted(ALIASES)), ', '.join(sorted(known))))
     for name in ('n_star', 'n_earth'):
-        switches[name] = int(switches[name])
+        if switches[name] is not None:
+            switches[name] = int(switches[name])
     # n_star counts the star's spectra with the template; the fit's own
     #   twoframe.n_star counts the free components, and is not set directly
     from lbl.pca2d.config import free_star_components
@@ -281,17 +286,17 @@ def input_files(science_dir: str, pattern: str) -> list:
     return sorted(glob.glob(os.path.join(science_dir, pattern or '*.fits')))
 
 
-#: an INPUT_FILE that says nothing of the files: PCA2D would then take its
-#:   own pattern for the instrument (nominal.yaml)
+#: an INPUT_FILE that says nothing of the files: PCA2D would then take the
+#:   instrument's pattern (PCA2D_INPUT_PATTERN of its LBL class)
 GENERIC_INPUT = (None, '', '*', '*.fits')
 
 
 def files_pattern(paths: list) -> Optional[str]:
     """The pattern of spectra a wrap gives none for: '*' and the end their
-    names share, its leading digits off (a date's or a number's). HARPS read
-    as ORIG has e2ds files (*_e2ds_A.fits) where PCA2D's HARPS default is
-    the ESO archive's *_S2D_A.fits: without it, no spectrum was found.
-    None when the names share no more than .fits."""
+    names share, its leading digits off (a date's or a number's): the files
+    LBL reads, whatever the instrument's default pattern says (a folder of
+    one data source's files read with another source's default would find
+    none). None when the names share no more than .fits."""
     names = [os.path.basename(path) for path in paths]
     if not names:
         return None
@@ -302,47 +307,43 @@ def files_pattern(paths: list) -> Optional[str]:
     return '*' + tail
 
 
-def nominal_digest(instrument: Optional[str] = None) -> str:
+def nominal_digest(instrument: Optional[str] = None,
+                   data_source: Optional[str] = None) -> str:
     """The nominal configuration as a correction depends on it: PARSED (its
-    comments are not in it), the general block and the instrument's own
-    (all of them when none is named), WITHOUT their output sections (the
-    windows and figures, which change nothing in the spectra). Until
-    2026-10-23 the stamp hashed the file's bytes: a comment, a window or
-    another instrument's setting made every correction of every instrument
-    again."""
+    comments are not in it), the general block of nominal.yaml and the
+    instrument's own settings (its LBL class's PCA2D_* parameters, domain
+    and resolving power), WITHOUT their output sections (the windows and
+    figures, which change nothing in the spectra). So a comment, a window or
+    another instrument's setting does not make a correction again."""
     nominal = read_nominal()
     general = dict(nominal.get('general') or {})
     general.pop('output', None)
     blocks = dict(general=general)
-    wanted = {str(instrument).upper(), str(instrument).upper().split('_')[0]}
-    for name, block in (nominal.get('instruments') or {}).items():
-        block = dict(block or {})
-        lbl_name = str((block.get('lbl') or {}).get('instrument') or name)
-        if instrument and name.upper() not in wanted \
-                and lbl_name.upper() not in wanted:
-            continue
-        block.pop('output', None)
-        blocks[name] = block
+    if instrument:
+        from lbl.pca2d.config import instrument_layer
+        layer = dict(instrument_layer(instrument, data_source))
+        layer.pop('output', None)
+        blocks['instrument'] = layer
     text = json.dumps(blocks, sort_keys=True, default=str).encode()
     return hashlib.sha1(text).hexdigest()
 
 
 def request_stamp(request: dict, switches: dict, files: list,
-                  instrument: Optional[str] = None) -> str:
+                  instrument: Optional[str] = None,
+                  data_source: Optional[str] = None) -> str:
     """What makes a correction this one: the settings, the input files (name,
     size, date) and the nominal configuration they sit on (nominal_digest:
     the instrument's, parsed). Not the figures, which change nothing in the
     spectra."""
-    # the FREE star components: n_star counts the template since
-    #   2026-10-22, and a correction made before then keeps its stamp when it
-    #   is the same fit
+    # the FREE star components, which is what the fit counts (n_star counts
+    #   the template as well)
     from lbl.pca2d.config import free_star_components
     blob = dict(request=request,
                 counts=[free_star_components(switches['n_star']),
                         switches['n_earth']],
                 files=[(os.path.basename(f), os.path.getsize(f),
                         int(os.path.getmtime(f))) for f in files])
-    blob['nominal'] = nominal_digest(instrument)
+    blob['nominal'] = nominal_digest(instrument, data_source)
     text = json.dumps(blob, sort_keys=True, default=str).encode()
     return hashlib.sha1(text).hexdigest()[:12]
 
@@ -357,9 +358,9 @@ def lbl_products(data_dir: str, name: str, science_subdir: str = 'science',
     """Everything LBL made from the object `name`: a file or folder of one of
     LBL's product folders whose name holds `name` between separators.
 
-    Only LBL's folders, never another one a person keeps in DATA_DIR: on
-    2026-10-21 a comparison/ folder holding copies named after the object was
-    swept up with the products. And not what LBL made from a longer name that
+    Only LBL's folders, never another one a person keeps in DATA_DIR (a
+    folder of copies named after the object would otherwise be swept up with
+    the products). And not what LBL made from a longer name that
     starts with this one: the labelled corrections of the same star,
     <object>_pca2d_<label>, are other objects, and are taken out of each name
     before it is matched."""
@@ -442,15 +443,14 @@ def run_folder(work: str):
 def request_block(overrides: dict, instrument: str, data_source,
                   input_file) -> dict:
     """An object's block of the request: what PCA2D changed, and what LBL
-    already knows about the files, its reader and its NIRPS mode."""
+    already knows about the files: the instrument and data source that
+    select its class (which gives every instrument-dependent setting,
+    Instrument.pca2d_settings), and the files' pattern."""
     block = copy.deepcopy(overrides)
     lbl_block = block.setdefault('lbl', dict())
     lbl_block.setdefault('instrument', instrument)
     if data_source is not None:
         lbl_block.setdefault('data_source', data_source)
-    if instrument in NIRPS_MODES:
-        block.setdefault('quality', dict()).setdefault(
-            'drs_modes', [NIRPS_MODES[instrument]])
     if input_file not in (None, '', '*', '*.fits'):
         block.setdefault('input', dict()).setdefault('pattern', input_file)
     return block
@@ -559,7 +559,7 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
             target['planets'] = sorted(set(
                 list(target.get('planets') or [])
                 + [float(orbit['period']) for orbit in found]))
-    with open(path, 'w') as handle:
+    with open(path, 'w', encoding='utf-8') as handle:
         handle.write('# what lbl_pca2d asked of pca2d for %s: the nominal'
                      ' configuration\n# of lbl/pca2d, with each object\'s'
                      ' block holding the PCA2D dict\n' % ', '.join(objects))
@@ -689,6 +689,12 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         overrides.setdefault('twoframe', dict())['earth_basis'] = frozen.path
         if not (isinstance(pca2d, dict) and 'n_earth' in pca2d):
             switches['n_earth'] = frozen.n_earth
+    # the instrument's own number of observer components, when neither the
+    #   PCA2D dict nor a frozen basis gives one
+    if switches['n_earth'] is None:
+        from lbl.pca2d.config import instrument_layer
+        switches['n_earth'] = int(instrument_layer(
+            instrument, data_source)['twoframe']['n_earth'])
         log('PCA2D: the observer basis is %s, frozen' % frozen.describe(),
             'info')
     # NO INPUT_FILE IN THE WRAP: the files LBL read (all of the folder's)
@@ -722,9 +728,9 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         request['orbits'] = orbits
     if any(velocities.values()):
         request['velocities'] = velocities
-    # the basis by its content, and how it is divided out (in full, since
-    #   2026-10-22: shrunk by this star's own significance before, which
-    #   dropped it): another basis, or a correction made before, is made again
+    # the basis by its content, and how it is divided out (in full: shrunk
+    #   by this star's own significance, it would be dropped): another basis
+    #   is made again
     if frozen is not None:
         request['earth_basis'] = dict(
             id=frozen.ident, shrink=False,
@@ -732,11 +738,11 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                 'observer_first', True)))
     stamp = request_stamp(request, switches,
                           [f for name in objects for f in files[name]],
-                          instrument)
+                          instrument, data_source)
     state_file = os.path.join(work, 'done.json')
     state = dict()
     if os.path.exists(state_file):
-        with open(state_file) as handle:
+        with open(state_file, encoding="utf-8") as handle:
             state = json.load(handle)
     present = {name: glob.glob(os.path.join(science_root, names[name][0],
                                             '*.fits')) for name in objects}
@@ -832,7 +838,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     resolved = os.path.join(run_dir, 'resolved_config.yaml')
     config = None
     if os.path.exists(resolved):
-        with open(resolved) as handle:
+        with open(resolved, encoding="utf-8") as handle:
             config = read_yaml(handle)
     output = re.sub(r'[^0-9A-Za-z._+-]', '_',
                     str(switches['output_name'] or ''))
@@ -850,7 +856,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         log('PCA2D: star components saved, %s' % saved, 'value')
     for name in objects:
         RUNS[names[name][0]] = run_dir
-    with open(state_file, 'w') as handle:
+    with open(state_file, 'w', encoding='utf-8') as handle:
         json.dump(dict(stamp=stamp, objects=[names[n][0] for n in objects],
                        run_dir=run_dir,
                        n_files={n: len(w) for n, w in written.items()},
@@ -891,7 +897,7 @@ def report(data_dir: str, delivered: str, corrected: str,
         # THE NAMES LBL USED, whatever the run's own configuration says: a
         # run made before the request carried lbl.suffix names the corrected
         # object <star>_PCA2D_<tag>, and its velocities would not be found
-        with open(os.path.join(run_dir, 'resolved_config.yaml')) as handle:
+        with open(os.path.join(run_dir, 'resolved_config.yaml'), encoding='utf-8') as handle:
             config = yaml.safe_load(handle)
         if corrected.startswith(delivered):
             config.setdefault('lbl', dict())['suffix'] = \

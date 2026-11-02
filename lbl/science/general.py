@@ -907,12 +907,12 @@ def rough_ccf_rv(inst: InstrumentsType, wavegrid: np.ndarray,
     # GAPS IN THE DATA: the spline runs straight across them, and a line
     #   that slides into one during the scan adds a step to the CCF. A
     #   template made of spectra that PCA2D masked where its fit had no
-    #   weight (GJ 1214 with HARPS, 2026-10-25: nothing below ~550 nm) gave
-    #   a model CCF whose minimum sat on the scan's edge, +300 km/s, and
-    #   every line window was then placed 260 km/s away from its line: the
-    #   errors four times larger, and files that did not converge. Only the
-    #   lines that stay on data over the whole scan are kept; a hole of a
-    #   few samples (a masked column) is not a gap.
+    #   weight (e.g. no data in the blue for a faint red star in the
+    #   visible) can give a model CCF whose minimum sits on the scan's
+    #   edge, hundreds of km/s away: every line window is then placed that
+    #   far from its line, the errors grow several times and files do not
+    #   converge. Only the lines that stay on data over the whole scan are
+    #   kept; a hole of a few samples (a masked column) is not a gap.
     gap_steps = inst.params.get('ROUGH_CCF_GAP_STEPS', 20)
     wsort = np.sort(wavegrid2)
     if len(wsort) > 1 and np.sum(keep_line) > 0:
@@ -1080,7 +1080,7 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
                            window for each order (get_velo_scale of each
                            order of wavegrid), if already known
     :param nstep: int, number of windows per window width (the windows
-                  are npoints // nstep apart; 4 is the original sampling)
+                  are npoints // nstep apart; 4 by default)
 
     :return: np.ndarray, the rms vector for this spectrum give the model
     """
@@ -1101,9 +1101,10 @@ def estimate_noise_model(spectrum: np.ndarray, wavegrid: np.ndarray,
             npoints = npoints_orders[order_num]
         # get the residuals between science and model
         residuals = spectrum[order_num] - model[order_num]
-        # robust sigma in boxes of npoints pixels, every npoints // 4 pixels
-        #   (box centers = indices). Boxes with <= 50% valid points (compared
-        #   to npoints, also at the edges) and zero sigmas are NaN.
+        # robust sigma in boxes of npoints pixels, every npoints // nstep
+        #   pixels (box centers = indices). Boxes with <= 50% valid points
+        #   (compared to npoints, also at the edges) and zero sigmas are
+        #   NaN.
         indices, sigma = fastmath.noise_model_windows(
             np.ascontiguousarray(residuals, dtype=float), int(npoints),
             ESTIMATE_SIGMA_Q_HI, ESTIMATE_SIGMA_Q_LO, int(nstep))
@@ -1672,8 +1673,7 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             continue
         # ---------------------------------------------------------------------
         # loop through all lines
-        #   (numba kernel with the same arithmetic as the per-line python
-        #    code it replaces: see lbl.core.fastmath.line_loop)
+        #   (a numba kernel: see lbl.core.fastmath.line_loop)
         # lines visited in this iteration (lines flagged as bad are skipped
         #   in all but the second iteration)
         if iteration != 1:
@@ -1693,7 +1693,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             pix_edges = mp.iuv_spline_eval(nwavegrid[order_num], xpix, edges)
             x_start_f[in_order] = pix_edges[:len(in_order)]
             x_end_f[in_order] = pix_edges[len(in_order):]
-        # the per-line code did int(np.floor(x)): it fails on a non-finite x
+        # a non-finite line edge has no pixel index: stop, as converting it
+        #   to an integer would
         if not np.all(np.isfinite(x_start_f[visit]) &
                       np.isfinite(x_end_f[visit])):
             raise ValueError('cannot convert float NaN to integer')

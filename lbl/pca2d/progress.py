@@ -11,9 +11,11 @@ Two things, deliberately kept apart:
 `bar` is a tqdm with `leave=False`, so a finished loop erases its own bar and
 the scrollback holds the narration rather than a graveyard of completed
 progress bars. It writes to stderr, and is drawn wherever a redrawn line means
-something: a terminal, and the window that runs the pipeline. Into a log file
-it would be a mile of half-drawn lines, so there the loop narrates itself
-instead, one line every half minute saying how far it has got.
+something: a terminal, and whatever sets LBL_PROGRESS_BARS=1 because it shows
+a carriage-returned line as one line redrawn in place (LBL's window does, for
+the runs it starts). Into a log file it would be a mile of half-drawn lines,
+so there the loop narrates itself instead, one line every half minute saying
+how far it has got.
 
 `log` is that narration: one line per thing that happened, timestamped
 `YYMMDD HH:MM:SS.SS | message` and coloured by role. Green for progress, blue
@@ -67,12 +69,12 @@ _SAY_EVERY = 30.0
 def _drawn():
     """Whether a bar can be drawn where this run's output is going.
 
-    A terminal, or the window that runs the pipeline: it sets PCA2D_COLOUR, it
-    reads the run through a pipe, and it redraws a carriage-returned line in
-    place (gui.cut_output), so a bar is a bar there too. A log file is neither,
-    and a bar in one is a mile of half-drawn lines.
+    A terminal, or a program that reads the run's output and asks for bars
+    by setting LBL_PROGRESS_BARS=1 (LBL's window does): it redraws a
+    carriage-returned line in place, so a bar is a bar there too. A log file
+    is neither, and a bar in one is a mile of half-drawn lines.
     """
-    return sys.stderr.isatty() or os.environ.get("PCA2D_COLOUR") == "1"
+    return sys.stderr.isatty() or os.environ.get("LBL_PROGRESS_BARS") == "1"
 
 
 def bar(iterable=None, total=None, desc="", unit="it", **kwargs):

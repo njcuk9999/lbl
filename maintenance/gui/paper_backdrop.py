@@ -11,8 +11,11 @@ derivatives are used (a blurred figure is one), each credited.
     python maintenance/gui/paper_backdrop.py <folder with meta/papers.json
         and figs/>
 
-<folder>/meta/papers.json and <folder>/figs/ are what the fetch writes (the
-scratch entry lbl-gui/261024_*_lbl_paper_figures holds the script).
+<folder>/meta/papers.json and <folder>/figs/ come from a fetch of the papers'
+records and arXiv sources, which is not part of LBL: papers.json holds one
+record per paper (arxiv, first, year, title, licence, lbl_mentions, and its
+figures, each with its files, relative to figs/, its caption and its kind,
+"lbl" when the caption names LBL), and figs/ the figure files.
 """
 import json
 import os

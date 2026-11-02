@@ -24,8 +24,8 @@ from .logger import log
 
 PLACEHOLDER = "REPLACE_ME"
 
-# what a NIRPS-like near-infrared setup can plausibly ask for; a value outside
-# these is not forbidden, it is questioned
+# what a spectrograph can plausibly ask for; a value outside these is not
+# forbidden, it is questioned
 SANE = {
     "wave_nm": (300.0, 30000.0),
     "dv_kms": (0.01, 20.0),
@@ -62,12 +62,12 @@ def probe_files(config, max_open=1):
         return None
     out = {"n_files": len(paths), "first": paths[0], "directory": directory}
     from . import readers as _readers
-    # A T.FITS IS NOT THE ONLY VALID SPECTRUM. Visible instruments go
-    # through LBL's bridge and have neither WaveA nor WaveAB: their solution
-    # can be a table with another name. Asking the reader the configuration
-    # names for the grid therefore checks the same thing for all of them, and
-    # much more than an extension name: that the file opens, that LBL's class
-    # recognises it and that wavelengths come out of it (2026-10-14).
+    # A T.FITS IS NOT THE ONLY VALID SPECTRUM. An instrument read through
+    # its LBL class has no wavelength extension of the t.fits kind: its
+    # solution can be a table with another name. Asking the reader the
+    # configuration names for the grid therefore checks the same thing for
+    # all of them, and much more than an extension name: that the file opens,
+    # that LBL's class recognises it and that wavelengths come out of it.
     out["bridged"] = not _readers.reads_natively(config)
     try:
         with robust_open(paths[0]) as hdulist:
@@ -81,14 +81,14 @@ def probe_files(config, max_open=1):
             wave = np.asarray(_readers.read_any(paths[0], config)["wave"],
                               dtype=float)
         else:
-            names = set(out["extensions"])
-            if not ({"WaveA", "WaveAB"} & names):
+            # the instrument's wavelength extension (PCA2D_TFITS_EXTENSIONS)
+            ext = (config.get("input") or {}).get("extensions") or {}
+            if not ext.get("wave") or ext["wave"] not in set(out["extensions"]):
                 out["no_wave"] = True
                 return out
             from .tfits import extensions_for
-            _, e_wave, _, _ = extensions_for(hdulist)
             with robust_open(paths[0]) as hdulist:
-                _, e_wave, _, _ = extensions_for(hdulist)
+                _, e_wave, _, _ = extensions_for(hdulist, ext)
                 wave = np.asarray(hdulist[e_wave].data, dtype=float)
         wave = np.atleast_2d(wave)
         finite = wave[np.isfinite(wave) & (wave > 0)]
@@ -338,7 +338,7 @@ def run_wizard(config, path):
 
     config["registration"]["frame"] = "observer"
 
-    with open(path, "w") as handle:
+    with open(path, "w", encoding="utf-8") as handle:
         yaml.safe_dump(config, handle, sort_keys=False, default_flow_style=False)
     print()
     log("wrote %s" % path, "value")
