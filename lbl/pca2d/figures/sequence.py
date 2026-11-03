@@ -56,7 +56,7 @@ from lbl.pca2d.plotting import (rows_of,  # noqa: F401
                             live_mask, nan_cmap, raw_log_flux_window,  # noqa: E402
                             sample_source_file, window_parity)
 from lbl.pca2d.twoframe import (LanczosShifter, cube_grid, fit_means,  # noqa: E402
-                            load_cube, mean_rows, row_parity, star_model,
+                            fit_weight_settings, load_cube, mean_rows, row_parity, star_model,
                             carried_means, fit_templates)
 
 
@@ -344,7 +344,7 @@ def window_arrays(cube, fit, means, group, grid, dv, delta, centre, width,
         return None
     a0, b0 = block
     g, data, w0, _ = load_cube(cube, columns=np.arange(a0, b0),
-                               min_snr_frac=0.0)
+                               min_snr_frac=0.0, **fit_weight_settings(fit))
     if select is not None:
         data, w0 = data[select], w0[select]
     n, m = data.shape

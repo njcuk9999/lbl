@@ -489,8 +489,10 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
     (star_static): expected, it is not tested.
     """
     from .twoframe import (LanczosShifter, carried_means, fit_means,
-                           fit_templates, load_cube, star_model)
+                           fit_templates, fit_weight_settings, load_cube,
+                           star_model)
     part = _pieces(cube, fit, window)
+    weighting = fit_weight_settings(fit)
     n, m = part["n"], part["m"]
     P, a = np.asarray(fit["P"], dtype=float), np.asarray(fit["a"], dtype=float)
     Q, b = np.asarray(fit["Q"], dtype=float), np.asarray(fit["b"], dtype=float)
@@ -520,7 +522,7 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
         a0, b0 = max(0, c0 - part["margin"]), min(m, c1 + part["margin"])
         _, data, w, _, noise, trans = load_cube(
             cube, dtype=np.float32, columns=np.arange(a0, b0),
-            with_sigma=True, with_trans=True)
+            with_sigma=True, with_trans=True, **weighting)
         shifter = LanczosShifter(b0 - a0, a=8, max_shift=part["reach"])
         Tf = shifter.prepare(T[:, a0:b0]) if np.any(T[:, a0:b0]) else None
         inner = slice(c0 - a0, c1 - a0)

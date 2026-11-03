@@ -166,7 +166,7 @@ def parse_args(argv=None):
     p.add_argument("--template-berv-bin", type=float, default=None,
                    help="BERV bin width in m/s for the hierarchical template;"
                         " 0 or unset gives the plain median")
-    p.add_argument("--template-berv-min-entries", type=int, default=3,
+    p.add_argument("--template-berv-min-entries", type=int, default=None,
                    help="exposures a BERV bin needs before it gets a vote")
     p.add_argument("--max-sigma", "--max-mad", dest="max_mad", type=float,
                    default=None,
@@ -1115,6 +1115,43 @@ _LOAD_BLOCK_BYTES = 256 * 1024 * 1024
 DEFAULT_MIN_PIXEL_SNR = 5.0
 
 
+#: the transmission at which the telluric ramp of the weights reaches zero
+DEFAULT_RAMP_ZERO = 0.5
+
+
+def weight_settings(config=None):
+    """load_cube's settings of the weights, from a configuration's `weights`
+    section: weights.min_pixel_snr, weights.ln_clip_low (read when the first
+    is null) and weights.telluric_ramp_zero. Without one, the defaults."""
+    weights = (config or {}).get("weights") or {}
+    return dict(min_pixel_snr=weights.get("min_pixel_snr",
+                                          DEFAULT_MIN_PIXEL_SNR),
+                ln_clip_low=weights.get("ln_clip_low"),
+                ramp_zero=float(weights.get("telluric_ramp_zero",
+                                            DEFAULT_RAMP_ZERO)))
+
+
+def fit_weight_settings(fit):
+    """The settings of the weights a fit was made with, from its fit.npz (a
+    path or what np.load gave), for every later reader of its cube to weigh
+    the samples as the fit did. A fit that does not record them was made
+    with the defaults."""
+    if isinstance(fit, (str, os.PathLike)):
+        if not os.path.exists(fit):
+            return weight_settings()
+        fit = np.load(fit)
+    files = list(getattr(fit, "files", None) or [])
+
+    def stored(name, default):
+        if name not in files:
+            return default
+        value = float(np.asarray(fit[name]))
+        return None if not np.isfinite(value) else value
+    return dict(min_pixel_snr=stored("min_pixel_snr", DEFAULT_MIN_PIXEL_SNR),
+                ln_clip_low=stored("ln_clip_low", None),
+                ramp_zero=stored("ramp_zero", DEFAULT_RAMP_ZERO))
+
+
 def read_cube_files(path, dtype=np.float64, columns=None, lazy=False):
     """Read a cached cube, in either of the two formats `cube.py` has written.
 
@@ -1683,7 +1720,8 @@ def check_memory(rows, columns, dtype, fraction=None):
 _SNR_CUT_SAID = set()
 
 
-def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
+def load_cube(path, ln_clip_low=None, ramp_zero=DEFAULT_RAMP_ZERO,
+              min_snr_frac=0.5,
               dtype=np.float64, columns=None, spill=None,
               min_pixel_snr=DEFAULT_MIN_PIXEL_SNR, with_sigma=False,
               with_trans=False):
@@ -3009,8 +3047,20 @@ def main(argv=None):
     # loses the low bits of the very totals the fit is judged by.
     rows, columns = cube_shape(args.cube)
     spill = spill_dir(rows, columns, args.dtype, args.cube, args.outdir)
+    # THE CONFIGURATION'S WEIGHTS, the ones the refit of the correct stage
+    #   reads too (reconstruct.refit_weights), saved with the fit for every
+    #   later reader of the cube (fit_weight_settings)
+    weighting = weight_settings()
+    if args.config:
+        from .config import load_config
+        weighting = weight_settings(load_config(args.config))
+    log("weights: pixel SNR above %s, telluric ramp from %.2f"
+        % (weighting["min_pixel_snr"] if weighting["min_pixel_snr"] is not None
+           else "none (ln f above %s)" % weighting["ln_clip_low"],
+           weighting["ramp_zero"]))
     grid, data, w, meta = load_cube(args.cube, min_snr_frac=args.min_snr_frac,
-                                    dtype=np.dtype(args.dtype), spill=spill)
+                                    dtype=np.dtype(args.dtype), spill=spill,
+                                    **weighting)
     # THE CROSS-VALIDATION, BEFORE ANY MEAN. The nights held out lose their
     # weight here, so before the per-parity means, the mean star and the
     # first sweep: the basis must learn nothing from them, not even their
@@ -3844,6 +3894,12 @@ def main(argv=None):
     # reads to mask below correct.weight_floor
     clip_rows, clip_cols, clip_factor = _clip_triplet(last_clip)
     np.savez_compressed(npz_path, bjd=bjd, a=a, b=b, P=P, Q=Q, alpha=alpha,
+                        # the weights' settings, NaN for one not set
+                        **{name: np.nan if weighting[key] is None
+                           else float(weighting[key])
+                           for name, key in (("min_pixel_snr", "min_pixel_snr"),
+                                             ("ln_clip_low", "ln_clip_low"),
+                                             ("ramp_zero", "ramp_zero"))},
                         clip_rows=clip_rows, clip_cols=clip_cols,
                         clip_factor=clip_factor, clip_nsig=float(args.clip),
                         velocity_term=bool(velocity_term),

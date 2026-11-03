@@ -63,7 +63,7 @@ from .progress import bar as _bar
 
 #: the same treatment twoframe.load_cube gives the cube, so a refitted
 #: coefficient is comparable with the fit's own rather than to its own scale
-RAMP_ZERO = 0.5
+RAMP_ZERO = _bcd.DEFAULT_RAMP_ZERO
 
 
 #: how to read a file when no configuration is given: an APERO t.fits
@@ -739,7 +739,7 @@ def clipped_weights_mask(cube, fit_path, floor=0.5):
     return out
 
 
-def fit_weights_mask(cube, mode="exposure", share=1.0):
+def fit_weights_mask(cube, mode="exposure", share=1.0, weighting=None):
     """The grid samples the fit weighted, per exposure: file name -> (2, grid).
 
     With mode "common" every exposure gets the same mask, the samples EVERY
@@ -756,7 +756,7 @@ def fit_weights_mask(cube, mode="exposure", share=1.0):
     (plotting.live_mask). Row 0 is the even orders, row 1 the odd ones.
     """
     from .plotting import live_mask
-    _, _, w, meta = _bcd.load_cube(cube, dtype=np.float32)
+    _, _, w, meta = _bcd.load_cube(cube, dtype=np.float32, **(weighting or {}))
     parity = _bcd.row_parity(meta, w.shape[0])
     names = [os.path.basename(str(v)) for v in meta["filename"]]
     out = {}
@@ -1303,8 +1303,9 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
         values, good = np.where(keep, out, 0.0), keep
 
     # The SAME weights the fit used, not merely 1/sigma^2. twoframe.load_cube
-    # also zeroes anything below ln_clip_low, ramps by the telluric
-    # transmission and blanks the grid edges, and the transmission ramp in
+    # also zeroes every sample below weights.min_pixel_snr in SNR (below
+    # ln_clip_low when that is null), ramps by the telluric transmission from
+    # weights.telluric_ramp_zero and blanks the grid edges, and the ramp in
     # particular matters here: it is near zero exactly where the atmosphere is
     # opaque, which is where the observer block does most of its work. Leaving
     # it out would shift the refitted amplitude by tens of per cent against the
@@ -1396,7 +1397,8 @@ def shrink_model(model, fits_path, cube, shrink=True, shrink_smooth=False,
         raise SystemExit("--shrink and --smooth-components need --cube and the"
                          " fit's archive beside %s: %s" % (fits_path, fit_path))
     b_rows = np.asarray(np.load(fit_path)["b"], dtype=float)
-    _, _, w_cube, _ = _bcd.load_cube(cube, dtype=np.float32)
+    _, _, w_cube, _ = _bcd.load_cube(cube, dtype=np.float32,
+                                     **_bcd.fit_weight_settings(fit_path))
     if b_rows.shape[0] != w_cube.shape[0]:
         raise SystemExit("the fit has %d rows and the cube %d"
                          % (b_rows.shape[0], w_cube.shape[0]))
@@ -1501,8 +1503,11 @@ def correct_many(model, args):
             what = "every sample the fit gave no weight, as panel 3 hides it"
         log("  reading the fit's weights from %s: %s will be NaN"
             % (args.cube, what))
-        alive_by_file = fit_weights_mask(args.cube, mask_mode,
-                                         getattr(args, "mask_share", 1.0) or 1.0)
+        # weighed as the fit weighed them, from its archive beside the basis
+        alive_by_file = fit_weights_mask(
+            args.cube, mask_mode, getattr(args, "mask_share", 1.0) or 1.0,
+            _bcd.fit_weight_settings(os.path.join(os.path.dirname(
+                os.path.abspath(args.fits)), "fit.npz")))
     else:
         log("  no --cube: samples the fit gave no weight to keep their flux,"
             " which panel 3 of the sequence figure does not show", "warn")
