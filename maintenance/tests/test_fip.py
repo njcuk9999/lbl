@@ -44,3 +44,21 @@ def test_a_few_bad_nights_do_not_move_the_answer():
     clean = fip.alias_aware(*_series(outliers=False))
     dirty = fip.alias_aware(*_series(outliers=True))
     assert abs(dirty['best_period'] - clean['best_period']) < 0.01
+
+
+def test_a_point_ever_further_out_stays_an_outlier():
+    # both densities underflow near 193 error bars: the wide one stays the
+    #   likelier, and the point must not come back with its full weight
+    err = np.ones(31)
+    for distance in (10.0, 50.0, 192.0, 193.0, 1000.0, 1e6):
+        value = np.zeros(31)
+        value[0] = distance
+        assert fip.outlier_probability(value, err)[0] > 0.999
+    # the same values as the densities themselves where they do not underflow
+    value = np.linspace(-20.0, 20.0, 41)
+    prior, width = fip.OUTLIER_PRIOR, fip.OUTLIER_WIDTH
+    narrow = np.exp(-0.5 * value ** 2)
+    wide = np.exp(-0.5 * (value / width) ** 2) / width
+    expected = prior * wide / ((1.0 - prior) * narrow + prior * wide)
+    assert np.allclose(fip.outlier_probability(value, np.ones(41)), expected,
+                       rtol=1e-12, atol=0.0)

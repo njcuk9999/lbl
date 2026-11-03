@@ -225,12 +225,14 @@ def outlier_probability(value, err, jitter=0.0, width=OUTLIER_WIDTH,
     narrow = np.sqrt(err ** 2 + jitter ** 2)
     wide = narrow * width
     centred = value - np.median(value)
-    with np.errstate(divide='ignore', invalid='ignore'):
-        lnarrow = np.exp(-0.5 * (centred / narrow) ** 2) / narrow
-        lwide = np.exp(-0.5 * (centred / wide) ** 2) / wide
-    total = (1.0 - prior) * lnarrow + prior * lwide
-    out = np.where(total > 0, prior * lwide / total, 0.0)
-    return np.clip(out, 0.0, 1.0)
+    # the ratio of the two densities in logs: far enough out, both densities
+    #   underflow to zero, while the wide population stays the far likelier
+    with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
+        log_ratio = (np.log(wide / narrow) - 0.5 * (centred / narrow) ** 2
+                     + 0.5 * (centred / wide) ** 2)
+        out = 1.0 / (1.0 + (1.0 - prior) / prior * np.exp(log_ratio))
+    # no error bar, no estimate
+    return np.clip(np.where(np.isfinite(out), out, 0.0), 0.0, 1.0)
 
 
 def oafip(time, value, err, freq=None, trend=1, rounds=5):
