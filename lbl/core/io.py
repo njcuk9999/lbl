@@ -15,6 +15,7 @@ import fnmatch
 import functools
 import itertools
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -862,22 +863,34 @@ def find_files(path_list: List[Path],
 
 def clean_directory(path: str, logmsg: bool = True,
                     dir_suffix: str = '',
-                    include_files: Optional[List[str]] = None):
+                    include_files: Optional[List[str]] = None,
+                    dir_regex: Optional[str] = None):
     """
     Remove all files from a directory
 
     :param path: str, path to clean
     :param logmsg: bool, if True log cleaning
     :param dir_suffix: str, if not '' only clean directories that end with this
-    :param include_files: list of str, if not None only clean files in this list
+    :param include_files: list of str (or one str), if not None only clean
+                          files with these exact names
+    :param dir_regex: str, if set only clean the files of the directories
+                      below path whose name matches it, and of their
+                      sub-directories (dir_suffix is then not used)
 
     :return: None, removes files
     """
     # if directory does not exist do not clean
     if not os.path.exists(path):
         return
+    # one file name is a list of one (not a string to test substrings of)
+    if isinstance(include_files, str):
+        include_files = [include_files]
+    pattern = re.compile(dir_regex) if dir_regex else None
     # log cleaning
-    if len(dir_suffix) == 0:
+    if pattern is not None:
+        msg = 'Cleaning directory {0} --directories={1}'
+        log.general(msg.format(path, dir_regex))
+    elif len(dir_suffix) == 0:
         log.general('Cleaning directory {0}'.format(path))
     else:
         msg = 'Cleaning directory {0} --suffix={1}'
@@ -885,13 +898,20 @@ def clean_directory(path: str, logmsg: bool = True,
     # get all files in path that match filter
     files = []
     for _root, _dirs, _files in os.walk(path):
+        if pattern is not None:
+            # a directory below path whose name matches, or inside one
+            relpath = os.path.relpath(_root, path)
+            parts = [] if relpath == os.curdir else relpath.split(os.sep)
+            if not any(pattern.search(part) for part in parts):
+                continue
         # dir_suffix
-        if _root.endswith(dir_suffix):
-            for filename in _files:
-                if include_files is not None:
-                    if filename not in include_files:
-                        continue
-                files.append(os.path.join(_root, filename))
+        elif not _root.endswith(dir_suffix):
+            continue
+        for filename in _files:
+            if include_files is not None:
+                if filename not in include_files:
+                    continue
+            files.append(os.path.join(_root, filename))
 
     # loop around files
     for filename in files:

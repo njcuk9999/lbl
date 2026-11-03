@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-lbl_mask
+lbl_reset
 
-Build mask for the template for use in LBL compute/compile
+Remove the products of LBL from DATA_DIR (the spectra it derived, tables,
+velocities, masks, templates, plots, the sample wave grid)
 
 Created on 2021-08-24
 
@@ -41,6 +42,10 @@ ARGS_MASK = [  # core
 ]
 
 DESCRIPTION_MASK = 'Use this code to clean out any LBL data from DATA_DIR'
+# the science folders LBL derives from an object: <object>_tc (telluric
+#   cleaning), <object>_pca2d and <object>_tc_pca2d (PCA2D, with an optional
+#   _<name> after it)
+DERIVED_SCIENCE = r'(_tc|_pca2d(_[0-9A-Za-z._+-]+)?)$'
 
 
 # =============================================================================
@@ -105,8 +110,8 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 2: clean directories
     # -------------------------------------------------------------------------
-    # clean _tc from science directories (tellu cleaned files)
-    io.clean_directory(dparams['SCIENCE_DIR'], dir_suffix='_tc')
+    # clean the science folders LBL derived (telluric cleaning, PCA2D)
+    io.clean_directory(dparams['SCIENCE_DIR'], dir_regex=DERIVED_SCIENCE)
     # clean reftable directory
     io.clean_directory(dparams['LBLRT_DIR'])
     # clean rdb directory
@@ -121,7 +126,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     io.clean_directory(dparams['PLOT_DIR'])
     # clean calib directory
     io.clean_directory(dparams['CALIB_DIR'],
-                       include_files=inst.params['SAMPLE_WAVE_GRID_FILE'])
+                       include_files=[inst.params['SAMPLE_WAVE_GRID_FILE']])
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------

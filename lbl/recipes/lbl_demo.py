@@ -31,7 +31,8 @@ __authors__ = base.__authors__
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = io.log
-# set the path to the data
+# set the path to the data: no address is published yet, so this is not a
+#   URL and lbl_demo stops at once, saying so
 URL_TO_DATA = '/etiennes/path/'
 # set packed file format (zip, tar, gztar, bztar)
 UNPACK_FORMAT = 'gztar'
@@ -45,8 +46,15 @@ EXAMPLE_DEMO_WRAP = 'example_demo_wrap.py'
 def main():
     # ----------------------------------------------------------------------
     # print splash
-    lbl_misc.splash(name=__STRNAME__, instrument='None',
-                    params=base_classes.ParamDict(), plogger=log)
+    lbl_misc.splash(name=__STRNAME__, instrument='None', params=None,
+                    plogger=log)
+    # ----------------------------------------------------------------------
+    # without the address of the demo data there is nothing to download
+    if not str(URL_TO_DATA).startswith(('http://', 'https://', 'ftp://')):
+        emsg = ('lbl_demo: the address of the demonstration data is not set '
+                '(URL_TO_DATA = {0} in lbl/recipes/lbl_demo.py is not a URL), '
+                'so the demo cannot be downloaded')
+        raise LblException(emsg.format(URL_TO_DATA))
     # ----------------------------------------------------------------------
     # set ask condition
     ask_condition = True
@@ -113,7 +121,7 @@ def main():
     # write new demo
     with open(epath, 'w') as efile:
         for newline in newlines:
-            efile.write(newline + '\n')
+            efile.write(newline)
     # return locals
     return locals()
 
