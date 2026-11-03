@@ -2658,16 +2658,17 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_mean[line_it] = np.nan
                 per_line_error[line_it] = np.nan
                 continue
-            # get the difference and error for each line
+            # the offset of the line from the per-epoch velocities: the
+            #   weighted mean of its differences to them (Artigau et al.
+            #   2022, section 4.7), subtracted from the line in every epoch
+            #   below
             with warnings.catch_warnings(record=True) as _:
                 diff1 = dv_arr[:, line_it] - rdb_dict['vrad']
-                diff1 -= np.nanmedian(diff1)
             # here we avoid having a shallow copy
             err1 = np.array(sdv_arr[:, line_it])
             # try to guess the odd ratio mean
             # noinspection PyBroadException
             try:
-                # also updates dvrms[:,line_it]
                 guess2, bulk_error2 = mp.odd_ratio_mean(diff1, err1)
                 per_line_mean[line_it] = guess2
                 per_line_error[line_it] = bulk_error2
@@ -2676,9 +2677,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_mean[line_it] = np.nan
                 per_line_error[line_it] = np.nan
 
-        # normalize the per-line mean to zero
+        # the offsets are relative to the mean of all lines: their weighted
+        #   mean is set to zero, so that removing them leaves the zero point
+        #   of the velocities as it is
         guess3, bulk_error3 = mp.odd_ratio_mean(per_line_mean, per_line_error)
         per_line_mean = per_line_mean - guess3
+        # a line more than 100 times the spread of the offsets away is not
+        #   used at all
         nsig = np.abs(per_line_mean / mp.estimate_sigma(per_line_mean))
         per_line_mean[nsig > 100] = np.nan
 

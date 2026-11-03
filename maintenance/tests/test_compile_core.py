@@ -153,3 +153,47 @@ def test_an_lblrv_file_without_finite_velocity_gives_a_nan_row():
     others = np.delete(np.arange(12), 4)
     assert np.all(np.isfinite(vrad[others]))
     assert np.all(np.abs(vrad[others] - velocity[others]) < 1.5)
+
+
+def capture(func, *args, names=None, **kwargs):
+    """Run func; return its result and its local variables on return"""
+    import sys
+    saved = dict()
+
+    def tracer(frame, event, arg):
+        if event == 'return' and frame.f_code is func.__code__:
+            for key, value in frame.f_locals.items():
+                if names is None or key in names:
+                    saved[key] = value
+    previous = sys.getprofile()
+    sys.setprofile(tracer)
+    try:
+        result = func(*args, **kwargs)
+    finally:
+        sys.setprofile(previous)
+    return result, saved
+
+
+def test_per_line_zero_points_are_the_offsets_of_the_lines():
+    """Lines with offsets of 20 m/s rms, 30% of them missing at random in
+    each epoch: per_line_mean measures each line's offset (Artigau et al.
+    2022, section 4.7), and once removed the missing lines no longer add
+    their offsets to the velocities"""
+    wave, velocity, offset, dv, sdv = synthetic_star(offsets=20.0, seed=3)
+    rng = np.random.default_rng(4)
+    dv[rng.random(dv.shape) < 0.3] = np.nan
+    inst = SynthInst(make_tables(dv, sdv, wave), np.arange(12.0))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out, saved = capture(general.make_rdb_table, inst, 'x.rdb',
+                             inst.files(), '.', names=['per_line_mean'])
+    plm = np.array(saved['per_line_mean'])
+    good = np.isfinite(plm)
+    assert np.sum(good) > 0.95 * len(plm)
+    assert np.corrcoef(plm[good], offset[good])[0, 1] > 0.95
+    # weighted mean of the offsets at zero: plm = offset - their mean
+    assert abs(np.median(plm[good] - (offset[good] - np.mean(offset)))) < 1.0
+    vrad = np.array(out[0]['RDB']['vrad'], dtype=float)
+    resid = vrad - velocity
+    # noise alone: 5 m/s / sqrt(280 lines) = 0.30 m/s per epoch
+    assert np.std(resid - np.mean(resid)) < 0.45
