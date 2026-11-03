@@ -2330,6 +2330,10 @@ def external_star_template(spec, grid, parity, live, window, polyorder,
     return out, used
 
 
+#: the fewest weighted rows whose median is a star spectrum
+MIN_TEMPLATE_ROWS = 3
+
+
 def star_frame_template(data, w, shifter, delta, min_spectra=20, berv=None,
                         berv_bin=None, berv_min_entries=3, rows=None,
                         spill=None, desc=None):
@@ -2372,7 +2376,7 @@ def star_frame_template(data, w, shifter, delta, min_spectra=20, berv=None,
     with warnings.catch_warnings():
         # a t.fits cube has columns no row covers at all (dead orders, and the
         # half of the domain the other parity owns); those are all-NaN by
-        # construction and are zeroed by the min_spectra cut below
+        # construction and are zeroed by the count cut below
         warnings.simplefilter("ignore", RuntimeWarning)
         median_desc = desc and desc + ", median"
         if berv_bin and berv is not None:
@@ -2383,12 +2387,32 @@ def star_frame_template(data, w, shifter, delta, min_spectra=20, berv=None,
         else:
             template = _nanmedian_over_rows(home, desc=median_desc)
     count = np.zeros(n_cols, dtype=np.int64)
+    live_rows = 0
     for start in starts:
-        count += np.sum(np.isfinite(home[start:start + step]), axis=0)
+        finite = np.isfinite(home[start:start + step])
+        count += np.sum(finite, axis=0)
+        live_rows += int(np.any(finite, axis=1).sum())
     drop_workspace(home)
     del home
     template = np.where(np.isfinite(template), template, 0.0)
-    template[count < min_spectra] = 0.0
+    # A COLUMN NEEDS min_spectra ROWS, OR ALL THE ROWS THERE ARE. With fewer
+    #   weighted rows than min_spectra, a fixed limit would zero every column
+    #   and the fit would run on the star itself, its observer components
+    #   taking a share of the star's lines that the correction then divides
+    #   out. Below MIN_TEMPLATE_ROWS a median is not one.
+    need = max(min(int(min_spectra), live_rows), MIN_TEMPLATE_ROWS)
+    template[count < need] = 0.0
+    if live_rows < int(min_spectra):
+        log("only %d weighted rows%s, fewer than the %d a star-frame median"
+            " asks for: %s"
+            % (live_rows, " (%s)" % desc if desc else "", int(min_spectra),
+               "the star's spectrum is their median on the %d columns all of"
+               " them weight, and zero elsewhere. A fit of so few spectra is"
+               " fragile" % int(np.count_nonzero(template))
+               if live_rows >= MIN_TEMPLATE_ROWS else
+               "NO STAR SPECTRUM, so the fit runs on the star itself and its"
+               " observer components take part of the star's lines, which the"
+               " correction divides out"), "warn")
     return template
 
 
