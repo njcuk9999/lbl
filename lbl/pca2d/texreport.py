@@ -1645,7 +1645,7 @@ def known_planets(outdir, config, star, joint, facts, folder):
     None, k in m/s or None, source), shortest period first. The archive's
     answer is kept beside the report, and used again when the archive cannot
     be reached; `status` says which it was. Only confirmed planets are used:
-    an entry whose source is "TOI" (a candidate)
+    an entry whose source is "TOI" (a TESS object of interest, a candidate)
     is left out, whichever file it was read from.
     """
     from . import archive

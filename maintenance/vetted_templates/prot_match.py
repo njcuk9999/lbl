@@ -2,7 +2,7 @@
 most spectra in each bin), matched by position (SIMBAD's J2000 coordinates,
 nearest within 30 arcsec) in Shan+2024 (CARMENES, best periods), Newton+
 2016 and 2018 (MEarth, photometric), Diez Alonso+ 2019 (CARMENES,
-photometric), Lu+ 2022 (ZTF, photometric) and Lambier+ 2025.
+photometric), Lu+ 2022 (ZTF, photometric) and Lambier+ 2025 (TESS).
 
 Reads candidates_simbad.json (vet_simbad.py) and vsini_rows.json
 (vsini_rows.py), whose objects are the candidates; writes prot_match.json:
