@@ -77,7 +77,8 @@ MASKED_PANELS = ("corrected", "resid")
 CLIP_KEYS = ("clip_window", "nsig_cut", "excursion_nsig", "excursion_samples",
              "weight_floor", "bias_nsig", "bias_samples", "excess_nsig",
              "excess_chi2", "excess_samples", "column_frac", "column_chi2",
-             "star_column_frac", "star_column_chi2", "star_bias_nsig")
+             "column_min_rows", "star_column_frac", "star_column_chi2",
+             "star_bias_nsig")
 #: the page: the report prints a figure at the text's width, A4 less two
 #: 2.2 cm margins (texreport.WIDTH), and no taller than 0.82 of the text's
 #: height, 8.2 inches (texreport.figure_block). Drawn at that width and at
@@ -130,7 +131,8 @@ def parse_args(argv=None):
                  "--column-frac", "--column-chi2", "--star-column-frac",
                  "--star-column-chi2", "--star-bias-nsig"):
         p.add_argument(flag, type=float, default=None)
-    for flag in ("--excursion-samples", "--bias-samples", "--excess-samples"):
+    for flag in ("--excursion-samples", "--bias-samples", "--excess-samples",
+                 "--column-min-rows"):
         p.add_argument(flag, type=int, default=None)
     return p.parse_args(argv)
 
@@ -291,6 +293,7 @@ def masked_samples(cube, fit, clip, a0, b0, names, parity, select=None):
             out, report = residual_outliers(
                 cube, fit, get("nsig_cut"), window,
                 column_frac=get("column_frac"), column_chi2=get("column_chi2"),
+                column_min_rows=int(get("column_min_rows") or 10),
                 excursion_nsig=get("excursion_nsig"),
                 excursion_samples=get("excursion_samples"),
                 excess_nsig=get("excess_nsig"), excess_chi2=get("excess_chi2"),

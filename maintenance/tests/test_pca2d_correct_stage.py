@@ -169,3 +169,18 @@ def test_the_high_pass_template_is_the_cube_s_own(tmp_path):
     joint.mkdir()
     assert np.all(spcube.load_template(cfg, str(joint)) == 0.0)
     assert np.all(spcube.load_template(cfg) == 0.0)
+
+
+def test_column_min_rows_reaches_the_correct_stage_and_the_figure():
+    from lbl.pca2d.figures import sequence
+    cfg = _member()
+    cfg["correct"]["nsig_cut"] = 3.0
+    cfg["correct"]["column_min_rows"] = 25
+    flags = cli.clip_args(cfg, quiet=True)
+    assert flags[flags.index("--column-min-rows") + 1] == "25"
+    args = reconstruct.parse_args(["--fits", "x.fits", "--correct", "--all",
+                                   "--source-dir", "s", *flags])
+    assert args.column_min_rows == 25
+    figure = sequence.parse_args(["--cube", "c", "--fit", "f", "--windows",
+                                  "1267:2", "--out", "o", *flags])
+    assert figure.column_min_rows == 25

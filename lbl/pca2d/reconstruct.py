@@ -172,6 +172,10 @@ def parse_args(argv=None):
                    help="with --column-chi2: drop an observer column from EVERY"
                         " exposure when more than this fraction of them is"
                         " clipped there and the survivors are still noisy")
+    p.add_argument("--column-min-rows", type=int, default=10,
+                   help="the fewest exposures of a parity over which a column"
+                        " gets a verdict from the column, bias and excess"
+                        " tests (correct.column_min_rows)")
     p.add_argument("--column-chi2", type=float, default=None,
                    help="the survivors' reduced chi2 above which such a column"
                         " goes; pure noise gives 0.97 after a 3 sigma clip"
@@ -1588,6 +1592,7 @@ def correct_many(model, args):
         clipped_by_file, clip_report = residual_outliers(
             args.cube, np.load(fit_path), args.nsig_cut, args.clip_window,
             column_frac=frac, column_chi2=chi2,
+            column_min_rows=int(getattr(args, "column_min_rows", 10) or 10),
             excursion_nsig=excursion, excursion_samples=samples,
             excess_nsig=excess, excess_chi2=getattr(args, "excess_chi2", None),
             excess_samples=wide, bias_nsig=bias, bias_samples=bias_wide,

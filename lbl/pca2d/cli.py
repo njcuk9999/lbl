@@ -1293,6 +1293,9 @@ def clip_args(cfg, quiet=False):
             and not corr.get("star_bias_nsig") and not floor):
         return []
     out = ["--clip-window", str(int(cfg["highpass"]["window"]))]
+    # the fewest exposures of a parity over which a column gets a verdict
+    if corr.get("column_min_rows") is not None:
+        out += ["--column-min-rows", str(int(corr["column_min_rows"]))]
     if excursion and elements:
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         samples = element_samples(resolution, cfg["domain"]["dv"], elements)
