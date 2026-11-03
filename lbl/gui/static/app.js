@@ -610,9 +610,17 @@ function drawTargets() {
   TARGETS.filter((row) => S.ticked.includes(row.name) && row.instrument && row.instrument !== '?')
     .forEach((row) => { (byInstrument[family(row.instrument)] = byInstrument[family(row.instrument)] || []).push(row.name); });
   const families = Object.keys(byInstrument);
+  // one button per instrument to keep its targets and untick the others;
+  //   first the instrument of the target ticked last, the likely intent
+  const last = [...S.ticked].reverse().map((name) => TARGETS.find((row) => row.name === name))
+    .find((row) => row && row.instrument && row.instrument !== '?');
+  const proposed = last ? family(last.instrument) : null;
+  const choices = [...families].sort((a, b) => (b === proposed) - (a === proposed));
   $('target_errors').replaceChildren(...(families.length > 1 ? [el('div', { class: 'message error' },
     el('strong', { text: t('err_mixed_title') }), ' ',
-    t('err_mixed', families.map((f) => `${f} : ${byInstrument[f].join(', ')}`).join(' · ')))] : []));
+    t('err_mixed', families.map((f) => `${f} : ${byInstrument[f].join(', ')}`).join(' · ')), ' ',
+    ...choices.map((f) => el('button', { type: 'button', class: 'button small', text: t('keep_family', f),
+      onclick: () => { S.ticked = S.ticked.filter((name) => byInstrument[f].includes(name)); ticksChanged(); } })))] : []));
   $('target_notes').textContent = S.ticked.length > 1 && families.length <= 1 ? t('joint_note') : '';
 }
 
@@ -654,6 +662,11 @@ function drawTiles() {
 
 function toggle(name) {
   S.ticked = S.ticked.includes(name) ? S.ticked.filter((n) => n !== name) : [...S.ticked, name];
+  ticksChanged();
+}
+
+// what follows a change of the ticked targets
+function ticksChanged() {
   save();
   drawTargets();
   loadPoints();
