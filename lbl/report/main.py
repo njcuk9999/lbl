@@ -428,12 +428,28 @@ def _zero_point_example(table, data_dir, science_dir):
     return None
 
 
+def _tapas_file(data_dir):
+    """The TAPAS file of this DATA_DIR, where the rest of LBL keeps it
+    (tellu_clean.get_tapas_lbl): its copy in other/, else
+    models/tellurics/ (io.model_path); None when neither is there."""
+    from lbl.core import io as lbl_io
+    from lbl.core.parameters import params
+    name = params['TELLUCLEAN_TAPAS_FILE']
+    copied = os.path.join(data_dir, 'other', name)
+    if os.path.exists(copied):
+        return copied
+    models = os.path.join(data_dir, 'models')
+    if not os.path.isdir(models):
+        return None
+    path = lbl_io.model_path(models, 'tellurics', name)
+    return path if os.path.exists(path) else None
+
+
 def _zero_point_figure(plt, path, data_dir, title):
     """The telluric fit of one exposure (the instrument's own figure)"""
     from lbl.instruments import espadons
-    return espadons.telluric_figure(
-        plt, path, tapas_file=os.path.join(data_dir, 'models',
-                                           'tapas_lbl.fits'), title=title)
+    return espadons.telluric_figure(plt, path, tapas_file=_tapas_file(data_dir),
+                                    title=title)
 
 
 def _activity_labels():
@@ -454,8 +470,8 @@ def _tapas(data_dir):
     without them falls back to the HARPS values and says so in nothing,
     because the window is then simply the usual one.
     """
-    path = os.path.join(data_dir, 'other', 'tapas_lbl.fits')
-    if not os.path.exists(path):
+    path = _tapas_file(data_dir)
+    if path is None:
         return None, None
     try:
         import numpy as np
