@@ -115,6 +115,18 @@ def test_the_cube_can_write_what_the_reader_returns(tmp_path):
     assert len(Table.read(out)) == 2
 
 
+def test_the_blaze_is_read_from_the_science_file(inst, tmp_path):
+    """a class that names no blaze file (KW_BLAZE_FILE None) has its blaze
+    read as LBL reads it, from the science file, not taken as 1"""
+    path = _expres_file(tmp_path)
+    payload = readers.read_any(path, _config())
+    flux, header = inst.load_science_file(path)
+    blaze, _ = inst.load_blaze_from_science(path, flux, header, '',
+                                            normalize=True)
+    assert np.array_equal(payload['blaze'], blaze, equal_nan=True)
+    assert np.nanstd(payload['blaze'][0]) > 0.01
+
+
 def test_expres_is_fitted_in_the_observer_frame(tmp_path):
     """the grid is barycentric: PCA2D brings it back to the observer's frame
     by the BERV the telluric cleaning uses (get_berv_transmission)"""

@@ -478,16 +478,36 @@ def _blaze(inst, path, flux, header, model_dir):
     blaze's shape out; only the weights do without it."""
     if inst.params.get("BLAZE_CORRECTED"):
         return np.ones_like(flux)
-    name = None
-    try:
-        name = header.get_hkey(inst.params["KW_BLAZE_FILE"])
-    except Exception:                                           # noqa: BLE001
-        pass
     folders = []
     if model_dir:
         folders.append(os.path.join(os.path.dirname(os.path.abspath(
             model_dir)), "calib"))
         folders.append(model_dir)
+    try:
+        keyword = inst.params["KW_BLAZE_FILE"]
+    except Exception:                                           # noqa: BLE001
+        keyword = None
+    name = None
+    if keyword is None:
+        # THE CLASS NAMES NO BLAZE FILE: its blaze, when it has one, is in
+        #   the science file itself (EXPRES: a column of the extraction), and
+        #   is read as LBL's recipes read it, by load_blaze_from_science.
+        #   Asking the header for a keyword None would only log a red error
+        #   per file
+        try:
+            blaze, _ = inst.load_blaze_from_science(
+                path, flux, header, calib_directory=(folders or [""])[0],
+                normalize=True)
+            blaze = np.atleast_2d(np.asarray(blaze, dtype=float))
+            if blaze.shape == np.shape(flux):
+                return blaze
+        except Exception:                                       # noqa: BLE001
+            pass
+    else:
+        try:
+            name = header.get_hkey(keyword)
+        except Exception:                                       # noqa: BLE001
+            pass
     for folder in folders:
         if name and os.path.exists(os.path.join(folder, os.path.basename(
                 str(name)))):
