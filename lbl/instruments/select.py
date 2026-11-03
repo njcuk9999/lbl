@@ -230,17 +230,16 @@ def parse_args(argnames: List[str], kwargs: Dict[str, Any],
             with open(config_file, 'r') as yfile:
                 yaml_inputs = yaml.load(yfile, yaml.FullLoader)
             # add these inputs to inputs
-            for argname in yaml_inputs:
-                # upper case argument
-                argname = argname.upper()
+            for yaml_key, value in yaml_inputs.items():
+                # upper case argument (the value is read with the yaml's key)
+                argname = str(yaml_key).upper()
                 # make sure these are in default_values
                 if argname not in list(default_values.keys()):
                     emsg = 'Yaml Argument "{0}" is invalid'
                     raise LblException(emsg.format(argname))
                 # skip Nones
-                if yaml_inputs[argname] not in [None, 'None']:
-                    inputs.set(argname, yaml_inputs[argname],
-                               source=func_name + '[YAML]')
+                if value not in [None, 'None']:
+                    inputs.set(argname, value, source=func_name + '[YAML]')
     # -------------------------------------------------------------------------
     # storage of command line arguments
     inputs.set('USER_KWARGS', value=[], source=func_name)

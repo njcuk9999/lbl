@@ -412,7 +412,7 @@ class LBLHeader(UserDict):
             drskey = ''
             for key_it in key:
                 if key_it in self.data:
-                    if self.data[key_it] != ['None', '', None]:
+                    if self.data[key_it] not in ['None', '', None]:
                         drskey = key_it
                         break
                 if key_it[len('HIERARCH '):] in self.data:
@@ -640,9 +640,10 @@ def check_file_exists(filename: str, fkind: Optional[str] = None,
     elif required:
         if fkind is not None:
             emsg = '{0} file {1} cannot be found'
+            eargs = [fkind.capitalize(), filename]
         else:
             emsg = 'File {1} cannot be found'
-        eargs = [fkind.capitalize(), filename]
+            eargs = [None, filename]
         raise LblException(emsg.format(*eargs))
     else:
         return False
@@ -1199,7 +1200,7 @@ def get_urlfile(url: str, name: str, savepath: str, required: bool = True):
         # attempt to download the data
         try:
             wget.download(url, savepath)
-            log.general('\nDownloaded tapas file.')
+            log.general('\nDownloaded {0} file.'.format(name))
         except Exception as e:
             if not required:
                 msg = 'Skipped {0} file. Missing from server.'
@@ -1310,7 +1311,7 @@ def load_table(filename: str, kind: Union[str, None] = None,
     """
     # deal with no kind
     if kind is None:
-        kind = '{0} table'.format(format)
+        kind = '{0} table'.format(fmt)
     # try to load fits file
     try:
         with warnings.catch_warnings(record=True) as _:
