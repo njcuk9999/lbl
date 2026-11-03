@@ -689,30 +689,27 @@ class ESSP(Instrument):
                                props['pre_cleaned_exponent_others'])
         # set image as pre_cleaned_flux
         image = props['pre_cleaned_flux']
-        # we need to get the data array from the fits file
-        data_array = io.load_fits(props['FILENAME'],
-                                  kind='science fits file',
-                                  extname='optimal')
-        # we push the image into the data arrays "spectrum" column
-        data_array['spectrum'] = image
-        # adding extensions that are not the flux after telluric correction
-        #   (error propagation, wavelength grid)
-        datalist = [None, data_array]
-        headerlist = [header, None]
-        datatypelist = [None, 'table']
+        # the FLUX extension (what load_science_file reads) is replaced, the
+        #   others (wavelength grid, blaze, errors) are kept under their names
+        datalist, headerlist = [None], [header]
+        datatypelist, names = [None], [None]
         # open hdulist
         with fits.open(props['FILENAME']) as hdulist:
-            # add the header for extension 1
-            if len(hdulist) > 1:
-                headerlist[1] = hdulist[1].header
-            # loop around and add other extensions
-            for hdu in hdulist[2:]:
-                datalist.append(hdu.data)
+            for hdu in hdulist[1:]:
+                if hdu.name == 'FLUX':
+                    datalist.append(image)
+                else:
+                    datalist.append(hdu.data)
                 headerlist.append(hdu.header)
+                names.append(hdu.name)
                 if isinstance(hdu, fits.hdu.image.ImageHDU):
                     datatypelist.append('image')
                 else:
                     datatypelist.append('table')
+        # without a FLUX extension the file could not be read back
+        if 'FLUX' not in names:
+            emsg = 'Science file {0} has no FLUX extension'
+            raise LblException(emsg.format(props['FILENAME']))
         # ---------------------------------------------------------------------
         # change the file name
         write_tellu_file = self.modify_tellu_filename(write_tellu_file)
@@ -722,7 +719,7 @@ class ESSP(Instrument):
         # ---------------------------------------------------------------------
         # write to file
         io.write_fits(write_tellu_file, data=datalist,
-                      header=headerlist, dtype=datatypelist)
+                      header=headerlist, dtype=datatypelist, names=names)
 
 # =============================================================================
 # Start of code
