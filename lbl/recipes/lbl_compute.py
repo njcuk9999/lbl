@@ -45,6 +45,7 @@ InstrumentsType = select.InstrumentsType
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 LblLowCCFSNR = base_classes.LblLowCCFSNR
+LblNoValidLines = base_classes.LblNoValidLines
 log = io.log
 # add arguments (must be in parameters.py)
 ARGS_COMPUTE = [  # core
@@ -446,7 +447,7 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
                                   model_velocity=run.model_velocity,
                                   science_file=science_file,
                                   mask_file=ctx['mask_file'])
-    except LblLowCCFSNR as e:
+    except (LblLowCCFSNR, LblNoValidLines) as e:
         emsg = e.message + '\n Skipping file.'
         log.warning(emsg)
         return None

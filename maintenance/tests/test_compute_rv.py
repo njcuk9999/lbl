@@ -256,3 +256,54 @@ def test_norm_is_the_continuum_of_the_template(tmp_path, monkeypatch):
     norm = norms[-1][np.isfinite(norms[-1])]
     assert len(norm) > 0.9 * norms[-1].size
     assert np.all(np.abs(norm - 1) < 0.01)
+
+
+@pytest.mark.parametrize('fill', [np.nan, 0.0])
+@pytest.mark.parametrize('model_velocity', [0.0, np.inf])
+def test_a_spectrum_without_valid_line_raises_the_skip_exception(
+        tmp_path, monkeypatch, fill, model_velocity):
+    """All NaN or all zero: compute_rv raises LblNoValidLines, which
+    lbl_compute catches to skip the file, rather than a ValueError that
+    stopped the run"""
+    monkeypatch.setattr(base_classes.logger, 'Log', lambda **kw: Quiet())
+    star, inst, ref, splines = setup(tmp_path)
+    data = np.full_like(star.wave, fill)
+    with pytest.raises(base_classes.LblNoValidLines):
+        run(inst, data, ref, splines, model_velocity=model_velocity)
+
+
+def test_lbl_compute_skips_a_file_without_valid_line(monkeypatch):
+    """compute_file returns None (no lblrv file) and the run goes on"""
+    from lbl.recipes import lbl_compute
+    monkeypatch.setattr(base_classes.logger, 'Log', lambda **kw: Quiet())
+    monkeypatch.setattr(lbl_compute, 'log', Quiet())
+
+    def no_lines(*args, **kwargs):
+        raise base_classes.LblNoValidLines('no line')
+    monkeypatch.setattr(general, 'compute_rv', no_lines)
+
+    class Fake:
+        params = dict(SKIP_DONE=False, DATA_TYPE='SCIENCE', KW_SNR=None,
+                      SNR_THRESHOLD=0)
+
+        def get_lblrv_file(self, science_file, lblrv_dir):
+            return 'x_lbl.fits', False
+
+        def load_science_file(self, science_file):
+            return np.ones((2, 10)), Header()
+
+        def get_wave_solution(self, *args):
+            return np.ones((2, 10))
+
+        def load_blaze_from_science(self, *args):
+            return np.ones((2, 10)), False
+
+        def write_lblrv_table(self, *args):
+            raise AssertionError('no lblrv file for a skipped spectrum')
+
+    ctx = dict(ref_table=dict(), blaze=None, lblrv_dir='.', calib_dir='.',
+               bad_hdr_key=None, bad_hdr_keys=[], splines=None,
+               science_sys_vel_props=None, mask_file='mask')
+    run_state = lbl_compute.ComputeRun(1)
+    assert lbl_compute.compute_file(Fake(), ctx, run_state, 0, 'x.fits') \
+        is None

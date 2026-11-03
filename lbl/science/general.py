@@ -46,6 +46,7 @@ Instrument = default.Instrument
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 LblLowCCFSNR = base_classes.LblLowCCFSNR
+LblNoValidLines = base_classes.LblNoValidLines
 log = io.log
 InstrumentsType = select.InstrumentsType
 # get speed of light
@@ -1677,10 +1678,20 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             ccf_weight[mask_snr < 3] = 0
             # absolute depths cannot be greater than 1
             ccf_weight[abs(ccf_weight) > 1] = 0
-            # calculate the rough CCF RV estimate
-            sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
-                                                      wave_mask, ccf_weight,
-                                                      kind='model')
+            # calculate the rough CCF RV estimate (a model with no data, as
+            #   that of a spectrum with none, or one the CCF cannot fit, has
+            #   no velocity: the file is skipped)
+            if not np.any(np.isfinite(model) & (model != 0)):
+                raise LblNoValidLines('The model has no finite non-zero '
+                                      'value: no CCF of the model')
+            try:
+                sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid,
+                                                          model, wave_mask,
+                                                          ccf_weight,
+                                                          kind='model')
+            except base_classes.LblCurveFitException as e:
+                emsg = 'CCF of the model could not be fitted: {0}'
+                raise LblNoValidLines(emsg.format(e.error))
 
             model_velocity = sys_model_rv - sys_rv
             log.general('\tModel velocity {:.2f} m/s'.format(model_velocity))
@@ -1708,11 +1719,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             pix_edges = mp.iuv_spline_eval(nwavegrid[order_num], xpix, edges)
             x_start_f[in_order] = pix_edges[:len(in_order)]
             x_end_f[in_order] = pix_edges[len(in_order):]
-        # a non-finite line edge has no pixel index: stop, as converting it
-        #   to an integer would
-        if not np.all(np.isfinite(x_start_f[visit]) &
-                      np.isfinite(x_end_f[visit])):
-            raise ValueError('cannot convert float NaN to integer')
+        # a line with a non-finite edge (an order without a wave solution)
+        #   keeps edges at 0, which the kernel rejects as too narrow
+        visit &= np.isfinite(x_start_f) & np.isfinite(x_end_f)
         x_start_i = np.zeros(len(orders), dtype=np.int64)
         x_end_i = np.zeros(len(orders), dtype=np.int64)
         x_start_i[visit] = np.floor(x_start_f[visit]).astype(np.int64)
@@ -1771,6 +1780,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # get the best etimate of the velocity and update sline
         rv_mean, bulk_error = mp.odd_ratio_mean(dv, sdv)
+        # no line with a valid velocity: nothing to measure in this file
+        if not np.isfinite(rv_mean):
+            emsg = ('No line has a valid velocity (iteration {0}, {1} lines '
+                    'with a finite dv)')
+            raise LblNoValidLines(emsg.format(iteration + 1,
+                                              np.sum(np.isfinite(dv))))
 
         # update rv_mean value with the response curve from template.
         #    An rv_mean value is always under-estimated in absolute value but
@@ -2541,6 +2556,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         for file_it in tqdm(range(dv_arr.shape[0])):
             # use the odd ratio mean to guess vrad and svrad
             orout1 = mp.odd_ratio_mean(dv_arr[file_it], sdv_arr[file_it])
+            # a file without any finite line velocity: its row stays NaN
+            if not np.isfinite(orout1[0]):
+                wmsg = 'No finite line velocity in {0}: its velocities are NaN'
+                log.warning(wmsg.format(lblrvfiles[file_it]))
             # add to output table
             rdb_dict['vrad'][file_it] = orout1[0]
             rdb_dict['svrad'][file_it] = orout1[1]
@@ -2733,6 +2752,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # get valid rv an dv drms
             valid_rv = (rvs_row - rv_per_line_model[0])[good2]
             valid_dvrms = err[good2]
+            # a fit of a slope with its covariance needs 3 lines or more:
+            #   with fewer, the slope stays NaN
+            if np.sum(good2) < 3:
+                break
             # get weights for the np.polyval fit. Do *not* use the square of
             # error bars for weight (see polyfit help)
 

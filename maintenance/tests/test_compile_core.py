@@ -139,3 +139,17 @@ def test_the_fwhm_column_is_the_ccf_fwhm_plus_dw_over_it():
     assert np.allclose(rdb['dW'], dw)
     assert np.allclose(rdb['fwhm'], fwhm + dw / fwhm)
     assert np.allclose(rdb['sig_fwhm'], np.array(rdb['sdW']) / fwhm)
+
+
+def test_an_lblrv_file_without_finite_velocity_gives_a_nan_row():
+    """The compile does not stop on it (np.min of an empty array): its row
+    is NaN, the others are measured"""
+    wave, velocity, _, dv, sdv = synthetic_star()
+    dv[4] = np.nan
+    inst = SynthInst(make_tables(dv, sdv, wave), np.arange(12.0))
+    _, rdb = run_rdb(inst)
+    vrad = np.array(rdb['vrad'], dtype=float)
+    assert np.isnan(vrad[4]) and np.isnan(rdb['vrad_achromatic'][4])
+    others = np.delete(np.arange(12), 4)
+    assert np.all(np.isfinite(vrad[others]))
+    assert np.all(np.abs(vrad[others] - velocity[others]) < 1.5)
