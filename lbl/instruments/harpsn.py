@@ -36,6 +36,10 @@ LblException = base_classes.LblException
 log = io.log
 
 
+# the blue end [nm] from which the photometric bands are chosen
+BAND_WAVEMIN = 378.06
+
+
 # =============================================================================
 # Define HARPS-N class
 # =============================================================================
@@ -656,8 +660,10 @@ class HarpsN(Instrument):
         :return: dict, the binned dictionary
         """
         # ---------------------------------------------------------------------
-        # define regions, and blue/red band ends
-        bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
+        # define regions, and blue/red band ends: the g band starts 8 nm
+        #   before the first order of HARPS-N, and is measured on the part of
+        #   it that the spectrum covers
+        bout = astro.choose_bands(astro.bands, BAND_WAVEMIN, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
         # define the regions: '' and the two halves of the detector

@@ -21,5 +21,6 @@ def test_harpsn_domain_from_real_files(source):
     inst = klass(parameters.params.copy(), base_classes.ParamDict())
     assert 387.47 < inst.wavemin < 387.56
     assert 691.05 < inst.wavemax < 691.21
-    # the g band starts at 379.8 nm, out of the domain: no band column
-    assert inst.get_binned_parameters()['bands'] == []
+    # the g band starts at 379.8 nm, 8 nm before the first order: it is
+    #   kept, and measured on the part the spectrum covers
+    assert inst.get_binned_parameters()['bands'] == ['g']
