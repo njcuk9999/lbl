@@ -756,7 +756,7 @@ def announce(args, plan):
     """Say what is about to happen, in the terms the config used."""
     cfg = plan["config"]
     log("object      %s" % args.object, "value")
-    log("instrument  %s   (read from INSTRUME, not chosen)"
+    log("instrument  %s   (named by lbl.instrument or --instrument)"
         % cfg["input"].get("instrument", "?"), "value")
     log("spectra     %d files in %s" % (len(plan["files"]), plan["directory"]),
         "value")

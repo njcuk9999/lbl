@@ -465,6 +465,8 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
             here = _overlap_blaze(w_shift, blaze[order], ok, grid,
                                   start, overlap_hi, flux[order])
             before = None
+            # the zone as it is, before either order gives it up
+            zone = (start, overlap_hi)
             previous = last_order.get(parity)
             if previous is not None:
                 p_shift, p_ok, p_order = previous
@@ -483,7 +485,7 @@ def resample_exposure(payload: dict, grid: np.ndarray, config: dict):
                 sigma[parity][lo:overlap_hi + 1] = np.nan
             log("orders of the same parity overlap near %.2f nm over %d"
                 " samples: the highest blaze is kept"
-                % (grid[start], overlap_hi - start + 1), "warn")
+                % (grid[zone[0]], zone[1] - zone[0] + 1), "warn")
         last_stop[parity] = stop - 1
         # what is needed to ask this order again what it carries over a zone
         # not known yet, that of its overlap with the next one
