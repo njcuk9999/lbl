@@ -3489,33 +3489,59 @@ def get_stellar_models(inst: InstrumentsType, model_dir: str
     out_model = io.model_path(str(model_dir), 'phoenix',
                               modelfile.format(**fkwargs))
     # -------------------------------------------------------------------------
-    # check if we already have the wave file
-    if not os.path.exists(out_wavefile):
-        # print that we are downloading wave file
-        msg = 'Downloading model wave file. \n\t{0}'
-        log.general(msg.format(wavefile_url))
-        # get wave file (now format cards)
-        wget.download(wavefile_url, out=out_wavefile)
-    else:
-        # print that we are downloading wave file
-        msg = 'Found model wave file. \n\t{0}'
-        log.general(msg.format(out_wavefile))
+    # the sources, in order: LBL's mirror, then the original site. The mirror
+    #   has the same paths from HiResFITS/ on, under STELLAR_MIRROR_URL, and
+    #   its files (trimmed and gzipped) have their own names. A wave file and
+    #   a model always come from the same source: trimmed and untrimmed files
+    #   differ in length, and the two are paired by index
+    sources = []
+    mirror_url = params.get('STELLAR_MIRROR_URL', None)
+    mirror_suffix = params.get('STELLAR_MIRROR_SUFFIX', None)
+    anchor = 'HiResFITS/'
+    if (mirror_url not in (None, '', 'None') and mirror_suffix
+            and anchor in wavefile_url and anchor in modelfile_url):
+        pair = []
+        for url in (wavefile_url, modelfile_url):
+            folder, name = url[url.index(anchor):].rsplit('/', 1)
+            name = name.replace('.fits', mirror_suffix)
+            pair += [mirror_url.rstrip('/') + '/' + folder + '/' + name,
+                     io.model_path(str(model_dir), 'phoenix', name)]
+        sources.append(['the mirror'] + pair)
+    sources.append(['the original site', wavefile_url, out_wavefile,
+                    modelfile_url, out_model])
     # -------------------------------------------------------------------------
-    # check if we already have the model
-    if not os.path.exists(out_model):
-        # print that we are downloading model file
-        msg = 'Downloading model spectrum. \n\t{0}'
-        log.general(msg.format(modelfile_url))
-        # get wave file (now format cards)
-        wget.download(modelfile_url, out=out_model)
-    else:
-        # print that we are downloading model file
-        msg = 'Found model spectrum. \n\t{0}'
-        log.general(msg.format(out_model))
+    # a pair already on disk is used as it is, whichever source it came from
+    chosen = None
+    for source in sources:
+        if os.path.exists(source[2]) and os.path.exists(source[4]):
+            chosen = source
+            msg = 'Found model wave file and spectrum. \n\t{0}\n\t{1}'
+            log.general(msg.format(source[2], source[4]))
+            break
+    # otherwise the first source that has both files
+    errors = []
+    for source in sources if chosen is None else []:
+        name, wave_src, wave_out, model_src, model_out = source
+        try:
+            for url, out in ((wave_src, wave_out), (model_src, model_out)):
+                if not os.path.exists(out):
+                    msg = 'Downloading model file from {0}. \n\t{1}'
+                    log.general(msg.format(name, url))
+                    wget.download(url, out=out)
+        except Exception as exc:                              # noqa: BLE001
+            errors.append('{0}: {1}: {2}'.format(name, type(exc).__name__,
+                                                  exc))
+            log.warning('Could not get the stellar model from ' + errors[-1])
+            continue
+        chosen = source
+        break
+    if chosen is None:
+        emsg = 'The stellar model could not be downloaded:\n\t{0}'
+        raise LblException(emsg.format('\n\t'.join(errors)))
     # -------------------------------------------------------------------------
     # load the model wave file and the model spectrum
-    m_wavemap = io.load_fits(out_wavefile)
-    m_spectrum = io.load_fits(out_model)
+    m_wavemap = io.load_fits(chosen[2])
+    m_spectrum = io.load_fits(chosen[4])
     # -------------------------------------------------------------------------
     # model wavemap is in Angstrom -> convert to nm
     m_wavemap = m_wavemap / 10.0

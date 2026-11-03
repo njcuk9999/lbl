@@ -601,6 +601,27 @@ params.set(key='STELLAR_MODEL_FILE', value=None, source=__NAME__,
                 'appriopriate format cards)',
            dtype=str, not_none=True)
 
+# Define the mirror of the PHOENIX models, asked before STELLAR_WAVE_URL and
+#    STELLAR_MODEL_URL: the files of LBL's default grid (log g 4.5, Z 0,
+#    alpha 0, Teff 3000 to 6000 K), trimmed to 350-2550 nm and gzipped, under
+#    the same HiResFITS/ paths as on the original site. A file the mirror
+#    does not have is taken from the original site. None: no mirror
+params.set(key='STELLAR_MIRROR_URL',
+           value='https://raw.githubusercontent.com/eartigau/'
+                 'lbl-phoenix-mirror/main/',
+           source=__NAME__,
+           desc='the mirror of the PHOENIX models (trimmed, gzipped), asked '
+                'before the original site; None for no mirror',
+           dtype=str)
+
+# Define what the mirror's names have in place of '.fits': the trimmed
+#    files have their own names, so that a trimmed model is never read
+#    against an untrimmed wave file, or the other way around
+params.set(key='STELLAR_MIRROR_SUFFIX', value='_350-2550nm.fits.gz',
+           source=__NAME__,
+           desc="what the mirror's file names have in place of '.fits'",
+           dtype=str)
+
 # Define the object temperature (stellar model)
 params.set(key='OBJECT_TEFF', value=None, source=__NAME__,
            desc='the object temperature (stellar model)', arg='--obj_temp',

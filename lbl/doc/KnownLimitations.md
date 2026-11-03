@@ -108,6 +108,14 @@ named.
 - **Nights need the observatory's longitude:** without network access and
   without astropy's site registry in its cache, LBL stops. This is by
   design.
+- **Downloads with a single source:**
+  - The PHOENIX mirror (`STELLAR_MIRROR_URL`,
+    github.com/eartigau/lbl-phoenix-mirror) holds only LBL's default grid:
+    log g 4.5, Z 0, alpha 0, Teff 3000-6000 K. Another `OBJECT_LOGG` still
+    needs the Goettingen site.
+  - `MODEL_REPO_URL` (TAPAS, temperature gradients) is one server, a bare
+    IP over plain HTTP, with no mirror. Its `tapas_lbl.fits` (181 MB, 104 MB
+    with xz) is over GitHub's 100 MB per-file limit.
 
 ## Dead code, duplicates, stale text
 
