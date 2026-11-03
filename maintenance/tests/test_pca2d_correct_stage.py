@@ -67,3 +67,36 @@ def test_a_file_that_cannot_be_read_is_counted_and_said(tmp_path, monkeypatch):
     assert (pairs, missing) == ([], 3)
     # once, with the reason
     assert len([s for s in said if "no such extension" in s]) == 1
+
+
+def _masks():
+    kept = np.ones((2, 10), dtype=bool)
+    return {"a1": ~kept, "a2": ~kept, "b1": kept, "b2": kept}
+
+
+def test_each_star_of_a_joint_fit_gets_its_own_common_mask():
+    masks = _masks()
+    assert reconstruct.mask_for("common", None, masks, "a2").sum() == 0
+    assert reconstruct.mask_for("common", None, masks, "b1").sum() == 20
+    # and even when the exposure has a refit's mask of its own
+    own = np.zeros((2, 10), dtype=bool)
+    assert reconstruct.mask_for("common", own, masks, "b2").sum() == 20
+
+
+def test_on_a_stacked_cube_a_file_is_found_by_its_row():
+    masks = _masks()
+    assert reconstruct.mask_for("common", None, masks, "b9", "b1").sum() == 20
+    assert reconstruct.mask_for("common", None, masks, "a9", "a1").sum() == 0
+    assert reconstruct.mask_for("exposure", None, masks, "b9", "b1").sum() == 20
+
+
+def test_the_other_mask_modes_are_as_they_were():
+    masks = _masks()
+    own = np.zeros((2, 10), dtype=bool)
+    assert reconstruct.mask_for("none", own, masks, "b1") is None
+    assert reconstruct.mask_for("exposure", own, masks, "b1") is own
+    assert reconstruct.mask_for("exposure", None, masks, "b1") is masks["b1"]
+    assert reconstruct.mask_for("exposure", None, None, "b1") is None
+    # one campaign: the one set, also for a file that is not in the cube
+    one = {"a1": masks["b1"], "a2": masks["b1"]}
+    assert reconstruct.mask_for("common", None, one, "z") is masks["b1"]

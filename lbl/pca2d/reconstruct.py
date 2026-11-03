@@ -647,23 +647,34 @@ def refit_weights(values, good, sigma, trans, weights=None):
     return w
 
 
-def mask_for(mode, own_alive, alive_by_file, name):
+def mask_for(mode, own_alive, alive_by_file, name, row_name=None):
     """Which samples a corrected file blanks, under correct --mask.
 
-    `none` blanks nothing. `common` blanks every sample any exposure left
-    unweighted, the same set for all of them, and it says so even in the refit
-    path: that path computes a mask from the exposure's own weights, and
+    `none` blanks nothing. `common` blanks every sample too few of the star's
+    exposures weighted, one set for all of them, and it says so even in the
+    refit path: that path computes a mask from the exposure's own weights, and
     leaving it in charge would make the option do nothing at all on a
     nightly-stacked target, where every file goes through it. `exposure` blanks
     what that exposure lost, the refit's own mask when it has one.
+
+    `alive_by_file` is by the cube's rows, each object of a joint fit with its
+    own set (fit_weights_mask). A file is looked up by its own name, then by
+    `row_name`, the row it went into on a stacked cube (cut_key). A file of
+    neither is out of the cube, and takes the set of a one-object cube's only
+    campaign.
     """
     if mode == "none":
         return None
+    known = None
+    if alive_by_file:
+        known = alive_by_file.get(name)
+        if known is None and row_name is not None:
+            known = alive_by_file.get(row_name)
     if mode == "common" and alive_by_file:
-        return next(iter(alive_by_file.values()))
+        return known if known is not None else next(iter(alive_by_file.values()))
     if own_alive is not None:
         return own_alive
-    return alive_by_file.get(name) if alive_by_file is not None else None
+    return known
 
 
 def star_support(model):
@@ -1483,7 +1494,7 @@ def correct_many(model, args):
             what = ("every sample fewer than %.0f%% of the exposures weighted,"
                     " one line set for them all" % (100 * share))
         elif mask_mode == "common":
-            what = "every sample no exposure weighted, one line set for them all"
+            what = "every sample any exposure did not weight, one line set for them all"
         else:
             what = "every sample the fit gave no weight, as panel 3 hides it"
         log("  reading the fit's weights from %s: %s will be NaN"
@@ -1734,19 +1745,20 @@ def correct_many(model, args):
             " does to a velocity is its overlap with the star's derivative"
             % (velocity_fwhm, float(model["dv"]),
                float(getattr(args, "velocity_floor", VELOCITY_FLOOR))), "info")
-    # on a cube stacked per night, the cuts are stored per night
+    # on a cube stacked per night, the cuts and the masks are stored per night
     names_by_night = None
     members = None
     if args.by_night and getattr(args, "cube", None) and (
-            clipped_by_file is not None or floored_by_file is not None):
+            clipped_by_file is not None or floored_by_file is not None
+            or alive_by_file is not None):
         members = member_row_names(args.cube)
         if members:
-            log("  the cube's rows are coadds: each exposure gets the cuts of"
+            log("  the cube's rows are coadds: each exposure gets the masks of"
                 " the row it went into, %d rows for %d exposures"
                 % (len(set(members.values())), len(members)), "info")
         else:
             names_by_night = night_row_names(args.cube)
-            log("  the cube's rows are nights: each exposure gets the cuts of"
+            log("  the cube's rows are nights: each exposure gets the masks of"
                 " its night's row, %d nights" % len(names_by_night), "info")
     written = skipped = refitted = 0
     permute = getattr(args, "permute_b", None)
@@ -1786,13 +1798,13 @@ def correct_many(model, args):
                 continue
             row = fresh
             refitted += 1
-        # a refitted exposure has its own weights and so its own no-weight
-        # mask; on a cube of nights the cube's rows are not this file
-        alive = mask_for(mask_mode, own_alive, alive_by_file,
-                         os.path.basename(path))
         # THE NIGHT'S CUTS, NOT THOSE OF THE FILE: on a stacked cube they
         # are stored under the name of the night's row (cut_key)
         key = cut_key(path, row, names_by_night, members)
+        # a refitted exposure has its own weights and so its own no-weight
+        # mask; on a cube of nights the cube's rows are not this file
+        alive = mask_for(mask_mode, own_alive, alive_by_file,
+                         os.path.basename(path), key)
         clipped = (clipped_by_file.get(key)
                    if clipped_by_file is not None else None)
         if floored_by_file is not None:
@@ -1888,9 +1900,9 @@ def _correct_threaded(model, args, config, pairs, shifter, mask_mode,
                 return "unresampled", path, None
             row = fresh
             refit = True
-        alive = mask_for(mask_mode, own_alive, alive_by_file,
-                         os.path.basename(path))
         key = cut_key(path, row, names_by_night, members)
+        alive = mask_for(mask_mode, own_alive, alive_by_file,
+                         os.path.basename(path), key)
         clipped = (clipped_by_file.get(key)
                    if clipped_by_file is not None else None)
         if floored_by_file is not None:
