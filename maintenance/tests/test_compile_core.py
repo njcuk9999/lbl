@@ -197,3 +197,35 @@ def test_per_line_zero_points_are_the_offsets_of_the_lines():
     resid = vrad - velocity
     # noise alone: 5 m/s / sqrt(280 lines) = 0.30 m/s per epoch
     assert np.std(resid - np.mean(resid)) < 0.45
+
+
+def test_a_band_with_too_few_lines_is_nan_not_zero():
+    """Three lines in the g band (5 needed): its columns are NaN"""
+    wave, velocity, _, dv, sdv = synthetic_star()
+    wave = np.sort(np.concatenate([[450.0, 500.0, 550.0],
+                                   np.linspace(610.0, 990.0,
+                                               len(wave) - 3)]))
+    inst = SynthInst(make_tables(dv, sdv, wave), np.arange(12.0))
+    _, rdb = run_rdb(inst)
+    for col in ('vrad_g', 'svrad_g', 'vrad_g_0-2000', 'svrad_g_2000-4000'):
+        assert np.all(np.isnan(np.array(rdb[col], dtype=float)))
+    assert np.all(np.isfinite(np.array(rdb['vrad_r'], dtype=float)))
+
+
+def test_the_nightly_table_ignores_unmeasured_values():
+    """Three exposures a night: a band measured in two of them gives their
+    weighted mean, not NaN nor 0 +- 0 (a value of 0 +- 0, as in an rdb
+    written before, counts as unmeasured); other columns are averaged over
+    their finite values"""
+    table = Table()
+    table['MJD'] = [100.1, 100.2, 100.3, 101.1, 101.2, 101.3]
+    table['vrad_x'] = [1.0, 3.0, np.nan, 0.0, 5.0, 7.0]
+    table['svrad_x'] = [1.0, 1.0, np.nan, 0.0, 2.0, 2.0]
+    table['BERV'] = [10.0, np.nan, 12.0, 1.0, 2.0, 3.0]
+    inst = SynthInst([], table['MJD'])
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        rdb2 = general.make_rdb_table2(inst, table)
+    assert np.allclose(rdb2['vrad_x'], [2.0, 6.0])
+    assert np.allclose(rdb2['svrad_x'], [np.sqrt(0.5), np.sqrt(2.0)])
+    assert np.allclose(rdb2['BERV'], [11.0, 2.0])

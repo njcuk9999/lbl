@@ -2710,8 +2710,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # -------------------------------------------------------------------------
     # print progress
     log.info('Computing chromatic slope and per-bandpass statistics')
-    # zero filled array
-    lblrv_zeros = np.zeros_like(lblrvfiles, dtype=float)
+    # NaN filled array (a band or region not measured in a file stays NaN)
+    lblrv_nans = np.full(len(lblrvfiles), np.nan)
     # ---------------------------------------------------------------------
     # Update table with vrad/svrad, per epoch values and fwhm/sig_fwhm
     # ---------------------------------------------------------------------
@@ -2891,7 +2891,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             tmp_rv = dv_arr[row] - rv_per_line_model[row]
             tmp_err = sdv_arr[row]
         # ---------------------------------------------------------------------
-        # populate columns with zeros (if not present)
+        # populate columns with NaNs (if not present)
         # ---------------------------------------------------------------------
         # loop around the bands
         for iband in range(len(bands)):
@@ -2908,9 +2908,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 svrad_colname = 'svrad_{0}{1}'.format(*cargs)
                 # add new column if not present
                 if vrad_colname not in rdb_dict:
-                    rdb_dict[vrad_colname] = lblrv_zeros.copy()
+                    rdb_dict[vrad_colname] = lblrv_nans.copy()
                 if svrad_colname not in rdb_dict:
-                    rdb_dict[svrad_colname] = lblrv_zeros.copy()
+                    rdb_dict[svrad_colname] = lblrv_nans.copy()
         # ---------------------------------------------------------------------
         # loop around the bands
         for iband in range(len(bands)):
@@ -2940,8 +2940,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 # get the finite points
                 finite_mask = np.isfinite(tmp_err[comb_mask])
                 finite_mask &= np.isfinite(tmp_rv[comb_mask])
-                # deal with not having enough values (half of total being
-                #    non finite)
+                # deal with not having enough values (fewer than a tenth of
+                #    the lines finite)
                 if np.sum(finite_mask) < np.sum(comb_mask) / 10:
                     continue
                 # deal with not having enough points in general (min = 5)
@@ -3028,20 +3028,23 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             # if column requires wmean, combine value and error
             if colname in wmean_pairs:
                 # get value and error for this udate
-                vals = itable[colname]
-                errs = itable[wmean_pairs[colname]]
-                # get error^2
-                errs2 = errs ** 2
-                # deal with all nans
-                if np.sum(np.isfinite(errs2)) == 0:
+                vals = np.array(itable[colname], dtype=float)
+                errs = np.array(itable[wmean_pairs[colname]], dtype=float)
+                # the observations that measured it: finite value and a
+                #   finite, positive error (an unmeasured value does not
+                #   count, whatever it holds)
+                measured = np.isfinite(vals) & np.isfinite(errs) & (errs > 0)
+                # deal with none measured
+                if np.sum(measured) == 0:
                     value = np.nan
                     err_value = np.nan
                 else:
-                    # get 1/error^2
-                    with warnings.catch_warnings(record=True) as _:
-                        value = mp.nansum(vals / errs2) / mp.nansum(1 / errs2)
-                        err_value = np.sqrt(1 / mp.nansum(1 / errs2))
-                    # push into table
+                    # weighted mean with 1/error^2
+                    errs2 = errs[measured] ** 2
+                    value = (mp.nansum(vals[measured] / errs2) /
+                             mp.nansum(1 / errs2))
+                    err_value = np.sqrt(1 / mp.nansum(1 / errs2))
+                # push into table
                 rdb_dict2[colname].append(value)
                 rdb_dict2[wmean_pairs[colname]].append(err_value)
             # -----------------------------------------------------------------
@@ -3057,10 +3060,12 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
                     if itable[colname].mask[0]:
                         rdb_dict2[colname].append(np.nan)
                         continue
-                # try to produce the mean of rdb table
+                # try to produce the mean of rdb table (of its finite
+                #   values: a header key missing in one file is NaN there)
                 # noinspection PyBroadException
                 try:
-                    rdb_dict2[colname].append(np.mean(itable[colname]))
+                    with warnings.catch_warnings(record=True) as _:
+                        rdb_dict2[colname].append(np.nanmean(itable[colname]))
                 except Exception as _:
                     rdb_dict2[colname].append(itable[colname][0])
     # ---------------------------------------------------------------------
