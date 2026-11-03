@@ -476,15 +476,18 @@ def without_object(config):
     same way as one whose folder is not. Left in, it would give that target a
     different shared key and a joint run would refuse the whole set.
 
-    And the star's orbits (registration.orbits): they place ITS star's frame,
-    one star at a time, and change nothing of the grid the rows share. Left
-    in, one member with a known planet would make a joint run refuse the
-    whole set.
+    And the star's orbits and fitted velocities (registration.orbits,
+    registration.velocities): they place ITS star's frame, one star at a time,
+    and change nothing of the grid the rows share. Left in, one member with a
+    known planet or a template's fitted velocities would make a joint run
+    refuse the whole set.
     """
     other = copy.deepcopy(config)
     other["input"]["object"] = ""
     other["input"]["object_header"] = None
-    other.setdefault("registration", {})["orbits"] = []
+    registration = other.setdefault("registration", {})
+    registration["orbits"] = []
+    registration["velocities"] = {}
     return other
 
 

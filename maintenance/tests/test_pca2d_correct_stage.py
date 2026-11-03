@@ -100,3 +100,35 @@ def test_the_other_mask_modes_are_as_they_were():
     # one campaign: the one set, also for a file that is not in the cube
     one = {"a1": masks["b1"], "a2": masks["b1"]}
     assert reconstruct.mask_for("common", None, one, "z") is masks["b1"]
+
+
+def _member():
+    path = os.path.join(os.path.dirname(spconfig.__file__), "nominal.yaml")
+    return spconfig.load_config(path, instrument="NIRPS_HE", data_source="CADC")
+
+
+def test_a_member_s_velocities_do_not_refuse_a_joint_fit():
+    plain = _member()
+    fitted = copy.deepcopy(plain)
+    fitted["registration"]["velocities"] = {"a.fits": 0.012, "b.fits": -0.008}
+    assert spconfig.cache_key(plain) != spconfig.cache_key(fitted)
+    assert spconfig.cache_key(cli.without_object(plain)) == \
+        spconfig.cache_key(cli.without_object(fitted))
+    # and what was asked of the member stays on the member
+    assert fitted["registration"]["velocities"]
+
+
+def test_a_member_s_orbits_do_not_either():
+    plain = _member()
+    fitted = copy.deepcopy(plain)
+    fitted["registration"]["orbits"] = [dict(period=3.0, k=10.0)]
+    assert spconfig.cache_key(cli.without_object(plain)) == \
+        spconfig.cache_key(cli.without_object(fitted))
+
+
+def test_another_way_of_building_still_refuses():
+    plain = _member()
+    other = copy.deepcopy(plain)
+    other["domain"]["dv"] = 1.0
+    assert spconfig.cache_key(cli.without_object(plain)) != \
+        spconfig.cache_key(cli.without_object(other))
