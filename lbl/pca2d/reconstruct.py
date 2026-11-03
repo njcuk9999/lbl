@@ -395,10 +395,10 @@ def model_on_grid(model, row):
 def carry_star(star_rest, berv, dv, halfwidth=8):
     """S_n applied to the star-frame vector: translate by -pixel_shift(BERV).
 
-    Exactly the operator the fit used, taken from twoframe_bcd so the two can
-    never drift apart. The sign is the one NOTES 11.11 settles: a stellar
-    feature sits at lambda_bary = lambda_obs D(BERV), D the relativistic
-    Doppler factor, so star -> observer is minus grids.pixel_shift(BERV, dv).
+    Exactly the operator the fit used, taken from twoframe so the two can never
+    drift apart. A stellar feature sits at lambda_bary = lambda_obs D(BERV), D
+    the relativistic Doppler factor, so star -> observer is minus
+    grids.pixel_shift(BERV, dv).
     """
     delta = np.array([-float(pixel_shift(float(berv), dv))])
     shifter = _bcd.SHIFTERS["lanczos"](
@@ -408,15 +408,17 @@ def carry_star(star_rest, berv, dv, halfwidth=8):
     return shifter.carry(prepared, delta)[0, 0]
 
 
-def reconstruct(model, row, halfwidth=8, path=None):
+def reconstruct(model, row, halfwidth=8, path=None, config=None):
     """The model resampled onto every order of the file's own wavelength grid.
 
     Returns (wave, recon, parity): each (n_orders, n_pixels), parity per order.
     Samples the basis does not cover come back NaN rather than zero: zero is a
     meaningful value in a high-passed spectrum, "continuum", and handing back a
     flat continuum where the model has nothing to say would be a lie.
+
+    `config` says how to read the file; without one it is a t.fits.
     """
-    payload = _readers.read_any(path, config)
+    payload = _readers.read_any(path, config or TFITS_CONFIG)
     wave = payload["wave"]
     n_orders, n_pixels = wave.shape
     grid = model["grid"]
@@ -1966,7 +1968,12 @@ def main(argv=None):
     log("  BJD %.5f   BERV %+.4f km/s   star shift %+.2f samples"
           % (row["bjd"], row["berv"],
              -float(pixel_shift(float(row["berv"]), model["dv"]))))
-    wave, recon, parity = reconstruct(model, row, args.kernel_halfwidth, args.file)
+    config = None
+    if args.config:
+        from .config import load_config
+        config = load_config(args.config)
+    wave, recon, parity = reconstruct(model, row, args.kernel_halfwidth,
+                                      args.file, config)
     good = np.isfinite(recon)
     log("  rebuilt %d of %d samples (%.1f%%) over %d orders"
           % (good.sum(), recon.size, 100 * good.mean(), recon.shape[0]))

@@ -132,3 +132,22 @@ def test_another_way_of_building_still_refuses():
     other["domain"]["dv"] = 1.0
     assert spconfig.cache_key(cli.without_object(plain)) != \
         spconfig.cache_key(cli.without_object(other))
+
+
+def test_reconstruct_reads_its_file(monkeypatch):
+    """No configuration: a t.fits. With one: that configuration."""
+    seen = []
+
+    class Reached(Exception):
+        pass
+
+    def read_any(path, config):
+        seen.append(config)
+        raise Reached
+    monkeypatch.setattr(readers, "read_any", read_any)
+    with pytest.raises(Reached):
+        reconstruct.reconstruct({}, {}, path="x.fits")
+    asked = {"input": {"format": "s2d"}}
+    with pytest.raises(Reached):
+        reconstruct.reconstruct({}, {}, path="x.fits", config=asked)
+    assert seen == [reconstruct.TFITS_CONFIG, asked]
