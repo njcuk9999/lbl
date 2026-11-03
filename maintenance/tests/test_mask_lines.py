@@ -1,4 +1,5 @@
-"""The mask: its lines from a template without the savgol derivatives."""
+"""The mask: its lines from a template without the savgol derivatives, and
+the systemic velocity of a mask against a model."""
 import numpy as np
 from astropy.table import Table
 
@@ -45,3 +46,29 @@ def test_lines_without_savgol_have_the_flux_and_a_weight_everywhere():
     minima = lines['w_mask'] > 0
     assert np.all(lines['value'][minima] > 0.2)
     assert np.all(lines['value'][minima] < 1.05)
+
+
+def _model(velocity_kms, sigma_kms):
+    """A model spectrum with lines at rest, and a mask of the same lines seen
+    at a velocity (the template's frame)"""
+    centres = np.sort(np.random.default_rng(6).uniform(602.0, 618.0, 30))
+    wave = general.get_magic_grid(590.0, 630.0, 500.0)
+    ratio = np.sqrt((1 + velocity_kms * 1000 / C_MS)
+                    / (1 - velocity_kms * 1000 / C_MS))
+    spectrum = _lines(wave, centres, 0.6, sigma_kms)
+    table = Table(dict(ll_mask_s=centres * ratio, ll_mask_e=centres * ratio,
+                       w_mask=np.ones(centres.size)))
+    return table, wave, spectrum
+
+
+def test_the_systemic_velocity_inside_and_on_the_edges_of_the_range():
+    inst = _Inst()
+    table, wave, spectrum = _model(37.0, 20.0)
+    assert abs(general.mask_systemic_velocity(inst, table, wave, spectrum)
+               - 37.0) < 0.5
+    # a minimum on the first or the last point of the range: that edge, and
+    #   no error
+    for edge in (-200.0, 200.0):
+        table, wave, spectrum = _model(edge, 3.0)
+        assert general.mask_systemic_velocity(inst, table, wave,
+                                              spectrum) == edge
