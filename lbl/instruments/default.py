@@ -1635,6 +1635,51 @@ class Instrument:
         # finally return the updated binned dictionary
         return binned
 
+    def detector_npixel(self) -> int:
+        """
+        The number of pixels along an order: the class's npixel where it is
+        known, else the width of the sample wave grid in the calib directory
+        (written from a real science file by get_sample_wave_grid), else 4096
+
+        :return: int, the number of pixels along an order
+        """
+        if self.npixel is not None:
+            return int(self.npixel)
+        data_dir = self.params['DATA_DIR'] if 'DATA_DIR' in self.params else None
+        grid_file = self.params['SAMPLE_WAVE_GRID_FILE']
+        if data_dir not in [None, 'None', ''] and grid_file not in [None, '']:
+            path = os.path.join(data_dir, self.params['CALIB_SUBDIR'],
+                                grid_file)
+            if os.path.exists(path):
+                with fits.open(path) as hdulist:
+                    for hdu in hdulist:
+                        if hdu.header.get('NAXIS', 0) == 2:
+                            # keep it: compil calls this once per file
+                            self.npixel = int(hdu.header['NAXIS1'])
+                            return self.npixel
+        return 4096
+
+    def pixel_regions(self) -> Tuple[List[str], List[float], List[float]]:
+        """
+        The cross order regions of get_binned_parameters: '' (every line, with
+        no pixel limit) and the two halves of the detector. On a 4096-pixel
+        detector the halves keep the names they always had (_0-2044 and
+        _2044-4088, rdb columns); otherwise their names give their limits
+
+        :return: tuple, 1. the region names (suffices), 2. the lower and
+                 3. the upper x pixel of each region
+        """
+        npixel = self.detector_npixel()
+        half = npixel // 2
+        if npixel == 4096:
+            region_names = ['', '_0-2044', '_2044-4088']
+        else:
+            region_names = ['', '_0-{0}'.format(half),
+                            '_{0}-{1}'.format(half, npixel)]
+        region_low = [-np.inf, 0, half]
+        region_high = [np.inf, half, npixel]
+        return region_names, region_low, region_high
+
     def get_epoch_groups(self, rdb_table: Table
                          ) -> Tuple[np.ndarray, np.ndarray]:
         """

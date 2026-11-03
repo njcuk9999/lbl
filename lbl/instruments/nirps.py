@@ -141,13 +141,14 @@ class NIRPS(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 25)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.param_set('COMPILE_BINNED_BAND1', 'H', source=func_name)
+        #    the bands are j and h (lower case)
+        self.param_set('COMPILE_BINNED_BAND1', 'h', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'J', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', 'j', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'H', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', 'h', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 1600, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -988,9 +989,9 @@ class NIRPS(Instrument):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1271,9 +1272,9 @@ class NIRPS_HA(NIRPS):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1358,9 +1359,9 @@ class NIRPS_HE(NIRPS):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -2275,9 +2276,9 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -2764,9 +2765,9 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

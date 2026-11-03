@@ -48,6 +48,8 @@ class Espresso(Instrument):
         self.default_template_name = 'LBL_Template_{0}_espresso.fits'
         self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_espresso.fits'
         self.default_sample_wave_name = 'sample_wave_grid_espresso.fits'
+        # pixels along an order (S2D files)
+        self.npixel = 9111
         # define wave limits in nm
         self.wavemin = 377.189
         self.wavemax = 790.788
@@ -125,13 +127,14 @@ class Espresso(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
+        #    the bands are g and r
         self.param_set('COMPILE_BINNED_BAND1', 'g', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'i', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 650, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -844,12 +847,8 @@ class Espresso(Instrument):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

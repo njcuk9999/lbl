@@ -1024,9 +1024,9 @@ class Spirou(Instrument):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

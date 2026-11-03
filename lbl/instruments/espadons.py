@@ -819,13 +819,14 @@ class Espadons(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
+        #    the bands are g, r and i
         self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
         self.param_set('COMPILE_BINNED_BAND2', 'r', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'z', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', 'i', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 650, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -1416,8 +1417,8 @@ class Espadons(Instrument):
         binned['blue_end'] = list(blue_end)
         binned['red_end'] = list(red_end)
         binned['region_names'] = ['']
-        binned['region_low'] = [0]
-        binned['region_high'] = [NPIX]
+        binned['region_low'] = [-np.inf]
+        binned['region_high'] = [np.inf]
         binned['use_regions'] = list(use_regions)
         # ---------------------------------------------------------------------
         # return this binning dictionary

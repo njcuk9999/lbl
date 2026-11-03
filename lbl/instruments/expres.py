@@ -900,9 +900,9 @@ class Expres(Instrument):
         # define the region names (suffices)
         region_names = ['', '_0-3960', '_3960-7920']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 3960]
+        region_low = [-np.inf, 0, 3960]
         # upper x pixel bin point [pixels]
-        region_high = [7920, 3960, 7920]
+        region_high = [np.inf, 3960, 7920]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1081,13 +1081,14 @@ class Expres_ESSP(essp.ESSP):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
+        #    only r lies whole in the domain: no colour
         self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', None, source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)

@@ -909,12 +909,8 @@ class MaroonXBlue(MaroonX):
         # define whether we should use regions for each band
         use_regions = [True, True, True]
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1063,6 +1059,11 @@ class MaroonXRed(MaroonX):
         self.param_set('KW_SNR', 'SNR_74', source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
         self.param_set('CCF_CLEAN_BANDS', ['i'], source=func_name)
+        # the bands to plot (from get_binned_parameters): only i lies whole
+        #    in the domain, so no colour
+        self.param_set('COMPILE_BINNED_BAND1', 'i', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', None, source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MIN', 647, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
@@ -1231,12 +1232,8 @@ class MaroonXRed(MaroonX):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2018', '_2018-4036']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2018]
-        # upper x pixel bin point [pixels]
-        region_high = [4036, 2018, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
