@@ -14,8 +14,9 @@ by that much; registering first and coadding afterwards does not.
 The night an exposure belongs to is taken from its timestamp, read out of the
 filename when it is there. Opening hundreds of headers costs minutes of pure
 I/O, as much as reading the pixels; the filename carries the same
-information for free. The rule is the usual one: everything
-before UT noon belongs to the night that started the previous day.
+information for free. The rule is the one of all of LBL
+(lbl.core.astro.NIGHT_START_UT and night_number): everything before UT noon
+belongs to the night that started the previous day.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ import re
 import numpy as np
 from astropy.io import fits
 
+from lbl.core.astro import NIGHT_START_UT, night_number  # noqa: F401
 from .logger import log
 
 # <INSTRUMENT>.2023-01-20T08:42:08.941t.fits or
@@ -47,14 +49,14 @@ def timestamp_from_name(path: str):
 
 
 def night_label(stamp: _dt.datetime) -> str:
-    """The night a UT timestamp belongs to, as YYYY-MM-DD.
+    """The night a UT timestamp belongs to, as YYYY-MM-DD, the date it
+    started on.
 
-    Anything before UT noon is credited to the previous day, which is the
-    convention every observatory log uses and which keeps a whole night in one
-    bucket regardless of the site's longitude.
+    Anything before NIGHT_START_UT (noon) is credited to the previous day,
+    the boundary night_number draws on a Julian date.
     """
     date = stamp.date()
-    if stamp.hour < 12:
+    if stamp.hour + stamp.minute / 60.0 < NIGHT_START_UT:
         date = date - _dt.timedelta(days=1)
     return date.isoformat()
 

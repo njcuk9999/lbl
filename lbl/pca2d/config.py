@@ -1048,6 +1048,18 @@ def instrument_stem(folder, instrument):
     return match.group(1) if match else None
 
 
+def _check_flat_names(path, user, instrument, data_source):
+    """Stop on a flat file resolved for another instrument than the caller's:
+    its values are that instrument's, and they would win over the class."""
+    said = user.get("lbl") or {}
+    for key, asked in (("instrument", instrument), ("data_source", data_source)):
+        if asked and said.get(key) and str(said[key]).upper() != str(asked).upper():
+            raise SystemExit(
+                "%s is a flat configuration with lbl.%s = %s, and this run"
+                " names %s: its settings are the other's. Start from the"
+                " layered configuration instead" % (path, key, said[key], asked))
+
+
 def load_config(path: str | None, object_name: str | None = None,
                 data_dir: str | None = None, out_dir: str | None = None,
                 instrument: str | None = None, variant: dict | None = None,
@@ -1066,7 +1078,12 @@ def load_config(path: str | None, object_name: str | None = None,
     which.
 
     A file written in the flat form, with `input:` and `domain:` at the top
-    level, also loads: it is treated as one more layer on top of `general`.
+    level, is the last word over the instrument's layer: what it sets stays,
+    and the layer only fills in what it does not. The resolved configuration
+    a run writes is such a file, so a stage reading it back gets what the run
+    resolved (a resolved configuration is a fixed point), whatever the class
+    says today. A flat file naming another instrument than the caller is a
+    contradiction, and stops.
     """
     user = {}
     if path is not None:
@@ -1097,7 +1114,11 @@ def load_config(path: str | None, object_name: str | None = None,
     instrument = instrument or named.get("instrument")
     data_source = data_source or named.get("data_source")
     if instrument:
+        if not layered:
+            _check_flat_names(path, user, instrument, data_source)
         cfg = _deep_update(cfg, instrument_layer(instrument, data_source))
+        if not layered:
+            cfg = _deep_update(cfg, user)
         cfg["input"]["instrument"] = str(cfg["lbl"]["instrument"]).upper()
 
     if obj_block:

@@ -5,6 +5,8 @@ assembles them. The periodogram is lbl.report.periodogram, the false
 inclusion probability lbl.report.fip, the fit of K at published ephemerides
 lbl.report.kepfit.
 """
+import os
+
 import numpy as np
 
 from lbl.report import series as S
@@ -433,14 +435,18 @@ def page_periodogram(plt, table, title, known=None):
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
+    # the epochs with a velocity: the window below would be NaN for all
+    good = np.isfinite(time) & np.isfinite(vrad) & np.isfinite(svrad) \
+        & (svrad > 0)
+    time, vrad, svrad = time[good], vrad[good], svrad[good]
     if len(time) < 10:
         return None
     freq = frequency_grid(time)
     power = gls(time, vrad - np.median(vrad), svrad, freq)
     # THE SPECTRAL WINDOW, and it is NOT computed with gls: gls has a
-    # floating mean, so a constant series gets exactly zero from it and the
-    # window would be a flat line. The window is the transform of the
-    # sampling itself,
+    # floating mean, so a constant series has no power to give (what it
+    # returns is a ratio of rounding errors) and says nothing about the
+    # sampling. The window is the transform of the sampling itself,
     #
     #     W(nu) = | sum_k w_k exp(-2i pi nu t_k) | / sum_k w_k,
     #
@@ -643,16 +649,46 @@ def _best_order(wave, low, high):
     return best
 
 
+def _telluric_pair(raw, clean, instrument=None, data_source=None):
+    """(flux before, wavelength in nm, flux after) of a spectrum and its
+    telluric-cleaned copy, each (orders, pixels).
+
+    Read by the instrument's LBL class when it is named (lbl.pca2d.readers,
+    which reads every instrument PCA2D does); otherwise as an ESO S2D file
+    (flux in extension 1, wavelength in Angstrom in extension 4), the one
+    layout this page knew. Raises with the reason when neither fits.
+    """
+    from astropy.io import fits
+
+    if instrument:
+        from lbl.pca2d import readers
+        before = readers.read(raw, instrument, data_source)
+        after = readers.read(clean, instrument, data_source)
+        return (np.atleast_2d(before['flux']), np.atleast_2d(before['wave']),
+                np.atleast_2d(after['flux']))
+    with fits.open(raw) as hdul:
+        if len(hdul) < 5 or np.ndim(hdul[1].data) != 2 \
+                or np.shape(hdul[4].data) != np.shape(hdul[1].data):
+            raise ValueError('not an ESO S2D file (flux in extension 1, its'
+                             ' wavelength in 4), and the report was not'
+                             ' given the instrument to read it by')
+        before = hdul[1].data.astype(float)
+        wave = hdul[4].data.astype(float) / 10.0
+    return before, wave, fits.getdata(clean, 1).astype(float)
+
+
 def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
-                  spl_water=None, spl_dry=None, half_width=1.2):
+                  spl_water=None, spl_dry=None, half_width=1.2,
+                  instrument=None, data_source=None):
     """The telluric correction on the best, median and worst epoch.
 
     `which` picks the column that ranks the epochs: water or dry. One epoch
     from each end and one from the middle, rather than one at random, which
-    would not say whether the hard case comes out right.
+    would not say whether the hard case comes out right. The spectra are
+    read by the instrument's class when `instrument` (and `data_source`)
+    name it, as ESO S2D files otherwise (_telluric_pair); a spectrum that
+    cannot be read says why in its panel.
     """
-    from astropy.io import fits
-
     column = S.WATER if which == 'water' else S.DRY
     if column not in table:
         return None
@@ -673,7 +709,7 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
 
     fig, axes = plt.subplots(len(picks), 1, figsize=(10, 2.6 * len(picks)),
                              squeeze=False)
-    drawn = 0
+    drawn = said = 0
     for row, (tag, index) in enumerate(picks.items()):
         ax = axes[row, 0]
         raw = S.spectrum_path(table, index, science_dir)
@@ -684,11 +720,14 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
                     transform=ax.transAxes)
             continue
         try:
-            with fits.open(raw) as hdul:
-                before = hdul[1].data.astype(float)
-                wave = hdul[4].data.astype(float) / 10.0
-            after = fits.getdata(clean, 1).astype(float)
-        except Exception:                                     # noqa: BLE001
+            before, wave, after = _telluric_pair(raw, clean, instrument,
+                                                 data_source)
+        except Exception as exc:                              # noqa: BLE001
+            ax.text(0.5, 0.5, 'cannot read %s:\n%s'
+                    % (os.path.basename(raw), exc), ha='center',
+                    va='center', fontsize=8, wrap=True,
+                    transform=ax.transAxes)
+            said += 1
             continue
         # THE SELECTION DOES NOT REQUIRE THE CORRECTED FLUX TO BE FINITE.
         # LBL sets to NaN every pixel whose modelled absorption is deeper
@@ -779,7 +818,7 @@ def page_telluric(plt, table, title, science_dir, tc_dir, which='water',
         ax.legend(fontsize=7)
         ax.grid(alpha=0.3)
         drawn += 1
-    if not drawn:
+    if not drawn and not said:
         plt.close(fig)
         return None
     axes[-1, 0].set_xlabel('Wavelength in the observatory rest frame (nm)')
@@ -1016,8 +1055,10 @@ def page_oafip(plt, table, title, known=None):
     or bury one, and the only defence is to clip, which is a decision made
     before the question is asked. The outlier-aware FIP instead MODELS the
     outliers: each point is weighted by its probability of belonging to the
-    normal population rather than to a wider one, read off its distance to
-    the median against its error bar and the jitter (lbl.report.fip.oafip).
+    normal population rather than to a wider one, read off its residual to
+    the best fit at each frequency against its error bar and that fit's
+    jitter (lbl.report.fip.oafip); the bottom panel shows them at the
+    frequency of the lowest FIP.
 
     Reading the two together is the point. Where they agree, the answer does
     not depend on how the outliers were handled. Where they differ, it does,

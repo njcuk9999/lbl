@@ -112,6 +112,35 @@ ccf_regions['k'] = [2100, 2200]
 
 
 # =============================================================================
+# Define observing nights
+# =============================================================================
+#: THE UT HOUR AT WHICH ONE NIGHT ENDS AND THE NEXT BEGINS, for every part of
+#: LBL that groups exposures by night: PCA2D's coadds (lbl.pca2d.nights), its
+#: correct stage, its holdout and its null test, the reports and the window.
+#: Noon UT is daytime in Chile, on La Palma and in Arizona, but not on Mauna
+#: Kea (2 h HST): TOI 1452 by SPIRou has 5 of its 56 nights cut in two by it.
+#: No single hour suits every longitude; changing it regroups the coadds of a
+#: stacked PCA2D cube, whose cache key does not hold it.
+NIGHT_START_UT = 12.0
+
+
+def night_number(jd):
+    """
+    The night a Julian date belongs to, as an integer that changes at
+    NIGHT_START_UT: floor(jd) at noon, for a JD, a BJD or an rjd
+    (BJD - 2400000) alike, whose fractions start at noon. An MJD
+    (JD - 2400000.5) is passed as mjd + 0.5.
+
+    :param jd: float or array, the Julian dates [days]
+
+    :return: int or array of int, the nights
+    """
+    import numpy as np
+    shift = (NIGHT_START_UT - 12.0) / 24.0
+    return np.floor(np.asarray(jd, dtype=float) - shift).astype(int)
+
+
+# =============================================================================
 # Start of code
 # =============================================================================
 # Main code here

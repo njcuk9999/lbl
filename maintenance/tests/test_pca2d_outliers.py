@@ -93,3 +93,50 @@ def test_a_deep_line_core_is_not_an_outlier_of_its_own_noise():
     # a real outlier still is one
     resid[7, 500] = 10 * sigma[7, 500]
     assert outliers.scaled_z(resid, sigma, 201)[7, 500] > 5
+
+
+def _correlated_cube(tmp_path, dead=1500, m=4000, n=12, dv=0.5, seed=5):
+    """Noise correlated over neighbours (rho_1 = 0.5), none of it valid in the
+    first `dead` columns, and a fit that explains nothing of it."""
+    rng = np.random.default_rng(seed)
+    berv = np.repeat(np.linspace(-5.0, 5.0, n // 2), 2)
+    grid = 1500.0 * np.exp(np.arange(m) * dv / C_KMS)
+    white = rng.normal(0.0, 0.01, (n, m + 1))
+    data = ((white[:, 1:] + white[:, :-1]) / np.sqrt(2)).astype(np.float32)
+    data[:, :dead] = np.nan
+    path = os.path.join(str(tmp_path), "cube")
+    os.makedirs(path)
+    np.save(os.path.join(path, "grid.npy"), grid)
+    np.save(os.path.join(path, "data.npy"), data)
+    np.save(os.path.join(path, "sigma.npy"),
+            np.full((n, m), 0.01, dtype=np.float32))
+    Table(dict(filename=["e%02d.fits" % (r // 2) for r in range(n)], berv=berv,
+               parity=np.arange(n) % 2, exposure=np.arange(n) // 2,
+               snr_band=np.full(n, 100.0))).write(os.path.join(path, "meta.fits"))
+    fit = os.path.join(str(tmp_path), "fit.npz")
+    np.savez(fit, P=np.zeros((1, m)), a=np.zeros((n, 1)),
+             Q=np.zeros((1, m)), b=np.zeros((n, 1)), berv=berv, dv=dv)
+    return path, fit
+
+
+def test_the_noise_correlation_skips_a_block_with_nothing_valid(tmp_path):
+    cube, fit = _correlated_cube(tmp_path)
+    rho = outliers.noise_correlation(cube, np.load(fit), 51, 4, block=1000)
+    # the high pass takes a little off; an empty first block gave exactly 0
+    assert 0.35 < rho[0] < 0.55
+    assert abs(rho[2]) < 0.1
+
+
+def test_the_noise_correlation_is_measured_beyond_the_first_block(tmp_path,
+                                                                 monkeypatch):
+    cube, fit = _correlated_cube(tmp_path, dead=0)
+    seen = []
+    real = outliers.residual_z
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs.get("columns"))
+        return real(*args, **kwargs)
+    monkeypatch.setattr(outliers, "residual_z", spy)
+    outliers.noise_correlation(cube, np.load(fit), 51, 4, blocks=2, block=1000)
+    # two blocks, spread over the grid rather than the first two
+    assert seen == [(0, 1000), (2000, 3000)]

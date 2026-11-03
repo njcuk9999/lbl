@@ -87,7 +87,7 @@ optical spectrographs.
 | key | default | |
 |---|---|---|
 | `n_star` | 1 | the star's spectra, the template included: 1 is the template alone, not adjusted in depth; 2 adds one star-frame component with a free amplitude (never divided out); 0 is refused |
-| `n_earth` | 7 | observer-frame components fitted and divided out (with `input_name`: all of the basis') |
+| `n_earth` | the instrument's | observer-frame components fitted and divided out: without it, the class's `PCA2D_N_EARTH` (7 for NIRPS, 2 for HARPS); with `input_name`, all of the basis' |
 | `compare` | True | LBL measures the delivered object too, first, for the report |
 | `figures` | as `REPORT` | the river plots and the other figures of the correction |
 | `overwrite` | False | redo even when the same correction is on disk (as `SKIP_LBL_PCA2D=False`, below) |

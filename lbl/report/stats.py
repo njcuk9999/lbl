@@ -9,6 +9,7 @@ from statistics import NormalDist
 
 import numpy as np
 
+from lbl.core.astro import night_number
 from lbl.report import series as S
 
 #: the scatter of a gaussian over its median absolute deviation,
@@ -49,10 +50,13 @@ def _span(values):
 
 
 def summarise(table):
-    """Every number the summary table shows, as (label, value, unit) rows."""
+    """Every number the summary table shows, as (label, value, unit) rows.
+    The velocities are those with a finite time, value and error bar."""
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
+    good = np.isfinite(time) & np.isfinite(vrad) & np.isfinite(svrad)
+    time, vrad, svrad = time[good], vrad[good], svrad[good]
     centred = vrad - np.median(vrad)
 
     # WHICH LBL WROTE THIS, and from where: a report that does not say which
@@ -69,7 +73,7 @@ def summarise(table):
     rows.append(('Report written', _now(), 'UTC'))
     rows += [('Epochs', '%d' % len(time), ''),
             ('Time span', '%.1f' % (np.max(time) - np.min(time)), 'days'),
-            ('Nights', '%d' % len(np.unique(np.floor(time))), ''),
+            ('Nights', '%d' % len(np.unique(night_number(time))), ''),
             ('Systemic velocity', '%.1f' % np.median(vrad), 'm/s'),
             ('rms', '%.2f' % np.std(centred, ddof=1), 'm/s'),
             ('Robust scatter (MAD)', '%.2f' % robust_sigma(centred), 'm/s'),
@@ -82,7 +86,7 @@ def summarise(table):
                      '%.2f' % (robust_sigma(centred) / median_err), ''))
 
     # the nightly scatter, which drops anything that varies within a night
-    nights = np.floor(time)
+    nights = night_number(time)
     binned = np.array([np.median(centred[nights == one])
                        for one in np.unique(nights)])
     if binned.size > 2:

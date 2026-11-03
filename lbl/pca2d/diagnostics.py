@@ -26,8 +26,10 @@ import numpy as np
 
 
 def night_of(bjd):
-    """The night of an exposure: floor(BJD - 0.5), the cube's convention."""
-    return np.floor(np.asarray(bjd, dtype=float) - 0.5).astype(int)
+    """The night of an exposure: nights.night_number, the cube's
+    convention."""
+    from .nights import night_number
+    return night_number(bjd)
 
 
 def holdout_rows(bjd, which):

@@ -59,11 +59,16 @@ from .logger import log
 from . import readers as _readers
 from . import tfits as sptf
 from . import twoframe as _bcd
+from .nights import night_number
 from .progress import bar as _bar
 
 #: the same treatment twoframe.load_cube gives the cube, so a refitted
 #: coefficient is comparable with the fit's own rather than to its own scale
-RAMP_ZERO = 0.5
+RAMP_ZERO = _bcd.DEFAULT_RAMP_ZERO
+
+
+#: how to read a file when no configuration is given: an APERO t.fits
+TFITS_CONFIG = {"input": {"format": "tfits"}}
 
 
 def parse_args(argv=None):
@@ -167,6 +172,10 @@ def parse_args(argv=None):
                    help="with --column-chi2: drop an observer column from EVERY"
                         " exposure when more than this fraction of them is"
                         " clipped there and the survivors are still noisy")
+    p.add_argument("--column-min-rows", type=int, default=10,
+                   help="the fewest exposures of a parity over which a column"
+                        " gets a verdict from the column, bias and excess"
+                        " tests (correct.column_min_rows)")
     p.add_argument("--column-chi2", type=float, default=None,
                    help="the survivors' reduced chi2 above which such a column"
                         " goes; pure noise gives 0.97 after a 3 sigma clip"
@@ -391,10 +400,10 @@ def model_on_grid(model, row):
 def carry_star(star_rest, berv, dv, halfwidth=8):
     """S_n applied to the star-frame vector: translate by -pixel_shift(BERV).
 
-    Exactly the operator the fit used, taken from twoframe_bcd so the two can
-    never drift apart. The sign is the one NOTES 11.11 settles: a stellar
-    feature sits at lambda_bary = lambda_obs D(BERV), D the relativistic
-    Doppler factor, so star -> observer is minus grids.pixel_shift(BERV, dv).
+    Exactly the operator the fit used, taken from twoframe so the two can never
+    drift apart. A stellar feature sits at lambda_bary = lambda_obs D(BERV), D
+    the relativistic Doppler factor, so star -> observer is minus
+    grids.pixel_shift(BERV, dv).
     """
     delta = np.array([-float(pixel_shift(float(berv), dv))])
     shifter = _bcd.SHIFTERS["lanczos"](
@@ -404,15 +413,17 @@ def carry_star(star_rest, berv, dv, halfwidth=8):
     return shifter.carry(prepared, delta)[0, 0]
 
 
-def reconstruct(model, row, halfwidth=8, path=None):
+def reconstruct(model, row, halfwidth=8, path=None, config=None):
     """The model resampled onto every order of the file's own wavelength grid.
 
     Returns (wave, recon, parity): each (n_orders, n_pixels), parity per order.
     Samples the basis does not cover come back NaN rather than zero: zero is a
     meaningful value in a high-passed spectrum, "continuum", and handing back a
     flat continuum where the model has nothing to say would be a lie.
+
+    `config` says how to read the file; without one it is a t.fits.
     """
-    payload = _readers.read_any(path, config)
+    payload = _readers.read_any(path, config or TFITS_CONFIG)
     wave = payload["wave"]
     n_orders, n_pixels = wave.shape
     grid = model["grid"]
@@ -643,23 +654,34 @@ def refit_weights(values, good, sigma, trans, weights=None):
     return w
 
 
-def mask_for(mode, own_alive, alive_by_file, name):
+def mask_for(mode, own_alive, alive_by_file, name, row_name=None):
     """Which samples a corrected file blanks, under correct --mask.
 
-    `none` blanks nothing. `common` blanks every sample any exposure left
-    unweighted, the same set for all of them, and it says so even in the refit
-    path: that path computes a mask from the exposure's own weights, and
+    `none` blanks nothing. `common` blanks every sample too few of the star's
+    exposures weighted, one set for all of them, and it says so even in the
+    refit path: that path computes a mask from the exposure's own weights, and
     leaving it in charge would make the option do nothing at all on a
     nightly-stacked target, where every file goes through it. `exposure` blanks
     what that exposure lost, the refit's own mask when it has one.
+
+    `alive_by_file` is by the cube's rows, each object of a joint fit with its
+    own set (fit_weights_mask). A file is looked up by its own name, then by
+    `row_name`, the row it went into on a stacked cube (cut_key). A file of
+    neither is out of the cube, and takes the set of a one-object cube's only
+    campaign.
     """
     if mode == "none":
         return None
+    known = None
+    if alive_by_file:
+        known = alive_by_file.get(name)
+        if known is None and row_name is not None:
+            known = alive_by_file.get(row_name)
     if mode == "common" and alive_by_file:
-        return next(iter(alive_by_file.values()))
+        return known if known is not None else next(iter(alive_by_file.values()))
     if own_alive is not None:
         return own_alive
-    return alive_by_file.get(name) if alive_by_file is not None else None
+    return known
 
 
 def star_support(model):
@@ -722,7 +744,7 @@ def clipped_weights_mask(cube, fit_path, floor=0.5):
     return out
 
 
-def fit_weights_mask(cube, mode="exposure", share=1.0):
+def fit_weights_mask(cube, mode="exposure", share=1.0, weighting=None):
     """The grid samples the fit weighted, per exposure: file name -> (2, grid).
 
     With mode "common" every exposure gets the same mask, the samples EVERY
@@ -739,7 +761,7 @@ def fit_weights_mask(cube, mode="exposure", share=1.0):
     (plotting.live_mask). Row 0 is the even orders, row 1 the odd ones.
     """
     from .plotting import live_mask
-    _, _, w, meta = _bcd.load_cube(cube, dtype=np.float32)
+    _, _, w, meta = _bcd.load_cube(cube, dtype=np.float32, **(weighting or {}))
     parity = _bcd.row_parity(meta, w.shape[0])
     names = [os.path.basename(str(v)) for v in meta["filename"]]
     out = {}
@@ -1039,12 +1061,13 @@ def plot(path, wave, recon, row, source):
 def night_index(coeffs):
     """Map a night number to its COEFFS row.
 
-    The night is floor(BJD - 0.5), the same convention the cube builder uses, so
-    an exposure taken after midnight belongs to the night it started in.
+    The night is nights.night_number, the boundary the cube builder groups
+    by, so an exposure taken after midnight belongs to the night it started
+    in.
     """
     nights = {}
     for i, bjd in enumerate(np.asarray(coeffs["bjd"], dtype=float)):
-        nights[int(np.floor(bjd - 0.5))] = i
+        nights[int(night_number(bjd))] = i
     return nights
 
 
@@ -1054,14 +1077,14 @@ def night_row_names(cube):
     On a cube stacked per night, a night's row carries the name of its FIRST
     exposure (meta.fits, filename column), and everything computed per row
     (the residual's cuts, the loop's floor) is stored under that name. The
-    night is floor(BJD - 0.5), the convention of night_index and of the cube
-    builder. The two parities of a night share the same name.
+    night is nights.night_number, the convention of night_index and of the
+    cube builder. The two parities of a night share the same name.
     """
     from astropy.table import Table
     meta = Table.read(os.path.join(cube, "meta.fits"))
     names = {}
     for name, bjd in zip(meta["filename"], np.asarray(meta["bjd"], dtype=float)):
-        names.setdefault(int(np.floor(bjd - 0.5)), os.path.basename(str(name)))
+        names.setdefault(int(night_number(bjd)), os.path.basename(str(name)))
     return names
 
 
@@ -1097,12 +1120,15 @@ def cut_key(path, row, names_by_night, members=None):
         return members.get(own, own)
     if not names_by_night:
         return own
-    night = int(np.floor(float(row["bjd"]) - 0.5))
+    night = int(night_number(float(row["bjd"])))
     return names_by_night.get(night, own)
 
 
 def rows_by_night(model, args, config=None):
-    """One (path, row) pair per t.fits in --source-dir, matched on its night.
+    """One (path, row) pair per spectrum in --source-dir, matched on its night.
+
+    The spectra are those of the configuration's input.pattern, read by
+    readers.read_any: a t.fits or a file of any instrument LBL reads.
 
     The row's coefficients are the night's; the BERV is the exposure's own,
     read from its header, because the star basis has to be placed where that
@@ -1122,10 +1148,17 @@ def rows_by_night(model, args, config=None):
         for i, name in enumerate(coeffs["filename"]):
             by_row[os.path.basename(str(name))] = i
     out, missing = [], 0
-    for path in sorted(glob.glob(os.path.join(args.source_dir, "*t.fits"))):
+    config = config or TFITS_CONFIG
+    pattern = (config.get("input") or {}).get("pattern") or "*t.fits"
+    for path in sorted(glob.glob(os.path.join(args.source_dir, pattern))):
         try:
-            payload = _readers.star_frame(sptf.read_tfits(path), config)
-        except Exception:                                     # noqa: BLE001
+            payload = _readers.read_any(path, config)
+        except Exception as exc:                              # noqa: BLE001
+            # said once: on one bad file it is that file, on all of them it
+            #   is why the run ends up writing nothing
+            if not missing:
+                log("  could not read %s, skipped (%s: %s)"
+                    % (os.path.basename(path), type(exc).__name__, exc), "warn")
             missing += 1
             continue
         meta = payload["meta"]
@@ -1142,7 +1175,7 @@ def rows_by_night(model, args, config=None):
                 row["vstar"] = float(meta.get("vstar", 0.0))
             out.append((path, row))
             continue
-        night = int(np.floor(float(meta["bjd"]) - 0.5))
+        night = int(night_number(float(meta["bjd"])))
         if night not in index:
             missing += 1
             continue
@@ -1247,7 +1280,7 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
         from . import cube as _cube
         from . import preprocess as _prep
 
-        template = _cube.load_template(config)
+        template = _cube.load_template(config, model.get("cube_path"))
         if template is None:
             raise SystemExit(
                 "highpass.against_template is on but the cube kept no"
@@ -1276,8 +1309,9 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
         values, good = np.where(keep, out, 0.0), keep
 
     # The SAME weights the fit used, not merely 1/sigma^2. twoframe.load_cube
-    # also zeroes anything below ln_clip_low, ramps by the telluric
-    # transmission and blanks the grid edges, and the transmission ramp in
+    # also zeroes every sample below weights.min_pixel_snr in SNR (below
+    # ln_clip_low when that is null), ramps by the telluric transmission from
+    # weights.telluric_ramp_zero and blanks the grid edges, and the ramp in
     # particular matters here: it is near zero exactly where the atmosphere is
     # opaque, which is where the observer block does most of its work. Leaving
     # it out would shift the refitted amplitude by tens of per cent against the
@@ -1369,7 +1403,8 @@ def shrink_model(model, fits_path, cube, shrink=True, shrink_smooth=False,
         raise SystemExit("--shrink and --smooth-components need --cube and the"
                          " fit's archive beside %s: %s" % (fits_path, fit_path))
     b_rows = np.asarray(np.load(fit_path)["b"], dtype=float)
-    _, _, w_cube, _ = _bcd.load_cube(cube, dtype=np.float32)
+    _, _, w_cube, _ = _bcd.load_cube(cube, dtype=np.float32,
+                                     **_bcd.fit_weight_settings(fit_path))
     if b_rows.shape[0] != w_cube.shape[0]:
         raise SystemExit("the fit has %d rows and the cube %d"
                          % (b_rows.shape[0], w_cube.shape[0]))
@@ -1457,6 +1492,9 @@ def correct_many(model, args):
     # which of the fit's star spectra are this object's, when several were
     # fitted together against one observer basis (pca2d.joint)
     model["star_group"] = int(getattr(args, "star_group", 0) or 0)
+    # the cube the refit takes its high-pass template from: the one this
+    # stage was handed, whatever key the configuration gives today
+    model["cube_path"] = getattr(args, "cube", None)
     alive_by_file = None
     mask_mode = str(getattr(args, "mask", None) or "exposure")
     if mask_mode == "none":
@@ -1469,13 +1507,16 @@ def correct_many(model, args):
             what = ("every sample fewer than %.0f%% of the exposures weighted,"
                     " one line set for them all" % (100 * share))
         elif mask_mode == "common":
-            what = "every sample no exposure weighted, one line set for them all"
+            what = "every sample any exposure did not weight, one line set for them all"
         else:
             what = "every sample the fit gave no weight, as panel 3 hides it"
         log("  reading the fit's weights from %s: %s will be NaN"
             % (args.cube, what))
-        alive_by_file = fit_weights_mask(args.cube, mask_mode,
-                                         getattr(args, "mask_share", 1.0) or 1.0)
+        # weighed as the fit weighed them, from its archive beside the basis
+        alive_by_file = fit_weights_mask(
+            args.cube, mask_mode, getattr(args, "mask_share", 1.0) or 1.0,
+            _bcd.fit_weight_settings(os.path.join(os.path.dirname(
+                os.path.abspath(args.fits)), "fit.npz")))
     else:
         log("  no --cube: samples the fit gave no weight to keep their flux,"
             " which panel 3 of the sequence figure does not show", "warn")
@@ -1551,6 +1592,7 @@ def correct_many(model, args):
         clipped_by_file, clip_report = residual_outliers(
             args.cube, np.load(fit_path), args.nsig_cut, args.clip_window,
             column_frac=frac, column_chi2=chi2,
+            column_min_rows=int(getattr(args, "column_min_rows", 10) or 10),
             excursion_nsig=excursion, excursion_samples=samples,
             excess_nsig=excess, excess_chi2=getattr(args, "excess_chi2", None),
             excess_samples=wide, bias_nsig=bias, bias_samples=bias_wide,
@@ -1720,19 +1762,20 @@ def correct_many(model, args):
             " does to a velocity is its overlap with the star's derivative"
             % (velocity_fwhm, float(model["dv"]),
                float(getattr(args, "velocity_floor", VELOCITY_FLOOR))), "info")
-    # on a cube stacked per night, the cuts are stored per night
+    # on a cube stacked per night, the cuts and the masks are stored per night
     names_by_night = None
     members = None
     if args.by_night and getattr(args, "cube", None) and (
-            clipped_by_file is not None or floored_by_file is not None):
+            clipped_by_file is not None or floored_by_file is not None
+            or alive_by_file is not None):
         members = member_row_names(args.cube)
         if members:
-            log("  the cube's rows are coadds: each exposure gets the cuts of"
+            log("  the cube's rows are coadds: each exposure gets the masks of"
                 " the row it went into, %d rows for %d exposures"
                 % (len(set(members.values())), len(members)), "info")
         else:
             names_by_night = night_row_names(args.cube)
-            log("  the cube's rows are nights: each exposure gets the cuts of"
+            log("  the cube's rows are nights: each exposure gets the masks of"
                 " its night's row, %d nights" % len(names_by_night), "info")
     written = skipped = refitted = 0
     permute = getattr(args, "permute_b", None)
@@ -1772,13 +1815,13 @@ def correct_many(model, args):
                 continue
             row = fresh
             refitted += 1
-        # a refitted exposure has its own weights and so its own no-weight
-        # mask; on a cube of nights the cube's rows are not this file
-        alive = mask_for(mask_mode, own_alive, alive_by_file,
-                         os.path.basename(path))
         # THE NIGHT'S CUTS, NOT THOSE OF THE FILE: on a stacked cube they
         # are stored under the name of the night's row (cut_key)
         key = cut_key(path, row, names_by_night, members)
+        # a refitted exposure has its own weights and so its own no-weight
+        # mask; on a cube of nights the cube's rows are not this file
+        alive = mask_for(mask_mode, own_alive, alive_by_file,
+                         os.path.basename(path), key)
         clipped = (clipped_by_file.get(key)
                    if clipped_by_file is not None else None)
         if floored_by_file is not None:
@@ -1806,7 +1849,7 @@ def correct_many(model, args):
                                      % (os.path.basename(new), covered[-1]))
     if permute is not None and prepared:
         from .diagnostics import night_derangement
-        nights = [int(np.floor(float(r["bjd"]) - 0.5)) for _, r, _, _ in prepared]
+        nights = [int(night_number(float(r["bjd"]))) for _, r, _, _ in prepared]
         source = night_derangement(nights, permute)
         log("  --permute-b %d: every exposure gets the observer amplitudes of"
             " an exposure from ANOTHER night, %d exposures over %d nights. A"
@@ -1874,9 +1917,9 @@ def _correct_threaded(model, args, config, pairs, shifter, mask_mode,
                 return "unresampled", path, None
             row = fresh
             refit = True
-        alive = mask_for(mask_mode, own_alive, alive_by_file,
-                         os.path.basename(path))
         key = cut_key(path, row, names_by_night, members)
+        alive = mask_for(mask_mode, own_alive, alive_by_file,
+                         os.path.basename(path), key)
         clipped = (clipped_by_file.get(key)
                    if clipped_by_file is not None else None)
         if floored_by_file is not None:
@@ -1940,7 +1983,12 @@ def main(argv=None):
     log("  BJD %.5f   BERV %+.4f km/s   star shift %+.2f samples"
           % (row["bjd"], row["berv"],
              -float(pixel_shift(float(row["berv"]), model["dv"]))))
-    wave, recon, parity = reconstruct(model, row, args.kernel_halfwidth, args.file)
+    config = None
+    if args.config:
+        from .config import load_config
+        config = load_config(args.config)
+    wave, recon, parity = reconstruct(model, row, args.kernel_halfwidth,
+                                      args.file, config)
     good = np.isfinite(recon)
     log("  rebuilt %d of %d samples (%.1f%%) over %d orders"
           % (good.sum(), recon.size, 100 * good.mean(), recon.shape[0]))

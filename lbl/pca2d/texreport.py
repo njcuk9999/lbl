@@ -483,9 +483,19 @@ def binned(x, y, width=2.0, least=3):
 FAP_LEVELS = (1e-2, 1e-3, 1e-4)
 
 
-def periodogram(t, y, e, pmin=1.1, samples=6000):
+#: frequencies per peak width (1/T) of a periodogram, as lbl.report.periodogram
+PER_PEAK = 10
+
+
+def periodogram(t, y, e, pmin=1.1, samples=None):
     """(periods, power, best period, its power, false-alarm probability,
     the powers of FAP_LEVELS).
+
+    The frequencies are PER_PEAK per peak width 1/T, T the time span, as in
+    lbl.report.periodogram, and never fewer than `samples` (6000 down to
+    1.1 d by default, more for a shorter pmin). A fixed number would put
+    fewer than one frequency per peak width beyond a span of 6600 d, and a
+    strong peak could fall between two of them.
 
     The false alarms are Baluev's (2008) approximation over the frequencies
     searched, astropy's default: the power a peak anywhere in them needs to
@@ -499,7 +509,11 @@ def periodogram(t, y, e, pmin=1.1, samples=6000):
     if baseline <= 2 * pmin or ok.sum() < 8:
         return None
     fmin, fmax = 1.0 / baseline, 1.0 / pmin
-    freq = np.linspace(fmin, fmax, samples)
+    if samples is None:
+        samples = int(6000 * max(1.0, 1.1 / pmin))
+    count = max(int(samples),
+                int(np.ceil(PER_PEAK * baseline * (fmax - fmin))) + 1)
+    freq = np.linspace(fmin, fmax, count)
     model = LombScargle(t[ok], y[ok], e[ok])
     power = model.power(freq)
     best = int(np.nanargmax(power))
@@ -1463,9 +1477,8 @@ def figure_phase(before, after, planets, path, most=4):
 def figure_periodograms(before, after, planets, path):
     lines = planet_lines(planets)
     # down to the shortest known period, which may be under a day (an
-    # ultra-short-period planet), with the grid made finer to match
+    # ultra-short-period planet); periodogram makes the grid finer to match
     pmin = min([1.1] + [0.8 * p for _l, p in lines])
-    samples = 6000 if pmin >= 1.1 else int(6000 * 1.1 / pmin)
     rows = [("velocity", "v", "e")]
     if before.get("d2v") is not None and after.get("d2v") is not None:
         rows.append(("d2v", "d2v", "sd2v"))
@@ -1482,8 +1495,7 @@ def figure_periodograms(before, after, planets, path):
             if e is None:
                 e = np.ones_like(y)
             keep = inliers(y) if value != "v" else np.isfinite(y)
-            found = periodogram(run["t"][keep], y[keep], e[keep],
-                                pmin=pmin, samples=samples)
+            found = periodogram(run["t"][keep], y[keep], e[keep], pmin=pmin)
             if not found:
                 continue
             drawn = True
