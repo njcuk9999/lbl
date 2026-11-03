@@ -540,9 +540,6 @@ class Generic(Instrument):
         """
         # get the wave centers for each order
         wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
         # find the 'diffraction' order for a given 'on-detector' order
         dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
         dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
