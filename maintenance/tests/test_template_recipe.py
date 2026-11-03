@@ -155,3 +155,40 @@ def test_a_low_snr_order_cuts_its_own_rms_and_not_the_other_parity(tmp_path):
     assert np.isfinite(odd).sum() > 1000
     assert np.array_equal(np.isfinite(table['rms_even']), np.isfinite(even))
     assert np.array_equal(np.isfinite(table['rms_odd']), np.isfinite(odd))
+
+
+def test_a_point_one_file_lacks_is_the_mean_of_the_files_that_have_it():
+    # two files in a bin, the second three times brighter: where it lacks a
+    #   point, the bin is the first file's value, with no step
+    wave = np.linspace(600.0, 601.0, 50)
+    shape = 1 - 0.5 * np.exp(-0.5 * ((wave - 600.5) / 0.05) ** 2)
+    weight = np.full(wave.size, 2.0)
+    faint, bright = 100.0 * weight * shape, 300.0 * weight * shape
+    bright[20:25] = np.nan
+    flux_bin, weight_bin, norm_bin = (np.zeros(wave.size) for _ in range(3))
+    for flux in (faint, bright):
+        recipe.add_to_bin(flux_bin, weight_bin, norm_bin, flux, weight,
+                          recipe.file_level(flux, weight))
+    assert np.allclose(flux_bin / norm_bin, shape / np.median(shape))
+    # the weight is the faint file's alone there, both files' elsewhere
+    assert np.allclose(weight_bin[20:25], 2.0)
+    assert np.allclose(np.delete(weight_bin, range(20, 25)), 4.0)
+
+
+def test_a_hole_in_one_file_does_not_empty_its_bin(tmp_path):
+    # a hole in one order of one file, three times brighter than the others:
+    #   every bin keeps the points there, and the hole's bin has no step
+    levels = np.ones(24)
+    levels[0] = 3.0
+    files = Files(nfile=24, levels=levels, holes=[(0, 2, 900, 960)])
+    out, _ = _run(files, tmp_path, TEMPLATE_MEDBINMAX=12)
+    wavegrid, cube = out['wavegrid'], out['flux_cube']
+    hole = mp.doppler_shift(files.wave[2, [905, 955]], -files.berv[0])
+    inside = (wavegrid > hole[0]) & (wavegrid < hole[1])
+    assert inside.sum() > 20
+    assert np.all(np.isfinite(cube[inside]))
+    # the hole's bin against the median of the bins, inside the hole and
+    #   just outside: the same to the noise
+    near = (wavegrid > hole[0] - 0.3) & (wavegrid < hole[1] + 0.3) & ~inside
+    ratio = cube[:, out['ibin'][0]] / np.nanmedian(cube, axis=1)
+    assert abs(np.nanmedian(ratio[inside]) - np.nanmedian(ratio[near])) < 0.01
