@@ -136,6 +136,84 @@ def domain(instrument, source=None):
             [tuple(float(x) for x in str(w).split(':')) for w in windows])
 
 
+def order_index(spans, x):
+    """The order that holds x nearest its middle, as an index of `spans`;
+    None when no order holds it"""
+    held = [(abs(x - 0.5 * (w[0] + w[-1])), i) for i, (w, _) in
+            enumerate(spans) if w[0] <= x <= w[-1]]
+    return min(held)[1] if held else None
+
+
+def stellar_line(spans, centre):
+    """The line of KEEP a configured window is on, or None: within 1 nm of
+    its centre, or in the same order, which is where this tool puts the
+    window of a line that cannot sit in the middle of its blaze. Without
+    the second, that window would be taken for a telluric one on the next
+    run, and the tool would not give back what it proposed."""
+    for line in KEEP:
+        if abs(line - centre) < 1.0:
+            return line
+    here = order_index(spans, centre)
+    for line in KEEP:
+        if here is not None and order_index(spans, line) == here:
+            return line
+    return None
+
+
+def propose(spans, tapas, wmin, wmax, centre, width):
+    """(best, reach on a stellar line or None, the line when its window was
+    moved to the middle of its blaze or None) for one configured window;
+    best is (score, centre, width, throughput, absorbed share, deepest), or
+    None when nothing reaches BLAZE_FLOOR. A window on a stellar line is
+    searched from the LINE, not from the configured centre, so that a run
+    on the tool's own output proposes the same window."""
+    line = stellar_line(spans, centre)
+    keep = KEEP[line] if line is not None else None
+    start = centre if line is None else line
+    best = None
+    # the same width, or narrower where the orders are short (the
+    #   visible: 5 to 8 nm an order on HARPS), never under MIN_WIDTH
+    widths = sorted({max(MIN_WIDTH, round(width * f * 4) / 4)
+                     for f in (1.0, 0.75, 0.5)}, reverse=True)
+    if keep is not None:
+        widths = [width]
+    reach = SEARCH if keep is None else keep
+    for w in widths:
+        for c in np.arange(start - reach, start + reach + 0.01,
+                           0.05 if keep is not None else 0.25):
+            a, b = c - w / 2, c + w / 2
+            if a < wmin or b > wmax:
+                continue
+            cc = throughput(spans, a, b)
+            if cc < BLAZE_FLOOR:
+                continue
+            sh, dp = tellurics(tapas, a, b)
+            if keep is not None:
+                # on the stellar line: the best centred, nearest
+                score = (round(cc, 3), -abs(c - start))
+                if best is None or score > best[0]:
+                    best = (score, c, w, cc, sh, dp)
+                continue
+            # the telluric content (a narrower window counts less),
+            #   then the throughput, then nearness
+            score = (round(sh * (1 - dp) * np.sqrt(w / width), 3), cc,
+                     -abs(c - centre))
+            if best is None or score > best[0]:
+                best = (score, c, w, cc, sh, dp)
+    # A STELLAR LINE THAT CANNOT SIT IN THE MIDDLE OF THE BLAZE: the
+    #   window goes to the middle of its order's blaze instead
+    moved = None
+    if best is None and keep is not None:
+        peak = blaze_middle(spans, line - width / 2, line + width / 2)
+        if peak is not None:
+            a, b = peak - width / 2, peak + width / 2
+            sh, dp = tellurics(tapas, a, b)
+            best = ((0,), round(peak * 4) / 4, width,
+                    throughput(spans, a, b), sh, dp)
+            moved = line
+    return best, keep, moved
+
+
 def main(models, *specs):
     # TAPAS in models/tellurics/, or at the top of models/ where older
     #   versions of LBL kept it
@@ -171,52 +249,12 @@ def main(models, *specs):
             lo, hi = centre - width / 2, centre + width / 2
             cen = throughput(spans, lo, hi)
             share, deepest = tellurics(tapas, lo, hi)
-            best = None
-            # the same width, or narrower where the orders are short (the
-            #   visible: 5 to 8 nm an order on HARPS), never under MIN_WIDTH
-            widths = sorted({max(MIN_WIDTH, round(width * f * 4) / 4)
-                             for f in (1.0, 0.75, 0.5)}, reverse=True)
-            # a configured window is on a stellar line of KEEP when its
-            #   centre is within 1 nm of the line's
-            keep = next((reach for line, reach in KEEP.items()
-                         if abs(line - centre) < 1.0), None)
-            if keep is not None:
-                widths = [width]
-            reach = SEARCH if keep is None else keep
-            for w in widths:
-                for c in np.arange(centre - reach, centre + reach + 0.01,
-                                   0.05 if keep is not None else 0.25):
-                    a, b = c - w / 2, c + w / 2
-                    if a < wmin or b > wmax:
-                        continue
-                    cc = throughput(spans, a, b)
-                    if cc < BLAZE_FLOOR:
-                        continue
-                    sh, dp = tellurics(tapas, a, b)
-                    if keep is not None:
-                        # on the stellar line: the best centred, nearest
-                        score = (round(cc, 3), -abs(c - centre))
-                        if best is None or score > best[0]:
-                            best = (score, c, w, cc, sh, dp)
-                        continue
-                    # the telluric content (a narrower window counts less),
-                    #   then the throughput, then nearness
-                    score = (round(sh * (1 - dp) * np.sqrt(w / width), 3), cc,
-                             -abs(c - centre))
-                    if best is None or score > best[0]:
-                        best = (score, c, w, cc, sh, dp)
-            # A STELLAR LINE THAT CANNOT SIT IN THE MIDDLE OF THE BLAZE: the
-            #   window goes to the middle of its order's blaze instead
-            if best is None and keep is not None:
-                peak = blaze_middle(spans, lo, hi)
-                if peak is not None:
-                    a, b = peak - width / 2, peak + width / 2
-                    sh, dp = tellurics(tapas, a, b)
-                    best = ((0,), round(peak * 4) / 4, width,
-                            throughput(spans, a, b), sh, dp)
-                    print('  the line at %.1f nm sits on its blaze\'s flank'
-                          ' (%.2f of the peak at worst): moved to the middle'
-                          ' of the blaze' % (centre, cen))
+            best, keep, moved = propose(spans, tapas, wmin, wmax, centre,
+                                        width)
+            if moved is not None:
+                print('  the line at %.1f nm sits on its blaze\'s flank'
+                      ' (%.2f of the peak at worst): moved to the middle'
+                      ' of the blaze' % (moved, cen))
             line = ('%s %7.2f:%-4g blaze %5.2f, %3.0f%% absorbed, deepest'
                     ' %.3f' % ('*' if keep is not None else ' ', centre, width, cen,
                                100 * share, deepest))
