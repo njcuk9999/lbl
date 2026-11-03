@@ -992,25 +992,33 @@ def curve_fit(*args, funcname: Union[str, None] = None, **kwargs):
 def robust_polyfit(x: np.ndarray, y: np.ndarray, degree: int,
                    nsigcut: float) -> Tuple[np.ndarray, np.ndarray]:
     """
-    A robust polyfit (iterating on the residuals) until nsigma is below the
-    nsigcut threshold. Takes care of NaNs before fitting
+    A robust polyfit: fit, then keep the points whose absolute residual is
+    below nsigcut times the median absolute residual (of all the points),
+    and fit again, until every point used is below that threshold. Points
+    with a NaN in x or y are never used.
 
     :param x: np.ndarray, the x array to pass to np.polyval
     :param y: np.ndarray, the y array to pass to np.polyval
     :param degree: int, the degree of polynomial fit passed to np.polyval
-    :param nsigcut: float, the threshold sigma required to return result
-    :return:
+    :param nsigcut: float, the threshold in units of the median absolute
+                    residual (not of sigma: for Gaussian residuals, 1 median
+                    absolute residual is 0.674 sigma, so 3 is 2.02 sigma)
+    :return: tuple, 1. the coefficients of the last fit, 2. the mask of the
+             points that last fit used
     """
     # set up mask
-    keep = np.isfinite(y)
+    keep = np.isfinite(x) & np.isfinite(y)
+    used = np.array(keep)
     # set the nsigmax to infinite
     nsigmax = np.inf
     # set the fit as unset at first
     fit = None
     # while sigma is greater than sigma cut keep fitting
     while nsigmax > nsigcut:
+        # the points of this fit
+        used = keep
         # calculate the polynomial fit (of the non-NaNs)
-        fit = np.polyfit(x[keep], y[keep], degree)
+        fit = np.polyfit(x[used], y[used], degree)
         # calculate the residuals of the polynomial fit
         res = y - np.polyval(fit, x)
         # work out the new sigma values
@@ -1021,11 +1029,11 @@ def robust_polyfit(x: np.ndarray, y: np.ndarray, degree: int,
         else:
             nsig = np.abs(res) / sig
         # work out the maximum sigma
-        nsigmax = np.max(nsig[keep])
-        # re-work out the keep criteria
+        nsigmax = np.max(nsig[used])
+        # re-work out the keep criteria (NaN residuals are never kept)
         keep = nsig < nsigcut
-    # return the fit and the mask of good values
-    return np.array(fit), np.array(keep)
+    # return the fit and the mask of the points it used
+    return np.array(fit), np.array(used)
 
 
 def medfilt_1d(a: Union[list, np.ndarray],
@@ -1061,13 +1069,14 @@ def air_index(wavelength: Union[np.ndarray, float], temp: float = 15.0,
               pressure: float = 760.0) -> Union[np.ndarray, float]:
     """
     transform the wavelength in vacuum on the air
-    wavelength in nm, t=temperature in C, p=pressure in millibar
+    wavelength in nm, t=temperature in C, p=pressure in mm Hg (the density
+    term is 1 at 15 C and 760 mm Hg; 1013.25 here would mean 1.33 atm)
 
     From EA via Romain Allart (For HARPS specifically)
 
     :param wavelength: np.array - vector of wavelengths
     :param temp: float, air temperature in degrees C
-    :param pressure: float, air pressure in millibar
+    :param pressure: float, air pressure in mm Hg (760 = 1 atm)
 
     :return: depending on input a np.array of refractive indexes or a single
              refractive index
