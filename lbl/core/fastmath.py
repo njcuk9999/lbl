@@ -631,10 +631,10 @@ def _bn_nanmedian(values, n_in):
 def lowpass_windows(input_vect, width):
     """
     Window loop of lbl.core.math.lowpassfilter: for boxes of `width` pixels
-    every width // 4 pixels (starting half a box before the vector), the
-    mean pixel position (bottleneck nanmean) and the NaN-median of the values
-    (bottleneck nanmedian), skipping boxes with < 3 pixels or < 3 finite
-    values.
+    every width // 4 pixels (starting half a box before the vector, cut at
+    its ends), the median position of the finite pixels (bottleneck median)
+    and the median of their values (bottleneck nanmedian), skipping boxes
+    with < 3 pixels or < 3 finite values.
 
     :return: xmed, ymed (float64 arrays)
     """
@@ -648,33 +648,37 @@ def lowpass_windows(input_vect, width):
     xmed = np.empty(nmax)
     ymed = np.empty(nmax)
     buf = np.empty(max(width, 1))
+    pos = np.empty(max(width, 1))
     count = 0
     for iw in range(nmax):
         it = start + iw * step
+        # the box holds pixels low_bound to high_bound - 1
         low_bound = it
         high_bound = it + width
         if low_bound < 0:
             low_bound = 0
-        if high_bound > (nvect - 1):
-            high_bound = nvect - 1
+        if high_bound > nvect:
+            high_bound = nvect
         npix = high_bound - low_bound
         if npix < 3:
             continue
+        # the finite pixels of the box (positions in increasing order)
         nfinite = 0
         for i in range(low_bound, high_bound):
             if np.isfinite(input_vect[i]):
+                buf[nfinite] = input_vect[i]
+                pos[nfinite] = i
                 nfinite += 1
         if nfinite < 3:
             continue
-        # bottleneck nanmean of the (integer) pixel positions
-        asum = 0.0
-        for i in range(low_bound, high_bound):
-            asum += i
-        xmed[count] = asum / npix
+        # median of the (sorted) positions
+        half = nfinite >> 1
+        if nfinite % 2 == 0:
+            xmed[count] = 0.5 * (pos[half - 1] + pos[half])
+        else:
+            xmed[count] = pos[half]
         # bottleneck nanmedian of the values
-        for i in range(npix):
-            buf[i] = input_vect[low_bound + i]
-        ymed[count] = _bn_nanmedian(buf, npix)
+        ymed[count] = _bn_nanmedian(buf, nfinite)
         count += 1
     return xmed[:count], ymed[:count]
 

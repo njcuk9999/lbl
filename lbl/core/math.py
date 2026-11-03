@@ -707,16 +707,19 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
 
     Algorithm:
 
-    provide an input vector of an arbitrary length and compute a running NaN
-    median over a box of a given length (width value). The running median is
-    NOT computed at every pixel but at steps of 1/4th of the width value.
-    This provides a vector of points where the nan-median has been computed
-    (ymed) and mean position along the input vector (xmed) of valid (non-NaN)
-    pixels. This xmed/ymed combination is then used in a spline to recover a
-    vector for all pixel positions within the input vector.
+    provide an input vector of an arbitrary length and compute a running
+    median of the finite values over a box of a given length (width value),
+    cut at the ends of the vector. The running median is NOT computed at
+    every pixel but at steps of 1/4th of the width value. This provides a
+    vector of points where the median has been computed (ymed) and the
+    median position along the input vector (xmed) of the finite pixels of
+    the box: the position that goes with a median of the values, so that a
+    ramp is followed exactly whatever pixels are missing. This xmed/ymed
+    combination is then used in a spline to recover a vector for all pixel
+    positions within the input vector.
 
-    When there are no valid pixel in a 'width' domain, the value is skipped
-    in the creation of xmed and ymed, and the domain is splined over.
+    When a box has fewer than 3 finite pixels, it is skipped in the creation
+    of xmed and ymed, and the domain is splined over.
 
     :param input_vect: numpy 1D vector, vector to low pass
     :param width: int, width (box size) of the low pass filter
@@ -740,26 +743,27 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
         # if we are at the start or end of vector, we go 'off the edge' and
         # define a box that goes beyond it. It will lead to an effectively
         # smaller 'width' value, but will provide a consistent result at edges.
+        # the box holds pixels low_bound to high_bound - 1
         low_bound = it
         high_bound = it + int(width)
         # deal with lower bounds out of bounds --> set to zero
         if low_bound < 0:
             low_bound = 0
-        # deal with upper bounds out of bounds --> set to max
-        if high_bound > (len(input_vect) - 1):
-            high_bound = (len(input_vect) - 1)
+        # deal with upper bounds out of bounds --> the last pixel included
+        if high_bound > len(input_vect):
+            high_bound = len(input_vect)
         # get the pixel bounds
         pixval = index[low_bound:high_bound]
         # do not low pass if not enough points
         if len(pixval) < 3:
             continue
-        # if no finite value, skip
-        if np.sum(np.isfinite(input_vect[pixval])) < 3:
+        # the finite pixels of the box, skipped if fewer than 3
+        valid = np.isfinite(input_vect[pixval])
+        if np.sum(valid) < 3:
             continue
-        # mean position along vector and NaN median value of
-        # points at those positions
-        xmed.append(nanmean(pixval))
-        ymed.append(nanmedian(input_vect[pixval]))
+        # median position of the finite pixels and median of their values
+        xmed.append(nanmedian(pixval[valid]))
+        ymed.append(nanmedian(input_vect[pixval[valid]]))
     # convert to arrays
     xmed = np.array(xmed, dtype=float)
     ymed = np.array(ymed, dtype=float)
