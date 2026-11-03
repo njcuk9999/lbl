@@ -66,6 +66,10 @@ from .progress import bar as _bar
 RAMP_ZERO = 0.5
 
 
+#: how to read a file when no configuration is given: an APERO t.fits
+TFITS_CONFIG = {"input": {"format": "tfits"}}
+
+
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1102,7 +1106,10 @@ def cut_key(path, row, names_by_night, members=None):
 
 
 def rows_by_night(model, args, config=None):
-    """One (path, row) pair per t.fits in --source-dir, matched on its night.
+    """One (path, row) pair per spectrum in --source-dir, matched on its night.
+
+    The spectra are those of the configuration's input.pattern, read by
+    readers.read_any: a t.fits or a file of any instrument LBL reads.
 
     The row's coefficients are the night's; the BERV is the exposure's own,
     read from its header, because the star basis has to be placed where that
@@ -1122,10 +1129,17 @@ def rows_by_night(model, args, config=None):
         for i, name in enumerate(coeffs["filename"]):
             by_row[os.path.basename(str(name))] = i
     out, missing = [], 0
-    for path in sorted(glob.glob(os.path.join(args.source_dir, "*t.fits"))):
+    config = config or TFITS_CONFIG
+    pattern = (config.get("input") or {}).get("pattern") or "*t.fits"
+    for path in sorted(glob.glob(os.path.join(args.source_dir, pattern))):
         try:
-            payload = _readers.star_frame(sptf.read_tfits(path), config)
-        except Exception:                                     # noqa: BLE001
+            payload = _readers.read_any(path, config)
+        except Exception as exc:                              # noqa: BLE001
+            # said once: on one bad file it is that file, on all of them it
+            #   is why the run ends up writing nothing
+            if not missing:
+                log("  could not read %s, skipped (%s: %s)"
+                    % (os.path.basename(path), type(exc).__name__, exc), "warn")
             missing += 1
             continue
         meta = payload["meta"]

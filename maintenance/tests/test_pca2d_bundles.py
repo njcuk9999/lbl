@@ -133,7 +133,7 @@ def test_two_bundles_of_one_night_are_two_rows(tmp_path, monkeypatch):
     source, cube = _exposure_tree(tmp_path, members)
     bjd = {"e1t.fits": 2460600.60, "e2t.fits": 2460600.61,
            "e3t.fits": 2460600.70, "e4t.fits": 2460600.71}
-    monkeypatch.setattr(reconstruct.sptf, "read_tfits", lambda path: {
+    monkeypatch.setattr(reconstruct.sptf, "read_tfits", lambda path, *_: {
         "meta": {"bjd": bjd[os.path.basename(path)], "berv": 1.0}})
     # one coefficient row per (row, parity), as the fit writes them
     coeffs = Table(rows=[("e1t.fits", 2460600.605, 0.0, 0.1),
@@ -159,7 +159,7 @@ def test_whole_nights_match_by_membership_or_by_night(tmp_path, monkeypatch):
     source, cube = _exposure_tree(tmp_path, members)
     bjd = {"e1t.fits": 2460600.60, "e2t.fits": 2460600.62,
            "f1t.fits": 2460601.60}
-    monkeypatch.setattr(reconstruct.sptf, "read_tfits", lambda path: {
+    monkeypatch.setattr(reconstruct.sptf, "read_tfits", lambda path, *_: {
         "meta": {"bjd": bjd[os.path.basename(path)], "berv": 1.0}})
     coeffs = Table(rows=[("e1t.fits", 2460600.61, 0.0, 0.1),
                          ("e1t.fits", 2460600.61, 0.0, 0.2),
