@@ -238,3 +238,21 @@ def test_the_line_windows_are_centred_on_the_lines(tmp_path, monkeypatch):
     for v1, e1, n1 in velocities[1:]:
         assert abs(v1 - v0) < 0.1 * e0
         assert n1 == n0
+
+
+def test_norm_is_the_continuum_of_the_template(tmp_path, monkeypatch):
+    """norm, the pseudo-continuum the residual projections divide by, is the
+    level of the template between its lines: 1 for this star"""
+    from lbl.core import fastmath
+    norms = []
+    kernel = fastmath.line_loop
+
+    def recorder(*args):
+        norms.append(np.array(args[17]))
+        return kernel(*args)
+    monkeypatch.setattr(fastmath, 'line_loop', recorder)
+    star, inst, ref, splines = setup(tmp_path)
+    run(inst, star.observe(velocity=0.0, seed=10), ref, splines)
+    norm = norms[-1][np.isfinite(norms[-1])]
+    assert len(norm) > 0.9 * norms[-1].size
+    assert np.all(np.abs(norm - 1) < 0.01)

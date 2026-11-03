@@ -770,6 +770,54 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
     return _lowpass_spline(input_vect, xmed, ymed, k)
 
 
+def upper_envelope(input_vect: np.ndarray, width: int,
+                   percentile: float = 95.0) -> np.ndarray:
+    """
+    The upper envelope of a vector: a pseudo-continuum for a spectrum with
+    absorption lines.
+
+    In boxes of `width` pixels every width // 4 pixels (cut at the ends of the
+    vector), the given percentile of the finite values, placed at the median
+    position of the finite pixels of the box; boxes with fewer than 3 finite
+    values are skipped. These points are joined by straight lines (constant
+    beyond the first and the last), so the envelope does not overshoot them:
+    it stays within the range of the box percentiles and is positive wherever
+    the vector is. NaN everywhere when fewer than 2 boxes are left.
+
+    :param input_vect: numpy 1D vector
+    :param width: int, size of the boxes in pixels
+    :param percentile: float, the percentile of each box (95: the level of
+                       the continuum between the lines, as
+                       lbl.science.activity_lines takes it)
+
+    :return: np.ndarray, the envelope at every pixel of input_vect
+    """
+    input_vect = np.asarray(input_vect, dtype=float)
+    npix = len(input_vect)
+    width = int(width)
+    step = max(width // 4, 1)
+    index = np.arange(npix)
+    xpos, ylev = [], []
+    for it in range(-width // 2, npix + width // 2, step):
+        pixval = index[max(it, 0):min(it + width, npix)]
+        if len(pixval) < 3:
+            continue
+        valid = np.isfinite(input_vect[pixval])
+        if np.sum(valid) < 3:
+            continue
+        xpos.append(np.median(pixval[valid]))
+        ylev.append(np.percentile(input_vect[pixval[valid]], percentile))
+    if len(xpos) < 2:
+        return np.full(npix, np.nan)
+    xpos, ylev = np.array(xpos), np.array(ylev)
+    # boxes with the same finite pixels give the same point once
+    xuniq, inverse = np.unique(xpos, return_inverse=True)
+    yuniq = np.bincount(inverse, weights=ylev) / np.bincount(inverse)
+    if len(xuniq) < 2:
+        return np.full(npix, np.nan)
+    return np.interp(index, xuniq, yuniq)
+
+
 def _lowpass_fast_ok(input_vect: np.ndarray, width: Any) -> bool:
     """
     Whether lowpassfilter can use the numba window loop: a 1D float64 vector

@@ -1550,12 +1550,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
             # if this is the first iteration update model0
             if iteration == 0:
-                # normalization of the local pseudo continuum level of the unblazed
-                # model
+                # the local pseudo-continuum of the unblazed template (norm,
+                #   read by the residual projections): its upper envelope,
+                #   the 95th percentile in boxes of a quarter of the order
                 model0[order_num] = tvals[0]
                 model0[order_num][model0[order_num] == 0] = np.nan
-                lp_wid = model0.shape[1] // 2 # half the blaze length
-                norm[order_num] = mp.lowpassfilter(model0[order_num], lp_wid, k=2)
+                cont_wid = model0.shape[1] // 4
+                norm[order_num] = mp.upper_envelope(model0[order_num],
+                                                    cont_wid)
 
                 # spline the original template and apply blaze
                 model0[order_num] *= blaze_ord
