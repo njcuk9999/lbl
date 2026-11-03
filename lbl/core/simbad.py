@@ -51,15 +51,16 @@ _SIMBAD = None
 # =============================================================================
 def toi_number(name: Any) -> Optional[str]:
     """
-    The TOI number of a name in any spelling: TOI-1234, TOI 1234, TOI_1234
-    and TOI1234, with a planet's .01 or LBL's suffixes after it
+    The TOI number of a name in any spelling: TOI-1234, TOI 1234, TOI_1234,
+    TOI1234 and TOIM1234 (M for the dash, as folder names write it), with a
+    planet's .01 or LBL's suffixes after it
 
     :param name: a name
 
     :return: str, the number without leading zeros, or None for a name that
              is not a TOI's
     """
-    found = re.match(r'^\s*TOI[\s_-]*0*(\d+)(?:\.\d+)?(?![0-9])',
+    found = re.match(r'^\s*TOI(?:[\s_-]|M)*0*(\d+)(?:\.\d+)?(?![0-9])',
                      str(name or ''), re.I)
     return found.group(1) if found else None
 
@@ -80,7 +81,14 @@ def name_variants(name: Any) -> List[str]:
     for base in (raw, SUFFIXES.sub('', raw)):
         if not base:
             continue
-        out += [base, re.sub(r'_+', ' ', base).strip()]
+        spaced = re.sub(r'_+', ' ', base).strip()
+        # words run together (EpsilonEridani, ADLeo), and an M between
+        #   digits for a minus sign (TYC_3980M1081M1): SIMBAD knows
+        #   'Epsilon Eridani', 'AD Leo' and 'TYC 3980-1081-1'
+        words = re.sub(r'(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', ' ',
+                       spaced)
+        minus = re.sub(r'(?<=\d)M(?=\d)', '-', words)
+        out += [base, spaced, words, minus]
         for family, spelled in FAMILIES:
             found = re.match(r'^(?:%s)[\s_-]*0*(\d+)(?:[\s_-]*([A-Ca-c]))?$'
                              % family, base, re.I)
