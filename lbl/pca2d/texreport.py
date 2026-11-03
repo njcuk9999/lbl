@@ -145,12 +145,17 @@ def tex(text) -> str:
     error: a report with one odd glyph is still a report. Terminal colours
     and other control characters are dropped: a skipped figure's reason can
     come from a coloured log line, and its escape sequence stops pdflatex
-    ("Unicode character ^^[ (U+001B)").
+    ("Unicode character ^^[ (U+001B)"). A line break becomes a space, which
+    is what LaTeX makes of one anyway; but two of them are a new paragraph,
+    which stops pdflatex inside a macro or a table cell ("Paragraph ended
+    before \\@textcolor was complete"), and an error message can hold them:
+    SIMBAD's, when it cannot be reached, went into \\watch{...} of the
+    star's table and the report was not made.
     """
     out = []
     for ch in ANSI_ESCAPE.sub("", str(text)):
-        if ch in "\t\n":
-            out.append(" " if ch == "\t" else ch)
+        if ch in "\t\n\r":
+            out.append(" ")
         elif ord(ch) < 32 or 127 <= ord(ch) < 160:
             continue
         elif ch in _TEX:
