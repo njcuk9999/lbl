@@ -1230,7 +1230,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # get the noise model switch
     use_noise_model = inst.params['USE_NOISE_MODEL']
-    # get the pixel hp_width [needs to be in m/s]
+    # the high-pass width in m/s: the parameter HP_WIDTH (km/s) is only
+    #   what the header says when no order has 3 lines (see below)
     hp_width = inst.params['HP_WIDTH'] * 1000
     # get the object science name
     # object_science = inst.params['OBJECT_SCIENCE']
@@ -1312,11 +1313,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     inst.params['BERV'] = berv
 
     width = np.zeros(sci_data.shape[0], dtype=int)
-    for order_num in range(sci_data.shape[0]):  # TODO change back to hp_width
+    for order_num in range(sci_data.shape[0]):
         # within each order, we determine the median width of lines and
-        # we define the filtering size as 5x that value. This avoids the
-        # hp_width parameter. We don't expect that derivatives of lines
-        # have a significant impact on that scale length
+        # we define the filtering size as 5x that value (the HP_WIDTH
+        # parameter is not used). We don't expect that derivatives of lines
+        # have a significant impact on that scale length. hp_width ends as
+        # the value of the last order with 3 lines or more
         lines_in_order = np.where((ref_table['ORDER'] == order_num))[0]
 
         if len(lines_in_order) < 3:
@@ -1935,7 +1937,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['SYSTEMIC_VELOCITY'] = sys_rv
     outputs['RMSRATIO'] = stddev_nsig
     outputs['CCF_EW'] = ccf_ewidth
-    outputs['HP_WIDTH'] = hp_width
+    # in km/s, as the header key HP_WIDTH says
+    outputs['HP_WIDTH'] = hp_width / 1000
     outputs['TOTAL_DURATION'] = total_time
     outputs['MODEL_VELOCITY'] = model_velocity
     outputs['LINES_XPIX_SET'] = lines_xpix_set

@@ -307,3 +307,15 @@ def test_lbl_compute_skips_a_file_without_valid_line(monkeypatch):
     run_state = lbl_compute.ComputeRun(1)
     assert lbl_compute.compute_file(Fake(), ctx, run_state, 0, 'x.fits') \
         is None
+
+
+def test_the_hp_width_output_is_in_km_s(tmp_path):
+    """The header key HP_WIDTH is declared in km/s: 5 times the median width
+    of the line windows of the last order with lines"""
+    star, inst, ref, splines = setup(tmp_path)
+    _, out = run(inst, star.observe(velocity=0.0, seed=10), ref, splines)
+    last = np.max(ref['ORDER'])
+    inorder = ref['ORDER'] == last
+    width = np.nanmedian(ref['WAVE_END'][inorder] /
+                         ref['WAVE_START'][inorder] - 1) * C_MS
+    assert abs(out['HP_WIDTH'] - 5 * width / 1000) < 1e-9
