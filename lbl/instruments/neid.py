@@ -71,7 +71,7 @@ class Neid(Instrument):
         :return: None - updates self.params
         """
         emsg = 'NEID not implemented yet'
-        raise NotImplemented(emsg)
+        raise NotImplementedError(emsg)
 
 
 # =============================================================================

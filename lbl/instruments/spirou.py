@@ -1332,11 +1332,11 @@ class SpirouCADC(Spirou):
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'SPIROU CADC mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'SPIROU CADC mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         # flux extname kind
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name

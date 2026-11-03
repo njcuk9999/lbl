@@ -1446,11 +1446,11 @@ class NIRPS_HA_CADC(NIRPS_HA):
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         # flux extname kind
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name
@@ -1662,11 +1662,11 @@ class NIRPS_HE_CADC(NIRPS_HE):
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         # flux extname kind
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name

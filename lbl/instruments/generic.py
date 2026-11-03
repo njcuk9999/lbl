@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SPIRou instrument class here: instrument specific settings
+Generic instrument class here: settings given by the user
 
 Created on 2021-05-27
 
@@ -37,7 +37,7 @@ log = io.log
 
 
 # =============================================================================
-# Define Spirou class
+# Define Generic class
 # =============================================================================
 class Generic(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -83,21 +83,21 @@ class Generic(Instrument):
 
     def param_override(self):
         """
-        Parameter override for SPIRou parameters
+        Parameter override for Generic parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
         func_name = __NAME__ + '.Generic.override()'
-        # update instrument
+        # update instrument (over the user's INSTRUMENT, which is Generic)
         value = self.generic_validate('GENERIC_INSTRUMENT')
-        self.param_set('INSTRUMENT', value, source=func_name)
+        self.params.set('INSTRUMENT', value, source=func_name)
         # set a new template name
         newtname = self.default_template_name.replace('Generic', value)
         # update data source
         value = self.generic_validate('GENERIC_DATA_SOURCE')
-        self.param_set('DATA_SOURCE', value, source=func_name)
+        self.params.set('DATA_SOURCE', value, source=func_name)
         # ---------------------------------------------------------------------
         # update the template name
         self.default_template_name = newtname
@@ -470,15 +470,15 @@ class Generic(Instrument):
         :param science_file: str, the filename to load
         :return:
         """
-        # Fiber must be set for SPIROU CADC
+        # the flux extension must be set
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'Generic mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'Generic mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         # full extension name
         extname = 'FLUX'
         # load the first extension of each

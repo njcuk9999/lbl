@@ -39,6 +39,8 @@ Time = base.AstropyTime
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = io.log
+# the source tags of values the user gave (see select.parse_args)
+USER_SOURCE_TAGS = ('[KWARGS]', '[CMD]', '[YAML]')
 
 
 # =============================================================================
@@ -91,13 +93,13 @@ class Instrument:
     def _not_implemented(method):
         """
         This class has methods that must be implemented in an Instrument
-        subclass - raise a NotImplemented exception
+        subclass - raise a NotImplementedError
 
         :param method: str, the method that needs to be implemented
         :return:
         """
         emsg = 'Must implement {0} in specific instrument class'
-        raise NotImplemented(emsg.format(method))
+        raise NotImplementedError(emsg.format(method))
 
     @staticmethod
     def to_mjd(time_value: Union[float, np.ndarray]
@@ -115,6 +117,23 @@ class Instrument:
         values = np.asarray(time_value, dtype=float)
         return np.where(values > 2.4e6, values - 2400000.5, values)[()]
 
+    def user_set(self, key: str) -> bool:
+        """
+        Whether the user gave this parameter a value: select.parse_args marks
+        the source of a value from a wrap or a python call [KWARGS], from the
+        command line [CMD] and from a yaml file [YAML]
+
+        :param key: str, the key to check
+
+        :return: bool, True if the user set it (to something other than None)
+        """
+        if key not in self.params or self.params[key] is None:
+            return False
+        instance = self.params.instances.get(key.upper())
+        if instance is None or instance.source is None:
+            return False
+        return any(tag in str(instance.source) for tag in USER_SOURCE_TAGS)
+
     def param_set(self, key: str, value: Any, source: str = None) -> None:
         """
         Set a parameter in the parameter dictionary
@@ -125,7 +144,7 @@ class Instrument:
         :return: None
         """
         # do not update parameters that the user has set themselves
-        if 'KWARGS' in self.params.sources():
+        if self.user_set(key):
             return
         # set the parameter
         self.params.set(key, value, source=source)
@@ -530,7 +549,7 @@ class Instrument:
         :return: None - updates OBJECT_COMPARISON if not set
         """
         # set function name
-        func_name = __NAME__ + '.Spirou._set_object_comparison()'
+        func_name = __NAME__ + '.Instrument._set_object_comparison()'
         # deal with no object
         if self.params['OBJECT_SCIENCE'] is None:
             raise LblException('OBJECT_SCIENCE name must be defined')
@@ -1260,7 +1279,7 @@ class Instrument:
                  image already blaze corrected)
         """
         _ = sci_image, sci_hdr, calib_directory, normalize
-        raise self._not_implemented('science_files')
+        raise self._not_implemented('load_blaze_from_science')
 
     def no_blaze_corr(self, sci_image: np.ndarray, sci_wave: np.ndarray):
         """
@@ -1386,7 +1405,7 @@ class Instrument:
         :return: dict, a dictionary table of the science parameters
         """
         _ = filename, tdict, sci_hdr, berv
-        raise self._not_implemented('get_berv')
+        raise self._not_implemented('populate_sci_table')
 
     def sort_files_by_hkey(self, science_files: List[str],
                            hkey='KW_MID_EXP_TIME') -> List[str]:
