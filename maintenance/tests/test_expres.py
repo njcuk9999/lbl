@@ -2,6 +2,8 @@
 over the pixels Excalibur calibrates, a barycentric wave map LBL can spline,
 the time and the BERV from the other extensions, the extraction-only files
 left out."""
+import os
+
 import numpy as np
 import pytest
 from astropy.io import fits
@@ -133,3 +135,66 @@ def test_the_window_reads_an_expres_file(tmp_path):
     assert abs(record['berv'] - berv) < 1e-4
     assert abs(record['berv'] - 21.9257) < 1e-3
     assert targets.night_of(record) is not None
+
+
+def _expres_file(path, snr=None):
+    """A small EXPRES-like file: INSTRMNT, the exposure meter's header, and,
+    with `snr`, an optimal table whose order 111 has that SNR per pixel"""
+    from lbl.instruments import expres
+    primary = fits.PrimaryHDU()
+    primary.header['INSTRMNT'] = 'EXPRES'
+    primary.header['OBJECT'] = '10700'
+    hdus = [primary]
+    if snr is not None:
+        orders = np.array([112, 111, 110])
+        flux = np.full((3, 40), 100.0)
+        error = np.full((3, 40), 100.0 / snr)
+        error[0], error[2] = 1.0, 1.0
+        hdus.append(fits.BinTableHDU.from_columns(
+            [fits.Column(name='orders', format='J', array=orders),
+             fits.Column(name='spectrum', format='40D', array=flux),
+             fits.Column(name='uncertainty', format='40D', array=error)],
+            name='optimal'))
+    bary = fits.BinTableHDU.from_columns(
+        [fits.Column(name='midpoints', format='D', array=np.zeros(2))],
+        name=expres.BARY_EXTENSION)
+    bary.header[expres.BARY_MIDPOINT_KEY] = 2458710.959567354
+    bary.header[expres.BARY_REDSHIFT_KEY] = 7.313910006701e-05
+    fits.HDUList(hdus + [bary]).writeto(str(path))
+
+
+def test_the_window_reads_the_expres_snr_of_order_111(tmp_path):
+    from lbl.gui import targets
+    _expres_file(tmp_path / 'a.fits', snr=234.0)
+    assert targets.read_file(str(tmp_path / 'a.fits'))['snr'] == 234.0
+
+
+def test_only_the_expres_records_are_read_again(tmp_path, monkeypatch):
+    """A record read by an older EXPRES reader is read again; the others
+    are kept (READER_VERSION, not a new VERSION of the whole index)"""
+    from lbl.gui import targets
+    for name in ('EXP', 'OTHER'):
+        (tmp_path / 'science' / name).mkdir(parents=True)
+    _expres_file(tmp_path / 'science' / 'EXP' / 'a.fits', snr=200.0)
+    other = fits.PrimaryHDU()
+    other.header['INSTRUME'] = 'HARPS'
+    other.writeto(str(tmp_path / 'science' / 'OTHER' / 'b.fits'))
+    monkeypatch.setattr(targets, 'INDEX_HOME', str(tmp_path / 'index'))
+    scanner = targets.Scanner()
+    scanner.start(str(tmp_path))
+    scanner.thread.join(30)
+    index = scanner.snapshot()
+    # as an older reader left them
+    index['targets']['EXP']['a.fits'].pop('reader')
+    index['targets']['OTHER']['b.fits'].pop('reader')
+    targets.save_index(index, str(tmp_path))
+    read = []
+    real = targets.read_file
+    monkeypatch.setattr(targets, 'read_file',
+                        lambda path: read.append(path) or real(path))
+    scanner = targets.Scanner()
+    scanner.start(str(tmp_path))
+    scanner.thread.join(30)
+    assert [os.path.basename(p) for p in read] == ['a.fits']
+    record = scanner.snapshot()['targets']['EXP']['a.fits']
+    assert record['snr'] == 200.0 and record['reader'] == 2

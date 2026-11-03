@@ -20,6 +20,10 @@ def test_the_spellings_simbad_is_asked_in():
     assert 'TOI-1452' in simbad.name_variants('TOI-1452.01')
     assert simbad.name_variants('Gl699')[-1] == 'GJ 699'
     assert simbad.name_variants('GJ_15A')[-1] == 'GJ 15 A'
+    # a folder named after its star and its instrument or data source
+    assert 'HD 10700' in simbad.name_variants('HD10700_EXPRES')
+    assert 'GJ 229' in simbad.name_variants('Gliese229_HARPS_ORIG')
+    assert 'ADLeo' in simbad.name_variants('ADLeo_HARPSN_ESO')
     # the name as written comes first, and nothing is asked twice
     names = simbad.name_variants('TOI-1452')
     assert names[0] == 'TOI-1452' and len(names) == len(set(names))

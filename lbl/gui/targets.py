@@ -27,6 +27,12 @@ INDEX_HOME = os.path.join(os.path.expanduser("~"), ".lbl_pca2d_gui", "scans")
 #:    systemic velocity below), so that an index of another version is
 #:    read again from the headers rather than trusted
 VERSION = 6
+#: the version of how one instrument's files are read, raised when only that
+#:    instrument's records change: its files are read again, not every file
+#:    of the index (VERSION), which takes minutes on a large folder
+READER_VERSION = {"EXPRES": 2}
+#: the EXPRES order whose SNR the window shows (about 552 nm)
+EXPRES_SNR_ORDER = 111
 #: a folder made from another by LBL or PCA2D is not a target: the corrected
 #: (<object>_pca2d, <object>_pca2d_<name>) and the cleaned (<object>_tc)
 DERIVED = re.compile(r"(_pca2d(_.*)?|_tc(_.*)?)$")
@@ -162,7 +168,7 @@ def read_file(path: str) -> dict:
     if out["instrument"] == "ESPADONS":
         return _espadons(headers[0], out)
     if out["instrument"] == "EXPRES":
-        return _expres(headers, out)
+        return _expres(headers, out, path)
     # APERO writes EXTSNxxx and BJD on the science extension: its headers
     #   first, the primary's after
     ordered = sorted(headers, key=lambda h: not any(
@@ -234,15 +240,41 @@ def _espadons(header, out: dict) -> dict:
     return out
 
 
-def _expres(headers, out: dict) -> dict:
+def _expres_snr(path: str):
+    """EXPRES's headers give no SNR: the median SNR per pixel, spectrum over
+    uncertainty of the optimal extraction, in the central half of order
+    EXPRES_SNR_ORDER (about 552 nm). About 50 ms a file, as long as reading
+    the headers of the other instruments. None if it cannot be read."""
+    from astropy.io import fits
+    try:
+        with fits.open(path, memmap=True) as hdulist:
+            table = hdulist["OPTIMAL"].data
+            rows = np.where(np.asarray(table["orders"])
+                            == EXPRES_SNR_ORDER)[0]
+            if rows.size == 0:
+                return None
+            flux = np.array(table["spectrum"][rows[0]], dtype=float)
+            error = np.array(table["uncertainty"][rows[0]], dtype=float)
+    except Exception:                                     # noqa: BLE001
+        return None
+    centre = slice(flux.size // 4, 3 * flux.size // 4)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        snr = flux[centre] / error[centre]
+    snr = snr[np.isfinite(snr)]
+    return round(float(np.median(snr)), 2) if snr.size else None
+
+
+def _expres(headers, out: dict, path: str) -> dict:
     """EXPRES: the date and the BERV are those LBL's class reads
     (lbl.instruments.expres), the flux-weighted midpoint of the exposure and
     its barycentric redshift, in the header of the exposure meter's
-    extension. Its headers give no SNR."""
+    extension. Its headers give no SNR: it is read from the data
+    (_expres_snr)."""
     from lbl.core.math import speed_of_light
     from lbl.instruments import expres
     out["object"] = str(headers[0].get("OBJECT", "")).strip() or None
     out["exptime"] = _first(headers, ("AEXPTIME", "EXPTIME"))
+    out["snr"] = _expres_snr(path)
     for head in headers:
         midpoint = _number(head.get(expres.BARY_MIDPOINT_KEY))
         redshift = _number(head.get(expres.BARY_REDSHIFT_KEY))
@@ -352,12 +384,16 @@ class Scanner:
                 record = self.index["targets"].setdefault(name, {}).get(key)
                 self.current = name
             if (record is None or record.get("size") != stat.st_size
-                    or record.get("mtime") != int(stat.st_mtime)):
+                    or record.get("mtime") != int(stat.st_mtime)
+                    or record.get("reader", 1) != READER_VERSION.get(
+                        record.get("instrument"), 1)):
                 try:
                     record = read_file(path)
                 except Exception as exc:                  # noqa: BLE001
                     record = dict(unreadable=str(exc)[:120])
-                record.update(size=stat.st_size, mtime=int(stat.st_mtime))
+                record.update(size=stat.st_size, mtime=int(stat.st_mtime),
+                              reader=READER_VERSION.get(
+                                  record.get("instrument"), 1))
                 with self.lock:
                     self.index["targets"][name][key] = record
                 changed += 1
