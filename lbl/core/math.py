@@ -338,22 +338,28 @@ if not HAS_NUMBA:
 
 
 # Set "nopython" mode for best performance, equivalent to @nji
-@jit(nopython=True, cache=True)
+#   error_model='numpy': a division by zero gives NaN or inf and does not raise
+@jit(nopython=True, cache=True, error_model='numpy')
 def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
-                   odd_ratio: float = 2e-4, nmax: int = 10,
+                   odd_ratio: float = 2e-3, nmax: int = 10,
                    conv_cut=1e-2) -> Tuple[float, float]:
     """
     Provide values and corresponding errors and compute a weighted mean
 
     :param value: np.array (1D), value array
     :param error: np.array (1D), uncertainties for value array
-    :param odd_ratio: float, the probability that the point is bad
-                    Recommended value in Artigau et al. 2021 : f0 = 0.002
+    :param odd_ratio: float, the height of the flat outlier floor relative to
+                    the Gaussian peak of each point: f0 = 2e-3 in Artigau et
+                    al. 2022 (Appendix B), which gives a point a weight of
+                    about 0.5 at 3.5 sigma and about 0.02 at 4.5 sigma
     :param nmax: int, maximum number of iterations to pass through
     :param conv_cut: float, the convergence cut criteria - how precise we have
                      to get
 
-    :return: tuple, 1. the weighted mean, 2. the error on weighted mean
+    :return: tuple, 1. the weighted mean, 2. the error on weighted mean.
+             When all the points are so far from the median that their weights
+             are exactly zero: (NaN, inf). When no weight is finite (all the
+             errors are zero, for example): (NaN, NaN).
     """
     # deal with NaNs in value or error
     keep = np.isfinite(value) & np.isfinite(error)
@@ -389,6 +395,7 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
         # update the guess based on the weights
         if np.sum(np.isfinite(weights)) == 0:
             guess = np.nan
+            bulk_error = np.nan
         else:
             guess = np.nansum(value * weights) / np.nansum(weights)
             # work out the bulk error
