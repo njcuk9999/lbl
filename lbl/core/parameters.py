@@ -453,9 +453,9 @@ params.set('COMPIL_MAX_PIXEL_WIDTH', None, source=__NAME__,
 params.set('COMPIL_CUT_PEARSONR', -1, source=__NAME__,
            desc='Max likelihood of correlation with BERV to use line')
 
-# define the CCF e-width to use for FP files
+# define the CCF e-width to use for FP files [km/s]
 params.set('COMPIL_FP_EWID', None, source=__NAME__,
-           desc='define the CCF e-width to use for FP files',
+           desc='define the CCF e-width to use for FP files [km/s]',
            not_none=True)
 
 # define whether to add the magic "binned wavelength" bands rv

@@ -229,3 +229,46 @@ def test_the_nightly_table_ignores_unmeasured_values():
     assert np.allclose(rdb2['vrad_x'], [2.0, 6.0])
     assert np.allclose(rdb2['svrad_x'], [np.sqrt(0.5), np.sqrt(2.0)])
     assert np.allclose(rdb2['BERV'], [11.0, 2.0])
+
+
+def test_a_calibration_run_has_its_line_velocities_and_fwhm_in_m_s():
+    """FP files: the DV and SDV extensions hold the line velocities (they
+    were left at zero), and with CCF_EW = 0 in the headers the fwhm uses
+    COMPIL_FP_EWID in km/s: 5 km/s gives a FWHM of 11.77 km/s"""
+    wave, _, _, dv, sdv = synthetic_star()
+    d2v = np.full_like(dv, -40000.0)
+    inst = SynthInst(make_tables(dv, sdv, wave, d2v=d2v), np.arange(12.0),
+                     ccf_ew=0.0, DATA_TYPE='FP')
+    out, rdb = run_rdb(inst)
+    assert np.allclose(out['DV'], dv, equal_nan=True)
+    assert np.allclose(out['SDV'], sdv, equal_nan=True)
+    fwhm = mp.fwhm_value() * 5000.0
+    dw = 8 * np.log(2) * -40000.0
+    assert np.allclose(rdb['fwhm'], fwhm + dw / fwhm)
+    assert np.all(np.array(rdb['fwhm']) > 0.9 * fwhm)
+
+
+def test_a_one_file_run_gives_its_velocity():
+    """A line seen once has no offset to remove: a one-file compile gives
+    the weighted mean of the lines, where it used to fail"""
+    wave, velocity, _, dv, sdv = synthetic_star(nepoch=1)
+    inst = SynthInst(make_tables(dv, sdv, wave), np.arange(1.0))
+    _, rdb = run_rdb(inst)
+    assert abs(rdb['vrad'][0] - mp.odd_ratio_mean(dv[0], sdv[0])[0]) < 1e-9
+
+
+def test_a_short_run_keeps_lines_seen_twice_with_their_offset():
+    """Three files, lines with offsets, some lines missing in one file: the
+    zero point of those lines is the mean of their two differences, and they
+    are not lost by the 100 sigma cut"""
+    wave, velocity, offset, dv, sdv = synthetic_star(nepoch=3, offsets=20.0,
+                                                     seed=8)
+    dv[0, :100] = np.nan
+    inst = SynthInst(make_tables(dv, sdv, wave), np.arange(3.0))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out, saved = capture(general.make_rdb_table, inst, 'x.rdb',
+                             inst.files(), '.', names=['per_line_mean'])
+    plm = np.array(saved['per_line_mean'])
+    assert np.all(np.isfinite(plm[:100]))
+    assert np.corrcoef(plm[:100], offset[:100])[0, 1] > 0.9

@@ -2154,6 +2154,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # get fraction of time a line as been measured
     frac_time_meas = inst.params['COMPIL_FRAC_TIME_MEAS']
     # obj_sci = inst.params['OBJECT_SCIENCE']
+    # the CCF e-width of calibration files, in km/s
     ccf_ew_fp = inst.params['COMPIL_FP_EWID']
     # get the threshold of pearson-r likelihood of correlation with BERV
     cut_pearsonr = inst.params['COMPIL_CUT_PEARSONR']
@@ -2406,12 +2407,11 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # Read all lines for this file and load into arrays
         # ---------------------------------------------------------------------
-        # if we don't have a calibration we set the rvs and dvrms from rv table
-        if not flag_calib:
-            dv_arr[row] = rvtable['dv'][good]
-            sdv_arr[row] = rvtable['sdv'][good]
-        # else we calculate it using odd ratio mean
-        else:
+        # the line velocities of this file (the DV and SDV extensions)
+        dv_arr[row] = rvtable['dv'][good]
+        sdv_arr[row] = rvtable['sdv'][good]
+        # for a calibration the velocity is their odd ratio mean
+        if flag_calib:
             cal_rv = np.array(rvtable['dv'][good], dtype=float)
             cal_dvrms = np.array(rvtable['sdv'][good], dtype=float)
             # estimate using odd ratio mean
@@ -2620,13 +2620,20 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # find valid velocity measurements
             good1 = np.isfinite(dv_arr[:, line_it])
             per_line_diff = (dv_arr[:, line_it] - rdb_dict['vrad'])
-            # skip if less that 3 valid values for this line
+            # fewer than 3 valid values for this line: in a run of fewer
+            #   than 5 files, the plain mean of its differences to the
+            #   per-epoch velocities (a line seen once has no offset that can
+            #   be told from its velocity: it is kept with an offset of 0);
+            #   in longer runs the line is not used
             if np.sum(good1) < 3:
-                if dv_arr.shape[0] < 5:
-                    per_line_mean[line_it] = np.nanmean(dv_arr[:, line_it])
+                if dv_arr.shape[0] < 5 and np.sum(good1) == 1:
+                    per_line_mean[line_it] = 0.0
+                    per_line_error[line_it] = sdv_arr[good1, line_it][0]
+                elif dv_arr.shape[0] < 5 and np.sum(good1) == 2:
+                    per_line_mean[line_it] = np.nanmean(per_line_diff)
                     # calculate the per line error
-                    part1 = np.nanstd(dv_arr[:, line_it])
-                    part2 = np.sqrt(np.sum(good))
+                    part1 = np.nanstd(per_line_diff)
+                    part2 = np.sqrt(np.sum(good1))
                     per_line_error[line_it] = part1 / part2
                 else:
                     per_line_mean[line_it] = np.nan
@@ -2831,8 +2838,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
 
         ccf_ew_row = rdb_dict[ccf_ew_col][row]
         # TODO -> make this smarter if we have LFC or HC
+        #   (CCF_EW is in m/s, COMPIL_FP_EWID in km/s)
         if ccf_ew_row == 0:
-            ccf_ew_row = float(ccf_ew_fp)
+            ccf_ew_row = float(ccf_ew_fp) * 1000
 
         # work out the fwhm (1 sigma * sigma value)
         d2v = rdb_dict['d2v'][row]
