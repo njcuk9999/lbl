@@ -141,13 +141,14 @@ class NIRPS(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 25)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.param_set('COMPILE_BINNED_BAND1', 'H', source=func_name)
+        #    the bands are j and h (lower case)
+        self.param_set('COMPILE_BINNED_BAND1', 'h', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'J', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', 'j', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'H', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', 'h', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 1600, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -163,15 +164,15 @@ class NIRPS(Instrument):
         self.param_set('READ_OUT_NOISE', 30, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
@@ -778,8 +779,8 @@ class NIRPS(Instrument):
             # -----------------------------------------------------------------
             # must check time frame (if present) for FP
             cond2, cond3 = True, True
-            # get mjdmid
-            mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
+            # get mjdmid: the limits are MJDs, the key may hold a BJD
+            mjdmid = self.to_mjd(sci_hdr[self.params['KW_MID_EXP_TIME']])
             # check start time for FP calibration
             if not mcond2:
                 cond2 = mjdmid >= start
@@ -988,9 +989,9 @@ class NIRPS(Instrument):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1271,9 +1272,9 @@ class NIRPS_HA(NIRPS):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1358,9 +1359,9 @@ class NIRPS_HE(NIRPS):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1446,11 +1447,11 @@ class NIRPS_HA_CADC(NIRPS_HA):
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         # flux extname kind
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name
@@ -1662,11 +1663,11 @@ class NIRPS_HE_CADC(NIRPS_HE):
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     '{0} mode')
-            base_classes.LblException(emsg.format(self.name))
+            raise base_classes.LblException(emsg.format(self.name))
         # flux extname kind
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name
@@ -2006,10 +2007,30 @@ class NIRPS_HA_ESO(NIRPS_HA):
         :return:
         """
         _ = sci_hdr
-        # ESPRESSO data is always BERV corrected from the starting point
+        # the S2D wave grid (extension 4) is already barycentric
         berv = 0.0
         # return the berv measurement (in m/s)
         return berv
+
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s.
+
+        The wave grid of the S2D (extension 4, WAVEDATA_VAC_BARY in the ESO
+        format) is already barycentric, so get_berv returns zero; the
+        atmosphere sat in the observer frame and moved by the header's BERV.
+        This is what lbl_telluclean shifts TAPAS by, and what PCA2D takes as
+        the observer's BERV.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
+        hdr_key = self.params['KW_BERV']
+        try:
+            return float(sci_hdr.get_hkey(hdr_key, dtype=float)) * 1000
+        except Exception:
+            return 0.0
 
     def populate_sci_table(self, filename: str, tdict: dict,
                            sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
@@ -2218,9 +2239,6 @@ class NIRPS_HA_ESO(NIRPS_HA):
         """
         # get the wave centers for each order
         wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
         # find the 'diffraction' order for a given 'on-detector' order
         dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
         dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
@@ -2278,9 +2296,9 @@ class NIRPS_HA_ESO(NIRPS_HA):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -2479,10 +2497,30 @@ class NIRPS_HE_ESO(NIRPS_HE):
         :return:
         """
         _ = sci_hdr
-        # ESPRESSO data is always BERV corrected from the starting point
+        # the S2D wave grid (extension 4) is already barycentric
         berv = 0.0
         # return the berv measurement (in m/s)
         return berv
+
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s.
+
+        The wave grid of the S2D (extension 4, WAVEDATA_VAC_BARY in the ESO
+        format) is already barycentric, so get_berv returns zero; the
+        atmosphere sat in the observer frame and moved by the header's BERV.
+        This is what lbl_telluclean shifts TAPAS by, and what PCA2D takes as
+        the observer's BERV.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
+        hdr_key = self.params['KW_BERV']
+        try:
+            return float(sci_hdr.get_hkey(hdr_key, dtype=float)) * 1000
+        except Exception:
+            return 0.0
 
     def populate_sci_table(self, filename: str, tdict: dict,
                            sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
@@ -2693,9 +2731,6 @@ class NIRPS_HE_ESO(NIRPS_HE):
         """
         # get the wave centers for each order
         wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
         # find the 'diffraction' order for a given 'on-detector' order
         dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
         dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
@@ -2770,9 +2805,9 @@ class NIRPS_HE_ESO(NIRPS_HE):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

@@ -159,15 +159,15 @@ class Spirou(Instrument):
         self.param_set('READ_OUT_NOISE', 30, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
@@ -1024,9 +1024,9 @@ class Spirou(Instrument):
         # define the region names (suffices)
         region_names = ['', '_0-2044', '_2044-4088', '_1532-2556']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2044, 1532]
+        region_low = [-np.inf, 0, 2044, 1532]
         # upper x pixel bin point [pixels]
-        region_high = [4088, 2044, 4088, 2556]
+        region_high = [np.inf, 2044, 4088, 2556]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1332,11 +1332,11 @@ class SpirouCADC(Spirou):
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'SPIROU CADC mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'SPIROU CADC mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         # flux extname kind
         flux_extname = self.params['FLUX_EXTENSION_NAME']
         # full extension name

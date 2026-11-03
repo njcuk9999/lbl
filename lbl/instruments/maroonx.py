@@ -136,15 +136,15 @@ class MaroonX(Instrument):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
@@ -909,12 +909,8 @@ class MaroonXBlue(MaroonX):
         # define whether we should use regions for each band
         use_regions = [True, True, True]
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1063,6 +1059,11 @@ class MaroonXRed(MaroonX):
         self.param_set('KW_SNR', 'SNR_74', source=func_name)
         # define which bands to use for the clean CCF (see astro.ccf_regions)
         self.param_set('CCF_CLEAN_BANDS', ['i'], source=func_name)
+        # the bands to plot (from get_binned_parameters): only i lies whole
+        #    in the domain, so no colour
+        self.param_set('COMPILE_BINNED_BAND1', 'i', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', None, source=func_name)
         # define the compil minimum wavelength allowed for lines [nm]
         self.param_set('COMPIL_WAVE_MIN', 647, source=func_name)
         # define the compil maximum wavelength allowed for lines [nm]
@@ -1231,12 +1232,8 @@ class MaroonXRed(MaroonX):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2018', '_2018-4036']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2018]
-        # upper x pixel bin point [pixels]
-        region_high = [4036, 2018, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

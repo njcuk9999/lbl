@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SOPHIE instrument class here: instrument specific settings
+ESSP instrument class here: what the ESSP readers of each instrument share
 
 Created on 2023-06-21
 
@@ -24,7 +24,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.expres.py'
+__NAME__ = 'instruments.essp.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -37,7 +37,7 @@ log = io.log
 
 
 # =============================================================================
-# Define SOPHIE class
+# Define ESSP class
 # =============================================================================
 class ESSP(Instrument):
     """
@@ -379,9 +379,6 @@ class ESSP(Instrument):
         """
         # get the wave centers for each order
         wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
         # find the 'diffraction' order for a given 'on-detector' order
         dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
         dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
@@ -630,12 +627,8 @@ class ESSP(Instrument):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -692,30 +685,27 @@ class ESSP(Instrument):
                                props['pre_cleaned_exponent_others'])
         # set image as pre_cleaned_flux
         image = props['pre_cleaned_flux']
-        # we need to get the data array from the fits file
-        data_array = io.load_fits(props['FILENAME'],
-                                  kind='science fits file',
-                                  extname='optimal')
-        # we push the image into the data arrays "spectrum" column
-        data_array['spectrum'] = image
-        # adding extensions that are not the flux after telluric correction
-        #   (error propagation, wavelength grid)
-        datalist = [None, data_array]
-        headerlist = [header, None]
-        datatypelist = [None, 'table']
+        # the FLUX extension (what load_science_file reads) is replaced, the
+        #   others (wavelength grid, blaze, errors) are kept under their names
+        datalist, headerlist = [None], [header]
+        datatypelist, names = [None], [None]
         # open hdulist
         with fits.open(props['FILENAME']) as hdulist:
-            # add the header for extension 1
-            if len(hdulist) > 1:
-                headerlist[1] = hdulist[1].header
-            # loop around and add other extensions
-            for hdu in hdulist[2:]:
-                datalist.append(hdu.data)
+            for hdu in hdulist[1:]:
+                if hdu.name == 'FLUX':
+                    datalist.append(image)
+                else:
+                    datalist.append(hdu.data)
                 headerlist.append(hdu.header)
+                names.append(hdu.name)
                 if isinstance(hdu, fits.hdu.image.ImageHDU):
                     datatypelist.append('image')
                 else:
                     datatypelist.append('table')
+        # without a FLUX extension the file could not be read back
+        if 'FLUX' not in names:
+            emsg = 'Science file {0} has no FLUX extension'
+            raise LblException(emsg.format(props['FILENAME']))
         # ---------------------------------------------------------------------
         # change the file name
         write_tellu_file = self.modify_tellu_filename(write_tellu_file)
@@ -725,7 +715,7 @@ class ESSP(Instrument):
         # ---------------------------------------------------------------------
         # write to file
         io.write_fits(write_tellu_file, data=datalist,
-                      header=headerlist, dtype=datatypelist)
+                      header=headerlist, dtype=datatypelist, names=names)
 
 # =============================================================================
 # Start of code

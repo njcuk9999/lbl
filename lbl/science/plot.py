@@ -18,6 +18,7 @@ from astropy.table import Table
 
 from lbl.core import base
 from lbl.core import base_classes
+from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import select
 
@@ -31,6 +32,7 @@ __authors__ = base.__authors__
 # get classes
 InstrumentsType = select.InstrumentsType
 LblException = base_classes.LblException
+log = io.log
 # plt module
 PLT_MOD = None
 
@@ -336,53 +338,59 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     if not inst.params['PLOT_COMPIL_BINNED']:
         return
     # -------------------------------------------------------------------------
-    # get the band names from params
-    band1_name = inst.params['COMPILE_BINNED_BAND1']
-    band2_name = inst.params['COMPILE_BINNED_BAND2']
-    band3_name = inst.params['COMPILE_BINNED_BAND3']
+    # get the band names from params: a band with no column in the table
+    #   (not among the instrument's bands, or not set) is left out
+    names = dict()
+    for num in (1, 2, 3):
+        name = inst.params['COMPILE_BINNED_BAND{0}'.format(num)]
+        if 'vrad_{0}'.format(name) in rdb_table.colnames:
+            names[num] = name
+        else:
+            msg = 'Binned band plot: no band "{0}" (COMPILE_BINNED_BAND{1})'
+            log.general(msg.format(name, num))
+    has_band1 = 1 in names
+    has_colour = 2 in names and 3 in names
     # get arrays from rdb table
     rjd = rdb_table['rjd']
     vrad = rdb_table['vrad']
     svrad = rdb_table['svrad']
-    vrad_band1 = rdb_table['vrad_{0}'.format(band1_name)]
-    svrad_band1 = rdb_table['svrad_{0}'.format(band1_name)]
-    vrad_band2 = rdb_table['vrad_{0}'.format(band2_name)]
-    svrad_band2 = rdb_table['svrad_{0}'.format(band2_name)]
-    vrad_band3 = rdb_table['vrad_{0}'.format(band3_name)]
-    svrad_band3 = rdb_table['svrad_{0}'.format(band3_name)]
-    # get colour (band2 - band3)
-    vrad_colour = vrad_band2 - vrad_band3
-    svrad_colour = np.sqrt(svrad_band2 ** 2 + svrad_band3 ** 2)
-    # normalize by median value
-    nvrad_band1 = vrad_band1 - mp.nanmedian(vrad_band1)
     nvrad = vrad - mp.nanmedian(vrad)
-    nvrad_colour = vrad_colour - mp.nanmedian(vrad_colour)
-    # colour name
-    colour_name = '{0} - {1}'.format(band2_name, band3_name)
     # -------------------------------------------------------------------------
-    # set up plot
-    fig, frames = plt.subplots(ncols=1, nrows=2, sharex='all')
+    # set up plot: one panel for band 1 (with all lines), one for the colour
+    nrows = 1 + int(has_colour)
+    fig, frames = plt.subplots(ncols=1, nrows=nrows, sharex='all',
+                               squeeze=False)
+    frames = frames[:, 0]
     # -------------------------------------------------------------------------
-    # plot functions here
-
     # plot band 1
-    frames[0].errorbar(rjd, nvrad_band1, fmt='.r', yerr=svrad_band1, alpha=0.2,
-                       label=band1_name)
+    if has_band1:
+        band1_name = names[1]
+        vrad_band1 = rdb_table['vrad_{0}'.format(band1_name)]
+        svrad_band1 = rdb_table['svrad_{0}'.format(band1_name)]
+        nvrad_band1 = vrad_band1 - mp.nanmedian(vrad_band1)
+        frames[0].errorbar(rjd, nvrad_band1, fmt='.r', yerr=svrad_band1,
+                           alpha=0.2, label=band1_name)
+        title0 = '{0} velocity'.format(band1_name)
+    else:
+        title0 = 'velocity'
     # plot all vrad
     frames[0].errorbar(rjd, nvrad, fmt='.k', yerr=svrad, alpha=0.8,
                        label='all')
-    # plot colour
-    frames[1].errorbar(rjd, nvrad_colour, fmt='.g', yerr=svrad_colour,
-                       alpha=0.5, label=colour_name)
-    # -------------------------------------------------------------------------
-    # add legend
     frames[0].legend(loc=0)
-    # construct axis titles
-    title0 = '{0} velocity'.format(band1_name)
-    title1 = '{0} velocity difference'.format(colour_name)
-    # set labels
     frames[0].set(xlabel='rjd', ylabel='RV [m/s]', title=title0)
-    frames[1].set(xlabel='rjd', ylabel='RV [m/s]', title=title1)
+    # plot colour (band2 - band3)
+    if has_colour:
+        band2_name, band3_name = names[2], names[3]
+        vrad_colour = (rdb_table['vrad_{0}'.format(band2_name)] -
+                       rdb_table['vrad_{0}'.format(band3_name)])
+        svrad_colour = np.sqrt(rdb_table['svrad_{0}'.format(band2_name)] ** 2 +
+                               rdb_table['svrad_{0}'.format(band3_name)] ** 2)
+        nvrad_colour = vrad_colour - mp.nanmedian(vrad_colour)
+        colour_name = '{0} - {1}'.format(band2_name, band3_name)
+        frames[1].errorbar(rjd, nvrad_colour, fmt='.g', yerr=svrad_colour,
+                           alpha=0.5, label=colour_name)
+        title1 = '{0} velocity difference'.format(colour_name)
+        frames[1].set(xlabel='rjd', ylabel='RV [m/s]', title=title1)
     # construct main title
     title = 'OBJECT_SCIENCE = {0}    OBJECT_COMPARISON_{1}'
     targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON']]

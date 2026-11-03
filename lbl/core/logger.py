@@ -102,12 +102,15 @@ class Log:
         # update console fmt
         self.confmt = self.format_class(theme=self.theme, program=program)
         self.filefmt = self.format_class(theme='OFF', program=program)
-        # loop around handlers and change level
-        for it in range(len(self.logger.handlers)):
-            if isinstance(self.logger.handlers[it], logging.StreamHandler):
-                self.logger.handlers[it].setLevel(level)
-            # set the format from console format
-            self.logger.handlers[it].setFormatter(self.confmt)
+        # the console takes the level and the console format; a log file
+        #   (a FileHandler is a StreamHandler too) keeps its level and gets
+        #   the file format, without colour codes
+        for handler in self.logger.handlers:
+            if isinstance(handler, logging.FileHandler):
+                handler.setFormatter(self.filefmt)
+            elif isinstance(handler, logging.StreamHandler):
+                handler.setLevel(level)
+                handler.setFormatter(self.confmt)
 
     def add_log_file(self, filepath: str, level: Union[str, int, None] = None):
         # set file path
@@ -506,6 +509,9 @@ class Colors:
     def update_theme(self, theme=None):
         if theme is not None:
             self.theme = theme
+        self.endc = self.ENDC
+        self.bold = self.BOLD
+        self.underline = self.UNDERLINE
         if self.theme == 'DARK':
             self.header = self.MAGENTA1
             self.okblue = self.BLUE1
@@ -522,6 +528,10 @@ class Colors:
             self.warning = ''
             self.fail = ''
             self.debug = ''
+            # no closing code either (the log file's format)
+            self.endc = ''
+            self.bold = ''
+            self.underline = ''
         else:
             self.header = self.MAGENTA2
             self.okblue = self.MAGENTA2

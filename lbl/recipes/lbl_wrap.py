@@ -18,6 +18,7 @@ import sys
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import vetted
 from lbl.recipes import lbl_compile
 from lbl.recipes import lbl_compute
 from lbl.recipes import lbl_mask
@@ -46,7 +47,7 @@ REMOVE_KEYS = [  # core
     'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'OBJECT_TEFF',
     'BLAZE_CORRECTED', 'BLAZE_FILE',
     # run keys
-    'RUN_LBL_RESET',
+    'RUN_LBL_RESET', 'RUN_LBL_RESMAP',
     'RUN_LBL_TELLUCLEAN', 'RUN_LBL_TEMPLATE', 'RUN_LBL_MASK',
     'RUN_LBL_COMPUTE', 'RUN_LBL_COMPILE',
     # skip keys
@@ -101,7 +102,8 @@ def main(runparams: dict):
     data_dir = lbl_misc.check_runparams(runparams, 'DATA_DIR')
     data_source = lbl_misc.check_runparams(runparams, 'DATA_SOURCE')
     data_types = lbl_misc.check_runparams(runparams, 'DATA_TYPES')
-    object_sciences = lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE')
+    object_sciences = _object_list(
+        lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE'))
     object_comparisons = lbl_misc.check_runparams(runparams, 'OBJECT_COMPARISON')
     object_teffs = lbl_misc.check_runparams(runparams, 'OBJECT_TEFF')
     blaze_corrs = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED',
@@ -125,6 +127,16 @@ def main(runparams: dict):
             emsg = ('LBL_WRAP ERROR: Cannot have RUN_LBL_MASK=True and '
                     'MASK_FILE={0} (Must be unset)')
             raise base_classes.LblException(emsg.format(runparams['MASK_FILE']))
+    # the residual map recipe is not run by the wrap
+    if runparams['RUN_LBL_RESMAP']:
+        log.warning('RUN_LBL_RESMAP=True: lbl_resmap is not run by the wrap, '
+                    'run it on its own')
+    # -------------------------------------------------------------------------
+    # the reset cleans the products of every object in DATA_DIR: once, before
+    #   the first object, or only the last object's products would survive
+    if runparams['RUN_LBL_RESET']:
+        lbl_reset.main(instrument=instrument, data_dir=data_dir,
+                       data_source=data_source, **keyword_args)
     # -------------------------------------------------------------------------
     # mark the expected length if a list
     olen = len(object_sciences)
@@ -159,12 +171,14 @@ def main(runparams: dict):
         blaze_file = lbl_misc.wraplistcheck(blaze_files,
                                             'BLAZE_FILE', **wkargs)
         # ---------------------------------------------------------------------
-        if runparams['RUN_LBL_RESET']:
-            lbl_reset.main(instrument=instrument, data_dir=data_dir,
-                           data_source=data_source, **keyword_args)
-        # ---------------------------------------------------------------------
         # run all pre-cleaning steps
         if runparams['RUN_LBL_TELLUCLEAN'] and data_type == 'SCIENCE':
+            # the template the cleaning uses is the star's own, made from its
+            #   cleaned spectra (its lines are divided out of each spectrum);
+            #   the comparison is what the velocities are measured against
+            tc_template = _tc_name(object_science)
+            tc_comparison = _tc_comparison(runparams, data_dir, instrument,
+                                           object_science, object_comparison)
             # run telluric cleaning (without template)
             lbl_telluclean.main(instrument=instrument, data_dir=data_dir,
                                 data_source=data_source,
@@ -176,15 +190,12 @@ def main(runparams: dict):
                                 blaze_corrected=blaze_corr,
                                 blaze_file=blaze_file,
                                 **keyword_args)
-            # update template name
-            if not object_comparison.endswith('_tc'):
-                object_comparison = object_comparison + '_tc'
             # make the template (if not present)
             lbl_template.main(instrument=instrument, data_dir=data_dir,
                               data_source=data_source,
                               data_type=data_type,
                               object_science=object_science + '_tc',
-                              object_comparison=object_comparison,
+                              object_comparison=tc_template,
                               blaze_corrected=blaze_corr,
                               blaze_file=blaze_file,
                               overwrite=True,
@@ -195,7 +206,7 @@ def main(runparams: dict):
                                 data_source=data_source,
                                 data_type=data_type,
                                 object_science=object_science,
-                                object_comparison=object_comparison,
+                                object_comparison=tc_template,
                                 skip_done=False,
                                 telluclean_use_template=True,
                                 blaze_corrected=blaze_corr,
@@ -210,14 +221,14 @@ def main(runparams: dict):
                               data_source=data_source,
                               data_type=data_type,
                               object_science=object_science + '_tc',
-                              object_comparison=object_comparison,
+                              object_comparison=tc_template,
                               blaze_corrected=blaze_corr,
                               blaze_file=blaze_file,
                               overwrite=True,
                               **keyword_args)
-            # update object name
-            if not object_science.endswith('_tc'):
-                object_science = object_science + '_tc'
+            # update object and comparison names
+            object_science = _tc_name(object_science)
+            object_comparison = tc_comparison
         # ---------------------------------------------------------------------
         # LBL's own steps, from the template to the report
         steps = dict(runparams=runparams, keyword_args=keyword_args,
@@ -303,6 +314,53 @@ def main(runparams: dict):
         else:
             _lbl_steps(object_science=object_science,
                        object_comparison=object_comparison, **steps)
+
+
+def _object_list(object_sciences) -> list:
+    """OBJECT_SCIENCE as a list: a string is one object (not its letters)"""
+    if isinstance(object_sciences, str):
+        return [object_sciences]
+    if isinstance(object_sciences, (list, tuple)):
+        return list(object_sciences)
+    emsg = ('LBL_WRAP ERROR: OBJECT_SCIENCE must be an object name or a list '
+            'of them (got {0})')
+    raise base_classes.LblException(emsg.format(repr(object_sciences)))
+
+
+def _tc_name(objname: str) -> str:
+    """The name of an object after the telluric cleaning"""
+    return objname if objname.endswith('_tc') else objname + '_tc'
+
+
+def _tc_comparison(runparams: dict, data_dir: str, instrument: str,
+                   object_science: str, object_comparison: str) -> str:
+    """
+    The comparison of a telluric-cleaned object: the object's own cleaned
+    template; a vetted template as it is (a stellar template, with no
+    telluric lines to clean); another star's cleaned template, which needs
+    that star cleaned first (its science/<star>_tc spectra, or its template)
+    """
+    if object_comparison in [None, '', 'None', 'Null']:
+        return _tc_name(object_science)
+    if vetted.is_vetted(object_comparison):
+        return object_comparison
+    if _tc_name(object_comparison) == _tc_name(object_science):
+        return _tc_name(object_science)
+    other = _tc_name(object_comparison)
+    science_dir = os.path.join(data_dir,
+                               runparams.get('SCIENCE_SUBDIR', 'science'),
+                               other)
+    if os.path.isdir(science_dir) or \
+            _template_of(data_dir, other, instrument) is not None:
+        return other
+    emsg = ('LBL_WRAP ERROR: OBJECT_SCIENCE={0} with OBJECT_COMPARISON={1} and '
+            'RUN_LBL_TELLUCLEAN=True: the velocities are measured against '
+            'the template of the cleaned comparison, {2}, and there are '
+            'neither {2} spectra ({3}) nor a {2} template. Clean {1} first '
+            '(earlier in the OBJECT_SCIENCE list, or in an earlier wrap), or '
+            'compare {0} with itself or a VETTED_ template')
+    eargs = [object_science, object_comparison, other, science_dir]
+    raise base_classes.LblException(emsg.format(*eargs))
 
 
 def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
@@ -494,7 +552,8 @@ def custom(runparams: dict, func, required_kwargs: List[str]):
     data_dir = lbl_misc.check_runparams(runparams, 'DATA_DIR')
     data_source = lbl_misc.check_runparams(runparams, 'DATA_SOURCE')
     data_types = lbl_misc.check_runparams(runparams, 'DATA_TYPES')
-    object_sciences = lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE')
+    object_sciences = _object_list(
+        lbl_misc.check_runparams(runparams, 'OBJECT_SCIENCE'))
     object_comparisons = lbl_misc.check_runparams(runparams, 'OBJECT_COMPARISON')
     object_teffs = lbl_misc.check_runparams(runparams, 'OBJECT_TEFF')
     blaze_corrs = lbl_misc.check_runparams(runparams, 'BLAZE_CORRECTED',

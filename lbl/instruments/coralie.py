@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SOPHIE instrument class here: instrument specific settings
+CORALIE instrument class here: instrument specific settings
 
 Created on 2023-06-21
 
@@ -36,7 +36,7 @@ log = io.log
 
 
 # =============================================================================
-# Define SOPHIE class
+# Define CORALIE class
 # =============================================================================
 class Coralie(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -58,11 +58,11 @@ class Coralie(Instrument):
         self.update_from_args(args)
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC PARAMETERS
+    # CORALIE SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for CORALIE parameters
         (update default params)
 
         :return: None - updates self.params
@@ -71,9 +71,9 @@ class Coralie(Instrument):
         func_name = __NAME__ + '.Coralie.override()'
         # set parameters to update
         self.param_set('INSTRUMENT', 'CORALIE', source=func_name)
-        # add instrument earth location
+        # add instrument earth location: CORALIE is on the Euler telescope
         #    (for use in astropy.coordinates.EarthLocation)
-        self.param_set('EARTH_LOCATION', 'OHP')
+        self.param_set('EARTH_LOCATION', 'La Silla Observatory')
         # define the default science input files
         self.param_set('INPUT_FILE', '*.fits', source=func_name)
         # The input science data are blaze corrected
@@ -114,13 +114,14 @@ class Coralie(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
+        #    no band lies whole in the domain: nothing to plot
+        self.param_set('COMPILE_BINNED_BAND1', None, source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', None, source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -140,15 +141,15 @@ class Coralie(Instrument):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
@@ -222,10 +223,11 @@ class Coralie(Instrument):
         # define the key that gives the mid exposure time in MJD
         self.param_set('KW_MID_EXP_TIME', 'HIERARCH ESO DRS BJD',
                         source=func_name)
-        # define the start time of the observation
+        # define the start time of the observation (a BJD: to_mjd makes it an
+        #    MJD where one is needed)
         self.param_set('KW_MJDATE', 'HIERARCH ESO DRS BJD', source=func_name)
         # define snr keyword
-        self.param_set('KW_SNR', 'HIERARCH OHP DRS SPE EXT SN50',
+        self.param_set('KW_SNR', 'HIERARCH ESO DRS SPE EXT SN50',
                         source=func_name)
         # define berv keyword
         self.param_set('KW_BERV', 'HIERARCH ESO DRS BERV', source=func_name)
@@ -271,7 +273,7 @@ class Coralie(Instrument):
         self.param_set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
-    # SOPHIE SPECIFIC METHODS
+    # CORALIE SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
                     extnum: int = 0, extname: str = None) -> io.LBLHeader:
@@ -721,9 +723,9 @@ class Coralie(Instrument):
         """
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
-        # get mjdate
-        mjdate = header.get_hkey(kw_mjdate, dtype=float)
-        # convert to plot date and take off JD?
+        # get mjdate: the key may hold a BJD
+        mjdate = self.to_mjd(header.get_hkey(kw_mjdate, dtype=float))
+        # convert to plot date
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date
         return float(plot_date)
@@ -747,12 +749,8 @@ class Coralie(Instrument):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

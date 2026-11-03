@@ -167,15 +167,15 @@ class Expres(Instrument):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
@@ -900,9 +900,9 @@ class Expres(Instrument):
         # define the region names (suffices)
         region_names = ['', '_0-3960', '_3960-7920']
         # lower x pixel bin point [pixels]
-        region_low = [0, 0, 3960]
+        region_low = [-np.inf, 0, 3960]
         # upper x pixel bin point [pixels]
-        region_high = [7920, 3960, 7920]
+        region_high = [np.inf, 3960, 7920]
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -1005,16 +1005,16 @@ class Expres_ESSP(essp.ESSP):
                  args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
-            name = 'HARPS_ESSP'
+            name = 'EXPRES_ESSP'
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'LBL_Template_{0}_harps_essp.fits'
-        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_harps_essp.fits'
-        self.default_sample_wave_name = 'sample_wave_grid_harps_essp.fits'
-        # define wave limits in nm
-        self.wavemin = 387.515
-        self.wavemax = 691.128
+        self.default_template_name = 'LBL_Template_{0}_expres_essp.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_expres_essp.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_expres_essp.fits'
+        # define wave limits in nm (those of the Expres class)
+        self.wavemin = 492.0
+        self.wavemax = 727.0
         # set parameters for instrument
         self.params = params
         # override params
@@ -1030,7 +1030,7 @@ class Expres_ESSP(essp.ESSP):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.neid_ESSP.param_override()'
+        func_name = __NAME__ + '.Expres_ESSP.param_override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------
@@ -1043,7 +1043,7 @@ class Expres_ESSP(essp.ESSP):
         self.param_set('EARTH_LOCATION', 'lowell')
         # define the default science input files
         self.param_set('INPUT_FILE', '*.fits', source=func_name)
-        # The input science data are blaze corrected
+        # The input science data are not blaze corrected
         self.param_set('BLAZE_CORRECTED', False, source=func_name)
         # define the mask table format
         self.param_set('REF_TABLE_FMT', 'csv', source=func_name)
@@ -1081,13 +1081,14 @@ class Expres_ESSP(essp.ESSP):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
+        #    only r lies whole in the domain: no colour
         self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', None, source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -1107,15 +1108,15 @@ class Expres_ESSP(essp.ESSP):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)

@@ -51,10 +51,12 @@ class HarpsN(Instrument):
         self.default_template_name = 'LBL_Template_{0}_harpsn.fits'
         self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_harpsn.fits'
         self.default_sample_wave_name = 'sample_wave_grid_harpsn.fits'
-        # define wave limits in nm
-        # TODO: check these values
-        self.wavemin = 378.060
-        self.wavemax = 691.476
+        # pixels along an order (S2D files)
+        self.npixel = 4096
+        # define wave limits in nm: real S2D files run from 387.48 to 387.55
+        #    and end at 691.06 to 691.20 (vacuum, barycentric)
+        self.wavemin = 387.515
+        self.wavemax = 691.128
         # set parameters for instrument
         self.params = params
         # override params
@@ -125,13 +127,14 @@ class HarpsN(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
+        #    no band lies whole in the domain: nothing to plot
+        self.param_set('COMPILE_BINNED_BAND1', None, source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', None, source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -149,15 +152,15 @@ class HarpsN(Instrument):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)
@@ -231,7 +234,8 @@ class HarpsN(Instrument):
         # define the key that gives the mid exposure time in MJD
         self.param_set('KW_MID_EXP_TIME', 'HIERARCH TNG DRS BJD',
                         source=func_name)
-        # define the start time of the observation
+        # define the start time of the observation (a BJD: to_mjd makes it an
+        #    MJD where one is needed)
         self.param_set('KW_MJDATE', 'HIERARCH TNG DRS BJD', source=func_name)
         # define snr keyword
         self.param_set('KW_SNR', 'HIERARCH TNG DRS SPE EXT SN47',
@@ -630,9 +634,9 @@ class HarpsN(Instrument):
         """
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
-        # get mjdate
-        mjdate = header.get_hkey(kw_mjdate, dtype=float)
-        # convert to plot date and take off JD?
+        # get mjdate: the key may hold a BJD
+        mjdate = self.to_mjd(header.get_hkey(kw_mjdate, dtype=float))
+        # convert to plot date
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date
         return float(plot_date)
@@ -656,12 +660,8 @@ class HarpsN(Instrument):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()
@@ -692,10 +692,10 @@ class HarpsN_ORIG(HarpsN):
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPSN_ORIG.fits'
         self.default_sample_wave_name = 'sample_wave_grid_harpsn_orig.fits'
-        # define wave limits in nm
-        # TODO: check these values
-        self.wavemin = 378.060
-        self.wavemax = 691.476
+        # define wave limits in nm: real S2D files run from 387.48 to 387.55
+        #    and end at 691.06 to 691.20 (vacuum, barycentric)
+        self.wavemin = 387.515
+        self.wavemax = 691.128
         # set parameters for instrument
         self.params = params
         # override params
@@ -747,7 +747,8 @@ class HarpsN_ORIG(HarpsN):
         # define the key that gives the mid exposure time in MJD
         self.param_set('KW_MID_EXP_TIME', 'HIERARCH TNG DRS BJD',
                         source=func_name)
-        # define the start time of the observation
+        # define the start time of the observation (a BJD: to_mjd makes it an
+        #    MJD where one is needed)
         self.param_set('KW_MJDATE', 'HIERARCH TNG DRS BJD', source=func_name)
         # define snr keyword
         self.param_set('KW_SNR', 'HIERARCH TNG DRS SPE EXT SN47',
@@ -821,12 +822,7 @@ class HarpsN_ORIG(HarpsN):
             sci_image, sci_hdr = self.load_science_file(science_file)
             # get wave solution for reference file
             sci_wave = self.get_wave_solution(science_file, sci_image, sci_hdr)
-            # the blaze is not expressed as a flux density but the science spectrum
-            # is. We match the two
-            gradwave = np.gradient(sci_wave, axis=1)
-            for order_num in range(blaze.shape[0]):
-                gradwave[order_num] /= np.nanmedian(gradwave[order_num])
-            blaze = blaze * gradwave
+            # an e2ds and its blaze are both per pixel: the blaze is used as it is
             # deal with normalizing per order
             if normalize:
                 # get the blaze parameters (may be instrument specific)
@@ -871,12 +867,7 @@ class HarpsN_ORIG(HarpsN):
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # get wave solution for reference file
         sci_wave = self.get_wave_solution(science_file, sci_image, sci_hdr)
-        # the blaze is not expressed as a flux density but the science spectrum
-        # is. We match the two
-        gradwave = np.gradient(sci_wave, axis=1)
-        for order_num in range(blaze.shape[0]):
-            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
-        blaze = blaze * gradwave
+        # an e2ds and its blaze are both per pixel: the blaze is used as it is
         # deal with normalizing per order
         if normalize:
             # get the blaze parameters (may be instrument specific)
@@ -976,10 +967,10 @@ class HarpsN_ESO(HarpsN):
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPSN_ESO.fits'
         self.default_sample_wave_name = 'sample_wave_grid_harpsn_eso.fits'
-        # define wave limits in nm
-        # TODO: check these values
-        self.wavemin = 378.060
-        self.wavemax = 691.476
+        # define wave limits in nm: real S2D files run from 387.48 to 387.55
+        #    and end at 691.06 to 691.20 (vacuum, barycentric)
+        self.wavemin = 387.515
+        self.wavemax = 691.128
         # set parameters for instrument
         self.params = params
         # override params
@@ -1034,7 +1025,7 @@ class HarpsN_ESO(HarpsN):
         self.param_set('KW_MID_EXP_TIME', 'HIERARCH TNG QC BJD',
                         source=func_name)
         # define the start time of the observation
-        self.param_set('KW_MJDATE', 'HIERARCH TNG QC BJD', source=func_name)
+        self.param_set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         self.param_set('KW_SNR', 'HIERARCH TNG QC ORDER65 SNR',
                         source=func_name)
@@ -1056,8 +1047,7 @@ class HarpsN_ESO(HarpsN):
         # 3. The value of the header key that tells us key 1 is a blaze file
         self.param_set('KW_BLAZE_FILE_WILDV', 'BLAZE_A', source=func_name)
         # define the exposure time of the observation
-        self.param_set('KW_EXPTIME', 'HIERARCH TNG QC BJD',
-                        source=func_name)
+        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
         self.param_set('KW_AIRMASS', 'AIRMASS',
                         source=func_name)
@@ -1170,9 +1160,6 @@ class HarpsN_ESO(HarpsN):
         """
         # get the wave centers for each order
         wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
         # find the 'diffraction' order for a given 'on-detector' order
         dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
         dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
@@ -1300,7 +1287,7 @@ class HarpsN_ESSP(essp.ESSP):
 
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for HARPS-N ESSP parameters
         (update default params)
 
         :return: None - updates self.params
@@ -1357,13 +1344,14 @@ class HarpsN_ESSP(essp.ESSP):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
-        self.param_set('COMPILE_BINNED_BAND1', 'r', source=func_name)
+        #    no band lies whole in the domain: nothing to plot
+        self.param_set('COMPILE_BINNED_BAND1', None, source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', None, source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 550, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -1381,15 +1369,15 @@ class HarpsN_ESSP(essp.ESSP):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)

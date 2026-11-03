@@ -26,6 +26,28 @@ __date__ = base.__date__
 __authors__ = base.__authors__
 #
 NO_THEME = [False, 'False', 'OFF', 'off', 'Off', 'None']
+#: the Log of the run, which lbl_misc.move_log sets (DATA_DIR/log)
+log = None
+
+
+def exception_log() -> logger.Log:
+    """
+    The Log an exception writes to: the run's (log, set by
+    lbl_misc.move_log), else the one made when lbl.core.io was imported.
+    Never a new Log: that would drop the handlers of the run, and the
+    message and all that follows would go to ~/lbl instead of DATA_DIR/log
+
+    :return: logger.Log, the log to write to
+    """
+    if log is not None:
+        return log
+    # imported here: lbl.core.io imports this module
+    from lbl.core import io
+    io_log = getattr(io, 'log', None)
+    if io_log is not None:
+        return io_log
+    # raised while lbl.core.io is being imported: the log of the import
+    return logger.Log(filename=base.LOG_FILE)
 
 
 # =============================================================================
@@ -40,10 +62,7 @@ class LblException(Exception):
         self.message = message
         # log error
         if verbose:
-            # get log
-            log = logger.Log(filename=base.LOG_FILE)
-            # log error
-            log.error(self.message)
+            exception_log().error(self.message)
 
     def __str__(self) -> str:
         """
@@ -84,10 +103,8 @@ class LblCurveFitException(Exception):
         self.p0 = p0
         self.func = func
         self.error = error
-        # get log
-        log = logger.Log(filename=base.LOG_FILE)
         # log error
-        log.error(self.message)
+        exception_log().error(self.message)
 
     def __str__(self) -> str:
         """
