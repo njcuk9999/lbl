@@ -53,10 +53,10 @@ class HarpsN(Instrument):
         self.default_sample_wave_name = 'sample_wave_grid_harpsn.fits'
         # pixels along an order (S2D files)
         self.npixel = 4096
-        # define wave limits in nm
-        # TODO: check these values
-        self.wavemin = 378.060
-        self.wavemax = 691.476
+        # define wave limits in nm: real S2D files run from 387.48 to 387.55
+        #    and end at 691.06 to 691.20 (vacuum, barycentric)
+        self.wavemin = 387.515
+        self.wavemax = 691.128
         # set parameters for instrument
         self.params = params
         # override params
@@ -127,8 +127,8 @@ class HarpsN(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
-        #    only g lies whole in the domain: no colour
-        self.param_set('COMPILE_BINNED_BAND1', 'g', source=func_name)
+        #    no band lies whole in the domain: nothing to plot
+        self.param_set('COMPILE_BINNED_BAND1', None, source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
         self.param_set('COMPILE_BINNED_BAND2', None, source=func_name)
@@ -692,10 +692,10 @@ class HarpsN_ORIG(HarpsN):
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPSN_ORIG.fits'
         self.default_sample_wave_name = 'sample_wave_grid_harpsn_orig.fits'
-        # define wave limits in nm
-        # TODO: check these values
-        self.wavemin = 378.060
-        self.wavemax = 691.476
+        # define wave limits in nm: real S2D files run from 387.48 to 387.55
+        #    and end at 691.06 to 691.20 (vacuum, barycentric)
+        self.wavemin = 387.515
+        self.wavemax = 691.128
         # set parameters for instrument
         self.params = params
         # override params
@@ -967,10 +967,10 @@ class HarpsN_ESO(HarpsN):
         # extra parameters (specific to instrument)
         self.default_template_name = 'Template_{0}_HARPSN_ESO.fits'
         self.default_sample_wave_name = 'sample_wave_grid_harpsn_eso.fits'
-        # define wave limits in nm
-        # TODO: check these values
-        self.wavemin = 378.060
-        self.wavemax = 691.476
+        # define wave limits in nm: real S2D files run from 387.48 to 387.55
+        #    and end at 691.06 to 691.20 (vacuum, barycentric)
+        self.wavemin = 387.515
+        self.wavemax = 691.128
         # set parameters for instrument
         self.params = params
         # override params
