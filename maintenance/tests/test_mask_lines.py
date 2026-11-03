@@ -1,9 +1,13 @@
-"""The mask: its lines from a template without the savgol derivatives, and
-the systemic velocity of a mask against a model."""
+"""The mask: its lines from a template without the savgol derivatives, the
+systemic velocity of a mask against a model, and the names of the files
+written."""
+import os
+
 import numpy as np
 from astropy.table import Table
 
-from lbl.core import math as mp
+from lbl.core import io, math as mp, parameters
+from lbl.instruments import default
 from lbl.science import general
 
 C_MS = mp.speed_of_light_ms
@@ -72,3 +76,23 @@ def test_the_systemic_velocity_inside_and_on_the_edges_of_the_range():
         table, wave, spectrum = _model(edge, 3.0)
         assert general.mask_systemic_velocity(inst, table, wave,
                                               spectrum) == edge
+
+
+def test_the_mask_type_is_replaced_in_the_file_name_only(tmp_path):
+    # a folder and an object whose names contain the mask type ('full')
+    folder = tmp_path / 'fullrun' / 'masks'
+    folder.mkdir(parents=True)
+    mask_file = str(folder / 'LBL_Mask_fullmoon_full_default.fits')
+    inst = default.Instrument('Default')
+    inst.params = parameters.params.copy()
+    inst.params.update(DATA_TYPE='SCIENCE', INSTRUMENT='Default',
+                       DATA_SOURCE='None', OBJECT_SCIENCE='fullmoon',
+                       OBJECT_COMPARISON='fullmoon')
+    table = Table(dict(ll_mask_s=[600.0, 601.0], ll_mask_e=[600.0, 601.0],
+                       w_mask=[1.0, -1.0]))
+    inst.write_mask(mask_file, table, np.array([False, True]),
+                    np.array([True, False]), 12.3, io.LBLHeader())
+    written = sorted(os.listdir(folder))
+    assert written == ['LBL_Mask_fullmoon_full_default.fits',
+                       'LBL_Mask_fullmoon_neg_default.fits',
+                       'LBL_Mask_fullmoon_pos_default.fits']
