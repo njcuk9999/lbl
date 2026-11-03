@@ -41,9 +41,10 @@ a sum of w correlated samples is
     V(w) = w + 2 * sum over k of (w - k) * rho_k
 
 with rho_k the autocorrelation of the residual at lag k, measured on the run's
-own cube by noise_correlation. On a 0.5 km/s grid rho_1 is typically about
-0.9, so V(17) is near 90 rather than 17: a window of two resolution elements
-holds about three independent measurements, not seventeen.
+own cube by noise_correlation. On a 0.5 km/s grid rho_1 depends on the
+instrument (about 0.55 on HARPS, 0.7 on NIRPS, 0.93 on SPIRou), so V(17) is
+33 to 88 rather than 17: a window of two resolution elements holds between
+three and nine independent measurements, not seventeen.
 
     window_variance     V(w) from the measured rho
     noise_correlation   rho_k of the residual, from the cube and the fit
@@ -79,6 +80,7 @@ import numpy as np
 from astropy import constants
 
 from .grids import pixel_shift
+from .logger import log
 from lbl.core.math import mad_to_sigma
 
 #: the light speed the resolution element is measured with, km/s
@@ -547,21 +549,47 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
         del data, w, noise, trans, resid
 
 
-def noise_correlation(cube, fit, window, lags, blocks=1, chunk=16, clip_at=5.0):
+def noise_correlation(cube, fit, window, lags, blocks=4, chunk=16, clip_at=5.0,
+                      block=40000):
     """The residual's rho_1..rho_lags, measured on the run's own cube.
 
-    A block of columns is enough: the whole point is the shape of the noise's
-    correlation, which the grid step, the registration and the high pass set,
-    not the wavelength. Averaged over the chunks of rows it sees.
+    A few blocks of `block` columns are enough: the whole point is the shape
+    of the noise's correlation, which the grid step, the registration and the
+    high pass set more than the wavelength. `blocks` of them, spread over the
+    grid, and only blocks with valid samples count: a grid's first block can
+    hold nothing at all (a domain starting below the instrument's first
+    order), and measured there alone rho would be zero, every window taken
+    for independent samples and every Z too large. When the spread blocks are
+    empty, the others are tried in turn. Averaged over the chunks of rows,
+    weighted by their valid samples.
     """
-    weights, total = 0.0, np.zeros(int(lags))
-    for (start, stop), _c0, _c1, inner, z in residual_z(
-            cube, fit, window, chunk=chunk, blocks=blocks):
-        rho = autocorrelation(z[:, inner], lags, clip_at=clip_at)
-        count = float(np.isfinite(z[:, inner]).sum())
-        total += count * np.asarray(rho)
-        weights += count
-    return list(total / weights) if weights else [0.0] * int(lags)
+    from .twoframe import cube_grid_size
+    m = int(cube_grid_size(cube))
+    starts = list(range(0, m, int(block)))
+    stride = max(1, len(starts) // max(1, int(blocks)))
+    spread = starts[::stride]
+    order = spread + [s for s in starts if s not in spread]
+    weights, total, used = 0.0, np.zeros(int(lags)), 0
+    for c0 in order:
+        if used >= int(blocks):
+            break
+        found = 0.0
+        for _rows, _c0, _c1, inner, z in residual_z(
+                cube, fit, window, block=block, chunk=chunk,
+                columns=(c0, min(c0 + int(block), m))):
+            count = float(np.isfinite(z[:, inner]).sum())
+            if not count:
+                continue
+            rho = autocorrelation(z[:, inner], lags, clip_at=clip_at)
+            total += count * np.asarray(rho)
+            weights += count
+            found += count
+        used += bool(found)
+    if not weights:
+        log("the residual has no valid sample in any block of the grid: its"
+            " correlation is taken as zero", "warn")
+        return [0.0] * int(lags)
+    return list(total / weights)
 
 
 def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
@@ -632,7 +660,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
             or (bool(star_bias_nsig) and bool(bias_samples))) and rho is None:
         lags = max(len(widths) - 1, int(excess_samples or 0),
                    int(bias_samples or 0), 8)
-        rho = noise_correlation(cube, fit, window, lags, blocks=1, chunk=chunk)
+        rho = noise_correlation(cube, fit, window, lags, chunk=chunk)
     rho = list(rho or [])
     # per order parity and per OBSERVER column, over every exposure: how many
     # were measured there, how many were flagged, and the z^2 of the rest
