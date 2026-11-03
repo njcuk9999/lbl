@@ -1055,8 +1055,10 @@ def page_oafip(plt, table, title, known=None):
     or bury one, and the only defence is to clip, which is a decision made
     before the question is asked. The outlier-aware FIP instead MODELS the
     outliers: each point is weighted by its probability of belonging to the
-    normal population rather than to a wider one, read off its distance to
-    the median against its error bar and the jitter (lbl.report.fip.oafip).
+    normal population rather than to a wider one, read off its residual to
+    the best fit at each frequency against its error bar and that fit's
+    jitter (lbl.report.fip.oafip); the bottom panel shows them at the
+    frequency of the lowest FIP.
 
     Reading the two together is the point. Where they agree, the answer does
     not depend on how the outliers were handled. Where they differ, it does,
