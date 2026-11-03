@@ -2007,10 +2007,30 @@ class NIRPS_HA_ESO(NIRPS_HA):
         :return:
         """
         _ = sci_hdr
-        # ESPRESSO data is always BERV corrected from the starting point
+        # the S2D wave grid (extension 4) is already barycentric
         berv = 0.0
         # return the berv measurement (in m/s)
         return berv
+
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s.
+
+        The wave grid of the S2D (extension 4, WAVEDATA_VAC_BARY in the ESO
+        format) is already barycentric, so get_berv returns zero; the
+        atmosphere sat in the observer frame and moved by the header's BERV.
+        This is what lbl_telluclean shifts TAPAS by, and what PCA2D takes as
+        the observer's BERV.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
+        hdr_key = self.params['KW_BERV']
+        try:
+            return float(sci_hdr.get_hkey(hdr_key, dtype=float)) * 1000
+        except Exception:
+            return 0.0
 
     def populate_sci_table(self, filename: str, tdict: dict,
                            sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
@@ -2477,10 +2497,30 @@ class NIRPS_HE_ESO(NIRPS_HE):
         :return:
         """
         _ = sci_hdr
-        # ESPRESSO data is always BERV corrected from the starting point
+        # the S2D wave grid (extension 4) is already barycentric
         berv = 0.0
         # return the berv measurement (in m/s)
         return berv
+
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s.
+
+        The wave grid of the S2D (extension 4, WAVEDATA_VAC_BARY in the ESO
+        format) is already barycentric, so get_berv returns zero; the
+        atmosphere sat in the observer frame and moved by the header's BERV.
+        This is what lbl_telluclean shifts TAPAS by, and what PCA2D takes as
+        the observer's BERV.
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
+        hdr_key = self.params['KW_BERV']
+        try:
+            return float(sci_hdr.get_hkey(hdr_key, dtype=float)) * 1000
+        except Exception:
+            return 0.0
 
     def populate_sci_table(self, filename: str, tdict: dict,
                            sci_hdr: io.LBLHeader, berv: float = 0.0) -> dict:
