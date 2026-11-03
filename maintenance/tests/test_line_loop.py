@@ -117,3 +117,26 @@ def test_a_line_flagged_bad_has_no_velocity_in_the_later_passes():
               mask_keep=keep)
     assert np.isnan(out['dv'][2])
     assert np.isfinite(out['dv'][3])
+
+
+def test_edge_pixels_are_weighted_by_their_fraction_inside_the_window():
+    """Window from pixel 10.3 to pixel 50.6 (pixel i spans WAVE[i] to
+    WAVE[i + 1]): pixel 10 has 0.7 of its span inside, pixel 50 has 0.6;
+    MEANXPIX, the weighted mean pixel, says which weights were used"""
+    meanxpix = np.zeros(1)
+    arrs = [np.full(1, np.nan) for _ in range(8)] + [np.zeros(1)]
+    fastmath.line_loop(1, False, np.zeros(1, dtype=np.int64),
+                       np.array([600.0 + 0.002 * 10.3]),
+                       np.array([600.0 + 0.002 * 50.6]),
+                       np.array([10], dtype=np.int64),
+                       np.array([50], dtype=np.int64),
+                       np.ones(1, dtype=bool), WAVE, MODEL, RMS, MODEL,
+                       DMODEL, D2MODEL, D3MODEL, BLAZE, B_RATIO, NORM,
+                       np.zeros((0, 1, 1)), 3, *arrs, meanxpix, np.zeros(1),
+                       np.zeros(1), np.zeros(1, dtype=np.int64), np.zeros(1),
+                       np.zeros((0, 1)), np.zeros((0, 1)),
+                       np.zeros(1, dtype=bool), np.zeros(1, dtype=bool))
+    pix = np.arange(10, 51, dtype=float)
+    weight = np.ones_like(pix)
+    weight[0], weight[-1] = 0.7, 0.6
+    assert abs(meanxpix[0] - np.sum(weight * pix) / np.sum(weight)) < 1e-9

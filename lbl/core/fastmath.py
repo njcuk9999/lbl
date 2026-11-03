@@ -466,18 +466,21 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
         passed_bounds[line_it] = True
         wave_s = wave_start[line_it]
         wave_e = wave_end[line_it]
-        # weights at the edge of the domain
+        # weights at the edge of the domain: pixel i spans ww_ord[i] to
+        #   ww_ord[i + 1], and a pixel that straddles an edge of the window
+        #   is weighted by the fraction of its span inside the window (so
+        #   the sum of the weights is the width of the window in pixels)
         nseg = x_end - x_start + 1
         weight_mask = wbuf[:nseg]
         weight_mask[:] = 1.0
         if ww_ord[x_start] < wave_s:
             refdiff = ww_ord[x_start + 1] - wave_s
             wavediff = ww_ord[x_start + 1] - ww_ord[x_start]
-            weight_mask[0] = 1 - refdiff / wavediff
+            weight_mask[0] = refdiff / wavediff
         if ww_ord[x_end + 1] > wave_e:
             refdiff = wave_e - ww_ord[x_end]
-            wavediff = ww_ord[x_end] - ww_ord[x_end - 1]
-            weight_mask[nseg - 1] = 1 - (refdiff / wavediff)
+            wavediff = ww_ord[x_end + 1] - ww_ord[x_end]
+            weight_mask[nseg - 1] = refdiff / wavediff
         # mean xpix (bottleneck nansums) and mean blaze
         tmp = tbuf[:nseg]
         for i in range(nseg):
