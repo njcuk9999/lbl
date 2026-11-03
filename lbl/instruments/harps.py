@@ -816,7 +816,7 @@ class Harps(Instrument):
 
 
 # =============================================================================
-# Define HARPS-N ORIG class
+# Define HARPS ORIG class
 # =============================================================================
 # noinspection PyPep8Naming
 class Harps_ORIG(Harps):
@@ -846,7 +846,7 @@ class Harps_ORIG(Harps):
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for HARPS N parameters
+        Parameter override for HARPS parameters
         (update default params)
 
         :return: None - updates self.params
@@ -1103,7 +1103,7 @@ class Harps_ORIG(Harps):
 
 
 # =============================================================================
-# Define HARPS-N ESO class
+# Define HARPS ESO class
 # =============================================================================
 # noinspection PyPep8Naming
 class Harps_ESO(Harps):
@@ -1133,7 +1133,7 @@ class Harps_ESO(Harps):
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for HARPS N parameters
+        Parameter override for HARPS parameters
         (update default params)
 
         :return: None - updates self.params
@@ -1439,13 +1439,13 @@ class Harps_ESSP(essp.ESSP):
 
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for HARPS ESSP parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.HarpsN_ESSP.param_override()'
+        func_name = __NAME__ + '.Harps_ESSP.param_override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------

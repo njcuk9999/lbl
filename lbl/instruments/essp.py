@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SOPHIE instrument class here: instrument specific settings
+ESSP instrument class here: what the ESSP readers of each instrument share
 
 Created on 2023-06-21
 
@@ -24,7 +24,7 @@ from lbl.instruments import default
 # =============================================================================
 # Define variables
 # =============================================================================
-__NAME__ = 'instruments.expres.py'
+__NAME__ = 'instruments.essp.py'
 __version__ = base.__version__
 __date__ = base.__date__
 __authors__ = base.__authors__
@@ -37,7 +37,7 @@ log = io.log
 
 
 # =============================================================================
-# Define SOPHIE class
+# Define ESSP class
 # =============================================================================
 class ESSP(Instrument):
     """

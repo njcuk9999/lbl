@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SOPHIE instrument class here: instrument specific settings
+CORALIE instrument class here: instrument specific settings
 
 Created on 2023-06-21
 
@@ -36,7 +36,7 @@ log = io.log
 
 
 # =============================================================================
-# Define SOPHIE class
+# Define CORALIE class
 # =============================================================================
 class Coralie(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -58,11 +58,11 @@ class Coralie(Instrument):
         self.update_from_args(args)
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC PARAMETERS
+    # CORALIE SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for CORALIE parameters
         (update default params)
 
         :return: None - updates self.params
@@ -71,9 +71,9 @@ class Coralie(Instrument):
         func_name = __NAME__ + '.Coralie.override()'
         # set parameters to update
         self.param_set('INSTRUMENT', 'CORALIE', source=func_name)
-        # add instrument earth location
+        # add instrument earth location: CORALIE is on the Euler telescope
         #    (for use in astropy.coordinates.EarthLocation)
-        self.param_set('EARTH_LOCATION', 'OHP')
+        self.param_set('EARTH_LOCATION', 'La Silla Observatory')
         # define the default science input files
         self.param_set('INPUT_FILE', '*.fits', source=func_name)
         # The input science data are blaze corrected
@@ -226,7 +226,7 @@ class Coralie(Instrument):
         #    MJD where one is needed)
         self.param_set('KW_MJDATE', 'HIERARCH ESO DRS BJD', source=func_name)
         # define snr keyword
-        self.param_set('KW_SNR', 'HIERARCH OHP DRS SPE EXT SN50',
+        self.param_set('KW_SNR', 'HIERARCH ESO DRS SPE EXT SN50',
                         source=func_name)
         # define berv keyword
         self.param_set('KW_BERV', 'HIERARCH ESO DRS BERV', source=func_name)
@@ -272,7 +272,7 @@ class Coralie(Instrument):
         self.param_set('KW_TEMPERATURE', None, source=func_name)
 
     # -------------------------------------------------------------------------
-    # SOPHIE SPECIFIC METHODS
+    # CORALIE SPECIFIC METHODS
     # -------------------------------------------------------------------------
     def load_header(self, filename: str, kind: str = 'fits file',
                     extnum: int = 0, extname: str = None) -> io.LBLHeader:

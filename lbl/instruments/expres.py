@@ -1005,16 +1005,16 @@ class Expres_ESSP(essp.ESSP):
                  args: base_classes.ParamDict, name: str = None):
         # get the name
         if name is None:
-            name = 'HARPS_ESSP'
+            name = 'EXPRES_ESSP'
         # call to super function
         super().__init__(params, args, name)
         # extra parameters (specific to instrument)
-        self.default_template_name = 'LBL_Template_{0}_harps_essp.fits'
-        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_harps_essp.fits'
-        self.default_sample_wave_name = 'sample_wave_grid_harps_essp.fits'
-        # define wave limits in nm
-        self.wavemin = 387.515
-        self.wavemax = 691.128
+        self.default_template_name = 'LBL_Template_{0}_expres_essp.fits'
+        self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_expres_essp.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_expres_essp.fits'
+        # define wave limits in nm (those of the Expres class)
+        self.wavemin = 492.0
+        self.wavemax = 727.0
         # set parameters for instrument
         self.params = params
         # override params
@@ -1030,7 +1030,7 @@ class Expres_ESSP(essp.ESSP):
         :return: None - updates self.params
         """
         # set function name
-        func_name = __NAME__ + '.neid_ESSP.param_override()'
+        func_name = __NAME__ + '.Expres_ESSP.param_override()'
         # first run the inherited method
         super().param_override()
         # ---------------------------------------------------------------------
@@ -1043,7 +1043,7 @@ class Expres_ESSP(essp.ESSP):
         self.param_set('EARTH_LOCATION', 'lowell')
         # define the default science input files
         self.param_set('INPUT_FILE', '*.fits', source=func_name)
-        # The input science data are blaze corrected
+        # The input science data are not blaze corrected
         self.param_set('BLAZE_CORRECTED', False, source=func_name)
         # define the mask table format
         self.param_set('REF_TABLE_FMT', 'csv', source=func_name)

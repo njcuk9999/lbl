@@ -1288,7 +1288,7 @@ class HarpsN_ESSP(essp.ESSP):
 
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for HARPS-N ESSP parameters
         (update default params)
 
         :return: None - updates self.params

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SPIRou instrument class here: instrument specific settings
+ESPRESSO instrument class here: instrument specific settings
 
 Created on 2021-05-27
 
@@ -37,7 +37,7 @@ log = io.log
 
 
 # =============================================================================
-# Define Spirou class
+# Define ESPRESSO class
 # =============================================================================
 class Espresso(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -63,7 +63,7 @@ class Espresso(Instrument):
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SPIRou parameters
+        Parameter override for ESPRESSO parameters
         (update default params)
 
         :return: None - updates self.params
