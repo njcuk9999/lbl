@@ -244,3 +244,24 @@ def test_pdflatex_can_be_named(monkeypatch, tmp_path):
         assert io.find_pdflatex() == str(fake)
     finally:
         io.find_pdflatex.cache_clear()
+
+
+@pytest.mark.parametrize("pca2d", [True, dict(n_star=1)])
+def test_without_n_earth_the_instrument_gives_it(tmp_path, monkeypatch, pca2d):
+    """PCA2D=True or a dict without n_earth reach the fit with the class's
+    number. There is no frozen basis then, and nothing to describe."""
+    from lbl.pca2d import cli
+    folder = tmp_path / "science" / "STAR"
+    folder.mkdir(parents=True)
+    (folder / "at.fits").write_bytes(b"")
+    (tmp_path / "models").mkdir()
+    seen = dict()
+
+    def stop_here(argv):
+        seen["argv"] = list(argv)
+        raise SystemExit(3)
+    monkeypatch.setattr(cli, "main", stop_here)
+    with pytest.raises(LblException, match="stopped"):
+        lbl_pca2d.correct("NIRPS_HE", str(tmp_path), ["STAR"], {"STAR": None},
+                          "CADC", pca2d, None, "science", report=False)
+    assert seen["argv"][seen["argv"].index("--n-earth") + 1] == "7"

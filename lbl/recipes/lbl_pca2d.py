@@ -689,14 +689,14 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         overrides.setdefault('twoframe', dict())['earth_basis'] = frozen.path
         if not (isinstance(pca2d, dict) and 'n_earth' in pca2d):
             switches['n_earth'] = frozen.n_earth
+        log('PCA2D: the observer basis is %s, frozen' % frozen.describe(),
+            'info')
     # the instrument's own number of observer components, when neither the
     #   PCA2D dict nor a frozen basis gives one
     if switches['n_earth'] is None:
         from lbl.pca2d.config import instrument_layer
         switches['n_earth'] = int(instrument_layer(
             instrument, data_source)['twoframe']['n_earth'])
-        log('PCA2D: the observer basis is %s, frozen' % frozen.describe(),
-            'info')
     # NO INPUT_FILE IN THE WRAP: the files LBL read (all of the folder's)
     #   tell PCA2D which they are, rather than its default for the
     #   instrument, which is one data source's
