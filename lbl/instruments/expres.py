@@ -118,6 +118,21 @@ class Expres(Instrument):
         self.param_set('PCA2D_WINDOWS', source=func_name,
                        value=['687.75:2.5', '630.75:2', '594.25:2.25',
                               '651.0:2.5', '588.5:1.5', '519.0:2'])
+        # the wavelengths are barycentric (get_berv returns 0), so PCA2D
+        #    brings them back to the observer's frame, where the atmosphere
+        #    is fixed: the two-frame fit separates the star from the
+        #    atmosphere by the BERV, and on the barycentric grid the two
+        #    frames would be one. The BERV it undoes is the one the telluric
+        #    cleaning shifts TAPAS by (get_berv_transmission). Each exposure
+        #    then covers an interval shifted by its own BERV, so a sample is
+        #    kept when half of the exposures cover it rather than all of
+        #    them (as for the S2D of HARPS and HARPS-N)
+        self.param_set('PCA2D_TO_OBSERVER', True, source=func_name)
+        self.param_set('PCA2D_MASK_SHARE', 0.5, source=func_name)
+        # two observer-frame components for PCA2D, as for HARPS: in the
+        #    visible the atmosphere is mostly O2, which follows the airmass,
+        #    and water, which follows the water column
+        self.param_set('PCA2D_N_EARTH', 2, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
