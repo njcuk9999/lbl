@@ -59,6 +59,22 @@ DESCRIPTION_TEMPLATE = 'Use this code to create the LBL template'
 # =============================================================================
 # Define functions
 # =============================================================================
+def berv_bins(berv: np.ndarray, nbin: int) -> np.ndarray:
+    """
+    The bin of each file: bins of equal size, ordered by BERV. The bin follows
+    the rank of the file's BERV, so that files with nearly the same BERV share
+    a bin and a telluric residual stays at one BERV in the median over bins.
+
+    :param berv: np.ndarray, the BERV of each file
+    :param nbin: int, the number of bins
+
+    :return: np.ndarray of int, the bin of each file, 0 to nbin - 1
+    """
+    # argsort gives the files in order of BERV; its argsort is each file's rank
+    rank = np.argsort(np.argsort(berv))
+    return np.array(nbin * (rank / len(berv)), dtype=int)
+
+
 def main(**kwargs):
     """
     Wrapper around __main__ recipe code (deals with errors and loads instrument
@@ -331,7 +347,7 @@ def run_template(inst, objname: str, objkind: str):
     med_spec_hp = 1
     # we distribute the files in bins of equal size ordered by berv
     # Files with nearly the same berv will be in the same bin
-    ibin = np.array(nbin * (np.argsort(berv) / len(berv)), dtype=int)
+    ibin = berv_bins(berv, nbin)
     # storage of the science table - reset
     sci_table = dict()
     # iterate 5 times
