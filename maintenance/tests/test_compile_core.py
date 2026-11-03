@@ -272,3 +272,24 @@ def test_a_short_run_keeps_lines_seen_twice_with_their_offset():
     plm = np.array(saved['per_line_mean'])
     assert np.all(np.isfinite(plm[:100]))
     assert np.corrcoef(plm[:100], offset[:100])[0, 1] > 0.9
+
+
+def test_numbers_written_as_text_are_averaged_per_night():
+    """An airmass that the header gives as text is averaged over the night,
+    as a number; real text, or the same number in every row (an object
+    called 10700), stays as its first value"""
+    table = Table()
+    table['MJD'] = [100.1, 100.2, 101.1]
+    table['AIRMASS'] = ['1.2', '1.4', '1.1']
+    table['OBJECT'] = ['10700', '10700', '10700']
+    table['DATE'] = ['2024-01-01', '2024-01-01', '2024-01-02']
+    table['TAU'] = ['NaN', 'NaN', 'NaN']
+    inst = SynthInst([], table['MJD'])
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        rdb2 = general.make_rdb_table2(inst, table)
+    assert rdb2['AIRMASS'].dtype.kind == 'f'
+    assert np.allclose(rdb2['AIRMASS'], [1.3, 1.1])
+    assert list(rdb2['OBJECT']) == ['10700', '10700']
+    assert list(rdb2['DATE']) == ['2024-01-01', '2024-01-02']
+    assert list(rdb2['TAU']) == ['NaN', 'NaN']

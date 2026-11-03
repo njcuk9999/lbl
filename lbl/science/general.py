@@ -3019,6 +3019,12 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     # add any column pairs that don't conform to this
     wmean_pairs['fwhm'] = 'sig_fwhm'
     wmean_pairs['contrast'] = 'sig_contrast'
+    # text columns that hold numbers (averaged per epoch, as numbers)
+    numeric_text = dict()
+    for colname in rdb_table.colnames:
+        numbers = _numbers_in_text(rdb_table[colname])
+        if numbers is not None and colname not in wmean_pairs:
+            numeric_text[colname] = numbers
     # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB 2 table')
@@ -3059,7 +3065,14 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             # if not vrad or svrad then try to mean the column or if not
             #   just take the first value
             elif colname not in wmean_pairs.values():
-                # do not try to do a mean on strings (its stupid)
+                # numbers written as text (an airmass read as a string from
+                #   the header): the mean of their finite values
+                if colname in numeric_text:
+                    with warnings.catch_warnings(record=True) as _:
+                        rdb_dict2[colname].append(np.nanmean(
+                            numeric_text[colname][epoch_mask]))
+                    continue
+                # do not try to do a mean on strings: the first value
                 if isinstance(itable[colname][0], str):
                     rdb_dict2[colname].append(itable[colname][0])
                     continue
@@ -3087,6 +3100,29 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     # ---------------------------------------------------------------------
     # return rdb table
     return rdb_table2
+
+
+def _numbers_in_text(values) -> Optional[np.ndarray]:
+    """
+    A text column of the rdb table as numbers, if all its values read as
+    numbers and its finite values are not all the same (a header value
+    written as a string, such as an airmass), else None (real text, or a
+    name such as an object called 10700)
+
+    :param values: the column
+
+    :return: np.ndarray of floats or None
+    """
+    if len(values) == 0 or not isinstance(values[0], str):
+        return None
+    try:
+        numbers = np.array([float(value) for value in values])
+    except (TypeError, ValueError):
+        return None
+    finite = numbers[np.isfinite(numbers)]
+    if len(finite) == 0 or np.all(finite == finite[0]):
+        return None
+    return numbers
 
 
 def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:
