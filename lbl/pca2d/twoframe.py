@@ -1933,7 +1933,8 @@ def tidy_block(basis, coeffs, power):
 
 
 def nightly_bin(bjd, coeffs):
-    night = np.floor(bjd - 0.5).astype(int)
+    from .nights import night_number
+    night = night_number(bjd)
     unique = np.unique(night)
     out_t = np.zeros(unique.size)
     out_c = np.zeros((unique.size, coeffs.shape[1]))
@@ -1964,7 +1965,8 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
         # divided by the count, i.e. sqrt(sum e^2)/n -- not e/sqrt(n), because
         # the exposures in a night do not all carry the same weight
         if err is not None:
-            night = np.floor(bjd - 0.5).astype(int)
+            from .nights import night_number
+            night = night_number(bjd)
             uniq = np.unique(night)
             be = np.zeros((uniq.size, coeffs.shape[1]))
             for i, v in enumerate(uniq):

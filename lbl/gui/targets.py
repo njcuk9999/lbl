@@ -61,9 +61,6 @@ VSYS_NO_SOURCE = ("", "none", "header", "null")
 #: a velocity [km/s] beyond this is a placeholder (ESO writes -99999 when
 #:    it has none), and 0 means unknown
 VSYS_MAX = 1000.0
-#: the night a spectrum belongs to: MJD shifted so that a night does not
-#: straddle midnight UTC anywhere it matters (Chile, Hawaii)
-NIGHT_SHIFT = -0.3
 #: the instruments whose LBL readers (DATA_SOURCE) differ by the LAYOUT of
 #:    their files: APERO's own t.fits hold the flux in the primary HDU, with
 #:    WAVEORDN in its header; the CADC's an empty primary and named
@@ -371,7 +368,8 @@ def summary(records: dict) -> dict:
     instruments = sorted({r.get("instrument", "?") for r in rows})
     sources = sorted({r["source"] for r in rows if r.get("source")})
     objects = sorted({r.get("object") for r in rows if r.get("object")})
-    nights = (len(np.unique(np.floor(mjd + NIGHT_SHIFT))) if mjd.size
+    from lbl.core.astro import night_number
+    nights = (len(np.unique(night_number(mjd + 0.5))) if mjd.size
               else 0)
     return dict(
         files=len(records), unreadable=len(records) - len(rows),

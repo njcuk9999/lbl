@@ -75,9 +75,10 @@ def read_rdb(path):
 
 
 def nightly(rjd, v, e):
-    """Weighted nightly means as (rjd, velocity, error), a night being a day of
-    rjd + 0.5."""
-    night = np.floor(rjd + 0.5).astype(int)
+    """Weighted nightly means as (rjd, velocity, error), the nights of
+    nights.night_number."""
+    from .nights import night_number
+    night = night_number(rjd)
     out = []
     for n in np.unique(night):
         s = night == n
@@ -143,7 +144,8 @@ def signal_stats(t, v, e, periods=(), degree=2):
     """
     t = np.asarray(t, float)
     v = np.asarray(v, float)
-    nights = np.floor(t).astype(int)
+    from .nights import night_number
+    nights = night_number(t)
     tc = t - t.mean()
     trend = np.polyval(np.polyfit(tc, v, degree), tc) if t.size > degree + 1 \
         else np.zeros_like(v)

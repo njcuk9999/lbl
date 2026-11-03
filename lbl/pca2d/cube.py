@@ -1106,7 +1106,7 @@ def _quality_reason(meta, wave, quality):
     # seasons of a hundred or more). Nights are given as integer rjd.
     nights = quality.get("nights")
     if nights:
-        if int(np.floor(rjd)) not in {int(n) for n in nights}:
+        if int(spnights.night_number(rjd)) not in {int(n) for n in nights}:
             return "rjd %.2f is not one of the %d nights asked for" % (
                 rjd, len(nights))
     # THE SPECTROGRAPH MODE, when a campaign mixes two. An instrument with a
