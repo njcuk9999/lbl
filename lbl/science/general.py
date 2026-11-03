@@ -382,39 +382,49 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # Deal with Rotational broadening
     # -------------------------------------------------------------------------
-    if isinstance(inst.params['ROTBROAD'], tuple):
-        # Apply rotational broadening if inst.params['ROTBROAD'] is
-        # passed as an argument.
-        epsilon = inst.params['ROTBROAD'][0]
+    # ROTBROAD = (epsilon, vsini in km/s): every template column compute_rv
+    #   reads (flux, flux_odd, flux_even and, with USE_SAVGOL_TEMPLATE, their
+    #   Savitzky-Golay derivatives; without it the derivatives are taken from
+    #   the broadened flux) is convolved with the rotation kernel, in pixels
+    #   of the template grid (a constant velocity step is assumed). NaNs
+    #   spread over the kernel's width.
+    rotbroad = inst.params['ROTBROAD']
+    rot_kernel, rot_npix = None, 0
+    if isinstance(rotbroad, (list, tuple)) and len(rotbroad) == 2:
         # TODO check that its 0-1 for epsilon
         # TODO check that its 1-100 for vsini to avoid m/s rather than km/s
-        vsini = inst.params['ROTBROAD'][1]
-        # Calculate the step in the wavelength grid
+        epsilon, vsini = float(rotbroad[0]), float(rotbroad[1])
+        # template pixels per km/s
         step = (twave / np.gradient(twave))
-        sample_sampling = np.nanmedian(step / constants.c.to(uu.km / uu.s).value)
-        # calculate the pixel value for the broadening (the delta function
-        #     position)
-        npix = np.ceil(vsini / sample_sampling).astype(int)
+        pix_per_kms = np.nanmedian(step / constants.c.to(uu.km / uu.s).value)
+        # half width of the kernel in pixels: vsini in pixels
+        rot_npix = int(np.ceil(vsini * pix_per_kms))
         # get the wave grid of the template that we are going to use
-        twave_tmp = np.linspace(twave[len(twave) // 2 - npix],
-                                twave[len(twave) // 2 + npix],
-                                2 * npix + 1)
+        twave_tmp = np.linspace(twave[len(twave) // 2 - rot_npix],
+                                twave[len(twave) // 2 + rot_npix],
+                                2 * rot_npix + 1)
         # set up the delta value and populate the delta function at the
         # point of interest
         delta_tmp = np.zeros_like(twave_tmp)
-        delta_tmp[npix] = 1
+        delta_tmp[rot_npix] = 1
         # run the rotation kernel
         rot_kernel = mp.rot_broad(twave_tmp, delta_tmp, epsilon, vsini)
         # display a message that we have rotationally broadened the spectrum
         msg = 'Rotational broadening epsilon = {}, vsini = {} km/s'
-        log.general(msg.format(*inst.params['ROTBROAD']))
-        # push the rotational broadening onto the flux using the rotational
-        #  broadening kernel
-        tflux2 = np.zeros_like(tflux)
-        for ioff in range(len(delta_tmp)):
-            tflux2 += np.roll(tflux, ioff - npix) * rot_kernel[ioff]
-        # set this to the flux we would have had from before
-        tflux = tflux2
+        log.general(msg.format(epsilon, vsini))
+
+    def rotation(flux: np.ndarray) -> np.ndarray:
+        """The flux convolved with the rotation kernel (as is without one)"""
+        if rot_kernel is None or len(flux) == 0:
+            return flux
+        flux2 = np.zeros_like(flux)
+        for ioff in range(len(rot_kernel)):
+            flux2 += np.roll(flux, ioff - rot_npix) * rot_kernel[ioff]
+        return flux2
+
+    tflux = rotation(tflux)
+    tflux_odd = rotation(tflux_odd)
+    tflux_even = rotation(tflux_even)
     # -------------------------------------------------------------------------
     # get the gradient of the log of the wave
     grad_log_wave = np.gradient(np.log(twave))
@@ -450,7 +460,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
             """
             key = '{0}_savgol_d{1}'.format(flux_key, deriv)
             dd = np.array(ttable[key]) / (glw_c ** (deriv))
-            return dd
+            return rotation(dd)
         # get the derivative of the flux
         dflux = savgol_deriv(template_table, 'flux', 1)
         # get the 2nd derivative of the flux
