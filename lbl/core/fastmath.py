@@ -409,6 +409,11 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
     passed_bounds flags the lines whose meanxpix / meanblaze were set,
     stats_updated the lines whose rmsratio / npixline / chi2 were set.
 
+    Each pass starts every line with dv, sdv at NaN and frac_line_valid at
+    0 (and d0v, d2v, d3v, their errors and proj / sproj at NaN on the last
+    pass): a line that is skipped or fails in this pass has no value, not
+    the value of an earlier pass measured around another velocity.
+
     x_start_all / x_end_all are the floor()ed pixel positions of the line
     edges (from the wave -> pixel spline of the order), as int64.
     proj_models has shape (n_resproj, n_orders, n_pixels) (only read on the
@@ -425,8 +430,23 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
     sbuf = np.empty(npix)
     bbuf = np.empty(npix)
     rbuf = np.empty(npix)
+    fbuf = np.empty(npix)
     for line_it in range(orders.shape[0]):
         order_num = orders[line_it]
+        # no value until this pass measures one
+        dv[line_it] = np.nan
+        sdv[line_it] = np.nan
+        frac_line_valid[line_it] = 0.0
+        if flag_last_iter:
+            d0v[line_it] = np.nan
+            sd0v[line_it] = np.nan
+            d2v[line_it] = np.nan
+            sd2v[line_it] = np.nan
+            d3v[line_it] = np.nan
+            sd3v[line_it] = np.nan
+            for ikey in range(nproj):
+                proj[ikey, line_it] = np.nan
+                sproj[ikey, line_it] = np.nan
         # skip lines flagged as bad (in all but the second iteration)
         if (iteration != 1) and not mask_keep[line_it]:
             continue
@@ -527,11 +547,13 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                 seg[i] = d3model[order_num, x_start + i] * weight_mask[i]
             d3v[line_it], sd3v[line_it] = _bouchy(seg, diff_seg, mean_rms,
                                                   tmp)
-            # residual projection tables
-            #   note: as in compute_rv, frac_diff_seg is diff_seg itself, so
-            #   diff_seg is divided in place once per table
+            # residual projection tables: the residual and its noise in
+            #   units of the local continuum (b_ratio * norm), in a buffer of
+            #   their own (diff_seg itself is left as it is for every table
+            #   and for the line statistics below)
             bn_seg = bbuf[:nseg]
             frac_mean_rms = rbuf[:nseg]
+            frac_diff_seg = fbuf[:nseg]
             for ikey in range(nproj):
                 for i in range(nseg):
                     seg[i] = (proj_models[ikey, order_num, x_start + i] *
@@ -539,10 +561,10 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                     bn_seg[i] = (b_ratio[order_num, x_start + i] *
                                  norm[order_num, x_start + i])
                 for i in range(nseg):
-                    diff_seg[i] /= bn_seg[i]
+                    frac_diff_seg[i] = diff_seg[i] / bn_seg[i]
                     frac_mean_rms[i] = mean_rms / bn_seg[i]
-                pd_key, psd_key = _bouchy_arr(seg, diff_seg, frac_mean_rms,
-                                              tmp)
+                pd_key, psd_key = _bouchy_arr(seg, frac_diff_seg,
+                                              frac_mean_rms, tmp)
                 if np.isfinite(pd_key) and np.isfinite(psd_key):
                     proj[ikey, line_it] = pd_key
                     sproj[ikey, line_it] = psd_key
