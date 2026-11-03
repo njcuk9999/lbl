@@ -3436,12 +3436,11 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
     if not inst.params['USE_SAVGOL_TEMPLATE']:
         t_flux = np.array(template_table['flux'])
         # smooth the spectrum to avoid lines that coincide with small-scale noise
-        #   excursion
+        #   excursion: the mean of the 5 points centred on each point
         t_flux_tmp = np.zeros_like(t_flux)
         for offset in range(-2, 3):
             t_flux_tmp += np.roll(t_flux, offset)
-        # copy over original vector
-        t_flux = np.array(t_flux_tmp)
+        t_flux = t_flux_tmp / 5.0
         # find the first and second derivative of the flux
         dflux = np.gradient(t_flux)
         ddflux = np.gradient(dflux)
@@ -3456,9 +3455,10 @@ def find_mask_lines(inst: InstrumentsType, template_table: Table) -> Table:
         t_snr[np.isinf(t_snr)] = np.nan
     # -------------------------------------------------------------------------
     # lines are regions there is a sign change in the derivative of the flux
-    #   we also have some checks for NaNs
+    #   between points i and i + 1; we also have some checks for NaNs, with
+    #   the second derivative at i, where the weight is read
     cond1 = np.sign(dflux[1:]) != np.sign(dflux[:-1])
-    cond2 = np.isfinite(ddflux[1:])
+    cond2 = np.isfinite(ddflux[:-1])
     cond3 = np.isfinite(dflux[1:])
     cond4 = np.isfinite(dflux[:-1])
     # get the position where all these condition are True
