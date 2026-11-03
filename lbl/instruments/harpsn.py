@@ -1058,8 +1058,7 @@ class HarpsN_ESO(HarpsN):
         # 3. The value of the header key that tells us key 1 is a blaze file
         self.param_set('KW_BLAZE_FILE_WILDV', 'BLAZE_A', source=func_name)
         # define the exposure time of the observation
-        self.param_set('KW_EXPTIME', 'HIERARCH TNG QC BJD',
-                        source=func_name)
+        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
         self.param_set('KW_AIRMASS', 'AIRMASS',
                         source=func_name)

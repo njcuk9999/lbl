@@ -233,8 +233,7 @@ class Espresso(Instrument):
         self.param_set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
                         source=func_name)
         # define the exposure time of the observation
-        self.param_set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
-                        source=func_name)
+        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
         self.param_set('KW_AIRMASS',
                         ['HIERARCH ESO TEL1 AIRM START',
