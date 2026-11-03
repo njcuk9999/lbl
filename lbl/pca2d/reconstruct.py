@@ -1276,7 +1276,7 @@ def refit_row(model, path, config, shifter, base_row, weight="flux",
         from . import cube as _cube
         from . import preprocess as _prep
 
-        template = _cube.load_template(config)
+        template = _cube.load_template(config, model.get("cube_path"))
         if template is None:
             raise SystemExit(
                 "highpass.against_template is on but the cube kept no"
@@ -1488,6 +1488,9 @@ def correct_many(model, args):
     # which of the fit's star spectra are this object's, when several were
     # fitted together against one observer basis (pca2d.joint)
     model["star_group"] = int(getattr(args, "star_group", 0) or 0)
+    # the cube the refit takes its high-pass template from: the one this
+    # stage was handed, whatever key the configuration gives today
+    model["cube_path"] = getattr(args, "cube", None)
     alive_by_file = None
     mask_mode = str(getattr(args, "mask", None) or "exposure")
     if mask_mode == "none":

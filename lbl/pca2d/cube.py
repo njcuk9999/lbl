@@ -949,9 +949,16 @@ def _stash_template(config, template):
     _PENDING_TEMPLATE = np.asarray(template, dtype=np.float32)
 
 
-def load_template(config):
-    """The high-pass template, or None."""
-    path = template_path(config)
+def load_template(config, cube=None):
+    """The high-pass template, or None: that of the cube folder `cube` when
+    it holds one (the cube a stage was handed), else of the cube the
+    configuration's key names (a joint cube keeps none: each member's is in
+    its own cube, which its own configuration names)."""
+    if not (config.get("highpass") or {}).get("against_template"):
+        return None
+    path = os.path.join(cube, TEMPLATE_FILE) if cube else None
+    if path is None or not os.path.exists(path):
+        path = template_path(config)
     if path is None or not os.path.exists(path):
         return None
     try:

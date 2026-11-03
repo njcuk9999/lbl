@@ -151,3 +151,21 @@ def test_reconstruct_reads_its_file(monkeypatch):
     with pytest.raises(Reached):
         reconstruct.reconstruct({}, {}, path="x.fits", config=asked)
     assert seen == [reconstruct.TFITS_CONFIG, asked]
+
+
+def test_the_high_pass_template_is_the_cube_s_own(tmp_path):
+    from lbl.pca2d import cube as spcube
+    cfg = _member()
+    cfg["output"]["cache_directory"] = str(tmp_path / "cache")
+    keyed = os.path.dirname(spcube.template_path(cfg))
+    os.makedirs(keyed)
+    np.save(os.path.join(keyed, spcube.TEMPLATE_FILE), np.zeros((2, 3)))
+    given = tmp_path / "another_cube"
+    given.mkdir()
+    np.save(given / spcube.TEMPLATE_FILE, np.ones((2, 3)))
+    assert np.all(spcube.load_template(cfg, str(given)) == 1.0)
+    # a cube without one (a joint cube): the one the configuration names
+    joint = tmp_path / "joint_cube"
+    joint.mkdir()
+    assert np.all(spcube.load_template(cfg, str(joint)) == 0.0)
+    assert np.all(spcube.load_template(cfg) == 0.0)
