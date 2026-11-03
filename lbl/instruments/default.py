@@ -99,6 +99,22 @@ class Instrument:
         emsg = 'Must implement {0} in specific instrument class'
         raise NotImplemented(emsg.format(method))
 
+    @staticmethod
+    def to_mjd(time_value: Union[float, np.ndarray]
+               ) -> Union[float, np.ndarray]:
+        """
+        Bring a time in days to an MJD: a value above 2.4e6 is a Julian date
+        (a BJD for the classes whose only time key is a BJD), anything else
+        is already an MJD. The barycentric correction, at most 8.3 minutes,
+        is kept: this is for cutting nights and for plot dates.
+
+        :param time_value: float or np.ndarray, the time in days
+
+        :return: float or np.ndarray, the same time as an MJD
+        """
+        values = np.asarray(time_value, dtype=float)
+        return np.where(values > 2.4e6, values - 2400000.5, values)[()]
+
     def param_set(self, key: str, value: Any, source: str = None) -> None:
         """
         Set a parameter in the parameter dictionary
@@ -1440,8 +1456,8 @@ class Instrument:
             # -----------------------------------------------------------------
             # must check time frame (if present) for FP
             cond2, cond3 = True, True
-            # get mjdmid
-            mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
+            # get mjdmid: the limits are MJDs, the key may hold a BJD
+            mjdmid = self.to_mjd(sci_hdr[self.params['KW_MID_EXP_TIME']])
             # check start time for FP calibration
             if not mcond2:
                 cond2 = mjdmid >= start
@@ -1460,9 +1476,9 @@ class Instrument:
                     'files provide have:')
             # add info about the range of files (if FP files)
             if not mcond2:
-                emsg += '\n\tMJDMID>{1}'
+                emsg += '\n\tMJDMID>{0}'
             if not mcond3:
-                emsg += '\n\tMJDMID<{2}'
+                emsg += '\n\tMJDMID<{1}'
             # tell the user what they can do to fix this - we don't want emails
             emsg += ('\nPlease define a template and do not run the '
                      'template code or add some valid files')
@@ -1471,8 +1487,8 @@ class Instrument:
             # raise exception - we need some files to make a template!
             raise base_classes.LblException(emsg.format(*eargs))
         else:
-            msg = ('Object is classified as science. Found {1} files'
-                   ' ignoring {2} other files')
+            msg = ('Object is classified as science. Found {0} files'
+                   ' ignoring {1} other files')
             margs = [len(keep_files),
                      len(science_files) - len(keep_files)]
             log.info(msg.format(*margs))
@@ -1629,8 +1645,10 @@ class Instrument:
                     'astropy.coordinates.EarthLocation\n\tError {1}: {2}')
             eargs = [earth_location, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
-        # get times from rdb table and force to floats
-        times = np.array(rdb_table[kw_mjd], dtype=float)
+        # get times from rdb table and force to floats: bin_by_time counts
+        #   days from UT midnight, so a BJD must first become an MJD or the
+        #   nights are cut at local midnight rather than at local noon
+        times = self.to_mjd(np.array(rdb_table[kw_mjd], dtype=float))
         # get local time at midnight
         epoch_values = mp.bin_by_time(loc.lon.value, times,
                                       day_frac=0)

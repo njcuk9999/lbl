@@ -222,7 +222,8 @@ class Coralie(Instrument):
         # define the key that gives the mid exposure time in MJD
         self.param_set('KW_MID_EXP_TIME', 'HIERARCH ESO DRS BJD',
                         source=func_name)
-        # define the start time of the observation
+        # define the start time of the observation (a BJD: to_mjd makes it an
+        #    MJD where one is needed)
         self.param_set('KW_MJDATE', 'HIERARCH ESO DRS BJD', source=func_name)
         # define snr keyword
         self.param_set('KW_SNR', 'HIERARCH OHP DRS SPE EXT SN50',
@@ -721,9 +722,9 @@ class Coralie(Instrument):
         """
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
-        # get mjdate
-        mjdate = header.get_hkey(kw_mjdate, dtype=float)
-        # convert to plot date and take off JD?
+        # get mjdate: the key may hold a BJD
+        mjdate = self.to_mjd(header.get_hkey(kw_mjdate, dtype=float))
+        # convert to plot date
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date
         return float(plot_date)

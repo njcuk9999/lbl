@@ -778,8 +778,8 @@ class NIRPS(Instrument):
             # -----------------------------------------------------------------
             # must check time frame (if present) for FP
             cond2, cond3 = True, True
-            # get mjdmid
-            mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
+            # get mjdmid: the limits are MJDs, the key may hold a BJD
+            mjdmid = self.to_mjd(sci_hdr[self.params['KW_MID_EXP_TIME']])
             # check start time for FP calibration
             if not mcond2:
                 cond2 = mjdmid >= start
