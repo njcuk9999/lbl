@@ -409,6 +409,11 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
     passed_bounds flags the lines whose meanxpix / meanblaze were set,
     stats_updated the lines whose rmsratio / npixline / chi2 were set.
 
+    Each pass starts every line with dv, sdv at NaN and frac_line_valid at
+    0 (and d0v, d2v, d3v, their errors and proj / sproj at NaN on the last
+    pass): a line that is skipped or fails in this pass has no value, not
+    the value of an earlier pass measured around another velocity.
+
     x_start_all / x_end_all are the floor()ed pixel positions of the line
     edges (from the wave -> pixel spline of the order), as int64.
     proj_models has shape (n_resproj, n_orders, n_pixels) (only read on the
@@ -425,8 +430,23 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
     sbuf = np.empty(npix)
     bbuf = np.empty(npix)
     rbuf = np.empty(npix)
+    fbuf = np.empty(npix)
     for line_it in range(orders.shape[0]):
         order_num = orders[line_it]
+        # no value until this pass measures one
+        dv[line_it] = np.nan
+        sdv[line_it] = np.nan
+        frac_line_valid[line_it] = 0.0
+        if flag_last_iter:
+            d0v[line_it] = np.nan
+            sd0v[line_it] = np.nan
+            d2v[line_it] = np.nan
+            sd2v[line_it] = np.nan
+            d3v[line_it] = np.nan
+            sd3v[line_it] = np.nan
+            for ikey in range(nproj):
+                proj[ikey, line_it] = np.nan
+                sproj[ikey, line_it] = np.nan
         # skip lines flagged as bad (in all but the second iteration)
         if (iteration != 1) and not mask_keep[line_it]:
             continue
@@ -446,18 +466,21 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
         passed_bounds[line_it] = True
         wave_s = wave_start[line_it]
         wave_e = wave_end[line_it]
-        # weights at the edge of the domain
+        # weights at the edge of the domain: pixel i spans ww_ord[i] to
+        #   ww_ord[i + 1], and a pixel that straddles an edge of the window
+        #   is weighted by the fraction of its span inside the window (so
+        #   the sum of the weights is the width of the window in pixels)
         nseg = x_end - x_start + 1
         weight_mask = wbuf[:nseg]
         weight_mask[:] = 1.0
         if ww_ord[x_start] < wave_s:
             refdiff = ww_ord[x_start + 1] - wave_s
             wavediff = ww_ord[x_start + 1] - ww_ord[x_start]
-            weight_mask[0] = 1 - refdiff / wavediff
+            weight_mask[0] = refdiff / wavediff
         if ww_ord[x_end + 1] > wave_e:
             refdiff = wave_e - ww_ord[x_end]
-            wavediff = ww_ord[x_end] - ww_ord[x_end - 1]
-            weight_mask[nseg - 1] = 1 - (refdiff / wavediff)
+            wavediff = ww_ord[x_end + 1] - ww_ord[x_end]
+            weight_mask[nseg - 1] = refdiff / wavediff
         # mean xpix (bottleneck nansums) and mean blaze
         tmp = tbuf[:nseg]
         for i in range(nseg):
@@ -527,11 +550,13 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                 seg[i] = d3model[order_num, x_start + i] * weight_mask[i]
             d3v[line_it], sd3v[line_it] = _bouchy(seg, diff_seg, mean_rms,
                                                   tmp)
-            # residual projection tables
-            #   note: as in compute_rv, frac_diff_seg is diff_seg itself, so
-            #   diff_seg is divided in place once per table
+            # residual projection tables: the residual and its noise in
+            #   units of the local continuum (b_ratio * norm), in a buffer of
+            #   their own (diff_seg itself is left as it is for every table
+            #   and for the line statistics below)
             bn_seg = bbuf[:nseg]
             frac_mean_rms = rbuf[:nseg]
+            frac_diff_seg = fbuf[:nseg]
             for ikey in range(nproj):
                 for i in range(nseg):
                     seg[i] = (proj_models[ikey, order_num, x_start + i] *
@@ -539,10 +564,10 @@ def line_loop(iteration, flag_last_iter, orders, wave_start, wave_end,
                     bn_seg[i] = (b_ratio[order_num, x_start + i] *
                                  norm[order_num, x_start + i])
                 for i in range(nseg):
-                    diff_seg[i] /= bn_seg[i]
+                    frac_diff_seg[i] = diff_seg[i] / bn_seg[i]
                     frac_mean_rms[i] = mean_rms / bn_seg[i]
-                pd_key, psd_key = _bouchy_arr(seg, diff_seg, frac_mean_rms,
-                                              tmp)
+                pd_key, psd_key = _bouchy_arr(seg, frac_diff_seg,
+                                              frac_mean_rms, tmp)
                 if np.isfinite(pd_key) and np.isfinite(psd_key):
                     proj[ikey, line_it] = pd_key
                     sproj[ikey, line_it] = psd_key
@@ -631,10 +656,10 @@ def _bn_nanmedian(values, n_in):
 def lowpass_windows(input_vect, width):
     """
     Window loop of lbl.core.math.lowpassfilter: for boxes of `width` pixels
-    every width // 4 pixels (starting half a box before the vector), the
-    mean pixel position (bottleneck nanmean) and the NaN-median of the values
-    (bottleneck nanmedian), skipping boxes with < 3 pixels or < 3 finite
-    values.
+    every width // 4 pixels (starting half a box before the vector, cut at
+    its ends), the median position of the finite pixels (bottleneck median)
+    and the median of their values (bottleneck nanmedian), skipping boxes
+    with < 3 pixels or < 3 finite values.
 
     :return: xmed, ymed (float64 arrays)
     """
@@ -648,33 +673,37 @@ def lowpass_windows(input_vect, width):
     xmed = np.empty(nmax)
     ymed = np.empty(nmax)
     buf = np.empty(max(width, 1))
+    pos = np.empty(max(width, 1))
     count = 0
     for iw in range(nmax):
         it = start + iw * step
+        # the box holds pixels low_bound to high_bound - 1
         low_bound = it
         high_bound = it + width
         if low_bound < 0:
             low_bound = 0
-        if high_bound > (nvect - 1):
-            high_bound = nvect - 1
+        if high_bound > nvect:
+            high_bound = nvect
         npix = high_bound - low_bound
         if npix < 3:
             continue
+        # the finite pixels of the box (positions in increasing order)
         nfinite = 0
         for i in range(low_bound, high_bound):
             if np.isfinite(input_vect[i]):
+                buf[nfinite] = input_vect[i]
+                pos[nfinite] = i
                 nfinite += 1
         if nfinite < 3:
             continue
-        # bottleneck nanmean of the (integer) pixel positions
-        asum = 0.0
-        for i in range(low_bound, high_bound):
-            asum += i
-        xmed[count] = asum / npix
+        # median of the (sorted) positions
+        half = nfinite >> 1
+        if nfinite % 2 == 0:
+            xmed[count] = 0.5 * (pos[half - 1] + pos[half])
+        else:
+            xmed[count] = pos[half]
         # bottleneck nanmedian of the values
-        for i in range(npix):
-            buf[i] = input_vect[low_bound + i]
-        ymed[count] = _bn_nanmedian(buf, npix)
+        ymed[count] = _bn_nanmedian(buf, nfinite)
         count += 1
     return xmed[:count], ymed[:count]
 

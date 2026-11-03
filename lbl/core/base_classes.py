@@ -81,6 +81,15 @@ class LblLowCCFSNR(LblException):
         super().__init__(message)
 
 
+class LblNoValidLines(LblException):
+    def __init__(self, message):
+        """
+        Constructor for the exception of a spectrum in which no line has a
+        valid velocity (lbl_compute skips the file)
+        """
+        super().__init__(message)
+
+
 class LblCurveFitException(Exception):
     def __init__(self, message: str, x=None, y=None, f=None,
                  p0=None, func=None, error=None):

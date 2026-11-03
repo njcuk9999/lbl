@@ -46,6 +46,7 @@ Instrument = default.Instrument
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 LblLowCCFSNR = base_classes.LblLowCCFSNR
+LblNoValidLines = base_classes.LblNoValidLines
 log = io.log
 InstrumentsType = select.InstrumentsType
 # get speed of light
@@ -381,39 +382,49 @@ def spline_template(inst: InstrumentsType, template_file: str,
     # -------------------------------------------------------------------------
     # Deal with Rotational broadening
     # -------------------------------------------------------------------------
-    if isinstance(inst.params['ROTBROAD'], tuple):
-        # Apply rotational broadening if inst.params['ROTBROAD'] is
-        # passed as an argument.
-        epsilon = inst.params['ROTBROAD'][0]
+    # ROTBROAD = (epsilon, vsini in km/s): every template column compute_rv
+    #   reads (flux, flux_odd, flux_even and, with USE_SAVGOL_TEMPLATE, their
+    #   Savitzky-Golay derivatives; without it the derivatives are taken from
+    #   the broadened flux) is convolved with the rotation kernel, in pixels
+    #   of the template grid (a constant velocity step is assumed). NaNs
+    #   spread over the kernel's width.
+    rotbroad = inst.params['ROTBROAD']
+    rot_kernel, rot_npix = None, 0
+    if isinstance(rotbroad, (list, tuple)) and len(rotbroad) == 2:
         # TODO check that its 0-1 for epsilon
         # TODO check that its 1-100 for vsini to avoid m/s rather than km/s
-        vsini = inst.params['ROTBROAD'][1]
-        # Calculate the step in the wavelength grid
+        epsilon, vsini = float(rotbroad[0]), float(rotbroad[1])
+        # template pixels per km/s
         step = (twave / np.gradient(twave))
-        sample_sampling = np.nanmedian(step / constants.c.to(uu.km / uu.s).value)
-        # calculate the pixel value for the broadening (the delta function
-        #     position)
-        npix = np.ceil(vsini / sample_sampling).astype(int)
+        pix_per_kms = np.nanmedian(step / constants.c.to(uu.km / uu.s).value)
+        # half width of the kernel in pixels: vsini in pixels
+        rot_npix = int(np.ceil(vsini * pix_per_kms))
         # get the wave grid of the template that we are going to use
-        twave_tmp = np.linspace(twave[len(twave) // 2 - npix],
-                                twave[len(twave) // 2 + npix],
-                                2 * npix + 1)
+        twave_tmp = np.linspace(twave[len(twave) // 2 - rot_npix],
+                                twave[len(twave) // 2 + rot_npix],
+                                2 * rot_npix + 1)
         # set up the delta value and populate the delta function at the
         # point of interest
         delta_tmp = np.zeros_like(twave_tmp)
-        delta_tmp[npix] = 1
+        delta_tmp[rot_npix] = 1
         # run the rotation kernel
         rot_kernel = mp.rot_broad(twave_tmp, delta_tmp, epsilon, vsini)
         # display a message that we have rotationally broadened the spectrum
         msg = 'Rotational broadening epsilon = {}, vsini = {} km/s'
-        log.general(msg.format(*inst.params['ROTBROAD']))
-        # push the rotational broadening onto the flux using the rotational
-        #  broadening kernel
-        tflux2 = np.zeros_like(tflux)
-        for ioff in range(len(delta_tmp)):
-            tflux2 += np.roll(tflux, ioff - npix) * rot_kernel[ioff]
-        # set this to the flux we would have had from before
-        tflux = tflux2
+        log.general(msg.format(epsilon, vsini))
+
+    def rotation(flux: np.ndarray) -> np.ndarray:
+        """The flux convolved with the rotation kernel (as is without one)"""
+        if rot_kernel is None or len(flux) == 0:
+            return flux
+        flux2 = np.zeros_like(flux)
+        for ioff in range(len(rot_kernel)):
+            flux2 += np.roll(flux, ioff - rot_npix) * rot_kernel[ioff]
+        return flux2
+
+    tflux = rotation(tflux)
+    tflux_odd = rotation(tflux_odd)
+    tflux_even = rotation(tflux_even)
     # -------------------------------------------------------------------------
     # get the gradient of the log of the wave
     grad_log_wave = np.gradient(np.log(twave))
@@ -449,7 +460,7 @@ def spline_template(inst: InstrumentsType, template_file: str,
             """
             key = '{0}_savgol_d{1}'.format(flux_key, deriv)
             dd = np.array(ttable[key]) / (glw_c ** (deriv))
-            return dd
+            return rotation(dd)
         # get the derivative of the flux
         dflux = savgol_deriv(template_table, 'flux', 1)
         # get the 2nd derivative of the flux
@@ -693,10 +704,11 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     ccf_vector /= np.nanmedian(ccf_vector)
 
     # ---------------------------------------------------------------------
-    # construct a guess at the ccf fit
-    # default FWHM is 6 km/s as this is about the typical width of slowly
-    # rotating M dwarfs
-    coeffs = [dv[np.argmin(ccf_vector)], 6000,
+    # construct a guess at the ccf fit: a Gaussian (expo = 2) with a FWHM of
+    #   6000 / sqrt(2) = 4243 m/s and ears of 3 (the full profile is then
+    #   4.0 km/s wide at half depth), a typical width for a slowly rotating
+    #   M dwarf
+    coeffs = [dv[np.argmin(ccf_vector)], 6000 / np.sqrt(2),
               1 - np.nanmin(ccf_vector), 3, 2]
     lowf = None
     # do this twice for better fit
@@ -733,7 +745,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     msg += '\n\tEARS = {0:.4f}'.format(coeffs[3])
     msg += '\n\tEXPO = {0:.4f}'.format(coeffs[4])
     # ---------------------------------------------------------------------
-    # add values to props
+    # add values to props (FWHM: of the main component of the fit, in m/s)
     props['VSYS'] = coeffs[0]
     props['FWHM'] = coeffs[1]
     props['CONTRAST'] = coeffs[2]
@@ -1218,7 +1230,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # get the noise model switch
     use_noise_model = inst.params['USE_NOISE_MODEL']
-    # get the pixel hp_width [needs to be in m/s]
+    # the high-pass width in m/s: the parameter HP_WIDTH (km/s) is only
+    #   what the header says when no order has 3 lines (see below)
     hp_width = inst.params['HP_WIDTH'] * 1000
     # get the object science name
     # object_science = inst.params['OBJECT_SCIENCE']
@@ -1300,11 +1313,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     inst.params['BERV'] = berv
 
     width = np.zeros(sci_data.shape[0], dtype=int)
-    for order_num in range(sci_data.shape[0]):  # TODO change back to hp_width
+    for order_num in range(sci_data.shape[0]):
         # within each order, we determine the median width of lines and
-        # we define the filtering size as 5x that value. This avoids the
-        # hp_width parameter. We don't expect that derivatives of lines
-        # have a significant impact on that scale length
+        # we define the filtering size as 5x that value (the HP_WIDTH
+        # parameter is not used). We don't expect that derivatives of lines
+        # have a significant impact on that scale length. hp_width ends as
+        # the value of the last order with 3 lines or more
         lines_in_order = np.where((ref_table['ORDER'] == order_num))[0]
 
         if len(lines_in_order) < 3:
@@ -1326,6 +1340,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # deal with first estimate of RV / CCF equivalent width
         vtot = velo_estimate + systemic_props['VSYS']
         sys_rv, ccf_fwhm = berv - vtot, systemic_props['FWHM']
+        # the CCF e-width (header CCF_EW): the sigma of the Gaussian that
+        #   has the FWHM of the template's CCF, in m/s
         ccf_ewidth = ccf_fwhm / mp.fwhm_value()
     else:
         # for FP files
@@ -1547,12 +1563,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
 
             # if this is the first iteration update model0
             if iteration == 0:
-                # normalization of the local pseudo continuum level of the unblazed
-                # model
+                # the local pseudo-continuum of the unblazed template (norm,
+                #   read by the residual projections): its upper envelope,
+                #   the 95th percentile in boxes of a quarter of the order
                 model0[order_num] = tvals[0]
                 model0[order_num][model0[order_num] == 0] = np.nan
-                lp_wid = model0.shape[1] // 2 # half the blaze length
-                norm[order_num] = mp.lowpassfilter(model0[order_num], lp_wid, k=2)
+                cont_wid = model0.shape[1] // 4
+                norm[order_num] = mp.upper_envelope(model0[order_num],
+                                                    cont_wid)
 
                 # spline the original template and apply blaze
                 model0[order_num] *= blaze_ord
@@ -1602,17 +1620,22 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # if we are not using a noise model - estimate the noise
         if not use_noise_model:
-
-            rms = estimate_noise_model(sci_data, wavegrid, model,
+            # the noise and the sigma clip of this pass, from the science
+            #   data as read (sci_data0) against the current model: a pixel
+            #   clipped while the model was still away from the spectrum (the
+            #   flanks of deep lines, for a start off in velocity) comes back
+            #   once the model has reached it
+            rms = estimate_noise_model(sci_data0, wavegrid, model,
                                        noise_sampling_width,
                                        npoints_orders=noise_npoints,
                                        nstep=inst.params['NOISE_SAMPLING_NSTEP'])
             # work out the number of sigma away from the model
-            nsig = (sci_data - model) / rms
+            nsig = (sci_data0 - model) / rms
             # mask for nsigma
             with warnings.catch_warnings(record=True) as _:
                 sigmask = np.abs(nsig) > rms_sigclip_thres
-            # apply sigma clip to the science data
+            # the science data of this pass: clipped from the original
+            sci_data = np.array(sci_data0)
             sci_data[sigmask] = np.nan
         else:
             for order_num in range(sci_data.shape[0]):
@@ -1629,8 +1652,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # get orders
         orders = line_orders
-        # set these for use/update later
-        nwavegrid = mp.doppler_shift(wavegrid, -sys_rv)
+        # the wave grid on which the line windows (in the frame of the mask)
+        #   are placed. The model is the template shifted by model_shift,
+        #   and the mask sits model_offset (the model velocity) from the
+        #   template, so the lines of the model, and of the spectrum it
+        #   matches, are at model_shift - model_offset in the frame of the
+        #   mask: the windows follow them and the lines are centred
+        nwavegrid = mp.doppler_shift(wavegrid, model_shift - model_offset)
         # the wave -> pixel splines of the orders (evaluated at the line
         #   edges below); orders with too few finite points give NaNs
         xpix = np.arange(model.shape[1])
@@ -1662,10 +1690,20 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             ccf_weight[mask_snr < 3] = 0
             # absolute depths cannot be greater than 1
             ccf_weight[abs(ccf_weight) > 1] = 0
-            # calculate the rough CCF RV estimate
-            sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid, model,
-                                                      wave_mask, ccf_weight,
-                                                      kind='model')
+            # calculate the rough CCF RV estimate (a model with no data, as
+            #   that of a spectrum with none, or one the CCF cannot fit, has
+            #   no velocity: the file is skipped)
+            if not np.any(np.isfinite(model) & (model != 0)):
+                raise LblNoValidLines('The model has no finite non-zero '
+                                      'value: no CCF of the model')
+            try:
+                sys_model_rv, ewidth_model = rough_ccf_rv(inst, wavegrid,
+                                                          model, wave_mask,
+                                                          ccf_weight,
+                                                          kind='model')
+            except base_classes.LblCurveFitException as e:
+                emsg = 'CCF of the model could not be fitted: {0}'
+                raise LblNoValidLines(emsg.format(e.error))
 
             model_velocity = sys_model_rv - sys_rv
             log.general('\tModel velocity {:.2f} m/s'.format(model_velocity))
@@ -1693,11 +1731,9 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
             pix_edges = mp.iuv_spline_eval(nwavegrid[order_num], xpix, edges)
             x_start_f[in_order] = pix_edges[:len(in_order)]
             x_end_f[in_order] = pix_edges[len(in_order):]
-        # a non-finite line edge has no pixel index: stop, as converting it
-        #   to an integer would
-        if not np.all(np.isfinite(x_start_f[visit]) &
-                      np.isfinite(x_end_f[visit])):
-            raise ValueError('cannot convert float NaN to integer')
+        # a line with a non-finite edge (an order without a wave solution)
+        #   keeps edges at 0, which the kernel rejects as too narrow
+        visit &= np.isfinite(x_start_f) & np.isfinite(x_end_f)
         x_start_i = np.zeros(len(orders), dtype=np.int64)
         x_end_i = np.zeros(len(orders), dtype=np.int64)
         x_start_i[visit] = np.floor(x_start_f[visit]).astype(np.int64)
@@ -1756,6 +1792,12 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # get the best etimate of the velocity and update sline
         rv_mean, bulk_error = mp.odd_ratio_mean(dv, sdv)
+        # no line with a valid velocity: nothing to measure in this file
+        if not np.isfinite(rv_mean):
+            emsg = ('No line has a valid velocity (iteration {0}, {1} lines '
+                    'with a finite dv)')
+            raise LblNoValidLines(emsg.format(iteration + 1,
+                                              np.sum(np.isfinite(dv))))
 
         # update rv_mean value with the response curve from template.
         #    An rv_mean value is always under-estimated in absolute value but
@@ -1895,7 +1937,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['SYSTEMIC_VELOCITY'] = sys_rv
     outputs['RMSRATIO'] = stddev_nsig
     outputs['CCF_EW'] = ccf_ewidth
-    outputs['HP_WIDTH'] = hp_width
+    # in km/s, as the header key HP_WIDTH says
+    outputs['HP_WIDTH'] = hp_width / 1000
     outputs['TOTAL_DURATION'] = total_time
     outputs['MODEL_VELOCITY'] = model_velocity
     outputs['LINES_XPIX_SET'] = lines_xpix_set
@@ -2111,6 +2154,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # get fraction of time a line as been measured
     frac_time_meas = inst.params['COMPIL_FRAC_TIME_MEAS']
     # obj_sci = inst.params['OBJECT_SCIENCE']
+    # the CCF e-width of calibration files, in km/s
     ccf_ew_fp = inst.params['COMPIL_FP_EWID']
     # get the threshold of pearson-r likelihood of correlation with BERV
     cut_pearsonr = inst.params['COMPIL_CUT_PEARSONR']
@@ -2363,12 +2407,11 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # Read all lines for this file and load into arrays
         # ---------------------------------------------------------------------
-        # if we don't have a calibration we set the rvs and dvrms from rv table
-        if not flag_calib:
-            dv_arr[row] = rvtable['dv'][good]
-            sdv_arr[row] = rvtable['sdv'][good]
-        # else we calculate it using odd ratio mean
-        else:
+        # the line velocities of this file (the DV and SDV extensions)
+        dv_arr[row] = rvtable['dv'][good]
+        sdv_arr[row] = rvtable['sdv'][good]
+        # for a calibration the velocity is their odd ratio mean
+        if flag_calib:
             cal_rv = np.array(rvtable['dv'][good], dtype=float)
             cal_dvrms = np.array(rvtable['sdv'][good], dtype=float)
             # estimate using odd ratio mean
@@ -2526,6 +2569,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         for file_it in tqdm(range(dv_arr.shape[0])):
             # use the odd ratio mean to guess vrad and svrad
             orout1 = mp.odd_ratio_mean(dv_arr[file_it], sdv_arr[file_it])
+            # a file without any finite line velocity: its row stays NaN
+            if not np.isfinite(orout1[0]):
+                wmsg = 'No finite line velocity in {0}: its velocities are NaN'
+                log.warning(wmsg.format(lblrvfiles[file_it]))
             # add to output table
             rdb_dict['vrad'][file_it] = orout1[0]
             rdb_dict['svrad'][file_it] = orout1[1]
@@ -2573,13 +2620,20 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # find valid velocity measurements
             good1 = np.isfinite(dv_arr[:, line_it])
             per_line_diff = (dv_arr[:, line_it] - rdb_dict['vrad'])
-            # skip if less that 3 valid values for this line
+            # fewer than 3 valid values for this line: in a run of fewer
+            #   than 5 files, the plain mean of its differences to the
+            #   per-epoch velocities (a line seen once has no offset that can
+            #   be told from its velocity: it is kept with an offset of 0);
+            #   in longer runs the line is not used
             if np.sum(good1) < 3:
-                if dv_arr.shape[0] < 5:
-                    per_line_mean[line_it] = np.nanmean(dv_arr[:, line_it])
+                if dv_arr.shape[0] < 5 and np.sum(good1) == 1:
+                    per_line_mean[line_it] = 0.0
+                    per_line_error[line_it] = sdv_arr[good1, line_it][0]
+                elif dv_arr.shape[0] < 5 and np.sum(good1) == 2:
+                    per_line_mean[line_it] = np.nanmean(per_line_diff)
                     # calculate the per line error
-                    part1 = np.nanstd(dv_arr[:, line_it])
-                    part2 = np.sqrt(np.sum(good))
+                    part1 = np.nanstd(per_line_diff)
+                    part2 = np.sqrt(np.sum(good1))
                     per_line_error[line_it] = part1 / part2
                 else:
                     per_line_mean[line_it] = np.nan
@@ -2611,16 +2665,17 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_mean[line_it] = np.nan
                 per_line_error[line_it] = np.nan
                 continue
-            # get the difference and error for each line
+            # the offset of the line from the per-epoch velocities: the
+            #   weighted mean of its differences to them (Artigau et al.
+            #   2022, section 4.7), subtracted from the line in every epoch
+            #   below
             with warnings.catch_warnings(record=True) as _:
                 diff1 = dv_arr[:, line_it] - rdb_dict['vrad']
-                diff1 -= np.nanmedian(diff1)
             # here we avoid having a shallow copy
             err1 = np.array(sdv_arr[:, line_it])
             # try to guess the odd ratio mean
             # noinspection PyBroadException
             try:
-                # also updates dvrms[:,line_it]
                 guess2, bulk_error2 = mp.odd_ratio_mean(diff1, err1)
                 per_line_mean[line_it] = guess2
                 per_line_error[line_it] = bulk_error2
@@ -2629,9 +2684,13 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 per_line_mean[line_it] = np.nan
                 per_line_error[line_it] = np.nan
 
-        # normalize the per-line mean to zero
+        # the offsets are relative to the mean of all lines: their weighted
+        #   mean is set to zero, so that removing them leaves the zero point
+        #   of the velocities as it is
         guess3, bulk_error3 = mp.odd_ratio_mean(per_line_mean, per_line_error)
         per_line_mean = per_line_mean - guess3
+        # a line more than 100 times the spread of the offsets away is not
+        #   used at all
         nsig = np.abs(per_line_mean / mp.estimate_sigma(per_line_mean))
         per_line_mean[nsig > 100] = np.nan
 
@@ -2658,8 +2717,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
     # -------------------------------------------------------------------------
     # print progress
     log.info('Computing chromatic slope and per-bandpass statistics')
-    # zero filled array
-    lblrv_zeros = np.zeros_like(lblrvfiles, dtype=float)
+    # NaN filled array (a band or region not measured in a file stays NaN)
+    lblrv_nans = np.full(len(lblrvfiles), np.nan)
     # ---------------------------------------------------------------------
     # Update table with vrad/svrad, per epoch values and fwhm/sig_fwhm
     # ---------------------------------------------------------------------
@@ -2718,6 +2777,10 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             # get valid rv an dv drms
             valid_rv = (rvs_row - rv_per_line_model[0])[good2]
             valid_dvrms = err[good2]
+            # a fit of a slope with its covariance needs 3 lines or more:
+            #   with fewer, the slope stays NaN
+            if np.sum(good2) < 3:
+                break
             # get weights for the np.polyval fit. Do *not* use the square of
             # error bars for weight (see polyfit help)
 
@@ -2775,8 +2838,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
 
         ccf_ew_row = rdb_dict[ccf_ew_col][row]
         # TODO -> make this smarter if we have LFC or HC
+        #   (CCF_EW is in m/s, COMPIL_FP_EWID in km/s)
         if ccf_ew_row == 0:
-            ccf_ew_row = float(ccf_ew_fp)
+            ccf_ew_row = float(ccf_ew_fp) * 1000
 
         # work out the fwhm (1 sigma * sigma value)
         d2v = rdb_dict['d2v'][row]
@@ -2789,7 +2853,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['dW'][row] = dw
         rdb_dict['sdW'][row] = sdw
         # ---------------------------------------------------------------------
-        # calculate the mean full width half max
+        # the FWHM of the template's CCF (from its e-width)
         mean_fwhm = mp.fwhm_value() * ccf_ew_row
         # fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_d2v / ccf_ew_row)
         fwhm_row = mean_fwhm + dw / mean_fwhm
@@ -2835,7 +2899,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             tmp_rv = dv_arr[row] - rv_per_line_model[row]
             tmp_err = sdv_arr[row]
         # ---------------------------------------------------------------------
-        # populate columns with zeros (if not present)
+        # populate columns with NaNs (if not present)
         # ---------------------------------------------------------------------
         # loop around the bands
         for iband in range(len(bands)):
@@ -2852,9 +2916,9 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 svrad_colname = 'svrad_{0}{1}'.format(*cargs)
                 # add new column if not present
                 if vrad_colname not in rdb_dict:
-                    rdb_dict[vrad_colname] = lblrv_zeros.copy()
+                    rdb_dict[vrad_colname] = lblrv_nans.copy()
                 if svrad_colname not in rdb_dict:
-                    rdb_dict[svrad_colname] = lblrv_zeros.copy()
+                    rdb_dict[svrad_colname] = lblrv_nans.copy()
         # ---------------------------------------------------------------------
         # loop around the bands
         for iband in range(len(bands)):
@@ -2884,8 +2948,8 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
                 # get the finite points
                 finite_mask = np.isfinite(tmp_err[comb_mask])
                 finite_mask &= np.isfinite(tmp_rv[comb_mask])
-                # deal with not having enough values (half of total being
-                #    non finite)
+                # deal with not having enough values (fewer than a tenth of
+                #    the lines finite)
                 if np.sum(finite_mask) < np.sum(comb_mask) / 10:
                     continue
                 # deal with not having enough points in general (min = 5)
@@ -2955,6 +3019,12 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     # add any column pairs that don't conform to this
     wmean_pairs['fwhm'] = 'sig_fwhm'
     wmean_pairs['contrast'] = 'sig_contrast'
+    # text columns that hold numbers (averaged per epoch, as numbers)
+    numeric_text = dict()
+    for colname in rdb_table.colnames:
+        numbers = _numbers_in_text(rdb_table[colname])
+        if numbers is not None and colname not in wmean_pairs:
+            numeric_text[colname] = numbers
     # -------------------------------------------------------------------------
     # log progress
     log.info('Producing LBL RDB 2 table')
@@ -2972,27 +3042,37 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
             # if column requires wmean, combine value and error
             if colname in wmean_pairs:
                 # get value and error for this udate
-                vals = itable[colname]
-                errs = itable[wmean_pairs[colname]]
-                # get error^2
-                errs2 = errs ** 2
-                # deal with all nans
-                if np.sum(np.isfinite(errs2)) == 0:
+                vals = np.array(itable[colname], dtype=float)
+                errs = np.array(itable[wmean_pairs[colname]], dtype=float)
+                # the observations that measured it: finite value and a
+                #   finite, positive error (an unmeasured value does not
+                #   count, whatever it holds)
+                measured = np.isfinite(vals) & np.isfinite(errs) & (errs > 0)
+                # deal with none measured
+                if np.sum(measured) == 0:
                     value = np.nan
                     err_value = np.nan
                 else:
-                    # get 1/error^2
-                    with warnings.catch_warnings(record=True) as _:
-                        value = mp.nansum(vals / errs2) / mp.nansum(1 / errs2)
-                        err_value = np.sqrt(1 / mp.nansum(1 / errs2))
-                    # push into table
+                    # weighted mean with 1/error^2
+                    errs2 = errs[measured] ** 2
+                    value = (mp.nansum(vals[measured] / errs2) /
+                             mp.nansum(1 / errs2))
+                    err_value = np.sqrt(1 / mp.nansum(1 / errs2))
+                # push into table
                 rdb_dict2[colname].append(value)
                 rdb_dict2[wmean_pairs[colname]].append(err_value)
             # -----------------------------------------------------------------
             # if not vrad or svrad then try to mean the column or if not
             #   just take the first value
             elif colname not in wmean_pairs.values():
-                # do not try to do a mean on strings (its stupid)
+                # numbers written as text (an airmass read as a string from
+                #   the header): the mean of their finite values
+                if colname in numeric_text:
+                    with warnings.catch_warnings(record=True) as _:
+                        rdb_dict2[colname].append(np.nanmean(
+                            numeric_text[colname][epoch_mask]))
+                    continue
+                # do not try to do a mean on strings: the first value
                 if isinstance(itable[colname][0], str):
                     rdb_dict2[colname].append(itable[colname][0])
                     continue
@@ -3001,10 +3081,12 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
                     if itable[colname].mask[0]:
                         rdb_dict2[colname].append(np.nan)
                         continue
-                # try to produce the mean of rdb table
+                # try to produce the mean of rdb table (of its finite
+                #   values: a header key missing in one file is NaN there)
                 # noinspection PyBroadException
                 try:
-                    rdb_dict2[colname].append(np.mean(itable[colname]))
+                    with warnings.catch_warnings(record=True) as _:
+                        rdb_dict2[colname].append(np.nanmean(itable[colname]))
                 except Exception as _:
                     rdb_dict2[colname].append(itable[colname][0])
     # ---------------------------------------------------------------------
@@ -3018,6 +3100,29 @@ def make_rdb_table2(inst: InstrumentsType, rdb_table: Table) -> Table:
     # ---------------------------------------------------------------------
     # return rdb table
     return rdb_table2
+
+
+def _numbers_in_text(values) -> Optional[np.ndarray]:
+    """
+    A text column of the rdb table as numbers, if all its values read as
+    numbers and its finite values are not all the same (a header value
+    written as a string, such as an airmass), else None (real text, or a
+    name such as an object called 10700)
+
+    :param values: the column
+
+    :return: np.ndarray of floats or None
+    """
+    if len(values) == 0 or not isinstance(values[0], str):
+        return None
+    try:
+        numbers = np.array([float(value) for value in values])
+    except (TypeError, ValueError):
+        return None
+    finite = numbers[np.isfinite(numbers)]
+    if len(finite) == 0 or np.all(finite == finite[0]):
+        return None
+    return numbers
 
 
 def make_drift_table(inst: InstrumentsType, rdb_table: Table) -> Table:

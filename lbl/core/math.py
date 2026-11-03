@@ -338,22 +338,28 @@ if not HAS_NUMBA:
 
 
 # Set "nopython" mode for best performance, equivalent to @nji
-@jit(nopython=True, cache=True)
+#   error_model='numpy': a division by zero gives NaN or inf and does not raise
+@jit(nopython=True, cache=True, error_model='numpy')
 def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
-                   odd_ratio: float = 2e-4, nmax: int = 10,
+                   odd_ratio: float = 2e-3, nmax: int = 10,
                    conv_cut=1e-2) -> Tuple[float, float]:
     """
     Provide values and corresponding errors and compute a weighted mean
 
     :param value: np.array (1D), value array
     :param error: np.array (1D), uncertainties for value array
-    :param odd_ratio: float, the probability that the point is bad
-                    Recommended value in Artigau et al. 2021 : f0 = 0.002
+    :param odd_ratio: float, the height of the flat outlier floor relative to
+                    the Gaussian peak of each point: f0 = 2e-3 in Artigau et
+                    al. 2022 (Appendix B), which gives a point a weight of
+                    about 0.5 at 3.5 sigma and about 0.02 at 4.5 sigma
     :param nmax: int, maximum number of iterations to pass through
     :param conv_cut: float, the convergence cut criteria - how precise we have
                      to get
 
-    :return: tuple, 1. the weighted mean, 2. the error on weighted mean
+    :return: tuple, 1. the weighted mean, 2. the error on weighted mean.
+             When all the points are so far from the median that their weights
+             are exactly zero: (NaN, inf). When no weight is finite (all the
+             errors are zero, for example): (NaN, NaN).
     """
     # deal with NaNs in value or error
     keep = np.isfinite(value) & np.isfinite(error)
@@ -389,6 +395,7 @@ def odd_ratio_mean(value: np.ndarray, error: np.ndarray,
         # update the guess based on the weights
         if np.sum(np.isfinite(weights)) == 0:
             guess = np.nan
+            bulk_error = np.nan
         else:
             guess = np.nansum(value * weights) / np.nansum(weights)
             # work out the bulk error
@@ -700,16 +707,19 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
 
     Algorithm:
 
-    provide an input vector of an arbitrary length and compute a running NaN
-    median over a box of a given length (width value). The running median is
-    NOT computed at every pixel but at steps of 1/4th of the width value.
-    This provides a vector of points where the nan-median has been computed
-    (ymed) and mean position along the input vector (xmed) of valid (non-NaN)
-    pixels. This xmed/ymed combination is then used in a spline to recover a
-    vector for all pixel positions within the input vector.
+    provide an input vector of an arbitrary length and compute a running
+    median of the finite values over a box of a given length (width value),
+    cut at the ends of the vector. The running median is NOT computed at
+    every pixel but at steps of 1/4th of the width value. This provides a
+    vector of points where the median has been computed (ymed) and the
+    median position along the input vector (xmed) of the finite pixels of
+    the box: the position that goes with a median of the values, so that a
+    ramp is followed exactly whatever pixels are missing. This xmed/ymed
+    combination is then used in a spline to recover a vector for all pixel
+    positions within the input vector.
 
-    When there are no valid pixel in a 'width' domain, the value is skipped
-    in the creation of xmed and ymed, and the domain is splined over.
+    When a box has fewer than 3 finite pixels, it is skipped in the creation
+    of xmed and ymed, and the domain is splined over.
 
     :param input_vect: numpy 1D vector, vector to low pass
     :param width: int, width (box size) of the low pass filter
@@ -733,30 +743,79 @@ def lowpassfilter(input_vect: np.ndarray, width: int = 101,
         # if we are at the start or end of vector, we go 'off the edge' and
         # define a box that goes beyond it. It will lead to an effectively
         # smaller 'width' value, but will provide a consistent result at edges.
+        # the box holds pixels low_bound to high_bound - 1
         low_bound = it
         high_bound = it + int(width)
         # deal with lower bounds out of bounds --> set to zero
         if low_bound < 0:
             low_bound = 0
-        # deal with upper bounds out of bounds --> set to max
-        if high_bound > (len(input_vect) - 1):
-            high_bound = (len(input_vect) - 1)
+        # deal with upper bounds out of bounds --> the last pixel included
+        if high_bound > len(input_vect):
+            high_bound = len(input_vect)
         # get the pixel bounds
         pixval = index[low_bound:high_bound]
         # do not low pass if not enough points
         if len(pixval) < 3:
             continue
-        # if no finite value, skip
-        if np.sum(np.isfinite(input_vect[pixval])) < 3:
+        # the finite pixels of the box, skipped if fewer than 3
+        valid = np.isfinite(input_vect[pixval])
+        if np.sum(valid) < 3:
             continue
-        # mean position along vector and NaN median value of
-        # points at those positions
-        xmed.append(nanmean(pixval))
-        ymed.append(nanmedian(input_vect[pixval]))
+        # median position of the finite pixels and median of their values
+        xmed.append(nanmedian(pixval[valid]))
+        ymed.append(nanmedian(input_vect[pixval[valid]]))
     # convert to arrays
     xmed = np.array(xmed, dtype=float)
     ymed = np.array(ymed, dtype=float)
     return _lowpass_spline(input_vect, xmed, ymed, k)
+
+
+def upper_envelope(input_vect: np.ndarray, width: int,
+                   percentile: float = 95.0) -> np.ndarray:
+    """
+    The upper envelope of a vector: a pseudo-continuum for a spectrum with
+    absorption lines.
+
+    In boxes of `width` pixels every width // 4 pixels (cut at the ends of the
+    vector), the given percentile of the finite values, placed at the median
+    position of the finite pixels of the box; boxes with fewer than 3 finite
+    values are skipped. These points are joined by straight lines (constant
+    beyond the first and the last), so the envelope does not overshoot them:
+    it stays within the range of the box percentiles and is positive wherever
+    the vector is. NaN everywhere when fewer than 2 boxes are left.
+
+    :param input_vect: numpy 1D vector
+    :param width: int, size of the boxes in pixels
+    :param percentile: float, the percentile of each box (95: the level of
+                       the continuum between the lines, as
+                       lbl.science.activity_lines takes it)
+
+    :return: np.ndarray, the envelope at every pixel of input_vect
+    """
+    input_vect = np.asarray(input_vect, dtype=float)
+    npix = len(input_vect)
+    width = int(width)
+    step = max(width // 4, 1)
+    index = np.arange(npix)
+    xpos, ylev = [], []
+    for it in range(-width // 2, npix + width // 2, step):
+        pixval = index[max(it, 0):min(it + width, npix)]
+        if len(pixval) < 3:
+            continue
+        valid = np.isfinite(input_vect[pixval])
+        if np.sum(valid) < 3:
+            continue
+        xpos.append(np.median(pixval[valid]))
+        ylev.append(np.percentile(input_vect[pixval[valid]], percentile))
+    if len(xpos) < 2:
+        return np.full(npix, np.nan)
+    xpos, ylev = np.array(xpos), np.array(ylev)
+    # boxes with the same finite pixels give the same point once
+    xuniq, inverse = np.unique(xpos, return_inverse=True)
+    yuniq = np.bincount(inverse, weights=ylev) / np.bincount(inverse)
+    if len(xuniq) < 2:
+        return np.full(npix, np.nan)
+    return np.interp(index, xuniq, yuniq)
 
 
 def _lowpass_fast_ok(input_vect: np.ndarray, width: Any) -> bool:
@@ -839,7 +898,7 @@ def gauss_function(x: Union[float, np.ndarray], a: float, x0: float,
     :param x: numpy array (1D), the x data points
     :param a: float, the amplitude
     :param x0: float, the mean position of the gaussian
-    :param sigma: float, the standard deviation (FWHM) of the gaussian
+    :param sigma: float, the standard deviation of the gaussian
     :param dc: float, the constant level below the gaussian
 
     :return gauss: numpy array (1D), size = len(x), the output gaussian
@@ -855,7 +914,7 @@ def gauss_fit_s(x: Union[float, np.ndarray], x0: float, sigma: float,
 
     :param x: numpy array (1D), the x values for the gauss fit
     :param x0: float, the mean position
-    :param sigma: float, the FWHM
+    :param sigma: float, the standard deviation (FWHM / 2.3548)
     :param a: float, the amplitude
     :param zp: float, the dc level
     :param slope: float, the float (x-x0) * slope
@@ -873,17 +932,23 @@ def gauss_fit_e(x: Union[float, np.ndarray], x0: float, fwhm: float,
     """
     Gaussian fit with a shape factor and ears
 
+    The profile is 1 - g1 + g2, with g1 = amp exp(-|x - x0|**expo / ew**expo)
+    and g2 = (amp / ears**2) exp(-|x - x0|**expo / (2 ew)**expo).
+
     :param x: numpy array (1D), the x values for the gauss fit
     :param x0: float, the mean position
-    :param fwhm: float, the FWHM
+    :param fwhm: float, the full width at half maximum of g1. The ears g2
+                 are twice as wide and ears**2 times weaker, of opposite
+                 sign, so the whole profile is narrower at half its depth
+                 (by about 6 percent for ears of 3)
     :param amp: float, the amplitude
     :param ears: float, the ears (wings of the gaussian)
-    :param expo: float, the shape factor
+    :param expo: float, the shape factor (2 for a Gaussian)
 
     :return: np.ndarray - the gaussian value
     """
-    # gaussian FWHM = 2*sqrt(2*ln(2))*sigma
-    ew = fwhm / (2 * (2 * np.log(2)) ** (1 / expo))
+    # g1 is at half its maximum at |x - x0| = ew * ln(2)**(1/expo)
+    ew = fwhm / (2 * np.log(2) ** (1 / expo))
 
     g1 = amp * np.exp(-np.abs(x - x0) ** expo / ew ** expo)
     g2 = (amp / ears ** 2) * np.exp(-np.abs(x - x0) ** expo / (ew * 2) ** expo)
@@ -975,25 +1040,33 @@ def curve_fit(*args, funcname: Union[str, None] = None, **kwargs):
 def robust_polyfit(x: np.ndarray, y: np.ndarray, degree: int,
                    nsigcut: float) -> Tuple[np.ndarray, np.ndarray]:
     """
-    A robust polyfit (iterating on the residuals) until nsigma is below the
-    nsigcut threshold. Takes care of NaNs before fitting
+    A robust polyfit: fit, then keep the points whose absolute residual is
+    below nsigcut times the median absolute residual (of all the points),
+    and fit again, until every point used is below that threshold. Points
+    with a NaN in x or y are never used.
 
     :param x: np.ndarray, the x array to pass to np.polyval
     :param y: np.ndarray, the y array to pass to np.polyval
     :param degree: int, the degree of polynomial fit passed to np.polyval
-    :param nsigcut: float, the threshold sigma required to return result
-    :return:
+    :param nsigcut: float, the threshold in units of the median absolute
+                    residual (not of sigma: for Gaussian residuals, 1 median
+                    absolute residual is 0.674 sigma, so 3 is 2.02 sigma)
+    :return: tuple, 1. the coefficients of the last fit, 2. the mask of the
+             points that last fit used
     """
     # set up mask
-    keep = np.isfinite(y)
+    keep = np.isfinite(x) & np.isfinite(y)
+    used = np.array(keep)
     # set the nsigmax to infinite
     nsigmax = np.inf
     # set the fit as unset at first
     fit = None
     # while sigma is greater than sigma cut keep fitting
     while nsigmax > nsigcut:
+        # the points of this fit
+        used = keep
         # calculate the polynomial fit (of the non-NaNs)
-        fit = np.polyfit(x[keep], y[keep], degree)
+        fit = np.polyfit(x[used], y[used], degree)
         # calculate the residuals of the polynomial fit
         res = y - np.polyval(fit, x)
         # work out the new sigma values
@@ -1004,11 +1077,11 @@ def robust_polyfit(x: np.ndarray, y: np.ndarray, degree: int,
         else:
             nsig = np.abs(res) / sig
         # work out the maximum sigma
-        nsigmax = np.max(nsig[keep])
-        # re-work out the keep criteria
+        nsigmax = np.max(nsig[used])
+        # re-work out the keep criteria (NaN residuals are never kept)
         keep = nsig < nsigcut
-    # return the fit and the mask of good values
-    return np.array(fit), np.array(keep)
+    # return the fit and the mask of the points it used
+    return np.array(fit), np.array(used)
 
 
 def medfilt_1d(a: Union[list, np.ndarray],
@@ -1044,13 +1117,14 @@ def air_index(wavelength: Union[np.ndarray, float], temp: float = 15.0,
               pressure: float = 760.0) -> Union[np.ndarray, float]:
     """
     transform the wavelength in vacuum on the air
-    wavelength in nm, t=temperature in C, p=pressure in millibar
+    wavelength in nm, t=temperature in C, p=pressure in mm Hg (the density
+    term is 1 at 15 C and 760 mm Hg; 1013.25 here would mean 1.33 atm)
 
     From EA via Romain Allart (For HARPS specifically)
 
     :param wavelength: np.array - vector of wavelengths
     :param temp: float, air temperature in degrees C
-    :param pressure: float, air pressure in millibar
+    :param pressure: float, air pressure in mm Hg (760 = 1 atm)
 
     :return: depending on input a np.array of refractive indexes or a single
              refractive index
