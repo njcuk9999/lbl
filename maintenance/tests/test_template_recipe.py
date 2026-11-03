@@ -192,3 +192,13 @@ def test_a_hole_in_one_file_does_not_empty_its_bin(tmp_path):
     near = (wavegrid > hole[0] - 0.3) & (wavegrid < hole[1] + 0.3) & ~inside
     ratio = cube[:, out['ibin'][0]] / np.nanmedian(cube, axis=1)
     assert abs(np.nanmedian(ratio[inside]) - np.nanmedian(ratio[near])) < 0.01
+
+
+def test_the_low_pass_is_hp_width_on_the_grid_it_is_applied_to(tmp_path):
+    # the template's grid is 3.2 times finer than the pixels (0.25 km/s
+    #   against 0.8): the width in points is that of the grid
+    assert recipe.lowpass_points(500, 250.0) == 2000
+    out, _ = _run(Files(nfile=6), tmp_path)
+    width_kms = out['hp_width'] * out['grid_step_magic'] / 1000
+    assert out['grid_step_magic'] == 250.0
+    assert width_kms == pytest.approx(out['inst'].params['HP_WIDTH'])

@@ -75,6 +75,18 @@ def berv_bins(berv: np.ndarray, nbin: int) -> np.ndarray:
     return np.array(nbin * (rank / len(berv)), dtype=int)
 
 
+def lowpass_points(hp_width_kms: float, grid_step_ms: float) -> int:
+    """
+    The width of a low pass filter in points of a grid uniform in velocity
+
+    :param hp_width_kms: float, the width in km/s (HP_WIDTH)
+    :param grid_step_ms: float, the step of the grid in m/s
+
+    :return: int, the width in points of the grid
+    """
+    return int(np.round(float(hp_width_kms) * 1000 / float(grid_step_ms)))
+
+
 def file_level(flux: np.ndarray, weight: np.ndarray) -> float:
     """
     The flux level of one file's s1d: its median flux per unit weight (1 if
@@ -247,8 +259,6 @@ def run_template(inst, objname: str, objkind: str):
     inst.params['OBJECT_SCIENCE'] = str(objname)
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
-    # get the pixel hp_width [needs to be in m/s]
-    hp_width = float(inst.params['HP_WIDTH']) * 1000
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
@@ -313,6 +323,9 @@ def run_template(inst, objname: str, objkind: str):
     # grid scale for the template
     wavegrid = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
                                       dv_grid=grid_step_magic)
+    # the width of the low pass filters, HP_WIDTH [km/s] in points of this
+    #   grid, the one they are applied on
+    hp_width = lowpass_points(inst.params['HP_WIDTH'], grid_step_magic)
     # -------------------------------------------------------------------------
     # Step 5: Loop around each file and load into cube
     # -------------------------------------------------------------------------
@@ -594,12 +607,6 @@ def run_template(inst, objname: str, objkind: str):
 
         # copy
         flux_cube0 = np.array(flux_cube)
-        # get the pixel hp_width [needs to be in m/s]
-        grid_step_original = general.get_velocity_step(refwave, rounding=False)
-
-        # recalculate the hp_width
-        hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 /
-                                grid_step_original))
         # -------------------------------------------------------------------------
         # applying low pass filter
         log.general('\tApplying low pass filter to cube')
