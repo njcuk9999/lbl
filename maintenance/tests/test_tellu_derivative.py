@@ -10,12 +10,13 @@ from lbl.science import tellu_derivative as td
 C = constants.c.to("km/s").value
 
 
-def _atmosphere(seed=2):
+def _atmosphere(seed=2, water_depths=(0.2, 0.9)):
     """Water and dry transmissions, functions of the wavelength [nm]: narrow
-    lines, as TAPAS gives them before the instrument's resolution"""
+    lines, as TAPAS gives them before the instrument's resolution, water
+    lines of depths uniform in `water_depths` at exponent 1"""
     rng = np.random.default_rng(seed)
     water_lines = np.sort(rng.uniform(586.5, 599.5, 60))
-    water_depth = rng.uniform(0.2, 0.9, water_lines.size)
+    water_depth = rng.uniform(*water_depths, water_lines.size)
     dry_lines = np.sort(rng.uniform(586.5, 599.5, 15))
     dry_depth = rng.uniform(0.1, 0.5, dry_lines.size)
 
@@ -82,3 +83,18 @@ def test_no_tellurics_gives_no_water_and_dry_stays_physical():
     wave, sp, noise = _spectrum(spl_water, spl_dry, 0.5, 1.15, 40000.0)
     _, dry = td.fit_exponents(wave, sp, spl_water, spl_dry, 1.2, noise=noise)
     assert td.DRY_RANGE[0] * 1.2 < dry < td.DRY_RANGE[1] * 1.2
+
+
+def test_more_water_than_the_sweep_reaches_is_fitted():
+    # water exponents past the sweep's last point (2.5): a minimum there is
+    #   a wet exposure, not a missing signal, and the fit goes past it.
+    #   Lines of 2 to 15% at exponent 1, as most of the visible's
+    spl_water, spl_dry = _atmosphere(water_depths=(0.02, 0.15))
+    for true in (3.0, 4.0):
+        wave, sp, noise = _spectrum(spl_water, spl_dry, true, 1.15, 40000.0)
+        water, dry = td.fit_exponents(wave, sp, spl_water, spl_dry, 1.2,
+                                      noise=noise)
+        assert not td.is_fallback(water), true
+        assert abs(water / true - 1) < 0.02, (true, water)
+        assert abs(dry - 1.15) < 0.05, (true, dry)
+

@@ -348,6 +348,8 @@ def objective(sp, trans, noise=None):
 #:    follows it to a few percent (fit_exponents), and an unbounded fit can
 #:    sink to zero on a blind pass, without a template
 DRY_RANGE = (0.5, 1.5)
+#: the bounds of the water exponent in the fit, exclusive
+WATER_RANGE = (1e-4, 20.0)
 
 
 def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
@@ -412,7 +414,8 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     def cost(p):
         water = float(np.exp(p[0]))
         dry = float(np.exp(p[1])) if free_dry else float(airmass)
-        if not (1e-4 < water < 20) or not (low < dry < high):
+        if not (WATER_RANGE[0] < water < WATER_RANGE[1]) or \
+                not (low < dry < high):
             return np.inf
         return objective(sp, transmission(model, wave_ground, water, dry),
                          noise)
@@ -442,17 +445,18 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     if not np.all(np.isfinite(costs)):
         return float(fallback) + FALLBACK_MARK, float(airmass)
     # WHAT "NOTHING TO GO ON" IS, the cost being in units of the noise: a
-    #   minimum on an edge of the scan, or a curve flat to `flat_span`
+    #   minimum on the scan's FIRST point, or a curve flat to `flat_span`
     #   (0.1%), numerically. A faint star can have a real interior minimum
     #   with a span of only 0.5 to 2%, so the span alone cannot ask for
     #   more; a flat flux without tellurics, at the same noise, is no flat
     #   curve but a minimum at the scan's first point (spans of a few
-    #   percent or more), which the edge test catches
+    #   percent or more), which the edge test catches. A minimum on the
+    #   scan's LAST point is the opposite, more water than the scan reaches:
+    #   the fit starts there and is free to go past it, up to WATER_RANGE
     span = (costs.max() - costs.min()) / max(abs(costs.min()), 1e-30)
     jbest = int(np.argmin(costs))
     flat = span < flat_span
-    on_edge = jbest in (0, len(scan) - 1)
-    if flat or on_edge:
+    if flat or jbest == 0:
         # THE FALLBACK MUST BE RECOGNISABLE. `fallback` is 0.35, which is
         # ALSO a point of the sweep: an exposure that really converges to
         # 0.35 would return the same number as an exposure that failed, and
@@ -468,7 +472,7 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
                    options=dict(xatol=1e-4, fatol=1e-10, maxiter=300))
     water = float(np.exp(out.x[0]))
     dry = float(np.exp(out.x[1])) if free_dry else float(airmass)
-    if not np.isfinite(water) or water < scan[0] or water > scan[-1]:
+    if not np.isfinite(water) or water < scan[0]:
         return float(fallback) + FALLBACK_MARK, float(airmass)
     return water, dry
 
