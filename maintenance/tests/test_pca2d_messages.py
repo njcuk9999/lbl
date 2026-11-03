@@ -59,3 +59,26 @@ def test_a_missing_wavelength_extension_is_named(tmp_path):
     cfg["input"]["object"] = "STAR"
     info = wizard.probe_files(cfg)
     assert info["no_wave"] == cfg["input"]["extensions"]["wave"]
+
+
+def test_the_parity_agreement_compares_noise_not_continua():
+    """With the high pass deferred, the two parities hold ln f, each order
+    at its own level: their difference is noise only once each order is
+    high-passed."""
+    from lbl.pca2d import cube
+    rng = np.random.default_rng(3)
+    m = 3000
+    x = np.arange(m)
+    lines = -0.2 * np.exp(-0.5 * ((x[:, None] - rng.uniform(0, m, 60)[None, :])
+                                  / 3.0) ** 2).sum(axis=1)
+    values = np.vstack([lines + 0.4 + 1e-4 * x, lines - 0.3 - 2e-4 * x])
+    values += rng.normal(0.0, 0.01, values.shape)
+    sigma = np.full(values.shape, 0.01)
+    good = np.ones(values.shape, dtype=bool)
+    segments = [(0, 0, m), (1, 0, m)]
+    hp = dict(window=101, polyorder=2)
+    deferred = cube._parity_agreement(values, sigma, good, segments, hp)
+    assert 0.7 < deferred < 1.2, deferred
+    # without the segments (already high-passed values), as it was
+    flat = values - np.vstack([0.4 + 1e-4 * x, -0.3 - 2e-4 * x])
+    assert 0.8 < cube._parity_agreement(flat, sigma, good) < 1.2

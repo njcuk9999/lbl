@@ -636,7 +636,8 @@ def _prepare_exposure(path, config, grid, blocks):
                good=good, segments=segments,
                snippets={(a0, b0): sptf.raw_block(payload, grid, a0, b0, config)
                          for a0, b0 in blocks},
-               ratio=_parity_agreement(values, sig, good))
+               ratio=_parity_agreement(values, sig, good, segments,
+                                       config["highpass"]))
     return out
 
 
@@ -728,16 +729,41 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     return grid, data, sigma, trans, meta_table
 
 
-def _parity_agreement(values, sigma, good):
+def _parity_agreement(values, sigma, good, segments=None, highpass=None):
     """Observed odd-even scatter over the order overlaps, in units of sigma.
 
     Free diagnostic: wherever both parities cover a column they measured the
     same photons at two different places on the detector, so their difference
     is an error estimate that owes nothing to any noise model.
+
+    `segments`, (parity, start, stop) of each order, are those of an exposure
+    whose high pass is deferred (highpass.against_template): its values are
+    then ln f, the level of each order still in them, and the difference of
+    two orders would be the step between their continua. Each segment is
+    high-passed here first, by `highpass` (window, polyorder), as the classic
+    filter would have done.
     """
     both = good[0] & good[1]
     if both.sum() < 100:
         return np.nan
+    if segments:
+        flat = np.zeros_like(values)
+        kept = np.zeros_like(good)
+        for parity, start, stop in segments:
+            seg = values[parity, start:stop]
+            ok = good[parity, start:stop]
+            if ok.sum() < int(highpass["window"]):
+                continue
+            with np.errstate(over="ignore"):
+                hp, hp_ok = prep.highpass(np.where(ok, np.exp(seg), np.nan),
+                                          highpass["window"],
+                                          highpass["polyorder"], "log_sub")
+            flat[parity, start:stop] = np.where(hp_ok & ok, hp, 0.0)
+            kept[parity, start:stop] = hp_ok & ok
+        values = flat
+        both = kept[0] & kept[1]
+        if both.sum() < 100:
+            return np.nan
     difference = values[0][both] - values[1][both]
     expected = np.sqrt(sigma[0][both] ** 2 + sigma[1][both] ** 2)
     expected = np.median(expected[np.isfinite(expected)])
