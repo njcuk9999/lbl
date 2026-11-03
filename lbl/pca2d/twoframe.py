@@ -491,10 +491,11 @@ def equilibrated_solve(amat, bvec, ridge=1e-12):
 def velocity_column(star_row, mask=None):
     """d(star model)/d(pixel): the shape a small shift of the star has.
 
-    First order, and exact at first order: f(x + eps) = f + eps f'(x). On the
-    magic grid a pixel IS a velocity, dv km/s of it, so the amplitude that
-    multiplies this column is a shift in pixels and alpha * dv is a velocity in
-    km/s. It is also why d/d(ln lambda) needs nothing but np.gradient: the grid
+    First order, and exact at first order: f(x + eps) = f + eps f'(x), the star
+    moved by eps samples towards the BLUE. On the magic grid a pixel IS a
+    velocity, dv km/s of it, so the amplitude alpha that multiplies this column
+    is a shift in pixels and -alpha * dv is the star's velocity in km/s,
+    receding positive. It is also why d/d(ln lambda) needs nothing but np.gradient: the grid
     is uniform in ln lambda by construction, which is the whole reason it was
     built that way.
 
@@ -3629,7 +3630,7 @@ def main(argv=None):
             # the residual of the *full* model and can be quoted against chi2_raw.
             shift = ""
             if velocity_term:
-                v = shift_velocity(alpha[~rejected], dv) * 1000.0        # m/s
+                v = shift_velocity(-alpha[~rejected], dv) * 1000.0       # m/s
                 shift = "  shift %.1f m/s rms" % (
                     mad_to_sigma * np.median(np.abs(v - np.median(v))) if v.size else 0.0)
             # left/raw keeps a digit more than seems necessary: convergence is
@@ -3784,12 +3785,14 @@ def main(argv=None):
         # the shift the fit absorbed rather than let the observer block have.
         # In pixels because that is what the solve works in, and in m/s because
         # that is what it means, read back through the relativistic Doppler
-        # (grids.shift_velocity). Its error is the derivative there: dv km/s
-        # per pixel, to 1e-13 at these few pixels.
+        # (grids.shift_velocity). The star moved by -alpha samples
+        # (velocity_column), so a receding star is positive, as every velocity
+        # of LBL. Its error is the derivative there: dv km/s per pixel, to
+        # 1e-13 at these few pixels.
         table["alpha"] = alpha
-        table["vrad_fit"] = shift_velocity(alpha, dv) * 1000.0
+        table["vrad_fit"] = shift_velocity(-alpha, dv) * 1000.0
         table["evrad_fit"] = sig_vel * dv * 1000.0
-        v = shift_velocity(alpha[~rejected], dv) * 1000.0
+        v = shift_velocity(-alpha[~rejected], dv) * 1000.0
         log("  velocity absorbed by the shift term: %.1f m/s rms, median"
             " %+.1f, worst %+.1f"
             % (mad_to_sigma * np.median(np.abs(v - np.median(v))), np.median(v),
