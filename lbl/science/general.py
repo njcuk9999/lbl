@@ -1637,8 +1637,13 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # get orders
         orders = line_orders
-        # set these for use/update later
-        nwavegrid = mp.doppler_shift(wavegrid, -sys_rv)
+        # the wave grid on which the line windows (in the frame of the mask)
+        #   are placed. The model is the template shifted by model_shift,
+        #   and the mask sits model_offset (the model velocity) from the
+        #   template, so the lines of the model, and of the spectrum it
+        #   matches, are at model_shift - model_offset in the frame of the
+        #   mask: the windows follow them and the lines are centred
+        nwavegrid = mp.doppler_shift(wavegrid, model_shift - model_offset)
         # the wave -> pixel splines of the orders (evaluated at the line
         #   edges below); orders with too few finite points give NaNs
         xpix = np.arange(model.shape[1])

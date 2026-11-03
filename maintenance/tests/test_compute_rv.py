@@ -206,3 +206,35 @@ def test_a_start_off_in_velocity_ends_at_the_same_velocity(tmp_path):
         assert abs(n1 - n0) <= 2
         assert abs(v1 - v0) < 0.05 * e0
         assert abs(e1 / e0 - 1) < 0.01
+
+
+def test_the_line_windows_are_centred_on_the_lines(tmp_path, monkeypatch):
+    """A mask displaced by X from the template gives a model velocity of
+    about X; the windows of the mask are placed on the lines of the model
+    (and of the spectrum), not 2 X away from them, and the velocity does not
+    depend on X"""
+    from lbl.core import fastmath
+    grids = []
+    kernel = fastmath.line_loop
+
+    def recorder(*args):
+        grids.append(np.array(args[8]))
+        return kernel(*args)
+    monkeypatch.setattr(fastmath, 'line_loop', recorder)
+    star = Star()
+    data = star.observe(velocity=0.0, seed=10)
+    velocities = []
+    for offset in (0.0, 3000.0, -3000.0, 6000.0):
+        _, inst, ref, splines = setup(tmp_path, star=star,
+                                      mask=star.mask_table(offset=offset))
+        table, out = run(inst, data, ref, splines, model_velocity=np.inf)
+        assert abs(out['MODEL_VELOCITY'] - offset) < 100
+        # the shift of the windows' grid, minus the offset of the mask: the
+        #   distance of the windows from the lines (in m/s)
+        shift = np.nanmedian(C_MS * np.log(star.wave / grids[-1]))
+        assert abs(shift + offset) < 100
+        velocities.append(bulk(table))
+    v0, e0, n0 = velocities[0]
+    for v1, e1, n1 in velocities[1:]:
+        assert abs(v1 - v0) < 0.1 * e0
+        assert n1 == n0
