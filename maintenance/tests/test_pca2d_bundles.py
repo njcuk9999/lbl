@@ -22,6 +22,11 @@ from lbl.pca2d import nights
 from lbl.pca2d import reconstruct
 
 
+#: NIRPS's site, La Silla, east longitude [deg]: its nights are cut at local
+#:    noon there, 16:43 UT
+LA_SILLA = -70.73
+
+
 def _stamps(start, n, step_min):
     t0 = dt.datetime.fromisoformat(start)
     return [t0 + dt.timedelta(minutes=step_min * i) for i in range(n)]
@@ -29,13 +34,13 @@ def _stamps(start, n, step_min):
 
 def test_no_bundle_keeps_whole_nights():
     stamps = _stamps("2024-10-12T02:00:00", 6, 5)
-    labels = [nights.night_label(s) for s in stamps]
+    labels = [nights.night_label(s, LA_SILLA) for s in stamps]
     assert nights.split_nights(stamps, labels, None) == labels
 
 
 def test_a_night_cut_by_minutes_from_each_bundle_s_start():
     stamps = _stamps("2024-10-12T02:00:00", 10, 5)      # 0, 5, ... 45 min
-    labels = [nights.night_label(s) for s in stamps]
+    labels = [nights.night_label(s, LA_SILLA) for s in stamps]
     out = nights.split_nights(stamps, labels, {"minutes": 20})
     # 0..20 min is five exposures, then 25..45
     assert out == ["2024-10-11#00"] * 5 + ["2024-10-11#01"] * 5
@@ -44,7 +49,7 @@ def test_a_night_cut_by_minutes_from_each_bundle_s_start():
 def test_a_night_that_fits_keeps_its_plain_label():
     stamps = (_stamps("2024-10-12T02:00:00", 3, 5)
               + _stamps("2024-10-13T02:00:00", 10, 5))
-    labels = [nights.night_label(s) for s in stamps]
+    labels = [nights.night_label(s, LA_SILLA) for s in stamps]
     out = nights.split_nights(stamps, labels, {"minutes": 20})
     assert out[:3] == ["2024-10-11"] * 3
     assert set(out[3:]) == {"2024-10-12#00", "2024-10-12#01"}
@@ -52,7 +57,7 @@ def test_a_night_that_fits_keeps_its_plain_label():
 
 def test_a_night_cut_by_berv_range_and_by_count():
     stamps = _stamps("2024-10-12T02:00:00", 8, 5)
-    labels = [nights.night_label(s) for s in stamps]
+    labels = [nights.night_label(s, LA_SILLA) for s in stamps]
     bervs = [0.0, 0.03, 0.06, 0.09, 0.12, 0.15, 0.18, 0.21]
     out = nights.split_nights(stamps, labels, {"berv": 0.1}, bervs)
     assert out == ["2024-10-11#00"] * 4 + ["2024-10-11#01"] * 4
@@ -64,7 +69,8 @@ def test_a_night_cut_by_berv_range_and_by_count():
 def test_group_files_reads_the_times_from_the_names(tmp_path):
     names = ["NIRPS.2024-10-12T02:%02d:00.000t.fits" % m for m in range(0, 50, 5)]
     files = [str(tmp_path / n) for n in reversed(names)]   # out of order
-    out, labels = nights.group_files(files, True, bundle={"minutes": 20})
+    out, labels = nights.group_files(files, True, bundle={"minutes": 20},
+                                     longitude=LA_SILLA)
     assert [os.path.basename(f) for f in out] == names
     assert labels == ["2024-10-11#00"] * 5 + ["2024-10-11#01"] * 5
 
@@ -171,7 +177,14 @@ def test_whole_nights_match_by_membership_or_by_night(tmp_path, monkeypatch):
         source_dir = source
     Args.cube = cube
     by_members, _ = reconstruct.rows_by_night({"coeffs": coeffs}, Args)
-    Args.cube = None
+    # by night: a cube without members, which records where its nights
+    #   were cut (local noon at La Silla)
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    meta = Table(dict(filename=["e1t.fits"], bjd=[2460600.61]))
+    meta.meta[nights.LONGITUDE_KEY] = LA_SILLA
+    meta.write(str(plain / "meta.fits"))
+    Args.cube = str(plain)
     by_night, _ = reconstruct.rows_by_night({"coeffs": coeffs}, Args)
     assert [float(r["b1"]) for _, r in by_members] == \
         [float(r["b1"]) for _, r in by_night] == [0.2, 0.2, 0.4]

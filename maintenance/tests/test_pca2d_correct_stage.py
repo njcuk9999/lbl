@@ -33,7 +33,9 @@ def _bridged(tmp_path):
     class Args:
         source_dir = str(source)
         cube = None
-    return Args, {"input": {"format": "s2d", "pattern": "*_S2D_A.fits"}}
+    # HARPS, whose nights are cut at local noon at La Silla
+    return Args, {"input": {"format": "s2d", "pattern": "*_S2D_A.fits",
+                            "instrument": "HARPS"}}
 
 
 def test_stacked_rows_read_a_bridged_instrument(tmp_path, monkeypatch):

@@ -35,6 +35,22 @@ PREAMBLE = r"""\documentclass[a4paper,11pt]{article}
 """
 
 
+def _longitude(instrument, data_source, earth_location):
+    """The observatory's east longitude [deg], where the summary's nights
+    are cut (local noon there), or None, said in the log, when it is not
+    known: the summary then counts no night."""
+    from lbl.core import astro
+    try:
+        if earth_location:
+            return astro.site_longitude(earth_location)
+        return astro.observatory_longitude(instrument, data_source)
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('the report counts no night: the observatory, where '
+                    'nights are cut at local noon, is not known ({0})'
+                    ''.format(exc))
+        return None
+
+
 def _escape(text):
     """Make a string safe for LaTeX. Object names carry underscores."""
     out = str(text)
@@ -114,7 +130,8 @@ def _planet_section(planets):
 
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                 known_periods=None, template_file=None, ephemerides_of=None,
-                star=None, instrument=None, data_source=None):
+                star=None, instrument=None, data_source=None,
+                earth_location=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
     :param data_dir: str, the run's DATA_DIR
@@ -135,7 +152,11 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                  velocity in the telluric frame rather than by the BERV
     :param instrument: str, LBL's name of the instrument, and data_source
                        its data source: the telluric pages read the spectra
-                       by its class (without it, as ESO S2D files)
+                       by its class (without it, as ESO S2D files), and the
+                       nights are cut at local noon at its observatory
+    :param earth_location: str, the observatory as astropy names it, for an
+                           instrument whose site is the wrap's (Generic);
+                           otherwise the instrument's class gives it
     """
     try:
         import matplotlib
@@ -299,7 +320,8 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
             fig.savefig(path, bbox_inches='tight')
             plt.close(fig)
             drawn.append((name, path))
-        rows = list(stats.summarise(table))
+        rows = list(stats.summarise(table, _longitude(
+            instrument, data_source, earth_location)))
         iterations = series.column(table, figures.ITERATIONS)
         if iterations is not None and np.isfinite(iterations).any():
             iterations = iterations[np.isfinite(iterations)]

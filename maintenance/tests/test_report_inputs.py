@@ -45,7 +45,8 @@ def test_the_summary_leaves_out_an_epoch_without_velocity():
     value[5] = np.nan
     # as series.read_rdb gives it: a dict of columns
     table = {series.TIME: time, series.VELOCITY: value, series.ERROR: err}
-    rows = {label: text for label, text, _ in stats.summarise(table)}
+    # the nights cut at local noon at La Silla
+    rows = {label: text for label, text, _ in stats.summarise(table, -70.73)}
     assert rows["Epochs"] == "%d" % (time.size - 1)
     assert rows["rms"] != "nan"
 

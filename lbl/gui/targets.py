@@ -355,9 +355,28 @@ class Scanner:
             return json.loads(json.dumps(self.index or {}))
 
 
+def night_of(record: dict):
+    """The night of one spectrum's record, cut at local noon at the
+    observatory of the instrument its headers name (INSTRUME, by LBL's class:
+    lbl.core.astro.observatory_longitude), or None when its time or its
+    instrument is not known: never another boundary by default."""
+    mjd = record.get("mjd")
+    if mjd is None:
+        return None
+    from lbl.core.astro import night_number, observatory_longitude
+    try:
+        longitude = observatory_longitude(record.get("instrument"))
+    except Exception:                                     # noqa: BLE001
+        return None
+    # an MJD's fraction starts at midnight UT, a JD's at noon
+    return int(night_number(float(mjd) + 0.5, longitude))
+
+
 def summary(records: dict) -> dict:
     """One target's row: files, instrument, median SNR, median exposure
-    time, the BERV span and the dates."""
+    time, the BERV span and the dates. The nights are cut at local noon at
+    the instrument's observatory (night_of); None when no spectrum's
+    instrument is known."""
     rows = [r for r in records.values() if "unreadable" not in r]
     def values(key):
         return np.array([r[key] for r in rows if r.get(key) is not None],
@@ -368,9 +387,8 @@ def summary(records: dict) -> dict:
     instruments = sorted({r.get("instrument", "?") for r in rows})
     sources = sorted({r["source"] for r in rows if r.get("source")})
     objects = sorted({r.get("object") for r in rows if r.get("object")})
-    from lbl.core.astro import night_number
-    nights = (len(np.unique(night_number(mjd + 0.5))) if mjd.size
-              else 0)
+    known = {night_of(r) for r in rows} - {None}
+    nights = len(known) if known or not mjd.size else None
     return dict(
         files=len(records), unreadable=len(records) - len(rows),
         instrument="/".join(instruments) if instruments else "?",
@@ -388,13 +406,15 @@ def summary(records: dict) -> dict:
 
 
 def points(records: dict) -> dict:
-    """One target's spectra for the plots: BERV, SNR, MJD and the systemic
-    velocity [km/s, None where the headers do not say], aligned."""
+    """One target's spectra for the plots: BERV, SNR, MJD, the night
+    (night_of: the window counts the nights of a selection by it) and the
+    systemic velocity [km/s, None where the headers do not say], aligned."""
     rows = [r for r in records.values()
             if "unreadable" not in r and r.get("berv") is not None]
     return dict(berv=[r["berv"] for r in rows],
                 snr=[r.get("snr") for r in rows],
                 mjd=[r.get("mjd") for r in rows],
+                night=[night_of(r) for r in rows],
                 vsys=[r.get("vsys") for r in rows])
 
 

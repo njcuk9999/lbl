@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-from astropy.coordinates import EarthLocation
 
 from lbl.core import astro
 from lbl.core import base
@@ -1707,9 +1706,12 @@ class Instrument:
         if earth_location is None:
             emsg = 'EARTH_LOCATION is not defined in the instrument '
             raise base_classes.LblException(emsg)
-        # try to get location of site from astropy
+        # the site's longitude, from astropy, as everywhere in LBL that
+        #   cuts nights (astro.observatory_longitude): an epoch is a night,
+        #   from local mean noon to local mean noon, the boundaries of
+        #   astro.night_number
         try:
-            loc = EarthLocation.of_site(earth_location)
+            longitude = astro.observatory_longitude(self.params)
         except Exception as e:
             emsg = ('Problem with EARTH_LOCATION {0} in '
                     'astropy.coordinates.EarthLocation\n\tError {1}: {2}')
@@ -1720,8 +1722,7 @@ class Instrument:
         #   nights are cut at local midnight rather than at local noon
         times = self.to_mjd(np.array(rdb_table[kw_mjd], dtype=float))
         # get local time at midnight
-        epoch_values = mp.bin_by_time(loc.lon.value, times,
-                                      day_frac=0)
+        epoch_values = mp.bin_by_time(longitude, times, day_frac=0)
         # get the unique epoch groups
         epoch_groups = np.unique(epoch_values)
         # return the epoch groupings and epoch values

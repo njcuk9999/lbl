@@ -49,9 +49,14 @@ def _span(values):
     return float(np.min(good)), float(np.median(good)), float(np.max(good))
 
 
-def summarise(table):
+def summarise(table, longitude):
     """Every number the summary table shows, as (label, value, unit) rows.
-    The velocities are those with a finite time, value and error bar."""
+    The velocities are those with a finite time, value and error bar.
+
+    The nights are cut at local noon at the observatory, at east longitude
+    `longitude` [deg] (lbl.core.astro.observatory_longitude). None when it
+    is not known: the rows that count nights are then left out, rather than
+    counted at another boundary."""
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
@@ -72,9 +77,11 @@ def summarise(table):
         pass
     rows.append(('Report written', _now(), 'UTC'))
     rows += [('Epochs', '%d' % len(time), ''),
-            ('Time span', '%.1f' % (np.max(time) - np.min(time)), 'days'),
-            ('Nights', '%d' % len(np.unique(night_number(time))), ''),
-            ('Systemic velocity', '%.1f' % np.median(vrad), 'm/s'),
+            ('Time span', '%.1f' % (np.max(time) - np.min(time)), 'days')]
+    if longitude is not None:
+        rows.append(('Nights', '%d' % len(np.unique(night_number(
+            time, longitude))), ''))
+    rows += [('Systemic velocity', '%.1f' % np.median(vrad), 'm/s'),
             ('rms', '%.2f' % np.std(centred, ddof=1), 'm/s'),
             ('Robust scatter (MAD)', '%.2f' % robust_sigma(centred), 'm/s'),
             ('Median error bar', '%.2f' % np.median(svrad), 'm/s')]
@@ -86,11 +93,13 @@ def summarise(table):
                      '%.2f' % (robust_sigma(centred) / median_err), ''))
 
     # the nightly scatter, which drops anything that varies within a night
-    nights = night_number(time)
-    binned = np.array([np.median(centred[nights == one])
-                       for one in np.unique(nights)])
-    if binned.size > 2:
-        rows.append(('Nightly rms', '%.2f' % np.std(binned, ddof=1), 'm/s'))
+    if longitude is not None:
+        nights = night_number(time, longitude)
+        binned = np.array([np.median(centred[nights == one])
+                           for one in np.unique(nights)])
+        if binned.size > 2:
+            rows.append(('Nightly rms', '%.2f' % np.std(binned, ddof=1),
+                         'm/s'))
 
     # how far the outliers reach, in units of the robust scatter
     scatter = robust_sigma(centred)

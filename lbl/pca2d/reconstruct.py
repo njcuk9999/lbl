@@ -59,7 +59,7 @@ from .logger import log
 from . import readers as _readers
 from . import tfits as sptf
 from . import twoframe as _bcd
-from .nights import night_number
+from .nights import night_number, run_longitude
 from .progress import bar as _bar
 
 #: the same treatment twoframe.load_cube gives the cube, so a refitted
@@ -1058,33 +1058,47 @@ def plot(path, wave, recon, row, source):
     log("wrote %s" % path)
 
 
-def night_index(coeffs):
+def night_index(coeffs, longitude):
     """Map a night number to its COEFFS row.
 
-    The night is nights.night_number, the boundary the cube builder groups
-    by, so an exposure taken after midnight belongs to the night it started
-    in.
+    The night is nights.night_number at east longitude `longitude` [deg],
+    the boundary the cube builder groups by (local noon at the observatory),
+    so an exposure taken after midnight belongs to the night it started in.
     """
     nights = {}
     for i, bjd in enumerate(np.asarray(coeffs["bjd"], dtype=float)):
-        nights[int(night_number(bjd))] = i
+        nights[int(night_number(bjd, longitude))] = i
     return nights
 
 
-def night_row_names(cube):
+class NightNames(dict):
+    """{night: name of its cube row}, and the east longitude [deg] its nights
+    were cut at (`longitude`), which travels with it: a time looked up in it
+    (cut_key) has to be cut into a night at the same place as its keys."""
+
+    def __init__(self, longitude, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.longitude = longitude
+
+    def night_of(self, bjd):
+        return int(night_number(bjd, self.longitude))
+
+
+def night_row_names(cube, longitude):
     """The name the cube gives each night: {night: name of its row}.
 
     On a cube stacked per night, a night's row carries the name of its FIRST
     exposure (meta.fits, filename column), and everything computed per row
     (the residual's cuts, the loop's floor) is stored under that name. The
-    night is nights.night_number, the convention of night_index and of the
-    cube builder. The two parities of a night share the same name.
+    night is nights.night_number at east longitude `longitude` [deg], the
+    convention of night_index and of the cube builder (local noon at the
+    observatory). The two parities of a night share the same name.
     """
     from astropy.table import Table
     meta = Table.read(os.path.join(cube, "meta.fits"))
-    names = {}
+    names = NightNames(longitude)
     for name, bjd in zip(meta["filename"], np.asarray(meta["bjd"], dtype=float)):
-        names.setdefault(int(night_number(bjd)), os.path.basename(str(name)))
+        names.setdefault(names.night_of(bjd), os.path.basename(str(name)))
     return names
 
 
@@ -1120,7 +1134,7 @@ def cut_key(path, row, names_by_night, members=None):
         return members.get(own, own)
     if not names_by_night:
         return own
-    night = int(night_number(float(row["bjd"])))
+    night = names_by_night.night_of(float(row["bjd"]))
     return names_by_night.get(night, own)
 
 
@@ -1139,10 +1153,14 @@ def rows_by_night(model, args, config=None):
     """
     import glob
     coeffs = model["coeffs"]
-    index = night_index(coeffs)
     # BY MEMBERSHIP when the cube says which row each exposure went into:
     # with bundles a night has several rows, and its night is not enough
     members = member_row_names(getattr(args, "cube", None))
+    # otherwise by night, cut at local noon at the observatory: the
+    #   configuration's instrument's, or the cube's record
+    longitude = None if members else run_longitude(
+        config, getattr(args, "cube", None), need="--by-night")
+    index = night_index(coeffs, longitude) if not members else {}
     by_row = {}
     if members:
         for i, name in enumerate(coeffs["filename"]):
@@ -1175,7 +1193,7 @@ def rows_by_night(model, args, config=None):
                 row["vstar"] = float(meta.get("vstar", 0.0))
             out.append((path, row))
             continue
-        night = int(night_number(float(meta["bjd"])))
+        night = int(night_number(float(meta["bjd"]), longitude))
         if night not in index:
             missing += 1
             continue
@@ -1774,7 +1792,8 @@ def correct_many(model, args):
                 " the row it went into, %d rows for %d exposures"
                 % (len(set(members.values())), len(members)), "info")
         else:
-            names_by_night = night_row_names(args.cube)
+            names_by_night = night_row_names(args.cube, run_longitude(
+                config, args.cube, need="--by-night"))
             log("  the cube's rows are nights: each exposure gets the masks of"
                 " its night's row, %d nights" % len(names_by_night), "info")
     written = skipped = refitted = 0
@@ -1849,7 +1868,10 @@ def correct_many(model, args):
                                      % (os.path.basename(new), covered[-1]))
     if permute is not None and prepared:
         from .diagnostics import night_derangement
-        nights = [int(night_number(float(r["bjd"]))) for _, r, _, _ in prepared]
+        longitude = run_longitude(config, getattr(args, "cube", None),
+                                  need="--permute-b")
+        nights = [int(night_number(float(r["bjd"]), longitude))
+                  for _, r, _, _ in prepared]
         source = night_derangement(nights, permute)
         log("  --permute-b %d: every exposure gets the observer amplitudes of"
             " an exposure from ANOTHER night, %d exposures over %d nights. A"

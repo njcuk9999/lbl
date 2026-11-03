@@ -1932,9 +1932,23 @@ def tidy_block(basis, coeffs, power):
     return basis, coeffs, power
 
 
-def nightly_bin(bjd, coeffs):
+def night_longitude(args, need=None):
+    """The longitude this fit's nights are cut at (local noon there): the
+    instrument of --config, else what --cube records (nights.run_longitude).
+    None when neither says, unless `need` names what needs it."""
+    from .nights import run_longitude
+    config = None
+    if getattr(args, "config", None):
+        from .config import load_config
+        config = load_config(args.config)
+    return run_longitude(config, getattr(args, "cube", None), need=need)
+
+
+def nightly_bin(bjd, coeffs, longitude):
+    """The coefficients' means per night, cut at local noon at east longitude
+    `longitude` [deg] (nights.night_number)."""
     from .nights import night_number
-    night = night_number(bjd)
+    night = night_number(bjd, longitude)
     unique = np.unique(night)
     out_t = np.zeros(unique.size)
     out_c = np.zeros((unique.size, coeffs.shape[1]))
@@ -1945,13 +1959,22 @@ def nightly_bin(bjd, coeffs):
     return out_t, out_c
 
 
-def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
+def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None,
+                longitude=None):
     """Both blocks' coefficients against time, star on the left, Earth on the right.
 
     Side by side and on a shared time axis on purpose: the question this figure
     exists to answer is whether a feature in one block also appears in the other,
     which is what cross-frame leakage looks like from the coefficient side.
+
+    The nightly means are cut at local noon at east longitude `longitude`
+    [deg] (night_longitude); without it they are not drawn, and the log says
+    so.
     """
+    if longitude is None:
+        log("  no observatory known (no --config naming the instrument, and"
+            " a cube that records no night longitude): the coefficients are"
+            " drawn without their nightly means", "warn")
     plt.rcParams.update({"font.size": 9, "axes.grid": True, "grid.alpha": 0.25})
     n_rows = max(a.shape[1], b.shape[1])
     t = bjd - 2400000.5
@@ -1960,13 +1983,14 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
     blocks = [("star rest frame", a, pa, "tab:blue", err_a),
               ("observer (Earth) rest frame", b, pb, "tab:red", err_b)]
     for col, (title, coeffs, power, colour, err) in enumerate(blocks):
-        bt, bc = nightly_bin(bjd, coeffs)
+        if longitude is not None:
+            bt, bc = nightly_bin(bjd, coeffs, longitude)
         # the nightly error is the per-exposure error added in quadrature and
         # divided by the count, i.e. sqrt(sum e^2)/n -- not e/sqrt(n), because
         # the exposures in a night do not all carry the same weight
-        if err is not None:
+        if err is not None and longitude is not None:
             from .nights import night_number
-            night = night_number(bjd)
+            night = night_number(bjd, longitude)
             uniq = np.unique(night)
             be = np.zeros((uniq.size, coeffs.shape[1]))
             for i, v in enumerate(uniq):
@@ -1978,12 +2002,13 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
                 ax.axis("off")
                 continue
             ax.plot(t, coeffs[:, row], ".", ms=2.5, alpha=0.35, color=colour)
-            if err is not None:
+            if err is not None and longitude is not None:
                 ax.errorbar(bt - 2400000.5, bc[:, row], yerr=be[:, row],
                             fmt="none", ecolor="0.35", elinewidth=0.6,
                             capsize=0, alpha=0.8, zorder=2)
-            ax.plot(bt - 2400000.5, bc[:, row], "o", ms=3.2, mfc="none",
-                    mew=0.8, color="k", label="nightly mean", zorder=3)
+            if longitude is not None:
+                ax.plot(bt - 2400000.5, bc[:, row], "o", ms=3.2, mfc="none",
+                        mew=0.8, color="k", label="nightly mean", zorder=3)
             ax.axhline(0.0, color="k", lw=0.6, alpha=0.4)
             ax.set_ylabel("%s%d" % ("a" if col == 0 else "b", row + 1))
             ax.text(0.995, 0.95, "%.1f%% of weighted variance"
@@ -1994,7 +2019,8 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
             # the panel spans what this coefficient does, not the way to zero:
             # a coefficient sitting at -6 and moving by one reads as flat when
             # the axis has to reach zero, and the line at zero autoscales too
-            span = np.concatenate([coeffs[:, row], bc[:, row]])
+            span = (np.concatenate([coeffs[:, row], bc[:, row]])
+                    if longitude is not None else coeffs[:, row])
             span = span[np.isfinite(span)]
             if span.size:
                 lo, hi = float(span.min()), float(span.max())
@@ -2002,7 +2028,8 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
                 ax.set_ylim(lo - pad, hi + pad)
             if row == 0:
                 ax.set_title(title)
-                ax.legend(fontsize=7, loc="lower left")
+                if longitude is not None:
+                    ax.legend(fontsize=7, loc="lower left")
         axes[-1][col].set_xlabel("MJD (days)")
     fig.suptitle("Two-frame PCA: coefficients versus time\n"
                  "left = star-anchored block (fitted first), "
@@ -2974,10 +3001,20 @@ def replot(outdir, cube=None):
     if not keep.all():
         log("  %d of %d rows were rejected by the MAD cut and are not"
               " plotted" % (int((~keep).sum()), keep.size))
+    # the nights as the run cut them: the instrument of the configuration
+    #   the run wrote beside its fit, else what the cube records
+    resolved = os.path.join(outdir, "resolved_config.yaml")
+    config = None
+    if os.path.exists(resolved):
+        import yaml
+        with open(resolved, encoding="utf-8") as handle:
+            config = yaml.safe_load(handle)
+    from .nights import run_longitude
     plot_coeffs(fit["bjd"][keep], fit["a"][keep], fit["b"][keep],
                 fit["power_star"], fit["power_earth"], chi2_null,
                 os.path.join(outdir, "coefficients_vs_time.pdf"),
-                err_a=sigma[keep][:, :n_star], err_b=sigma[keep][:, n_star:])
+                err_a=sigma[keep][:, :n_star], err_b=sigma[keep][:, n_star:],
+                longitude=run_longitude(config, cube))
     plot_variance(fit["power_star"], fit["power_earth"], chi2_null, chi2_best,
                   os.path.join(outdir, "variance.pdf"))
     write_variance_table(fit["power_star"], fit["power_earth"], chi2_null,
@@ -3072,7 +3109,8 @@ def main(argv=None):
     held = None
     if getattr(args, "holdout", None):
         from .diagnostics import holdout_rows
-        held = holdout_rows(np.asarray(meta["bjd"], dtype=float), args.holdout)
+        held = holdout_rows(np.asarray(meta["bjd"], dtype=float), args.holdout,
+                            night_longitude(args, need="twoframe.holdout"))
         w[held] = 0.0
         data[held] = 0.0
         log("HOLDOUT: %d of %d rows (the %s-ranked nights) held out of the fit;"
@@ -3954,7 +3992,8 @@ def main(argv=None):
     plot_coeffs(bjd[keep], a[keep], b[keep], power_star, power_earth, chi2_null,
                 os.path.join(args.outdir, "coefficients_vs_time.pdf"),
                 err_a=sig_scaled[keep][:, :n_star],
-                err_b=sig_scaled[keep][:, n_star:])
+                err_b=sig_scaled[keep][:, n_star:],
+                longitude=night_longitude(args))
     plot_variance(power_star, power_earth, chi2_null, chi2,
                   os.path.join(args.outdir, "variance.pdf"))
     write_variance_table(power_star, power_earth, chi2_null, chi2,

@@ -74,11 +74,29 @@ def read_rdb(path):
     return rdb_rows(path)[:3]
 
 
-def nightly(rjd, v, e):
+def rdb_longitude(path):
+    """The east longitude [deg] of the observatory of an LBL rdb's spectra,
+    where its nights are cut (local noon there): the instrument its FITS
+    twin (lbl_*.fits, written beside the rdb) names in INSTRUME, by its LBL
+    class's EARTH_LOCATION (lbl.core.astro.observatory_longitude)."""
+    from lbl.core.astro import observatory_longitude
+    twin = os.path.splitext(path)[0] + ".fits"
+    instrument = None
+    if os.path.exists(twin):
+        instrument = fits.getheader(twin).get("INSTRUME")
+    if not instrument:
+        raise SystemExit(
+            "%s: no instrument named (INSTRUME of %s), so no observatory: the"
+            " nights are cut at local noon there" % (path, twin))
+    return observatory_longitude(str(instrument).strip())
+
+
+def nightly(rjd, v, e, longitude):
     """Weighted nightly means as (rjd, velocity, error), the nights of
-    nights.night_number."""
+    nights.night_number, cut at local noon at east longitude `longitude`
+    [deg]."""
     from .nights import night_number
-    night = night_number(rjd)
+    night = night_number(rjd, longitude)
     out = []
     for n in np.unique(night):
         s = night == n
@@ -87,11 +105,12 @@ def nightly(rjd, v, e):
     return np.array(out).T
 
 
-def velocity_stats(t, v, e):
+def velocity_stats(t, v, e, longitude):
     """rms, robust sigma (1.4826 MAD), median error and the rms of nightly
-    weighted means, all about the median."""
+    weighted means, all about the median; the nights are cut at local noon
+    at east longitude `longitude` [deg]."""
     d = v - np.median(v)
-    nt = nightly(t, v, e)
+    nt = nightly(t, v, e, longitude)
     return {"n": d.size, "rms": float(np.std(d)),
             "robust": float(mad_to_sigma * np.median(np.abs(d - np.median(d)))),
             "median_error": float(np.median(e)),
@@ -121,7 +140,7 @@ def amplitude_at(t, v, e, period):
     return K, float(np.sqrt(max(scale * var, 0.0)) / max(K, 1e-9))
 
 
-def signal_stats(t, v, e, periods=(), degree=2):
+def signal_stats(t, v, e, longitude, periods=(), degree=2):
     """What a correction did to a star that MOVES, which the rms cannot say.
 
     A correction can absorb part of a long-term astrophysical trend (the
@@ -140,18 +159,19 @@ def signal_stats(t, v, e, periods=(), degree=2):
                    (target.planets in the configuration)
 
     A correction that shrinks `drift` or any amplitude is removing signal,
-    whatever it does to the rms.
+    whatever it does to the rms. The nights are cut at local noon at east
+    longitude `longitude` [deg].
     """
     t = np.asarray(t, float)
     v = np.asarray(v, float)
     from .nights import night_number
-    nights = night_number(t)
+    nights = night_number(t, longitude)
     tc = t - t.mean()
     trend = np.polyval(np.polyfit(tc, v, degree), tc) if t.size > degree + 1 \
         else np.zeros_like(v)
     inside = [float(np.std(v[nights == n], ddof=1))
               for n in np.unique(nights) if (nights == n).sum() > 2]
-    out = dict(velocity_stats(t, v, e))
+    out = dict(velocity_stats(t, v, e, longitude))
     out.update({"drift": float(np.ptp(trend)),
                 "residual": float(np.std(v - trend, ddof=1)),
                 "in_night": float(np.median(inside)) if inside else float("nan"),
@@ -205,7 +225,8 @@ def load_run(obj, tag, suffix, outputs, lbl_dir):
     t, v, e, table = rdb_rows(rdb)
     n_star, n_earth = parse_tag(tag)
     run = {"tag": tag, "name": name, "n_star": n_star, "n_earth": n_earth,
-           "t": t, "v": v, "e": e, "table": table}
+           "t": t, "v": v, "e": e, "table": table,
+           "longitude": rdb_longitude(rdb)}
     folder = os.path.join(outputs, obj, tag)
     if os.path.exists(os.path.join(folder, "fit.npz")):
         run["fit"] = np.load(os.path.join(folder, "fit.npz"), allow_pickle=True)
@@ -235,7 +256,8 @@ def on_common(runs, delivered):
         for name in ("t", "v", "e"):
             run[name] = run[name][keep]
         run["table"] = run["table"][keep]
-        run["stats"] = velocity_stats(run["t"], run["v"], run["e"])
+        run["stats"] = velocity_stats(run["t"], run["v"], run["e"],
+                                      run["longitude"])
     return len(common)
 
 
@@ -402,7 +424,7 @@ def series_page(delivered, runs, which):
         d = run["v"] - np.median(run["v"])
         ax.errorbar(run["t"], d, yerr=run["e"], fmt="o", ms=2.2, lw=0.5,
                     color=colour, ecolor=colour, alpha=0.55, capsize=0)
-        nt = nightly(run["t"], run["v"], run["e"])
+        nt = nightly(run["t"], run["v"], run["e"], run["longitude"])
         ax.plot(nt[0], nt[1] - np.median(run["v"]), "o", ms=3.2, mfc="white",
                 mec="0.15", mew=0.8, label="nightly mean")
         ax.axhline(0, color="0.6", lw=0.6)
@@ -509,7 +531,8 @@ def dv_histogram(ax, runs, colours):
     lim = lim if np.isfinite(lim) and lim > 0 else 1.0
     bins = np.linspace(-lim, lim, 41)
     for run, value, colour in zip(runs, values, colours):
-        s = run.get("stats") or velocity_stats(run["t"], run["v"], run["e"])
+        s = run.get("stats") or velocity_stats(run["t"], run["v"], run["e"],
+                                               run["longitude"])
         ax.hist(value, bins=bins, histtype="stepfilled", color=colour,
                 alpha=0.18, lw=0.0)
         ax.hist(value, bins=bins, histtype="step", color=colour, lw=1.3,
@@ -595,7 +618,7 @@ def compilation_figure(original, variants, title=None):
     centred = lambda run: run["v"] - np.median(run["v"])
     top = axes[0]
     for run, colour in zip(runs, colours):
-        nt = nightly(run["t"], run["v"], run["e"])
+        nt = nightly(run["t"], run["v"], run["e"], run["longitude"])
         s = run["stats"]
         first = run is original
         # points and no line: a line between two nightly means draws a slope
@@ -723,12 +746,14 @@ def compare_main(args):
     """--compare: the compilation of named LBL objects against the original."""
     rdb = lambda name: os.path.join(args.lbl_dir, "lblrdb", "lbl_%s_%s.rdb" % (name, name))
     t, v, e, table = rdb_rows(rdb(args.object))
-    original = {"t": t, "v": v, "e": e, "table": table, "label": args.original_label}
+    original = {"t": t, "v": v, "e": e, "table": table, "label": args.original_label,
+                "longitude": rdb_longitude(rdb(args.object))}
     variants = []
     for item in args.compare:
         name, _, label = item.partition("=")
         t, v, e, table = rdb_rows(rdb(name))
-        variants.append({"t": t, "v": v, "e": e, "table": table, "label": label or name})
+        variants.append({"t": t, "v": v, "e": e, "table": table, "label": label or name,
+                         "longitude": rdb_longitude(rdb(name))})
     n_common = on_common(variants, original)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     fig = compilation_figure(original, variants, args.title)
@@ -773,7 +798,8 @@ def main(argv=None):
     if not os.path.exists(delivered_rdb):
         raise SystemExit("no LBL velocities for the delivered spectra: %s" % delivered_rdb)
     t, v, e, table = rdb_rows(delivered_rdb)
-    delivered = {"t": t, "v": v, "e": e, "table": table}
+    delivered = {"t": t, "v": v, "e": e, "table": table,
+                 "longitude": rdb_longitude(delivered_rdb)}
     loaded = {tag: load_run(args.object, tag, args.suffix, args.outputs, args.lbl_dir)
               for tag in tags}
     runs = sorted((loaded[tag] for tag in tags if loaded[tag] is not None),

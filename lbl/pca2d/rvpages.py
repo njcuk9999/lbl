@@ -23,6 +23,7 @@ import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
 from .logger import log
+from .nights import run_longitude
 from .lblscan import (AFTER, BEFORE, berv_figure, compilation_figure,
                       nightly, rdb_rows, velocity_stats)
 
@@ -32,8 +33,10 @@ def rdb_path(data_dir, name):
     return os.path.join(data_dir, "lblrdb", "lbl_%s_%s.rdb" % (name, name))
 
 
-def load_series(data_dir, name, label):
-    """One rdb as the dict the figures take, or None when it is not there."""
+def load_series(data_dir, name, label, longitude):
+    """One rdb as the dict the figures take, or None when it is not there.
+    `longitude` is the observatory's east longitude [deg], where its nights
+    are cut (local noon there)."""
     path = rdb_path(data_dir, name)
     if not os.path.exists(path):
         return None
@@ -43,7 +46,8 @@ def load_series(data_dir, name, label):
         return None
     return {"t": t, "v": v, "e": e, "table": table, "label": label,
             "name": name, "path": path, "berv": berv_of(table),
-            "stats": velocity_stats(t, v, e)}
+            "longitude": longitude,
+            "stats": velocity_stats(t, v, e, longitude)}
 
 
 def berv_of(table):
@@ -79,7 +83,8 @@ def on_common(series):
         cut["table"] = run["table"][keep]
         if run.get("berv") is not None:
             cut["berv"] = run["berv"][keep]
-        cut["stats"] = velocity_stats(cut["t"], cut["v"], cut["e"])
+        cut["stats"] = velocity_stats(cut["t"], cut["v"], cut["e"],
+                                      cut["longitude"])
         out.append(cut)
     return out, int(common.size)
 
@@ -99,7 +104,7 @@ def solo_figure(run, title):
     axes[0].set_title("every exposure: rms %.2f, robust sigma %.2f, median"
                       " error %.2f m/s" % (s["rms"], s["robust"],
                                            s["median_error"]), fontsize=8.5)
-    nt = nightly(run["t"], run["v"], run["e"])
+    nt = nightly(run["t"], run["v"], run["e"], run["longitude"])
     # points and no line joining them: consecutive nights can be a fortnight
     # apart, and the line drawn across the gap is a shape nothing measured
     axes[1].errorbar(nt[0], nt[1] - np.median(run["v"]), yerr=nt[2], fmt="o",
@@ -175,17 +180,20 @@ def velocity_pages(plan, out=None):
     block = config.get("lbl") or {}
     data_dir = block.get("directory") or "lbl"
     asked_before = bool(block.get("before", True))
+    # the nights, cut at local noon at the instrument's observatory
+    longitude = run_longitude(config, need="the velocity pages")
 
     pages, text = [], []
     for star, before_name, after_name in stars_of(plan):
-        after = load_series(data_dir, after_name, "corrected")
+        after = load_series(data_dir, after_name, "corrected", longitude)
         if after is None:
             log("no LBL velocities for %s yet (%s): no RV page for it"
                 % (star, rdb_path(data_dir, after_name)), "warn")
             continue
         series = [after]
         if asked_before:
-            before = load_series(data_dir, before_name, "delivered")
+            before = load_series(data_dir, before_name, "delivered",
+                                 longitude)
             if before is None:
                 log("lbl.before is on but %s has no rdb: the page for %s shows"
                     " the corrected velocities alone"

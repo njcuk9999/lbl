@@ -46,9 +46,11 @@ def test_the_bundles_of_a_night_take_the_profile_berv(tmp_path):
     files = [str(tmp_path / ('NIRPS.2024-08-24T06:%02d:00.000t.fits' % m))
              for m in range(4)]
     bervs = dict(zip(files, [10.0, 10.05, 10.5, 10.55]))
+    # NIRPS, at La Silla: its nights are cut at local noon there
     _, labels = nights.group_files(files, True, bundle=dict(berv=0.1),
-                                   berv_of=bervs.get)
+                                   berv_of=bervs.get, longitude=-70.73)
     assert len(set(labels)) == 2
     # no profile to ask: stops, rather than read the headers itself
-    with pytest.raises(RuntimeError, match='instrument'):
-        nights.group_files(files, True, bundle=dict(berv=0.1))
+    with pytest.raises(RuntimeError, match='instrument profile'):
+        nights.group_files(files, True, bundle=dict(berv=0.1),
+                           longitude=-70.73)

@@ -390,8 +390,11 @@ def vtot_of(run):
     return bervbias.total_velocity(run["v"], run["berv"])
 
 
-def load(tree, name, label, comparison=None):
-    """One LBL object as the figures take it, or None when it has no rdb."""
+def load(tree, name, label, comparison=None, longitude=None):
+    """One LBL object as the figures take it, or None when it has no rdb.
+    `longitude` is the observatory's east longitude [deg], where its nights
+    are cut (local noon there), carried with the series for its nightly
+    statistics."""
     path = rdb_file(tree, name, comparison)
     if not os.path.exists(path):
         return None
@@ -404,7 +407,7 @@ def load(tree, name, label, comparison=None):
     berv = column(table, "BERV")
     snr_name, snr = snr_column(table)
     return {"label": label, "name": name, "path": path, "t": t, "v": v,
-            "e": e, "berv": berv,
+            "e": e, "berv": berv, "longitude": longitude,
             "vtot": (bervbias.total_velocity(v, berv)
                      if berv is not None else None),
             "snr": snr, "snr_name": snr_name,
@@ -559,10 +562,10 @@ def bias_row(fitted):
 def star_numbers(before, after, planets=(), seed=0):
     """Everything the summary table says about one star, both ways."""
     out = {"n": int(before["t"].size),
-           "nights": int(velocity_stats(after["t"], after["v"],
-                                        after["e"])["nights"])}
+           "nights": int(velocity_stats(after["t"], after["v"], after["e"],
+                                        after["longitude"])["nights"])}
     for key, run in (("before", before), ("after", after)):
-        s = velocity_stats(run["t"], run["v"], run["e"])
+        s = velocity_stats(run["t"], run["v"], run["e"], run["longitude"])
         row = {"rms": s["rms"], "robust": s["robust"],
                "nightly_rms": s["nightly_rms"],
                "median_error": s["median_error"]}
@@ -834,7 +837,7 @@ def figure_time(before, after, path):
     spreads = []
     for ax, run, colour in zip(axes, (before, after), (BEFORE, AFTER)):
         middle = np.median(run["v"])
-        nt = nightly(run["t"], run["v"], run["e"])
+        nt = nightly(run["t"], run["v"], run["e"], run["longitude"])
         # one exposure a night makes the nightly means the exposures again,
         # drawn over them: one layer then, not two that hide each other
         if nt.shape[1] < 0.8 * run["t"].size:
@@ -851,7 +854,7 @@ def figure_time(before, after, path):
         ax.plot(run["t"][order], line[order] - middle, color=INK, lw=1.0,
                 ls="--", zorder=4,
                 label="straight line, %+.2f m/s/yr" % slope)
-        s = velocity_stats(run["t"], run["v"], run["e"])
+        s = velocity_stats(run["t"], run["v"], run["e"], run["longitude"])
         ax.set_title("%s: rms %.2f m/s, nightly rms %.2f m/s, median error"
                      " %.2f m/s" % (run["label"], s["rms"], s["nightly_rms"],
                                     s["median_error"]),
@@ -2769,13 +2772,18 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
     # the template each star was measured against: the corrected object
     #   follows the star when it was its own, else keeps the other star's
     against = comparisons(config, stars)
+    # the nights of the velocity statistics, cut at local noon at the
+    #   instrument's observatory
+    from .nights import run_longitude
+    longitude = run_longitude(config, need="the report's nightly statistics")
     series = []
     for star in stars:
         before_name, after_name = object_names(config, star, tag)
         own = against[star] == star
         after_against = after_name if own else against[star]
-        before = load(tree, before_name, "delivered", against[star])
-        after = load(tree, after_name, "corrected", after_against)
+        before = load(tree, before_name, "delivered", against[star],
+                      longitude)
+        after = load(tree, after_name, "corrected", after_against, longitude)
         # the report opens on the velocity series, the corrected one when
         #   LBL has measured it
         if after is not None or before is not None:

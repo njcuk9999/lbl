@@ -134,6 +134,11 @@ Each row of the fit is one exposure, a whole night, or a bundle of a night:
 | `bundle_max=6` | or of at most six exposures |
 
 The default (`nightly_stack`) is the instrument's, its `PCA2D_NIGHTLY_STACK`.
+A night runs from local noon to the next local noon at the observatory, in
+local mean solar time from the longitude of the site the instrument's LBL
+class names (`EARTH_LOCATION`): the nights of LBL's own compile, so a night on
+Mauna Kea is not cut at noon UT. The cube records that longitude, and its
+cache key holds it, so a cube coadded at another boundary is built again.
 The cube is in the observer's frame, so a coadd smears the star by the BERV
 range of what it holds, and a long sequence is not one sky either: over a
 transit night of several hours the BERV moves by hundreds of m/s and the

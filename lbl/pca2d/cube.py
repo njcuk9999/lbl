@@ -460,6 +460,9 @@ def build_cube(config: dict):
                          % (fmt, ", ".join(sorted(ORDER_FORMATS | FLAT_FORMATS))))
 
     grid, data, sigma, trans, meta = result
+    # the longitude its nights were cut at (local noon there), with the cube:
+    #   what a later stage reads its nights by when given no configuration
+    spnights.record_longitude(meta, config)
     # written whenever the cache is on, rebuild or not: what a rebuild rebuilds
     # is the cube on disk, and the stages after this one read it from there
     if out["use_cache"]:
@@ -614,7 +617,8 @@ def _prepare_exposure(path, config, grid, blocks):
     # THE EXPOSURE'S WAVELENGTHS, and not the grid: this is the only branch
     # that has them, and the criterion that rejects a solution that goes
     # backward needs to see them order by order.
-    reason = _quality_reason(meta, payload["wave"], config["quality"])
+    reason = _quality_reason(meta, payload["wave"], config["quality"],
+                             _nights_longitude(config))
     if reason is not None:
         out["log"].append(("rejecting %s: %s" % (meta["filename"], reason),
                            "warn"))
@@ -654,7 +658,8 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
         bundle=spnights.bundle_settings(inp) if stack else None,
         berv_of=lambda path: _readers.file_observer_berv(config, path),
         orbits=config["registration"].get("orbits"),
-        velocities=config["registration"].get("velocities"))
+        velocities=config["registration"].get("velocities"),
+        longitude=spnights.config_longitude(config) if stack else None)
     n_groups = len(set(labels))
     _check_memory(config, 2 * n_groups, n_pixels)
 
@@ -790,7 +795,8 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
         bundle=spnights.bundle_settings(config["input"]) if stack else None,
         berv_of=lambda path: _readers.file_observer_berv(config, path),
         orbits=config["registration"].get("orbits"),
-        velocities=config["registration"].get("velocities"))
+        velocities=config["registration"].get("velocities"),
+        longitude=spnights.config_longitude(config) if stack else None)
     n_groups = len(set(labels))
     n_pixels = grid.size
     _check_memory(config, n_groups, n_pixels)
@@ -821,7 +827,8 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
                    inp.get("object_header") or inp["object"]), "warn")
             continue
         meta = one_object(meta, inp)
-        reason = _quality_reason(meta, wave, config["quality"])
+        reason = _quality_reason(meta, wave, config["quality"],
+                                 _nights_longitude(config))
         if reason is not None:
             log("rejecting %s: %s" % (meta["filename"], reason), "warn")
             n_rejected += 1
@@ -1084,8 +1091,20 @@ def _highpass_one(values, sig, good, segments, berv, template, grid, config):
     return np.where(keep, out, 0.0), keep
 
 
-def _quality_reason(meta, wave, quality):
+def _nights_longitude(config):
+    """The observatory's longitude when quality.nights picks nights, which
+    are cut at local noon there; None otherwise, so that a run that picks
+    no night never needs the site."""
+    if not config["quality"].get("nights"):
+        return None
+    return spnights.config_longitude(config)
+
+
+def _quality_reason(meta, wave, quality, longitude=None):
     """Return why this exposure should be rejected, or None to keep it.
+
+    `longitude` is the observatory's east longitude [deg], which
+    quality.nights needs (_nights_longitude).
 
     The checks are explicit because a frame whose extraction failed can
     carry a *negative* median flux and negative or 'NaN' per-order SNR
@@ -1136,10 +1155,18 @@ def _quality_reason(meta, wave, quality):
     # joint fit assumes the atmosphere belongs to the night, which only holds for
     # stars observed on the SAME nights, and the nights two campaigns share are
     # not a contiguous range (a few dozen shared nights can be scattered through
-    # seasons of a hundred or more). Nights are given as integer rjd.
+    # seasons of a hundred or more). Nights are given as integer rjd: the rjd
+    # at noon UT of the local date the night began on (nights.night_number,
+    # cut at local noon at the observatory).
     nights = quality.get("nights")
     if nights:
-        if int(spnights.night_number(rjd)) not in {int(n) for n in nights}:
+        if longitude is None:
+            raise RuntimeError(
+                "quality.nights picks nights, cut at local noon at the"
+                " observatory, and nothing names it: lbl.instrument in the"
+                " configuration names the instrument")
+        night = int(spnights.night_number(rjd, longitude))
+        if night not in {int(n) for n in nights}:
             return "rjd %.2f is not one of the %d nights asked for" % (
                 rjd, len(nights))
     # THE SPECTROGRAPH MODE, when a campaign mixes two. An instrument with a

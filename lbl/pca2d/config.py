@@ -278,6 +278,9 @@ DEFAULTS = {
         "isolated_window": None,
         "min_rjd": None,
         "max_rjd": None,
+        # the nights kept, as integer rjd: the rjd at noon UT of the local
+        # date each night began on, nights being cut at local noon at the
+        # observatory (nights.night_number). Hashed only when set.
         "nights": None,
         # THE SPECTROGRAPH MODE: the list of modes kept, read from the
         # headers' DRS mode (PCA2D_DRS_MODES of the instrument's LBL class).
@@ -1362,6 +1365,17 @@ def cache_key(config: dict) -> str:
     # no shift at all, and keeps its key and its telluric map.
     if relevant["registration"].get("frame") != "observer":
         relevant["doppler"] = "relativistic"
+    # THE NIGHTS ARE CUT AT LOCAL NOON AT THE OBSERVATORY (nights.night_label),
+    # and were cut at noon UT before: a cube whose rows are nights, or whose
+    # exposures were picked by night (quality.nights), coadds or keeps other
+    # exposures when the boundary moves, so the boundary is in the key. A
+    # cube that refuses stacking and picks no night is the same either way,
+    # and keeps its key.
+    if not unstacked or relevant["quality"].get("nights"):
+        from .nights import config_longitude
+        longitude = config_longitude(config)
+        relevant["nights"] = ("local mean noon" if longitude is None else
+                              "local mean noon at %+.2f deg east" % longitude)
     blob = json.dumps(relevant, sort_keys=True, default=str).encode()
     return hashlib.sha1(blob).hexdigest()[:12]
 

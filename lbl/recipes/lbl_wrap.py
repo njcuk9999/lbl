@@ -464,6 +464,13 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                                          instrument),
                                      instrument=instrument,
                                      data_source=data_source,
+                                     # the site of a Generic instrument,
+                                     #   where its nights are cut; any
+                                     #   other's class names its own
+                                     earth_location=(
+                                         runparams.get('EARTH_LOCATION')
+                                         if str(instrument).upper()
+                                         == 'GENERIC' else None),
                                      # PLANETS: the K of its confirmed
                                      #   planets of known ephemeris fitted
                                      ephemerides_of=(object_science if
