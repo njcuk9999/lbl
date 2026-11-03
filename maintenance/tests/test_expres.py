@@ -103,3 +103,33 @@ def test_extraction_only_files_left_out(inst, tmp_path):
     inst.params.set('OBJECT_SCIENCE', 'STAR')
     inst.params.set('INPUT_FILE', '*.fits')
     assert list(inst.science_files(str(tmp_path))) == [good]
+
+
+def test_the_window_reads_an_expres_file(tmp_path):
+    """The window's scan (lbl.gui.targets.read_file) names EXPRES from its
+    INSTRMNT and takes the date and the BERV as LBL's class does: the
+    flux-weighted midpoint and its barycentric redshift."""
+    from lbl.core.math import speed_of_light
+    from lbl.gui import targets
+    from lbl.instruments import expres
+    primary = fits.PrimaryHDU()
+    primary.header['INSTRMNT'] = 'EXPRES'
+    primary.header['OBJECT'] = '10700'
+    primary.header['AEXPTIME'] = 80.0
+    bary = fits.BinTableHDU.from_columns(
+        [fits.Column(name='midpoints', format='D', array=np.zeros(2))],
+        name=expres.BARY_EXTENSION)
+    bary.header[expres.BARY_MIDPOINT_KEY] = 2458710.959567354
+    bary.header[expres.BARY_REDSHIFT_KEY] = 7.313910006701e-05
+    path = str(tmp_path / '10700_190815.1114.fits')
+    fits.HDUList([primary, bary]).writeto(path)
+    record = targets.read_file(path)
+    assert record['instrument'] == 'EXPRES'
+    assert record['object'] == '10700'
+    assert record['exptime'] == 80.0
+    assert abs(record['mjd'] - 58710.459567354) < 1e-6
+    ratio = 1 + 7.313910006701e-05
+    berv = speed_of_light * (ratio ** 2 - 1) / (ratio ** 2 + 1)
+    assert abs(record['berv'] - berv) < 1e-4
+    assert abs(record['berv'] - 21.9257) < 1e-3
+    assert targets.night_of(record) is not None

@@ -26,7 +26,7 @@ INDEX_HOME = os.path.join(os.path.expanduser("~"), ".lbl_pca2d_gui", "scans")
 #:    either changes (a new field, a number read otherwise, such as the
 #:    systemic velocity below), so that an index of another version is
 #:    read again from the headers rather than trusted
-VERSION = 5
+VERSION = 6
 #: a folder made from another by LBL or PCA2D is not a target: the corrected
 #: (<object>_pca2d, <object>_pca2d_<name>) and the cleaned (<object>_tc)
 DERIVED = re.compile(r"(_pca2d(_.*)?|_tc(_.*)?)$")
@@ -102,10 +102,12 @@ def files_of(data_dir: str, name: str) -> list:
 
 
 def _instrument(headers) -> str:
-    for head in headers:
-        value = head.get("INSTRUME")
-        if value:
-            return str(value).strip().upper()
+    # EXPRES writes its name in INSTRMNT
+    for key in ("INSTRUME", "INSTRMNT"):
+        for head in headers:
+            value = head.get(key)
+            if value:
+                return str(value).strip().upper()
     return "?"
 
 
@@ -159,6 +161,8 @@ def read_file(path: str) -> dict:
     out["instrument"] = _instrument(headers)
     if out["instrument"] == "ESPADONS":
         return _espadons(headers[0], out)
+    if out["instrument"] == "EXPRES":
+        return _expres(headers, out)
     # APERO writes EXTSNxxx and BJD on the science extension: its headers
     #   first, the primary's after
     ordered = sorted(headers, key=lambda h: not any(
@@ -227,6 +231,29 @@ def _espadons(header, out: dict) -> dict:
         pass
     snr = espadons.order_snr(header)
     out["snr"] = None if not np.isfinite(snr) else float(snr)
+    return out
+
+
+def _expres(headers, out: dict) -> dict:
+    """EXPRES: the date and the BERV are those LBL's class reads
+    (lbl.instruments.expres), the flux-weighted midpoint of the exposure and
+    its barycentric redshift, in the header of the exposure meter's
+    extension. Its headers give no SNR."""
+    from lbl.core.math import speed_of_light
+    from lbl.instruments import expres
+    out["object"] = str(headers[0].get("OBJECT", "")).strip() or None
+    out["exptime"] = _first(headers, ("AEXPTIME", "EXPTIME"))
+    for head in headers:
+        midpoint = _number(head.get(expres.BARY_MIDPOINT_KEY))
+        redshift = _number(head.get(expres.BARY_REDSHIFT_KEY))
+        if midpoint is None or redshift is None:
+            continue
+        # the midpoint is a JD; the redshift becomes a velocity, relativistic
+        out["mjd"] = midpoint - 2400000.5
+        ratio = 1.0 + redshift
+        out["berv"] = round(speed_of_light * (ratio ** 2 - 1)
+                            / (ratio ** 2 + 1), 4)
+        break
     return out
 
 
