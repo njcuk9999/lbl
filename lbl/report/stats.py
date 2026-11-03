@@ -49,10 +49,13 @@ def _span(values):
 
 
 def summarise(table):
-    """Every number the summary table shows, as (label, value, unit) rows."""
+    """Every number the summary table shows, as (label, value, unit) rows.
+    The velocities are those with a finite time, value and error bar."""
     time = np.asarray(table[S.TIME], dtype=float)
     vrad = np.asarray(table[S.VELOCITY], dtype=float)
     svrad = np.asarray(table[S.ERROR], dtype=float)
+    good = np.isfinite(time) & np.isfinite(vrad) & np.isfinite(svrad)
+    time, vrad, svrad = time[good], vrad[good], svrad[good]
     centred = vrad - np.median(vrad)
 
     # WHICH LBL WROTE THIS, and from where: a report that does not say which

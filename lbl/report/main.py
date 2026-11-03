@@ -114,7 +114,7 @@ def _planet_section(planets):
 
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                 known_periods=None, template_file=None, ephemerides_of=None,
-                star=None):
+                star=None, instrument=None, data_source=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
     :param data_dir: str, the run's DATA_DIR
@@ -133,6 +133,9 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     :param star: str, the science object: with SIMBAD's systemic velocity
                  of it, the velocity series is coloured by the star's
                  velocity in the telluric frame rather than by the BERV
+    :param instrument: str, LBL's name of the instrument, and data_source
+                       its data source: the telluric pages read the spectra
+                       by its class (without it, as ESO S2D files)
     """
     try:
         import matplotlib
@@ -268,15 +271,15 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                                                              title)))
     if series.has_telluric(table) and science_dir and tc_dir:
         wanted.append(('Telluric correction, water column',
-                       lambda: figures.page_telluric(plt, table, title,
-                                                     science_dir, tc_dir,
-                                                     'water', spl_water,
-                                                     spl_dry)))
+                       lambda: figures.page_telluric(
+                           plt, table, title, science_dir, tc_dir, 'water',
+                           spl_water, spl_dry, instrument=instrument,
+                           data_source=data_source)))
         wanted.append(('Telluric correction, dry column',
-                       lambda: figures.page_telluric(plt, table, title,
-                                                     science_dir, tc_dir,
-                                                     'dry', spl_water,
-                                                     spl_dry)))
+                       lambda: figures.page_telluric(
+                           plt, table, title, science_dir, tc_dir, 'dry',
+                           spl_water, spl_dry, instrument=instrument,
+                           data_source=data_source)))
 
     work = tempfile.mkdtemp(prefix='lbl_report_')
     try:

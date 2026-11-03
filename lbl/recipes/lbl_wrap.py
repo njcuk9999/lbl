@@ -404,6 +404,8 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                                      template_file=_template_of(
                                          data_dir, object_comparison,
                                          instrument),
+                                     instrument=instrument,
+                                     data_source=data_source,
                                      # PLANETS: the K of its confirmed
                                      #   planets of known ephemeris fitted
                                      ephemerides_of=(object_science if

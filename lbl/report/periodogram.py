@@ -85,7 +85,10 @@ def _gls_power(sums: Dict[str, np.ndarray]) -> np.ndarray:
 def gls(time: np.ndarray, value: np.ndarray, err: np.ndarray,
         freq: np.ndarray) -> np.ndarray:
     """
-    The generalised Lomb-Scargle periodogram (floating mean, weighted)
+    The generalised Lomb-Scargle periodogram (floating mean, weighted), on
+    the points whose time, value and error bar are finite (the error bar
+    positive): one NaN in the sums would make every power NaN, which
+    _gls_power turns into a flat zero
 
     :param time: np.ndarray, the time [days]
     :param value: np.ndarray, the values
@@ -94,5 +97,10 @@ def gls(time: np.ndarray, value: np.ndarray, err: np.ndarray,
 
     :return: np.ndarray, the power (0 to 1)
     """
+    time, value, err = (np.asarray(a, dtype=float) for a in (time, value, err))
+    good = np.isfinite(time) & np.isfinite(value) & np.isfinite(err) & (err > 0)
+    time, value, err = time[good], value[good], err[good]
+    if time.size < 3:
+        return np.zeros(np.size(freq))
     cos, sin = _trig(time, freq, float(np.mean(time)))
     return _gls_power(_gls_sums(1.0 / err ** 2, value, cos, sin))
