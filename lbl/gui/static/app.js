@@ -632,9 +632,11 @@ function drawTiles() {
   const hi = bervs.length ? Math.max(...bervs.map((row) => row.berv_max)) : null;
   const instruments = [...new Set(ticked.map((row) => row.instrument).filter(Boolean))].sort();
   // the nights and SNR of the ticked spectra themselves (POINTS), the
-  //   targets' own numbers until they are read
-  const mjds = ticked.flatMap((row) => ((POINTS[row.name] || {}).mjd || []).filter((m) => m !== null && m !== undefined));
-  const nights = mjds.length ? new Set(mjds.map((m) => Math.floor(m - 0.3))).size : sum(ticked, 'nights');
+  //   targets' own numbers until they are read. The nights are the
+  //   server's (targets.night_of: cut at local noon at the observatory of
+  //   each spectrum's instrument), never cut here
+  const nightsOf = ticked.flatMap((row) => ((POINTS[row.name] || {}).night || []).filter((n) => n !== null && n !== undefined));
+  const nights = nightsOf.length ? new Set(nightsOf).size : sum(ticked, 'nights');
   const snrs = ticked.flatMap((row) => ((POINTS[row.name] || {}).snr || []).filter((v) => v !== null && v !== undefined));
   const median = (values) => { const v = [...values].sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
   const snr = median(snrs.length ? snrs : ticked.map((row) => row.snr).filter((v) => v !== null && v !== undefined));

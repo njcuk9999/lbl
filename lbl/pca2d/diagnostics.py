@@ -25,12 +25,14 @@ from __future__ import annotations
 import numpy as np
 
 
-def night_of(bjd):
-    """The night of an exposure: floor(BJD - 0.5), the cube's convention."""
-    return np.floor(np.asarray(bjd, dtype=float) - 0.5).astype(int)
+def night_of(bjd, longitude):
+    """The night of an exposure: nights.night_number, the cube's
+    convention, cut at local noon at east longitude `longitude` [deg]."""
+    from .nights import night_number
+    return night_number(bjd, longitude)
 
 
-def holdout_rows(bjd, which):
+def holdout_rows(bjd, which, longitude):
     """The rows to hold out of the fit: the nights of even or odd rank.
 
     The rank is that of the night among the distinct nights, by increasing
@@ -38,11 +40,12 @@ def holdout_rows(bjd, which):
     BERV range instead of cutting out one season. `which` is "even" or
     "odd": the nights HELD OUT, not those of the fit. All the rows of a
     night (the two order parities, or the exposures of an unstacked night)
-    share its fate.
+    share its fate. The nights are cut at local noon at east longitude
+    `longitude` [deg] (nights.run_longitude).
     """
     if which not in ("even", "odd"):
         raise ValueError("holdout is 'even' or 'odd', not %r" % (which,))
-    nights = night_of(bjd)
+    nights = night_of(bjd, longitude)
     _, rank = np.unique(nights, return_inverse=True)
     return (rank % 2) == (0 if which == "even" else 1)
 

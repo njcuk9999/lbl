@@ -192,6 +192,12 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
     that overlap after widening are merged. The result is numerically the
     same as the continuous grid inside the pieces, and correct at their
     edges by construction.
+
+    THE GRID POINTS ARE MULTIPLES OF THE STEP in ln(wavelength), whatever
+    wave_min is: every grid, with or without `bands` and whatever its
+    range, samples the same wavelengths, so that the transmission divided
+    out of a spectrum (transmission_map) is the one its exponents were
+    fitted with.
     """
     step = np.arctanh(step_kms / C)
     sig_pix = np.arctanh(C / resolution / FWHM_PER_SIGMA / C) / step
@@ -200,6 +206,8 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
     kernel = np.exp(-0.5 * (x / sig_pix) ** 2)
     kernel = kernel / kernel.sum()
 
+    # the first grid point: the multiple of the step at or below wave_min
+    base = np.floor(np.log(wave_min) / step) * step
     if bands:
         # the pieces, widened by the kernel and merged when they touch
         margin = (half + 1) * step
@@ -208,12 +216,11 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
         # the same wavelengths as the continuous grid would. Otherwise the
         # two grids differ by a fraction of a step and np.interp samples the
         # model at shifted places (differences of 2e-3 in transmission).
-        base = np.log(wave_min)
         spans = []
         for low, high in sorted(bands):
             lo = max(base, np.log(low) - margin)
             hi = min(np.log(wave_max), np.log(high) + margin)
-            lo = base + np.floor((lo - base) / step) * step
+            lo = np.floor(lo / step) * step
             if hi <= lo:
                 continue
             if spans and lo <= spans[-1][1]:
@@ -221,9 +228,9 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
             else:
                 spans.append((lo, hi))
     else:
-        spans = [(np.log(wave_min), np.log(wave_max))]
+        spans = [(base, np.log(wave_max))]
     if not spans:
-        spans = [(np.log(wave_min), np.log(wave_max))]
+        spans = [(base, np.log(wave_max))]
 
     lnw = np.concatenate([np.arange(lo, hi, step) for lo, hi in spans])
     wave = np.exp(lnw)
@@ -251,6 +258,24 @@ def transmission(model, wave_ground, alpha_water, alpha_dry):
             conv[start:stop] = np.convolve(raw[start:stop], model["kernel"],
                                            mode="same")
     return np.interp(wave_ground, model["wave"], conv)
+
+
+def transmission_map(spl_water, spl_dry, wave_ground, alpha_water, alpha_dry,
+                     resolution, step_kms=STEP_KMS):
+    """T on `wave_ground` (any shape; NaN where it is not finite), the model
+    the fit uses (model_grid and transmission, the same grid points and the
+    same kernel at `resolution`), on one grid over the whole range of
+    `wave_ground`: defined wherever the spectrum is."""
+    wave_ground = np.asarray(wave_ground, dtype=float)
+    out = np.full(wave_ground.shape, np.nan)
+    finite = np.isfinite(wave_ground) & (wave_ground > 0)
+    if not np.any(finite):
+        return out
+    wave = wave_ground[finite]
+    model = model_grid(spl_water, spl_dry, wave.min() * 0.999,
+                       wave.max() * 1.001, resolution, step_kms=step_kms)
+    out[finite] = transmission(model, wave, alpha_water, alpha_dry)
+    return out
 
 
 def transmission_weights(trans, depth_max, depth_saturated, reject_saturated,
@@ -348,6 +373,15 @@ def objective(sp, trans, noise=None):
 #:    follows it to a few percent (fit_exponents), and an unbounded fit can
 #:    sink to zero on a blind pass, without a template
 DRY_RANGE = (0.5, 1.5)
+#: the bounds of the water exponent in the fit, exclusive
+WATER_RANGE = (1e-4, 20.0)
+#: the first steps of the second simplex in ln(exponent), water then dry:
+#:    10% and 5% of the exponent. scipy's default steps are 5% of each
+#:    coordinate and 0.00025 for a coordinate that is zero, which an exponent
+#:    of 1 (a point of the sweep) or an airmass of 1 is in logarithm: from
+#:    such a tiny simplex the fit stalls on the roughness of the cost (its
+#:    weights move with the exponent) and stays at its start
+SIMPLEX_STEP = (0.1, 0.05)
 
 
 def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
@@ -412,7 +446,8 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     def cost(p):
         water = float(np.exp(p[0]))
         dry = float(np.exp(p[1])) if free_dry else float(airmass)
-        if not (1e-4 < water < 20) or not (low < dry < high):
+        if not (WATER_RANGE[0] < water < WATER_RANGE[1]) or \
+                not (low < dry < high):
             return np.inf
         return objective(sp, transmission(model, wave_ground, water, dry),
                          noise)
@@ -442,17 +477,18 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
     if not np.all(np.isfinite(costs)):
         return float(fallback) + FALLBACK_MARK, float(airmass)
     # WHAT "NOTHING TO GO ON" IS, the cost being in units of the noise: a
-    #   minimum on an edge of the scan, or a curve flat to `flat_span`
+    #   minimum on the scan's FIRST point, or a curve flat to `flat_span`
     #   (0.1%), numerically. A faint star can have a real interior minimum
     #   with a span of only 0.5 to 2%, so the span alone cannot ask for
     #   more; a flat flux without tellurics, at the same noise, is no flat
     #   curve but a minimum at the scan's first point (spans of a few
-    #   percent or more), which the edge test catches
+    #   percent or more), which the edge test catches. A minimum on the
+    #   scan's LAST point is the opposite, more water than the scan reaches:
+    #   the fit starts there and is free to go past it, up to WATER_RANGE
     span = (costs.max() - costs.min()) / max(abs(costs.min()), 1e-30)
     jbest = int(np.argmin(costs))
     flat = span < flat_span
-    on_edge = jbest in (0, len(scan) - 1)
-    if flat or on_edge:
+    if flat or jbest == 0:
         # THE FALLBACK MUST BE RECOGNISABLE. `fallback` is 0.35, which is
         # ALSO a point of the sweep: an exposure that really converges to
         # 0.35 would return the same number as an exposure that failed, and
@@ -463,12 +499,21 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
         # but that makes the fallback recognisable on reading.
         return float(fallback) + FALLBACK_MARK, float(airmass)
 
-    x0 = [np.log(scan[jbest]), np.log(max(float(airmass), 1e-3))]
-    out = minimize(cost, x0=x0, method="Nelder-Mead",
-                   options=dict(xatol=1e-4, fatol=1e-10, maxiter=300))
+    x0 = np.array([np.log(scan[jbest]), np.log(max(float(airmass), 1e-3))])
+    # TWO SIMPLEXES FROM THE SAME START, and the lower cost is kept: scipy's
+    #   default steps, which stall where a coordinate is zero in logarithm,
+    #   and steps of SIMPLEX_STEP, which never do; on a cost this rough
+    #   neither ends lower on every exposure
+    options = dict(xatol=1e-4, fatol=1e-10, maxiter=300)
+    simplex = np.array([x0, x0 + [SIMPLEX_STEP[0], 0.0],
+                        x0 + [0.0, SIMPLEX_STEP[1]]])
+    fits = [minimize(cost, x0=x0, method="Nelder-Mead", options=options),
+            minimize(cost, x0=x0, method="Nelder-Mead",
+                     options=dict(options, initial_simplex=simplex))]
+    out = min(fits, key=lambda one: one.fun)
     water = float(np.exp(out.x[0]))
     dry = float(np.exp(out.x[1])) if free_dry else float(airmass)
-    if not np.isfinite(water) or water < scan[0] or water > scan[-1]:
+    if not np.isfinite(water) or water < scan[0]:
         return float(fallback) + FALLBACK_MARK, float(airmass)
     return water, dry
 

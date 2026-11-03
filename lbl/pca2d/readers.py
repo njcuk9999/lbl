@@ -404,6 +404,65 @@ def flux_extension(path, flux):
     return None
 
 
+def flux_place(inst, path, flux):
+    """Where the flux LBL's class reads from this file is held in it:
+    (extension, column), column None for an image. None when it cannot be
+    found, in which case the caller refuses to write rather than write in
+    the wrong place.
+
+    TWO KINDS OF FILE. Most pipelines write the flux as an image, and the
+    class does not name it: flux_extension finds it again by its shape.
+    Some write it as a COLUMN OF A TABLE (EXPRES: the `spectrum` column of
+    the `optimal` extraction), which flux_extension cannot see, since a
+    table's data are records and not an array of the flux's shape: there the
+    class names the column itself (Instrument.science_flux_column), and the
+    column is checked to be there and to have the flux's shape.
+    """
+    from astropy.io import fits
+
+    try:
+        named = inst.science_flux_column() if inst is not None else None
+    except Exception:                                          # noqa: BLE001
+        named = None
+    if not named:
+        extension = flux_extension(path, flux)
+        return None if extension is None else (extension, None)
+    extension, column = named
+    try:
+        with fits.open(path, memmap=False) as hdulist:
+            data = hdulist[extension].data
+            if column not in data.columns.names:
+                return None
+            if np.atleast_2d(data[column]).shape != np.shape(flux):
+                return None
+    except Exception:                                          # noqa: BLE001
+        return None
+    return extension, column
+
+
+def scale_flux(hdulist, place, factor):
+    """Multiply the flux of an open copy of a spectrum by `factor`, where
+    flux_place says it is, in place.
+
+    A MULTIPLICATION, NOT A REPLACEMENT. The flux LBL's class returns is
+    not always the array in the file: EXPRES multiplies its `spectrum`
+    column by the blaze, others divide by a continuum or blank the samples
+    of low SNR. What the file holds is proportional to it, sample by
+    sample, so multiplying it by the factor the flux was multiplied by gives
+    the file the class reads back as the corrected flux, whatever the class
+    does on reading, and leaves every sample the factor is 1 on exactly as
+    it was. A NaN factor blanks the sample.
+    """
+    extension, column = place
+    hdu = hdulist[extension]
+    factor = np.asarray(factor, dtype=np.float64)
+    if column is None:
+        hdu.data = np.asarray(hdu.data, dtype=np.float64) * factor
+        return
+    values = np.asarray(hdu.data[column], dtype=np.float64)
+    hdu.data[column][:] = values.reshape(factor.shape) * factor
+
+
 #: the instruments already told that their blaze is taken as 1
 _NO_BLAZE = set()
 
@@ -419,16 +478,36 @@ def _blaze(inst, path, flux, header, model_dir):
     blaze's shape out; only the weights do without it."""
     if inst.params.get("BLAZE_CORRECTED"):
         return np.ones_like(flux)
-    name = None
-    try:
-        name = header.get_hkey(inst.params["KW_BLAZE_FILE"])
-    except Exception:                                           # noqa: BLE001
-        pass
     folders = []
     if model_dir:
         folders.append(os.path.join(os.path.dirname(os.path.abspath(
             model_dir)), "calib"))
         folders.append(model_dir)
+    try:
+        keyword = inst.params["KW_BLAZE_FILE"]
+    except Exception:                                           # noqa: BLE001
+        keyword = None
+    name = None
+    if keyword is None:
+        # THE CLASS NAMES NO BLAZE FILE: its blaze, when it has one, is in
+        #   the science file itself (EXPRES: a column of the extraction), and
+        #   is read as LBL's recipes read it, by load_blaze_from_science.
+        #   Asking the header for a keyword None would only log a red error
+        #   per file
+        try:
+            blaze, _ = inst.load_blaze_from_science(
+                path, flux, header, calib_directory=(folders or [""])[0],
+                normalize=True)
+            blaze = np.atleast_2d(np.asarray(blaze, dtype=float))
+            if blaze.shape == np.shape(flux):
+                return blaze
+        except Exception:                                       # noqa: BLE001
+            pass
+    else:
+        try:
+            name = header.get_hkey(keyword)
+        except Exception:                                       # noqa: BLE001
+            pass
     for folder in folders:
         if name and os.path.exists(os.path.join(folder, os.path.basename(
                 str(name)))):
@@ -488,7 +567,6 @@ def read(path, instrument_name, data_source, config_file=None,
                                          config_file), path)
     flux, header = inst.load_science_file(path)
     flux = np.atleast_2d(np.asarray(flux, dtype=float))
-    science_ext = flux_extension(path, flux)
     to_observer = bool(to_observer)
     wave = np.atleast_2d(np.asarray(
         inst.get_wave_solution(path, flux, header), dtype=float))
@@ -650,7 +728,12 @@ def read(path, instrument_name, data_source, config_file=None,
     meta["telluric_model"] = "tapas" if recon is not None else "none"
     if recon is None:
         recon = np.ones_like(flux)
-    meta["flux_extension"] = science_ext
+    # WHERE THE FLUX IS IN THE FILE IS NOT METADATA. It used to be carried
+    #   here as meta["flux_extension"], which the cube writes into its
+    #   meta.fits with the rest: a table's flux has no image extension, the
+    #   value was None, and astropy cannot write a column of None, so the
+    #   cube stopped. Only the writing of a corrected file needs it, and it
+    #   asks flux_place, which also knows a flux held in a table column
     return dict(flux=flux, wave=wave, blaze=blaze, recon=recon, sky=None,
                 snr=order_snr(flux), meta=meta)
 

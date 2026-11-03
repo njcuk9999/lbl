@@ -44,7 +44,8 @@ from astropy.table import Table
 from .grids import doppler, pixel_shift
 from .plotting import live_mask
 from .twoframe import (LanczosShifter, carried_means, cube_grid, fit_means,
-                       fit_templates, load_cube, row_parity, star_model)
+                       fit_templates, fit_weight_settings, load_cube,
+                       row_parity, star_model)
 
 #: the template rule, in its PCA2FIT stamp beside the fit it came from, so that
 #: a template made by another rule is made again. 2: the star block plus each
@@ -141,7 +142,8 @@ def star_coverage(cube, fit, chunk=16, block=40000):
     for c0 in range(0, m, step):
         c1 = min(c0 + step, m)
         a0, b0 = max(0, c0 - margin), min(m, c1 + margin)
-        _, data, w, _ = load_cube(cube, dtype=np.float32, columns=np.arange(a0, b0))
+        _, data, w, _ = load_cube(cube, dtype=np.float32, columns=np.arange(a0, b0),
+                                  **fit_weight_settings(fit))
         shifter = LanczosShifter(b0 - a0, a=8, max_shift=reach)
         Tf = shifter.prepare(T[:, a0:b0]) if np.any(T[:, a0:b0]) else None
         inner = slice(c0 - a0, c1 - a0)

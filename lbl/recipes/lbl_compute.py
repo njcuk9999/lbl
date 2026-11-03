@@ -45,6 +45,7 @@ InstrumentsType = select.InstrumentsType
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 LblLowCCFSNR = base_classes.LblLowCCFSNR
+LblNoValidLines = base_classes.LblNoValidLines
 log = io.log
 # add arguments (must be in parameters.py)
 ARGS_COMPUTE = [  # core
@@ -446,7 +447,7 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
                                   model_velocity=run.model_velocity,
                                   science_file=science_file,
                                   mask_file=ctx['mask_file'])
-    except LblLowCCFSNR as e:
+    except (LblLowCCFSNR, LblNoValidLines) as e:
         emsg = e.message + '\n Skipping file.'
         log.warning(emsg)
         return None
@@ -486,6 +487,13 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
 # =============================================================================
 # Parallel computation (COMPUTE_NPROC > 1)
 # =============================================================================
+#: what a worker process runs (python -c): argv[1] the task file, argv[2] the
+#:   folder of the lbl package of the main process
+WORKER_COMMAND = ('import sys; sys.path.insert(0, sys.argv[2]); '
+                  'from lbl.recipes import lbl_compute; '
+                  'lbl_compute.worker_main(sys.argv[1])')
+
+
 def compute_parallel(inst: InstrumentsType, ctx: Dict[str, Any],
                      run: ComputeRun, science_files: List[str], nproc: int,
                      recipe_kwargs: Dict[str, Any]):
@@ -546,16 +554,16 @@ def compute_parallel(inst: InstrumentsType, ctx: Dict[str, Any],
         task['result_file'] = result_file
         with open(task_file, 'wb') as pfile:
             pickle.dump(task, pfile)
-        # the worker must import this same lbl package
+        # the worker must import this same lbl package: first on its path,
+        #   before the current directory that python -c puts first (an lbl
+        #   folder there would be imported instead)
         lbl_path = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))
         env = dict(os.environ)
         env['PYTHONPATH'] = os.pathsep.join(
             [lbl_path] + [p for p in env.get('PYTHONPATH', '').split(os.pathsep)
                           if len(p) > 0])
-        cmd = [sys.executable, '-c',
-               'import sys; from lbl.recipes import lbl_compute; '
-               'lbl_compute.worker_main(sys.argv[1])', task_file]
+        cmd = [sys.executable, '-c', WORKER_COMMAND, task_file, lbl_path]
         with open(log_file, 'w') as lfile:
             proc = subprocess.Popen(cmd, env=env, stdout=lfile,
                                     stderr=subprocess.STDOUT)

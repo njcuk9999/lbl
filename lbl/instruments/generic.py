@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SPIRou instrument class here: instrument specific settings
+Generic instrument class here: settings given by the user
 
 Created on 2021-05-27
 
@@ -37,7 +37,7 @@ log = io.log
 
 
 # =============================================================================
-# Define Spirou class
+# Define Generic class
 # =============================================================================
 class Generic(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -83,21 +83,21 @@ class Generic(Instrument):
 
     def param_override(self):
         """
-        Parameter override for SPIRou parameters
+        Parameter override for Generic parameters
         (update default params)
 
         :return: None - updates self.params
         """
         # set function name
         func_name = __NAME__ + '.Generic.override()'
-        # update instrument
+        # update instrument (over the user's INSTRUMENT, which is Generic)
         value = self.generic_validate('GENERIC_INSTRUMENT')
-        self.param_set('INSTRUMENT', value, source=func_name)
+        self.params.set('INSTRUMENT', value, source=func_name)
         # set a new template name
         newtname = self.default_template_name.replace('Generic', value)
         # update data source
         value = self.generic_validate('GENERIC_DATA_SOURCE')
-        self.param_set('DATA_SOURCE', value, source=func_name)
+        self.params.set('DATA_SOURCE', value, source=func_name)
         # ---------------------------------------------------------------------
         # update the template name
         self.default_template_name = newtname
@@ -166,15 +166,15 @@ class Generic(Instrument):
         self.generic_validate('READ_OUT_NOISE')
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.generic_validate('MASK_SNR_MIN')
@@ -470,15 +470,15 @@ class Generic(Instrument):
         :param science_file: str, the filename to load
         :return:
         """
-        # Fiber must be set for SPIROU CADC
+        # the flux extension must be set
         if 'FLUX_EXTENSION_NAME' not in self.params:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'Generic mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         if self.params['FLUX_EXTENSION_NAME'] is None:
             emsg = ('Keyword FLUX_EXTENSION_NAME must be set for '
                     'Generic mode')
-            base_classes.LblException(emsg)
+            raise base_classes.LblException(emsg)
         # full extension name
         extname = 'FLUX'
         # load the first extension of each
@@ -540,9 +540,6 @@ class Generic(Instrument):
         """
         # get the wave centers for each order
         wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
-        # espresso has 2 orders per 'true' order so have to take every other
-        #   wave element
-        wave_cen = wave_cen[::2]
         # find the 'diffraction' order for a given 'on-detector' order
         dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
         dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
@@ -796,12 +793,8 @@ class Generic(Instrument):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

@@ -32,7 +32,7 @@ import numpy as np
 from lbl.pca2d.grids import pixel_shift
 from lbl.pca2d.logger import log
 from lbl.pca2d.plotting import rows_of
-from lbl.pca2d.twoframe import LanczosShifter, load_cube
+from lbl.pca2d.twoframe import LanczosShifter, fit_weight_settings, load_cube
 
 
 def parse_args(argv=None):
@@ -65,8 +65,9 @@ def main(argv=None):
     # the cube whole, then the rows the FIT used: its own list is the authority,
     # and re-deriving the selection would tie the figure to the signal-to-noise
     # cut as it is now rather than to the one the fit was made with
-    grid, data, w, meta = load_cube(args.cube, min_snr_frac=0.0)
     fit = np.load(args.fit)
+    grid, data, w, meta = load_cube(args.cube, min_snr_frac=0.0,
+                                    **fit_weight_settings(fit))
     select = rows_of(meta, fit)
     if select is not None:
         data, w, meta = data[select], w[select], meta[select]

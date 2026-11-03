@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SOPHIE instrument class here: instrument specific settings
+NEID instrument classes here: instrument specific settings
 
 Created on 2023-06-21
 
@@ -39,7 +39,7 @@ log = io.log
 
 
 # =============================================================================
-# Define SOPHIE class
+# Define NEID class
 # =============================================================================
 class Neid(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -61,17 +61,17 @@ class Neid(Instrument):
         self.update_from_args(args)
 
     # -------------------------------------------------------------------------
-    # SPIROU SPECIFIC PARAMETERS
+    # NEID SPECIFIC PARAMETERS
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SOPHIE parameters
+        Parameter override for NEID parameters
         (update default params)
 
         :return: None - updates self.params
         """
         emsg = 'NEID not implemented yet'
-        raise NotImplemented(emsg)
+        raise NotImplementedError(emsg)
 
 
 # =============================================================================
@@ -89,9 +89,9 @@ class Neid_ESSP(essp.ESSP):
         self.default_template_name = 'LBL_Template_{0}_neid_essp.fits'
         self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_neid_essp.fits'
         self.default_sample_wave_name = 'sample_wave_grid_neid_essp.fits'
-        # define wave limits in nm
-        self.wavemin = 387.515
-        self.wavemax = 691.128
+        # define wave limits in nm (those of the Neid class)
+        self.wavemin = 379.66
+        self.wavemax = 822.36
         # set parameters for instrument
         self.params = params
         # override params
@@ -114,13 +114,13 @@ class Neid_ESSP(essp.ESSP):
         # set parameters to update
         # ---------------------------------------------------------------------
         # set parameters to update
-        self.param_set('INSTRUMENT', 'EXPRES', source=func_name)
-        # add instrument earth location
+        self.param_set('INSTRUMENT', 'NEID', source=func_name)
+        # add instrument earth location: NEID is on the WIYN telescope
         #    (for use in astropy.coordinates.EarthLocation)
-        self.param_set('EARTH_LOCATION', 'lowell')
+        self.param_set('EARTH_LOCATION', 'WIYN')
         # define the default science input files
         self.param_set('INPUT_FILE', '*.fits', source=func_name)
-        # The input science data are blaze corrected
+        # The input science data are not blaze corrected
         self.param_set('BLAZE_CORRECTED', False, source=func_name)
         # define the mask table format
         self.param_set('REF_TABLE_FMT', 'csv', source=func_name)
@@ -184,15 +184,15 @@ class Neid_ESSP(essp.ESSP):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=5, source=func_name)

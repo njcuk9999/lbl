@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SPIRou instrument class here: instrument specific settings
+ESPRESSO instrument class here: instrument specific settings
 
 Created on 2021-05-27
 
@@ -37,7 +37,7 @@ log = io.log
 
 
 # =============================================================================
-# Define Spirou class
+# Define ESPRESSO class
 # =============================================================================
 class Espresso(Instrument):
     def __init__(self, params: base_classes.ParamDict,
@@ -48,6 +48,8 @@ class Espresso(Instrument):
         self.default_template_name = 'LBL_Template_{0}_espresso.fits'
         self.default_mask_name = 'LBL_Mask_{obj}_{mtype}_espresso.fits'
         self.default_sample_wave_name = 'sample_wave_grid_espresso.fits'
+        # pixels along an order (S2D files)
+        self.npixel = 9111
         # define wave limits in nm
         self.wavemin = 377.189
         self.wavemax = 790.788
@@ -63,7 +65,7 @@ class Espresso(Instrument):
     # -------------------------------------------------------------------------
     def param_override(self):
         """
-        Parameter override for SPIRou parameters
+        Parameter override for ESPRESSO parameters
         (update default params)
 
         :return: None - updates self.params
@@ -125,13 +127,14 @@ class Espresso(Instrument):
         # define the number of bins used in the magic "binned wavelength" bands
         self.param_set('COMPIL_NUM_UNIFORM_WAVEBIN', 15)
         # define the first band (from get_binned_parameters) to plot (band1)
+        #    the bands are g and r
         self.param_set('COMPILE_BINNED_BAND1', 'g', source=func_name)
         # define the second band (from get_binned_parameters) to plot (band2)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND2', 'r', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND2', 'g', source=func_name)
         # define the third band (from get_binned_parameters) to plot (band3)
         #    this is used for colour   band2 - band3
-        self.param_set('COMPILE_BINNED_BAND3', 'i', source=func_name)
+        self.param_set('COMPILE_BINNED_BAND3', 'r', source=func_name)
         # define the reference wavelength used in the slope fitting in nm
         self.param_set('COMPIL_SLOPE_REF_WAVE', 650, source=func_name)
         # define the name of the sample wave grid file (saved to the calib dir)
@@ -149,15 +152,15 @@ class Espresso(Instrument):
         self.param_set('READ_OUT_NOISE', 15, source=func_name)
         # Define the wave url for the stellar models
         self.param_set('STELLAR_WAVE_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/')
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/')
         # Define the wave file for the stellar models (using wget)
         self.param_set('STELLAR_WAVE_FILE', source=func_name,
                         value='WAVE_PHOENIX-ACES-AGSS-COND-2011.fits')
         # Define the stellar model url
         self.param_set('STELLAR_MODEL_URL', source=func_name,
-                        value='ftp://phoenix.astro.physik.uni-goettingen.de/'
-                              'HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
+                        value='https://phoenix.astro.physik.uni-goettingen.de/'
+                              'data/HiResFITS/PHOENIX-ACES-AGSS-COND-2011/'
                               '{ZSTR}{ASTR}/')
         # Define the minimum allowed SNR in a pixel to add it to the mask
         self.param_set('MASK_SNR_MIN', value=20, source=func_name)
@@ -223,7 +226,7 @@ class Espresso(Instrument):
         self.param_set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
                         source=func_name)
         # define the start time of the observation
-        self.param_set('KW_MJDATE', 'HIERARCH ESO QC BJD', source=func_name)
+        self.param_set('KW_MJDATE', 'MJD-OBS', source=func_name)
         # define snr keyword
         self.param_set('KW_SNR', 'HIERARCH ESO QC ORDER100 SNR',
                         source=func_name)
@@ -233,8 +236,7 @@ class Espresso(Instrument):
         self.param_set('KW_BLAZE_FILE', 'HIERARCH ESO PRO REC1 CAL20 NAME',
                         source=func_name)
         # define the exposure time of the observation
-        self.param_set('KW_EXPTIME', 'HIERARCH ESO QC BJD',
-                        source=func_name)
+        self.param_set('KW_EXPTIME', 'EXPTIME', source=func_name)
         # define the airmass of the observation
         self.param_set('KW_AIRMASS',
                         ['HIERARCH ESO TEL1 AIRM START',
@@ -819,9 +821,9 @@ class Espresso(Instrument):
         """
         # get mjdate key
         kw_mjdate = self.params['KW_MJDATE']
-        # get mjdate
-        mjdate = header.get_hkey(kw_mjdate, dtype=float)
-        # convert to plot date and take off JD?
+        # get mjdate: the key may hold a BJD
+        mjdate = self.to_mjd(header.get_hkey(kw_mjdate, dtype=float))
+        # convert to plot date
         plot_date = Time(mjdate, format='mjd').plot_date
         # return float plot date
         return float(plot_date)
@@ -845,12 +847,8 @@ class Espresso(Instrument):
         bout = astro.choose_bands(astro.bands, self.wavemin, self.wavemax)
         bands, blue_end, red_end, use_regions = bout
         # ---------------------------------------------------------------------
-        # define the region names (suffices)
-        region_names = ['', '_0-2044', '_2044-4088']
-        # lower x pixel bin point [pixels]
-        region_low = [0, 0, 2048]
-        # upper x pixel bin point [pixels]
-        region_high = [4096, 2048, 4096]
+        # define the regions: '' and the two halves of the detector
+        region_names, region_low, region_high = self.pixel_regions()
         # ---------------------------------------------------------------------
         # return all this information (in a dictionary)
         binned = dict()

@@ -460,6 +460,9 @@ def build_cube(config: dict):
                          % (fmt, ", ".join(sorted(ORDER_FORMATS | FLAT_FORMATS))))
 
     grid, data, sigma, trans, meta = result
+    # the longitude its nights were cut at (local noon there), with the cube:
+    #   what a later stage reads its nights by when given no configuration
+    spnights.record_longitude(meta, config)
     # written whenever the cache is on, rebuild or not: what a rebuild rebuilds
     # is the cube on disk, and the stages after this one read it from there
     if out["use_cache"]:
@@ -614,7 +617,8 @@ def _prepare_exposure(path, config, grid, blocks):
     # THE EXPOSURE'S WAVELENGTHS, and not the grid: this is the only branch
     # that has them, and the criterion that rejects a solution that goes
     # backward needs to see them order by order.
-    reason = _quality_reason(meta, payload["wave"], config["quality"])
+    reason = _quality_reason(meta, payload["wave"], config["quality"],
+                             _nights_longitude(config))
     if reason is not None:
         out["log"].append(("rejecting %s: %s" % (meta["filename"], reason),
                            "warn"))
@@ -636,7 +640,8 @@ def _prepare_exposure(path, config, grid, blocks):
                good=good, segments=segments,
                snippets={(a0, b0): sptf.raw_block(payload, grid, a0, b0, config)
                          for a0, b0 in blocks},
-               ratio=_parity_agreement(values, sig, good))
+               ratio=_parity_agreement(values, sig, good, segments,
+                                       config["highpass"]))
     return out
 
 
@@ -653,7 +658,8 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
         bundle=spnights.bundle_settings(inp) if stack else None,
         berv_of=lambda path: _readers.file_observer_berv(config, path),
         orbits=config["registration"].get("orbits"),
-        velocities=config["registration"].get("velocities"))
+        velocities=config["registration"].get("velocities"),
+        longitude=spnights.config_longitude(config) if stack else None)
     n_groups = len(set(labels))
     _check_memory(config, 2 * n_groups, n_pixels)
 
@@ -728,16 +734,41 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     return grid, data, sigma, trans, meta_table
 
 
-def _parity_agreement(values, sigma, good):
+def _parity_agreement(values, sigma, good, segments=None, highpass=None):
     """Observed odd-even scatter over the order overlaps, in units of sigma.
 
     Free diagnostic: wherever both parities cover a column they measured the
     same photons at two different places on the detector, so their difference
     is an error estimate that owes nothing to any noise model.
+
+    `segments`, (parity, start, stop) of each order, are those of an exposure
+    whose high pass is deferred (highpass.against_template): its values are
+    then ln f, the level of each order still in them, and the difference of
+    two orders would be the step between their continua. Each segment is
+    high-passed here first, by `highpass` (window, polyorder), as the classic
+    filter would have done.
     """
     both = good[0] & good[1]
     if both.sum() < 100:
         return np.nan
+    if segments:
+        flat = np.zeros_like(values)
+        kept = np.zeros_like(good)
+        for parity, start, stop in segments:
+            seg = values[parity, start:stop]
+            ok = good[parity, start:stop]
+            if ok.sum() < int(highpass["window"]):
+                continue
+            with np.errstate(over="ignore"):
+                hp, hp_ok = prep.highpass(np.where(ok, np.exp(seg), np.nan),
+                                          highpass["window"],
+                                          highpass["polyorder"], "log_sub")
+            flat[parity, start:stop] = np.where(hp_ok & ok, hp, 0.0)
+            kept[parity, start:stop] = hp_ok & ok
+        values = flat
+        both = kept[0] & kept[1]
+        if both.sum() < 100:
+            return np.nan
     difference = values[0][both] - values[1][both]
     expected = np.sqrt(sigma[0][both] ** 2 + sigma[1][both] ** 2)
     expected = np.median(expected[np.isfinite(expected)])
@@ -764,7 +795,8 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
         bundle=spnights.bundle_settings(config["input"]) if stack else None,
         berv_of=lambda path: _readers.file_observer_berv(config, path),
         orbits=config["registration"].get("orbits"),
-        velocities=config["registration"].get("velocities"))
+        velocities=config["registration"].get("velocities"),
+        longitude=spnights.config_longitude(config) if stack else None)
     n_groups = len(set(labels))
     n_pixels = grid.size
     _check_memory(config, n_groups, n_pixels)
@@ -795,7 +827,8 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
                    inp.get("object_header") or inp["object"]), "warn")
             continue
         meta = one_object(meta, inp)
-        reason = _quality_reason(meta, wave, config["quality"])
+        reason = _quality_reason(meta, wave, config["quality"],
+                                 _nights_longitude(config))
         if reason is not None:
             log("rejecting %s: %s" % (meta["filename"], reason), "warn")
             n_rejected += 1
@@ -923,9 +956,16 @@ def _stash_template(config, template):
     _PENDING_TEMPLATE = np.asarray(template, dtype=np.float32)
 
 
-def load_template(config):
-    """The high-pass template, or None."""
-    path = template_path(config)
+def load_template(config, cube=None):
+    """The high-pass template, or None: that of the cube folder `cube` when
+    it holds one (the cube a stage was handed), else of the cube the
+    configuration's key names (a joint cube keeps none: each member's is in
+    its own cube, which its own configuration names)."""
+    if not (config.get("highpass") or {}).get("against_template"):
+        return None
+    path = os.path.join(cube, TEMPLATE_FILE) if cube else None
+    if path is None or not os.path.exists(path):
+        path = template_path(config)
     if path is None or not os.path.exists(path):
         return None
     try:
@@ -1051,8 +1091,20 @@ def _highpass_one(values, sig, good, segments, berv, template, grid, config):
     return np.where(keep, out, 0.0), keep
 
 
-def _quality_reason(meta, wave, quality):
+def _nights_longitude(config):
+    """The observatory's longitude when quality.nights picks nights, which
+    are cut at local noon there; None otherwise, so that a run that picks
+    no night never needs the site."""
+    if not config["quality"].get("nights"):
+        return None
+    return spnights.config_longitude(config)
+
+
+def _quality_reason(meta, wave, quality, longitude=None):
     """Return why this exposure should be rejected, or None to keep it.
+
+    `longitude` is the observatory's east longitude [deg], which
+    quality.nights needs (_nights_longitude).
 
     The checks are explicit because a frame whose extraction failed can
     carry a *negative* median flux and negative or 'NaN' per-order SNR
@@ -1103,10 +1155,18 @@ def _quality_reason(meta, wave, quality):
     # joint fit assumes the atmosphere belongs to the night, which only holds for
     # stars observed on the SAME nights, and the nights two campaigns share are
     # not a contiguous range (a few dozen shared nights can be scattered through
-    # seasons of a hundred or more). Nights are given as integer rjd.
+    # seasons of a hundred or more). Nights are given as integer rjd: the rjd
+    # at noon UT of the local date the night began on (nights.night_number,
+    # cut at local noon at the observatory).
     nights = quality.get("nights")
     if nights:
-        if int(np.floor(rjd)) not in {int(n) for n in nights}:
+        if longitude is None:
+            raise RuntimeError(
+                "quality.nights picks nights, cut at local noon at the"
+                " observatory, and nothing names it: lbl.instrument in the"
+                " configuration names the instrument")
+        night = int(spnights.night_number(rjd, longitude))
+        if night not in {int(n) for n in nights}:
             return "rjd %.2f is not one of the %d nights asked for" % (
                 rjd, len(nights))
     # THE SPECTROGRAPH MODE, when a campaign mixes two. An instrument with a

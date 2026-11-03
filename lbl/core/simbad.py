@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 SIMBAD, asked through its Python client (astroquery.simbad, on SIMBAD's TAP
-service), for the window's archive search and Teff, the PCA2D report and
+service at the CDS, or at its CfA mirror when the CDS does not answer:
+SERVERS), for the window's archive search and Teff, the PCA2D report and
 the astrometry of the secular acceleration. Not through a web page or CDS's
 Sesame resolver: a service that takes a script for a robot can block it,
 and Sesame can be down while SIMBAD's TAP service answers in a fraction of
@@ -20,8 +21,15 @@ from typing import Any, Dict, List, Optional
 # =============================================================================
 # Define variables
 # =============================================================================
-#: seconds a request to SIMBAD may take, connection and answer
+#: seconds a request to SIMBAD may take to connect, then to answer: a
+#:   server that does not take the connection is left quickly for the next
+CONNECT_TIMEOUT = 5
 TIMEOUT = 30
+#: SIMBAD's servers, the CDS first, then its mirror at the CfA, which serves
+#:   the same TAP tables. A query that no server before has answered goes
+#:   to the next, and the server that answered is asked first afterwards
+#:   (2026-11-03: the CDS took no connection while the CfA answered in 0.3 s)
+SERVERS = ['simbad.cds.unistra.fr', 'simbad.harvard.edu']
 #: what LBL and its users append to a star's name: the telluric cleaning
 #:   (_tc), PCA2D's corrections (_pca2d...), an instrument
 SUFFIXES = re.compile(r'(_tc|_pca2d[0-9A-Za-z._+-]*|_(SPIROU|NIRPS|NIRPS_HE|'
@@ -84,10 +92,10 @@ def name_variants(name: Any) -> List[str]:
 
 
 def _simbad():
-    """The client, made once, its requests given TIMEOUT (astroquery's own
-    timeout is how long SIMBAD may work on a query, not how long the
-    network may take: a service that does not answer would hold a report
-    or the window for as long as the connection stays open)"""
+    """The client, made once, its requests given CONNECT_TIMEOUT and TIMEOUT
+    (astroquery's own timeout is how long SIMBAD may work on a query, not
+    how long the network may take: a service that does not answer would
+    hold a report or the window for as long as the connection stays open)"""
     global _SIMBAD
     if _SIMBAD is None:
         from astroquery.simbad import Simbad
@@ -96,7 +104,7 @@ def _simbad():
         request = session.request
 
         def with_timeout(method, url, **kwargs):
-            kwargs.setdefault('timeout', TIMEOUT)
+            kwargs.setdefault('timeout', (CONNECT_TIMEOUT, TIMEOUT))
             return request(method, url, **kwargs)
         session.request = with_timeout
         _SIMBAD = simbad
@@ -130,18 +138,28 @@ def tap(query: str) -> List[Dict[str, Any]]:
 
     :return: list of dict, column -> value (None where SIMBAD has none)
 
-    :raises OSError: SIMBAD could not be asked, or did not answer
+    :raises OSError: SIMBAD could not be asked, or no server answered
     """
     try:
-        table = _simbad().query_tap(query)
+        client = _simbad()
     except ImportError as exc:
         raise OSError('astroquery is not installed (pip install astroquery):'
                       ' SIMBAD cannot be asked') from exc
-    except Exception as exc:                              # noqa: BLE001
-        raise OSError('SIMBAD: %s: %s' % (type(exc).__name__,
-                                          str(exc)[:200])) from exc
-    return [{col: _value(row[col]) for col in table.colnames}
-            for row in table]
+    failures = []
+    for server in list(SERVERS):
+        client.server = server
+        try:
+            table = client.query_tap(query)
+        except Exception as exc:                          # noqa: BLE001
+            failures.append('%s: %s: %s' % (server, type(exc).__name__,
+                                            str(exc)[:200]))
+            continue
+        # the server that answered is asked first from now on
+        SERVERS.remove(server)
+        SERVERS.insert(0, server)
+        return [{col: _value(row[col]) for col in table.colnames}
+                for row in table]
+    raise OSError('SIMBAD: no server answered (%s)' % '; '.join(failures))
 
 
 def resolve(name: Any) -> Optional[Dict[str, Any]]:

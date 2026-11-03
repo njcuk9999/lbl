@@ -81,7 +81,7 @@ def get_args(description: str):
                    default='None',
                    action='store', help='The data directory')
     # add the name of the wrap file
-    parser.add_argument('wrap_file', type=str,
+    parser.add_argument('wrap_file', type=str, nargs='?',
                    default='None',
                    action='store', help='The wrap file name')
     # parse the arguments

@@ -476,15 +476,18 @@ def without_object(config):
     same way as one whose folder is not. Left in, it would give that target a
     different shared key and a joint run would refuse the whole set.
 
-    And the star's orbits (registration.orbits): they place ITS star's frame,
-    one star at a time, and change nothing of the grid the rows share. Left
-    in, one member with a known planet would make a joint run refuse the
-    whole set.
+    And the star's orbits and fitted velocities (registration.orbits,
+    registration.velocities): they place ITS star's frame, one star at a time,
+    and change nothing of the grid the rows share. Left in, one member with a
+    known planet or a template's fitted velocities would make a joint run
+    refuse the whole set.
     """
     other = copy.deepcopy(config)
     other["input"]["object"] = ""
     other["input"]["object_header"] = None
-    other.setdefault("registration", {})["orbits"] = []
+    registration = other.setdefault("registration", {})
+    registration["orbits"] = []
+    registration["velocities"] = {}
     return other
 
 
@@ -753,7 +756,7 @@ def announce(args, plan):
     """Say what is about to happen, in the terms the config used."""
     cfg = plan["config"]
     log("object      %s" % args.object, "value")
-    log("instrument  %s   (read from INSTRUME, not chosen)"
+    log("instrument  %s   (named by lbl.instrument or --instrument)"
         % cfg["input"].get("instrument", "?"), "value")
     log("spectra     %d files in %s" % (len(plan["files"]), plan["directory"]),
         "value")
@@ -1290,6 +1293,9 @@ def clip_args(cfg, quiet=False):
             and not corr.get("star_bias_nsig") and not floor):
         return []
     out = ["--clip-window", str(int(cfg["highpass"]["window"]))]
+    # the fewest exposures of a parity over which a column gets a verdict
+    if corr.get("column_min_rows") is not None:
+        out += ["--column-min-rows", str(int(corr["column_min_rows"]))]
     if excursion and elements:
         resolution = (cfg.get("twoframe") or {}).get("resolution") or 70000
         samples = element_samples(resolution, cfg["domain"]["dv"], elements)

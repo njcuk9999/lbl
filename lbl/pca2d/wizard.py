@@ -84,7 +84,7 @@ def probe_files(config, max_open=1):
             # the instrument's wavelength extension (PCA2D_TFITS_EXTENSIONS)
             ext = (config.get("input") or {}).get("extensions") or {}
             if not ext.get("wave") or ext["wave"] not in set(out["extensions"]):
-                out["no_wave"] = True
+                out["no_wave"] = ext.get("wave") or "(none named)"
                 return out
             from .tfits import extensions_for
             with robust_open(paths[0]) as hdulist:
@@ -121,8 +121,10 @@ def validate(config, probe=True):
     if info and info.get("error"):
         bad("input.pattern", "the first match does not open: %s" % info["error"])
     elif info and info.get("no_wave"):
-        bad("input.pattern", "%s has no WaveA extension; is it really a t.fits?"
-            % os.path.basename(info["first"]))
+        bad("input.pattern", "%s has no %s extension, the wavelengths the"
+            " instrument's PCA2D_TFITS_EXTENSIONS names: is it a file of"
+            " this instrument and data source?"
+            % (os.path.basename(info["first"]), info["no_wave"]))
 
     dom = config["domain"]
     lo, hi = dom.get("wave_min"), dom.get("wave_max")

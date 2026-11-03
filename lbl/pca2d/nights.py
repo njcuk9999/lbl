@@ -14,8 +14,12 @@ by that much; registering first and coadding afterwards does not.
 The night an exposure belongs to is taken from its timestamp, read out of the
 filename when it is there. Opening hundreds of headers costs minutes of pure
 I/O, as much as reading the pixels; the filename carries the same
-information for free. The rule is the usual one: everything
-before UT noon belongs to the night that started the previous day.
+information for free. The rule is the one of all of LBL
+(lbl.core.astro.night_number): a night runs from local mean noon to the next
+local mean noon at the observatory, whose longitude is the site of the
+instrument's EARTH_LOCATION (config_longitude). A cube records the longitude
+its nights were cut at (LONGITUDE_KEY in its meta.fits), and its cache key
+holds it, so that a cube grouped otherwise is never taken for this one.
 """
 
 from __future__ import annotations
@@ -27,7 +31,12 @@ import re
 import numpy as np
 from astropy.io import fits
 
+from lbl.core.astro import night_number, wrap_longitude  # noqa: F401
 from .logger import log
+
+#: the keyword of a cube's meta.fits that records the east longitude [deg]
+#:    of the observatory its nights were cut at (local mean noon there)
+LONGITUDE_KEY = "NIGHTLON"
 
 # <INSTRUMENT>.2023-01-20T08:42:08.941t.fits or
 # <INSTRUMENT>_2023-01-20T08_42_08_941_pp_...
@@ -46,17 +55,118 @@ def timestamp_from_name(path: str):
         return None
 
 
-def night_label(stamp: _dt.datetime) -> str:
-    """The night a UT timestamp belongs to, as YYYY-MM-DD.
+#: 2000-01-01 12:00 UT, JD 2451545.0: a UT timestamp's Julian date is counted
+#:    from there, and the night_number of a date is its Julian day number
+_J2000 = _dt.datetime(2000, 1, 1, 12, 0, 0)
+_J2000_JD = 2451545
 
-    Anything before UT noon is credited to the previous day, which is the
-    convention every observatory log uses and which keeps a whole night in one
-    bucket regardless of the site's longitude.
+
+def julian_date(stamp: _dt.datetime) -> float:
+    """The Julian date of a UT timestamp (naive, in UT)."""
+    return _J2000_JD + (stamp - _J2000).total_seconds() / 86400.0
+
+
+def night_label(stamp: _dt.datetime, longitude) -> str:
+    """The night a UT timestamp belongs to, as YYYY-MM-DD, the LOCAL date it
+    started on at the observatory at east longitude `longitude` [deg].
+
+    It is night_number on the stamp's Julian date, so the boundary is the
+    same to the second: anything before local mean noon is credited to the
+    night that started the local day before.
     """
-    date = stamp.date()
-    if stamp.hour < 12:
-        date = date - _dt.timedelta(days=1)
-    return date.isoformat()
+    night = int(night_number(julian_date(stamp), longitude))
+    return (_J2000.date() + _dt.timedelta(days=night - _J2000_JD)).isoformat()
+
+
+def config_longitude(config):
+    """The east longitude [deg] of the observatory of a PCA2D configuration's
+    instrument (lbl.instrument and lbl.data_source, else input.instrument),
+    the site of its EARTH_LOCATION (lbl.core.astro.observatory_longitude);
+    None when the configuration names no instrument. A plain dict read from
+    a resolved_config.yaml is enough."""
+    if not config:
+        return None
+    block = config.get("lbl") or {}
+    name = block.get("instrument") or (config.get("input") or {}).get(
+        "instrument")
+    if name in (None, "", "None"):
+        return None
+    from lbl.core.astro import observatory_longitude
+    source = block.get("data_source")
+    return observatory_longitude(str(name), None if source in (None, "", "None")
+                                 else str(source))
+
+
+def cube_longitude(cube):
+    """The east longitude [deg] a cube's nights were cut at, as its meta.fits
+    records it (LONGITUDE_KEY), or None for a cube that records none (built
+    before nights were cut at local noon, or by hand). `cube` is the cube's
+    folder or its meta table."""
+    meta = cube
+    if isinstance(cube, str):
+        path = os.path.join(cube, "meta.fits")
+        if not os.path.exists(path):
+            return None
+        value = fits.getheader(path, 1).get(LONGITUDE_KEY)
+    else:
+        value = (getattr(meta, "meta", None) or {}).get(LONGITUDE_KEY)
+    return None if value is None else float(value)
+
+
+def record_longitude(meta, config):
+    """Write the configuration's longitude into a cube's meta table
+    (LONGITUDE_KEY), which _save_cache writes with it: what every later
+    stage reads the cube's nights by when no configuration is given. Nothing
+    when the configuration names no instrument."""
+    longitude = config_longitude(config)
+    if longitude is not None:
+        meta.meta[LONGITUDE_KEY] = float(longitude)
+    return meta
+
+
+def run_longitude(config=None, cube=None, need=None):
+    """The longitude a stage after the cube groups exposures into nights by:
+    the configuration's instrument's (config_longitude), else what the cube
+    records (cube_longitude). Stops when the two disagree, since the cube's
+    nights would then not be the ones regrouped here.
+
+    None when neither says, unless `need` says what needs it: then it stops,
+    and says so. Never noon UT by default.
+    """
+    longitude = config_longitude(config)
+    recorded = cube_longitude(cube) if cube is not None else None
+    if longitude is not None and recorded is not None and abs(
+            wrap_longitude(longitude - recorded)) > 1e-6:
+        raise SystemExit(
+            "the cube %s was cut into nights at local noon at east longitude"
+            " %.4f, and the configuration's instrument is at %.4f: they are"
+            " not the same observatory" % (cube, recorded, longitude))
+    if longitude is not None and recorded is None and isinstance(cube, str) \
+            and _stacked(cube):
+        log("the cube %s records no night longitude: it was coadded into"
+            " nights before LBL cut them at local noon, and its nights may"
+            " not be the ones regrouped here; rebuild it" % cube, "warn")
+    if longitude is None:
+        longitude = recorded
+    if longitude is None and need:
+        raise SystemExit(
+            "%s groups the exposures into nights, cut at local noon at the"
+            " observatory, and nothing names it: give the configuration"
+            " (--config) whose lbl.instrument names the instrument, or a cube"
+            " that records its longitude (%s in its meta.fits)"
+            % (need, LONGITUDE_KEY))
+    return longitude
+
+
+def _stacked(cube: str) -> bool:
+    """Whether a cube's rows coadd several exposures (n_exposures)."""
+    path = os.path.join(cube, "meta.fits")
+    if not os.path.exists(path):
+        return False
+    from astropy.table import Table
+    meta = Table.read(path)
+    return ("n_exposures" in meta.colnames and len(meta)
+            and int(max(meta["n_exposures"])) > 1)
 
 
 def _stamp_from_header(path: str, extension: int) -> _dt.datetime | None:
@@ -197,16 +307,26 @@ def row_unit(source) -> str:
 
 
 def group_files(files: list[str], stack: bool, extension: int = 0,
-                bundle=None, orbits=None, velocities=None, berv_of=None):
+                bundle=None, orbits=None, velocities=None, berv_of=None,
+                longitude=None):
     """Sort files chronologically and label each with its output group.
 
     Returns (files, labels). With stack = False every file is its own group, so
-    the rest of the pipeline needs no special case. With `bundle`
-    (bundle_settings), each night is cut into bundles (split_nights), by
-    the star's frame when the star has `orbits` (frame_bervs). The BERV of a
-    file is `berv_of(path)`, in km/s: the observer's, from LBL's instrument
-    profile (readers.file_observer_berv), never read here from the headers.
+    the rest of the pipeline needs no special case. With stack = True the
+    group is the night (night_label), cut at local noon at east longitude
+    `longitude` [deg] (config_longitude), which stacking then requires. With
+    `bundle` (bundle_settings), each night is cut into bundles
+    (split_nights), by the star's frame when the star has `orbits`
+    (frame_bervs). The BERV of a file is `berv_of(path)`, in km/s: the
+    observer's, from LBL's instrument profile (readers.file_observer_berv),
+    never read here from the headers.
     """
+    if stack and longitude is None:
+        raise RuntimeError(
+            "nightly stacking cuts the nights at local noon at the"
+            " observatory, and nothing names it: lbl.instrument in the"
+            " configuration names the instrument, whose EARTH_LOCATION gives"
+            " the site")
     stamps = [timestamp_from_name(path) for path in files]
     missing = [i for i, s in enumerate(stamps) if s is None]
     if missing:
@@ -229,10 +349,12 @@ def group_files(files: list[str], stack: bool, extension: int = 0,
     if not stack:
         return files, ["%06d" % i for i in range(len(files))]
 
-    labels = [night_label(s) for s in stamps]
+    labels = [night_label(s, longitude) for s in stamps]
     n_nights = len(set(labels))
-    log("nightly stacking: %d exposures over %d nights (%.1f per night)"
-        % (len(files), n_nights, len(files) / max(n_nights, 1)), "value")
+    log("nightly stacking: %d exposures over %d nights (%.1f per night),"
+        " cut at local noon at east longitude %.2f"
+        % (len(files), n_nights, len(files) / max(n_nights, 1),
+           wrap_longitude(longitude)), "value")
     if bundle:
         bervs = None
         if bundle.get("berv") is not None:

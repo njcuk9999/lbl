@@ -166,7 +166,7 @@ def parse_args(argv=None):
     p.add_argument("--template-berv-bin", type=float, default=None,
                    help="BERV bin width in m/s for the hierarchical template;"
                         " 0 or unset gives the plain median")
-    p.add_argument("--template-berv-min-entries", type=int, default=3,
+    p.add_argument("--template-berv-min-entries", type=int, default=None,
                    help="exposures a BERV bin needs before it gets a vote")
     p.add_argument("--max-sigma", "--max-mad", dest="max_mad", type=float,
                    default=None,
@@ -491,10 +491,11 @@ def equilibrated_solve(amat, bvec, ridge=1e-12):
 def velocity_column(star_row, mask=None):
     """d(star model)/d(pixel): the shape a small shift of the star has.
 
-    First order, and exact at first order: f(x + eps) = f + eps f'(x). On the
-    magic grid a pixel IS a velocity, dv km/s of it, so the amplitude that
-    multiplies this column is a shift in pixels and alpha * dv is a velocity in
-    km/s. It is also why d/d(ln lambda) needs nothing but np.gradient: the grid
+    First order, and exact at first order: f(x + eps) = f + eps f'(x), the star
+    moved by eps samples towards the BLUE. On the magic grid a pixel IS a
+    velocity, dv km/s of it, so the amplitude alpha that multiplies this column
+    is a shift in pixels and -alpha * dv is the star's velocity in km/s,
+    receding positive. It is also why d/d(ln lambda) needs nothing but np.gradient: the grid
     is uniform in ln lambda by construction, which is the whole reason it was
     built that way.
 
@@ -1114,6 +1115,43 @@ _LOAD_BLOCK_BYTES = 256 * 1024 * 1024
 DEFAULT_MIN_PIXEL_SNR = 5.0
 
 
+#: the transmission at which the telluric ramp of the weights reaches zero
+DEFAULT_RAMP_ZERO = 0.5
+
+
+def weight_settings(config=None):
+    """load_cube's settings of the weights, from a configuration's `weights`
+    section: weights.min_pixel_snr, weights.ln_clip_low (read when the first
+    is null) and weights.telluric_ramp_zero. Without one, the defaults."""
+    weights = (config or {}).get("weights") or {}
+    return dict(min_pixel_snr=weights.get("min_pixel_snr",
+                                          DEFAULT_MIN_PIXEL_SNR),
+                ln_clip_low=weights.get("ln_clip_low"),
+                ramp_zero=float(weights.get("telluric_ramp_zero",
+                                            DEFAULT_RAMP_ZERO)))
+
+
+def fit_weight_settings(fit):
+    """The settings of the weights a fit was made with, from its fit.npz (a
+    path or what np.load gave), for every later reader of its cube to weigh
+    the samples as the fit did. A fit that does not record them was made
+    with the defaults."""
+    if isinstance(fit, (str, os.PathLike)):
+        if not os.path.exists(fit):
+            return weight_settings()
+        fit = np.load(fit)
+    files = list(getattr(fit, "files", None) or [])
+
+    def stored(name, default):
+        if name not in files:
+            return default
+        value = float(np.asarray(fit[name]))
+        return None if not np.isfinite(value) else value
+    return dict(min_pixel_snr=stored("min_pixel_snr", DEFAULT_MIN_PIXEL_SNR),
+                ln_clip_low=stored("ln_clip_low", None),
+                ramp_zero=stored("ramp_zero", DEFAULT_RAMP_ZERO))
+
+
 def read_cube_files(path, dtype=np.float64, columns=None, lazy=False):
     """Read a cached cube, in either of the two formats `cube.py` has written.
 
@@ -1682,7 +1720,8 @@ def check_memory(rows, columns, dtype, fraction=None):
 _SNR_CUT_SAID = set()
 
 
-def load_cube(path, ln_clip_low=None, ramp_zero=0.5, min_snr_frac=0.5,
+def load_cube(path, ln_clip_low=None, ramp_zero=DEFAULT_RAMP_ZERO,
+              min_snr_frac=0.5,
               dtype=np.float64, columns=None, spill=None,
               min_pixel_snr=DEFAULT_MIN_PIXEL_SNR, with_sigma=False,
               with_trans=False):
@@ -1893,8 +1932,23 @@ def tidy_block(basis, coeffs, power):
     return basis, coeffs, power
 
 
-def nightly_bin(bjd, coeffs):
-    night = np.floor(bjd - 0.5).astype(int)
+def night_longitude(args, need=None):
+    """The longitude this fit's nights are cut at (local noon there): the
+    instrument of --config, else what --cube records (nights.run_longitude).
+    None when neither says, unless `need` names what needs it."""
+    from .nights import run_longitude
+    config = None
+    if getattr(args, "config", None):
+        from .config import load_config
+        config = load_config(args.config)
+    return run_longitude(config, getattr(args, "cube", None), need=need)
+
+
+def nightly_bin(bjd, coeffs, longitude):
+    """The coefficients' means per night, cut at local noon at east longitude
+    `longitude` [deg] (nights.night_number)."""
+    from .nights import night_number
+    night = night_number(bjd, longitude)
     unique = np.unique(night)
     out_t = np.zeros(unique.size)
     out_c = np.zeros((unique.size, coeffs.shape[1]))
@@ -1905,13 +1959,22 @@ def nightly_bin(bjd, coeffs):
     return out_t, out_c
 
 
-def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
+def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None,
+                longitude=None):
     """Both blocks' coefficients against time, star on the left, Earth on the right.
 
     Side by side and on a shared time axis on purpose: the question this figure
     exists to answer is whether a feature in one block also appears in the other,
     which is what cross-frame leakage looks like from the coefficient side.
+
+    The nightly means are cut at local noon at east longitude `longitude`
+    [deg] (night_longitude); without it they are not drawn, and the log says
+    so.
     """
+    if longitude is None:
+        log("  no observatory known (no --config naming the instrument, and"
+            " a cube that records no night longitude): the coefficients are"
+            " drawn without their nightly means", "warn")
     plt.rcParams.update({"font.size": 9, "axes.grid": True, "grid.alpha": 0.25})
     n_rows = max(a.shape[1], b.shape[1])
     t = bjd - 2400000.5
@@ -1920,12 +1983,14 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
     blocks = [("star rest frame", a, pa, "tab:blue", err_a),
               ("observer (Earth) rest frame", b, pb, "tab:red", err_b)]
     for col, (title, coeffs, power, colour, err) in enumerate(blocks):
-        bt, bc = nightly_bin(bjd, coeffs)
+        if longitude is not None:
+            bt, bc = nightly_bin(bjd, coeffs, longitude)
         # the nightly error is the per-exposure error added in quadrature and
         # divided by the count, i.e. sqrt(sum e^2)/n -- not e/sqrt(n), because
         # the exposures in a night do not all carry the same weight
-        if err is not None:
-            night = np.floor(bjd - 0.5).astype(int)
+        if err is not None and longitude is not None:
+            from .nights import night_number
+            night = night_number(bjd, longitude)
             uniq = np.unique(night)
             be = np.zeros((uniq.size, coeffs.shape[1]))
             for i, v in enumerate(uniq):
@@ -1937,12 +2002,13 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
                 ax.axis("off")
                 continue
             ax.plot(t, coeffs[:, row], ".", ms=2.5, alpha=0.35, color=colour)
-            if err is not None:
+            if err is not None and longitude is not None:
                 ax.errorbar(bt - 2400000.5, bc[:, row], yerr=be[:, row],
                             fmt="none", ecolor="0.35", elinewidth=0.6,
                             capsize=0, alpha=0.8, zorder=2)
-            ax.plot(bt - 2400000.5, bc[:, row], "o", ms=3.2, mfc="none",
-                    mew=0.8, color="k", label="nightly mean", zorder=3)
+            if longitude is not None:
+                ax.plot(bt - 2400000.5, bc[:, row], "o", ms=3.2, mfc="none",
+                        mew=0.8, color="k", label="nightly mean", zorder=3)
             ax.axhline(0.0, color="k", lw=0.6, alpha=0.4)
             ax.set_ylabel("%s%d" % ("a" if col == 0 else "b", row + 1))
             ax.text(0.995, 0.95, "%.1f%% of weighted variance"
@@ -1953,7 +2019,8 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
             # the panel spans what this coefficient does, not the way to zero:
             # a coefficient sitting at -6 and moving by one reads as flat when
             # the axis has to reach zero, and the line at zero autoscales too
-            span = np.concatenate([coeffs[:, row], bc[:, row]])
+            span = (np.concatenate([coeffs[:, row], bc[:, row]])
+                    if longitude is not None else coeffs[:, row])
             span = span[np.isfinite(span)]
             if span.size:
                 lo, hi = float(span.min()), float(span.max())
@@ -1961,7 +2028,8 @@ def plot_coeffs(bjd, a, b, pa, pb, chi2_null, path, err_a=None, err_b=None):
                 ax.set_ylim(lo - pad, hi + pad)
             if row == 0:
                 ax.set_title(title)
-                ax.legend(fontsize=7, loc="lower left")
+                if longitude is not None:
+                    ax.legend(fontsize=7, loc="lower left")
         axes[-1][col].set_xlabel("MJD (days)")
     fig.suptitle("Two-frame PCA: coefficients versus time\n"
                  "left = star-anchored block (fitted first), "
@@ -2329,6 +2397,10 @@ def external_star_template(spec, grid, parity, live, window, polyorder,
     return out, used
 
 
+#: the fewest weighted rows whose median is a star spectrum
+MIN_TEMPLATE_ROWS = 3
+
+
 def star_frame_template(data, w, shifter, delta, min_spectra=20, berv=None,
                         berv_bin=None, berv_min_entries=3, rows=None,
                         spill=None, desc=None):
@@ -2371,7 +2443,7 @@ def star_frame_template(data, w, shifter, delta, min_spectra=20, berv=None,
     with warnings.catch_warnings():
         # a t.fits cube has columns no row covers at all (dead orders, and the
         # half of the domain the other parity owns); those are all-NaN by
-        # construction and are zeroed by the min_spectra cut below
+        # construction and are zeroed by the count cut below
         warnings.simplefilter("ignore", RuntimeWarning)
         median_desc = desc and desc + ", median"
         if berv_bin and berv is not None:
@@ -2382,12 +2454,32 @@ def star_frame_template(data, w, shifter, delta, min_spectra=20, berv=None,
         else:
             template = _nanmedian_over_rows(home, desc=median_desc)
     count = np.zeros(n_cols, dtype=np.int64)
+    live_rows = 0
     for start in starts:
-        count += np.sum(np.isfinite(home[start:start + step]), axis=0)
+        finite = np.isfinite(home[start:start + step])
+        count += np.sum(finite, axis=0)
+        live_rows += int(np.any(finite, axis=1).sum())
     drop_workspace(home)
     del home
     template = np.where(np.isfinite(template), template, 0.0)
-    template[count < min_spectra] = 0.0
+    # A COLUMN NEEDS min_spectra ROWS, OR ALL THE ROWS THERE ARE. With fewer
+    #   weighted rows than min_spectra, a fixed limit would zero every column
+    #   and the fit would run on the star itself, its observer components
+    #   taking a share of the star's lines that the correction then divides
+    #   out. Below MIN_TEMPLATE_ROWS a median is not one.
+    need = max(min(int(min_spectra), live_rows), MIN_TEMPLATE_ROWS)
+    template[count < need] = 0.0
+    if live_rows < int(min_spectra):
+        log("only %d weighted rows%s, fewer than the %d a star-frame median"
+            " asks for: %s"
+            % (live_rows, " (%s)" % desc if desc else "", int(min_spectra),
+               "the star's spectrum is their median on the %d columns all of"
+               " them weight, and zero elsewhere. A fit of so few spectra is"
+               " fragile" % int(np.count_nonzero(template))
+               if live_rows >= MIN_TEMPLATE_ROWS else
+               "NO STAR SPECTRUM, so the fit runs on the star itself and its"
+               " observer components take part of the star's lines, which the"
+               " correction divides out"), "warn")
     return template
 
 
@@ -2909,10 +3001,20 @@ def replot(outdir, cube=None):
     if not keep.all():
         log("  %d of %d rows were rejected by the MAD cut and are not"
               " plotted" % (int((~keep).sum()), keep.size))
+    # the nights as the run cut them: the instrument of the configuration
+    #   the run wrote beside its fit, else what the cube records
+    resolved = os.path.join(outdir, "resolved_config.yaml")
+    config = None
+    if os.path.exists(resolved):
+        import yaml
+        with open(resolved, encoding="utf-8") as handle:
+            config = yaml.safe_load(handle)
+    from .nights import run_longitude
     plot_coeffs(fit["bjd"][keep], fit["a"][keep], fit["b"][keep],
                 fit["power_star"], fit["power_earth"], chi2_null,
                 os.path.join(outdir, "coefficients_vs_time.pdf"),
-                err_a=sigma[keep][:, :n_star], err_b=sigma[keep][:, n_star:])
+                err_a=sigma[keep][:, :n_star], err_b=sigma[keep][:, n_star:],
+                longitude=run_longitude(config, cube))
     plot_variance(fit["power_star"], fit["power_earth"], chi2_null, chi2_best,
                   os.path.join(outdir, "variance.pdf"))
     write_variance_table(fit["power_star"], fit["power_earth"], chi2_null,
@@ -2984,8 +3086,20 @@ def main(argv=None):
     # loses the low bits of the very totals the fit is judged by.
     rows, columns = cube_shape(args.cube)
     spill = spill_dir(rows, columns, args.dtype, args.cube, args.outdir)
+    # THE CONFIGURATION'S WEIGHTS, the ones the refit of the correct stage
+    #   reads too (reconstruct.refit_weights), saved with the fit for every
+    #   later reader of the cube (fit_weight_settings)
+    weighting = weight_settings()
+    if args.config:
+        from .config import load_config
+        weighting = weight_settings(load_config(args.config))
+    log("weights: pixel SNR above %s, telluric ramp from %.2f"
+        % (weighting["min_pixel_snr"] if weighting["min_pixel_snr"] is not None
+           else "none (ln f above %s)" % weighting["ln_clip_low"],
+           weighting["ramp_zero"]))
     grid, data, w, meta = load_cube(args.cube, min_snr_frac=args.min_snr_frac,
-                                    dtype=np.dtype(args.dtype), spill=spill)
+                                    dtype=np.dtype(args.dtype), spill=spill,
+                                    **weighting)
     # THE CROSS-VALIDATION, BEFORE ANY MEAN. The nights held out lose their
     # weight here, so before the per-parity means, the mean star and the
     # first sweep: the basis must learn nothing from them, not even their
@@ -2995,7 +3109,8 @@ def main(argv=None):
     held = None
     if getattr(args, "holdout", None):
         from .diagnostics import holdout_rows
-        held = holdout_rows(np.asarray(meta["bjd"], dtype=float), args.holdout)
+        held = holdout_rows(np.asarray(meta["bjd"], dtype=float), args.holdout,
+                            night_longitude(args, need="twoframe.holdout"))
         w[held] = 0.0
         data[held] = 0.0
         log("HOLDOUT: %d of %d rows (the %s-ranked nights) held out of the fit;"
@@ -3629,7 +3744,7 @@ def main(argv=None):
             # the residual of the *full* model and can be quoted against chi2_raw.
             shift = ""
             if velocity_term:
-                v = shift_velocity(alpha[~rejected], dv) * 1000.0        # m/s
+                v = shift_velocity(-alpha[~rejected], dv) * 1000.0       # m/s
                 shift = "  shift %.1f m/s rms" % (
                     mad_to_sigma * np.median(np.abs(v - np.median(v))) if v.size else 0.0)
             # left/raw keeps a digit more than seems necessary: convergence is
@@ -3784,12 +3899,14 @@ def main(argv=None):
         # the shift the fit absorbed rather than let the observer block have.
         # In pixels because that is what the solve works in, and in m/s because
         # that is what it means, read back through the relativistic Doppler
-        # (grids.shift_velocity). Its error is the derivative there: dv km/s
-        # per pixel, to 1e-13 at these few pixels.
+        # (grids.shift_velocity). The star moved by -alpha samples
+        # (velocity_column), so a receding star is positive, as every velocity
+        # of LBL. Its error is the derivative there: dv km/s per pixel, to
+        # 1e-13 at these few pixels.
         table["alpha"] = alpha
-        table["vrad_fit"] = shift_velocity(alpha, dv) * 1000.0
+        table["vrad_fit"] = shift_velocity(-alpha, dv) * 1000.0
         table["evrad_fit"] = sig_vel * dv * 1000.0
-        v = shift_velocity(alpha[~rejected], dv) * 1000.0
+        v = shift_velocity(-alpha[~rejected], dv) * 1000.0
         log("  velocity absorbed by the shift term: %.1f m/s rms, median"
             " %+.1f, worst %+.1f"
             % (mad_to_sigma * np.median(np.abs(v - np.median(v))), np.median(v),
@@ -3817,6 +3934,12 @@ def main(argv=None):
     # reads to mask below correct.weight_floor
     clip_rows, clip_cols, clip_factor = _clip_triplet(last_clip)
     np.savez_compressed(npz_path, bjd=bjd, a=a, b=b, P=P, Q=Q, alpha=alpha,
+                        # the weights' settings, NaN for one not set
+                        **{name: np.nan if weighting[key] is None
+                           else float(weighting[key])
+                           for name, key in (("min_pixel_snr", "min_pixel_snr"),
+                                             ("ln_clip_low", "ln_clip_low"),
+                                             ("ramp_zero", "ramp_zero"))},
                         clip_rows=clip_rows, clip_cols=clip_cols,
                         clip_factor=clip_factor, clip_nsig=float(args.clip),
                         velocity_term=bool(velocity_term),
@@ -3869,7 +3992,8 @@ def main(argv=None):
     plot_coeffs(bjd[keep], a[keep], b[keep], power_star, power_earth, chi2_null,
                 os.path.join(args.outdir, "coefficients_vs_time.pdf"),
                 err_a=sig_scaled[keep][:, :n_star],
-                err_b=sig_scaled[keep][:, n_star:])
+                err_b=sig_scaled[keep][:, n_star:],
+                longitude=night_longitude(args))
     plot_variance(power_star, power_earth, chi2_null, chi2,
                   os.path.join(args.outdir, "variance.pdf"))
     write_variance_table(power_star, power_earth, chi2_null, chi2,

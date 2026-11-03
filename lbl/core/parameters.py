@@ -105,7 +105,7 @@ params.set(key='VERBOSE', value=2, source=__NAME__, options=[0, 1, 2],
            arg='--verbose', dtype=int)
 
 # Define whether to use tqdm (if verbose = 2)
-params.set(key='USE_TQDM', value=True, source=__NAME__, dtype=int,
+params.set(key='USE_TQDM', value=True, source=__NAME__, dtype=bool,
            desc='Whether to use tqdm module in loops (only for verbose=2)')
 
 # Define whether to add program id to the logging message
@@ -162,7 +162,7 @@ params.set(key='GENERIC_INSTRUMENT', value=None, source=__NAME__,
 # add instrument
 params.set(key='GENERIC_DATA_SOURCE', value=None, source=__NAME__,
            desc='The data source to use when using Generic Instrument',
-           options=base.INSTRUMENTS, dtype=str)
+           dtype=str)
 
 # add wave min
 params.set(key='GENERIC_WAVEMIN', value=None, source=__NAME__,
@@ -196,15 +196,15 @@ params.set(key='DATA_TYPE', value=None, source=__NAME__,
            arg='--data_type', not_none=True)
 
 # define the mask type (pos, neg, full)
-params.set(key='SCIENCE_MASK_TYPE', value='full',
+params.set(key='SCIENCE_MASK_TYPE', value='full', source=__NAME__,
            desc='the mask type (pos, neg, full)', dtype=str)
 
 # define the mask type (pos, neg, full)
-params.set(key='FP_MASK_TYPE', value='neg',
+params.set(key='FP_MASK_TYPE', value='neg', source=__NAME__,
            desc='the mask type (pos, neg, full)', dtype=str)
 
 # define the mask type (pos, neg, full)
-params.set(key='LFC_MASK_TYPE', value='neg',
+params.set(key='LFC_MASK_TYPE', value='neg', source=__NAME__,
            desc='the mask type (pos, neg, full)', dtype=str)
 
 # define the BERV of the object in m/s
@@ -353,7 +353,8 @@ params.set(key='COMPUTE_RV_N_ITERATIONS', value=20, source=__NAME__,
 
 # define the plot order for compute rv model plot
 params.set(key='COMPUTE_MODEL_PLOT_ORDERS', value=None, source=__NAME__,
-           desc='The plot orders for compute rv model plot', not_none=True)
+           desc='The plot order for the compute rv model plot: an integer '
+                'or a list of integers', not_none=True)
 
 # define the minimum line width (in pixels) to consider line valid
 params.set(key='COMPUTE_LINE_MIN_PIX_WIDTH', value=5, source=__NAME__,
@@ -429,11 +430,6 @@ params.set(key='RDB_SUFFIX', value='', source=__NAME__,
            desc='The suffix to give the rdb files',
            arg='--suffix_rdb', dtype=str)
 
-# define the plot order for the compute rv model plot
-params.set('COMPUTE_MODEL_PLOT_ORDERS', value=None, source=__NAME__,
-           desc='The plot order for the compute rv model plot'
-                'this can be an integer of a list of integers')
-
 # define the compil minimum wavelength allowed for lines [nm]
 params.set('COMPIL_WAVE_MIN', None, source=__NAME__,
            desc='The compil minimum wavelength allowed for lines [nm]',
@@ -453,9 +449,9 @@ params.set('COMPIL_MAX_PIXEL_WIDTH', None, source=__NAME__,
 params.set('COMPIL_CUT_PEARSONR', -1, source=__NAME__,
            desc='Max likelihood of correlation with BERV to use line')
 
-# define the CCF e-width to use for FP files
+# define the CCF e-width to use for FP files [km/s]
 params.set('COMPIL_FP_EWID', None, source=__NAME__,
-           desc='define the CCF e-width to use for FP files',
+           desc='define the CCF e-width to use for FP files [km/s]',
            not_none=True)
 
 # define whether to add the magic "binned wavelength" bands rv
@@ -604,6 +600,27 @@ params.set(key='STELLAR_MODEL_FILE', value=None, source=__NAME__,
            desc='Define the stellar model file name (using wget, with '
                 'appriopriate format cards)',
            dtype=str, not_none=True)
+
+# Define the mirror of the PHOENIX models, asked before STELLAR_WAVE_URL and
+#    STELLAR_MODEL_URL: the files of LBL's default grid (log g 4.5, Z 0,
+#    alpha 0, Teff 3000 to 6000 K), trimmed to 350-2550 nm and gzipped, under
+#    the same HiResFITS/ paths as on the original site. A file the mirror
+#    does not have is taken from the original site. None: no mirror
+params.set(key='STELLAR_MIRROR_URL',
+           value='https://raw.githubusercontent.com/eartigau/'
+                 'lbl-phoenix-mirror/main/',
+           source=__NAME__,
+           desc='the mirror of the PHOENIX models (trimmed, gzipped), asked '
+                'before the original site; None for no mirror',
+           dtype=str)
+
+# Define what the mirror's names have in place of '.fits': the trimmed
+#    files have their own names, so that a trimmed model is never read
+#    against an untrimmed wave file, or the other way around
+params.set(key='STELLAR_MIRROR_SUFFIX', value='_350-2550nm.fits.gz',
+           source=__NAME__,
+           desc="what the mirror's file names have in place of '.fits'",
+           dtype=str)
 
 # Define the object temperature (stellar model)
 params.set(key='OBJECT_TEFF', value=None, source=__NAME__,
@@ -953,7 +970,7 @@ params.set(key='KW_PDATE', value='LBLPDATE', source=__NAME__,
 
 # define the lbl instrument was used
 params.set(key='KW_INSTRUMENT', value='LBLINSTR', source=__NAME__,
-           desc='the LBL processed date',
+           desc='the LBL instrument used',
            comment='LBL instrument used')
 
 # define the lbl instrument mode that was used

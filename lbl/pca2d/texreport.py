@@ -145,12 +145,17 @@ def tex(text) -> str:
     error: a report with one odd glyph is still a report. Terminal colours
     and other control characters are dropped: a skipped figure's reason can
     come from a coloured log line, and its escape sequence stops pdflatex
-    ("Unicode character ^^[ (U+001B)").
+    ("Unicode character ^^[ (U+001B)"). A line break becomes a space, which
+    is what LaTeX makes of one anyway; but two of them are a new paragraph,
+    which stops pdflatex inside a macro or a table cell ("Paragraph ended
+    before \\@textcolor was complete"), and an error message can hold them:
+    SIMBAD's, when it cannot be reached, went into \\watch{...} of the
+    star's table and the report was not made.
     """
     out = []
     for ch in ANSI_ESCAPE.sub("", str(text)):
-        if ch in "\t\n":
-            out.append(" " if ch == "\t" else ch)
+        if ch in "\t\n\r":
+            out.append(" ")
         elif ord(ch) < 32 or 127 <= ord(ch) < 160:
             continue
         elif ch in _TEX:
@@ -390,8 +395,11 @@ def vtot_of(run):
     return bervbias.total_velocity(run["v"], run["berv"])
 
 
-def load(tree, name, label, comparison=None):
-    """One LBL object as the figures take it, or None when it has no rdb."""
+def load(tree, name, label, comparison=None, longitude=None):
+    """One LBL object as the figures take it, or None when it has no rdb.
+    `longitude` is the observatory's east longitude [deg], where its nights
+    are cut (local noon there), carried with the series for its nightly
+    statistics."""
     path = rdb_file(tree, name, comparison)
     if not os.path.exists(path):
         return None
@@ -404,7 +412,7 @@ def load(tree, name, label, comparison=None):
     berv = column(table, "BERV")
     snr_name, snr = snr_column(table)
     return {"label": label, "name": name, "path": path, "t": t, "v": v,
-            "e": e, "berv": berv,
+            "e": e, "berv": berv, "longitude": longitude,
             "vtot": (bervbias.total_velocity(v, berv)
                      if berv is not None else None),
             "snr": snr, "snr_name": snr_name,
@@ -483,9 +491,19 @@ def binned(x, y, width=2.0, least=3):
 FAP_LEVELS = (1e-2, 1e-3, 1e-4)
 
 
-def periodogram(t, y, e, pmin=1.1, samples=6000):
+#: frequencies per peak width (1/T) of a periodogram, as lbl.report.periodogram
+PER_PEAK = 10
+
+
+def periodogram(t, y, e, pmin=1.1, samples=None):
     """(periods, power, best period, its power, false-alarm probability,
     the powers of FAP_LEVELS).
+
+    The frequencies are PER_PEAK per peak width 1/T, T the time span, as in
+    lbl.report.periodogram, and never fewer than `samples` (6000 down to
+    1.1 d by default, more for a shorter pmin). A fixed number would put
+    fewer than one frequency per peak width beyond a span of 6600 d, and a
+    strong peak could fall between two of them.
 
     The false alarms are Baluev's (2008) approximation over the frequencies
     searched, astropy's default: the power a peak anywhere in them needs to
@@ -499,7 +517,11 @@ def periodogram(t, y, e, pmin=1.1, samples=6000):
     if baseline <= 2 * pmin or ok.sum() < 8:
         return None
     fmin, fmax = 1.0 / baseline, 1.0 / pmin
-    freq = np.linspace(fmin, fmax, samples)
+    if samples is None:
+        samples = int(6000 * max(1.0, 1.1 / pmin))
+    count = max(int(samples),
+                int(np.ceil(PER_PEAK * baseline * (fmax - fmin))) + 1)
+    freq = np.linspace(fmin, fmax, count)
     model = LombScargle(t[ok], y[ok], e[ok])
     power = model.power(freq)
     best = int(np.nanargmax(power))
@@ -545,10 +567,10 @@ def bias_row(fitted):
 def star_numbers(before, after, planets=(), seed=0):
     """Everything the summary table says about one star, both ways."""
     out = {"n": int(before["t"].size),
-           "nights": int(velocity_stats(after["t"], after["v"],
-                                        after["e"])["nights"])}
+           "nights": int(velocity_stats(after["t"], after["v"], after["e"],
+                                        after["longitude"])["nights"])}
     for key, run in (("before", before), ("after", after)):
-        s = velocity_stats(run["t"], run["v"], run["e"])
+        s = velocity_stats(run["t"], run["v"], run["e"], run["longitude"])
         row = {"rms": s["rms"], "robust": s["robust"],
                "nightly_rms": s["nightly_rms"],
                "median_error": s["median_error"]}
@@ -820,7 +842,7 @@ def figure_time(before, after, path):
     spreads = []
     for ax, run, colour in zip(axes, (before, after), (BEFORE, AFTER)):
         middle = np.median(run["v"])
-        nt = nightly(run["t"], run["v"], run["e"])
+        nt = nightly(run["t"], run["v"], run["e"], run["longitude"])
         # one exposure a night makes the nightly means the exposures again,
         # drawn over them: one layer then, not two that hide each other
         if nt.shape[1] < 0.8 * run["t"].size:
@@ -837,7 +859,7 @@ def figure_time(before, after, path):
         ax.plot(run["t"][order], line[order] - middle, color=INK, lw=1.0,
                 ls="--", zorder=4,
                 label="straight line, %+.2f m/s/yr" % slope)
-        s = velocity_stats(run["t"], run["v"], run["e"])
+        s = velocity_stats(run["t"], run["v"], run["e"], run["longitude"])
         ax.set_title("%s: rms %.2f m/s, nightly rms %.2f m/s, median error"
                      " %.2f m/s" % (run["label"], s["rms"], s["nightly_rms"],
                                     s["median_error"]),
@@ -1463,9 +1485,8 @@ def figure_phase(before, after, planets, path, most=4):
 def figure_periodograms(before, after, planets, path):
     lines = planet_lines(planets)
     # down to the shortest known period, which may be under a day (an
-    # ultra-short-period planet), with the grid made finer to match
+    # ultra-short-period planet); periodogram makes the grid finer to match
     pmin = min([1.1] + [0.8 * p for _l, p in lines])
-    samples = 6000 if pmin >= 1.1 else int(6000 * 1.1 / pmin)
     rows = [("velocity", "v", "e")]
     if before.get("d2v") is not None and after.get("d2v") is not None:
         rows.append(("d2v", "d2v", "sd2v"))
@@ -1482,8 +1503,7 @@ def figure_periodograms(before, after, planets, path):
             if e is None:
                 e = np.ones_like(y)
             keep = inliers(y) if value != "v" else np.isfinite(y)
-            found = periodogram(run["t"][keep], y[keep], e[keep],
-                                pmin=pmin, samples=samples)
+            found = periodogram(run["t"][keep], y[keep], e[keep], pmin=pmin)
             if not found:
                 continue
             drawn = True
@@ -2757,13 +2777,18 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
     # the template each star was measured against: the corrected object
     #   follows the star when it was its own, else keeps the other star's
     against = comparisons(config, stars)
+    # the nights of the velocity statistics, cut at local noon at the
+    #   instrument's observatory
+    from .nights import run_longitude
+    longitude = run_longitude(config, need="the report's nightly statistics")
     series = []
     for star in stars:
         before_name, after_name = object_names(config, star, tag)
         own = against[star] == star
         after_against = after_name if own else against[star]
-        before = load(tree, before_name, "delivered", against[star])
-        after = load(tree, after_name, "corrected", after_against)
+        before = load(tree, before_name, "delivered", against[star],
+                      longitude)
+        after = load(tree, after_name, "corrected", after_against, longitude)
         # the report opens on the velocity series, the corrected one when
         #   LBL has measured it
         if after is not None or before is not None:

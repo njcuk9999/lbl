@@ -231,10 +231,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     """
     # get parameters from inst
     force_airmass = inst.params['TELLUCLEAN_FORCE_AIRMASS']
-    kwidth = inst.params['TELLUCLEAN_KERNEL_WID']
-    ex_gau = inst.params['TELLUCLEAN_GAUSSIAN_SHAPE']
-    wave0 = inst.params['TELLUCLEAN_WAVE_LOWER']
-    wave1 = inst.params['TELLUCLEAN_WAVE_UPPER']
+    resolution = inst.params['APPROX_RESOLUTION']
     trans_threshold = inst.params['TELLUCLEAN_TRANSMISSION_THRESHOLD']
     # get the e2ds flux from e2ds parameters
     e2ds_flux = np.array(e2ds_params['flux'])
@@ -340,9 +337,6 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     wave_trans = np.array(wave_vector)
     if berv_trans:
         wave_trans = mp.doppler_shift(wave_trans, berv_trans)
-    # the absorption is not shifted in velocity: the model is evaluated in the
-    #   ground frame above, which is where the atmosphere is
-    dv_abso = 0.0
     # -------------------------------------------------------------------------
     # THE EXPONENTS, BY THE DERIVATIVE METHOD, FOR EVERY INSTRUMENT
     #
@@ -374,7 +368,7 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     try:
         expo_water, expo_others = tellu_derivative.fit_exponents(
             wave_trans, sp_for_fit, spl_water, spl_others, float(airmass),
-            resolution=inst.params['APPROX_RESOLUTION'],
+            resolution=resolution,
             free_dry=not force_airmass, noise=noise_for_fit)
     except Exception as exc:
         # nothing to fit on (no telluric window in this spectrum's range):
@@ -400,13 +394,6 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
                         'H2O {0:.4f}, dry {1:.4f} (airmass {2:.4f}), '
                         'template={3}'.format(expo_water, expo_others,
                                               float(airmass), template_flag))
-    # the transmission at these exponents, for the plot
-    trans = get_abso_sp(wave_trans, expo_others, expo_water,
-                        spl_others, spl_water, kwidth=kwidth, ex_gau=ex_gau,
-                        dv_abso=dv_abso, wave0=wave0, wave1=wave1)
-    # plot the corrected spectrum
-    plot.tellu_corr_plot(inst, wave_vector, sp_vector, trans,
-                         template_vector, template_flag, objname)
     # -------------------------------------------------------------------------
     # re-get wave grid for transmission (without trimming)
     #
@@ -419,11 +406,18 @@ def correct_tellu(inst: InstrumentsType, template_file: str,
     if berv_trans:
         wave_trans = mp.doppler_shift(wave_trans, berv_trans)
     # -------------------------------------------------------------------------
-    # get the final absorption spectrum to be used on the science data.
-    #    No trimming done on the wave grid
-    abso_e2ds = get_abso_sp(wave_trans, expo_others, expo_water,
-                            spl_others, spl_water, kwidth=kwidth, ex_gau=ex_gau,
-                            dv_abso=dv_abso, wave0=wave0, wave1=wave1)
+    # the absorption spectrum divided out of the science data, no trimming:
+    #   THE MODEL THE EXPONENTS WERE FITTED WITH (the Gaussian kernel at
+    #   APPROX_RESOLUTION, on the same grid points), over the whole range of
+    #   the wave map, so that every pixel of the spectrum has a transmission
+    abso_e2ds = tellu_derivative.transmission_map(
+        spl_water, spl_others, wave_trans, expo_water, expo_others,
+        resolution=resolution)
+    # the same on the trimmed vector, for the plot
+    trans = abso_e2ds.ravel()[keep]
+    # plot the corrected spectrum
+    plot.tellu_corr_plot(inst, wave_vector, sp_vector, trans,
+                         template_vector, template_flag, objname)
     # -------------------------------------------------------------------------
     # a transmission below exp(TELLUCLEAN_TRANSMISSION_THRESHOLD) (exp(-1),
     #     about 37%, so lines more than about 63% deep) is considered too

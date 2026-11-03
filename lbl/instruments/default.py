@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-from astropy.coordinates import EarthLocation
 
 from lbl.core import astro
 from lbl.core import base
@@ -39,6 +38,8 @@ Time = base.AstropyTime
 ParamDict = base_classes.ParamDict
 LblException = base_classes.LblException
 log = io.log
+# the source tags of values the user gave (see select.parse_args)
+USER_SOURCE_TAGS = ('[KWARGS]', '[CMD]', '[YAML]')
 
 
 # =============================================================================
@@ -91,13 +92,46 @@ class Instrument:
     def _not_implemented(method):
         """
         This class has methods that must be implemented in an Instrument
-        subclass - raise a NotImplemented exception
+        subclass - raise a NotImplementedError
 
         :param method: str, the method that needs to be implemented
         :return:
         """
         emsg = 'Must implement {0} in specific instrument class'
-        raise NotImplemented(emsg.format(method))
+        raise NotImplementedError(emsg.format(method))
+
+    @staticmethod
+    def to_mjd(time_value: Union[float, np.ndarray]
+               ) -> Union[float, np.ndarray]:
+        """
+        Bring a time in days to an MJD: a value above 2.4e6 is a Julian date
+        (a BJD for the classes whose only time key is a BJD), anything else
+        is already an MJD. The barycentric correction, at most 8.3 minutes,
+        is kept: this is for cutting nights and for plot dates.
+
+        :param time_value: float or np.ndarray, the time in days
+
+        :return: float or np.ndarray, the same time as an MJD
+        """
+        values = np.asarray(time_value, dtype=float)
+        return np.where(values > 2.4e6, values - 2400000.5, values)[()]
+
+    def user_set(self, key: str) -> bool:
+        """
+        Whether the user gave this parameter a value: select.parse_args marks
+        the source of a value from a wrap or a python call [KWARGS], from the
+        command line [CMD] and from a yaml file [YAML]
+
+        :param key: str, the key to check
+
+        :return: bool, True if the user set it (to something other than None)
+        """
+        if key not in self.params or self.params[key] is None:
+            return False
+        instance = self.params.instances.get(key.upper())
+        if instance is None or instance.source is None:
+            return False
+        return any(tag in str(instance.source) for tag in USER_SOURCE_TAGS)
 
     def param_set(self, key: str, value: Any, source: str = None) -> None:
         """
@@ -109,7 +143,7 @@ class Instrument:
         :return: None
         """
         # do not update parameters that the user has set themselves
-        if 'KWARGS' in self.params.sources():
+        if self.user_set(key):
             return
         # set the parameter
         self.params.set(key, value, source=source)
@@ -514,7 +548,7 @@ class Instrument:
         :return: None - updates OBJECT_COMPARISON if not set
         """
         # set function name
-        func_name = __NAME__ + '.Spirou._set_object_comparison()'
+        func_name = __NAME__ + '.Instrument._set_object_comparison()'
         # deal with no object
         if self.params['OBJECT_SCIENCE'] is None:
             raise LblException('OBJECT_SCIENCE name must be defined')
@@ -845,8 +879,14 @@ class Instrument:
         for it in range(len(masks)):
             # get mask
             mask = masks[it]
-            # get filename
-            new_mask_file = mask_file.replace(mask_type, extensions[it])
+            # get filename: the mask type is replaced in the file name only
+            #   (its last occurrence, the type the name ends with), so that
+            #   a folder or an object whose name contains it stays as it is
+            mask_dir, mask_name = os.path.split(mask_file)
+            head, sep, tail = mask_name.rpartition(mask_type)
+            if sep:
+                mask_name = head + extensions[it] + tail
+            new_mask_file = os.path.join(mask_dir, mask_name)
             # set up primary HDU
             header = fits.Header()
             # copy header from reference header
@@ -1085,6 +1125,27 @@ class Instrument:
         # return data and header
         return sci_data, sci_hdr
 
+    def science_flux_column(self) -> Optional[Tuple[str, str]]:
+        """
+        Where a science file holds its flux when the flux is a COLUMN OF A
+        TABLE rather than an image: (extension name, column name).
+
+        What a program needs to write a science file back with its flux
+        changed (the PCA2D correction, lbl.pca2d.reconstruct): a copy of the
+        file, the same in every other respect, that load_science_file reads
+        back. The flux load_science_file returns must be proportional to
+        that column, sample by sample (EXPRES: the column times the blaze,
+        another column), so that a flux multiplied by some factor is the
+        column multiplied by the same factor, and everything else in the
+        file stays as it is.
+
+        None (the default): the flux is an image, the first extension that
+        holds data, as io.load_fits reads it with no extension named.
+
+        :return: tuple (extension, column), or None for an image
+        """
+        return None
+
     def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
         """
         The BERV the TELLURIC TRANSMISSION must be shifted by, in m/s.
@@ -1244,7 +1305,7 @@ class Instrument:
                  image already blaze corrected)
         """
         _ = sci_image, sci_hdr, calib_directory, normalize
-        raise self._not_implemented('science_files')
+        raise self._not_implemented('load_blaze_from_science')
 
     def no_blaze_corr(self, sci_image: np.ndarray, sci_wave: np.ndarray):
         """
@@ -1370,7 +1431,7 @@ class Instrument:
         :return: dict, a dictionary table of the science parameters
         """
         _ = filename, tdict, sci_hdr, berv
-        raise self._not_implemented('get_berv')
+        raise self._not_implemented('populate_sci_table')
 
     def sort_files_by_hkey(self, science_files: List[str],
                            hkey='KW_MID_EXP_TIME') -> List[str]:
@@ -1440,8 +1501,8 @@ class Instrument:
             # -----------------------------------------------------------------
             # must check time frame (if present) for FP
             cond2, cond3 = True, True
-            # get mjdmid
-            mjdmid = sci_hdr[self.params['KW_MID_EXP_TIME']]
+            # get mjdmid: the limits are MJDs, the key may hold a BJD
+            mjdmid = self.to_mjd(sci_hdr[self.params['KW_MID_EXP_TIME']])
             # check start time for FP calibration
             if not mcond2:
                 cond2 = mjdmid >= start
@@ -1460,9 +1521,9 @@ class Instrument:
                     'files provide have:')
             # add info about the range of files (if FP files)
             if not mcond2:
-                emsg += '\n\tMJDMID>{1}'
+                emsg += '\n\tMJDMID>{0}'
             if not mcond3:
-                emsg += '\n\tMJDMID<{2}'
+                emsg += '\n\tMJDMID<{1}'
             # tell the user what they can do to fix this - we don't want emails
             emsg += ('\nPlease define a template and do not run the '
                      'template code or add some valid files')
@@ -1471,8 +1532,8 @@ class Instrument:
             # raise exception - we need some files to make a template!
             raise base_classes.LblException(emsg.format(*eargs))
         else:
-            msg = ('Object is classified as science. Found {1} files'
-                   ' ignoring {2} other files')
+            msg = ('Object is classified as science. Found {0} files'
+                   ' ignoring {1} other files')
             margs = [len(keep_files),
                      len(science_files) - len(keep_files)]
             log.info(msg.format(*margs))
@@ -1600,6 +1661,51 @@ class Instrument:
         # finally return the updated binned dictionary
         return binned
 
+    def detector_npixel(self) -> int:
+        """
+        The number of pixels along an order: the class's npixel where it is
+        known, else the width of the sample wave grid in the calib directory
+        (written from a real science file by get_sample_wave_grid), else 4096
+
+        :return: int, the number of pixels along an order
+        """
+        if self.npixel is not None:
+            return int(self.npixel)
+        data_dir = self.params['DATA_DIR'] if 'DATA_DIR' in self.params else None
+        grid_file = self.params['SAMPLE_WAVE_GRID_FILE']
+        if data_dir not in [None, 'None', ''] and grid_file not in [None, '']:
+            path = os.path.join(data_dir, self.params['CALIB_SUBDIR'],
+                                grid_file)
+            if os.path.exists(path):
+                with fits.open(path) as hdulist:
+                    for hdu in hdulist:
+                        if hdu.header.get('NAXIS', 0) == 2:
+                            # keep it: compil calls this once per file
+                            self.npixel = int(hdu.header['NAXIS1'])
+                            return self.npixel
+        return 4096
+
+    def pixel_regions(self) -> Tuple[List[str], List[float], List[float]]:
+        """
+        The cross order regions of get_binned_parameters: '' (every line, with
+        no pixel limit) and the two halves of the detector. On a 4096-pixel
+        detector the halves keep the names they always had (_0-2044 and
+        _2044-4088, rdb columns); otherwise their names give their limits
+
+        :return: tuple, 1. the region names (suffices), 2. the lower and
+                 3. the upper x pixel of each region
+        """
+        npixel = self.detector_npixel()
+        half = npixel // 2
+        if npixel == 4096:
+            region_names = ['', '_0-2044', '_2044-4088']
+        else:
+            region_names = ['', '_0-{0}'.format(half),
+                            '_{0}-{1}'.format(half, npixel)]
+        region_low = [-np.inf, 0, half]
+        region_high = [np.inf, half, npixel]
+        return region_names, region_low, region_high
+
     def get_epoch_groups(self, rdb_table: Table
                          ) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -1621,19 +1727,23 @@ class Instrument:
         if earth_location is None:
             emsg = 'EARTH_LOCATION is not defined in the instrument '
             raise base_classes.LblException(emsg)
-        # try to get location of site from astropy
+        # the site's longitude, from astropy, as everywhere in LBL that
+        #   cuts nights (astro.observatory_longitude): an epoch is a night,
+        #   from local mean noon to local mean noon, the boundaries of
+        #   astro.night_number
         try:
-            loc = EarthLocation.of_site(earth_location)
+            longitude = astro.observatory_longitude(self.params)
         except Exception as e:
             emsg = ('Problem with EARTH_LOCATION {0} in '
                     'astropy.coordinates.EarthLocation\n\tError {1}: {2}')
             eargs = [earth_location, type(e), str(e)]
             raise base_classes.LblException(emsg.format(*eargs))
-        # get times from rdb table and force to floats
-        times = np.array(rdb_table[kw_mjd], dtype=float)
+        # get times from rdb table and force to floats: bin_by_time counts
+        #   days from UT midnight, so a BJD must first become an MJD or the
+        #   nights are cut at local midnight rather than at local noon
+        times = self.to_mjd(np.array(rdb_table[kw_mjd], dtype=float))
         # get local time at midnight
-        epoch_values = mp.bin_by_time(loc.lon.value, times,
-                                      day_frac=0)
+        epoch_values = mp.bin_by_time(longitude, times, day_frac=0)
         # get the unique epoch groups
         epoch_groups = np.unique(epoch_values)
         # return the epoch groupings and epoch values

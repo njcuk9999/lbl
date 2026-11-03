@@ -35,6 +35,22 @@ PREAMBLE = r"""\documentclass[a4paper,11pt]{article}
 """
 
 
+def _longitude(instrument, data_source, earth_location):
+    """The observatory's east longitude [deg], where the summary's nights
+    are cut (local noon there), or None, said in the log, when it is not
+    known: the summary then counts no night."""
+    from lbl.core import astro
+    try:
+        if earth_location:
+            return astro.site_longitude(earth_location)
+        return astro.observatory_longitude(instrument, data_source)
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('the report counts no night: the observatory, where '
+                    'nights are cut at local noon, is not known ({0})'
+                    ''.format(exc))
+        return None
+
+
 def _escape(text):
     """Make a string safe for LaTeX. Object names carry underscores."""
     out = str(text)
@@ -114,7 +130,8 @@ def _planet_section(planets):
 
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                 known_periods=None, template_file=None, ephemerides_of=None,
-                star=None):
+                star=None, instrument=None, data_source=None,
+                earth_location=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
     :param data_dir: str, the run's DATA_DIR
@@ -133,6 +150,13 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     :param star: str, the science object: with SIMBAD's systemic velocity
                  of it, the velocity series is coloured by the star's
                  velocity in the telluric frame rather than by the BERV
+    :param instrument: str, LBL's name of the instrument, and data_source
+                       its data source: the telluric pages read the spectra
+                       by its class (without it, as ESO S2D files), and the
+                       nights are cut at local noon at its observatory
+    :param earth_location: str, the observatory as astropy names it, for an
+                           instrument whose site is the wrap's (Generic);
+                           otherwise the instrument's class gives it
     """
     try:
         import matplotlib
@@ -268,15 +292,15 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                                                              title)))
     if series.has_telluric(table) and science_dir and tc_dir:
         wanted.append(('Telluric correction, water column',
-                       lambda: figures.page_telluric(plt, table, title,
-                                                     science_dir, tc_dir,
-                                                     'water', spl_water,
-                                                     spl_dry)))
+                       lambda: figures.page_telluric(
+                           plt, table, title, science_dir, tc_dir, 'water',
+                           spl_water, spl_dry, instrument=instrument,
+                           data_source=data_source)))
         wanted.append(('Telluric correction, dry column',
-                       lambda: figures.page_telluric(plt, table, title,
-                                                     science_dir, tc_dir,
-                                                     'dry', spl_water,
-                                                     spl_dry)))
+                       lambda: figures.page_telluric(
+                           plt, table, title, science_dir, tc_dir, 'dry',
+                           spl_water, spl_dry, instrument=instrument,
+                           data_source=data_source)))
 
     work = tempfile.mkdtemp(prefix='lbl_report_')
     try:
@@ -296,7 +320,8 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
             fig.savefig(path, bbox_inches='tight')
             plt.close(fig)
             drawn.append((name, path))
-        rows = list(stats.summarise(table))
+        rows = list(stats.summarise(table, _longitude(
+            instrument, data_source, earth_location)))
         iterations = series.column(table, figures.ITERATIONS)
         if iterations is not None and np.isfinite(iterations).any():
             iterations = iterations[np.isfinite(iterations)]
@@ -428,12 +453,28 @@ def _zero_point_example(table, data_dir, science_dir):
     return None
 
 
+def _tapas_file(data_dir):
+    """The TAPAS file of this DATA_DIR, where the rest of LBL keeps it
+    (tellu_clean.get_tapas_lbl): its copy in other/, else
+    models/tellurics/ (io.model_path); None when neither is there."""
+    from lbl.core import io as lbl_io
+    from lbl.core.parameters import params
+    name = params['TELLUCLEAN_TAPAS_FILE']
+    copied = os.path.join(data_dir, 'other', name)
+    if os.path.exists(copied):
+        return copied
+    models = os.path.join(data_dir, 'models')
+    if not os.path.isdir(models):
+        return None
+    path = lbl_io.model_path(models, 'tellurics', name)
+    return path if os.path.exists(path) else None
+
+
 def _zero_point_figure(plt, path, data_dir, title):
     """The telluric fit of one exposure (the instrument's own figure)"""
     from lbl.instruments import espadons
-    return espadons.telluric_figure(
-        plt, path, tapas_file=os.path.join(data_dir, 'models',
-                                           'tapas_lbl.fits'), title=title)
+    return espadons.telluric_figure(plt, path, tapas_file=_tapas_file(data_dir),
+                                    title=title)
 
 
 def _activity_labels():
@@ -454,8 +495,8 @@ def _tapas(data_dir):
     without them falls back to the HARPS values and says so in nothing,
     because the window is then simply the usual one.
     """
-    path = os.path.join(data_dir, 'other', 'tapas_lbl.fits')
-    if not os.path.exists(path):
+    path = _tapas_file(data_dir)
+    if path is None:
         return None, None
     try:
         import numpy as np
