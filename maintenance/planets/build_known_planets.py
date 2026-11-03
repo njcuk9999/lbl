@@ -7,6 +7,15 @@ of confirmed planets whose K the report fits.
 
     python maintenance/planets/build_known_planets.py
 
+CONFIRMED PLANETS ONLY. A planet of exoplanet.eu is used only if its status
+is confirmed and it was published in a refereed paper; a planet whose
+confirmation the NASA Exoplanet Archive flags as questioned in the
+literature (pl_controv_flag) is left out, whatever exoplanet.eu says; and a
+value of the NASA archive is used only from a paper that published the
+planet as confirmed (soltype 'Published Confirmed'), never from the Kepler
+and TESS project tables. The archive's planetary systems tables (ps,
+pscomppars) hold confirmed planets only.
+
 Three sources, read when it runs (network needed):
 
     exoplanet.eu       the planets (confirmed, published in a refereed
@@ -470,7 +479,7 @@ def build(path: str = PUBLISHED):
         NASA_TAP + '?' + urllib.parse.urlencode(dict(
             query='select {0} from ps where default_flag = 1 and {1}'.format(
                 NASA_COLUMNS, NASA_PLANETS), format='csv'))))))
-    # a default solution from a survey's project tables identifies
+    # a default solution from the Kepler or TESS project tables identifies
     #   the planet (its names, its position), but none of its values is used
     for row in nasa:
         if row['soltype'] != NASA_SOLTYPE:
