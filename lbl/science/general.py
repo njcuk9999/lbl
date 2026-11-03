@@ -1605,17 +1605,22 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # ---------------------------------------------------------------------
         # if we are not using a noise model - estimate the noise
         if not use_noise_model:
-
-            rms = estimate_noise_model(sci_data, wavegrid, model,
+            # the noise and the sigma clip of this pass, from the science
+            #   data as read (sci_data0) against the current model: a pixel
+            #   clipped while the model was still away from the spectrum (the
+            #   flanks of deep lines, for a start off in velocity) comes back
+            #   once the model has reached it
+            rms = estimate_noise_model(sci_data0, wavegrid, model,
                                        noise_sampling_width,
                                        npoints_orders=noise_npoints,
                                        nstep=inst.params['NOISE_SAMPLING_NSTEP'])
             # work out the number of sigma away from the model
-            nsig = (sci_data - model) / rms
+            nsig = (sci_data0 - model) / rms
             # mask for nsigma
             with warnings.catch_warnings(record=True) as _:
                 sigmask = np.abs(nsig) > rms_sigclip_thres
-            # apply sigma clip to the science data
+            # the science data of this pass: clipped from the original
+            sci_data = np.array(sci_data0)
             sci_data[sigmask] = np.nan
         else:
             for order_num in range(sci_data.shape[0]):
