@@ -677,7 +677,7 @@ def run_template(inst, objname: str, objkind: str):
         rms_odd[low_snr_odd] = np.nan
         low_snr_even = snr_even < snr_threshold
         p50_even[low_snr_even] = np.nan
-        rms_odd[low_snr_even] = np.nan
+        rms_even[low_snr_even] = np.nan
     # -------------------------------------------------------------------------
     # other parameters for the header
     nfiles = len(science_files)
