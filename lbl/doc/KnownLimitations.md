@@ -30,7 +30,8 @@ named.
   `lbl/pca2d/nominal.yaml` blanks about 4% of the flux, including at
   490-560 nm where there are no tellurics. The errors grow by about 35%.
 - **The O2 B band is over-corrected on delivered spectra.** Between deep
-  line pairs the flux is multiplied by up to 1.67 (near 689.02 nm). Seven
+  line pairs the flux is multiplied by up to about 1.7 (1.67 and 1.76 in
+  two measurements, near 689.02 nm). Seven
   components do not fix it; running PCA2D after LBL's telluric cleaning
   does.
 
