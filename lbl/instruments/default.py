@@ -845,8 +845,14 @@ class Instrument:
         for it in range(len(masks)):
             # get mask
             mask = masks[it]
-            # get filename
-            new_mask_file = mask_file.replace(mask_type, extensions[it])
+            # get filename: the mask type is replaced in the file name only
+            #   (its last occurrence, the type the name ends with), so that
+            #   a folder or an object whose name contains it stays as it is
+            mask_dir, mask_name = os.path.split(mask_file)
+            head, sep, tail = mask_name.rpartition(mask_type)
+            if sep:
+                mask_name = head + extensions[it] + tail
+            new_mask_file = os.path.join(mask_dir, mask_name)
             # set up primary HDU
             header = fits.Header()
             # copy header from reference header

@@ -75,6 +75,65 @@ def berv_bins(berv: np.ndarray, nbin: int) -> np.ndarray:
     return np.array(nbin * (rank / len(berv)), dtype=int)
 
 
+def lowpass_points(hp_width_kms: float, grid_step_ms: float) -> int:
+    """
+    The width of a low pass filter in points of a grid uniform in velocity
+
+    :param hp_width_kms: float, the width in km/s (HP_WIDTH)
+    :param grid_step_ms: float, the step of the grid in m/s
+
+    :return: int, the width in points of the grid
+    """
+    return int(np.round(float(hp_width_kms) * 1000 / float(grid_step_ms)))
+
+
+def file_level(flux: np.ndarray, weight: np.ndarray) -> float:
+    """
+    The flux level of one file's s1d: its median flux per unit weight (1 if
+    it has no valid point or a level that is not positive)
+
+    :param flux: np.ndarray, the s1d flux (NaN where the file has no data)
+    :param weight: np.ndarray, the s1d weight
+
+    :return: float, the level
+    """
+    good = np.isfinite(flux) & np.isfinite(weight) & (weight > 0)
+    if not np.any(good):
+        return 1.0
+    level = float(np.median(flux[good] / weight[good]))
+    if not np.isfinite(level) or level <= 0:
+        return 1.0
+    return level
+
+
+def add_to_bin(flux_bin: np.ndarray, weight_bin: np.ndarray,
+               norm_bin: np.ndarray, flux: np.ndarray, weight: np.ndarray,
+               level: float):
+    """
+    Add one file's s1d to its bin (in place). A point the file does not have
+    is left out for this file only: neither its flux nor its weight is
+    added there, and the other files of the bin still make that point.
+
+    The bin is flux_bin / norm_bin, the mean of flux / (weight * level) over
+    the files that have the point, weighted by weight * level. The level
+    (file_level) is what makes it a mean: with weight alone, a point that
+    only some files have would move to their flux level and leave a step
+    in the bin where a brighter or fainter file is missing. weight_bin is the
+    sum of the weights, for the threshold on the weights.
+
+    :param flux_bin: np.ndarray, the bin's summed flux
+    :param weight_bin: np.ndarray, the bin's summed weight
+    :param norm_bin: np.ndarray, the bin's summed weight times level
+    :param flux: np.ndarray, the file's s1d flux (NaN where it has no data)
+    :param weight: np.ndarray, the file's s1d weight
+    :param level: float, the file's flux level (file_level)
+    """
+    valid = np.isfinite(flux) & np.isfinite(weight)
+    flux_bin[valid] += flux[valid]
+    weight_bin[valid] += weight[valid]
+    norm_bin[valid] += weight[valid] * level
+
+
 def main(**kwargs):
     """
     Wrapper around __main__ recipe code (deals with errors and loads instrument
@@ -200,8 +259,6 @@ def run_template(inst, objname: str, objkind: str):
     inst.params['OBJECT_SCIENCE'] = str(objname)
     # check data type
     general.check_data_type(inst.params['DATA_TYPE'])
-    # get the pixel hp_width [needs to be in m/s]
-    hp_width = float(inst.params['HP_WIDTH']) * 1000
     # -------------------------------------------------------------------------
     # Step 1: Set up data directory
     # -------------------------------------------------------------------------
@@ -266,6 +323,9 @@ def run_template(inst, objname: str, objkind: str):
     # grid scale for the template
     wavegrid = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
                                       dv_grid=grid_step_magic)
+    # the width of the low pass filters, HP_WIDTH [km/s] in points of this
+    #   grid, the one they are applied on
+    hp_width = lowpass_points(inst.params['HP_WIDTH'], grid_step_magic)
     # -------------------------------------------------------------------------
     # Step 5: Loop around each file and load into cube
     # -------------------------------------------------------------------------
@@ -363,6 +423,11 @@ def run_template(inst, objname: str, objkind: str):
         # same odd/even with the weights
         odd_weight_cube = np.zeros([len(wavegrid), nbin])
         even_weight_cube = np.zeros([len(wavegrid), nbin])
+        # the weights times each file's flux level, that the fluxes are
+        #   divided by (add_to_bin)
+        norm_cube = np.zeros([len(wavegrid), nbin])
+        odd_norm_cube = np.zeros([len(wavegrid), nbin])
+        even_norm_cube = np.zeros([len(wavegrid), nbin])
 
         # print iteration loop
         msg = 'Iteration {0} of {1}'
@@ -492,53 +557,46 @@ def run_template(inst, objname: str, objkind: str):
             s1d_flux_odd, s1d_weight_odd = s1d_all[2], s1d_all[3]
             s1d_flux_even, s1d_weight_even = s1d_all[4], s1d_all[5]
 
-            # push into arrays
-            flux_cube[:, ibin[it]] += s1d_flux
-            weight_cube[:, ibin[it]] += s1d_weight
-            # push into arrays (left)
-            odd_cube[:, ibin[it]] += s1d_flux_odd
-            odd_weight_cube[:, ibin[it]] += s1d_weight_odd
-            # push into arrays (right)
-            even_cube[:, ibin[it]] += s1d_flux_even
-            even_weight_cube[:, ibin[it]] += s1d_weight_even
+            # push into arrays: a point this file does not have (NaN) is
+            #   left out of its bin for this file only (add_to_bin), all
+            #   orders, odd orders and even orders with the level of the
+            #   file's s1d of all orders
+            level = file_level(s1d_flux, s1d_weight)
+            add_to_bin(flux_cube[:, ibin[it]], weight_cube[:, ibin[it]],
+                       norm_cube[:, ibin[it]], s1d_flux, s1d_weight, level)
+            add_to_bin(odd_cube[:, ibin[it]], odd_weight_cube[:, ibin[it]],
+                       odd_norm_cube[:, ibin[it]], s1d_flux_odd,
+                       s1d_weight_odd, level)
+            add_to_bin(even_cube[:, ibin[it]], even_weight_cube[:, ibin[it]],
+                       even_norm_cube[:, ibin[it]], s1d_flux_even,
+                       s1d_weight_even, level)
         # the last file's lines stay
         log.transient(start=False)
 
         # -------------------------------------------------------------------------
         # Step 6. Creation of the template
         # -------------------------------------------------------------------------
-        # points are not valid where weight is zero or flux_cube is exactly zero
-        bad_domain = (weight_cube == 0) | (flux_cube == 0)
-        # set the bad fluxes to NaN
-        flux_cube[bad_domain] = np.nan
-        # set the weighting of bad pixels to 1
-        weight_cube[bad_domain] = 1
-        # same for left
-        bad_domain = (odd_weight_cube == 0) | (odd_cube == 0)
-        odd_cube[bad_domain] = np.nan
-        odd_weight_cube[bad_domain] = 1
-        # same for right
-        bad_domain = (even_weight_cube == 0) | (even_cube == 0)
-        even_cube[bad_domain] = np.nan
-        even_weight_cube[bad_domain] = 1
-        # ---------------------------------------------------------------------
         # get bad weight threshold from params
         min_weight = inst.params['TEMPLATE_WEIGHT_MIN']
-        # bad weights (below 0.1) are set to 1
-        weight_cube[weight_cube < min_weight] = np.nan
-        odd_weight_cube[odd_weight_cube < min_weight] = np.nan
-        even_weight_cube[even_weight_cube < min_weight] = np.nan
+        cubes = ((flux_cube, weight_cube, norm_cube),
+                 (odd_cube, odd_weight_cube, odd_norm_cube),
+                 (even_cube, even_weight_cube, even_norm_cube))
+        for cube, wcube, ncube in cubes:
+            # points are not valid where no file of the bin has them (weight
+            #   zero), where the flux is exactly zero, or where the summed
+            #   weight is under TEMPLATE_WEIGHT_MIN
+            bad_domain = (wcube == 0) | (cube == 0) | (wcube < min_weight)
+            cube[bad_domain] = np.nan
+            ncube[bad_domain] = 1
         # ---------------------------------------------------------------------
         # print progress
         log.general('Calculating template')
-        # divide by the weights (to correct for overlapping orders)
-        flux_cube = flux_cube / weight_cube
-        # same for left
-        with warnings.catch_warnings(record=True) as _:
-            odd_cube = odd_cube / odd_weight_cube
-        # same for right
-        with warnings.catch_warnings(record=True) as _:
-            even_cube = even_cube / even_weight_cube
+        # divide by the weights times the files' levels: the weighted mean of
+        #   the files of each bin that have the point (add_to_bin), which also
+        #   corrects for overlapping orders
+        flux_cube = flux_cube / norm_cube
+        odd_cube = odd_cube / odd_norm_cube
+        even_cube = even_cube / even_norm_cube
 
         # normalize each slice of the cube by its median
         for it in tqdm(range(flux_cube.shape[1])):
@@ -549,12 +607,6 @@ def run_template(inst, objname: str, objkind: str):
 
         # copy
         flux_cube0 = np.array(flux_cube)
-        # get the pixel hp_width [needs to be in m/s]
-        grid_step_original = general.get_velocity_step(refwave, rounding=False)
-
-        # recalculate the hp_width
-        hp_width = int(np.round(inst.params['HP_WIDTH'] * 1000 /
-                                grid_step_original))
         # -------------------------------------------------------------------------
         # applying low pass filter
         log.general('\tApplying low pass filter to cube')
@@ -677,7 +729,7 @@ def run_template(inst, objname: str, objkind: str):
         rms_odd[low_snr_odd] = np.nan
         low_snr_even = snr_even < snr_threshold
         p50_even[low_snr_even] = np.nan
-        rms_odd[low_snr_even] = np.nan
+        rms_even[low_snr_even] = np.nan
     # -------------------------------------------------------------------------
     # other parameters for the header
     nfiles = len(science_files)
