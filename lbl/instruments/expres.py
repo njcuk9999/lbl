@@ -488,6 +488,19 @@ class Expres(Instrument):
         # return data and header
         return sci_data, sci_hdr
 
+    def science_flux_column(self) -> Tuple[str, str]:
+        """
+        Where the flux is in a science file: the 'spectrum' column of the
+        optimal extraction, which load_science_file multiplies by the
+        'blaze' column (and blanks outside Excalibur's range). A flux
+        multiplied by some factor is that column multiplied by the same
+        factor, which is how a corrected copy of the file is written
+        (PCA2D)
+
+        :return: tuple, (extension name, column name)
+        """
+        return 'optimal', 'spectrum'
+
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
         Get the systemic velocity in m/s of the mask

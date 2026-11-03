@@ -1126,6 +1126,27 @@ class Instrument:
         # return data and header
         return sci_data, sci_hdr
 
+    def science_flux_column(self) -> Optional[Tuple[str, str]]:
+        """
+        Where a science file holds its flux when the flux is a COLUMN OF A
+        TABLE rather than an image: (extension name, column name).
+
+        What a program needs to write a science file back with its flux
+        changed (the PCA2D correction, lbl.pca2d.reconstruct): a copy of the
+        file, the same in every other respect, that load_science_file reads
+        back. The flux load_science_file returns must be proportional to
+        that column, sample by sample (EXPRES: the column times the blaze,
+        another column), so that a flux multiplied by some factor is the
+        column multiplied by the same factor, and everything else in the
+        file stays as it is.
+
+        None (the default): the flux is an image, the first extension that
+        holds data, as io.load_fits reads it with no extension named.
+
+        :return: tuple (extension, column), or None for an image
+        """
+        return None
+
     def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
         """
         The BERV the TELLURIC TRANSMISSION must be shifted by, in m/s.
