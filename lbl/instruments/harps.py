@@ -959,12 +959,7 @@ class Harps_ORIG(Harps):
             sci_image, sci_hdr = self.load_science_file(science_file)
             # get wave solution for reference file
             sci_wave = self.get_wave_solution(science_file, sci_image, sci_hdr)
-            # the blaze is not expressed as a flux density but the science spectrum
-            # is. We match the two
-            gradwave = np.gradient(sci_wave, axis=1)
-            for order_num in range(blaze.shape[0]):
-                gradwave[order_num] /= np.nanmedian(gradwave[order_num])
-            blaze = blaze * gradwave
+            # an e2ds and its blaze are both per pixel: the blaze is used as it is
             # deal with normalizing per order
             if normalize:
                 # get the blaze parameters (may be instrument specific)
@@ -1009,12 +1004,7 @@ class Harps_ORIG(Harps):
         blaze = io.load_fits(abspath, kind='blaze fits file')
         # get wave solution for reference file
         sci_wave = self.get_wave_solution(science_file, sci_image, sci_hdr)
-        # the blaze is not expressed as a flux density but the science spectrum
-        # is. We match the two
-        gradwave = np.gradient(sci_wave, axis=1)
-        for order_num in range(blaze.shape[0]):
-            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
-        blaze = blaze * gradwave
+        # an e2ds and its blaze are both per pixel: the blaze is used as it is
         # deal with normalizing per order
         if normalize:
             # get the blaze parameters (may be instrument specific)
