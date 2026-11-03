@@ -862,18 +862,23 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
     # next. The extension table knows only APERO's products, so for the
     # instruments read by the bridge it is the bridge that answers, and the
     # grid comes from LBL's class rather than from an extension whose name
-    # does not exist here.
+    # does not exist here. A flux held in a table column (EXPRES) is
+    # written back into that column, the rest of the table untouched
+    # (_readers.flux_place, _readers.scale_flux).
     bridged = config is not None and not _readers.reads_natively(config)
     if bridged:
+        # THE FLUX AND THE WAVELENGTHS AS LBL'S CLASS READS THEM, in the frame
+        # the fit was made in (input.to_observer), and the place of that flux
+        # in the file, which the class names when it is a table column
         payload = _readers.read_any(path, config)
-        e_flux = payload["meta"].get("flux_extension")
-        if e_flux is None:
-            raise SystemExit(
-                "%s: cannot find the flux extension, so nothing is written"
-                " rather than writing in the wrong place"
-                % os.path.basename(path))
-        flux = np.asarray(out[e_flux].data, dtype=np.float64)
+        flux = np.atleast_2d(np.asarray(payload["flux"], dtype=np.float64))
         wave = np.atleast_2d(np.asarray(payload["wave"], dtype=np.float64))
+        place = _readers.flux_place(_readers.profile_of(config), path, flux)
+        if place is None:
+            raise SystemExit(
+                "%s: cannot find where the flux is in the file, so nothing is"
+                " written rather than writing in the wrong place"
+                % os.path.basename(path))
     else:
         # the same extension table the reader uses; a file that holds both a
         # fibre-combined (AB) flux and a single-fibre (A) one must have the
@@ -885,27 +890,39 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
     touched = 0
     blanked = 0
     n_clipped = 0
+    # WHAT THE FLUX IS MULTIPLIED BY, sample by sample: exp(-model) where the
+    # model applies, 1 where it has nothing to say, NaN where the sample is
+    # blanked. A factor rather than the corrected flux, because what a file
+    # holds is not always the flux LBL reads but is proportional to it
+    # (_readers.scale_flux)
+    factor = np.ones_like(flux)
     for order in range(n_orders):
         got = order_correction(model, correction, j, order, wave[order])
         if got is None:
             continue
         values, live = got
-        flux[order] = np.where(live, flux[order] * np.exp(-values), flux[order])
+        factor[order] = np.where(live, np.exp(-values), 1.0)
         if alive is not None:
             # NaN wherever the fit gave the sample no weight: exactly the
             # samples panel 3 of the sequence figure hides. The model there was
             # constrained by nothing, and a flux corrected by it is not one.
             bad = ~weighted_on_pixels(alive[order % 2], wave[order], model["grid"])
             blanked += int((bad & np.isfinite(flux[order])).sum())
-            flux[order][bad] = np.nan
+            factor[order][bad] = np.nan
         if clipped is not None:
             # NaN wherever the residual, panel 5, put a grid sample beside the
             # pixel beyond the clip: the model explains the rest of the order
             # and not that, whatever it is
             cut = ~weighted_on_pixels(~clipped[order % 2], wave[order], model["grid"])
-            n_clipped += int((cut & np.isfinite(flux[order])).sum())
-            flux[order][cut] = np.nan
+            n_clipped += int((cut & np.isfinite(flux[order])
+                              & np.isfinite(factor[order])).sum())
+            factor[order][cut] = np.nan
         touched += int(live.sum())
+    if bridged:
+        # a sample LBL's class does not read (NaN in its flux: outside
+        # Excalibur's range for EXPRES) is left in the file exactly as it was
+        factor[~np.isfinite(flux)] = 1.0
+    flux = flux * factor
 
     # Propagate the sky mask: samples the airglow drowned were excluded from
     # the fit, so leaving them in the corrected file would hand LBL data the
@@ -925,7 +942,10 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
                 flux[drown] = np.nan
                 masked = int(drown.sum())
 
-    out[e_flux].data = flux
+    if bridged:
+        _readers.scale_flux(out, place, factor)
+    else:
+        out[e_flux].data = flux
     head = out[0].header
     if max_sky:
         head["PCA2SKYR"] = (float(max_sky), "sky/flux above this was set to NaN")

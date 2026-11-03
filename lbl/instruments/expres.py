@@ -118,6 +118,21 @@ class Expres(Instrument):
         self.param_set('PCA2D_WINDOWS', source=func_name,
                        value=['687.75:2.5', '630.75:2', '594.25:2.25',
                               '651.0:2.5', '588.5:1.5', '519.0:2'])
+        # the wavelengths are barycentric (get_berv returns 0), so PCA2D
+        #    brings them back to the observer's frame, where the atmosphere
+        #    is fixed: the two-frame fit separates the star from the
+        #    atmosphere by the BERV, and on the barycentric grid the two
+        #    frames would be one. The BERV it undoes is the one the telluric
+        #    cleaning shifts TAPAS by (get_berv_transmission). Each exposure
+        #    then covers an interval shifted by its own BERV, so a sample is
+        #    kept when half of the exposures cover it rather than all of
+        #    them (as for the S2D of HARPS and HARPS-N)
+        self.param_set('PCA2D_TO_OBSERVER', True, source=func_name)
+        self.param_set('PCA2D_MASK_SHARE', 0.5, source=func_name)
+        # two observer-frame components for PCA2D, as for HARPS: in the
+        #    visible the atmosphere is mostly O2, which follows the airmass,
+        #    and water, which follows the water column
+        self.param_set('PCA2D_N_EARTH', 2, source=func_name)
         # define the SNR cut off threshold
         # Question: HARPS value?
         self.param_set('SNR_THRESHOLD', 10, source=func_name)
@@ -472,6 +487,19 @@ class Expres(Instrument):
         sci_hdr = self.load_header(science_file, kind='science fits file')
         # return data and header
         return sci_data, sci_hdr
+
+    def science_flux_column(self) -> Tuple[str, str]:
+        """
+        Where the flux is in a science file: the 'spectrum' column of the
+        optimal extraction, which load_science_file multiplies by the
+        'blaze' column (and blanks outside Excalibur's range). A flux
+        multiplied by some factor is that column multiplied by the same
+        factor, which is how a corrected copy of the file is written
+        (PCA2D)
+
+        :return: tuple, (extension name, column name)
+        """
+        return 'optimal', 'spectrum'
 
     def get_mask_systemic_vel(self, mask_file: str) -> float:
         """
