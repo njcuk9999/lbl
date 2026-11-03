@@ -350,6 +350,13 @@ def objective(sp, trans, noise=None):
 DRY_RANGE = (0.5, 1.5)
 #: the bounds of the water exponent in the fit, exclusive
 WATER_RANGE = (1e-4, 20.0)
+#: the first steps of the second simplex in ln(exponent), water then dry:
+#:    10% and 5% of the exponent. scipy's default steps are 5% of each
+#:    coordinate and 0.00025 for a coordinate that is zero, which an exponent
+#:    of 1 (a point of the sweep) or an airmass of 1 is in logarithm: from
+#:    such a tiny simplex the fit stalls on the roughness of the cost (its
+#:    weights move with the exponent) and stays at its start
+SIMPLEX_STEP = (0.1, 0.05)
 
 
 def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
@@ -467,9 +474,18 @@ def fit_exponents(wave_ground, sp, spl_water, spl_dry, airmass,
         # but that makes the fallback recognisable on reading.
         return float(fallback) + FALLBACK_MARK, float(airmass)
 
-    x0 = [np.log(scan[jbest]), np.log(max(float(airmass), 1e-3))]
-    out = minimize(cost, x0=x0, method="Nelder-Mead",
-                   options=dict(xatol=1e-4, fatol=1e-10, maxiter=300))
+    x0 = np.array([np.log(scan[jbest]), np.log(max(float(airmass), 1e-3))])
+    # TWO SIMPLEXES FROM THE SAME START, and the lower cost is kept: scipy's
+    #   default steps, which stall where a coordinate is zero in logarithm,
+    #   and steps of SIMPLEX_STEP, which never do; on a cost this rough
+    #   neither ends lower on every exposure
+    options = dict(xatol=1e-4, fatol=1e-10, maxiter=300)
+    simplex = np.array([x0, x0 + [SIMPLEX_STEP[0], 0.0],
+                        x0 + [0.0, SIMPLEX_STEP[1]]])
+    fits = [minimize(cost, x0=x0, method="Nelder-Mead", options=options),
+            minimize(cost, x0=x0, method="Nelder-Mead",
+                     options=dict(options, initial_simplex=simplex))]
+    out = min(fits, key=lambda one: one.fun)
     water = float(np.exp(out.x[0]))
     dry = float(np.exp(out.x[1])) if free_dry else float(airmass)
     if not np.isfinite(water) or water < scan[0]:

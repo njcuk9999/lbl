@@ -98,3 +98,28 @@ def test_more_water_than_the_sweep_reaches_is_fitted():
         assert abs(water / true - 1) < 0.02, (true, water)
         assert abs(dry - 1.15) < 0.05, (true, dry)
 
+
+def test_the_simplex_leaves_a_start_at_an_exponent_of_one(monkeypatch):
+    # a cost in steps of 1e-4, lowest around water 1.06 and dry 1.25: the
+    #   sweep's best point is 1.0, whose logarithm is 0, where scipy's
+    #   default first step (0.00025) does not change the cost and the
+    #   simplex used to stay; the fit must leave it
+    spl_water, spl_dry = _atmosphere()
+    wave, sp, noise = _spectrum(spl_water, spl_dry, 0.5, 1.15, 40000.0)
+
+    def transmission(model, wave_ground, water, dry):
+        out = np.ones(len(wave_ground))
+        out[0], out[1] = water, dry
+        return out
+
+    def objective(sp_, trans, noise_=None):
+        bowl = np.log(trans[0] / 1.06) ** 2 + np.log(trans[1] / 1.25) ** 2
+        return 1.0 + np.floor(bowl / 1e-4) * 1e-4
+
+    monkeypatch.setattr(td, 'transmission', transmission)
+    monkeypatch.setattr(td, 'objective', objective)
+    water, dry = td.fit_exponents(wave, sp, spl_water, spl_dry, 1.2,
+                                  noise=noise)
+    # the floor of the cost is 1.0495 to 1.0707 in water, 1.2376 to 1.2626
+    #   in dry
+    assert objective(None, [water, dry]) == 1.0, (water, dry)
