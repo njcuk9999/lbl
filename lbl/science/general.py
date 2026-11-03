@@ -693,10 +693,11 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     ccf_vector /= np.nanmedian(ccf_vector)
 
     # ---------------------------------------------------------------------
-    # construct a guess at the ccf fit
-    # default FWHM is 6 km/s as this is about the typical width of slowly
-    # rotating M dwarfs
-    coeffs = [dv[np.argmin(ccf_vector)], 6000,
+    # construct a guess at the ccf fit: a Gaussian (expo = 2) with a FWHM of
+    #   6000 / sqrt(2) = 4243 m/s and ears of 3 (the full profile is then
+    #   4.0 km/s wide at half depth), a typical width for a slowly rotating
+    #   M dwarf
+    coeffs = [dv[np.argmin(ccf_vector)], 6000 / np.sqrt(2),
               1 - np.nanmin(ccf_vector), 3, 2]
     lowf = None
     # do this twice for better fit
@@ -733,7 +734,7 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     msg += '\n\tEARS = {0:.4f}'.format(coeffs[3])
     msg += '\n\tEXPO = {0:.4f}'.format(coeffs[4])
     # ---------------------------------------------------------------------
-    # add values to props
+    # add values to props (FWHM: of the main component of the fit, in m/s)
     props['VSYS'] = coeffs[0]
     props['FWHM'] = coeffs[1]
     props['CONTRAST'] = coeffs[2]
@@ -1326,6 +1327,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         # deal with first estimate of RV / CCF equivalent width
         vtot = velo_estimate + systemic_props['VSYS']
         sys_rv, ccf_fwhm = berv - vtot, systemic_props['FWHM']
+        # the CCF e-width (header CCF_EW): the sigma of the Gaussian that
+        #   has the FWHM of the template's CCF, in m/s
         ccf_ewidth = ccf_fwhm / mp.fwhm_value()
     else:
         # for FP files
@@ -2789,7 +2792,7 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         rdb_dict['dW'][row] = dw
         rdb_dict['sdW'][row] = sdw
         # ---------------------------------------------------------------------
-        # calculate the mean full width half max
+        # the FWHM of the template's CCF (from its e-width)
         mean_fwhm = mp.fwhm_value() * ccf_ew_row
         # fwhm_row = mp.fwhm() * (ccf_ew_row + per_epoch_d2v / ccf_ew_row)
         fwhm_row = mean_fwhm + dw / mean_fwhm

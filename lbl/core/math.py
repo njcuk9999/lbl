@@ -846,7 +846,7 @@ def gauss_function(x: Union[float, np.ndarray], a: float, x0: float,
     :param x: numpy array (1D), the x data points
     :param a: float, the amplitude
     :param x0: float, the mean position of the gaussian
-    :param sigma: float, the standard deviation (FWHM) of the gaussian
+    :param sigma: float, the standard deviation of the gaussian
     :param dc: float, the constant level below the gaussian
 
     :return gauss: numpy array (1D), size = len(x), the output gaussian
@@ -862,7 +862,7 @@ def gauss_fit_s(x: Union[float, np.ndarray], x0: float, sigma: float,
 
     :param x: numpy array (1D), the x values for the gauss fit
     :param x0: float, the mean position
-    :param sigma: float, the FWHM
+    :param sigma: float, the standard deviation (FWHM / 2.3548)
     :param a: float, the amplitude
     :param zp: float, the dc level
     :param slope: float, the float (x-x0) * slope
@@ -880,17 +880,23 @@ def gauss_fit_e(x: Union[float, np.ndarray], x0: float, fwhm: float,
     """
     Gaussian fit with a shape factor and ears
 
+    The profile is 1 - g1 + g2, with g1 = amp exp(-|x - x0|**expo / ew**expo)
+    and g2 = (amp / ears**2) exp(-|x - x0|**expo / (2 ew)**expo).
+
     :param x: numpy array (1D), the x values for the gauss fit
     :param x0: float, the mean position
-    :param fwhm: float, the FWHM
+    :param fwhm: float, the full width at half maximum of g1. The ears g2
+                 are twice as wide and ears**2 times weaker, of opposite
+                 sign, so the whole profile is narrower at half its depth
+                 (by about 6 percent for ears of 3)
     :param amp: float, the amplitude
     :param ears: float, the ears (wings of the gaussian)
-    :param expo: float, the shape factor
+    :param expo: float, the shape factor (2 for a Gaussian)
 
     :return: np.ndarray - the gaussian value
     """
-    # gaussian FWHM = 2*sqrt(2*ln(2))*sigma
-    ew = fwhm / (2 * (2 * np.log(2)) ** (1 / expo))
+    # g1 is at half its maximum at |x - x0| = ew * ln(2)**(1/expo)
+    ew = fwhm / (2 * np.log(2) ** (1 / expo))
 
     g1 = amp * np.exp(-np.abs(x - x0) ** expo / ew ** expo)
     g2 = (amp / ears ** 2) * np.exp(-np.abs(x - x0) ** expo / (ew * 2) ** expo)
