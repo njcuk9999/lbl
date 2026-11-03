@@ -192,6 +192,12 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
     that overlap after widening are merged. The result is numerically the
     same as the continuous grid inside the pieces, and correct at their
     edges by construction.
+
+    THE GRID POINTS ARE MULTIPLES OF THE STEP in ln(wavelength), whatever
+    wave_min is: every grid, with or without `bands` and whatever its
+    range, samples the same wavelengths, so that the transmission divided
+    out of a spectrum (transmission_map) is the one its exponents were
+    fitted with.
     """
     step = np.arctanh(step_kms / C)
     sig_pix = np.arctanh(C / resolution / FWHM_PER_SIGMA / C) / step
@@ -200,6 +206,8 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
     kernel = np.exp(-0.5 * (x / sig_pix) ** 2)
     kernel = kernel / kernel.sum()
 
+    # the first grid point: the multiple of the step at or below wave_min
+    base = np.floor(np.log(wave_min) / step) * step
     if bands:
         # the pieces, widened by the kernel and merged when they touch
         margin = (half + 1) * step
@@ -208,12 +216,11 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
         # the same wavelengths as the continuous grid would. Otherwise the
         # two grids differ by a fraction of a step and np.interp samples the
         # model at shifted places (differences of 2e-3 in transmission).
-        base = np.log(wave_min)
         spans = []
         for low, high in sorted(bands):
             lo = max(base, np.log(low) - margin)
             hi = min(np.log(wave_max), np.log(high) + margin)
-            lo = base + np.floor((lo - base) / step) * step
+            lo = np.floor(lo / step) * step
             if hi <= lo:
                 continue
             if spans and lo <= spans[-1][1]:
@@ -221,9 +228,9 @@ def model_grid(spl_water, spl_dry, wave_min, wave_max, resolution,
             else:
                 spans.append((lo, hi))
     else:
-        spans = [(np.log(wave_min), np.log(wave_max))]
+        spans = [(base, np.log(wave_max))]
     if not spans:
-        spans = [(np.log(wave_min), np.log(wave_max))]
+        spans = [(base, np.log(wave_max))]
 
     lnw = np.concatenate([np.arange(lo, hi, step) for lo, hi in spans])
     wave = np.exp(lnw)
@@ -251,6 +258,24 @@ def transmission(model, wave_ground, alpha_water, alpha_dry):
             conv[start:stop] = np.convolve(raw[start:stop], model["kernel"],
                                            mode="same")
     return np.interp(wave_ground, model["wave"], conv)
+
+
+def transmission_map(spl_water, spl_dry, wave_ground, alpha_water, alpha_dry,
+                     resolution, step_kms=STEP_KMS):
+    """T on `wave_ground` (any shape; NaN where it is not finite), the model
+    the fit uses (model_grid and transmission, the same grid points and the
+    same kernel at `resolution`), on one grid over the whole range of
+    `wave_ground`: defined wherever the spectrum is."""
+    wave_ground = np.asarray(wave_ground, dtype=float)
+    out = np.full(wave_ground.shape, np.nan)
+    finite = np.isfinite(wave_ground) & (wave_ground > 0)
+    if not np.any(finite):
+        return out
+    wave = wave_ground[finite]
+    model = model_grid(spl_water, spl_dry, wave.min() * 0.999,
+                       wave.max() * 1.001, resolution, step_kms=step_kms)
+    out[finite] = transmission(model, wave, alpha_water, alpha_dry)
+    return out
 
 
 def transmission_weights(trans, depth_max, depth_saturated, reject_saturated,
