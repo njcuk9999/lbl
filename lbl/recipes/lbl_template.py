@@ -451,15 +451,11 @@ def run_template(inst, objname: str, objkind: str):
         sci_table = dict()
         # all bervs
         berv = np.zeros_like(science_files, dtype=float)
-        # loop around files
-        for it, filename in enumerate(science_files):
-            # on a terminal, the previous file's lines stay on screen while
-            #   this one runs, and the ones before are erased
-            log.transient()
-            # print progress
-            msg = 'Processing E2DS->S1D for file {0} of {1}'
-            margs = [it + 1, len(science_files)]
-            log.general(msg.format(*margs))
+        # loop around files, a progress bar for the files (nothing else is
+        #   printed in the loop, the shifts are summed up after it)
+        desc = 'E2DS->S1D, iteration {0} of {1}'.format(ite + 1, n_passes)
+        for it, filename in enumerate(tqdm(science_files, desc=desc,
+                                           unit='file')):
             # select the first science file as a reference file
             sci_image, sci_hdr = _load_template_science(inst, filename)
 
@@ -550,10 +546,6 @@ def run_template(inst, objname: str, objkind: str):
                 fit = np.polyfit(dv[imin - 1:imin + 2], sig[imin - 1:imin + 2], 2)
                 drv0[it] = -fit[1] / (2 * fit[0]) * grid_step_magic
 
-                msg = 'Approx RV shift for file {0} of {1} : {2:.1f}m/s'
-                margs = [it + 1, len(science_files), drv0[it]]
-                log.general(msg.format(*margs))
-
                 # subtract off this rv shift from our rv
                 rv0[it] -= drv0[it]
                 # get wave solution for reference file.
@@ -585,8 +577,6 @@ def run_template(inst, objname: str, objkind: str):
             add_to_bin(even_cube[:, ibin[it]], even_weight_cube[:, ibin[it]],
                        even_norm_cube[:, ibin[it]], s1d_flux_even,
                        s1d_weight_even, level)
-        # the last file's lines stay
-        log.transient(start=False)
 
         # -------------------------------------------------------------------------
         # Step 6. Creation of the template

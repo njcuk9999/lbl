@@ -9,9 +9,11 @@ Created on 2021-03-15
 
 @author: cook
 """
+import copy
 import logging
 import re
 import shutil
+import warnings
 from typing import List, Union
 
 from astropy.time import Time
@@ -68,6 +70,16 @@ class Log:
         # if we have a filename defined add a file logger
         if kwargs.get('filename', False):
             self.add_log_file(kwargs['filename'])
+        # Python's own warnings (numpy's RuntimeWarning...) through the log,
+        #   timestamped and coloured as warnings, not bare on stderr
+        warnings.showwarning = self.showwarning
+
+    def showwarning(self, message, category, filename, lineno, file=None,
+                    line=None):
+        """warnings.showwarning, a Python warning written as a log warning"""
+        _ = file, line
+        msg = '{0}: {1} ({2}:{3})'
+        self.warning(msg.format(category.__name__, message, filename, lineno))
 
     def _add_console(self, verbose: int, level: int):
         # set console verbosity level
@@ -459,8 +471,22 @@ class ConsoleFormat(logging.Formatter):
             self._style._fmt = self.error_fmt
         elif record.levelno == 999:
             self._style._fmt = self.empty_fmt
-        # Call the original formatter class to do the grunt work
-        result = logging.Formatter.format(self, record)
+        # Call the original formatter class to do the grunt work, each line
+        #   of a message of several lines with the time and level of the
+        #   first (a copy of the record per line, the record itself is
+        #   formatted again by the other handlers)
+        lines = record.getMessage().split('\n')
+        if len(lines) > 1 and record.levelno != 999:
+            results = []
+            for it, line in enumerate(lines):
+                one = copy.copy(record)
+                one.msg, one.args = line, None
+                if it < len(lines) - 1:
+                    one.exc_info, one.exc_text, one.stack_info = None, None, None
+                results.append(logging.Formatter.format(self, one))
+            result = '\n'.join(results)
+        else:
+            result = logging.Formatter.format(self, record)
         logging.Formatter.datefmt = '%Y-%m-%d %H:%M:%S'
         # Restore the original format configured by the user
         self._style._fmt = format_orig
