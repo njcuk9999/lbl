@@ -1202,6 +1202,12 @@ params.set(key='KW_RAW_HASH', value='LBLRHASH', source=__NAME__,
            desc='The input science file hash',
            comment='The input science file hash')
 
+# Define the token of the templates and the mask an lblrv file is measured
+#    against (lbl.core.provenance)
+params.set(key='KW_INPUTS_TOKEN', value='LBLITOK', source=__NAME__,
+           desc='The token of the templates and the mask measured against',
+           comment='Token of the templates and mask used')
+
 # Define the lbl template type
 params.set(key='KW_TEMPLATE_TYPE', value='LBLTMPLT', source=__NAME__,
            not_none=False, desc='The lbl template type',

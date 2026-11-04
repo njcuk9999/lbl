@@ -17,6 +17,7 @@ import numpy as np
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import provenance
 from lbl.core import math as mp
 from lbl.instruments import select
 from lbl.resources import lbl_misc
@@ -137,15 +138,31 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 3: Check if mask exists
     # -------------------------------------------------------------------------
-    if os.path.exists(mask_file) and not inst.params['OVERWRITE']:
+    # the token of the template the mask is made from, by its content
+    #   (provenance): a mask of LBL's mask folder made from another template
+    #   is made again. One made before tokens existed is kept unless the
+    #   template is newer than it, and is given its token. A mask from
+    #   elsewhere (MASK_FILE) is the user's, and kept
+    inputs_token = provenance.token([template_file], content=True)
+    exists = os.path.exists(mask_file)
+    own = os.path.samefile(os.path.dirname(os.path.abspath(mask_file)),
+                           mask_dir) if exists else True
+    if exists and own and provenance.recorded(mask_file) is None and \
+            not provenance.older_than(mask_file, [template_file]):
+        provenance.record(mask_file, inputs_token, 1)
+    current = not own or provenance.is_current(mask_file, inputs_token)
+    if exists and current and not inst.params['OVERWRITE']:
         # log that mask exist
         msg = 'Mask {0} exists. Skipping mask creation. '
         log.warning(msg.format(mask_file))
         log.warning('Set --overwrite to recalculate mask')
         # return here
         return locals()
-    elif os.path.exists(mask_file) and inst.params['OVERWRITE']:
+    elif exists and inst.params['OVERWRITE']:
         log.general(f'--overwrite=True. Recalculating mask {mask_file}')
+    elif exists:
+        log.general(f'Mask {mask_file} was made from another template than '
+                    f'{template_file}. Calculating mask.')
     else:
         log.general(f'Could not find {mask_file}. Calculating mask.')
     # -------------------------------------------------------------------------
@@ -216,6 +233,9 @@ def __main__(inst: InstrumentsType, **kwargs):
     # write mask to file
     inst.write_mask(mask_file, line_table, pos_mask, neg_mask, sys_vel,
                     template_hdr)
+    # and what it was made from (provenance)
+    if own:
+        provenance.record(mask_file, inputs_token, 1)
 
     # -------------------------------------------------------------------------
     # Step 8: Remove ref table for this mask (we must re-write it)

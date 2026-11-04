@@ -22,6 +22,8 @@ import numpy as np
 from astropy import constants
 from astropy.table import Table
 
+from lbl.core import provenance
+
 from . import grids
 from . import io as spio
 from . import nights as spnights
@@ -115,6 +117,20 @@ def _cache_dir(config: dict) -> str:
     directory = _cache.ensure(config)
     fmt = str(config["input"].get("format", "tfits"))
     return os.path.join(directory, "cube_%s_%s" % (fmt, cache_key(config)))
+
+
+def _cached_exposures(path: str) -> int:
+    """How many exposures a cached cube holds: its members (one row per
+    exposure, MEMBERS_FILE) when they are there, else its rows' files"""
+    members = os.path.join(path, MEMBERS_FILE)
+    try:
+        if os.path.exists(members):
+            names = Table.read(members, format="ascii.csv")["filename"]
+        else:
+            names = Table.read(os.path.join(path, "meta.fits"))["filename"]
+    except Exception:                                     # noqa: BLE001
+        return -1
+    return len({os.path.basename(str(name)) for name in names})
 
 
 def _load_cache(path: str):
@@ -430,14 +446,32 @@ def build_cube(config: dict):
     """
     cache = _cache_dir(config)
     out = config["output"]
-    if out["use_cache"] and out.get("reuse_cache", True):
-        cached = _load_cache(cache)
-        if cached is not None:
-            return cached
-
     inp = config["input"]
     source = spectra_dir(config)
     files = spio.find_spectra(source, inp["pattern"], inp["max_files"])
+    # THE SPECTRA A CUBE IS MADE FROM, as a token (lbl.core.provenance),
+    #   beside its meta.fits: the cache key holds the configuration, not the
+    #   files, so a cube of the same configuration made from other spectra
+    #   (some added, removed or cleaned again) is built again rather than
+    #   reused. A cube made before tokens existed is kept, and given its
+    #   token, when it holds as many exposures as there are files and none is
+    #   newer than it
+    inputs_token = provenance.token(files)
+    stamp = os.path.join(cache, "meta.fits")
+    if out["use_cache"] and out.get("reuse_cache", True):
+        if (os.path.exists(stamp) and provenance.recorded(stamp) is None
+                and not provenance.older_than(stamp, files)
+                and _cached_exposures(cache) == len(files)):
+            provenance.record(stamp, inputs_token, len(files))
+        if provenance.is_current(stamp, inputs_token):
+            cached = _load_cache(cache)
+            if cached is not None:
+                return cached
+        elif os.path.exists(stamp):
+            log("the cached cube %s was made from other spectra than the %d "
+                "in %s: building it again" % (cache, len(files), source),
+                "warn")
+
     if len(files) == 0:
         raise RuntimeError("no files matched %s/%s" % (source, inp["pattern"]))
     log("found %d files in %s" % (len(files), source), "value")
@@ -467,6 +501,7 @@ def build_cube(config: dict):
     # is the cube on disk, and the stages after this one read it from there
     if out["use_cache"]:
         _save_cache(cache, grid, data, sigma, trans, meta)
+        provenance.record(stamp, inputs_token, len(files))
         # after _save_cache, which replaces the whole directory
         _write_snippets(cache, snippets)
     return grid, data, sigma, trans, meta

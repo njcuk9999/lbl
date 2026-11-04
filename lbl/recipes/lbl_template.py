@@ -19,6 +19,7 @@ import numpy as np
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import provenance
 from lbl.core import fastmath
 from lbl.core import math as mp
 from lbl.core import vetted
@@ -277,26 +278,40 @@ def run_template(inst, objname: str, objkind: str):
                                                            template_file))
         return locals()
 
+    # science filenames
+    science_files = inst.science_files(science_dir)
     # -------------------------------------------------------------------------
     # Step 3: Check if template exists
     # -------------------------------------------------------------------------
-    if os.path.exists(template_file) and not inst.params['OVERWRITE']:
+    # the token of the spectra the template is made from (provenance): a
+    #   template on disk made from other spectra (more were added, some
+    #   removed) is made again. One made before tokens existed is kept
+    #   unless a spectrum is newer than it, and is given its token
+    inputs_token = provenance.token(science_files)
+    exists = os.path.exists(template_file)
+    if exists and provenance.recorded(template_file) is None and \
+            not provenance.older_than(template_file, science_files):
+        provenance.record(template_file, inputs_token, len(science_files))
+    current = provenance.is_current(template_file, inputs_token)
+    if exists and current and not inst.params['OVERWRITE']:
         # log that mask exist
         msg = 'Template {0} exists. Skipping template creation. '
         log.warning(msg.format(template_file))
         log.warning('Set --overwrite to recalculate mask')
         # return here
         return locals()
-    elif os.path.exists(template_file) and inst.params['OVERWRITE']:
+    elif exists and inst.params['OVERWRITE']:
         log.general(f'--overwrite=True. Recalculating template {template_file}')
+    elif exists:
+        log.general(f'Template {template_file} was made from other spectra '
+                    f'than the {len(science_files)} there now. Calculating '
+                    f'template.')
     else:
         log.general(f'Could not find {template_file}. Calculating template.')
 
     # -------------------------------------------------------------------------
     # Step 2: Check and set filenames (after checking if template exists)
     # -------------------------------------------------------------------------
-    # science filenames
-    science_files = inst.science_files(science_dir)
     # blaze filename (None if not set)
     blaze_file = inst.blaze_file(calib_dir)
     # load blaze file if set
@@ -818,6 +833,8 @@ def run_template(inst, objname: str, objkind: str):
                  planets=planets_used, small_rv_shift=flat_rv)
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
+    # and what it was made from (provenance)
+    provenance.record(template_file, inputs_token, len(science_files))
 
     # -------------------------------------------------------------------------
     # return local namespace

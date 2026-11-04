@@ -407,6 +407,10 @@ class Instrument:
                                value=outputs['MODEL_VELOCITY'])
         # add the raw hash from the science file
         header = self.set_hkey(header, 'KW_RAW_HASH', value=outputs['RAW_HASH'])
+        # add the token of the templates and mask measured against
+        if outputs.get('INPUTS_TOKEN') is not None:
+            header = self.set_hkey(header, 'KW_INPUTS_TOKEN',
+                                   value=outputs['INPUTS_TOKEN'])
         # ---------------------------------------------------------------------
         # Convert ref table dictionary to table
         # ---------------------------------------------------------------------

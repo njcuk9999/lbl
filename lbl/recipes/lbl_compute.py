@@ -26,6 +26,7 @@ from scipy import stats
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import provenance
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 from lbl.science import activity_lines
@@ -216,8 +217,15 @@ def setup_compute(inst: InstrumentsType,
     splines = general.spline_template(inst, comparison_template_file,
                                       comparison_sys_vel_props['MASK_SYS_VEL'],
                                       models_dir)
+    # the token of the templates and the mask the velocities are measured
+    #   against, by their content (provenance): an lblrv file measured
+    #   against others is measured again
+    inputs_files = sorted({str(science_template_file),
+                           str(comparison_template_file), str(mask_file)})
+    inputs_token = provenance.token(inputs_files, content=True)
     # return what the loop needs
     return dict(science_files=science_files, lblrv_dir=lblrv_dir,
+                inputs_files=inputs_files, inputs_token=inputs_token,
                 calib_dir=calib_dir, mask_file=mask_file, blaze=blaze,
                 ref_table=ref_table, splines=splines,
                 science_sys_vel_props=science_sys_vel_props,
@@ -332,12 +340,25 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
     # ---------------------------------------------------------------------
     lblrv_file, lblrv_exists = inst.get_lblrv_file(science_file,
                                                    ctx['lblrv_dir'])
+    # whether an lblrv file on disk was measured against these templates and
+    #   this mask (provenance): its token, or, made before tokens existed,
+    #   whether it is newer than all of them
+    same_inputs = False
+    if lblrv_exists and inst.params['SKIP_DONE']:
+        lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
+        lblrv_token = lblrv_hdr.get_hkey(inst.params['KW_INPUTS_TOKEN'],
+                                         required=False)
+        if lblrv_token in (None, ''):
+            same_inputs = not provenance.older_than(lblrv_file,
+                                                    ctx['inputs_files'])
+        else:
+            same_inputs = str(lblrv_token) == ctx['inputs_token']
     # If output file exists then get the model velocity from here, when the
     #   files on disk are kept (SKIP_DONE): written again, they are made
     #   with a model velocity of their own, not with one an earlier run may
     #   have got wrong (e.g. a model CCF that peaked on the edge of its
     #   scan), which rewriting would otherwise carry over
-    if lblrv_exists and inst.params['SKIP_DONE'] and \
+    if lblrv_exists and inst.params['SKIP_DONE'] and same_inputs and \
             not np.isfinite(run.model_velocity):
         lblrv_hdr = inst.load_header(lblrv_file, kind='lblrv fits file')
         run.model_velocity = lblrv_hdr.get_hkey(inst.params['KW_MODELVEL'],
@@ -352,8 +373,12 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
                                         required=False)
         # check hash of science file
         hash_identical = io.check_hash(science_file, lblrv_hash)
+        # measured against another template or mask: made again
+        if hash_identical and not same_inputs:
+            log.general('\t\tLBL.fits file was measured against another '
+                        'template or mask, computing again.')
         # a science lblrv file without the activity lines is made again
-        if (hash_identical and inst.params['DATA_TYPE'] == 'SCIENCE'
+        elif (hash_identical and inst.params['DATA_TYPE'] == 'SCIENCE'
                 and not activity_lines.has_activity(lblrv_file)):
             log.general('\t\tLBL.fits file has no activity lines, '
                         'computing again.')
@@ -459,6 +484,8 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
     outputs['MASK_FILE'] = os.path.basename(ctx['mask_file'])
     # add the rash hash to the outputs
     outputs['RAW_HASH'] = io.generate_checksum(science_file)
+    # and the token of the templates and mask measured against
+    outputs['INPUTS_TOKEN'] = ctx['inputs_token']
     # ---------------------------------------------------------------------
     # update iterables (for next iteration)
     run.systemic_all = outputs['SYSTEMIC_ALL']

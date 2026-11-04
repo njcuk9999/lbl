@@ -15,6 +15,7 @@ import traceback
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
+from lbl.core import provenance
 from lbl.instruments import select
 from lbl.resources import lbl_misc
 from lbl.science import activity_lines
@@ -148,7 +149,17 @@ def __main__(inst: InstrumentsType, **kwargs):
     #   is compiled again
     science = inst.params['DATA_TYPE'] == 'SCIENCE'
     outdated = science and not activity_lines.rdb_has_activity(rdbfile1)
-    if os.path.exists(rdbfile1) and inst.params['SKIP_DONE'] and not outdated:
+    # the token of the lblrv files compiled (provenance): a table compiled
+    #   from other files (spectra added, removed or measured again) is
+    #   compiled again, and with it the report
+    inputs_token = provenance.token(lblrv_files)
+    current = provenance.is_current(rdbfile1, inputs_token)
+    if os.path.exists(rdbfile1) and not current:
+        msg = ('File {0} was compiled from other lblrv files than the {1} '
+               'there now: compiling again')
+        log.general(msg.format(rdbfile1, len(lblrv_files)))
+    if os.path.exists(rdbfile1) and inst.params['SKIP_DONE'] and \
+            not outdated and current:
         # log file exists and we are skipping
         msg = 'File {0} exists, we will read it. To regenerate use --skip'
         margs = [rdbfile1]
@@ -178,6 +189,8 @@ def __main__(inst: InstrumentsType, **kwargs):
         else:
             rdbfitsfile = rdbfile1.replace('.rdb', '.fits')
             log.general('Skipping {0}'.format(rdbfitsfile))
+        # and what it was compiled from (provenance)
+        provenance.record(rdbfile1, inputs_token, len(lblrv_files))
 
     # -------------------------------------------------------------------------
     # Step 4: Produce binned (per-epoch) RDB file
