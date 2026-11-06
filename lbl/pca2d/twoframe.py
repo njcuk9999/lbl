@@ -957,7 +957,8 @@ def deflate_velocity(resid, P, a, alpha, shifter, delta, chunk=64, desc=None,
     return resid
 
 
-def mstep(residual, weights, coeffs, basis, floor_frac=1e-2, chunk=64):
+def mstep(residual, weights, coeffs, basis, floor_frac=1e-2, chunk=64,
+          desc=None):
     """One EMPCA eigenvector sweep, in whatever frame the residual lives in.
 
     `denominator > 0` is not a sufficient guard. With an honest banded operator
@@ -997,6 +998,10 @@ def mstep(residual, weights, coeffs, basis, floor_frac=1e-2, chunk=64):
     # only by the order of the additions, which is last-bit.
     rows = residual.shape[0]
     step = max(1, int(chunk))
+    # a bar over the chunks of both passes of every component: on a cube in
+    # mapped files this is minutes of reading with nothing else to show
+    passes = 2 * basis.shape[0] * len(range(0, rows, step))
+    progress = _bar(total=passes, desc=desc, unit="chunk") if desc else None
     for k in range(basis.shape[0]):
         ck = coeffs[:, k]
         numerator = np.zeros(residual.shape[1], dtype=np.float64)
@@ -1006,6 +1011,8 @@ def mstep(residual, weights, coeffs, basis, floor_frac=1e-2, chunk=64):
             wb = weights[start:stop]
             numerator += (wb * residual[start:stop]).T @ ck[start:stop]
             denominator += wb.T @ (ck[start:stop] ** 2)
+            if progress is not None:
+                progress.update()
         positive = denominator[denominator > 0]
         scale = float(np.median(positive)) if positive.size else 0.0
         floor = floor_frac * scale
@@ -1018,6 +1025,10 @@ def mstep(residual, weights, coeffs, basis, floor_frac=1e-2, chunk=64):
         for start in range(0, rows, step):          # the deflation, in chunks too
             stop = min(start + step, rows)
             residual[start:stop] -= np.outer(ck[start:stop], basis[k])
+            if progress is not None:
+                progress.update()
+    if progress is not None:
+        progress.close()
     for i in range(basis.shape[0]):          # modified Gram-Schmidt
         for j in range(i):
             basis[i] -= np.dot(basis[i], basis[j]) * basis[j]
@@ -1074,7 +1085,8 @@ def update_star(data, w, P, Q, a, b, shifter, delta, chunk, alpha=None,
     with np.errstate(invalid="ignore", divide="ignore"):
         resid_star /= np.where(w_star > 1e-12, w_star, 1.0)
     resid_star[w_star <= 1e-12] = 0.0
-    P_new = mstep(resid_star, w_star, a, P, chunk=chunk)
+    P_new = mstep(resid_star, w_star, a, P, chunk=chunk,
+                  desc="star basis, eigenvectors")
     if star_fwhm:
         from .resolution import smooth_rows
         P_new = smooth_rows(P_new, star_fwhm)
@@ -1095,7 +1107,8 @@ def update_earth(data, w, P, Q, a, b, shifter, delta, chunk, alpha=None,
                        out=work)
     model *= -1.0
     model += data                       # in place: data - model
-    return mstep(model, w, b, Q, chunk=chunk)
+    return mstep(model, w, b, Q, chunk=chunk,
+                 desc="observer basis, eigenvectors")
 
 
 # --------------------------------------------------------------------------
