@@ -331,3 +331,31 @@ def test_harpn_spectra_run_as_harpsn(data_dir):
     assert not any("HARPN spectra" in e for e in built["errors"])
     assert wrapgen._family("HARPS-N") == wrapgen._family("HARPN") == "HARPSN"
     assert wrapgen._family("HARPS") == "HARPS"
+
+
+def test_a_basis_on_another_grid_is_refused_before_the_run(data_dir):
+    # a NIRPS basis on a grid of a few samples, which no NIRPS run has
+    folder = data_dir / "pca2d" / "components"
+    folder.mkdir(parents=True)
+    head = fits.Header()
+    head["BASISNAM"] = "nirps_old"
+    head["INSTRUME"] = "NIRPS_HE"
+    head["DATASRC"] = "CADC"
+    head["NEARTH"] = 2
+    grid = 965.0 * (1 + np.arange(20) * 1e-6)
+    hdus = [fits.PrimaryHDU(header=head),
+            fits.ImageHDU(grid, name="WAVE"),
+            fits.ImageHDU(np.zeros((2, grid.size)), name="COMPONENTS"),
+            fits.ImageHDU(np.ones(grid.size, dtype=np.uint8), name="MASK"),
+            fits.BinTableHDU.from_columns(
+                [fits.Column(name="object", format="8A", array=["A"])],
+                name="TRAINING"),
+            fits.BinTableHDU.from_columns(
+                [fits.Column(name="object", format="8A", array=["A"])],
+                name="AMPLITUDES")]
+    fits.HDUList(hdus).writeto(folder / "PCA2D_Observer_nirps_old_nirps_he.fits")
+    built = wrapgen.build(_state(data_dir, pca2d={"input_name": "nirps_old"}))
+    assert any("IT MUST BE REBUILT" in e for e in built["errors"])
+    built = wrapgen.build(_state(data_dir, pca2d={"input_name": "nirps_old"},
+                                 lang="fr"))
+    assert any("IL FAUT LA RECONSTRUIRE" in e for e in built["errors"])

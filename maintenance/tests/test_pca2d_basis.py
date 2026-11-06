@@ -67,7 +67,7 @@ def test_a_cube_on_another_grid_or_too_many_components_is_refused(tmp_path):
     run.mkdir()
     grid, _ = _fake_run(str(run))
     loaded = basis.Basis(basis.save(str(run), 'b', str(tmp_path), ['A', 'B']))
-    with pytest.raises(ValueError, match='not on the grid'):
+    with pytest.raises(ValueError, match='NOT ON THE GRID'):
         loaded.on_grid(grid * (1 + 1e-9))
     with pytest.raises(ValueError, match='has 3'):
         loaded.on_grid(grid, 4)
@@ -76,6 +76,46 @@ def test_a_cube_on_another_grid_or_too_many_components_is_refused(tmp_path):
     #   and stops
     with pytest.raises(ValueError, match='does not say which INSTRUMENT'):
         loaded.check_compatible('SPIROU', 'CADC')
+
+
+def test_a_basis_on_another_grid_says_what_differs_and_to_rebuild_it(tmp_path):
+    run = tmp_path / 'run'
+    run.mkdir()
+    grid, _ = _fake_run(str(run))
+    loaded = basis.Basis(basis.save(str(run), 'b', str(tmp_path), ['A', 'B']))
+    step = 0.5 / C_KMS
+    assert loaded.grid_problem(grid) == ''
+    # the same comb cut to another domain (an older LBL's): what this run
+    #   covers and the basis does not is named, and what to do
+    text = loaded.grid_problem(965.0 * np.exp(np.arange(5, 60) * step))
+    assert text.startswith('THE OBSERVER BASIS b IS NOT ON THE GRID OF THIS'
+                           ' RUN: THE BASIS MUST BE REBUILT.')
+    assert 'the wavelength domain' in text
+    assert 'the basis has no components from' in text
+    assert "REBUILD THE BASIS ON THIS GRID" in text
+    assert "output_name='b', on A, B" in text and loaded.path in text
+    # another step, another anchor
+    assert 'what differs: the step' in loaded.grid_problem(
+        965.0 * np.exp(np.arange(50) * 0.6 / C_KMS))
+    assert 'what differs: the anchor' in loaded.grid_problem(
+        965.1 * np.exp(np.arange(50) * step))
+
+
+def test_the_grid_of_a_run_is_checked_before_it_runs(tmp_path):
+    run = tmp_path / 'run'
+    run.mkdir()
+    grid, _ = _fake_run(str(run))
+    loaded = basis.Basis(basis.save(str(run), 'b', str(tmp_path), ['A', 'B']))
+    domain = dict(wave0=965.0, dv=0.5, wave_min=965.0,
+                  wave_max=grid[-1] * (1 + 1e-12), smart_dv=False,
+                  grid_source='magic')
+    assert loaded.check_domain(domain) is True
+    # dv measured from the spectra, or the grid of an s1d: only the fit can
+    #   tell
+    assert loaded.check_domain(dict(domain, smart_dv=True)) is False
+    assert loaded.check_domain(dict(domain, grid_source='native')) is False
+    with pytest.raises(ValueError, match='THE BASIS MUST BE REBUILT'):
+        loaded.check_domain(dict(domain, wave_max=grid[-1] * 1.0001))
 
 
 def test_a_basis_of_another_instrument_is_refused(tmp_path):

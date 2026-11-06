@@ -265,3 +265,57 @@ def test_without_n_earth_the_instrument_gives_it(tmp_path, monkeypatch, pca2d):
         lbl_pca2d.correct("NIRPS_HE", str(tmp_path), ["STAR"], {"STAR": None},
                           "CADC", pca2d, None, "science", report=False)
     assert seen["argv"][seen["argv"].index("--n-earth") + 1] == "7"
+
+
+def test_the_domain_of_a_run_is_the_instrument_s_unless_asked():
+    """the domain the cube's grid is made from: the class's wavemin and
+    wavemax, anchored on a whole nm below, the nominal step, and what the
+    PCA2D dict sets last"""
+    domain = lbl_pca2d.run_domain("SPIROU", "CADC", dict())
+    assert (domain["wave_min"], domain["wave_max"]) == (955.793, 2515.771)
+    assert domain["wave0"] == 955.0 and domain["dv"] == 0.5
+    assert not domain["smart_dv"]
+    asked = lbl_pca2d.run_domain("SPIROU", "CADC", {"domain": {"dv": 0.6}})
+    assert asked["dv"] == 0.6 and asked["wave0"] == 955.0
+
+
+def test_a_frozen_basis_is_checked_against_the_grid_of_the_run(monkeypatch,
+                                                              tmp_path):
+    from lbl.pca2d import basis as pbasis
+    seen = dict()
+
+    class Refused:
+        def check_compatible(self, *args, **kwargs):
+            pass
+
+        def check_domain(self, domain):
+            seen["domain"] = domain
+            raise ValueError("THE BASIS MUST BE REBUILT")
+    monkeypatch.setattr(pbasis, "load", lambda *args, **kwargs: Refused())
+    assert lbl_pca2d.frozen_basis(dict(n_star=1), "SPIROU", "CADC",
+                                  str(tmp_path)) is None
+    with pytest.raises(LblException, match="input_name: THE BASIS MUST BE"):
+        lbl_pca2d.frozen_basis(dict(input_name="b"), "SPIROU", "CADC",
+                               str(tmp_path))
+    assert seen["domain"] == lbl_pca2d.run_domain("SPIROU", "CADC", dict())
+
+
+def test_a_wrap_with_a_basis_it_cannot_use_stops_before_lbl(monkeypatch,
+                                                            tmp_path):
+    """the basis is checked before LBL's first step, not at the PCA2D fit"""
+    from lbl.recipes import lbl_wrap
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("an LBL step ran")
+
+    def stop(*args, **kwargs):
+        raise LblException("basis refused")
+    monkeypatch.setattr(sys, "argv", list(sys.argv))
+    monkeypatch.setattr(lbl_wrap, "_lbl_steps", refuse)
+    monkeypatch.setattr(lbl_pca2d, "frozen_basis", stop)
+    rparams = dict(INSTRUMENT="SPIROU", DATA_SOURCE="CADC",
+                   DATA_DIR=str(tmp_path), DATA_TYPES=["SCIENCE"],
+                   OBJECT_SCIENCE=["STAR"], OBJECT_COMPARISON=["STAR"],
+                   OBJECT_TEFF=[3300], PCA2D=dict(input_name="b"))
+    with pytest.raises(LblException, match="basis refused"):
+        lbl_wrap.main(rparams)

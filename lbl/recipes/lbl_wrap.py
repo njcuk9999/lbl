@@ -131,6 +131,14 @@ def main(runparams: dict):
     if runparams['RUN_LBL_RESMAP']:
         log.warning('RUN_LBL_RESMAP=True: lbl_resmap is not run by the wrap, '
                     'run it on its own')
+    # a frozen observer basis (PCA2D input_name) this run cannot use, of
+    #   another instrument or on another grid, stops the wrap here, before
+    #   LBL's first step, rather than at the PCA2D fit, minutes later
+    science = [data_types] if isinstance(data_types, str) else data_types
+    if runparams.get('PCA2D') not in (None, False) and 'SCIENCE' in science:
+        from lbl.recipes import lbl_pca2d
+        lbl_pca2d.frozen_basis(runparams['PCA2D'], instrument, data_source,
+                               data_dir, report=runparams.get('REPORT', True))
     # -------------------------------------------------------------------------
     # the reset cleans the products of every object in DATA_DIR: once, before
     #   the first object, or only the last object's products would survive

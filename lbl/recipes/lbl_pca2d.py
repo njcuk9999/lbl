@@ -236,6 +236,51 @@ def settings(pca2d, report=True) -> tuple:
     return switches, overrides
 
 
+def run_domain(instrument: str, data_source, overrides: dict) -> dict:
+    """The domain section a correction resolves, from which its cube's grid
+    is made (pca2d.grids.magic_grid): pca2d's DEFAULTS, the general block of
+    nominal.yaml, the instrument's own layer (its LBL class), then what the
+    PCA2D dict sets, in the order pca2d.config.load_config lays them."""
+    from lbl.pca2d import config as pconfig
+    domain = copy.deepcopy(pconfig.DEFAULTS['domain'])
+    layers = ((read_nominal().get('general') or dict()).get('domain'),
+              pconfig.instrument_layer(instrument, data_source).get('domain'),
+              (overrides or dict()).get('domain'))
+    for layer in layers:
+        domain.update(copy.deepcopy(layer or dict()))
+    return domain
+
+
+def frozen_basis(pca2d, instrument: str, data_source, data_dir: str,
+                 report: bool = True):
+    """The frozen observer basis the PCA2D dict names (input_name), read and
+    checked, or None when it names none. It must be of the same instrument
+    and DATA_SOURCE (Basis.check_compatible) and on the grid this run's cube
+    will be made on (Basis.check_domain); otherwise LblException, saying what
+    to do. lbl_wrap calls it before anything runs, so that a basis this run
+    cannot use stops the wrap at once rather than at the PCA2D fit, after
+    LBL's first pass; main calls it again for the basis it uses."""
+    switches, overrides = settings(pca2d, report)
+    if not switches['input_name']:
+        return None
+    from lbl.pca2d import basis as pbasis
+    try:
+        frozen = pbasis.load(str(switches['input_name']), data_dir,
+                             instrument, str(data_source or ''))
+    except FileNotFoundError as exc:
+        raise LblException('PCA2D input_name: {0}'.format(exc))
+    try:
+        # the same instrument and the same DATA_SOURCE, or nothing
+        frozen.check_compatible(instrument, data_source,
+                                others=pbasis.compatible_bases(
+                                    data_dir, instrument, data_source))
+        # and the grid the cube will be made on
+        frozen.check_domain(run_domain(instrument, data_source, overrides))
+    except ValueError as exc:
+        raise LblException('PCA2D input_name: {0}'.format(exc))
+    return frozen
+
+
 def star_template(data_dir: str, name: str, comparison: str,
                   instrument: str) -> dict:
     """
@@ -671,21 +716,8 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     # THE OBSERVER COMPONENTS OF ANOTHER FIT (input_name, pca2d.basis): taken
     #   frozen, the star's own block and the amplitudes fitted. All of them
     #   unless n_earth is given
-    frozen = None
-    if switches['input_name']:
-        from lbl.pca2d import basis as pbasis
-        try:
-            frozen = pbasis.load(str(switches['input_name']), data_dir,
-                                 instrument, str(data_source or ''))
-        except FileNotFoundError as exc:
-            raise LblException('PCA2D input_name: {0}'.format(exc))
-        # the same instrument and the same DATA_SOURCE, or nothing
-        try:
-            frozen.check_compatible(instrument, data_source,
-                                    others=pbasis.compatible_bases(
-                                        data_dir, instrument, data_source))
-        except ValueError as exc:
-            raise LblException('PCA2D input_name: {0}'.format(exc))
+    frozen = frozen_basis(pca2d, instrument, data_source, data_dir, report)
+    if frozen is not None:
         overrides.setdefault('twoframe', dict())['earth_basis'] = frozen.path
         if not (isinstance(pca2d, dict) and 'n_earth' in pca2d):
             switches['n_earth'] = frozen.n_earth

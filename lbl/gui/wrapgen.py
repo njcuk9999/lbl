@@ -265,6 +265,22 @@ def build(state: dict) -> dict:
             lbl_pca2d.settings(dict(pca2d), report=rparams.get("REPORT", True))
         except Exception as exc:                          # noqa: BLE001
             errors.append(say("err_pca2d", exc))
+        else:
+            # a basis found and of this instrument must also be on the grid
+            #   this run's cube will be made on, or LBL stops at once
+            if pca2d.get("input_name") and found and found[0]["compatible"]:
+                from lbl.core.base_classes import LblException
+                try:
+                    lbl_pca2d.frozen_basis(dict(pca2d), instrument, source,
+                                           data_dir,
+                                           report=rparams.get("REPORT", True))
+                except LblException as exc:
+                    errors.append(say("err_basis_grid", pca2d["input_name"],
+                                      exc))
+                except Exception:                         # noqa: BLE001
+                    # a basis the window cannot read is left to the run,
+                    #   which reads it again and says why
+                    pass
         rparams["PCA2D"] = pca2d
         skip = state.get("skip_pca2d")
         if skip is not None:

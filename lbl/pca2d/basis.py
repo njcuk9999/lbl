@@ -62,6 +62,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
+from .grids import C_KMS, magic_grid
+
 #: where the components are, under DATA_DIR
 FOLDER = os.path.join('pca2d', 'components')
 #: where the kept observer bases are, under DATA_DIR: one folder per
@@ -353,15 +355,101 @@ class Basis:
         if n_earth > self.n_earth:
             raise ValueError('%d observer components asked of basis %s, which'
                              ' has %d' % (n_earth, self.name, self.n_earth))
-        if grid.size != self.grid.size or not np.allclose(
-                grid, self.grid, rtol=1e-12, atol=0):
-            raise ValueError(
-                'the cube is not on the grid of basis %s (%d samples from'
-                ' %.4f nm here, %d from %.4f nm there): same instrument and'
-                ' domain settings are needed' % (
-                    self.name, grid.size, grid[0], self.grid.size,
-                    self.grid[0]))
+        problem = self.grid_problem(grid)
+        if problem:
+            raise ValueError(problem)
         return self.components[:n_earth].copy()
+
+    def grid_problem(self, grid: np.ndarray) -> str:
+        """
+        Why the basis cannot be used on a cube's grid, said in full: what
+        differs (the step, the anchor or the domain), why it happens, and
+        that the basis must be rebuilt on this grid. Its components are
+        never re-sampled onto another grid, which would change them.
+
+        :param grid: np.ndarray, the cube's grid [nm]
+
+        :return: str, the explanation, '' when the grid is the basis' (same
+                 samples, same wavelengths)
+        """
+        grid = np.asarray(grid, dtype=float)
+        if grid.size == self.grid.size and np.allclose(
+                grid, self.grid, rtol=1e-12, atol=0):
+            return ''
+        step_here = np.log(grid[1] / grid[0])
+        step_there = np.log(self.grid[1] / self.grid[0])
+        dv_here = C_KMS * np.tanh(step_here)
+        dv_there = C_KMS * np.tanh(step_there)
+        # the basis' samples counted from this grid's first one: a whole
+        #   number when both grids are cut from the same log-uniform comb
+        offset = np.log(grid[0] / self.grid[0]) / step_there
+        if not np.isclose(step_here, step_there, rtol=1e-9, atol=0):
+            what = ('the step: %.6f km/s per sample here, %.6f km/s in the'
+                    ' basis (domain.dv)' % (dv_here, dv_there))
+        elif abs(offset - np.round(offset)) > 1e-6:
+            what = ('the anchor: the same step, but the two grids sample'
+                    ' other wavelengths (domain.wave0)')
+        else:
+            what = ('the wavelength domain (domain.wave_min, domain.wave_max):'
+                    ' the step and the anchor are the same')
+            missing = []
+            if grid[0] < self.grid[0] * (1 - 1e-12):
+                missing.append('%.4f to %.4f nm' % (grid[0], self.grid[0]))
+            if grid[-1] > self.grid[-1] * (1 + 1e-12):
+                missing.append('%.4f to %.4f nm' % (self.grid[-1], grid[-1]))
+            if missing:
+                what += ('; the basis has no components from %s, which this'
+                         ' run covers' % ' and from '.join(missing))
+        objects = ', '.join(sorted(set(str(o) for o in
+                                       self.training['object']))) or '?'
+        lines = [
+            'THE OBSERVER BASIS %s IS NOT ON THE GRID OF THIS RUN: THE BASIS'
+            ' MUST BE REBUILT.' % self.name,
+            '    this run : %d samples, %.4f to %.4f nm, %.6f km/s per sample'
+            % (grid.size, grid[0], grid[-1], dv_here),
+            '    the basis: %d samples, %.4f to %.4f nm, %.6f km/s per sample'
+            ' (%s, saved %s)' % (self.grid.size, self.grid[0], self.grid[-1],
+                                 dv_there, self.path,
+                                 self.header.get('DATE', '?')),
+            '    what differs: %s.' % what,
+            '    why: the basis was saved with other PCA2D domain settings'
+            ' than this run\'s: by an older LBL (whose PCA2D domain was not'
+            ' yet the wavemin and wavemax of the instrument\'s class), or'
+            ' with another domain.dv, wave0, wave_min or wave_max.',
+            '    what to do: REBUILD THE BASIS ON THIS GRID, with this LBL and'
+            ' this run\'s domain settings: run again the joint PCA2D fit that'
+            ' made it (PCA2D output_name=%r, on %s), then this run. Nothing'
+            ' else will do: the components of a basis are not re-sampled onto'
+            ' another grid, which would change them.' % (self.name, objects)]
+        return '\n'.join(lines)
+
+    def check_domain(self, domain: dict) -> bool:
+        """
+        The check on_grid makes at the fit, made before anything runs: stop
+        (ValueError, with the text of grid_problem) when a run of these
+        domain settings would make its cube on another grid than the
+        basis'. The grid is known in advance only when it is the magic grid
+        of a given dv: when dv is measured from the spectra (domain.smart_dv)
+        or the grid read from an s1d (grid_source 'native'), only the fit
+        can tell.
+
+        :param domain: dict, PCA2D's domain section as the run resolves it
+                       (wave0, dv, wave_min, wave_max, smart_dv, grid_source)
+
+        :return: bool, True when checked, False when it is left to the fit
+        """
+        if domain.get('smart_dv') or \
+                domain.get('grid_source', 'magic') != 'magic':
+            return False
+        keys = ('wave0', 'dv', 'wave_min', 'wave_max')
+        if any(domain.get(key) is None for key in keys):
+            return False
+        grid = magic_grid(domain['wave0'], domain['dv'], domain['wave_min'],
+                          domain['wave_max'])
+        problem = self.grid_problem(grid)
+        if problem:
+            raise ValueError(problem)
+        return True
 
     def check_compatible(self, instrument: str, data_source: str,
                          others: str = ''):
