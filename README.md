@@ -22,6 +22,10 @@ Compatible with:
 Optional: the two-frame PCA precleaning (pca2d) of the spectra before the
 velocities, with one `PCA2D` key in the wrap: see [lbl/doc/PCA2D.md](lbl/doc/PCA2D.md).
 
+The template is made from every pixel of every spectrum, without resampling
+(a local polynomial through them, with explicit derivatives): see
+[lbl/doc/TEMPLATE.md](lbl/doc/TEMPLATE.md).
+
 ---
 
 Please see our website for documentation: [lbl.exoplanets.ca](https://lbl.exoplanets.ca/)

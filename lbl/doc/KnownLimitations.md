@@ -49,12 +49,26 @@ named.
 - **Water is biased +6.6% at SNR 5** (unbiased at SNR 10).
 
 **Template and mask**
+- **A star measured against its own template loses about 1/N of its
+  velocities**, N its number of spectra: each spectrum is part of the
+  template. A velocity added to the 40 NIRPS spectra of GJ 1028 came back
+  0.978 times as large with BERVBIN, 0.983 with SCATTER; 1.000 with the 729
+  of eps Eri. With few spectra and the star's own template, a planet's K is
+  that much small.
+- **The SCATTER template takes about twice as long as BERVBIN** (4.4 against
+  2.1 min for 729 NIRPS spectra): the low passes of each spectrum, and the
+  files read twice when the orders do not fit in `TEMPLATE_SCATTER_MEMORY`.
+- **A SCATTER window much narrower than one resolution element shrinks the
+  velocities** (0.84 at 0.4 resolution element on GJ 1028): see
+  `TEMPLATE.md`. Nothing stops a user from setting it.
 - **`MASK_EDGE_NOISE_FACTOR` defaults to 1.0**, while the derivative noise
-  is 1.80 times the propagated one. `MASK_EDGE_NSIG` = 3 is therefore about
-  1.7 true sigma: on a synthetic sparse line list, 34% of the minima kept
-  are real lines.
-- **`file_level` is one number per file.** Where a file lacks a point, its
-  bin moves to the other files' local level: a 1.0% step in the test.
+  of a BERVBIN template is 1.80 times the propagated one. `MASK_EDGE_NSIG` = 3
+  is therefore about 1.7 true sigma: on a synthetic sparse line list, 34% of
+  the minima kept are real lines. (A SCATTER template gives the uncertainty
+  of its derivative from the fit, `eflux_savgol_d1`, calibrated.)
+- **`file_level` is one number per file** (BERVBIN). Where a file lacks a
+  point, its bin moves to the other files' local level: a 1.0% step in the
+  test.
 
 **Compute**
 - **Non-convergence is flagged only by `RESET_RV` and a large error:** a
