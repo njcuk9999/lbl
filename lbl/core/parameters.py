@@ -277,7 +277,9 @@ params.set(key='MASK_EDGE_NSIG', value=3.0, source=__NAME__,
 
 # multiplies the propagated uncertainty of the derivative of the template:
 #   the points of a template are correlated (its grid oversamples the pixels
-#   of the spectrograph) so the propagation underestimates the noise
+#   of the spectrograph) so the propagation underestimates the noise (a
+#   SCATTER template gives the uncertainty of its derivative itself, from the
+#   fit of the pixels)
 params.set(key='MASK_EDGE_NOISE_FACTOR', value=1.0, source=__NAME__,
            desc='Multiplies the propagated uncertainty of the derivative of '
                 'the template (correlated noise)', dtype=float)
@@ -798,6 +800,53 @@ params.set(key='SMALL_RV_SHIFT', value=True, source=__NAME__,
 # define the mnimal SNR required for a pixel to be considered valid in
 # the template
 params.set('TEMPLATE_SNR_THRES', 10, source=__NAME__)
+
+# how the template is made from the spectra. SCATTER: every pixel of every
+#   spectrum keeps its own wavelength in the star's frame, and the template
+#   and its derivatives are a local polynomial through the cloud of all the
+#   pixels of each order (lbl/science/template_scatter.py, after
+#   github.com/eartigau/templatepy): no spectrum is resampled. BERVBIN: the
+#   spectra resampled to s1d and the median of TEMPLATE_MEDBINMAX bins of
+#   BERV (the method before 2026-11). The FP and other calibrations are
+#   always made with BERVBIN
+params.set(key='TEMPLATE_METHOD', value='SCATTER', source=__NAME__,
+           desc='how the template is made: SCATTER (local polynomials '
+                'through the pixels of all the spectra) or BERVBIN (median '
+                'of the s1d spectra in bins of BERV)', dtype=str,
+           options=['SCATTER', 'BERVBIN'])
+# SCATTER: the FWHM of the Gaussian weight of the local polynomial, in
+#   resolution elements (c / APPROX_RESOLUTION), as the savgol window of the
+#   BERVBIN template. Not much narrower: a narrow window puts a sharp copy of
+#   each spectrum's own noise in the template, at that spectrum's pixels, and
+#   the velocity of the spectrum is then pulled towards the template's. On 40
+#   NIRPS spectra of GJ 1028, a velocity added to the spectra came out 0.84
+#   times as large with 0.4 resolution element (the 3 steps of the grid of
+#   templatepy), 0.98 with 0.93 (and 0.98 with BERVBIN); the pull grows as the
+#   SNR of the spectra falls
+params.set(key='TEMPLATE_SCATTER_FWHM', value=1.0, source=__NAME__,
+           desc='SCATTER template: FWHM of the window of the local '
+                'polynomial, in resolution elements', dtype=float)
+# SCATTER: the passes of fit, clip and low pass of each order
+params.set(key='TEMPLATE_SCATTER_NITER', value=4, source=__NAME__,
+           desc='SCATTER template: passes per order (fit, clip of the '
+                'pixels that are off in most spectra, low pass)', dtype=int)
+# SCATTER: points further than this many times the robust scale of the
+#   local residuals are left out of the local polynomial
+params.set(key='TEMPLATE_SCATTER_CLIP', value=5.0, source=__NAME__,
+           desc='SCATTER template: clip of the local outliers, in units of '
+                'the robust scale of the residuals', dtype=float)
+# SCATTER: a pixel of the detector whose residual, in units of its noise,
+#   has a median over the spectra beyond this is left out of all spectra
+#   (what stays on the detector while the star moves)
+params.set(key='TEMPLATE_SCATTER_OBS_CLIP', value=2.0, source=__NAME__,
+           desc='SCATTER template: clip of the detector pixels whose median '
+                'residual over the spectra exceeds this many sigma',
+           dtype=float)
+# SCATTER: the memory for the pixels of the orders read at once [GB]; more
+#   orders than fit are read in several passes over the files
+params.set(key='TEMPLATE_SCATTER_MEMORY', value=2.0, source=__NAME__,
+           desc='SCATTER template: memory for the orders read at once [GB]',
+           dtype=float)
 
 # ---------------------------------------------------------------------
 # Parameters for the PCA2D precleaning (lbl.pca2d)

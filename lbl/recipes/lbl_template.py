@@ -12,6 +12,7 @@ Created on 2021-08-24
 import os
 import traceback
 import warnings
+from functools import partial
 from typing import List
 
 import numpy as np
@@ -28,6 +29,7 @@ from lbl.resources import lbl_misc
 from lbl.science import apero
 from lbl.science import general
 from lbl.science import planets
+from lbl.science import template_scatter
 
 # =============================================================================
 # Define variables
@@ -253,171 +255,19 @@ def _nanpercentile_rows(cube: np.ndarray, percents: List[float]
     return np.nanpercentile(cube, percents, axis=1)
 
 
-def run_template(inst, objname: str, objkind: str):
-    # get tqdm
-    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
-    # must force object science to object template
-    inst.params['OBJECT_SCIENCE'] = str(objname)
-    # check data type
-    general.check_data_type(inst.params['DATA_TYPE'])
-    # -------------------------------------------------------------------------
-    # Step 1: Set up data directory
-    # -------------------------------------------------------------------------
-    dparams = select.make_all_directories(inst)
-    template_dir, science_dir = dparams['TEMPLATE_DIR'], dparams['SCIENCE_DIR']
-    calib_dir = dparams['CALIB_DIR']
-    # -------------------------------------------------------------------------
-    # Step 2: Check and set filenames
-    # -------------------------------------------------------------------------
-    # template filename
-    template_file = inst.template_file(template_dir, objkind, required=False)
-    # a vetted template is the depot's, never made again from spectra (it
-    #   has none here): template_file put it there
-    if vetted.is_vetted(objname):
-        log.general('{0} is a vetted template: {1}'.format(objname,
-                                                           template_file))
-        return locals()
+def _bervbin_template(inst, science_files, blaze, calib_dir, wavegrid,
+                      grid_step_magic, hp_width, rv0, drv0, berv, nbin,
+                      planets_used, flat_rv, n_passes, tqdm):
+    """
+    The template as the median of the spectra resampled to s1d (e2ds_to_s1d)
+    and stacked in nbin bins of BERV (TEMPLATE_METHOD = 'BERVBIN'), the
+    velocities iterated on in up to n_passes passes
 
-    # science filenames
-    science_files = inst.science_files(science_dir)
-    # -------------------------------------------------------------------------
-    # Step 3: Check if template exists
-    # -------------------------------------------------------------------------
-    # the token of the spectra the template is made from (provenance): a
-    #   template on disk made from other spectra (more were added, some
-    #   removed) is made again. One made before tokens existed is kept
-    #   unless a spectrum is newer than it, and is given its token
-    inputs_token = provenance.token(science_files)
-    exists = os.path.exists(template_file)
-    if exists and provenance.recorded(template_file) is None and \
-            not provenance.older_than(template_file, science_files):
-        provenance.record(template_file, inputs_token, len(science_files))
-    current = provenance.is_current(template_file, inputs_token)
-    if exists and current and not inst.params['OVERWRITE']:
-        # log that mask exist
-        msg = 'Template {0} exists. Skipping template creation. '
-        log.warning(msg.format(template_file))
-        log.warning('Set --overwrite to recalculate mask')
-        # return here
-        return locals()
-    elif exists and inst.params['OVERWRITE']:
-        log.general(f'--overwrite=True. Recalculating template {template_file}')
-    elif exists:
-        log.general(f'Template {template_file} was made from other spectra '
-                    f'than the {len(science_files)} there now. Calculating '
-                    f'template.')
-    else:
-        log.general(f'Could not find {template_file}. Calculating template.')
-
-    # -------------------------------------------------------------------------
-    # Step 2: Check and set filenames (after checking if template exists)
-    # -------------------------------------------------------------------------
-    # blaze filename (None if not set)
-    blaze_file = inst.blaze_file(calib_dir)
-    # load blaze file if set
-    if blaze_file is not None:
-        blaze = inst.load_blaze(blaze_file, science_file=str(science_files[0]),
-                                normalize=False)
-    else:
-        blaze = None
-
-    # -------------------------------------------------------------------------
-    # Step 4: Deal with reference file (first file)
-    # -------------------------------------------------------------------------
-    # may need to filter out calibrations
-    science_files = inst.filter_files(science_files)
-    # select the most recent science file as a reference file
-    refimage, refhdr = inst.load_science_file(science_files[-1])
-    # get wave solution for reference file
-    refwave = inst.get_wave_solution(science_files[-1], refimage, refhdr)
-    # get domain coverage
-    wavemin = inst.params['COMPIL_WAVE_MIN']
-    wavemax = inst.params['COMPIL_WAVE_MAX']
-    # work out a valid velocity step in m/s
-    grid_step_magic = general.get_velocity_step(refwave)
-    # grid scale for the template
-    wavegrid = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
-                                      dv_grid=grid_step_magic)
-    # the width of the low pass filters, HP_WIDTH [km/s] in points of this
-    #   grid, the one they are applied on
-    hp_width = lowpass_points(inst.params['HP_WIDTH'], grid_step_magic)
-    # -------------------------------------------------------------------------
-    # Step 5: Loop around each file and load into cube
-    # -------------------------------------------------------------------------
-
-    # We do not want to put to overwhelm the memory, so we construct the
-    # flux cube with a hierarchcal binning. We first determine the number of
-    # files and and we have too many, we stack every Nth file into a smaller
-    # cube .
-
-    # We first determine the number of files and we have too many, we stack
-    # every Nth file into a smaller cube
-    nmaxbins = inst.params['TEMPLATE_MEDBINMAX']
-    nbin = np.min([nmaxbins, len(science_files)])
-    # create a cube that contains one line for each file
-    flux_cube = np.zeros([len(wavegrid), nbin])
-    # we also keep track of odd/even order contributions
-    odd_cube = np.zeros([len(wavegrid), nbin])
-    even_cube = np.zeros([len(wavegrid), nbin])
-
-    # weight cube to account for order overlap
-    weight_cube = np.zeros([len(wavegrid), nbin])
-    # same odd/even with the weights
-    odd_weight_cube = np.zeros([len(wavegrid), nbin])
-    even_weight_cube = np.zeros([len(wavegrid), nbin])
-    # storage for the rv and drv0
-    rv0 = np.zeros_like(science_files, dtype=float)
-    drv0 = np.zeros_like(science_files, dtype=float)
-
-    berv = np.zeros_like(science_files, dtype=float)
-    # the time of each spectrum [BJD], for the companions' velocities
-    bjd = np.zeros_like(science_files, dtype=float)
-    use_planets = (bool(inst.params['PLANETS'])
-                   and inst.params['DATA_TYPE'] == 'SCIENCE')
-    for sci_it in range(len(science_files)):
-        sci_hdr = _load_template_header(inst, science_files[sci_it])
-        berv[sci_it] = inst.get_berv(sci_hdr)
-        if use_planets:
-            # RJD = JD - 2400000
-            try:
-                bjd[sci_it] = inst.get_rjd_value(sci_hdr) + 2400000.0
-            except Exception as exc:
-                msg = ('PLANETS: no time for {0} ({1}): the known '
-                       'orbits are not used')
-                log.warning(msg.format(science_files[sci_it], exc))
-                use_planets = False
-    # -------------------------------------------------------------------------
-    # PLANETS: the known companions of the star. If the catalogs have their
-    #   orbits, every spectrum is registered with its BERV and their velocity
-    #   at its time, and the template is made in one pass; if not (None), the
-    #   velocities are iterated on as below
-    planets_used = None
-    if use_planets:
-        header_names = [refhdr.get(inst.params.get('KW_OBJNAME', 'OBJECT')),
-                        refhdr.get('DRSOBJN')]
-        planets_used = planets.orbits_for(
-            planets.star_names(objname, header_names),
-            inst.params['DATA_DIR'])
-    if planets_used is not None:
-        log.info('PLANETS: the template is made on BERV + the Keplerian '
-                 'velocity of each spectrum, in one pass')
-        rv0 = planets.star_velocity(bjd, planets_used['orbits'])
-        planets_used['velocity'] = np.array(rv0)
-        msg = ('PLANETS: velocity of the star from {0:.1f} to {1:.1f} m/s '
-               'over the {2} spectra')
-        log.info(msg.format(np.min(rv0), np.max(rv0), len(rv0)))
-    # SMALL_RV_SHIFT: the star's velocity taken as constant, the template
-    #   made in one pass on BERV alone (unless its orbits are known above);
-    #   False iterates on the velocities below
-    flat_rv = (planets_used is None and bool(inst.params['SMALL_RV_SHIFT'])
-               and inst.params['DATA_TYPE'] == 'SCIENCE')
-    if flat_rv:
-        log.info('SMALL_RV_SHIFT: the velocity of the star is taken as '
-                 'constant: the template is made on BERV alone, in one pass '
-                 '(SMALL_RV_SHIFT = False iterates on the velocities)')
-    # the passes: one when the velocities are known (or taken as
-    #   constant), up to 5 otherwise
-    n_passes = 1 if (planets_used is not None or flat_rv) else 5
+    :return: dict(p50, p50_odd, p50_even, rms, rms_odd, rms_even,
+             sci_table, rv0, berv)
+    """
+    # the velocity corrections are updated in place: a copy
+    drv0 = np.array(drv0)
     # storage of the science table
     med_spec_hp = 1
     # we distribute the files in bins of equal size ordered by berv
@@ -735,6 +585,238 @@ def run_template(inst, objname: str, objkind: str):
         low_snr_even = snr_even < snr_threshold
         p50_even[low_snr_even] = np.nan
         rms_even[low_snr_even] = np.nan
+    return dict(p50=p50, p50_odd=p50_odd, p50_even=p50_even, rms=rms,
+                rms_odd=rms_odd, rms_even=rms_even, sci_table=sci_table,
+                rv0=rv0, berv=berv, flux_cube=flux_cube, ibin=ibin)
+
+
+def run_template(inst, objname: str, objkind: str):
+    # get tqdm
+    tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
+    # must force object science to object template
+    inst.params['OBJECT_SCIENCE'] = str(objname)
+    # check data type
+    general.check_data_type(inst.params['DATA_TYPE'])
+    # -------------------------------------------------------------------------
+    # Step 1: Set up data directory
+    # -------------------------------------------------------------------------
+    dparams = select.make_all_directories(inst)
+    template_dir, science_dir = dparams['TEMPLATE_DIR'], dparams['SCIENCE_DIR']
+    calib_dir = dparams['CALIB_DIR']
+    # -------------------------------------------------------------------------
+    # Step 2: Check and set filenames
+    # -------------------------------------------------------------------------
+    # template filename
+    template_file = inst.template_file(template_dir, objkind, required=False)
+    # a vetted template is the depot's, never made again from spectra (it
+    #   has none here): template_file put it there
+    if vetted.is_vetted(objname):
+        log.general('{0} is a vetted template: {1}'.format(objname,
+                                                           template_file))
+        return locals()
+
+    # science filenames
+    science_files = inst.science_files(science_dir)
+    # -------------------------------------------------------------------------
+    # Step 3: Check if template exists
+    # -------------------------------------------------------------------------
+    # the token of the spectra the template is made from (provenance): a
+    #   template on disk made from other spectra (more were added, some
+    #   removed) is made again. One made before tokens existed is kept
+    #   unless a spectrum is newer than it, and is given its token
+    # the method of the template (SCATTER for science spectra; the FP and the
+    #   other calibrations are made with BERVBIN)
+    template_method = str(inst.params['TEMPLATE_METHOD']).upper()
+    if template_method not in ('SCATTER', 'BERVBIN'):
+        raise LblException('TEMPLATE_METHOD must be SCATTER or BERVBIN, '
+                           'not {0}'.format(template_method))
+    if template_method == 'SCATTER' and inst.params['DATA_TYPE'] != 'SCIENCE':
+        template_method = 'BERVBIN'
+    # a SCATTER template is not one made from the same files by BERVBIN
+    if template_method == 'SCATTER':
+        inputs_token = provenance.token(
+            science_files, extra=dict(method='SCATTER', version=1))
+    else:
+        inputs_token = provenance.token(science_files)
+    exists = os.path.exists(template_file)
+    if exists and provenance.recorded(template_file) is None and \
+            not provenance.older_than(template_file, science_files):
+        provenance.record(template_file, inputs_token, len(science_files))
+    current = provenance.is_current(template_file, inputs_token)
+    if exists and current and not inst.params['OVERWRITE']:
+        # log that mask exist
+        msg = 'Template {0} exists. Skipping template creation. '
+        log.warning(msg.format(template_file))
+        log.warning('Set --overwrite to recalculate mask')
+        # return here
+        return locals()
+    elif exists and inst.params['OVERWRITE']:
+        log.general(f'--overwrite=True. Recalculating template {template_file}')
+    elif exists:
+        log.general(f'Template {template_file} was made from other spectra '
+                    f'than the {len(science_files)} there now. Calculating '
+                    f'template.')
+    else:
+        log.general(f'Could not find {template_file}. Calculating template.')
+
+    # -------------------------------------------------------------------------
+    # Step 2: Check and set filenames (after checking if template exists)
+    # -------------------------------------------------------------------------
+    # blaze filename (None if not set)
+    blaze_file = inst.blaze_file(calib_dir)
+    # load blaze file if set
+    if blaze_file is not None:
+        blaze = inst.load_blaze(blaze_file, science_file=str(science_files[0]),
+                                normalize=False)
+    else:
+        blaze = None
+
+    # -------------------------------------------------------------------------
+    # Step 4: Deal with reference file (first file)
+    # -------------------------------------------------------------------------
+    # may need to filter out calibrations
+    science_files = inst.filter_files(science_files)
+    # select the most recent science file as a reference file
+    refimage, refhdr = inst.load_science_file(science_files[-1])
+    # get wave solution for reference file
+    refwave = inst.get_wave_solution(science_files[-1], refimage, refhdr)
+    # get domain coverage
+    wavemin = inst.params['COMPIL_WAVE_MIN']
+    wavemax = inst.params['COMPIL_WAVE_MAX']
+    # work out a valid velocity step in m/s
+    grid_step_magic = general.get_velocity_step(refwave)
+    # grid scale for the template
+    wavegrid = general.get_magic_grid(wave0=wavemin, wave1=wavemax,
+                                      dv_grid=grid_step_magic)
+    # the width of the low pass filters, HP_WIDTH [km/s] in points of this
+    #   grid, the one they are applied on
+    hp_width = lowpass_points(inst.params['HP_WIDTH'], grid_step_magic)
+    # -------------------------------------------------------------------------
+    # Step 5: Loop around each file and load into cube
+    # -------------------------------------------------------------------------
+
+    # We do not want to put to overwhelm the memory, so we construct the
+    # flux cube with a hierarchcal binning. We first determine the number of
+    # files and and we have too many, we stack every Nth file into a smaller
+    # cube .
+
+    # We first determine the number of files and we have too many, we stack
+    # every Nth file into a smaller cube
+    nmaxbins = inst.params['TEMPLATE_MEDBINMAX']
+    nbin = np.min([nmaxbins, len(science_files)])
+    # create a cube that contains one line for each file
+    flux_cube = np.zeros([len(wavegrid), nbin])
+    # we also keep track of odd/even order contributions
+    odd_cube = np.zeros([len(wavegrid), nbin])
+    even_cube = np.zeros([len(wavegrid), nbin])
+
+    # weight cube to account for order overlap
+    weight_cube = np.zeros([len(wavegrid), nbin])
+    # same odd/even with the weights
+    odd_weight_cube = np.zeros([len(wavegrid), nbin])
+    even_weight_cube = np.zeros([len(wavegrid), nbin])
+    # storage for the rv and drv0
+    rv0 = np.zeros_like(science_files, dtype=float)
+    drv0 = np.zeros_like(science_files, dtype=float)
+
+    berv = np.zeros_like(science_files, dtype=float)
+    # the time of each spectrum [BJD], for the companions' velocities
+    bjd = np.zeros_like(science_files, dtype=float)
+    use_planets = (bool(inst.params['PLANETS'])
+                   and inst.params['DATA_TYPE'] == 'SCIENCE')
+    for sci_it in range(len(science_files)):
+        sci_hdr = _load_template_header(inst, science_files[sci_it])
+        berv[sci_it] = inst.get_berv(sci_hdr)
+        if use_planets:
+            # RJD = JD - 2400000
+            try:
+                bjd[sci_it] = inst.get_rjd_value(sci_hdr) + 2400000.0
+            except Exception as exc:
+                msg = ('PLANETS: no time for {0} ({1}): the known '
+                       'orbits are not used')
+                log.warning(msg.format(science_files[sci_it], exc))
+                use_planets = False
+    # -------------------------------------------------------------------------
+    # PLANETS: the known companions of the star. If the catalogs have their
+    #   orbits, every spectrum is registered with its BERV and their velocity
+    #   at its time, and the template is made in one pass; if not (None), the
+    #   velocities are iterated on as below
+    planets_used = None
+    if use_planets:
+        header_names = [refhdr.get(inst.params.get('KW_OBJNAME', 'OBJECT')),
+                        refhdr.get('DRSOBJN')]
+        planets_used = planets.orbits_for(
+            planets.star_names(objname, header_names),
+            inst.params['DATA_DIR'])
+    if planets_used is not None:
+        log.info('PLANETS: the template is made on BERV + the Keplerian '
+                 'velocity of each spectrum, in one pass')
+        rv0 = planets.star_velocity(bjd, planets_used['orbits'])
+        planets_used['velocity'] = np.array(rv0)
+        msg = ('PLANETS: velocity of the star from {0:.1f} to {1:.1f} m/s '
+               'over the {2} spectra')
+        log.info(msg.format(np.min(rv0), np.max(rv0), len(rv0)))
+    # SMALL_RV_SHIFT: the star's velocity taken as constant, the template
+    #   made in one pass on BERV alone (unless its orbits are known above);
+    #   False iterates on the velocities below
+    flat_rv = (planets_used is None and bool(inst.params['SMALL_RV_SHIFT'])
+               and inst.params['DATA_TYPE'] == 'SCIENCE')
+    if flat_rv:
+        log.info('SMALL_RV_SHIFT: the velocity of the star is taken as '
+                 'constant: the template is made on BERV alone, in one pass '
+                 '(SMALL_RV_SHIFT = False iterates on the velocities)')
+    # the passes: one when the velocities are known (or taken as
+    #   constant), up to 5 otherwise
+    n_passes = 1 if (planets_used is not None or flat_rv) else 5
+    # the template: local polynomials through the pixels of all the spectra,
+    #   none resampled (SCATTER), or the median of the spectra resampled and
+    #   stacked in bins of BERV (BERVBIN, also for the FP)
+    if template_method == 'SCATTER':
+        built = template_scatter.build(
+            inst, science_files, partial(_load_template_science, inst), blaze,
+            calib_dir, wavegrid, berv, rv0, iterate_rv=(n_passes > 1),
+            tqdm=tqdm)
+        p50, p50_odd, p50_even = (built['flux'], built['flux_odd'],
+                                  built['flux_even'])
+        eflux, eflux_odd, eflux_even = (built['eflux'], built['eflux_odd'],
+                                        built['eflux_even'])
+        # the rms columns the mask reads as BERVBIN's: template_uncertainty
+        #   takes sqrt(pi / 2) rms / sqrt(nbin) for the uncertainty of the
+        #   template, which is eflux here
+        to_rms = np.sqrt(nbin) / np.sqrt(np.pi / 2)
+        rms, rms_odd, rms_even = (eflux * to_rms, eflux_odd * to_rms,
+                                  eflux_even * to_rms)
+        sci_table, rv0 = built['sci_table'], built['rv0']
+        savgol_fluxes = built['savgol_fluxes']
+        # the points of the odd and even templates under TEMPLATE_SNR_THRES
+        #   (their SNR low passed), as BERVBIN
+        snr_threshold = inst.params['TEMPLATE_SNR_THRES']
+        for key, flux_p, rms_p in (('flux_odd', p50_odd, rms_odd),
+                                   ('flux_even', p50_even, rms_even)):
+            with warnings.catch_warnings(record=True) as _:
+                snr = mp.lowpassfilter(flux_p / rms_p, hp_width)
+                low_snr = ~(snr >= snr_threshold)
+            flux_p[low_snr] = np.nan
+            rms_p[low_snr] = np.nan
+            for deriv in range(4):
+                savgol_fluxes['{0}_savgol_d{1}'.format(key, deriv)][low_snr] = \
+                    np.nan
+        sci_table['VSYS'] = rv0
+        if planets_used is not None:
+            sci_table['VKEP'] = np.array(planets_used['velocity'])
+    else:
+        built = _bervbin_template(inst, science_files, blaze, calib_dir,
+                                  wavegrid, grid_step_magic, hp_width, rv0,
+                                  drv0, berv, nbin, planets_used, flat_rv,
+                                  n_passes, tqdm)
+        p50, p50_odd, p50_even = (built['p50'], built['p50_odd'],
+                                  built['p50_even'])
+        rms, rms_odd, rms_even = (built['rms'], built['rms_odd'],
+                                  built['rms_even'])
+        eflux, eflux_odd, eflux_even = rms, rms_odd, rms_even
+        sci_table, rv0, berv = (built['sci_table'], built['rv0'],
+                                built['berv'])
+        savgol_fluxes = None
     # -------------------------------------------------------------------------
     # other parameters for the header
     nfiles = len(science_files)
@@ -753,17 +835,22 @@ def run_template(inst, objname: str, objkind: str):
     # Step 8. Calculate Savitzky-Golay filtered template for better handling
     #         of higher derivatives
     # -------------------------------------------------------------------------
-    savgol_fluxes = inst.calculate_savgol_template(dv_grid=grid_step_magic,
-                                                   flux_dict=dict(flux=p50,
-                                                   flux_odd=p50_odd,
-                                                   flux_even=p50_even))
+    # (SCATTER has them already: the derivatives of its local polynomials)
+    if savgol_fluxes is None:
+        savgol_fluxes = inst.calculate_savgol_template(
+            dv_grid=grid_step_magic,
+            flux_dict=dict(flux=p50, flux_odd=p50_odd, flux_even=p50_even))
     # set a key to tell us the type of template created
     if len(savgol_fluxes) > 0:
-        template_type = 'LBL_SAVGOL'
+        if template_method == 'SCATTER':
+            template_type = 'LBL_SCATTER'
+        else:
+            template_type = 'LBL_SAVGOL'
         # repeat quality control checks for savgol fluxes
         for col in savgol_fluxes:
-            # skip odd cols (we will deal with odd/even in even cases)
-            if 'odd' in col:
+            # skip odd cols (we will deal with odd/even in even cases) and the
+            #   uncertainties
+            if 'odd' in col or col.startswith('eflux'):
                 continue
             # deal with even (odd + even)
             elif 'even' in col:
@@ -814,9 +901,9 @@ def run_template(inst, objname: str, objkind: str):
     # Step 9. Write template
     # -------------------------------------------------------------------------
     # get props
-    props = dict(wavelength=wavegrid, flux=p50, eflux=rms, rms=rms,
-                 flux_odd=p50_odd, eflux_odd=rms_odd, flux_even=p50_even,
-                 eflux_even=rms_even, rms_odd=rms_odd,
+    props = dict(wavelength=wavegrid, flux=p50, eflux=eflux, rms=rms,
+                 flux_odd=p50_odd, eflux_odd=eflux_odd, flux_even=p50_even,
+                 eflux_even=eflux_even, rms_odd=rms_odd,
                  rms_even=rms_even, template_coverage=template_coverage,
                  total_nobs_berv=total_nobs_berv, template_nobs=nfiles,
                  savgol_fluxes=savgol_fluxes, template_type=template_type,

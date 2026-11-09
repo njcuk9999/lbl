@@ -3947,12 +3947,17 @@ def find_mask_lines_significant(inst: InstrumentsType, template_table: Table,
     # -------------------------------------------------------------------------
     # uncertainty of each point of the template
     sigma_template = template_uncertainty(inst, template_table, template_hdr)
-    # the window of the savgol filter lbl_template applied, and the
-    #   coefficients of its first derivative
-    window = savgol_window_of_template(inst, template_table)
-    _, coeffs = mp.gaussian_weighted_savgol_coeffs(window, 3, 1)
-    # the uncertainty of the derivative, times MASK_EDGE_NOISE_FACTOR
-    sigma_dflux = derivative_uncertainty(sigma_template, coeffs)
+    if 'eflux_savgol_d1' in template_table.colnames:
+        # the template gives it (TEMPLATE_METHOD = SCATTER: the uncertainty of
+        #   the slope of its local polynomials, fitted on the pixels)
+        sigma_dflux = np.array(template_table['eflux_savgol_d1'])
+    else:
+        # the window of the savgol filter lbl_template applied, and the
+        #   coefficients of its first derivative
+        window = savgol_window_of_template(inst, template_table)
+        _, coeffs = mp.gaussian_weighted_savgol_coeffs(window, 3, 1)
+        sigma_dflux = derivative_uncertainty(sigma_template, coeffs)
+    # times MASK_EDGE_NOISE_FACTOR
     sigma_dflux = sigma_dflux * inst.params['MASK_EDGE_NOISE_FACTOR']
     # print the quality of the template
     with warnings.catch_warnings(record=True) as _:
