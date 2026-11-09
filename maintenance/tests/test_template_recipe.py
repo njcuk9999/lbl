@@ -227,27 +227,35 @@ class Moving(Files):
 
 
 def test_the_scatter_template_is_the_star_within_its_uncertainty(tmp_path):
-    # SCATTER (the default): the template and its derivative are the star's,
-    #   their scatter about it is the uncertainty they carry, and the orders
-    #   join without a step
-    files = Files(nfile=24)
-    _, table = _run(files, tmp_path)
-    wave, flux = np.array(table['wavelength']), np.array(table['flux'])
-    good = np.isfinite(flux) & (wave > files.wave.min() + 1) & \
-        (wave < files.wave.max() - 1)
-    wave, flux = wave[good], flux[good]
-    truth = files.star(wave)
-    level = mp.lowpassfilter(flux / truth, 501)
+    # SCATTER (the default): against the template of the same star without
+    #   noise, the template and its derivative scatter by the uncertainties
+    #   they carry; that template is the star but for the smoothing of a
+    #   window of one resolution element (as the savgol of BERVBIN); the
+    #   orders join without a step
+    tables = []
+    for counts in (4e4, 1e10):
+        files = Files(nfile=24, counts=counts)
+        (tmp_path / str(counts)).mkdir()
+        _, table = _run(files, tmp_path / str(counts))
+        tables.append(table)
+    noisy, clean = tables
+    wave = np.array(noisy['wavelength'])
+    good = np.isfinite(noisy['flux']) & np.isfinite(clean['flux']) & \
+        (wave > files.wave.min() + 1) & (wave < files.wave.max() - 1)
+    flux, flux0 = np.array(noisy['flux'])[good], np.array(clean['flux'])[good]
+    truth = files.star(wave[good])
+    level = mp.lowpassfilter(flux0 / truth, 501)
     assert np.ptp(level) < 3e-3
-    ratio = np.std(flux - truth * level) / np.median(table['eflux'][good])
-    assert 0.8 < ratio < 1.3
+    assert np.std(flux0 - truth * level) < 1e-3
+    # the two templates on the same level (their medians differ)
+    level0 = mp.lowpassfilter(flux / flux0, 501)
+    ratio = np.std(flux - flux0 * level0) / np.median(noisy['eflux'][good])
+    assert 0.8 < ratio < 1.25
     # the derivative per step of the grid
-    dln, h = np.log(wave[1] / wave[0]), 0.01
-    slope = (files.star(wave * np.exp(h * dln)) -
-             files.star(wave * np.exp(-h * dln))) / (2 * h)
-    error = np.array(table['flux_savgol_d1'])[good] - slope * level
-    ratio = np.std(error) / np.median(table['eflux_savgol_d1'][good])
-    assert 0.8 < ratio < 1.35
+    error = np.array(noisy['flux_savgol_d1'])[good] - \
+        np.array(clean['flux_savgol_d1'])[good] * level0
+    ratio = np.std(error) / np.median(noisy['eflux_savgol_d1'][good])
+    assert 0.8 < ratio < 1.25
 
 
 def test_the_scatter_template_measures_the_velocities_of_the_star(tmp_path):

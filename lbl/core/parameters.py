@@ -830,8 +830,9 @@ params.set(key='TEMPLATE_SCATTER_FWHM', value=1.0, source=__NAME__,
 params.set(key='TEMPLATE_SCATTER_NITER', value=4, source=__NAME__,
            desc='SCATTER template: passes per order (fit, clip of the '
                 'pixels that are off in most spectra, low pass)', dtype=int)
-# SCATTER: points further than this many times the robust scale of the
-#   local residuals are left out of the local polynomial
+# SCATTER: points further from the local polynomial than this many times
+#   the RMS of the residuals (in units of their noise) of its window are left
+#   out of it
 params.set(key='TEMPLATE_SCATTER_CLIP', value=5.0, source=__NAME__,
            desc='SCATTER template: clip of the local outliers, in units of '
                 'the robust scale of the residuals', dtype=float)

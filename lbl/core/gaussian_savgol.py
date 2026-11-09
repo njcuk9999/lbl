@@ -4,13 +4,18 @@
 A Gaussian-weighted Savitzky-Golay filter for points that are not on a grid:
 a local polynomial fitted by weighted least squares around each output point,
 with Gaussian weights in x, the points' own weights, and a clip of the
-outliers on the local median absolute deviation.
+outliers on the local scale of the normalised residuals.
 
 It is what the template is made of (lbl.science.template_scatter): the pixels
 of all the spectra of a star, each at its own wavelength in the star's frame,
 form one cloud of points, and the template and its derivatives are the local
 polynomial at each point of the template's grid. No spectrum is ever
 resampled, and the derivatives are those of the fitted polynomial.
+
+Each fit is one pass over the points of its window: the normal equations of
+a polynomial in u are made of the moments sum(weight * u**p), p = 0 to
+2 * polyorder, so these moments (and those of the squared weights, for the
+covariance) are all that is summed; the residuals come from the same sums.
 
 From templatepy (github.com/eartigau/templatepy, gaussian_savgol.py, MIT,
 Etienne Artigau), with the derivatives 0 to n returned in one pass, with
@@ -64,156 +69,117 @@ def _solve(mat: np.ndarray, vec: np.ndarray) -> np.ndarray:
     return out
 
 
-@njit(cache=True)
-def _normal(u: np.ndarray, yy: np.ndarray, ww: np.ndarray, m: int):
-    """The normal equations of a weighted polynomial fit in u: V'WV, V'Wy"""
-    mat = np.zeros((m, m))
-    vec = np.zeros(m)
-    powers = np.empty(m)
-    for i in range(len(u)):
-        w = ww[i]
-        if w <= 0:
-            continue
-        powers[0] = 1.0
-        for j in range(1, m):
-            powers[j] = powers[j - 1] * u[i]
-        for j in range(m):
-            vec[j] += w * powers[j] * yy[i]
-            for k in range(m):
-                mat[j, k] += w * powers[j] * powers[k]
-    return mat, vec
-
-
-@njit(cache=True)
-def _poly(coeffs: np.ndarray, u: float) -> float:
-    acc = 0.0
-    for j in range(len(coeffs) - 1, -1, -1):
-        acc = acc * u + coeffs[j]
-    return acc
-
-
-@njit(cache=True)
-def _weighted_median(values: np.ndarray, weights: np.ndarray) -> float:
-    """The weighted median of values (weights >= 0)"""
-    idx = np.argsort(values)
-    total = 0.0
-    for i in range(len(values)):
-        total += weights[i]
-    if total <= 0:
-        return np.nan
-    acc = 0.0
-    for i in range(len(values)):
-        acc += weights[idx[i]]
-        if acc >= 0.5 * total:
-            return values[idx[i]]
-    return values[idx[len(values) - 1]]
-
-
 @njit(parallel=True, cache=True)
-def _scatter_savgol(x, y, w, x_out, sigma_x, radius, polyorder, nderiv,
-                    sigma_clip, clip_iter, min_side):
+def _fit(x, y, w, x_out, sigma_x, radius, polyorder, min_side):
+    """The coefficients of the local polynomial in u = (x - x0) / radius at
+    each x0 of x_out, their uncertainties, and the mean square of the
+    normalised residuals in the window (NaN without enough points); the
+    points of weight 0 are left out"""
     n_out = len(x_out)
     m = polyorder + 1
-    derivs = np.full((n_out, nderiv + 1), np.nan)
-    errs = np.full((n_out, nderiv + 1), np.nan)
+    npow = 2 * m - 1
+    coeffs = np.full((n_out, m), np.nan)
+    errors = np.full((n_out, m), np.nan)
+    msr = np.full(n_out, np.nan)
+    inv_var = 1.0 / sigma_x ** 2
     for i in prange(n_out):
         x0 = x_out[i]
         left = np.searchsorted(x, x0 - radius)
         right = np.searchsorted(x, x0 + radius)
-        n = right - left
-        if n < m + 1:
+        if right - left < m + 1:
             continue
+        # the moments: sum g w u^p (normal equations), sum g^2 w u^p
+        #   (sandwich covariance), sum g w y u^j, sum g w y^2, sum g
+        mom = np.zeros(npow)
+        mom2 = np.zeros(npow)
+        vec = np.zeros(m)
+        syy = 0.0
+        sumg = 0.0
+        nleft = 0
+        nright = 0
+        for k in range(left, right):
+            wk = w[k]
+            if wk <= 0:
+                continue
+            d = x[k] - x0
+            u = d / radius
+            g = math.exp(-0.5 * d * d * inv_var)
+            gw = g * wk
+            g2w = g * gw
+            yk = y[k]
+            power = 1.0
+            for p in range(npow):
+                mom[p] += gw * power
+                mom2[p] += g2w * power
+                if p < m:
+                    vec[p] += gw * yk * power
+                power *= u
+            syy += gw * yk * yk
+            sumg += g
+            if d < 0:
+                nleft += 1
+            else:
+                nright += 1
         # points on both sides: the polynomial is never extrapolated (edges
         #   of an order, a masked telluric band)
-        mid = np.searchsorted(x, x0)
-        if (mid - left) < min_side or (right - mid) < min_side:
+        if nleft + nright < m + 1 or nleft < min_side or nright < min_side:
             continue
-        # u in units of the radius, for the conditioning of the fit
-        u = np.empty(n)
-        g = np.empty(n)
-        yy = np.empty(n)
-        wi = np.empty(n)
-        for k in range(n):
-            d = x[left + k] - x0
-            u[k] = d / radius
-            g[k] = math.exp(-0.5 * (d / sigma_x) ** 2)
-            yy[k] = y[left + k]
-            wi[k] = w[left + k]
-        base = g * wi
-        cw = base.copy()
-        coeffs = np.zeros(m)
-        zabs = np.empty(n)
-        for it in range(clip_iter + 1):
-            mat, vec = _normal(u, yy, cw, m)
-            coeffs = _solve(mat, vec)
-            if it == clip_iter or sigma_clip <= 0:
-                break
-            # residuals in units of each point's own error (w = 1/sigma**2),
-            #   their robust scale from the median absolute value
-            for k in range(n):
-                zabs[k] = abs(yy[k] - _poly(coeffs, u[k])) * math.sqrt(wi[k])
-            scale = 1.4826 * _weighted_median(zabs, g)
-            if not scale > 0:
-                break
-            ngood = 0
-            for k in range(n):
-                if zabs[k] > sigma_clip * scale:
-                    cw[k] = 0.0
-                else:
-                    cw[k] = base[k]
-                    ngood += 1
-            if ngood < m + 1:
-                cw = base.copy()
-                mat, vec = _normal(u, yy, cw, m)
-                coeffs = _solve(mat, vec)
-                break
-        # the derivatives in x: d^k/dx^k at x0 = k! c_k / radius^k
-        for k in range(min(nderiv, polyorder) + 1):
-            derivs[i, k] = coeffs[k] * math.gamma(k + 1.0) / radius ** k
-        for k in range(polyorder + 1, nderiv + 1):
-            derivs[i, k] = 0.0
-        # the uncertainties: the sandwich covariance of the weighted fit,
-        #   the points' errors scaled by the mean square of their normalised
-        #   residuals (the weights w are relative)
-        sumg = 0.0
-        sumz2 = 0.0
-        for k in range(n):
-            if cw[k] > 0:
-                r = (yy[k] - _poly(coeffs, u[k])) * math.sqrt(wi[k])
-                sumz2 += g[k] * r * r
-                sumg += g[k]
-        if sumg <= 0:
-            continue
-        s2 = sumz2 / sumg
-        mat, vec = _normal(u, yy, cw, m)
-        # B = V' diag(cw**2 / w) V
-        bmat = np.zeros((m, m))
-        powers = np.empty(m)
-        for k in range(n):
-            if cw[k] <= 0:
-                continue
-            q = cw[k] * cw[k] / wi[k]
-            powers[0] = 1.0
-            for j in range(1, m):
-                powers[j] = powers[j - 1] * u[k]
-            for j in range(m):
-                for l in range(m):
-                    bmat[j, l] += q * powers[j] * powers[l]
-        # of c_k: ek' A^-1 B A^-1 ek, with a = A^-1 ek (A symmetric)
-        for k in range(min(nderiv, polyorder) + 1):
-            ek = np.zeros(m)
-            ek[k] = 1.0
-            a = _solve(mat, ek)
+        mat = np.empty((m, m))
+        bmat = np.empty((m, m))
+        for j in range(m):
+            for l in range(m):
+                mat[j, l] = mom[j + l]
+                bmat[j, l] = mom2[j + l]
+        c = _solve(mat, vec)
+        # sum g w (y - P)^2 = syy - 2 c.vec + c' mat c
+        ssr = syy
+        for j in range(m):
+            ssr -= 2.0 * c[j] * vec[j]
+            for l in range(m):
+                ssr += c[j] * mat[j, l] * c[l]
+        # the points' errors scaled by the mean square of their normalised
+        #   residuals (the weights w are relative), weighted by g
+        s2 = max(ssr, 0.0) / sumg
+        msr[i] = s2
+        for j in range(m):
+            coeffs[i, j] = c[j]
+            # the sandwich covariance of c_j: ej' A^-1 B A^-1 ej
+            ej = np.zeros(m)
+            ej[j] = 1.0
+            a = _solve(mat, ej)
             var = 0.0
-            for j in range(m):
-                for l in range(m):
-                    var += a[j] * bmat[j, l] * a[l]
+            for p in range(m):
+                for q in range(m):
+                    var += a[p] * bmat[p, q] * a[q]
             if var > 0:
-                errs[i, k] = math.sqrt(s2 * var) * math.gamma(k + 1.0) / \
-                    radius ** k
-        for k in range(polyorder + 1, nderiv + 1):
-            errs[i, k] = 0.0
-    return derivs, errs
+                errors[i, j] = math.sqrt(s2 * var)
+    return coeffs, errors, msr
+
+
+@njit(parallel=True, cache=True)
+def _model(x, x_out, coeffs, msr, radius):
+    """The local polynomial of the nearest x_out at each x, and the RMS of
+    the normalised residuals of its window (NaN beyond the radius or where it
+    has none)"""
+    n = len(x)
+    n_out = len(x_out)
+    m = coeffs.shape[1]
+    out = np.full(n, np.nan)
+    scale = np.full(n, np.nan)
+    for k in prange(n):
+        idx = np.searchsorted(x_out, x[k])
+        if idx >= n_out or (idx > 0 and
+                            x[k] - x_out[idx - 1] < x_out[idx] - x[k]):
+            idx -= 1
+        u = (x[k] - x_out[idx]) / radius
+        if abs(u) > 1 or not np.isfinite(coeffs[idx, 0]):
+            continue
+        acc = 0.0
+        for j in range(m - 1, -1, -1):
+            acc = acc * u + coeffs[idx, j]
+        out[k] = acc
+        scale[k] = math.sqrt(msr[idx])
+    return out, scale
 
 
 def scatter_savgol(x: np.ndarray, y: np.ndarray, x_out: np.ndarray,
@@ -226,16 +192,20 @@ def scatter_savgol(x: np.ndarray, y: np.ndarray, x_out: np.ndarray,
 
     :param x: np.ndarray, the points' abscissae (any order unless presorted)
     :param y: np.ndarray, their values (non-finite values are left out)
-    :param x_out: np.ndarray, where the polynomial is evaluated
+    :param x_out: np.ndarray, where the polynomial is evaluated (sorted)
     :param window_fwhm: float, the FWHM of the Gaussian weight, in units of x;
                         the points within 1.5 FWHM of x_out are used
     :param weights: np.ndarray or None, the points' weights, 1 / sigma**2 up
                     to a constant (None: equal); <= 0 or non-finite left out
     :param polyorder: int, the order of the polynomial
     :param nderiv: int, the highest derivative returned
-    :param sigma_clip: float, points further than sigma_clip times the robust
-                       scale of the normalised residuals are rejected
-                       (<= 0: no clip)
+    :param sigma_clip: float, points further from the polynomial than
+                       sigma_clip times the RMS of the normalised residuals
+                       of its window are left out, and the polynomials
+                       fitted again (<= 0: no clip). The scale is local, so
+                       that where the polynomial cannot follow the points
+                       (the cores of narrow lines) they are not clipped
+                       more than elsewhere
     :param clip_iter: int, the iterations of the clip
     :param min_side: int, the points needed on each side of x_out
     :param presorted: bool, x is already sorted and all points are valid
@@ -259,9 +229,32 @@ def scatter_savgol(x: np.ndarray, y: np.ndarray, x_out: np.ndarray,
         w = np.ascontiguousarray(w[good][order])
     sigma_x = window_fwhm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
     radius = 1.5 * window_fwhm
-    return _scatter_savgol(x, y, w, x_out, sigma_x, radius, int(polyorder),
-                           int(nderiv), float(sigma_clip), int(clip_iter),
-                           int(min_side))
+    w_fit = w
+    for it in range(clip_iter + 1):
+        coeffs, errors, msr = _fit(x, y, w_fit, x_out, sigma_x, radius,
+                                   int(polyorder), int(min_side))
+        if it == clip_iter or sigma_clip <= 0:
+            break
+        # the residuals in units of each point's own error, against the RMS
+        #   of those of the window of the nearest output point
+        model, scale = _model(x, x_out, coeffs, msr, radius)
+        zabs = np.abs(y - model) * np.sqrt(w)
+        keep = ~(zabs > sigma_clip * scale)
+        if np.array_equal(keep, w_fit > 0):
+            break
+        w_fit = np.where(keep, w, 0.0)
+    # the derivatives in x: d^k/dx^k at x0 = k! c_k / radius^k (zero above
+    #   the order of the polynomial)
+    derivs = np.zeros((len(x_out), nderiv + 1))
+    errs = np.zeros((len(x_out), nderiv + 1))
+    for k in range(min(nderiv, polyorder) + 1):
+        factor = math.factorial(k) / radius ** k
+        derivs[:, k] = coeffs[:, k] * factor
+        errs[:, k] = errors[:, k] * factor
+    invalid = ~np.isfinite(coeffs[:, 0])
+    derivs[invalid] = np.nan
+    errs[invalid] = np.nan
+    return derivs, errs
 
 
 # =============================================================================

@@ -17,7 +17,8 @@ it. This replaces the median of spectra resampled into bins of BERV
 Per order, in TEMPLATE_SCATTER_NITER passes:
     1. the fit through the cloud, each point weighted by the inverse square
        of its noise (a low pass of its residuals), with a clip of the local
-       outliers at TEMPLATE_SCATTER_CLIP times their robust scale, in a
+       outliers at TEMPLATE_SCATTER_CLIP times the RMS of the residuals of
+       their window (in units of their noise), in a
        Gaussian window of TEMPLATE_SCATTER_FWHM resolution elements;
     2. a pixel of the detector whose residual is off in most spectra (the
        median over spectra of the residual in units of the noise beyond
@@ -255,7 +256,7 @@ def fit_order(data: OrderData, io_: int, shifts: np.ndarray,
         derivs, errs = scatter_savgol(x, flux, lngrid[i0:i1], params['fwhm'],
                                       weights=weight, polyorder=3,
                                       nderiv=NDERIV, sigma_clip=params['clip'],
-                                      presorted=True)
+                                      clip_iter=2, presorted=True)
         out = dict(i0=i0, i1=i1, derivs=derivs, errs=errs)
         if ite == niter - 1:
             break
