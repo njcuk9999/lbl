@@ -347,7 +347,7 @@ class _Coadder:
                                  os.path.basename(str(merged["filename"])),
                                  str(self._label),
                                  float(meta.get("bjd", np.nan)),
-                                 float(meta.get("berv", np.nan))))
+                                 member_berv(meta)))
         for parity in range(self.n_parity):
             slot = self.n_groups * self.n_parity + parity
             # A NON-ZERO WEIGHT IS NOT A USABLE WEIGHT. sigma is
@@ -978,6 +978,23 @@ _PENDING_TEMPLATE = None
 _PENDING_MEMBERS = None
 #: where they are saved, in the cube's folder
 MEMBERS_FILE = "members.csv"
+
+
+def member_berv(meta) -> float:
+    """The BERV an exposure is drawn at in the bundles figure, the one its
+    night was cut by (nights.split_nights): the observer's (berv_obs, from
+    LBL's profile), in the star's frame when known orbits set it (composed
+    with the star's Keplerian velocity, as frame_bervs does). Not the BERV
+    the fit applied, zero for every exposure on a grid already barycentric
+    (ESO's S2D); that one only when the reader gave no observer's [km/s]."""
+    obs = float(meta.get("berv_obs", np.nan))
+    if not np.isfinite(obs):
+        return float(meta.get("berv", np.nan))
+    vstar = float(meta.get("vstar", 0.0) or 0.0)
+    if not vstar:
+        return obs
+    from .grids import C_KMS
+    return (obs - vstar) / (1.0 - obs * vstar / C_KMS ** 2)
 
 
 def set_pending_members(members):

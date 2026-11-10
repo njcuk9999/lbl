@@ -155,7 +155,15 @@ exposures by BERV and the bundles it was cut into, before the river plots.
 
 In the river plots, the thick green line is where a feature fixed in the
 observer's frame falls in each row: the observer's residuals run parallel to
-it, and the star's lines stand vertical.
+it, and the star's lines stand vertical. The rows are ordered by the
+observer's BERV, the one the line follows, so the line ALWAYS runs
+monotonically down the page, from the upper left, whatever frame the
+spectra are delivered in: on a grid already barycentric (ESO's S2D,
+NIRPS's S2D_BLAZE_TELL_CORR_A), the BERV the fit applies is zero for every
+row, and the observer's comes from LBL's profile (`get_berv_transmission`).
+A line that zigzags means the rows are not in that order. Yellow is NaN
+(no data), said by a little yellow square above the colour bar on every
+page.
 
 The DRS modes kept are the instrument's (`PCA2D_DRS_MODES`: an LBL
 instrument named after a mode keeps that mode's files). The folder is the

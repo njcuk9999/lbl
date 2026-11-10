@@ -44,6 +44,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import patheffects
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -54,7 +55,7 @@ from lbl.pca2d.grids import (log_shift, parse_window,  # noqa: E402
                              pixel_shift, window_block)
 from lbl.pca2d.plotting import (rows_of,  # noqa: F401
                             live_mask, nan_cmap, raw_log_flux_window,  # noqa: E402
-                            sample_source_file, window_parity)
+                            sample_source_file, window_parity, NAN_COLOUR)
 from lbl.pca2d.twoframe import (LanczosShifter, cube_grid, fit_means,  # noqa: E402
                             fit_weight_settings, load_cube, mean_rows, row_parity, star_model,
                             carried_means, fit_templates)
@@ -177,6 +178,21 @@ def berv_track(centre, berv):
     b = np.asarray(berv, dtype=float)
     return float(centre) * np.exp(BERV_SIGN * (log_shift(b)
                                                - log_shift(np.median(b))))
+
+
+def river_rows(keep, berv_obs):
+    """The rows a river plot draws, in the order it draws them: those kept,
+    by the OBSERVER'S BERV, the one the green line follows (berv_track), so
+    that the line always runs one way down the page, whatever frame the
+    spectra came in. Not by the BERV the fit applied: on a grid already
+    barycentric (ESO's S2D, NIRPS ESO's S2D_BLAZE_TELL_CORR_A) that one is
+    zero for every row, and the rows would come in the order of the cube
+    (time), the line zigzagging across the page. With known orbits, the
+    star's frame differs from the observer's BERV by the Keplerian velocity
+    (m/s), which does not change the order. Ties keep the cube's order."""
+    keep = np.asarray(keep, dtype=bool)
+    order = np.asarray(berv_obs, dtype=float)[keep]
+    return np.where(keep)[0][np.argsort(order, kind="stable")]
 
 
 def berv_steps(track, x):
@@ -512,9 +528,9 @@ def load_context(cube, fit_path, source_dir=None, shrink=False, shrink_smooth=Fa
             #   delivered in the barycentric frame, without
             #   input.to_observer)
             "berv_obs": observer_bervs(meta),
-            # what the rows are ordered by: with orbits, berv is the star's
-            #   frame, the BERV and the companions' velocity together
-            "order_by": order_label(meta),
+            # what the rows are ordered by: the observer's BERV, which the
+            #   green line follows (river_rows)
+            "order_by": "BERV",
             "means": means, "group": group, "select": select,
             "templates": fit_templates(fit, meta, n, grid.size),
             "names": [os.path.basename(str(v)) for v in meta["filename"]],
@@ -599,7 +615,7 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
               " %.2f of a half-width from its centre" % (lo, hi, off))
     if only is not None:
         keep = keep & np.asarray(only, dtype=bool)
-    rows = np.where(keep)[0][np.argsort(berv[keep])]
+    rows = river_rows(keep, ctx["berv_obs"])
     if rows.size < 6:
         log("  %.1f-%.1f nm: too few rows, skipped" % (lo, hi))
         return None
@@ -719,7 +735,8 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
         ax.legend(fontsize=8, loc="lower right", framealpha=0.9)
         ax.set_title("%d of those rows in FLUX, spread over %s %+.1f to"
                      " %+.1f km/s" % (drawn, ctx.get("order_by", "BERV"),
-                                      berv[spread].min(), berv[spread].max()),
+                                      ctx["berv_obs"][spread].min(),
+                                      ctx["berv_obs"][spread].max()),
                      fontsize=8, loc="left")
         ax.grid(alpha=0.15)
         ax.tick_params(labelsize=8)
@@ -748,6 +765,15 @@ def draw_window(ctx, centre, width, n_overplot=5, only=None, label=None,
         y0, y1 = min(p.y0 for p in low), max(p.y1 for p in low)
         fig.colorbar(im_resid, cax=fig.add_axes([box.x0, y0, box.width, y1 - y0]),
                      label="residual, ln f")
+    # what yellow is, on every page, whether this window has any or not: a
+    #   little square above the colour bar (beside the line's legend there
+    #   is no room left by the first panel's title)
+    bar.ax.legend(handles=[Patch(facecolor=NAN_COLOUR, edgecolor="black",
+                                 linewidth=0.5, label="NaN")],
+                  loc="lower left", bbox_to_anchor=(0.0, 1.0),
+                  frameon=False, fontsize=8, handlelength=1.0,
+                  handleheight=1.0, borderaxespad=0.2, borderpad=0.0,
+                  handletextpad=0.4)
     # the star's name on its own line, big and bold and centred: with a page
     # per star and per window, which star a page is about has to be readable
     # at a glance and not found inside a sentence
