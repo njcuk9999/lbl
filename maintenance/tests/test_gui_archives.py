@@ -45,7 +45,8 @@ def test_a_folder_never_mixes_two_readers(tmp_path):
 
 
 def test_a_fetch_adds_and_says_where_from(tmp_path):
-    keep = tmp_path / "science" / "GJ1"
+    # into the DATA_DIR of its reader under the root, its models the root's
+    keep = tmp_path / "NIRPS_HE_ESO" / "science" / "GJ1"
     keep.mkdir(parents=True)
     (keep / "a_TCORR_A.fits").write_text("mine")
     box = archives.Archives()
@@ -53,7 +54,8 @@ def test_a_fetch_adds_and_says_where_from(tmp_path):
     box.search = dict(state="done", target="GJ 1", teff=3478.0, groups=[
         dict(id="NIRPS:", inst="NIRPS", label="NIRPS", archive="ESO",
              lbl="NIRPS_HE", source="ESO", input=group["input"],
-             params=group["params"], n=2, have=1, folder="GJ1", size_mb=24)])
+             params=group["params"], n=2, have=1, folder="GJ1",
+             home="NIRPS_HE_ESO", size_mb=24)])
     box._groups = {"NIRPS:": group}
     box.start_fetch(str(tmp_path), ["NIRPS:"])
     for _ in range(100):
@@ -67,6 +69,8 @@ def test_a_fetch_adds_and_says_where_from(tmp_path):
     origin = json.loads((keep / archives.ARCHIVE_FILE).read_text())
     assert origin["lbl"] == "NIRPS_HE" and origin["source"] == "ESO"
     assert origin["teff"] == 3478.0
+    assert os.readlink(tmp_path / "NIRPS_HE_ESO" / "models") == \
+        os.path.join(os.pardir, "models")
     # the bar's times, that its time left and its duration are read from
     status = box.status()
     bar = status["fetch"]["bars"][0]
@@ -106,10 +110,10 @@ def test_two_readers_found_together_get_two_folders(tmp_path, monkeypatch):
         if box.status()["search"]["state"] != "running":
             break
         time.sleep(0.05)
-    folders = {r["lbl"]: r["folder"] for r in box.status()["search"]["groups"]}
-    # whichever answered first keeps the star's name, the other its reader's
-    first, second = sorted(folders.values())
-    assert first == "GJ1" and second in ("GJ1_ESPRESSO_None", "GJ1_NIRPS_HE_ESO")
+    folders = {(r["home"], r["folder"])
+               for r in box.status()["search"]["groups"]}
+    # each reader its own DATA_DIR under the root: the star's name in both
+    assert folders == {("NIRPS_HE_ESO", "GJ1"), ("ESPRESSO", "GJ1")}
 
 
 def test_a_search_stops_and_drops_a_late_answer(tmp_path, monkeypatch):
@@ -177,5 +181,6 @@ def test_several_stars_at_once_and_none_out_of_reach(tmp_path, monkeypatch):
     assert ("GJ 1", "SOPHIE") not in asked and ("AD Leo", "SOPHIE") in asked
     assert {(r["target"], r["inst"]) for r in search["groups"]} == {
         ("GJ 1", "HARPS"), ("AD Leo", "HARPS"), ("AD Leo", "SOPHIE")}
-    assert len({r["folder"] for r in search["groups"]}) == 3
+    assert {(r["home"], r["folder"]) for r in search["groups"]} == {
+        ("HARPS_None", "GJ1"), ("HARPS_None", "ADLeo"), ("SOPHIE", "ADLeo")}
     assert search["stars"]["AD Leo"]["place"].startswith("10:19:")

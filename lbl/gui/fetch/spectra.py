@@ -110,12 +110,25 @@ TELLURIC_FLOOR = 0.5
 HEAD_BYTES = 512 + 2880 * 24
 
 
+#: ESPRESSO's setting whose spectra are a star's main folder; the others
+#:    (UHR11, HR21, MR42...) get folders of their own, as the window's
+#:    dispatch of downloaded files names them (lbl.gui.dispatch)
+ESPRESSO_MAIN = 'HR11'
+
+
 # =============================================================================
 # Define functions
 # =============================================================================
 def object_name(target: str) -> str:
     """the name of the star for LBL (letters and digits: GJ436)"""
     return re.sub(r'[^A-Za-z0-9]+', '', str(target)) or 'star'
+
+
+def _setting(obj: str, key: str) -> str:
+    """the folder of a star's spectra of a setting one template must not
+    mix with its main one (GJ436_EGGS), as the window's dispatch of
+    downloaded files names it"""
+    return f'{obj}_{key}' if key else obj
 
 
 def folder_name(target: str) -> str:
@@ -632,7 +645,8 @@ def groups(target: str, inst: str, root: str,
                      get=_get_tng)]
     if inst == 'SOPHIE':
         found = obs.sophie_spectra(star)
-        return [dict(key=key, obj=obj + key, lbl='SOPHIE', source='None',
+        return [dict(key=key, obj=_setting(obj, key), lbl='SOPHIE',
+                     source='None',
                      input='*_e2ds_A.fits', params={},
                      spectra=[dict(id=seq, name=f'{seq}_e2ds_A.fits')
                               for seq in found[mode]],
@@ -652,8 +666,10 @@ def groups(target: str, inst: str, root: str,
         for mode, key in (('HE', ''), ('HA', 'HA')):
             mine = [one for one in found if one['mode'] == mode]
             if mine:
+                # HE and HA are DATA_DIRs of their own (NIRPS_HE_ESO,
+                #   NIRPS_HA_ESO): one name for the star in both
                 out.append(dict(
-                    key=key, obj=obj + key, lbl=f'NIRPS_{mode}', source='ESO',
+                    key=key, obj=obj, lbl=f'NIRPS_{mode}', source='ESO',
                     input='*TCORR_A.fits',
                     params=dict(BLAZE_CORRECTED=False),
                     spectra=[dict(id=one['id'], name=_safe(
@@ -669,7 +685,8 @@ def groups(target: str, inst: str, root: str,
                     if (one['mode'].upper() == 'EGGS') == (mode == 'EGGS')]
             if mine:
                 out.append(dict(
-                    key=key, obj=obj + key, lbl='HARPS', source='ORIG',
+                    key=key, obj=_setting(obj, key), lbl='HARPS',
+                    source='ORIG',
                     input='*_e2ds_A.fits', params={},
                     spectra=[dict(id=one['id'], name=_safe(
                         f'HARPS.{one["id"]}_e2ds_A.fits')) for one in mine],
@@ -681,12 +698,14 @@ def groups(target: str, inst: str, root: str,
                  + one['bin'] for one in found]
         out = []
         if kinds:
-            # the setting most spectra have is the main run
-            main = max(set(kinds), key=kinds.count)
+            # HR 1x1 the main run, the others their own folders, as the
+            #   window's dispatch of downloaded files names them
+            main = ESPRESSO_MAIN
             for kind in sorted(set(kinds), key=lambda one: (one != main, one)):
                 key = '' if kind == main else kind
                 out.append(dict(
-                    key=key, obj=obj + key, lbl='ESPRESSO', source='None',
+                    key=key, obj=_setting(obj, key), lbl='ESPRESSO',
+                    source='None',
                     input='*S2D_A.fits', params={},
                     spectra=[dict(id=one['id'], name=_safe(
                         f'ESPRESSO.{one["id"]}_S2D_A.fits'))

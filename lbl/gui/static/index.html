@@ -47,6 +47,24 @@
           <span class="hint small" id="scan_status" data-t="data_dir_hint"></span>
         </label>
       </div>
+      <!-- the root's instrument folders, and its Downloads to dispatch -->
+      <div class="row gap wrap setup-folders">
+        <label class="field inline"><span class="label"><span data-t="data_folder"></span><span class="info" data-help="data_folder"></span></span>
+          <select id="data_folder"></select></label>
+        <button type="button" class="button" id="downloads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span id="downloads_label"></span></button>
+        <button type="button" class="button primary" id="dispatch"><span data-t="dispatch"></span></button>
+        <span class="info" data-help="dispatch"></span>
+        <span class="hint small" id="dispatch_status"></span>
+      </div>
+      <div id="dispatch_panel" class="dispatch-panel" hidden>
+        <p class="small" id="dispatch_summary"></p>
+        <div class="table-wrap dispatch-table" id="dispatch_wrap"><table class="data" id="dispatch_table"></table></div>
+        <ul class="small dispatch-notes" id="dispatch_notes"></ul>
+        <div class="row gap end" id="dispatch_buttons">
+          <button type="button" class="button" id="dispatch_cancel" data-t="dispatch_cancel"></button>
+          <button type="button" class="button primary" id="dispatch_go" data-t="dispatch_go"></button>
+        </div>
+      </div>
     </section>
 
     <nav class="span-3 tabs" id="tabs">

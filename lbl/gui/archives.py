@@ -13,9 +13,12 @@ LBL-readable spectra are:
 A search asks every instrument at once (an archive that does not answer
 holds the others up no more than its own time); what each one has is a
 run of LBL, a group: its LBL instrument and source, its spectra. A fetch
-writes a group's spectra into DATA_DIR/science/<folder>/ and its
-calibrations into DATA_DIR/calib/, through each group's own getter, and
-never moves or overwrites a file that is there. The folder then holds
+writes a group's spectra into the DATA_DIR of its instrument and source
+under the window's root (dispatch.folder_of: ROOT/NIRPS_HE_ESO,
+ROOT/SPIROU_CADC...), in science/<folder>/, the star's folder there if it
+has one (dispatch.star_folder), and its calibrations into calib/, through
+each group's own getter, and never moves or overwrites a file that is
+there. The folder then holds
 ARCHIVE_FILE, what it came from, which the window reads to set the data
 source and the file pattern of the wrap.
 """
@@ -28,6 +31,8 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+
+from . import dispatch
 
 #: the instruments asked, in the order the window shows them
 INSTRUMENTS = ("SPIROU", "NIRPS", "HARPS", "HARPSN", "SOPHIE", "ESPRESSO")
@@ -148,12 +153,22 @@ def cell(target, inst) -> str:
     return "%s|%s" % (target, inst)
 
 
-def folder_for(data_dir: str, group: dict) -> str:
-    """Where a group's spectra go: science/<object> if the folder is new or
-    holds these spectra already (or came from the same LBL instrument and
-    source); else science/<object>_<instrument>_<source>, so that one folder
-    never mixes two readers."""
+def folder_for(data_dir: str, group: dict, ident=None) -> str:
+    """Where a group's spectra go: the folder the star has in DATA_DIR
+    (dispatch.star_folder, `ident` its place as SIMBAD has it), else
+    science/<object> if the folder is new or holds these spectra already
+    (or came from the same LBL instrument and source); else
+    science/<object>_<instrument>_<source>, so that one folder never mixes
+    two readers."""
     base = group["obj"]
+    if ident and ident.get("ra") is not None:
+        from .dispatch import star_folder
+        # NIRPS's HE and HA are DATA_DIRs of their own, not settings
+        setting = "" if str(group["lbl"]).startswith("NIRPS") \
+            else group.get("key", "")
+        mine = star_folder(data_dir, ident, setting)
+        if mine:
+            return mine
     names = {one["name"] for one in group["spectra"]}
     for name in (base, "%s_%s_%s" % (base, group["lbl"], group["source"])):
         path = os.path.join(data_dir, "science", name)
@@ -390,17 +405,22 @@ class Archives:
                 if not group["spectra"]:
                     continue
                 key = "%s|%s:%s" % (target, inst, group["key"])
+                # the DATA_DIR of its reader under the root
+                home = dispatch.folder_of(group["lbl"], group["source"])
+                home_dir = os.path.join(data_dir, home) if data_dir else ""
+                mine = folder_for(home_dir, group, ident) if data_dir else \
+                    group["obj"]
                 with self.lock:
-                    folder = folder_for(data_dir, group) if data_dir else \
-                        group["obj"]
+                    folder = mine
                     # two readers never share a folder: one already proposed
                     #   for another reader of this search gives this one its
                     #   reader's name
-                    taken = {r["folder"] for r in self.search["groups"]}
+                    taken = {r["folder"] for r in self.search["groups"]
+                             if r.get("home") == home}
                     if folder in taken:
                         folder = "%s_%s_%s" % (group["obj"], group["lbl"],
                                                group["source"])
-                    here = os.path.join(data_dir or "", "science", folder)
+                    here = os.path.join(home_dir, "science", folder)
                     have = sum(os.path.exists(os.path.join(here, x["name"]))
                                for x in group["spectra"])
                     row = dict(
@@ -409,6 +429,7 @@ class Archives:
                         lbl=group["lbl"], source=group["source"],
                         input=group["input"], params=group["params"],
                         n=len(group["spectra"]), have=have, folder=folder,
+                        home=home,
                         size_mb=round(size * (len(group["spectra"]) - have),
                                       1))
                     rows.append(row)
@@ -421,10 +442,10 @@ class Archives:
             if rows:
                 for r in rows:
                     self.say("%s: %d spectra (%s %s), %d already here, %.0f MB"
-                             " to fetch into science/%s, in %.0f s" % (
+                             " to fetch into %s/science/%s, in %.0f s" % (
                                  said, r["n"], r["lbl"], r["source"],
-                                 r["have"], r["size_mb"], r["folder"],
-                                 time.time() - tick))
+                                 r["have"], r["size_mb"], r["home"],
+                                 r["folder"], time.time() - tick))
             else:
                 self.say("%s: no public spectrum LBL reads, %.0f s" % (
                     said, time.time() - tick))
@@ -460,7 +481,8 @@ class Archives:
             # one bar per group: what it is, whose, where, how far
             bars = [dict(label=r["label"], target=r.get("target")
                          or self.search.get("main") or "",
-                         folder=r["folder"], total=r["n"] - r["have"], done=0,
+                         folder=r["folder"], home=r.get("home", ""),
+                         total=r["n"] - r["have"], done=0,
                          failed=0)
                     for r, _ in groups]
             self.fetch = dict(state="running", total=total, done=0,
@@ -481,13 +503,12 @@ class Archives:
         self._stop = True
         self.say("fetch: stopping after the files under way", "warn")
 
-    def _fetch(self, data_dir, groups):
+    def _fetch(self, root, groups):
         """The groups of different instruments at once (their archives and
         their calibrations are their own), those of one instrument one
         after the other (two stars of one night can share a calibration
-        file), WORKERS files at a time in each."""
-        calib = os.path.join(data_dir, "calib")
-        os.makedirs(calib, exist_ok=True)
+        file), WORKERS files at a time in each; each group into the DATA_DIR
+        of its reader under the root."""
         by_inst = {}
         for index, (row, group) in enumerate(groups):
             by_inst.setdefault(row["inst"], []).append((index, row, group))
@@ -496,6 +517,15 @@ class Archives:
             for index, row, group in items:
                 if self._stop:
                     return
+                data_dir = os.path.join(root, row["home"])
+                calib = os.path.join(data_dir, "calib")
+                os.makedirs(calib, exist_ok=True)
+                # its models the root's (one copy for every instrument)
+                try:
+                    dispatch.share(root, row["home"])
+                except OSError as exc:
+                    self.say("%s/models not shared: %s" % (row["home"], exc),
+                             "warn")
                 self._fetch_group(data_dir, calib, index, row, group)
 
         with ThreadPoolExecutor(max_workers=len(by_inst)) as pool:
@@ -531,8 +561,8 @@ class Archives:
                      if b["done"] < b["total"]]
             self.fetch["current"] = ", ".join(
                 "%s %s" % (b["target"], b["label"]) for b in going)
-        self.say("fetch: %d %s spectra into science/%s (%d already there)"
-                 % (len(todo), said, row["folder"],
+        self.say("fetch: %d %s spectra into %s/science/%s (%d already"
+                 " there)" % (len(todo), said, row["home"], row["folder"],
                     len(group["spectra"]) - len(todo)))
 
         def get(one):

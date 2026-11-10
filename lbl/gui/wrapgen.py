@@ -155,6 +155,13 @@ def build(state: dict) -> dict:
                        or origin.get("source") != str(source)):
             errors.append(say("err_archive_source", target, origin["lbl"],
                               origin["source"]))
+    # A DATA_DIR OF A ROOT (dispatch.py): its name says its reader
+    from .dispatch import reader_of
+    home = reader_of(data_dir)
+    if home and home != (instrument, str(source)):
+        errors.append(say("err_folder_source",
+                          os.path.basename(os.path.normpath(data_dir)),
+                          home[0], home[1]))
     # THE OTHERS: the data source their files' layout says
     #   (targets.layout_source). Files read with another source's reader
     #   stop LBL on the first one (the CADC's t.fits read as APERO's: no

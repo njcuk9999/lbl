@@ -14,7 +14,7 @@ const SCATTER_COLOURED = 3;   // colours that stay apart from every other (scatt
 const HIST_COLOURED = 8;      // colours that stay apart from their neighbours (stacks)
 
 const DEFAULTS = {
-  lang: 'en', theme: 'light', tab: 'targets', data_dir: '', instrument: '', source: '',
+  lang: 'en', theme: 'light', tab: 'targets', root: '', folder: '', data_dir: '', instrument: '', source: '',
   python: '', ticked: [], hidden_instruments: [], sort: { key: 'name', dir: 1 },
   comparison: {}, teff: {}, lbl: {}, pca2d_on: true, pca2d: {},
   extra: {}, pca2d_extra: {},
@@ -37,6 +37,9 @@ let stream = null;
 let logLast = null;
 let scanTimer = null;
 let SCIENCE = { state: 'ok', folder: '' };
+let LAYOUT = null;       // the root: its instrument folders and its Downloads
+let DISPATCH = null;     // the dispatch of Downloads: its plan, then what it did
+let dispatchTimer = null;
 
 // ── plumbing ────────────────────────────────────────────────────────────
 const api = {
@@ -311,7 +314,7 @@ async function archiveSearch() {
   if (!target) return;
   archiveChosen = new Set();
   ARCHIVE = await api.post('/api/archive/search', {
-    target, data_dir: S.data_dir,
+    target, data_dir: S.root,
     instruments: S.archive_instruments || ARCHIVE_INSTRUMENTS.map(([key]) => key),
   });
   drawArchive();
@@ -396,7 +399,7 @@ function drawArchive() {
     el('td', { class: 'num', text: row.n }),
     el('td', { class: 'num', text: row.have || '' }),
     el('td', { class: 'num', text: row.size_mb ? megabytes(row.size_mb) : '0' }),
-    el('td', { class: 'mono', text: `science/${row.folder}` })));
+    el('td', { class: 'mono', text: `${row.home}/science/${row.folder}` })));
   $('archive_table').replaceChildren(el('thead', {}, head), el('tbody', {}, body));
   const total = rows.filter((row) => archiveChosen.has(row.id)).reduce((sum, row) => sum + (row.size_mb || 0), 0);
   $('archive_fetch_label').textContent = archiveChosen.size ? t('archive_fetch', megabytes(total)) : t('archive_fetch_none');
@@ -408,7 +411,7 @@ function drawArchive() {
     const share = bar.total ? Math.min(100, (100 * bar.done) / bar.total) : 100;
     const whose = bar.target || search.main || search.target || '';
     return el('div', { class: 'bar-row' },
-      el('div', { class: 'bar-text small', text: t('archive_progress', `${bar.label} ${whose} (science/${bar.folder})`, bar.done, bar.total, bar.failed) + barTime(bar, ARCHIVE.now) }),
+      el('div', { class: 'bar-text small', text: t('archive_progress', `${bar.label} ${whose} (${bar.home}/science/${bar.folder})`, bar.done, bar.total, bar.failed) + barTime(bar, ARCHIVE.now) }),
       el('div', { class: 'bar' }, el('div', { class: `bar-fill${bar.failed ? ' with-failed' : ''}`, style: `width:${share.toFixed(1)}%` })));
   }));
   if (fetch.state === 'running') {
@@ -439,13 +442,13 @@ async function archiveFetch() {
   const chosen = rows.filter((row) => archiveChosen.has(row.id));
   const total = chosen.reduce((sum, row) => sum + (row.size_mb || 0), 0);
   // more than a few GB: said, and asked
-  if (total > BIG_FETCH_MB && !(await confirmBox(t('archive_big', megabytes(total), childPath(S.data_dir, 'science'))))) return;
-  ARCHIVE = await api.post('/api/archive/fetch', { data_dir: S.data_dir, ids: chosen.map((row) => row.id) });
+  if (total > BIG_FETCH_MB && !(await confirmBox(t('archive_big', megabytes(total), S.root)))) return;
+  ARCHIVE = await api.post('/api/archive/fetch', { data_dir: S.root, ids: chosen.map((row) => row.id) });
   drawArchive();
   pollArchive();
   // the new folders appear in My targets as their headers are read
   const wait = setInterval(async () => {
-    if (!ARCHIVE || ARCHIVE.fetch.state !== 'running') { clearInterval(wait); await loadTargets(); }
+    if (!ARCHIVE || ARCHIVE.fetch.state !== 'running') { clearInterval(wait); await loadFolders(); await loadTargets(); }
   }, 2000);
 }
 
@@ -523,15 +526,167 @@ async function loadTargets() {
 }
 
 async function scan() {
-  S.data_dir = $('data_dir').value.trim();
+  S.root = $('data_dir').value.trim();
+  await loadFolders();
   save();
   setBackdrop();
+  await scanFolder();
+}
+
+/* read the targets of the folder in use (S.data_dir) */
+async function scanFolder() {
+  // a root without a folder of targets yet: said by the targets' table
+  if (LAYOUT && !LAYOUT.legacy && !S.folder) { await loadTargets(); return; }
   const data = await api.post('/api/scan', { data_dir: S.data_dir });
   if (data.error) { $('scan_status').textContent = data.error; return; }
   await loadInstrumentThings();
   if (scanTimer) clearInterval(scanTimer);
   scanTimer = setInterval(loadTargets, 1000);
   loadTargets();
+}
+
+// ── the root: its instrument folders, its Downloads ─────────────────────
+// The data folder of LBL (DATA_DIR) the window works in is one of the
+//   root's, ROOT/{INSTRUMENT}_{SOURCE}, or the root itself when it holds a
+//   science/ of its own (the old layout)
+async function loadFolders() {
+  if (!S.root) { LAYOUT = null; S.data_dir = ''; drawFolders(); return; }
+  LAYOUT = await api.get('/api/folders', { root: S.root });
+  if (LAYOUT.error) { LAYOUT = null; drawFolders(); return; }
+  const folders = LAYOUT.folders || [];
+  if (S.folder && !folders.some((f) => f.name === S.folder)) S.folder = '';
+  if (!S.folder && !LAYOUT.legacy && folders.length) {
+    // the folder of the instrument chosen, else the one with the most targets
+    const mine = folders.find((f) => f.instrument === S.instrument && f.source === S.source);
+    S.folder = (mine || [...folders].sort((a, b) => b.targets - a.targets)[0]).name;
+  }
+  S.data_dir = S.folder ? childPath(S.root, S.folder) : S.root;
+  drawFolders();
+}
+
+function drawFolders() {
+  const options = [];
+  if (LAYOUT && LAYOUT.legacy) options.push(el('option', { value: '', text: t('folder_this', LAYOUT.legacy_targets) }));
+  (LAYOUT ? LAYOUT.folders : []).forEach((f) => options.push(el('option', { value: f.name, text: t('folder_row', f.name, f.targets) })));
+  if (!options.length) options.push(el('option', { value: '', text: t('folder_none') }));
+  $('data_folder').replaceChildren(...options);
+  $('data_folder').value = S.folder;
+  $('data_folder').disabled = !LAYOUT || (!LAYOUT.legacy && !LAYOUT.folders.length);
+  const down = LAYOUT ? LAYOUT.downloads : null;
+  $('downloads_label').textContent = t('downloads_n', down ? down.files : 0);
+  $('downloads').title = down ? t('downloads_title', down.path) : '';
+  $('downloads').disabled = !S.root;
+  drawDispatch();
+}
+
+/* the folder chosen: its instrument and data source are the wrap's, and
+   every tab shows that folder's (targets, runs, tables, cleanup) */
+async function openFolder() {
+  S.data_dir = S.folder ? childPath(S.root, S.folder) : S.root;
+  const folder = LAYOUT && LAYOUT.folders.find((f) => f.name === S.folder);
+  if (folder) {
+    S.instrument = folder.instrument;
+    S.instrument_set = true;
+    S.setup_manual = false;
+    $('instrument').value = S.instrument;
+    fillSources();
+    S.source = folder.source;
+    $('source').value = S.source;
+  }
+  S.ticked = [];
+  save();
+  wrapEdited = false;
+  await scanFolder();
+  showTab(S.tab);
+}
+
+// the files of Downloads into the root's folders: a plan read from their
+//   headers first (dispatch.py), shown, then the files moved when asked
+async function startDispatch() {
+  DISPATCH = await api.post('/api/dispatch/plan', { root: S.root });
+  followDispatch();
+}
+
+function followDispatch() {
+  drawDispatch();
+  if (dispatchTimer) return;
+  dispatchTimer = setInterval(async () => {
+    DISPATCH = await api.get('/api/dispatch');
+    if (!['planning', 'moving'].includes(DISPATCH.state)) {
+      clearInterval(dispatchTimer);
+      dispatchTimer = null;
+      if (DISPATCH.state === 'done') {
+        await loadFolders();
+        await openFolder();
+      }
+    }
+    drawDispatch();
+  }, 700);
+}
+
+function dispatchNote(text) { return el('li', { text }); }
+
+function drawDispatch() {
+  const d = DISPATCH || { state: 'idle' };
+  const busy = ['planning', 'moving'].includes(d.state);
+  const down = LAYOUT ? LAYOUT.downloads : null;
+  $('dispatch').disabled = busy || !down || !down.files;
+  const step = d.step === 'simbad' ? t('dispatch_simbad', d.done, d.total)
+    : d.step === 'folders' ? t('dispatch_looking') : t('dispatch_headers', d.done, d.total);
+  $('dispatch_status').textContent = d.state === 'planning' ? step
+    : d.state === 'moving' ? t('dispatch_moving', d.done, d.total)
+      : d.state === 'error' ? t('dispatch_error', d.error) : '';
+  const panel = $('dispatch_panel');
+  panel.hidden = !['planned', 'done'].includes(d.state);
+  if (panel.hidden) return;
+  const notes = [];
+  if (d.state === 'planned') {
+    const p = d.plan;
+    const work = p.science + p.calib + p.n_unused + p.shares.length;
+    $('dispatch_summary').textContent = p.files ? t('dispatch_plan', p.files, p.science, p.folders.length, p.calib, p.n_unused, p.n_left) : t('dispatch_nothing');
+    let last = null;
+    const rows = p.folders.map((r) => {
+      const first = r.star !== last;
+      last = r.star;
+      return el('tr', { class: first ? 'star-first' : null },
+        el('td', { class: 'mono', text: `${r.home}/science/${r.folder}` }),
+        el('td', { class: 'num', text: r.science }),
+        el('td', { class: r.new ? 'good-text small' : 'muted small', text: t(r.new ? 'dispatch_new' : 'dispatch_existing') }),
+        el('td', { class: 'small', text: r.names.join(', ') }));
+    });
+    $('dispatch_table').replaceChildren(
+      el('thead', {}, el('tr', {}, ...['col_dispatch_folder', 'col_dispatch_files', null, 'col_dispatch_names'].map((key) => el('th', { class: key === 'col_dispatch_files' ? 'num' : null, text: key ? t(key) : '' })))),
+      el('tbody', {}, ...rows));
+    $('dispatch_wrap').hidden = !rows.length;
+    p.calibs.forEach((c) => notes.push(dispatchNote(t('dispatch_calib', c.n, c.home))));
+    // the models of the instrument folders, the root's: one line a kind
+    ['link', 'merge'].forEach((state) => {
+      const homes = p.shares.filter((one) => one.state === state).map((one) => one.home);
+      if (homes.length) notes.push(dispatchNote(t(`dispatch_share_${state}`, homes.join(', '))));
+    });
+    p.unused.forEach((u) => notes.push(dispatchNote(t('dispatch_unused', u.n, u.why, u.example))));
+    p.left.forEach((u) => notes.push(dispatchNote(t('dispatch_left', u.n, u.why, u.example))));
+    p.warnings.forEach((w) => notes.push(el('li', { class: 'warn-text', text: t(`dispatch_${w.key}`, ...w.args) })));
+    $('dispatch_go').hidden = !work;
+    $('dispatch_cancel').textContent = t('dispatch_cancel');
+  } else {
+    const r = d.result || {};
+    $('dispatch_summary').textContent = t('dispatch_done', r.moved || 0, r.copies || 0, r.unused || 0);
+    $('dispatch_wrap').hidden = true;
+    if ((r.made || []).length) notes.push(dispatchNote(t('dispatch_made', r.made.join(', '))));
+    const linked = [];
+    Object.entries(r.shared || {}).forEach(([home, done]) => Object.values(done).forEach((how) => {
+      if (how && how.kept) notes.push(el('li', { class: 'warn-text', text: t('dispatch_share_kept', home, how.kept.join(', ')) }));
+      else if (how === 'linked' || how === 'merged') linked.push(home);
+      else notes.push(el('li', { class: 'warn-text', text: `${home}/models: ${how}` }));
+    }));
+    if (linked.length) notes.push(dispatchNote(t('dispatch_shared', linked.join(', '))));
+    if ((r.kept || []).length) notes.push(el('li', { class: 'warn-text', text: t('dispatch_kept', r.kept.map((k) => k.name).join(', ')) }));
+    if ((r.failed || []).length) notes.push(el('li', { class: 'warn-text', text: t('dispatch_failed', r.failed.map((f) => `${f.name} (${f.why})`).join(', ')) }));
+    $('dispatch_go').hidden = true;
+    $('dispatch_cancel').textContent = t('dispatch_close');
+  }
+  $('dispatch_notes').replaceChildren(...notes);
 }
 
 const COLUMNS = [
@@ -556,7 +711,7 @@ function colourOf(name) {
 function drawTargets() {
   // no folder to read: said instead of an empty table
   const message = !S.data_dir ? t('no_data_dir')
-    : SCIENCE.state === 'missing' ? t('no_science', SCIENCE.folder)
+    : SCIENCE.state === 'missing' ? (LAYOUT && !LAYOUT.legacy && !S.folder ? t('no_folder', S.root) : t('no_science', SCIENCE.folder))
       : SCIENCE.state === 'empty' ? t('empty_science', SCIENCE.folder) : '';
   $('targets_message').textContent = message;
   $('targets_message').hidden = !message;
@@ -1313,8 +1468,9 @@ async function loadWrap() {
   const notes = [t('loaded', data.path), ...(data.notes || [])];
   if (data.skipped && data.skipped.length) notes.push(t('load_skipped', data.skipped.join(', ')));
   box.replaceChildren(el('div', { class: 'message warning' }, el('ul', {}, notes.map((n) => el('li', { text: n })))));
-  $('data_dir').value = S.data_dir;
+  $('data_dir').value = S.root || S.data_dir;
   $('run_name').value = S.name;
+  await loadFolders();
   $('min_rjd').value = S.min_rjd ?? '';
   $('max_rjd').value = S.max_rjd ?? '';
   $('skip_pca2d').value = S.skip_pca2d === null || S.skip_pca2d === undefined ? '' : String(S.skip_pca2d);
@@ -2194,6 +2350,8 @@ async function init() {
   S.ticked = [];
   S.hidden_instruments = [];
   S.setup_manual = false;
+  // a window of before the roots: its data folder is its root
+  if (!S.root) S.root = S.data_dir;
   document.documentElement.dataset.theme = S.theme;
   DEFAULT_PYTHON = state.python;
   S.python = S.python || state.python;
@@ -2203,7 +2361,7 @@ async function init() {
   await loadStrings();
   INSTRUMENTS = await api.get('/api/instruments');
   fillInstruments();
-  $('data_dir').value = S.data_dir;
+  $('data_dir').value = S.root;
   $('python').value = S.python;
   $('min_rjd').value = S.min_rjd ?? '';
   $('max_rjd').value = S.max_rjd ?? '';
@@ -2213,6 +2371,11 @@ async function init() {
   $('lang').onclick = async () => { S.lang = S.lang === 'fr' ? 'en' : 'fr'; save(); await loadStrings(); await loadInstrumentThings(); drawTargets(); drawPlots(); pollQueue(); if (S.tab === 'runs') loadRuns(); redrawExplorer(); };
   document.querySelectorAll('#tabs button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
   $('scan').onclick = scan;
+  $('data_folder').onchange = async (event) => { S.folder = event.target.value; await openFolder(); };
+  $('downloads').onclick = loadFolders;
+  $('dispatch').onclick = startDispatch;
+  $('dispatch_go').onclick = async () => { DISPATCH = await api.post('/api/dispatch/go', { root: S.root }); followDispatch(); };
+  $('dispatch_cancel').onclick = async () => { DISPATCH = await api.post('/api/dispatch/cancel', {}); drawDispatch(); };
   $('data_dir').onkeydown = (event) => { if (event.key === 'Enter') scan(); };
   $('instrument').onchange = async (event) => { S.instrument = event.target.value; S.instrument_set = true; S.setup_manual = true; fillSources(); save(); await loadInstrumentThings(); wrapEdited = false; drawSetupStatus(); };
   $('source').onchange = async (event) => { S.source = event.target.value; S.setup_manual = true; save(); await loadInstrumentThings(); wrapEdited = false; drawSetupStatus(); };
@@ -2271,10 +2434,14 @@ async function init() {
   $('delete').onclick = deleteSelected;
   $('cleanup').addEventListener('change', cleanupSelection);
 
+  await loadFolders();
   await loadInstrumentThings();
   await loadTargets();
   await followTicked();
   setBackdrop();
+  // a plan or a dispatch going on (the page opened again meanwhile)
+  DISPATCH = await api.get('/api/dispatch');
+  if (['planning', 'moving'].includes(DISPATCH.state)) followDispatch(); else drawDispatch();
   showTab(S.tab || 'targets');
   showSub(S.sub || 'local');
   pollQueue();

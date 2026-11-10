@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from astropy import constants
 
 from . import __version__, cleanup, history, i18n, lblinfo, runner
-from . import archives, explore, simbad, targets
+from . import archives, dispatch, explore, simbad, targets
 from . import wrapgen, wrapload
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -41,6 +41,7 @@ class Context:
     def __init__(self, data_dir: str = ""):
         self.scanner = targets.Scanner()
         self.archives = archives.Archives()
+        self.dispatcher = dispatch.Dispatcher()
         self.runner = runner.Runner()
         self.lock = threading.Lock()
         self.state = self.load_state()
@@ -233,6 +234,7 @@ class Handler(BaseHTTPRequestHandler):
                     ctx.scanner.start(data_dir)
                     status = ctx.scanner.status()
                 rows = []
+                home = dispatch.reader_of(data_dir)
                 for name in names:
                     records = (index.get("targets") or {}).get(name, {})
                     row = targets.summary(records)
@@ -249,6 +251,9 @@ class Handler(BaseHTTPRequestHandler):
                                               source=origin.get("source"))
                         if row.get("teff") is None and origin.get("teff"):
                             row["teff"] = float(origin["teff"])
+                    # a DATA_DIR of a root: its name says its reader
+                    elif home:
+                        row["archive"] = dict(lbl=home[0], source=home[1])
                     rows.append(row)
                 return self._json(dict(targets=rows, scan=status,
                                        science="ok", folder=science))
@@ -291,6 +296,11 @@ class Handler(BaseHTTPRequestHandler):
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 return self._json(dict(items=cleanup.survey(data_dir),
                                        busy=cleanup.busy(data_dir)))
+            if route == "/api/folders":
+                return self._json(dispatch.layout(ctx.allow(
+                    query.get("root", ""))))
+            if route == "/api/dispatch":
+                return self._json(ctx.dispatcher.status())
             if route == "/api/explore/rdbs":
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 return self._json(explore.rdb_files(data_dir))
@@ -400,6 +410,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(built)
             if route == "/api/queue":
                 return self._queue(body)
+            if route == "/api/dispatch/plan":
+                return self._json(ctx.dispatcher.start_plan(
+                    ctx.allow(body.get("root", ""))))
+            if route == "/api/dispatch/go":
+                return self._json(ctx.dispatcher.start_go(
+                    ctx.allow(body.get("root", ""))))
+            if route == "/api/dispatch/cancel":
+                return self._json(ctx.dispatcher.cancel())
             if route == "/api/archive/search":
                 data_dir = ctx.allow(body.get("data_dir", "")) \
                     if body.get("data_dir") else ""
@@ -448,6 +466,9 @@ class Handler(BaseHTTPRequestHandler):
                 loaded = wrapload.to_state(parsed["rparams"])
                 if loaded["state"].get("data_dir"):
                     ctx.allow(loaded["state"]["data_dir"])
+                    # a DATA_DIR of a root: the root and its folder
+                    loaded["state"]["root"], loaded["state"]["folder"] = \
+                        dispatch.split(loaded["state"]["data_dir"])
                 name = os.path.splitext(os.path.basename(path))[0]
                 if name == "wrap":
                     name = os.path.basename(os.path.dirname(path))

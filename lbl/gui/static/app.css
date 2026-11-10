@@ -158,6 +158,14 @@ body {
 /* the data folder alone on top; the instrument, the source and the Python
    in the LBL settings */
 .setup-grid.setup-one { grid-template-columns: 1fr; }
+/* the root's instrument folders, its Downloads and their dispatch */
+.setup-folders { margin-top: 10px; align-items: center; }
+.setup-folders select { min-width: 18em; }
+.setup-folders .button svg { width: 1em; height: 1em; vertical-align: -0.15em; margin-right: 0.35em; }
+.dispatch-panel { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.dispatch-table { max-height: 22em; }
+.dispatch-table tr.star-first td { border-top: 1px solid var(--line); }
+.dispatch-notes { margin: 8px 0; padding-left: 1.2em; }
 .setup-status { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .setup-status .button { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; }
 .good-text { color: #12936a; }
