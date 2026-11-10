@@ -231,3 +231,73 @@ def test_the_window_plans_then_moves(root):
     # a plan for another root is not moved
     assert "error" in box.start_go(str(root / "elsewhere"))
     assert box.start_go(str(root))["state"] == "moving"
+
+
+def _nirps_eso(path, catg, mode="HE", name="TOI-206", arcfile=None):
+    """A product of ESO's NIRPS pipeline: an S2D, or the night's blaze."""
+    head = fits.Header()
+    head["INSTRUME"] = "NIRPS"
+    head["OBJECT"] = name
+    head["MJD-OBS"] = 60928.34
+    if arcfile:
+        head["ARCFILE"] = arcfile
+    for key, value in (("ESO PRO CATG", catg), ("ESO INS MODE", mode),
+                       ("ESO TEL TARG ALPHA", 45456.935),
+                       ("ESO TEL TARG DELTA", -623120.465),
+                       ("ESO TEL TARG EPOCH", 2000.0),
+                       ("ESO TEL TARG PMA", 0.105946),
+                       ("ESO TEL TARG PMD", 0.110888),
+                       ("ESO PRO REC1 CAL24 NAME",
+                        "r.NIRPS.2025-09-09T12:12:29.357_BLAZE_A.fits")):
+        head["HIERARCH " + key] = value
+    hdus = [fits.PrimaryHDU(header=head)]
+    if catg == "BLAZE_A":
+        hdus.append(fits.ImageHDU(np.ones((2, 8), "f4")))
+    else:
+        hdus.append(fits.ImageHDU(np.ones((2, 8), "f4"), name="SCIDATA"))
+    fits.HDUList(hdus).writeto(path)
+
+
+def test_nirps_at_eso_its_telluric_corrected_s2d_and_its_blaze(tmp_path):
+    down = tmp_path / "Downloads"
+    down.mkdir()
+    _nirps_eso(down / "r.NIRPS.2026-02-27T02:15:29.476_S2D_BLAZE_TELL_CORR_A"
+                      ".fits", "S2D_BLAZE_TELL_CORR_A")
+    _nirps_eso(down / "r.NIRPS.2026-02-27T02:15:29.476_S2D_A.fits", "S2D_A")
+    # the night's blaze, ':' written '_' by the archive
+    _nirps_eso(down / "r.NIRPS.2025-09-09T12_12_29.357_BLAZE_A.fits",
+               "BLAZE_A", arcfile="NIRPS.2025-09-09T12:12:29.357.fits")
+    plan = dispatch.plan(str(tmp_path), ask_simbad=False)
+    # HE from ESO INS MODE; LBL's NIRPS ESO reader keeps the blaze in and
+    #   does not clean the tellurics: the S2D_BLAZE_TELL_CORR_A it reads
+    assert [(r["home"], r["folder"], r["science"]) for r in plan["folders"]] \
+        == [("NIRPS_HE_ESO", "TOI-206", 1)]
+    assert [u["name"] for u in plan["unused"]] == [
+        "r.NIRPS.2026-02-27T02:15:29.476_S2D_A.fits"]
+    assert plan["defaults"] == ["NIRPS_HE_ESO"]
+    result = dispatch.go(plan)
+    # the blaze under the name the spectra's headers give it, and the
+    #   setup's default blaze, in the root's models
+    calib = tmp_path / "NIRPS_HE_ESO" / "calib"
+    assert os.listdir(calib) == [
+        "r.NIRPS.2025-09-09T12:12:29.357_BLAZE_A.fits"]
+    assert result["defaults"] == ["NIRPS_HE_ESO"]
+    assert (tmp_path / "models" / "default-blaze"
+            / "blaze_NIRPS_HE_ESO.fits").is_file()
+
+
+def test_a_header_with_a_wrong_place_does_not_split_a_star():
+    # 430 files of one name at eps Eri, one of them 8 arcsec off (an
+    #   observer's typo), and 280 of another name at eps Eri: one star
+    pm = (-974.758, 20.876)
+    many = _sighting("HD22049", 53.2327, -9.4582, pm=pm)
+    many["files"] = list(range(430))
+    typo = _sighting("HD22049", 53.2350, -9.4582, pm=pm)
+    other = _sighting("Epsilon Eridani", 53.2327, -9.4583, pm=pm)
+    other["files"] = list(range(280))
+    assert dispatch.stars([many, typo, other]) == [[0, 1, 2]]
+    # two stars 20 arcsec apart, a pointing between them: never one
+    a = _sighting("STAR1", 10.0, 20.0)
+    b = _sighting("STAR2", 10.0, 20.0 + 20.0 / 3600)
+    p = _sighting("P", 10.0, 20.0 + 10.0 / 3600, pm=None, how="pointing")
+    assert sorted(map(len, dispatch.stars([a, b, p]))) == [1, 2]

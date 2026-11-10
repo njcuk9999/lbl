@@ -75,6 +75,8 @@ import warnings
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
+
 from . import targets
 
 #: the folder of a data root the downloads are put in
@@ -136,8 +138,11 @@ NAME_KEYS = ("DRSOBJN", "OBJECT", "HIERARCH ESO OBS TARG NAME",
              "HIERARCH TNG OBS TARG NAME", "HIERARCH OHP TARG NAME",
              "OBJNAME")
 #: the products of ESO's pipelines (PRO CATG) LBL reads, and those it reads
-#:    as calibrations
-ESO_SCIENCE = {"S2D_A"}
+#:    as calibrations. NIRPS's ESO reader keeps the blaze in (BLAZE_CORRECTED
+#:    False) and does not clean the tellurics: it reads the S2D corrected
+#:    for them, its blaze kept (S2D_BLAZE_TELL_CORR_A); the others read the
+#:    S2D blaze-corrected (S2D_A)
+ESO_SCIENCE = dict(NIRPS={"S2D_BLAZE_TELL_CORR_A"}, other={"S2D_A"})
 ESO_CALIB = {"BLAZE_A"}
 #: the folders of a DATA_DIR whose files are the same whatever the
 #:    instrument: one copy in the root, each DATA_DIR's a link to it. LBL's
@@ -501,9 +506,12 @@ def _kind(family, source, name, headers, extnames, primary):
             return "science", ""
         return "unused", "APERO's other products (LBL reads the t.fits)"
     if source == "ESO" or family == "ESPRESSO":
-        if catg.upper() in ESO_SCIENCE or "HIERARCH LBL TELL FLOOR" in primary:
+        read = ESO_SCIENCE.get(family, ESO_SCIENCE["other"])
+        # the archive search's own: ESO's S2D divided by its telluric model
+        if catg.upper() in read or "HIERARCH LBL TELL FLOOR" in primary:
             return "science", ""
-        return "unused", "%s (LBL reads the S2D_A)" % (catg or "a product")
+        return "unused", "%s (LBL reads the %s)" % (catg or "a product",
+                                                    ", ".join(sorted(read)))
     if family in ("HARPS", "HARPSN", "SOPHIE", "CORALIE"):
         if re.search(r"e2ds_a\.fits(\.gz)?$", lower):
             return "science", ""
@@ -548,8 +556,9 @@ def _blank(path: str) -> dict:
     stat = os.stat(path)
     return dict(path=path, name=os.path.basename(path), size=stat.st_size,
                 instrument=None, source=None, family=None, kind=None,
-                setting="", why="", names=[], component=None, place=None,
-                year=None, blaze=None, split=False, extra=[])
+                setting="", why="", names=[], drsobjn=None, component=None,
+                place=None, year=None, blaze=None, split=False, extra=[],
+                calib_name=None)
 
 
 def read(path: str) -> dict:
@@ -613,6 +622,15 @@ def read(path: str) -> dict:
     kind, why = _kind(family, source, out["name"], headers, extnames, primary)
     out.update(kind=kind, why=why)
     if kind == "calib":
+        # ESO's archive writes ':' as '_' in the names of the files it
+        #   gives: the name the spectra's headers give it again, from the
+        #   raw frame it was made of (r.<ARCFILE>_BLAZE_A.fits)
+        catg = str(_card(headers, "HIERARCH ESO PRO CATG") or "").upper()
+        arcfile = str(_card(headers, "ARCFILE") or "")
+        if catg in ESO_CALIB and arcfile.endswith(".fits"):
+            named = "r.%s_%s.fits" % (arcfile[:-5], catg)
+            if named.replace(":", "_") == out["name"].replace(":", "_"):
+                out["calib_name"] = named
         return out
     mjd = targets._first(headers, targets.MJD_KEYS)
     if mjd is not None and mjd > 2400000.5:
@@ -620,6 +638,8 @@ def read(path: str) -> dict:
     out["year"] = None if mjd is None else 2000.0 + (mjd - 51544.5) / 365.25
     out["setting"] = _setting(family, headers)
     out["names"] = _names(headers)
+    drs = _card(headers, "DRSOBJN")
+    out["drsobjn"] = str(drs).strip() if drs else None
     if family == "EXPRES":
         # EXPRES names its stars by their HD number alone (10700)
         out["names"] = ["HD" + n if n.isdigit() else n for n in out["names"]]
@@ -756,13 +776,41 @@ def _link(a, b):
     return sep / tol if sep <= tol else None
 
 
+def _centre(sightings, group):
+    """Where a group of sightings is: the median of its targets'
+    coordinates, each sighting weighted by its files (a header whose place
+    is wrong does not move it), those given with their proper motion only
+    when there are; a pseudo-sighting for tolerance(), or None for a group
+    of pointings only."""
+    best = [sightings[i] for i in group if sightings[i]["place"]
+            and sightings[i]["place"]["how"] == "catalogue"]
+    if not best:
+        return None
+    moving = [one for one in best if one["place"]["pm"] is not None]
+    used = moving or best
+    ra0 = used[0]["place"]["ra"]
+    ras, decs = [], []
+    for one in used:
+        count = len(one["files"])
+        # RA about the first one's: no jump at 0 h
+        ras += [ra0 + (one["place"]["ra"] - ra0 + 180.0) % 360.0 - 180.0] \
+            * count
+        decs += [one["place"]["dec"]] * count
+    pm = next((one["pm"] for one in used if one.get("pm")), None)
+    loose = 0.0 if moving else min(one["loose"] for one in best)
+    return dict(place=dict(ra=float(np.median(ras)) % 360.0,
+                           dec=float(np.median(decs)),
+                           pm=pm if moving else None, loose=loose,
+                           how="catalogue"), pm=pm, loose=loose)
+
+
 def stars(sightings, apart=frozenset()) -> list:
     """The sightings grouped into stars: the nearest pairs joined first,
-    two groups joined only if every pair of their sightings may be one star
-    (no two components, no two stars SIMBAD knows apart, two places of the
-    targets' coordinates within their tolerance) so that a place far from
-    both stars of a binary cannot join them. `apart`: pairs of sightings
-    (frozenset of two indices) that are two stars."""
+    two groups joined only if none of their sightings are two stars (two
+    components, two stars SIMBAD knows apart) and they share a name or
+    their places (_centre) agree within their tolerance, so that a place
+    far from both stars of a binary cannot join them. `apart`: pairs of
+    sightings (frozenset of two indices) that are two stars."""
     count = len(sightings)
     links = {}
     for i in range(count):
@@ -776,19 +824,21 @@ def stars(sightings, apart=frozenset()) -> list:
     members = {i: [i] for i in range(count)}
 
     def allowed(first, second):
+        named = False
         for i in first:
             for j in second:
                 a, b = sightings[i], sightings[j]
                 if frozenset((i, j)) in apart or _two_components(a, b):
                     return False
-                if (min(i, j), max(i, j)) in links:
-                    continue
-                # two places of the targets' coordinates that disagree
-                if a["place"] and b["place"] \
-                        and a["place"]["how"] == b["place"]["how"] \
-                        == "catalogue":
-                    return False
-        return True
+                named = named or _same_name(a, b)
+        if named:
+            return True
+        here, there = _centre(sightings, first), _centre(sightings, second)
+        if here is None or there is None:
+            return True
+        return separation((here["place"]["ra"], here["place"]["dec"]),
+                          (there["place"]["ra"], there["place"]["dec"])) \
+            <= tolerance(here, there)
 
     for (i, j), _ in sorted(links.items(), key=lambda item: item[1]):
         gi, gj = group[i], group[j]
@@ -999,12 +1049,6 @@ def plan(root: str, idents=None, progress=None, ask_simbad=True) -> dict:
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         list(pool.map(one, range(len(paths))))
-    for rec in records:
-        drs = None
-        if rec.get("names") and rec.get("family") in ("SPIROU", "NIRPS") \
-                and rec.get("source") in ("APERO", "CADC"):
-            drs = rec["names"][0]
-        rec["drsobjn"] = drs
     say(len(paths), len(paths), "folders")
     existing = _existing(root)
     stars_of = [r for r in records if r.get("kind") == "science"] + existing
@@ -1153,8 +1197,10 @@ def _destinations(root, records, stars_of, star_records, idents, warnings_,
                 home = folder_of(inst, source)
                 moves.append(dict(src=rec["path"], dest=os.path.join(
                     root, home, "calib", _target_name(rec)), kind="calib",
-                    home=home, link=(inst, source) != (rec["instrument"],
-                                                       rec["source"])))
+                    home=home, reader=(inst, source),
+                    eso=bool(rec.get("calib_name")),
+                    link=(inst, source) != (rec["instrument"],
+                                            rec["source"])))
         elif rec.get("kind") == "unused":
             unused.append(dict(path=rec["path"], name=rec["name"],
                                why=rec["why"], instrument=rec["instrument"]))
@@ -1174,7 +1220,11 @@ def _destinations(root, records, stars_of, star_records, idents, warnings_,
     shares = [dict(home=home, name=name, state=state) for home in homes
               for name, state in sharing(root, home).items()
               if state in ("link", "merge")]
+    defaults = sorted({m["home"] for m in moves if m.get("eso")
+                       and not os.path.exists(default_blaze(root,
+                                                            *m["reader"]))})
     return dict(root=root, folders=folders, homes=homes, shares=shares,
+                defaults=defaults,
                 calibs=[dict(home=h, n=c) for h, c in sorted(calib.items())],
                 unused=unused, left=left, warnings=warnings_, simbad=simbad,
                 moves=moves, files=len(records),
@@ -1183,9 +1233,10 @@ def _destinations(root, records, stars_of, star_records, idents, warnings_,
 
 
 def _target_name(rec) -> str:
-    """A file's name in its folder: a gzipped spectrum without its .gz (it
-    is gunzipped on the way)."""
-    name = rec["name"]
+    """A file's name in its folder: the one the spectra's headers give a
+    calibration, a gzipped spectrum without its .gz (it is gunzipped on the
+    way)."""
+    name = rec.get("calib_name") or rec["name"]
     return name[:-3] if name.lower().endswith(".fits.gz") else name
 
 
@@ -1407,8 +1458,29 @@ def go(plan_: dict, progress=None) -> dict:
                 if (home, k) in planned or v != "linked"}
         if said:
             out["shared"][home] = said
+    # a setup without a default blaze: the first blaze of ESO's put there
+    #   (LBL reads it for the spectra whose night's blaze is missing)
+    out["defaults"] = []
+    for one in moves:
+        if not one.get("eso") or not os.path.isfile(one["dest"]):
+            continue
+        default = default_blaze(root, *one["reader"])
+        if not os.path.exists(default):
+            os.makedirs(os.path.dirname(default), exist_ok=True)
+            shutil.copy2(one["dest"], default)
+            _record(root, one["dest"], default, "default blaze")
+            out["defaults"].append(one["home"])
     say(len(moves), len(moves), "done")
     return out
+
+
+def default_blaze(root: str, instrument: str, source: str) -> str:
+    """The default blaze of a setup in a DATA_DIR of the root, which LBL
+    reads for a spectrum whose own blaze is not in calib/
+    (lbl.instruments.default.Instrument.default_blaze_file)."""
+    return os.path.join(root, folder_of(instrument, source), "models",
+                        "default-blaze", "blaze_%s_%s.fits" % (
+                            str(instrument).upper(), str(source).upper()))
 
 
 # -----------------------------------------------------------------------------
@@ -1507,6 +1579,7 @@ def _shown(made: dict) -> dict:
                 for w, n in counts.most_common()]
     return dict(root=made["root"], folders=made["folders"],
                 calibs=made["calibs"], shares=made["shares"],
+                defaults=made["defaults"],
                 unused=by_why(made["unused"]),
                 left=by_why(made["left"]), warnings=made["warnings"],
                 simbad=made["simbad"], files=made["files"],

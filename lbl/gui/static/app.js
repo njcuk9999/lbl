@@ -664,6 +664,7 @@ function drawDispatch() {
       const homes = p.shares.filter((one) => one.state === state).map((one) => one.home);
       if (homes.length) notes.push(dispatchNote(t(`dispatch_share_${state}`, homes.join(', '))));
     });
+    (p.defaults || []).forEach((home) => notes.push(dispatchNote(t('dispatch_default_blaze', home))));
     p.unused.forEach((u) => notes.push(dispatchNote(t('dispatch_unused', u.n, u.why, u.example))));
     p.left.forEach((u) => notes.push(dispatchNote(t('dispatch_left', u.n, u.why, u.example))));
     p.warnings.forEach((w) => notes.push(el('li', { class: 'warn-text', text: t(`dispatch_${w.key}`, ...w.args) })));
@@ -674,6 +675,7 @@ function drawDispatch() {
     $('dispatch_summary').textContent = t('dispatch_done', r.moved || 0, r.copies || 0, r.unused || 0);
     $('dispatch_wrap').hidden = true;
     if ((r.made || []).length) notes.push(dispatchNote(t('dispatch_made', r.made.join(', '))));
+    if ((r.defaults || []).length) notes.push(dispatchNote(t('dispatch_defaults', r.defaults.join(', '))));
     const linked = [];
     Object.entries(r.shared || {}).forEach(([home, done]) => Object.values(done).forEach((how) => {
       if (how && how.kept) notes.push(el('li', { class: 'warn-text', text: t('dispatch_share_kept', home, how.kept.join(', ')) }));
