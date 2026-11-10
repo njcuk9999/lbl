@@ -1,5 +1,5 @@
 """The Data Explorer tab (lbl.gui.explore): the tables, their error columns,
-the template each was measured against, the TAPAS opacities, the FIP, and
+the template each was measured against, the TAPAS transmissions, the FIP, and
 the server refusing a table outside the data folders."""
 import json
 import os
@@ -111,15 +111,16 @@ def test_tapas_per_molecule_the_instrument_s_site_first(data):
     view = explore.template_view(str(data / "lblrdb" / "lbl_GJ_1_GJ_1.rdb"),
                                  str(data), nbin=300)
     molecules = view["tapas"]["molecules"]
-    # O2 has nothing there: left out; the opacity is -ln(transmission)
+    # O2 has nothing there: left out; the deepest transmission survives
+    #   the bins
     assert set(molecules) == {"H2O", "CH4"}
-    assert max(molecules["H2O"]["y"]) == pytest.approx(-np.log(0.1),
-                                                       rel=1e-3)
+    assert min(molecules["H2O"]["y"]) == pytest.approx(0.1, abs=1e-3)
+    assert max(molecules["H2O"]["y"]) <= 1.0
     narrow = explore.template_view(str(data / "lblrdb"
                                         / "lbl_GJ_1_GJ_1.rdb"),
                                    str(data), 1049.99, 1050.01, nbin=300)
-    assert max(narrow["tapas"]["molecules"]["H2O"]["y"]) == pytest.approx(
-        -np.log(0.1), rel=1e-3)
+    assert min(narrow["tapas"]["molecules"]["H2O"]["y"]) == pytest.approx(
+        0.1, abs=1e-3)
 
 
 def test_the_fip_finds_a_sinusoid_and_its_period(data):

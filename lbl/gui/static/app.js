@@ -1682,7 +1682,7 @@ async function deleteSelected() {
 // ── data explorer ───────────────────────────────────────────────────────
 // the rdb tables of DATA_DIR/lblrdb, any column against any other, the FIP
 //   of what is plotted, and the template the table was measured against
-//   with the TAPAS opacity of each molecule under it (explore.py). Plotly
+//   with the TAPAS transmission of each molecule under it (explore.py). Plotly
 //   draws them, fetched the first time the tab opens: the rest of the
 //   window does without it.
 const PLOTLY_URL = 'https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js';
@@ -1886,7 +1886,7 @@ function drawFip(quantities) {
 
 // ── template explorer ───────────────────────────────────────────────────
 // the template of the table over the wavelengths shown, and under it a
-//   quarter as high, on the same wavelengths, the TAPAS opacity of each
+//   quarter as high, on the same wavelengths, the TAPAS transmission of each
 //   molecule; a zoom asks the server for that range again (every point
 //   once narrow enough)
 let templateAsked = '';
@@ -1920,15 +1920,16 @@ function drawTemplate() {
   const molecules = (data.tapas && data.tapas.molecules) || {};
   Object.entries(molecules).forEach(([name, mol]) => traces.push({ x: mol.x, y: mol.y, mode: 'lines', name: name === 'others' ? t('template_others') : chemical(name),
     line: { color: css(MOLECULE_COLOURS[name] || '--series-other'), width: 1 }, xaxis: 'x', yaxis: 'y2',
-    hovertemplate: `${name === 'others' ? t('template_others') : chemical(name)} %{x:.4f} nm<br>${t('template_opacity_short')} %{y:.3g}<extra></extra>` }));
+    hovertemplate: `${name === 'others' ? t('template_others') : chemical(name)} %{x:.4f} nm<br>${t('template_transmission_short')} %{y:.3f}<extra></extra>` }));
   // the footer a quarter as high as the template, one x axis for both
   Plotly.react(div, traces, xpLayout({
     uirevision: XP.path, margin: { l: 70, r: 16, t: 28, b: 48 },
     legend: { orientation: 'h', x: 1, xanchor: 'right', y: 1.0, yanchor: 'bottom', font: { size: 11 } },
     xaxis: xpAxis({ title: { text: t('template_wavelength') }, range: data.range, autorange: false, anchor: 'y2' }),
     yaxis: xpAxis({ domain: [0.25, 1], title: { text: t('template_flux') }, autorange: true, fixedrange: true }),
-    yaxis2: xpAxis({ domain: [0, 0.1875], type: 'log', range: [-3, 1.1], fixedrange: true, tickvals: [0.001, 0.1, 10], ticktext: ['0.001', '0.1', '10'],
-      title: { text: t('template_opacity'), font: { size: 11 } } }),
+    // transmission, 1 clear to 0 opaque
+    yaxis2: xpAxis({ domain: [0, 0.1875], range: [0, 1.04], fixedrange: true, tickvals: [0, 0.5, 1],
+      title: { text: t('template_transmission'), font: { size: 11 } } }),
   }), PLOT_CONFIG).then(() => {
     if (div.dataset.zoom) return;
     div.dataset.zoom = '1';

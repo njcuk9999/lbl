@@ -1,7 +1,7 @@
 """The Data Explorer tab: the rdb tables of DATA_DIR/lblrdb, any column
 against any other, the false inclusion probability (FIP) of what is plotted,
-and the template a table was measured against, with the TAPAS opacity of
-each molecule under it.
+and the template a table was measured against, with the TAPAS
+transmission of each molecule under it.
 
 What the page gets is already cut to what it shows: a table as its numeric
 columns, the FIP as -log10 over a few thousand bins of period (the lowest
@@ -36,8 +36,6 @@ TIMES = ("rjd", "MJDMID", "MJD-OBS", "MJDATE", "BJD", "plot_date",
          "MJD", "JD")
 #: the FIP over this many bins of log period (the lowest FIP of each)
 FIP_BINS = 2000
-#: the TAPAS transmission floor: opacity at most -ln(1e-5), about 11.5
-TAPAS_FLOOR = 1e-5
 #: the site of the per-molecule TAPAS file of an instrument (a file whose
 #: name holds it, in models/tellurics)
 SITES = {"SPIROU": "maunakea", "ESPADONS": "maunakea",
@@ -298,8 +296,8 @@ def _template_arrays(path: str):
 def envelope(x, y, lo: float, hi: float, nbin: int, how: str = "minmax"):
     """The points of (x, y) within [lo, hi] (and one on each side), or, if
     there are more than 2 nbin of them, nbin bins of them: the min and the
-    max of each (minmax: the line's envelope) or the max ('max'). x is
-    sorted."""
+    max of each (minmax: the line's envelope) or the min ('min': the
+    depths of absorption lines). x is sorted."""
     i0 = max(int(np.searchsorted(x, lo, side="left")) - 1, 0)
     i1 = min(int(np.searchsorted(x, hi, side="right")) + 1, len(x))
     xs, ys = x[i0:i1], y[i0:i1]
@@ -308,10 +306,10 @@ def envelope(x, y, lo: float, hi: float, nbin: int, how: str = "minmax"):
     starts = np.linspace(0, xs.size, nbin + 1).astype(int)[:-1]
     middle = 0.5 * (xs[starts] + xs[np.r_[starts[1:], xs.size] - 1])
     with np.errstate(invalid="ignore"):
-        top = np.fmax.reduceat(ys, starts)
-        if how == "max":
-            return middle, top
         bottom = np.fmin.reduceat(ys, starts)
+        if how == "min":
+            return middle, bottom
+        top = np.fmax.reduceat(ys, starts)
     return np.repeat(middle, 2), np.column_stack([bottom, top]).ravel()
 
 
@@ -351,18 +349,17 @@ def tapas_file(data_dir: str, instrument: str = "") -> dict | None:
 TAPAS_COARSE = 32
 
 
-def _opacity(transmission):
-    """-ln(transmission), the transmission floored (and 1 where unknown)"""
-    values = np.nan_to_num(np.asarray(transmission, dtype=np.float32),
-                           nan=1.0)
-    return -np.log(np.clip(values, TAPAS_FLOOR, 1.0))
+def _transmission(values):
+    """A TAPAS transmission within [0, 1] (1 where unknown)"""
+    values = np.nan_to_num(np.asarray(values, dtype=np.float32), nan=1.0)
+    return np.clip(values, 0.0, 1.0)
 
 
 def _tapas_arrays(path: str, kind: str):
     """(wave, {molecule: transmission column}, coarse wave, {molecule:
-    coarse opacity}): the file is mapped, not read, but for its coarse
-    version (the max of each TAPAS_COARSE samples), made once for wide
-    views."""
+    coarse transmission}): the file is mapped, not read, but for its
+    coarse version (the min of each TAPAS_COARSE samples), made once for
+    wide views."""
     from astropy.io import fits
     with _LOCK:
         kept = _TAPAS.get(path)
@@ -380,7 +377,7 @@ def _tapas_arrays(path: str, kind: str):
     ends = np.minimum(starts + TAPAS_COARSE, len(wave)) - 1
     coarse_wave = 0.5 * (np.asarray(wave[starts], dtype=float)
                          + np.asarray(wave[ends], dtype=float))
-    coarse = {name: np.maximum.reduceat(_opacity(column), starts)
+    coarse = {name: np.minimum.reduceat(_transmission(column), starts)
               for name, column in columns.items()}
     # the files are written sorted (LBL's, TAPAS's): only checked
     if not np.all(np.diff(coarse_wave) > 0):
@@ -394,8 +391,8 @@ def _tapas_arrays(path: str, kind: str):
 def template_view(rdb: str, data_dir: str, lo=None, hi=None,
                   nbin: int = 1500) -> dict:
     """The template of a table over [lo, hi] nm (all of it when not given)
-    and the TAPAS opacity of each molecule over the same range, both cut
-    to about nbin bins."""
+    and the TAPAS transmission of each molecule over the same range,
+    both cut to about nbin bins."""
     info = template_of(rdb, data_dir)
     if info is None:
         return dict(template=None)
@@ -419,12 +416,12 @@ def template_view(rdb: str, data_dir: str, lo=None, hi=None,
         molecules = {}
         for name, column in columns.items():
             if use_coarse:
-                mx, my = envelope(cwave, coarse[name], lo, hi, nbin, "max")
+                mx, my = envelope(cwave, coarse[name], lo, hi, nbin, "min")
             else:
-                mx, my = envelope(swave, _opacity(column[i0:i1]), lo, hi,
-                                  nbin, "max")
+                mx, my = envelope(swave, _transmission(column[i0:i1]), lo,
+                                  hi, nbin, "min")
             # a molecule with nothing in the range: left out
-            if my.size and np.nanmax(my) > 1e-4:
+            if my.size and np.nanmin(my) < 1 - 1e-4:
                 molecules[name] = dict(x=np.round(mx, 6).tolist(),
                                        y=_listed(np.round(my, 6)))
         out["tapas"] = dict(file=os.path.basename(tapas["path"]),
