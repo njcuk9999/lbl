@@ -774,7 +774,12 @@ function drawTargets() {
   const empty = SCIENCE.empty || [];
   $('targets_empty').textContent = empty.length ? t('targets_empty_hidden', empty.length, empty.join(', ')) : '';
   $('targets_wrap').hidden = Boolean(message);
-  const instruments = [...new Set(TARGETS.map((row) => row.instrument))].sort();
+  // an instrument folder holds one instrument, read from one source (the
+  //   menu above chose it): no tick per instrument, no column of it; the
+  //   old layout's science/ may mix them
+  const one = Boolean(S.folder);
+  const instruments = one ? [] : [...new Set(TARGETS.map((row) => row.instrument))].sort();
+  $('instrument_filters').hidden = one;
   $('instrument_filters').replaceChildren(...instruments.map((name) => el('label', { class: 'check' },
     el('input', {
       type: 'checkbox', checked: !S.hidden_instruments.includes(name),
@@ -783,7 +788,8 @@ function drawTargets() {
         save(); drawTargets();
       },
     }), name)));
-  const rows = TARGETS.filter((row) => !S.hidden_instruments.includes(row.instrument));
+  const rows = TARGETS.filter((row) => one || !S.hidden_instruments.includes(row.instrument));
+  const columns = COLUMNS.filter((col) => !(one && col.key === 'instrument'));
   const { key, dir } = S.sort;
   rows.sort((a, b) => {
     const va = a[key];
@@ -792,7 +798,7 @@ function drawTargets() {
     if (vb === null || vb === undefined) return -1;
     return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * dir;
   });
-  const head = el('tr', {}, el('th', {}, ''), ...COLUMNS.map((col) => el('th', {
+  const head = el('tr', {}, el('th', {}, ''), ...columns.map((col) => el('th', {
     class: 'sortable', text: t(col.label) + (S.sort.key === col.key ? (S.sort.dir > 0 ? ' ▴' : ' ▾') : ''),
     onclick: () => { S.sort = { key: col.key, dir: S.sort.key === col.key ? -S.sort.dir : 1 }; save(); drawTargets(); },
   })));
@@ -805,7 +811,7 @@ function drawTargets() {
     return el('tr', { class: [ticked ? 'ticked' : '', reading ? 'reading' : ''].join(' ').trim(), ondblclick: () => toggle(row.name) },
       el('td', {}, el('input', { type: 'checkbox', checked: ticked, onchange: () => toggle(row.name) })),
       el('td', {}, colour ? el('span', { class: 'swatch', style: `background:${colour}` }) : null, row.name),
-      el('td', { text: row.instrument }),
+      one ? null : el('td', { text: row.instrument }),
       el('td', { class: 'num', 'data-tip': reading ? t('read_of', row.read || 0, row.files) : null },
         reading ? el('span', { class: 'muted', text: '… ' }) : null, String(row.files)),
       el('td', { class: 'num', text: reading ? '' : (row.nights || '') }),
@@ -949,11 +955,17 @@ function drawSetupStatus() {
   if (!box) return;
   const d = detectedSetup();
   const now = `${S.instrument} · ${S.source}`;
-  const manual = Boolean(S.setup_manual);
+  // an instrument folder sets them: shown, not chosen here
+  const folder = LAYOUT && S.folder ? LAYOUT.folders.find((f) => f.name === S.folder) : null;
+  const manual = Boolean(S.setup_manual) && !folder;
+  $('instrument').disabled = Boolean(folder);
+  $('source').disabled = Boolean(folder);
   $('instrument').classList.toggle('set', manual);
   $('source').classList.toggle('set', manual);
   let line;
-  if (!d) {
+  if (folder) {
+    line = el('span', { class: 'good-text', text: `✓ ${t('setup_folder', now, folder.name)}` });
+  } else if (!d) {
     line = el('span', { class: 'muted', text: t('setup_none') });
   } else if (!d.instrument) {
     line = el('span', { class: 'warn-text', text: t('setup_mixed') });
@@ -2508,7 +2520,7 @@ async function init() {
   $('instrument').onchange = async (event) => { S.instrument = event.target.value; S.instrument_set = true; S.setup_manual = true; fillSources(); save(); await loadInstrumentThings(); wrapEdited = false; drawSetupStatus(); };
   $('source').onchange = async (event) => { S.source = event.target.value; S.setup_manual = true; save(); await loadInstrumentThings(); wrapEdited = false; drawSetupStatus(); };
   $('python').onchange = (event) => { S.python = event.target.value.trim() || DEFAULT_PYTHON; $('python').value = S.python; save(); drawSetupStatus(); wrapEdited = false; };
-  $('tick_all').onclick = () => { S.ticked = TARGETS.filter((row) => !S.hidden_instruments.includes(row.instrument)).map((row) => row.name); save(); drawTargets(); loadPoints(); drawPerTarget(); followTicked(); };
+  $('tick_all').onclick = () => { S.ticked = TARGETS.filter((row) => S.folder || !S.hidden_instruments.includes(row.instrument)).map((row) => row.name); save(); drawTargets(); loadPoints(); drawPerTarget(); followTicked(); };
   $('tick_none').onclick = () => { S.ticked = []; save(); drawTargets(); loadPoints(); drawPerTarget(); drawSetupStatus(); };
   const bound = (key) => (event) => { S[key] = event.target.value === '' ? null : Number(event.target.value); save(); drawPlots(); wrapEdited = false; };
   $('min_rjd').onchange = bound('min_rjd');
