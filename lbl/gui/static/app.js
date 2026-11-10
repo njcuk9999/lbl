@@ -1731,11 +1731,30 @@ function xpLayout(extra) {
 const fipText = (value) => (value < 1e-15 ? '< 1e-15' : value < 1e-3 ? value.toExponential(1) : value.toFixed(3));
 const tableName = (set) => baseName(set.path).replace(/\.rdb$/, '');
 const setColour = (set) => css(SERIES[set.slot % SERIES.length]);
+const finite = (values) => values.filter((v) => v !== null && Number.isFinite(v));
 function median(values) {
-  const good = values.filter((v) => v !== null && Number.isFinite(v)).sort((a, b) => a - b);
+  const good = finite(values).sort((a, b) => a - b);
   if (!good.length) return 0;
   const mid = Math.floor(good.length / 2);
   return good.length % 2 ? good[mid] : 0.5 * (good[mid - 1] + good[mid]);
+}
+// the statistics of the report (lbl/report/stats.py): the rms with one
+//   degree of freedom less, the robust rms the median absolute deviation
+//   times that of a gaussian (1 / its third quartile, 0.67449)
+const MAD_TO_SIGMA = 1 / 0.6744897501960817;
+function spread(values) {
+  const good = finite(values);
+  if (good.length < 2) return { n: good.length, rms: NaN, robust: NaN };
+  const mean = good.reduce((sum, v) => sum + v, 0) / good.length;
+  const rms = Math.sqrt(good.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (good.length - 1));
+  const mid = median(good);
+  return { n: good.length, rms, robust: MAD_TO_SIGMA * median(good.map((v) => Math.abs(v - mid))) };
+}
+/* a number with as many digits as the scatter asks */
+function figure(value, scale) {
+  if (!Number.isFinite(value)) return '';
+  const digits = Math.max(0, Math.min(6, 2 - Math.floor(Math.log10(Math.abs(scale) || 1))));
+  return value.toFixed(digits);
 }
 
 function exploreMessage(text) {
@@ -1861,6 +1880,8 @@ function drawExplore() {
   const several = sets.length > 1;
   const bars = (array) => (array ? { type: 'data', array, visible: true, thickness: 1, width: 0, color: css('--axis') } : { visible: false });
   let colourNote = '';
+  let colourBar = false;
+  const ys = [];
   const traces = sets.map((set) => {
     const table = set.table;
     const values = table.values;
@@ -1871,6 +1892,7 @@ function drawExplore() {
       const mid = median(y);
       y = y.map((v) => (v === null ? null : v - mid));
     }
+    ys.push(y);
     const marker = { size: 7, line: { width: 0.6, color: css('--surface') } };
     let colour = null;
     let title = '';
@@ -1886,8 +1908,9 @@ function drawExplore() {
         title = XP.c;
       }
       if (colour) {
+        colourBar = true;
         Object.assign(marker, { color: colour, showscale: true,
-          colorbar: { title: { text: title, side: 'right' }, thickness: 12, outlinewidth: 0, tickfont: { color: css('--muted') } } });
+          colorbar: { title: { text: title, side: 'right' }, thickness: 12, outlinewidth: 0, tickfont: { color: css('--muted') }, x: 0.735, xanchor: 'left' } });
         // an outlier's probability: blue reliable, grey undecided, red outlier
         if (XP.c === 'outlier') Object.assign(marker, { cmin: 0, cmax: 1, colorscale: [[0, css('--series-1')], [0.5, '#9aa3b2'], [1, css('--series-8')]] });
         else marker.colorscale = 'Viridis';
@@ -1897,17 +1920,55 @@ function drawExplore() {
       error_x: bars(errorOf(XP.x)), error_y: bars(errorOf(XP.y)), showlegend: several,
       hovertemplate: `%{text}<br>${esc(XP.x)} %{x}<br>${esc(XP.y)} %{y}${colour ? `<br>${esc(title)} %{marker.color:.4g}` : ''}<extra>${several ? esc(tableName(set)) : ''}</extra>` };
   });
+  // on the right, on the same y axis, the histogram of y: of each table
+  //   as a fraction of its points when there are several, the same bins
+  //   for all
+  const pooled = finite(ys.flat()).sort((a, b) => a - b);
+  if (pooled.length > 1) {
+    const iqr = pooled[Math.floor(0.75 * (pooled.length - 1))] - pooled[Math.floor(0.25 * (pooled.length - 1))];
+    const span = pooled[pooled.length - 1] - pooled[0];
+    // Freedman-Diaconis, at least 10 bins and at most 400 (a far outlier
+    //   does not make the core one bin)
+    let size = 2 * iqr / Math.cbrt(pooled.length) || span / 20 || 1;
+    if (span > 0) size = Math.min(Math.max(size, span / 400), span / 10);
+    sets.forEach((set, i) => traces.push({ type: 'histogram', y: ys[i], xaxis: 'x2', yaxis: 'y', orientation: 'h',
+      name: tableName(set), showlegend: false, histnorm: several ? 'probability' : '',
+      ybins: { start: pooled[0] - size / 2, end: pooled[pooled.length - 1] + size, size },
+      marker: { color: several ? setColour(set) : css('--series-1'), line: { width: 0 } }, opacity: several ? 0.5 : 0.8,
+      hovertemplate: `%{y}<br>%{x}<extra>${several ? esc(tableName(set)) : ''}</extra>` }));
+  }
   Plotly.react($('explore_plot'), traces, xpLayout({
     uirevision: `${sets.map((set) => set.path).join('|')}|${XP.x}|${XP.y}`, margin: { l: 70, r: 16, t: several ? 28 : 12, b: 48 },
-    xaxis: xpAxis({ title: { text: XP.x } }),
+    barmode: 'overlay', bargap: 0.05,
+    xaxis: xpAxis({ title: { text: XP.x }, domain: [0, colourBar ? 0.72 : 0.79] }),
+    xaxis2: xpAxis({ title: { text: t(several ? 'explore_hist_fraction' : 'explore_hist_count') }, domain: [0.83, 1], anchor: 'y', rangemode: 'tozero' }),
     yaxis: xpAxis({ title: { text: several ? t('explore_minus_median', XP.y) : XP.y } }),
   }), PLOT_CONFIG);
+  drawStats(sets, ys);
   const first = sets[0].table;
   const said = [t('explore_rows', sets.reduce((sum, set) => sum + set.table.rows, 0))];
   said.push(first.errors[XP.y] ? t('explore_bars', first.errors[XP.y]) : t('explore_no_bars', XP.y));
   if (several) said.push(t('explore_colour_tables'));
   if (colourNote) said.push(colourNote);
   $('explore_note').textContent = said.join(' · ');
+}
+
+/* under the plot, for each table: its points, the rms and the robust rms
+   of y, its median error bar */
+function drawStats(sets, ys) {
+  const stats = sets.map((set, i) => ({ set, ...spread(ys[i]),
+    sigma: set.table.errors[XP.y] ? median(finite(set.table.values[set.table.errors[XP.y]])) : NaN }));
+  const scale = Math.min(...stats.map((row) => row.robust).filter((v) => v > 0), Infinity);
+  const several = sets.length > 1;
+  const head = ['explore_col_table', 'explore_col_n', 'explore_col_rms', 'explore_col_robust', 'explore_col_sigma'];
+  $('explore_stats').replaceChildren(
+    el('thead', {}, el('tr', {}, head.map((key, i) => el('th', { class: i ? 'num' : '', text: i > 1 ? `${t(key)} (${XP.y})` : t(key) })))),
+    el('tbody', {}, stats.map((row) => el('tr', {},
+      el('td', { class: 'mono' }, several ? el('span', { class: 'swatch', style: `background: ${setColour(row.set)}` }) : null, tableName(row.set)),
+      el('td', { class: 'num', text: row.n }),
+      el('td', { class: 'num mono', text: figure(row.rms, scale) }),
+      el('td', { class: 'num mono', text: figure(row.robust, scale) }),
+      el('td', { class: 'num mono', text: figure(row.sigma, scale) })))));
 }
 
 /* the quantities whose FIP is shown: y, and x when x is not a time (one

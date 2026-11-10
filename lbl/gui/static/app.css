@@ -738,3 +738,6 @@ h2 .info { vertical-align: 3px; }
 .xplot.fip { height: 300px; }
 .xplot.tall { height: 560px; }
 #pane-explore h3 { margin: 16px 0 2px; font-size: 15px; }
+.explore-stats { margin: 4px 0 2px; }
+.explore-stats table { width: auto; }
+.explore-stats td, .explore-stats th { padding: 3px 14px 3px 0; }
