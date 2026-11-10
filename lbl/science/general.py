@@ -3948,7 +3948,7 @@ def find_mask_lines_significant(inst: InstrumentsType, template_table: Table,
     # uncertainty of each point of the template
     sigma_template = template_uncertainty(inst, template_table, template_hdr)
     if 'eflux_savgol_d1' in template_table.colnames:
-        # the template gives it (TEMPLATE_METHOD = SCATTER: the uncertainty of
+        # the template gives it (TEMPLATE_METHOD = BSD: the uncertainty of
         #   the slope of its local polynomials, fitted on the pixels)
         sigma_dflux = np.array(template_table['eflux_savgol_d1'])
     else:

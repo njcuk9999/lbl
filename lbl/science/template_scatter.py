@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-The template without resampling a spectrum (TEMPLATE_METHOD = 'SCATTER').
+The template without resampling a spectrum: BSD, BERV Spectral Drizzle
+(TEMPLATE_METHOD = 'BSD'; 'SCATTER', its old name, is still accepted).
 
 Every pixel of every spectrum keeps its own wavelength, moved to the star's
 frame (BERV and the star's velocity, relativistic): for one order, the pixels
@@ -14,15 +15,15 @@ those of the fitted polynomial, and the uncertainty of each point comes with
 it. This replaces the median of spectra resampled into bins of BERV
 (TEMPLATE_METHOD = 'BERVBIN').
 
-Per order, in TEMPLATE_SCATTER_NITER passes:
+Per order, in TEMPLATE_BSD_NITER passes:
     1. the fit through the cloud, each point weighted by the inverse square
        of its noise (a low pass of its residuals), with a clip of the local
-       outliers at TEMPLATE_SCATTER_CLIP times the RMS of the residuals of
+       outliers at TEMPLATE_BSD_CLIP times the RMS of the residuals of
        their window (in units of their noise), in a
-       Gaussian window of TEMPLATE_SCATTER_FWHM resolution elements;
+       Gaussian window of TEMPLATE_BSD_FWHM resolution elements;
     2. a pixel of the detector whose residual is off in most spectra (the
        median over spectra of the residual in units of the noise beyond
-       TEMPLATE_SCATTER_OBS_CLIP) is left out of all spectra: what stays on
+       TEMPLATE_BSD_OBS_CLIP) is left out of all spectra: what stays on
        the detector while the star moves (telluric residuals, bad pixels);
     3. each spectrum is divided by a low pass (HP_WIDTH) of its ratio to the
        template, for what the blaze division leaves.
@@ -69,6 +70,20 @@ NDERIV = 3
 # =============================================================================
 # Define functions
 # =============================================================================
+def bsd_param(params, name: str):
+    """
+    TEMPLATE_BSD_<name>, or TEMPLATE_SCATTER_<name>, its name from when the
+    method was called SCATTER, when a wrap still sets that one
+
+    :param params: ParamDict, the parameters of the instrument
+    :param name: str, FWHM, NITER, CLIP, OBS_CLIP or MEMORY
+
+    :return: the value of the parameter
+    """
+    old = params['TEMPLATE_SCATTER_' + name]
+    return params['TEMPLATE_BSD_' + name] if old is None else old
+
+
 def star_shift(berv: np.ndarray, rv0: np.ndarray) -> np.ndarray:
     """
     The shift in ln(wavelength) that takes an observed wavelength to the
@@ -394,18 +409,18 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
     rv0 = np.array(rv0, dtype=float)
     lngrid = np.log(wavegrid)
     dln = np.log(wavegrid[1] / wavegrid[0])
-    # the window: TEMPLATE_SCATTER_FWHM resolution elements, 1 / R in
+    # the window: TEMPLATE_BSD_FWHM resolution elements, 1 / R in
     #   ln(wavelength)
     if not params['APPROX_RESOLUTION']:
-        emsg = ('TEMPLATE_METHOD = SCATTER needs the resolving power of the '
+        emsg = ('TEMPLATE_METHOD = BSD needs the resolving power of the '
                 'instrument (APPROX_RESOLUTION), or use TEMPLATE_METHOD = '
                 'BERVBIN')
         raise base_classes.LblException(emsg)
-    fit_params = dict(fwhm=(params['TEMPLATE_SCATTER_FWHM'] /
+    fit_params = dict(fwhm=(bsd_param(params, 'FWHM') /
                             params['APPROX_RESOLUTION']),
-                      clip=params['TEMPLATE_SCATTER_CLIP'],
-                      obs_clip=params['TEMPLATE_SCATTER_OBS_CLIP'])
-    niter = int(params['TEMPLATE_SCATTER_NITER'])
+                      clip=bsd_param(params, 'CLIP'),
+                      obs_clip=bsd_param(params, 'OBS_CLIP'))
+    niter = int(bsd_param(params, 'NITER'))
     # the geometry, the reference wavelength of each order and the low pass
     #   width of each order in pixels (HP_WIDTH)
     image0, hdr0 = load_science(science_files[-1])
@@ -417,10 +432,11 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
     good = np.isfinite(pix_ms) & (pix_ms > 0)
     hp_pix[good] = np.clip(params['HP_WIDTH'] * 1000 / pix_ms[good], 11,
                            max(11, npix // 4)).astype(int)
-    # the orders read at once: what fits in TEMPLATE_SCATTER_MEMORY [GB]
+    # the orders read at once: what fits in TEMPLATE_BSD_MEMORY [GB]
     per_order = nfiles * npix * 3 * 4
-    chunk = max(1, int(params['TEMPLATE_SCATTER_MEMORY'] * 1e9 // per_order))
-    msg = ('Template from the scattered pixels of {0} spectra: {1} orders, '
+    chunk = max(1, int(bsd_param(params, 'MEMORY') * 1e9 // per_order))
+    msg = ('BSD template (BERV Spectral Drizzle) from the pixels of {0} '
+           'spectra: {1} orders, '
            'window FWHM {2:.2f} km/s, {3} passes, {4} orders read at a time')
     log.info(msg.format(nfiles, nord, fit_params['fwhm'] * C_MS / 1e3, niter,
                         chunk))

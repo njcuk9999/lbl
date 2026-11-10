@@ -2,7 +2,9 @@
 
 LBL measures each spectrum against a template of the star, through the
 template's first derivatives. Since 2026-11-09 the template is made without
-resampling any spectrum (`TEMPLATE_METHOD = 'SCATTER'`, the default): every
+resampling any spectrum: BSD, BERV Spectral Drizzle (`TEMPLATE_METHOD =
+'BSD'`, the default; `'SCATTER'`, its name until 2026-11-10, is still
+accepted, as are the `TEMPLATE_BSD_*` parameters): every
 pixel of every spectrum keeps its own wavelength in the star's frame, and the
 template and its derivatives are a local polynomial fitted through that cloud
 of points. The method comes from
@@ -31,23 +33,23 @@ Order by order (`lbl/science/template_scatter.py`):
 2. At each point of the template's grid (the usual LBL grid, every 0.5 km/s
    for NIRPS, 1 km/s for SPIRou), a cubic is fitted by weighted least squares
    through the points within 1.5 FWHM (`lbl/core/gaussian_savgol.py`):
-   - a Gaussian weight in wavelength, of FWHM `TEMPLATE_SCATTER_FWHM`
+   - a Gaussian weight in wavelength, of FWHM `TEMPLATE_BSD_FWHM`
      resolution elements (`c / APPROX_RESOLUTION`);
    - each point weighted by `1 / sigma**2`, its noise being a low pass of its
      spectrum's residuals;
-   - points further than `TEMPLATE_SCATTER_CLIP` times the RMS of the
+   - points further than `TEMPLATE_BSD_CLIP` times the RMS of the
      normalised residuals of their window are left out (a local scale: the
      cores of lines the cubic cannot follow are not clipped more than
      elsewhere);
    - points on both sides of the grid point, or no value: the polynomial is
      never extrapolated over the end of an order or a masked band.
 3. A pixel of the detector whose residual, over the spectra, has a median
-   beyond `TEMPLATE_SCATTER_OBS_CLIP` sigma is left out of all spectra: what
+   beyond `TEMPLATE_BSD_OBS_CLIP` sigma is left out of all spectra: what
    stays on the detector while the star moves (telluric residuals, bad
    pixels).
 4. Each spectrum is divided by a low pass (`HP_WIDTH`) of its ratio to the
    template: what the blaze division leaves.
-5. Steps 2 to 4 are repeated (`TEMPLATE_SCATTER_NITER` passes).
+5. Steps 2 to 4 are repeated (`TEMPLATE_BSD_NITER` passes).
 
 The orders are then combined on the grid with the s1d weights, each brought
 back to its level in the spectra so that they join without a step: all the
@@ -81,19 +83,19 @@ these uncertainties.
 
 | parameter | default | what |
 |---|---|---|
-| `TEMPLATE_METHOD` | `'SCATTER'` | `'SCATTER'` or `'BERVBIN'` (the FP and other calibrations always use `'BERVBIN'`) |
-| `TEMPLATE_SCATTER_FWHM` | 1.0 | FWHM of the window, in resolution elements |
-| `TEMPLATE_SCATTER_NITER` | 4 | passes per order |
-| `TEMPLATE_SCATTER_CLIP` | 5.0 | clip of the local outliers, in units of the RMS of their window |
-| `TEMPLATE_SCATTER_OBS_CLIP` | 2.0 | clip of the detector pixels, in sigma of their median residual |
-| `TEMPLATE_SCATTER_MEMORY` | 2.0 | memory for the orders read at once [GB]; more orders take more reads of the files |
+| `TEMPLATE_METHOD` | `'BSD'` | `'BSD'` (or its old name `'SCATTER'`) or `'BERVBIN'` (the FP and other calibrations always use `'BERVBIN'`) |
+| `TEMPLATE_BSD_FWHM` | 1.0 | FWHM of the window, in resolution elements |
+| `TEMPLATE_BSD_NITER` | 4 | passes per order |
+| `TEMPLATE_BSD_CLIP` | 5.0 | clip of the local outliers, in units of the RMS of their window |
+| `TEMPLATE_BSD_OBS_CLIP` | 2.0 | clip of the detector pixels, in sigma of their median residual |
+| `TEMPLATE_BSD_MEMORY` | 2.0 | memory for the orders read at once [GB]; more orders take more reads of the files |
 
 ## What the template file holds
 
 The same columns as before, so that the mask and compute read it unchanged,
 and one more:
 
-| column | SCATTER |
+| column | BSD |
 |---|---|
 | `flux`, `flux_odd`, `flux_even` | the fitted value (the same as `*_savgol_d0`) |
 | `eflux`, `eflux_odd`, `eflux_even` | its uncertainty, from the fit |
@@ -101,7 +103,8 @@ and one more:
 | `flux_savgol_d0` to `d3` (and odd, even) | the value and derivatives, per step of the grid |
 | `eflux_savgol_d1` | the uncertainty of the first derivative: the mask's significant edges (`MASK_SIGNIFICANT_EDGES`) use it instead of propagating a grid savgol window |
 
-The header keyword `LBLTMPLT` is `LBL_SCATTER`. The method is part of the
+The header keyword `LBLTMPLT` is `LBL_BSD` (`LBL_SCATTER` for a template made
+before the rename). The method is part of the
 template's provenance token: a template made by the other method is made
 again.
 
@@ -118,8 +121,8 @@ LBL, came back:
 
 | template | fraction given back |
 |---|---|
-| SCATTER, 0.4 resolution element (templatepy's 3 steps of the grid) | 0.838 |
-| SCATTER, 1 resolution element (default) | 0.983 |
+| BSD, 0.4 resolution element (templatepy's 3 steps of the grid) | 0.838 |
+| BSD, 1 resolution element (default) | 0.983 |
 | BERVBIN | 0.978 |
 
 With the template held fixed (made from the spectra without the added
@@ -130,7 +133,7 @@ measures has it (see `KnownLimitations.md`).
 
 ## How it compares with the BERV bins
 
-| | BERVBIN | SCATTER |
+| | BERVBIN | BSD |
 |---|---|---|
 | GJ 1028 (NIRPS, 40 spectra): rms | 5.76 m/s | 5.73 m/s |
 | eps Eri (NIRPS, 729 spectra): rms within the nights | 1.470 m/s | 1.472 m/s |

@@ -624,16 +624,21 @@ def run_template(inst, objname: str, objkind: str):
     #   template on disk made from other spectra (more were added, some
     #   removed) is made again. One made before tokens existed is kept
     #   unless a spectrum is newer than it, and is given its token
-    # the method of the template (SCATTER for science spectra; the FP and the
-    #   other calibrations are made with BERVBIN)
+    # the method of the template (BSD, BERV Spectral Drizzle, for science
+    #   spectra; the FP and the other calibrations are made with BERVBIN).
+    #   SCATTER is the old name of BSD
     template_method = str(inst.params['TEMPLATE_METHOD']).upper()
-    if template_method not in ('SCATTER', 'BERVBIN'):
-        raise LblException('TEMPLATE_METHOD must be SCATTER or BERVBIN, '
-                           'not {0}'.format(template_method))
-    if template_method == 'SCATTER' and inst.params['DATA_TYPE'] != 'SCIENCE':
-        template_method = 'BERVBIN'
-    # a SCATTER template is not one made from the same files by BERVBIN
     if template_method == 'SCATTER':
+        template_method = 'BSD'
+    if template_method not in ('BSD', 'BERVBIN'):
+        raise LblException('TEMPLATE_METHOD must be BSD or BERVBIN, '
+                           'not {0}'.format(template_method))
+    if template_method == 'BSD' and inst.params['DATA_TYPE'] != 'SCIENCE':
+        template_method = 'BERVBIN'
+    # a BSD template is not one made from the same files by BERVBIN (the
+    #   token keeps the method's old name: a template made before the
+    #   rename is still the same)
+    if template_method == 'BSD':
         inputs_token = provenance.token(
             science_files, extra=dict(method='SCATTER', version=1))
     else:
@@ -769,9 +774,9 @@ def run_template(inst, objname: str, objkind: str):
     #   constant), up to 5 otherwise
     n_passes = 1 if (planets_used is not None or flat_rv) else 5
     # the template: local polynomials through the pixels of all the spectra,
-    #   none resampled (SCATTER), or the median of the spectra resampled and
+    #   none resampled (BSD), or the median of the spectra resampled and
     #   stacked in bins of BERV (BERVBIN, also for the FP)
-    if template_method == 'SCATTER':
+    if template_method == 'BSD':
         built = template_scatter.build(
             inst, science_files, partial(_load_template_science, inst), blaze,
             calib_dir, wavegrid, berv, rv0, iterate_rv=(n_passes > 1),
@@ -835,15 +840,15 @@ def run_template(inst, objname: str, objkind: str):
     # Step 8. Calculate Savitzky-Golay filtered template for better handling
     #         of higher derivatives
     # -------------------------------------------------------------------------
-    # (SCATTER has them already: the derivatives of its local polynomials)
+    # (BSD has them already: the derivatives of its local polynomials)
     if savgol_fluxes is None:
         savgol_fluxes = inst.calculate_savgol_template(
             dv_grid=grid_step_magic,
             flux_dict=dict(flux=p50, flux_odd=p50_odd, flux_even=p50_even))
     # set a key to tell us the type of template created
     if len(savgol_fluxes) > 0:
-        if template_method == 'SCATTER':
-            template_type = 'LBL_SCATTER'
+        if template_method == 'BSD':
+            template_type = 'LBL_BSD'
         else:
             template_type = 'LBL_SAVGOL'
         # repeat quality control checks for savgol fluxes

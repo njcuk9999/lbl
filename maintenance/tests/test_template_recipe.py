@@ -226,8 +226,8 @@ class Moving(Files):
         return np.array(self.cache[name])
 
 
-def test_the_scatter_template_is_the_star_within_its_uncertainty(tmp_path):
-    # SCATTER (the default): against the template of the same star without
+def test_the_bsd_template_is_the_star_within_its_uncertainty(tmp_path):
+    # BSD (the default): against the template of the same star without
     #   noise, the template and its derivative scatter by the uncertainties
     #   they carry; that template is the star but for the smoothing of a
     #   window of one resolution element (as the savgol of BERVBIN); the
@@ -258,7 +258,7 @@ def test_the_scatter_template_is_the_star_within_its_uncertainty(tmp_path):
     assert 0.8 < ratio < 1.25
 
 
-def test_the_scatter_template_measures_the_velocities_of_the_star(tmp_path):
+def test_the_bsd_template_measures_the_velocities_of_the_star(tmp_path):
     # SMALL_RV_SHIFT False: a star moving by +-1.5 km/s, its velocities found
     #   (up to their mean, which the template takes) to a few m/s
     vel = 1500.0 * np.sin(np.linspace(0, 9, 24))
@@ -268,7 +268,7 @@ def test_the_scatter_template_measures_the_velocities_of_the_star(tmp_path):
 
 
 def _own_template_velocities(files, resel):
-    """The velocity of each file against the SCATTER template made of all
+    """The velocity of each file against the BSD template made of all
     the files, the window resel resolution elements wide (converged)"""
     arguments = sys.argv
     sys.argv = sys.argv[:1]
@@ -305,7 +305,7 @@ def _own_template_velocities(files, resel):
     return rv
 
 
-def test_the_scatter_template_does_not_pull_the_velocities_to_itself():
+def test_the_bsd_template_does_not_pull_the_velocities_to_itself():
     # 15 m/s added to spectra of SNR ~60, each measured against the template
     #   made of them all, less the same without it: the default window gives
     #   the velocity back (bar the ~1/N of the template a spectrum is), a
@@ -315,7 +315,7 @@ def test_the_scatter_template_does_not_pull_the_velocities_to_itself():
     nfile = 24
     vel = 15.0 * np.sin(2 * np.pi * np.arange(nfile) / 7.3)
     slopes = []
-    for resel in (parameters.params['TEMPLATE_SCATTER_FWHM'], 0.4):
+    for resel in (parameters.params['TEMPLATE_BSD_FWHM'], 0.4):
         still = _own_template_velocities(
             Moving(np.zeros(nfile), nfile=nfile, counts=4e3,
                    bervamp=26000.0), resel)
