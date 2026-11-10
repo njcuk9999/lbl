@@ -26,6 +26,7 @@ from lbl.recipes import lbl_resmap
 from lbl.recipes import lbl_telluclean
 from lbl.recipes import lbl_template
 from lbl.recipes import lbl_reset
+from lbl.instruments import select
 from lbl.resources import lbl_misc
 
 # =============================================================================
@@ -371,6 +372,35 @@ def _tc_comparison(runparams: dict, data_dir: str, instrument: str,
     raise base_classes.LblException(emsg.format(*eargs))
 
 
+def _missing_for_compute(keyword_args, **kwargs):
+    """What lbl_compute will look for and not find: the templates of the
+    science object and of the comparison (a vetted one is fetched by
+    lbl_compute itself) and the comparison's mask, by the paths LBL's
+    instrument class gives them, as lbl_compute's own setup asks them.
+    ([objects whose template is missing], whether the mask is)."""
+    from lbl.core import parameters
+    names = {key.upper() for key in parameters.params}
+    args = select.parse_args(lbl_compute.ARGS_COMPUTE,
+                             dict({k: v for k, v in keyword_args.items()
+                                   if k.upper() in names}, **kwargs),
+                             '', parse=False)
+    inst = select.load_instrument(args)
+    data_dir = inst.params['DATA_DIR']
+    template_dir = os.path.join(data_dir, inst.params['TEMPLATE_SUBDIR'])
+    mask_dir = os.path.join(data_dir, inst.params['MASK_SUBDIR'])
+    model_dir = os.path.join(data_dir, 'models')
+    templates = []
+    for tkind, objname in (('science', inst.params['OBJECT_SCIENCE']),
+                           ('comparison', inst.params['OBJECT_COMPARISON'])):
+        if vetted.is_vetted(objname) or objname in templates:
+            continue
+        path = inst.template_file(template_dir, tkind, required=False)
+        if not os.path.exists(path):
+            templates.append(objname)
+    mask = inst.mask_file(model_dir, mask_dir, required=False)
+    return templates, not os.path.exists(mask)
+
+
 def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                data_type, object_science, object_comparison, object_teff,
                blaze_corr, blaze_file):
@@ -427,6 +457,41 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
     #               object_science=object_science,
     #               object_comparison=object_comparison,
     #               **keyword_args)
+    # ---------------------------------------------------------------------
+    # A TEMPLATE OR A MASK COMPUTE NEEDS AND THAT IS NOT THERE (RUN_LBL_
+    #   TEMPLATE or RUN_LBL_MASK off, and a PCA2D correction made again has
+    #   moved the previous one's to superseded/, say): made now, said,
+    #   rather than lbl_compute stopping on it after the correction
+    if runparams['RUN_LBL_COMPUTE']:
+        templates, mask = _missing_for_compute(
+            keyword_args, instrument=instrument, data_dir=data_dir,
+            data_source=data_source, data_type=data_type,
+            object_science=object_science,
+            object_comparison=object_comparison,
+            blaze_corrected=blaze_corr, blaze_file=blaze_file)
+        for _obj_template in templates:
+            log.warning('the template of {0} is not there, and lbl_compute'
+                        ' needs it: made now (RUN_LBL_TEMPLATE={1})'.format(
+                            _obj_template, runparams['RUN_LBL_TEMPLATE']))
+            lbl_template.main(instrument=instrument, data_dir=data_dir,
+                              data_source=data_source,
+                              data_type=data_type,
+                              object_science=object_science,
+                              object_comparison=_obj_template,
+                              blaze_corrected=blaze_corr,
+                              blaze_file=blaze_file, overwrite=False,
+                              **keyword_args)
+        if mask:
+            log.warning('the mask of {0} is not there, and lbl_compute needs'
+                        ' it: made now (RUN_LBL_MASK={1})'.format(
+                            object_comparison, runparams['RUN_LBL_MASK']))
+            lbl_mask.main(instrument=instrument, data_dir=data_dir,
+                          data_source=data_source,
+                          data_type=data_type,
+                          object_science=object_science,
+                          object_comparison=object_comparison,
+                          object_teff=object_teff, overwrite=False,
+                          **keyword_args)
     # ---------------------------------------------------------------------
     # run the compute code
     if runparams['RUN_LBL_COMPUTE']:
