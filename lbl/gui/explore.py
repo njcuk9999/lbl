@@ -46,7 +46,12 @@ SITES = {"SPIROU": "maunakea", "ESPADONS": "maunakea",
 #: the molecules of a TAPAS file, the order they are drawn in
 MOLECULES = ("H2O", "O2", "CH4", "CO2", "O3", "N2O", "NO2")
 
+#: what a PCA2D run adds to the name of a star's folder (science/<star>_pca2d
+#: or <star>_pca2d_<name>)
+PCA2D_MARK = "_pca2d"
+
 _LOCK = threading.Lock()
+_NAMES = {}
 _TEMPLATES = {}
 _TAPAS = {}
 _FIPS = {}
@@ -55,11 +60,71 @@ _FIPS = {}
 # =============================================================================
 # The tables
 # =============================================================================
+def names_of(path: str, data_dir: str = "") -> tuple:
+    """(science, template) of a table, lbl_<science>_<template>.rdb: from
+    its companion's header (LBL_OBJS, LBL_OBJC); else the name less the
+    template the header names, the longest folder of DATA_DIR/science the
+    name starts with, or the name less a template found on disk
+    (template_of); else its first word."""
+    from astropy.io import fits
+    stem = os.path.splitext(os.path.basename(path))[0]
+    rest = stem.split("_", 1)[1] if "_" in stem else stem
+    companion = _companion(path)
+    try:
+        mtime = os.path.getmtime(companion)
+    except OSError:
+        mtime = None
+    with _LOCK:
+        kept = _NAMES.get(companion)
+    if mtime is not None and kept and kept[0] == mtime:
+        return kept[1]
+    science = template = None
+    if mtime is not None:
+        try:
+            header = fits.getheader(companion)
+            science = header.get("LBL_OBJS")
+            template = header.get("LBL_OBJC")
+        except (OSError, ValueError):
+            pass
+    if not (science and rest.startswith(str(science) + "_")):
+        science = None
+        if template and rest.endswith("_" + str(template)):
+            science = rest[:-len(str(template)) - 1]
+        if not science:
+            folders = glob.glob(os.path.join(data_dir or "", "science", "*"))
+            known = sorted((os.path.basename(f) for f in folders),
+                           key=len, reverse=True)
+            science = next((name for name in known
+                            if rest.startswith(name + "_")), None)
+        if not science:
+            found = template_of(path, data_dir)
+            if found and rest.endswith("_" + found["object"]):
+                science = rest[:-len(found["object"]) - 1]
+        science = science or rest.split("_")[0]
+        template = None
+    science = str(science)
+    template = str(template) if template else rest[len(science) + 1:]
+    if mtime is not None:
+        with _LOCK:
+            _NAMES[companion] = (mtime, (science, template))
+    return science, template
+
+
+def object_flavour(science: str, template: str) -> tuple:
+    """A table's star and its flavour: the star its science folder is of
+    (GJ_1028_pca2d: GJ_1028), and what else its name says, the PCA2D
+    variant and the template ('pca2d / GJ_1028_pca2d', 'VETTED_GL880')."""
+    star = science.split(PCA2D_MARK)[0] or science
+    variant = science[len(star):].lstrip("_")
+    return star, ("%s / %s" % (variant, template) if variant else template)
+
+
 def rdb_files(data_dir: str) -> dict:
-    """The rdb tables of DATA_DIR/lblrdb, the newest first. A table of
-    every spectrum (lbl_X.rdb) carries that of its nights (lbl2_X.rdb,
-    written in the same run) as 'nightly', which is not listed apart; an
-    lbl2_ table without its lbl_ is."""
+    """The rdb tables of DATA_DIR/lblrdb, the newest first, each with its
+    star and its flavour (object_flavour). A table of every spectrum
+    (lbl_X.rdb) carries that of its nights (lbl2_X.rdb, written in the same
+    run) as 'nightly', which is not listed apart; an lbl2_ table without
+    its lbl_ is."""
     folder = os.path.join(data_dir or "", RDB_FOLDER)
     found = {}
     for path in glob.glob(os.path.join(folder, "*.rdb")):
@@ -80,6 +145,8 @@ def rdb_files(data_dir: str) -> dict:
             if twin is not None:
                 row["nightly"] = {key: twin[key]
                                   for key in ("path", "name", "mtime")}
+        row["object"], row["flavour"] = object_flavour(
+            *names_of(row["path"], data_dir))
         rows.append(row)
     # a run's two tables: as new as the newer of them
     rows.sort(key=lambda row: -max(row["mtime"], (row["nightly"] or row)

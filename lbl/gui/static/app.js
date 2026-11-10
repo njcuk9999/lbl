@@ -1729,7 +1729,14 @@ function xpLayout(extra) {
     legend: { orientation: 'h', x: 0, y: 1.0, yanchor: 'bottom', font: { size: 11 } }, ...extra };
 }
 const fipText = (value) => (value < 1e-15 ? '< 1e-15' : value < 1e-3 ? value.toExponential(1) : value.toFixed(3));
-const tableName = (set) => baseName(set.path).replace(/\.rdb$/, '');
+// a table as the legends say it: its flavour when all the tables are of
+//   one star, else its star and its flavour
+function tableName(set) {
+  const file = XP.files.find((row) => row.path === set.base) || {};
+  if (!file.object) return baseName(set.path).replace(/\.rdb$/, '');
+  const stars = new Set(XP.sets.map((other) => (XP.files.find((row) => row.path === other.base) || {}).object));
+  return stars.size === 1 && XP.sets.length > 1 ? file.flavour : `${file.object}: ${file.flavour}`;
+}
 const setColour = (set) => css(SERIES[set.slot % SERIES.length]);
 const finite = (values) => values.filter((v) => v !== null && Number.isFinite(v));
 function median(values) {
@@ -1798,32 +1805,49 @@ function shownOf(set) {
   return XP.nightly && file.nightly ? file.nightly : file;
 }
 
-/* a menu per table, its colour beside it when there are several, x to
-   take it off; + adds the newest table not shown */
+/* a row per table: its star, then its flavour (what else its name says:
+   the PCA2D variant, the template), its colour beside it when there are
+   several, x to take it off */
+const fileOf = (set) => XP.files.find((file) => file.path === set.base) || {};
+const freeFile = (file, but) => !XP.sets.some((set) => set !== but && set.base === file.path);
 function drawTableRows() {
   const several = XP.sets.length > 1;
-  const label = (file) => `${file.name} · ${when(Math.max(file.mtime, (file.nightly || file).mtime))}`;
+  const objects = [...new Set(XP.files.map((file) => file.object))];
+  const count = (name) => XP.files.filter((file) => file.object === name).length;
+  const stamp = (file) => when(Math.max(file.mtime, (file.nightly || file).mtime));
   $('explore_tables').replaceChildren(...XP.sets.map((set, i) => {
-    const select = el('select', { onchange: (event) => { set.base = event.target.value; openSets(); } },
-      XP.files.map((file) => el('option', { value: file.path, text: label(file) })));
-    select.value = set.base;
+    const current = fileOf(set);
+    // another star: its newest flavour not shown yet
+    const star = el('select', { class: 'explore-object', onchange: (event) => {
+      const mine = XP.files.filter((file) => file.object === event.target.value);
+      set.base = (mine.find((file) => freeFile(file, set)) || mine[0]).path;
+      drawTableRows();
+      openSets();
+    } }, objects.map((name) => el('option', { value: name, text: `${name} (${count(name)})` })));
+    star.value = current.object;
+    const flavour = el('select', { class: 'explore-flavour', onchange: (event) => { set.base = event.target.value; drawTableRows(); openSets(); } },
+      XP.files.filter((file) => file.object === current.object).map((file) => el('option', { value: file.path, text: `${file.flavour} · ${stamp(file)}` })));
+    flavour.value = set.base;
     return el('div', { class: 'explore-table-row' },
       several ? el('span', { class: 'swatch', style: `background: ${setColour(set)}` }) : null,
-      select,
-      several ? el('button', { type: 'button', class: 'button small', text: '×', title: t('explore_remove'),
+      star, flavour,
+      several ? el('button', { type: 'button', class: 'button small', text: '\u00D7', title: t('explore_remove'),
         onclick: () => { XP.sets.splice(i, 1); drawTableRows(); openSets(); } }) : null);
   }));
-  $('explore_add').disabled = XP.sets.length >= SERIES.length || XP.sets.length >= XP.files.length;
-  const nights = XP.sets.some((set) => (XP.files.find((file) => file.path === set.base) || {}).nightly);
+  $('explore_add').disabled = XP.sets.length >= SERIES.length || !XP.files.some((file) => freeFile(file));
+  const nights = XP.sets.some((set) => fileOf(set).nightly);
   $('explore_nightly').disabled = !nights;
   $('explore_nightly').checked = XP.nightly && nights;
 }
 
+/* another flavour of the first table's star, the newest not shown; another
+   star once they all are */
 function addTable() {
   const used = XP.sets.map((set) => set.slot);
   let slot = 0;
   while (used.includes(slot)) slot += 1;
-  const next = XP.files.find((file) => !XP.sets.some((set) => set.base === file.path));
+  const star = fileOf(XP.sets[0]).object;
+  const next = XP.files.find((file) => file.object === star && freeFile(file)) || XP.files.find((file) => freeFile(file));
   if (!next) return;
   XP.sets.push({ base: next.path, slot });
   drawTableRows();

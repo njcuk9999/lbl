@@ -72,8 +72,24 @@ def test_the_tables_newest_first_the_nights_with_their_spectra(data):
         "lbl_GJ_1_GJ_1.rdb", "lbl_TOI_1_VETTED_GL1.rdb",
         "lbl2_ALONE_ALONE.rdb"]
     assert files["files"][0]["nightly"]["name"] == "lbl2_GJ_1_GJ_1.rdb"
+    # each with its star and its flavour: from the companion's template,
+    #   from a template on disk
+    assert (files["files"][0]["object"], files["files"][0]["flavour"]) \
+        == ("GJ_1", "GJ_1")
+    assert (files["files"][1]["object"], files["files"][1]["flavour"]) \
+        == ("TOI_1", "VETTED_GL1")
     assert files["files"][1]["nightly"] is None
     assert files["latest"].endswith("lbl_GJ_1_GJ_1.rdb")
+
+
+def test_a_star_and_its_flavours():
+    assert explore.object_flavour("GJ_1028", "GJ_1028") == ("GJ_1028",
+                                                            "GJ_1028")
+    assert explore.object_flavour("GJ_1028_pca2d", "GJ_1028_pca2d") == (
+        "GJ_1028", "pca2d / GJ_1028_pca2d")
+    assert explore.object_flavour("TOI4860_pca2d_SPIROU_SNR15-25",
+                                  "VETTED_GJ1289") == (
+        "TOI4860", "pca2d_SPIROU_SNR15-25 / VETTED_GJ1289")
 
 
 def test_a_table_its_errors_its_defaults_and_its_template(data):
