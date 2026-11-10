@@ -1266,7 +1266,7 @@ async function loadInstrumentThings() {
   if (!Array.isArray(VETTED)) VETTED = [];
   if (S.data_dir) {
     BASES = await api.get('/api/bases', { data_dir: S.data_dir, instrument: S.instrument, source: S.source });
-    TEMPLATES = await api.get('/api/templates', { data_dir: S.data_dir, instrument: S.instrument });
+    TEMPLATES = await api.get('/api/templates', { data_dir: S.data_dir, instrument: S.instrument, source: S.source });
     // a frozen basis of another instrument or source cannot stay chosen
     const basis = S.pca2d.input_name;
     if (basis && !BASES.some((b) => b.compatible && b.name === basis)) {
@@ -1440,7 +1440,10 @@ function drawPerTarget() {
     const temps = {};
     TEMPLATES.forEach((tp) => { if (tp.teff) temps[tp.name] = tp.teff; });
     TARGETS.forEach((row) => { const known = row.teff || simbadTeff(row.name); if (known && !temps[row.name]) temps[row.name] = known; });
-    const labelled = (n) => `${n} (${temps[n] ? Math.round(temps[n]) : '?'} K)`;
+    // a template from elsewhere in the root says where (linked when run)
+    const away = {};
+    TEMPLATES.forEach((tp) => { if (tp.here === false) away[tp.name] = tp.home || t('explore_root_home'); });
+    const labelled = (n) => `${n} (${temps[n] ? Math.round(temps[n]) : '?'} K)${away[n] ? ` · ${away[n]}` : ''}`;
     const others = TEMPLATES.map((tp) => tp.name).filter((n) => !/_pca2d(_|$)/.test(n) && !/_tc$/.test(n) && n !== name);
     const choices = [...new Set([...others, ...S.ticked.filter((n) => n !== name)])]
       .sort((a, b) => (temps[a] || 1e9) - (temps[b] || 1e9));

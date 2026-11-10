@@ -120,7 +120,8 @@ def build(state: dict) -> dict:
             value = TEFF_FALLBACK
         teffs.append(int(round(value)))
     rparams["OBJECT_TEFF"] = teffs
-    templates = {row["name"] for row in lblinfo.templates(data_dir, instrument)}
+    templates = {row["name"] for row in lblinfo.templates(data_dir, instrument,
+                                                          source)}
     vetted = {row["name"]: row for row in lblinfo.vetted(instrument)}
     for target, other in zip(targets, rparams["OBJECT_COMPARISON"]):
         # a vetted template comes from LBL's depot when the run needs it:

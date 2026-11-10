@@ -208,7 +208,8 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/templates":
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 return self._json(lblinfo.templates(
-                    data_dir, query.get("instrument", "")))
+                    data_dir, query.get("instrument", ""),
+                    query.get("source", "")))
             if route == "/api/targets":
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 science = os.path.join(data_dir, "science")
@@ -472,6 +473,10 @@ class Handler(BaseHTTPRequestHandler):
                     text = wrapgen.window_text(
                         text, built["rparams"], body.get("name", ""),
                         body["state"].get("python") or sys.executable)
+                    lblinfo.link_templates(
+                        data_dir, built["rparams"].get("INSTRUMENT"),
+                        built["rparams"].get("DATA_SOURCE"),
+                        built["rparams"].get("OBJECT_COMPARISON"))
                 with open(path, "w", encoding="utf-8") as handle:
                     handle.write(text)
                 os.chmod(path, 0o755)
@@ -529,6 +534,11 @@ class Handler(BaseHTTPRequestHandler):
         python = state.get("python") or sys.executable
         text = wrapgen.window_text(body.get("wrap"), built["rparams"], name,
                                    python)
+        # the templates it names that are elsewhere in the root, linked
+        #   where LBL reads them
+        lblinfo.link_templates(data_dir, built["rparams"].get("INSTRUMENT"),
+                               built["rparams"].get("DATA_SOURCE"),
+                               built["rparams"].get("OBJECT_COMPARISON"))
         job_id = runner.new_id(name)
         folder = os.path.join(data_dir, history.GUI_RUNS, job_id)
         os.makedirs(folder, exist_ok=True)

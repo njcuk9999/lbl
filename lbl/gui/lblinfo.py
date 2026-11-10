@@ -336,20 +336,99 @@ def template_teff(path: str):
     return None
 
 
-def templates(data_dir: str, instrument: str) -> list:
-    """The objects whose LBL template is in DATA_DIR/templates for this
-    instrument, with the temperature its header gives: what
-    OBJECT_COMPARISON can name (another star's template is then the star's
-    spectrum in PCA2D). [dict(name, teff)]"""
-    folder = os.path.join(data_dir or "", "templates")
-    suffix = "_%s.fits" % str(instrument).lower()
-    out = []
-    for path in sorted(glob.glob(os.path.join(folder, "LBL_Template_*"))):
-        name = os.path.basename(path)
-        if name.lower().endswith(suffix):
-            out.append(dict(name=name[len("LBL_Template_"):-len(suffix)],
-                            teff=template_teff(path)))
+def template_pattern(instrument: str, source=None) -> tuple:
+    """(prefix, suffix) of the name LBL gives a template of this instrument
+    and data source (its class's default_template_name: LBL_Template_<obj>_
+    nirps_he_eso.fits, Template_<obj>_HARPS_ORIG.fits...)."""
+    inst = instrument_object(instrument, str(source)) if source not in (
+        None, "") else None
+    pattern = getattr(inst, "default_template_name", None) or \
+        "LBL_Template_{0}_%s.fits" % str(instrument).lower()
+    prefix, _, suffix = pattern.partition("{0}")
+    return prefix, suffix
+
+
+def templates(data_dir: str, instrument: str, source=None) -> list:
+    """The objects whose LBL template OBJECT_COMPARISON can name, for this
+    instrument and data source, with the temperature their header gives
+    (another star's template is then the star's spectrum in PCA2D): those
+    of DATA_DIR/templates, and, in a DATA_DIR of a data root
+    (lbl.gui.dispatch), those made with the same instrument and data source
+    elsewhere in the root (its other DATA_DIRs, its own templates/ of the
+    old layout), known by their header (LBLINSTR, LBLIMODE); a run links
+    one of these into DATA_DIR/templates (link_templates).
+    [dict(name, teff, path, here, home: its folder in the root, '' for the
+    root's own)]"""
+    prefix, suffix = template_pattern(instrument, source)
+    out, seen = [], set()
+
+    def scan(folder, here, home):
+        found = []
+        for path in glob.glob(os.path.join(folder, prefix + "*" + suffix)):
+            name = os.path.basename(path)[len(prefix):-len(suffix)]
+            if not name or name in seen:
+                continue
+            if not here and not _made_with(path, instrument, source):
+                continue
+            found.append(dict(name=name, teff=template_teff(path), path=path,
+                              here=here, home=home,
+                              mtime=os.path.getmtime(path)))
+        # the newest of a name first, when two folders have one
+        for row in sorted(found, key=lambda r: -r["mtime"]):
+            if row["name"] not in seen:
+                seen.add(row["name"])
+                out.append(row)
+
+    scan(os.path.join(data_dir or "", "templates"), True, None)
+    if source not in (None, ""):
+        from .dispatch import readers, split
+        root, mine = split(data_dir)
+        if mine:
+            scan(os.path.join(root, "templates"), False, "")
+            for home in sorted(readers()):
+                if home != mine:
+                    scan(os.path.join(root, home, "templates"), False, home)
+    out.sort(key=lambda r: r["name"])
+    for row in out:
+        row.pop("mtime", None)
     return out
+
+
+def _made_with(path: str, instrument: str, source) -> bool:
+    """Whether a template was made with this instrument and data source, by
+    its header (LBLINSTR, LBLIMODE: LBL writes them in the primary header,
+    a table written alone in its extension's)."""
+    from astropy.io import fits
+    try:
+        with fits.open(path) as hdulist:
+            for hdu in hdulist[:2]:
+                if "LBLINSTR" in hdu.header:
+                    return (str(hdu.header.get("LBLINSTR")) == str(instrument)
+                            and str(hdu.header.get("LBLIMODE", ""))
+                            == str(source))
+    except Exception:                                     # noqa: BLE001
+        return False
+    return False
+
+
+def link_templates(data_dir: str, instrument: str, source, names) -> list:
+    """The templates a run names (OBJECT_COMPARISON) that are elsewhere in
+    the root (templates) linked into DATA_DIR/templates, where LBL reads
+    them, their .inputs beside them; nothing copied, nothing replaced.
+    Returns the names linked."""
+    wanted = {str(n) for n in names or []}
+    linked = []
+    folder = os.path.join(data_dir, "templates")
+    for row in templates(data_dir, instrument, source):
+        if row["here"] or row["name"] not in wanted:
+            continue
+        os.makedirs(folder, exist_ok=True)
+        for src in (row["path"], row["path"] + ".inputs"):
+            dest = os.path.join(folder, os.path.basename(src))
+            if os.path.exists(src) and not os.path.lexists(dest):
+                os.symlink(os.path.relpath(src, folder), dest)
+        linked.append(row["name"])
+    return linked
 
 
 def vetted(instrument: str) -> list:

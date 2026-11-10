@@ -352,3 +352,39 @@ def test_files_from_elsewhere_added_then_planned(root, tmp_path_factory):
     _harps(one, "eps Eri", ESO_EPS["alpha"], ESO_EPS["delta"])
     moved = dispatch.add(str(root), [str(one)], move=True)
     assert moved["added"] == 1 and not one.exists()
+
+
+def test_templates_of_the_same_mode_across_the_root(tmp_path):
+    from astropy.table import Table
+    from lbl.gui import lblinfo
+
+    def template(path, instrument, mode):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        table = Table(dict(wavelength=[1.0, 2.0], flux=[1.0, 1.0]))
+        table.meta.update(LBLINSTR=instrument, LBLIMODE=mode)
+        table.write(path)
+
+    # the root's own templates/ (old layout): one of NIRPS HE CADC, one of
+    #   APERO under the same name pattern; an instrument folder's own, and
+    #   another mode's, whose name LBL writes otherwise (_nirps_he_eso)
+    template(tmp_path / "templates" / "LBL_Template_GL1_nirps_he.fits",
+             "NIRPS_HE", "CADC")
+    template(tmp_path / "templates" / "LBL_Template_GL2_nirps_he.fits",
+             "NIRPS_HE", "APERO")
+    template(tmp_path / "NIRPS_HE_CADC" / "templates"
+             / "LBL_Template_OWN_nirps_he.fits", "NIRPS_HE", "CADC")
+    template(tmp_path / "NIRPS_HE_ESO" / "templates"
+             / "LBL_Template_X_nirps_he_eso.fits", "NIRPS_HE", "ESO")
+    home = str(tmp_path / "NIRPS_HE_CADC")
+    rows = lblinfo.templates(home, "NIRPS_HE", "CADC")
+    assert [(r["name"], r["here"], r["home"]) for r in rows] == [
+        ("GL1", False, ""), ("OWN", True, None)]
+    eso = lblinfo.templates(str(tmp_path / "NIRPS_HE_ESO"), "NIRPS_HE", "ESO")
+    assert [r["name"] for r in eso] == ["X"]
+    # a run naming GL1: linked where LBL reads it, nothing copied
+    assert lblinfo.link_templates(home, "NIRPS_HE", "CADC", ["GL1"]) == ["GL1"]
+    link = tmp_path / "NIRPS_HE_CADC" / "templates" / \
+        "LBL_Template_GL1_nirps_he.fits"
+    assert link.is_symlink() and link.resolve() == (
+        tmp_path / "templates" / "LBL_Template_GL1_nirps_he.fits")
+    assert lblinfo.templates(home, "NIRPS_HE", "CADC")[0]["here"]
