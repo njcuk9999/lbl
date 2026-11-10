@@ -220,6 +220,7 @@ async function switchTheme() {
   // the plots and swatches read their colours from the theme when drawn
   drawTargets();
   drawPlots();
+  redrawExplorer();
   $('backdrop').classList.remove('ready');
   setBackdrop();
 }
@@ -232,6 +233,7 @@ function showTab(name) {
   if (name === 'run') { if (!wrapEdited) build(); loadWrapList(); }
   if (name === 'runs') loadRuns();
   if (name === 'cleanup') measure();
+  if (name === 'explore') loadExplorer();
   if (name === 'targets') drawPlots();
   if (name === 'refs') loadRefs();
   save();
@@ -1677,6 +1679,285 @@ async function deleteSelected() {
   measure();
 }
 
+// ── data explorer ───────────────────────────────────────────────────────
+// the rdb tables of DATA_DIR/lblrdb, any column against any other, the FIP
+//   of what is plotted, and the template the table was measured against
+//   with the TAPAS opacity of each molecule under it (explore.py). Plotly
+//   draws them, fetched the first time the tab opens: the rest of the
+//   window does without it.
+const PLOTLY_URL = 'https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js';
+let plotlyLoading = null;
+function loadPlotly() {
+  if (window.Plotly) return Promise.resolve(true);
+  if (!plotlyLoading) {
+    plotlyLoading = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = PLOTLY_URL;
+      script.onload = () => resolve(true);
+      script.onerror = () => { plotlyLoading = null; script.remove(); resolve(false); };
+      document.head.append(script);
+    });
+  }
+  return plotlyLoading;
+}
+
+// what is shown, kept while the window is open; a window opens on the
+//   newest table
+// picked: the columns chosen in the menus, kept from one table to the
+//   next (the others are each table's own: MJD, vrad, BERV); c '': no colour
+const XP = { files: [], path: '', mtime: 0, table: null, x: '', y: '', c: '', picked: {}, fips: {}, tpl: null };
+// water blue, O2 red, CH4 green (as in the PCA2D figures)
+const MOLECULE_COLOURS = { H2O: '--series-1', O2: '--series-8', CH4: '--series-3', CO2: '--series-4',
+  O3: '--series-7', N2O: '--series-5', NO2: '--series-other', others: '--series-2' };
+const PLOT_CONFIG = { responsive: true, displaylogo: false, scrollZoom: true };
+
+// numbers as they are: no 12.3k, no 1,596.2
+function xpAxis(extra) {
+  return { gridcolor: css('--grid'), linecolor: css('--axis'), zerolinecolor: css('--axis'),
+    color: css('--muted'), automargin: true, exponentformat: 'none', ...extra };
+}
+// a molecule as it is written (H2O: H<sub>2</sub>O)
+const chemical = (name) => name.replace(/(\d)/g, '<sub>$1</sub>');
+function xpLayout(extra) {
+  return { paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', separators: '.\u2009',
+    font: { family: 'Space Grotesk, sans-serif', color: css('--text'), size: 12 },
+    margin: { l: 64, r: 16, t: 28, b: 48 }, hoverlabel: { font: { family: 'IBM Plex Mono, monospace' } },
+    legend: { orientation: 'h', x: 0, y: 1.0, yanchor: 'bottom', font: { size: 11 } }, ...extra };
+}
+const fipText = (value) => (value < 1e-15 ? '< 1e-15' : value < 1e-3 ? value.toExponential(1) : value.toFixed(3));
+
+function exploreMessage(text) {
+  $('explore_message').hidden = !text;
+  $('explore_message').textContent = text || '';
+}
+
+async function loadExplorer() {
+  if (!S.data_dir) return;
+  if (!(await loadPlotly())) { exploreMessage(t('explore_no_plotly')); return; }
+  const data = await api.get('/api/explore/rdbs', { data_dir: S.data_dir });
+  XP.files = data.files || [];
+  if (!XP.files.length) {
+    exploreMessage(t('explore_no_rdb', data.folder || ''));
+    ['explore_plot', 'explore_fip', 'template_plot'].forEach((id) => Plotly.purge($(id)));
+    ['explore_note', 'explore_fip_note', 'template_note'].forEach((id) => { $(id).textContent = ''; });
+    $('explore_rdb').replaceChildren();
+    return;
+  }
+  exploreMessage('');
+  if (!XP.files.some((file) => file.path === XP.path)) XP.path = data.latest || XP.files[0].path;
+  $('explore_rdb').replaceChildren(...XP.files.map((file) => el('option', { value: file.path, text: `${file.name} · ${when(file.mtime)}` })));
+  $('explore_rdb').value = XP.path;
+  // the table shown has not changed: the plots as they were (their zoom),
+  //   to the width of the tab shown again
+  const shown = XP.files.find((file) => file.path === XP.path);
+  if (XP.table && XP.table.path === XP.path && shown.mtime === XP.mtime) {
+    ['explore_plot', 'explore_fip', 'template_plot'].forEach((id) => { if ($(id).data) Plotly.Plots.resize($(id)); });
+    return;
+  }
+  XP.mtime = shown.mtime;
+  await openTable(XP.path);
+}
+
+/* a table: the columns picked stay when it has them, else its own defaults */
+async function openTable(path) {
+  XP.path = path;
+  const table = await api.get('/api/explore/rdb', { data_dir: S.data_dir, path });
+  if (XP.path !== path) return;
+  if (table.error || !table.columns) { exploreMessage(table.error || t('explore_unreadable')); return; }
+  exploreMessage('');
+  XP.table = table;
+  XP.fips = {};
+  XP.tpl = null;
+  const has = (name) => table.columns.includes(name);
+  const keep = (key, own) => (XP.picked[key] && (has(XP[key]) || (key === 'c' && ['', 'outlier'].includes(XP[key]))) ? XP[key] : own);
+  XP.x = keep('x', table.x);
+  XP.y = keep('y', table.y);
+  XP.c = keep('c', table.c || '');
+  const options = (names) => names.map((name) => el('option', { value: name, text: name }));
+  $('explore_x').replaceChildren(...options(table.columns));
+  $('explore_y').replaceChildren(...options(table.columns));
+  $('explore_c').replaceChildren(el('option', { value: '', text: t('explore_colour_none') }),
+    el('option', { value: 'outlier', text: t('explore_outlier') }), ...options(table.columns));
+  $('explore_x').value = XP.x;
+  $('explore_y').value = XP.y;
+  $('explore_c').value = XP.c;
+  drawExplore();
+  loadFips();
+  loadTemplate();
+}
+
+function drawExplore() {
+  const table = XP.table;
+  if (!table || !window.Plotly) return;
+  const values = table.values;
+  const errorOf = (name) => (table.errors[name] ? values[table.errors[name]] : null);
+  const ex = errorOf(XP.x);
+  const ey = errorOf(XP.y);
+  let colour = null;
+  let title = '';
+  if (XP.c === 'outlier') {
+    const fip = XP.fips[XP.y];
+    colour = fip && fip.prob && fip.prob.length ? fip.prob : null;
+    title = t('explore_outlier_short');
+  } else if (XP.c) {
+    colour = values[XP.c];
+    title = XP.c;
+  }
+  const marker = { size: 7, line: { width: 0.6, color: css('--surface') } };
+  if (colour) {
+    Object.assign(marker, { color: colour, showscale: true,
+      colorbar: { title: { text: title, side: 'right' }, thickness: 12, outlinewidth: 0, tickfont: { color: css('--muted') } } });
+    // an outlier's probability: blue reliable, grey undecided, red outlier
+    if (XP.c === 'outlier') Object.assign(marker, { cmin: 0, cmax: 1, colorscale: [[0, css('--series-1')], [0.5, '#9aa3b2'], [1, css('--series-8')]] });
+    else marker.colorscale = 'Viridis';
+  } else marker.color = css('--series-1');
+  const bars = (array) => (array ? { type: 'data', array, visible: true, thickness: 1, width: 0, color: css('--axis') } : { visible: false });
+  const trace = { type: 'scatter', mode: 'markers', x: values[XP.x], y: values[XP.y], text: table.labels, marker,
+    error_x: bars(ex), error_y: bars(ey),
+    hovertemplate: `%{text}<br>${esc(XP.x)} %{x}<br>${esc(XP.y)} %{y}${colour ? `<br>${esc(title)} %{marker.color:.4g}` : ''}<extra></extra>` };
+  Plotly.react($('explore_plot'), [trace], xpLayout({
+    uirevision: `${XP.path}|${XP.x}|${XP.y}`, margin: { l: 70, r: 16, t: 12, b: 48 },
+    xaxis: xpAxis({ title: { text: XP.x } }), yaxis: xpAxis({ title: { text: XP.y } }),
+  }), PLOT_CONFIG);
+  const said = [t('explore_rows', table.rows)];
+  said.push(ey ? t('explore_bars', table.errors[XP.y]) : t('explore_no_bars', XP.y));
+  if (XP.c === 'outlier' && !colour) said.push(t('explore_outlier_wait'));
+  $('explore_note').textContent = said.join(' · ');
+}
+
+/* the FIP of y, and of x when x is not a time */
+async function loadFips() {
+  const table = XP.table;
+  if (!table) return;
+  if (!table.time) { Plotly.purge($('explore_fip')); $('explore_fip_note').textContent = t('explore_fip_no_time'); return; }
+  const quantities = [XP.y];
+  if (!table.times.includes(XP.x) && XP.x !== XP.y) quantities.push(XP.x);
+  const path = XP.path;
+  const missing = quantities.filter((name) => !XP.fips[name]);
+  if (missing.length) $('explore_fip_note').textContent = t('explore_fip_wait', missing.join(', '));
+  await Promise.all(missing.map(async (name) => {
+    const result = await api.get('/api/explore/fip', { data_dir: S.data_dir, path, column: name });
+    if (XP.path === path) XP.fips[name] = result;
+  }));
+  if (XP.path !== path) return;
+  drawFip(quantities);
+  if (XP.c === 'outlier') drawExplore();
+}
+
+function drawFip(quantities) {
+  if (!window.Plotly) return;
+  quantities = quantities || [XP.y].concat(XP.table && !XP.table.times.includes(XP.x) && XP.x !== XP.y ? [XP.x] : []);
+  const colours = ['--series-1', '--series-2'];
+  const traces = [];
+  const said = [];
+  let top = 0;
+  let span = null;
+  quantities.forEach((name, i) => {
+    const fip = XP.fips[name];
+    if (!fip) return;
+    if (!fip.period || !fip.period.length) { said.push(`${name}: ${fip.error || t('explore_fip_none')}`); return; }
+    const colour = css(colours[i % colours.length]);
+    const hover = (kind) => `${esc(name)}, ${kind}<br>%{x:.4f} d<br>-log10 FIP %{y:.2f}<extra></extra>`;
+    traces.push({ x: fip.period, y: fip.gauss, mode: 'lines', name: `${name}, ${t('explore_gauss')}`,
+      line: { color: colour, width: 1, dash: 'dash' }, opacity: 0.75, hovertemplate: hover(t('explore_gauss')) });
+    traces.push({ x: fip.period, y: fip.oa, mode: 'lines', name: `${name}, ${t('explore_oa')}`,
+      line: { color: colour, width: 1.8 }, hovertemplate: hover(t('explore_oa')) });
+    top = Math.max(top, ...fip.oa, ...fip.gauss);
+    span = [fip.period[0], fip.period[fip.period.length - 1]];
+    const best = fip.best.oa;
+    said.push(t('explore_fip_best', name, best.period.toFixed(3), fipText(best.fip), fip.outliers, fip.points)
+      + (fip.err ? '' : ` (${t('explore_fip_noerr')})`));
+  });
+  if (!traces.length) { Plotly.purge($('explore_fip')); $('explore_fip_note').textContent = said.join(' · '); return; }
+  // 1 % dotted (koloa's), and the year where the periods reach it
+  const shapes = [{ type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 2, y1: 2, line: { color: css('--muted'), width: 1, dash: 'dot' } }];
+  const notes = [];
+  if (span && span[1] > 365.25) {
+    shapes.push({ type: 'line', xref: 'x', x0: 365.25, x1: 365.25, yref: 'paper', y0: 0, y1: 1, line: { color: css('--muted'), width: 1, dash: 'dot' } });
+    notes.push({ x: Math.log10(365.25), xref: 'x', y: 1, yref: 'paper', yanchor: 'bottom', text: t('explore_year'), showarrow: false, font: { size: 10, color: css('--muted') } });
+  }
+  Plotly.react($('explore_fip'), traces, xpLayout({
+    uirevision: XP.path, shapes, annotations: notes,
+    xaxis: xpAxis({ type: 'log', dtick: 'D2', title: { text: t('explore_period_axis') } }),
+    yaxis: xpAxis({ title: { text: t('explore_fip_axis') }, range: [0, Math.max(2.5, top * 1.08)] }),
+  }), PLOT_CONFIG);
+  $('explore_fip_note').textContent = said.join(' · ');
+}
+
+// ── template explorer ───────────────────────────────────────────────────
+// the template of the table over the wavelengths shown, and under it a
+//   quarter as high, on the same wavelengths, the TAPAS opacity of each
+//   molecule; a zoom asks the server for that range again (every point
+//   once narrow enough)
+let templateAsked = '';
+let templateTimer = null;
+async function loadTemplate(lo, hi) {
+  const path = XP.path;
+  if (!path) return;
+  const n = Math.round(Math.max(400, $('template_plot').clientWidth || 1000));
+  const key = `${path}|${lo}|${hi}|${n}`;
+  templateAsked = key;
+  const data = await api.get('/api/explore/template', { data_dir: S.data_dir, path, lo: lo ?? '', hi: hi ?? '', n });
+  if (templateAsked !== key) return;
+  XP.tpl = data;
+  drawTemplate();
+}
+
+function drawTemplate() {
+  const data = XP.tpl;
+  const div = $('template_plot');
+  if (!window.Plotly || !data) return;
+  if (!data.template) {
+    Plotly.purge(div);
+    div.hidden = true;
+    $('template_note').textContent = data.error || t('template_none');
+    return;
+  }
+  div.hidden = false;
+  const traces = [{ x: data.x, y: data.y, mode: 'lines', name: t('template_flux'), showlegend: false,
+    line: { color: css('--text'), width: 1 }, xaxis: 'x', yaxis: 'y',
+    hovertemplate: '%{x:.4f} nm<br>%{y:.4f}<extra></extra>' }];
+  const molecules = (data.tapas && data.tapas.molecules) || {};
+  Object.entries(molecules).forEach(([name, mol]) => traces.push({ x: mol.x, y: mol.y, mode: 'lines', name: name === 'others' ? t('template_others') : chemical(name),
+    line: { color: css(MOLECULE_COLOURS[name] || '--series-other'), width: 1 }, xaxis: 'x', yaxis: 'y2',
+    hovertemplate: `${name === 'others' ? t('template_others') : chemical(name)} %{x:.4f} nm<br>${t('template_opacity_short')} %{y:.3g}<extra></extra>` }));
+  // the footer a quarter as high as the template, one x axis for both
+  Plotly.react(div, traces, xpLayout({
+    uirevision: XP.path, margin: { l: 70, r: 16, t: 28, b: 48 },
+    legend: { orientation: 'h', x: 1, xanchor: 'right', y: 1.0, yanchor: 'bottom', font: { size: 11 } },
+    xaxis: xpAxis({ title: { text: t('template_wavelength') }, range: data.range, autorange: false, anchor: 'y2' }),
+    yaxis: xpAxis({ domain: [0.25, 1], title: { text: t('template_flux') }, autorange: true, fixedrange: true }),
+    yaxis2: xpAxis({ domain: [0, 0.1875], type: 'log', range: [-3, 1.1], fixedrange: true, tickvals: [0.001, 0.1, 10], ticktext: ['0.001', '0.1', '10'],
+      title: { text: t('template_opacity'), font: { size: 11 } } }),
+  }), PLOT_CONFIG).then(() => {
+    if (div.dataset.zoom) return;
+    div.dataset.zoom = '1';
+    div.on('plotly_relayout', (event) => {
+      let range = null;
+      if (event['xaxis.range[0]'] !== undefined) range = [event['xaxis.range[0]'], event['xaxis.range[1]']];
+      else if (Array.isArray(event['xaxis.range'])) range = event['xaxis.range'];
+      else if (!event['xaxis.autorange']) return;
+      clearTimeout(templateTimer);
+      templateTimer = setTimeout(() => (range ? loadTemplate(range[0], range[1]) : loadTemplate()), 120);
+    });
+  });
+  const said = [t('template_of', data.template.name)];
+  if (data.tapas) {
+    said.push(t(data.tapas.kind === 'molecules' ? 'template_tapas' : 'template_tapas_lbl', data.tapas.file));
+    const berv = XP.table && XP.table.berv;
+    if (berv) said.push(t('template_berv', berv[0].toFixed(1), berv[1].toFixed(1)));
+  } else said.push(t('template_no_tapas'));
+  $('template_note').textContent = said.join(' · ');
+}
+
+/* everything the tab shows, drawn again (a theme, a language) */
+function redrawExplorer() {
+  if (S.tab !== 'explore' || !window.Plotly) return;
+  drawExplore();
+  drawFip();
+  drawTemplate();
+}
+
 // ── background ──────────────────────────────────────────────────────────
 // blurred figures of papers whose velocities LBL measured, one mosaic per
 //   theme (maintenance/gui/paper_backdrop.py); the References tab
@@ -1723,7 +2004,7 @@ async function init() {
   $('run_name').value = S.name || '';
 
   $('theme').onclick = switchTheme;
-  $('lang').onclick = async () => { S.lang = S.lang === 'fr' ? 'en' : 'fr'; save(); await loadStrings(); await loadInstrumentThings(); drawTargets(); drawPlots(); pollQueue(); if (S.tab === 'runs') loadRuns(); };
+  $('lang').onclick = async () => { S.lang = S.lang === 'fr' ? 'en' : 'fr'; save(); await loadStrings(); await loadInstrumentThings(); drawTargets(); drawPlots(); pollQueue(); if (S.tab === 'runs') loadRuns(); redrawExplorer(); };
   document.querySelectorAll('#tabs button').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
   $('scan').onclick = scan;
   $('data_dir').onkeydown = (event) => { if (event.key === 'Enter') scan(); };
@@ -1758,6 +2039,11 @@ async function init() {
   }
   $('runs_refresh').onclick = loadRuns;
   $('measure').onclick = measure;
+  $('explore_refresh').onclick = loadExplorer;
+  $('explore_rdb').onchange = (event) => { XP.mtime = (XP.files.find((file) => file.path === event.target.value) || {}).mtime || 0; openTable(event.target.value); };
+  $('explore_x').onchange = (event) => { XP.x = event.target.value; XP.picked.x = true; drawExplore(); loadFips(); };
+  $('explore_y').onchange = (event) => { XP.y = event.target.value; XP.picked.y = true; drawExplore(); loadFips(); };
+  $('explore_c').onchange = (event) => { XP.c = event.target.value; XP.picked.c = true; drawExplore(); };
   $('best_all').onclick = () => bestMatch(S.ticked);
   $('simbad_teff').onclick = () => askSimbad(S.ticked, true);
   // read the folder again: new or removed targets and spectra, and the

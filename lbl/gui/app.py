@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from astropy import constants
 
 from . import __version__, cleanup, history, i18n, lblinfo, runner
-from . import archives, simbad, targets
+from . import archives, explore, simbad, targets
 from . import wrapgen, wrapload
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -291,6 +291,25 @@ class Handler(BaseHTTPRequestHandler):
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 return self._json(dict(items=cleanup.survey(data_dir),
                                        busy=cleanup.busy(data_dir)))
+            if route == "/api/explore/rdbs":
+                data_dir = ctx.allow(query.get("data_dir", ""))
+                return self._json(explore.rdb_files(data_dir))
+            if route.startswith("/api/explore/"):
+                # a table of the data folders this window was given only
+                data_dir = ctx.allow(query.get("data_dir", ""))
+                path = query.get("path", "")
+                if not path.endswith(".rdb") or not ctx.servable(path):
+                    return self.send_error(HTTPStatus.FORBIDDEN)
+                if route == "/api/explore/rdb":
+                    return self._json(explore.read_rdb(path, data_dir))
+                if route == "/api/explore/fip":
+                    return self._json(explore.fip_of(path,
+                                                     query.get("column", "")))
+                if route == "/api/explore/template":
+                    return self._json(explore.template_view(
+                        path, data_dir, query.get("lo"), query.get("hi"),
+                        int(query.get("n") or 1500)))
+                return self.send_error(HTTPStatus.NOT_FOUND)
             if route == "/file":
                 path = query.get("path", "")
                 if not ctx.servable(path):

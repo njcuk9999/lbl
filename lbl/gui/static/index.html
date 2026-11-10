@@ -55,6 +55,7 @@
       <button type="button" data-tab="pca2d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span data-t="tab_pca2d"></span></button>
       <button type="button" data-tab="run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4.5l12 7.5-12 7.5z"/></svg><span data-t="tab_run"></span></button>
       <button type="button" data-tab="runs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg><span data-t="tab_runs"></span></button>
+      <button type="button" data-tab="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 3.5v17h17"/><circle cx="8.5" cy="15" r="1.4"/><circle cx="12.5" cy="10.5" r="1.4"/><circle cx="16.5" cy="13" r="1.4"/><circle cx="19" cy="6.5" r="1.4"/></svg><span data-t="tab_explore"></span></button>
       <button type="button" data-tab="cleanup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span data-t="tab_cleanup"></span></button>
       <button type="button" data-tab="refs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5h6a2 2 0 0 1 2 2V20a1.5 1.5 0 0 0-1.5-1.5H4zM20 4.5h-6a2 2 0 0 0-2 2V20a1.5 1.5 0 0 1 1.5-1.5H20z"/></svg><span data-t="tab_refs"></span></button>
     </nav>
@@ -303,6 +304,35 @@
       <div class="card">
         <h2 data-t="runs_reports"></h2>
         <div class="table-wrap"><table class="data" id="runs_reports"></table></div>
+      </div>
+    </section>
+
+    <!-- DATA EXPLORER: the rdb tables, any column against any other, the
+         FIP of what is plotted, and the template with the TAPAS opacity of
+         each molecule under it (explore.py; drawn with Plotly) -->
+    <section class="pane span-3" id="pane-explore" hidden>
+      <div class="card">
+        <div class="row spread">
+          <h2><span data-t="explore_title"></span><span class="info" data-help="explore"></span></h2>
+          <button type="button" class="button" id="explore_refresh" data-t="refresh"></button>
+        </div>
+        <div class="explore-form">
+          <label class="field"><span class="label" data-t="explore_rdb"></span><select id="explore_rdb"></select></label>
+          <label class="field"><span class="label" data-t="explore_x"></span><select id="explore_x"></select></label>
+          <label class="field"><span class="label" data-t="explore_y"></span><select id="explore_y"></select></label>
+          <label class="field"><span class="label" data-t="explore_c"></span><select id="explore_c"></select></label>
+        </div>
+        <div id="explore_message" class="message warning" hidden></div>
+        <div id="explore_plot" class="xplot"></div>
+        <p class="hint small" id="explore_note"></p>
+        <h3><span data-t="explore_fip"></span><span class="info" data-help="explore_fip"></span></h3>
+        <div id="explore_fip" class="xplot fip"></div>
+        <p class="hint small" id="explore_fip_note"></p>
+      </div>
+      <div class="card">
+        <h2><span data-t="template_explorer"></span><span class="info" data-help="template_explorer"></span></h2>
+        <div id="template_plot" class="xplot tall"></div>
+        <p class="hint small" id="template_note"></p>
       </div>
     </section>
 
