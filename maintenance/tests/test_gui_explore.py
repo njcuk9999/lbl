@@ -57,16 +57,22 @@ def data(tmp_path):
     return tmp_path
 
 
-def test_the_tables_newest_first_and_the_window_opens_on_every_spectrum(data):
+def test_the_tables_newest_first_the_nights_with_their_spectra(data):
     folder = data / "lblrdb"
     _rdb(folder / "lbl2_GJ_1_GJ_1.rdb")
+    _rdb(folder / "lbl2_ALONE_ALONE.rdb")
     now = os.path.getmtime(folder / "lbl2_GJ_1_GJ_1.rdb")
     os.utime(folder / "lbl_GJ_1_GJ_1.rdb", (now - 30, now - 30))
-    os.utime(folder / "lbl_TOI_1_VETTED_GL1.rdb", (now - 3600, now - 3600))
+    os.utime(folder / "lbl_TOI_1_VETTED_GL1.rdb", (now - 600, now - 600))
+    os.utime(folder / "lbl2_ALONE_ALONE.rdb", (now - 3600, now - 3600))
     files = explore.rdb_files(str(data))
-    assert [f["name"] for f in files["files"]][0] == "lbl2_GJ_1_GJ_1.rdb"
-    # the nights' table is written just after that of every spectrum: the
-    #   latest run opens on the latter
+    # lbl2_ beside its lbl_ (its run as new as its nights' table), an
+    #   lbl2_ alone listed
+    assert [f["name"] for f in files["files"]] == [
+        "lbl_GJ_1_GJ_1.rdb", "lbl_TOI_1_VETTED_GL1.rdb",
+        "lbl2_ALONE_ALONE.rdb"]
+    assert files["files"][0]["nightly"]["name"] == "lbl2_GJ_1_GJ_1.rdb"
+    assert files["files"][1]["nightly"] is None
     assert files["latest"].endswith("lbl_GJ_1_GJ_1.rdb")
 
 

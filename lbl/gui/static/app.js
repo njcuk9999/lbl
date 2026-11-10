@@ -1705,7 +1705,9 @@ function loadPlotly() {
 //   newest table
 // picked: the columns chosen in the menus, kept from one table to the
 //   next (the others are each table's own: MJD, vrad, BERV); c '': no colour
-const XP = { files: [], path: '', mtime: 0, table: null, x: '', y: '', c: '', picked: {}, fips: {}, tpl: null };
+// base: the table of the menu; path: the table shown, its nights' one
+//   (lbl2_) when the box is ticked
+const XP = { files: [], base: '', nightly: false, path: '', mtime: 0, table: null, x: '', y: '', c: '', picked: {}, fips: {}, tpl: null };
 // water blue, O2 red, CH4 green (as in the PCA2D figures)
 const MOLECULE_COLOURS = { H2O: '--series-1', O2: '--series-8', CH4: '--series-3', CO2: '--series-4',
   O3: '--series-7', N2O: '--series-5', NO2: '--series-other', others: '--series-2' };
@@ -1744,18 +1746,31 @@ async function loadExplorer() {
     return;
   }
   exploreMessage('');
-  if (!XP.files.some((file) => file.path === XP.path)) XP.path = data.latest || XP.files[0].path;
-  $('explore_rdb').replaceChildren(...XP.files.map((file) => el('option', { value: file.path, text: `${file.name} · ${when(file.mtime)}` })));
-  $('explore_rdb').value = XP.path;
+  if (!XP.files.some((file) => file.path === XP.base)) XP.base = data.latest || XP.files[0].path;
+  $('explore_rdb').replaceChildren(...XP.files.map((file) => el('option', { value: file.path, text: `${file.name} · ${when(Math.max(file.mtime, (file.nightly || file).mtime))}` })));
+  $('explore_rdb').value = XP.base;
   // the table shown has not changed: the plots as they were (their zoom),
   //   to the width of the tab shown again
-  const shown = XP.files.find((file) => file.path === XP.path);
-  if (XP.table && XP.table.path === XP.path && shown.mtime === XP.mtime) {
+  const shown = shownTable();
+  if (XP.table && XP.table.path === shown.path && shown.mtime === XP.mtime) {
     ['explore_plot', 'explore_fip', 'template_plot'].forEach((id) => { if ($(id).data) Plotly.Plots.resize($(id)); });
     return;
   }
+  await openShown();
+}
+
+/* the table the menu and the box name: that of the nights when ticked and
+   there is one; the box greyed out where there is none */
+function shownTable() {
+  const file = XP.files.find((row) => row.path === XP.base) || XP.files[0];
+  $('explore_nightly').disabled = !file.nightly;
+  $('explore_nightly').checked = XP.nightly && Boolean(file.nightly);
+  return XP.nightly && file.nightly ? file.nightly : file;
+}
+async function openShown() {
+  const shown = shownTable();
   XP.mtime = shown.mtime;
-  await openTable(XP.path);
+  await openTable(shown.path);
 }
 
 /* a table: the columns picked stay when it has them, else its own defaults */
@@ -1767,6 +1782,9 @@ async function openTable(path) {
   exploreMessage('');
   XP.table = table;
   XP.fips = {};
+  // the same template (a run's two tables): seen where it was
+  const before = XP.tpl;
+  const sameTemplate = before && before.template && table.template && before.template.path === table.template.path;
   XP.tpl = null;
   const has = (name) => table.columns.includes(name);
   const keep = (key, own) => (XP.picked[key] && (has(XP[key]) || (key === 'c' && ['', 'outlier'].includes(XP[key]))) ? XP[key] : own);
@@ -1783,7 +1801,7 @@ async function openTable(path) {
   $('explore_c').value = XP.c;
   drawExplore();
   loadFips();
-  loadTemplate();
+  if (sameTemplate) loadTemplate(before.range[0], before.range[1]); else loadTemplate();
 }
 
 function drawExplore() {
@@ -2041,7 +2059,8 @@ async function init() {
   $('runs_refresh').onclick = loadRuns;
   $('measure').onclick = measure;
   $('explore_refresh').onclick = loadExplorer;
-  $('explore_rdb').onchange = (event) => { XP.mtime = (XP.files.find((file) => file.path === event.target.value) || {}).mtime || 0; openTable(event.target.value); };
+  $('explore_rdb').onchange = (event) => { XP.base = event.target.value; openShown(); };
+  $('explore_nightly').onchange = (event) => { XP.nightly = event.target.checked; openShown(); };
   $('explore_x').onchange = (event) => { XP.x = event.target.value; XP.picked.x = true; drawExplore(); loadFips(); };
   $('explore_y').onchange = (event) => { XP.y = event.target.value; XP.picked.y = true; drawExplore(); loadFips(); };
   $('explore_c').onchange = (event) => { XP.c = event.target.value; XP.picked.c = true; drawExplore(); };

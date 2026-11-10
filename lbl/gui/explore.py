@@ -55,34 +55,37 @@ _FIPS = {}
 # =============================================================================
 # The tables
 # =============================================================================
-#: an lbl_ table written this long before the lbl2_ table of its run [s]
-SAME_RUN = 600.0
-
-
 def rdb_files(data_dir: str) -> dict:
-    """The rdb tables of DATA_DIR/lblrdb, the newest first, and the one a
-    window opens on: the newest, but the table of every spectrum (lbl_)
-    rather than that of the nights (lbl2_), which LBL writes just after it
-    in the same run."""
+    """The rdb tables of DATA_DIR/lblrdb, the newest first. A table of
+    every spectrum (lbl_X.rdb) carries that of its nights (lbl2_X.rdb,
+    written in the same run) as 'nightly', which is not listed apart; an
+    lbl2_ table without its lbl_ is."""
     folder = os.path.join(data_dir or "", RDB_FOLDER)
-    rows = []
+    found = {}
     for path in glob.glob(os.path.join(folder, "*.rdb")):
         try:
             stat = os.stat(path)
         except OSError:
             continue
-        rows.append(dict(path=path, name=os.path.basename(path),
-                         mtime=stat.st_mtime, size=stat.st_size))
-    rows.sort(key=lambda row: -row["mtime"])
-    latest = rows[0] if rows else None
-    if latest and latest["name"].startswith("lbl2_"):
-        twin = "lbl_" + latest["name"][len("lbl2_"):]
-        for row in rows:
-            if row["name"] == twin \
-                    and latest["mtime"] - row["mtime"] < SAME_RUN:
-                latest = row
+        name = os.path.basename(path)
+        found[name] = dict(path=path, name=name, mtime=stat.st_mtime,
+                           size=stat.st_size, nightly=None)
+    rows = []
+    for name, row in found.items():
+        if name.startswith("lbl2_") and \
+                "lbl_" + name[len("lbl2_"):] in found:
+            continue
+        if name.startswith("lbl_"):
+            twin = found.get("lbl2_" + name[len("lbl_"):])
+            if twin is not None:
+                row["nightly"] = {key: twin[key]
+                                  for key in ("path", "name", "mtime")}
+        rows.append(row)
+    # a run's two tables: as new as the newer of them
+    rows.sort(key=lambda row: -max(row["mtime"], (row["nightly"] or row)
+                                   ["mtime"]))
     return dict(folder=folder, files=rows,
-                latest=latest["path"] if latest else None)
+                latest=rows[0]["path"] if rows else None)
 
 
 def error_column(name: str, names) -> str | None:
