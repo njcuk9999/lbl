@@ -301,3 +301,21 @@ def test_a_header_with_a_wrong_place_does_not_split_a_star():
     b = _sighting("STAR2", 10.0, 20.0 + 20.0 / 3600)
     p = _sighting("P", 10.0, 20.0 + 10.0 / 3600, pm=None, how="pointing")
     assert sorted(map(len, dispatch.stars([a, b, p]))) == [1, 2]
+
+
+def test_what_the_window_shows_of_a_root(root):
+    dispatch.go(dispatch.plan(str(root), ask_simbad=False))
+    # a science/ of the root's own with empty folders only: no targets, not
+    #   offered as a data folder
+    (root / "science" / "OLD").mkdir(parents=True)
+    _harps(root / "Downloads" / "HARPS.2016-01-01T00-00-00.000_e2ds_A.fits",
+           "eps Eri", ESO_EPS["alpha"], ESO_EPS["delta"])
+    shown = dispatch.layout(str(root))
+    assert not shown["legacy"] and shown["science"]["empty"] == ["OLD"]
+    harps = next(f for f in shown["folders"] if f["name"] == "HARPS_ORIG")
+    assert (harps["targets"], harps["spectra"], harps["models"]) == (
+        3, 3, "linked")
+    # what waits in Downloads, by kind of name
+    assert shown["downloads"]["kinds"] == [dict(kind="*.txt", n=1),
+                                           dict(kind="*_e2ds_A.fits", n=1)]
+    assert shown["downloads"]["unused"] == 1

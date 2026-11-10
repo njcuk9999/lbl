@@ -96,11 +96,17 @@ def test_files_are_served_from_the_data_folder_only(server):
 def test_the_targets_say_when_there_is_no_folder(server, tmp_path):
     base, tmp = server
     import shutil
+    from astropy.io import fits
+    # a target is a folder with spectra; an empty one is said apart
+    fits.PrimaryHDU().writeto(tmp / "data" / "science" / "STAR" / "a.fits")
+    (tmp / "data" / "science" / "EMPTY").mkdir()
     got = json.loads(_get(base + "/api/targets?data_dir=%s" % (tmp / "data"))[1])
     assert got["science"] == "ok" and [r["name"] for r in got["targets"]] == ["STAR"]
+    assert got["empty"] == ["EMPTY"]
     shutil.rmtree(tmp / "data" / "science" / "STAR")
     got = json.loads(_get(base + "/api/targets?data_dir=%s" % (tmp / "data"))[1])
     assert got["science"] == "empty" and got["targets"] == []
+    assert got["empty"] == ["EMPTY"]
     shutil.rmtree(tmp / "data" / "science")
     got = json.loads(_get(base + "/api/targets?data_dir=%s" % (tmp / "data"))[1])
     assert got["science"] == "missing"

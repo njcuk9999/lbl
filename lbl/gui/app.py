@@ -233,12 +233,16 @@ class Handler(BaseHTTPRequestHandler):
                         and targets.incomplete(index, data_dir, names):
                     ctx.scanner.start(data_dir)
                     status = ctx.scanner.status()
-                rows = []
+                rows, empty = [], []
                 home = dispatch.reader_of(data_dir)
                 for name in names:
                     records = (index.get("targets") or {}).get(name, {})
                     row = targets.summary(records)
                     on_disk = len(targets.files_of(data_dir, name))
+                    # a folder without spectra is no target: said apart
+                    if not on_disk:
+                        empty.append(name)
+                        continue
                     # files: on disk; read: in the index so far
                     row.update(name=name, read=row["files"], files=on_disk,
                                on_disk=on_disk)
@@ -256,7 +260,8 @@ class Handler(BaseHTTPRequestHandler):
                         row["archive"] = dict(lbl=home[0], source=home[1])
                     rows.append(row)
                 return self._json(dict(targets=rows, scan=status,
-                                       science="ok", folder=science))
+                                       science="ok" if rows else "empty",
+                                       folder=science, empty=empty))
             if route == "/api/points":
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 status = ctx.scanner.status()
@@ -301,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
                     query.get("root", ""))))
             if route == "/api/dispatch":
                 return self._json(ctx.dispatcher.status())
+            if route == "/api/explore/lines":
+                return self._json(explore.lines_of_interest())
             if route == "/api/explore/rdbs":
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 return self._json(explore.rdb_files(data_dir))
@@ -310,6 +317,8 @@ class Handler(BaseHTTPRequestHandler):
                 path = query.get("path", "")
                 if not path.endswith(".rdb") or not ctx.servable(path):
                     return self.send_error(HTTPStatus.FORBIDDEN)
+                # the table's own data folder: its templates and masks
+                data_dir = explore.data_dir_of(path)
                 if route == "/api/explore/rdb":
                     return self._json(explore.read_rdb(path, data_dir))
                 if route == "/api/explore/fip":
@@ -319,7 +328,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(explore.template_view(
                         path, data_dir, query.get("lo"), query.get("hi"),
                         int(query.get("n") or 1500),
-                        query.get("tapas", "1") != "0"))
+                        query.get("tapas", "1") != "0", query.get("vsys")))
                 return self.send_error(HTTPStatus.NOT_FOUND)
             if route == "/file":
                 path = query.get("path", "")

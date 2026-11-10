@@ -166,6 +166,22 @@ body {
 .dispatch-table { max-height: 22em; }
 .dispatch-table tr.star-first td { border-top: 1px solid var(--line); }
 .dispatch-notes { margin: 8px 0; padding-left: 1.2em; }
+/* the template's lines of interest, its frame and its systemic velocity */
+.template-controls { margin-bottom: 6px; align-items: center; }
+.template-vsys { width: 7em; }
+/* the root as a tree: Downloads, the instrument folders, the rest */
+.root-tree { margin-top: 10px; }
+.root-tree > summary { cursor: pointer; }
+.root-tree-body { margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; max-height: 28em; overflow: auto; }
+.tree-node > summary { cursor: pointer; padding: 1px 0; }
+.tree-node > :not(summary), .root-tree-body > .tree-line { margin-left: 1.4em; }
+.tree-node > .tree-line.deep { margin-left: 2.8em; }
+.tree-name { font-family: "IBM Plex Mono", monospace; }
+.tree-note { color: var(--muted); margin-left: 0.8em; }
+.tree-count { display: inline-block; min-width: 4em; margin-right: 0.8em; text-align: right; color: var(--muted); font-family: "IBM Plex Mono", monospace; }
+.tree-node.current > summary .tree-name { font-weight: 600; }
+.tree-here { margin-left: 0.8em; }
+.button.tree-open { margin-left: 0.8em; padding: 0 10px; min-height: 0; height: auto; font-size: 0.72rem; line-height: 1.5; }
 .setup-status { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .setup-status .button { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; }
 .good-text { color: #12936a; }

@@ -188,3 +188,40 @@ def test_the_server_reads_tables_of_the_data_folder_only(server, data,
         urllib.request.urlopen(server + "/api/explore/rdb?data_dir=%s"
                                "&path=%s" % (data, elsewhere))
     assert error.value.code == 403
+
+
+def test_the_template_in_its_star_s_rest_frame(data):
+    # LBL's mask of the template carries the star's systemic velocity
+    (data / "masks").mkdir()
+    fits.PrimaryHDU(header=fits.Header(dict(SYSTVELO=30000.0))).writeto(
+        data / "masks" / "LBL_Mask_GJ_1_full_spirou.fits")
+    rdb = str(data / "lblrdb" / "lbl_GJ_1_GJ_1.rdb")
+    rest = explore.template_view(rdb, str(data), 1049.8, 1050.2, nbin=2000,
+                                 tapas=False, vsys="auto")
+    assert rest["vsys"]["value"] == 30.0 and rest["vsys"]["shift"] == 30.0
+    assert rest["vsys"]["source"] == "LBL_Mask_GJ_1_full_spirou.fits"
+    x, y = np.array(rest["x"]), np.array(rest["y"], dtype=float)
+    # the line, at 1050 nm in the template, where a receding star's is at
+    #   rest: 1050 nm over the relativistic Doppler factor (0.105 nm), to
+    #   the template's sampling (0.005 nm)
+    assert x[np.argmin(y)] == pytest.approx(1050 / explore.doppler(30.0),
+                                            abs=3e-3)
+    same = explore.template_view(rdb, str(data), 1049.8, 1050.2, nbin=2000,
+                                 tapas=False, vsys="")
+    assert same["vsys"]["shift"] is None
+    x, y = np.array(same["x"]), np.array(same["y"], dtype=float)
+    assert x[np.argmin(y)] == pytest.approx(1050.0, abs=3e-3)
+    lines = explore.lines_of_interest()
+    assert {"label", "wave", "width"} <= set(lines[0]) and len(lines) > 10
+
+
+def test_a_root_s_tables_every_data_folder_s(data):
+    # a DATA_DIR of a root: its tables first, then the root's own
+    home = data / "NIRPS_HE_APERO"
+    (home / "lblrdb").mkdir(parents=True)
+    _rdb(home / "lblrdb" / "lbl_GJ_2_GJ_2.rdb")
+    files = explore.rdb_files(str(home))["files"]
+    assert files[0]["name"] == "lbl_GJ_2_GJ_2.rdb" and files[0]["own"]
+    assert {f["home"] for f in files[1:]} == {""}
+    assert not any(f["own"] for f in files[1:])
+    assert explore.data_dir_of(files[1]["path"]) == str(data)

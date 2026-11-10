@@ -40,6 +40,7 @@ let SCIENCE = { state: 'ok', folder: '' };
 let LAYOUT = null;       // the root: its instrument folders and its Downloads
 let DISPATCH = null;     // the dispatch of Downloads: its plan, then what it did
 let dispatchTimer = null;
+const TREE_OPEN = new Set(['Downloads/']);   // the tree's folders shown open
 
 // ── plumbing ────────────────────────────────────────────────────────────
 const api = {
@@ -135,7 +136,7 @@ function childPath(folder, name) {
   return `${dir}${dir.includes('\\') && !dir.includes('/') ? '\\' : '/'}${name}`;
 }
 function relative(path) {
-  const root = flatPath(S.data_dir || '').replace(/\/$/, '') + '/';
+  const root = flatPath(S.root || S.data_dir || '').replace(/\/$/, '') + '/';
   return path && flatPath(path).startsWith(root) ? path.slice(root.length) : path;
 }
 
@@ -499,7 +500,7 @@ async function loadTargets() {
   const data = await api.get('/api/targets', { data_dir: S.data_dir });
   if (data.error) { $('scan_status').textContent = data.error; return; }
   TARGETS = data.targets || [];
-  SCIENCE = { state: data.science || 'ok', folder: data.folder || '' };
+  SCIENCE = { state: data.science || 'ok', folder: data.folder || '', empty: data.empty || [] };
   const scan = data.scan || {};
   // the server reads the headers by itself (one file per folder first):
   //   the page follows while it does
@@ -566,8 +567,9 @@ async function loadFolders() {
 
 function drawFolders() {
   const options = [];
-  if (LAYOUT && LAYOUT.legacy) options.push(el('option', { value: '', text: t('folder_this', LAYOUT.legacy_targets) }));
-  (LAYOUT ? LAYOUT.folders : []).forEach((f) => options.push(el('option', { value: f.name, text: t('folder_row', f.name, f.targets) })));
+  if (LAYOUT && LAYOUT.legacy) options.push(el('option', { value: '', text: t('folder_this', LAYOUT.legacy_targets, LAYOUT.legacy_spectra) }));
+  (LAYOUT ? LAYOUT.folders : []).forEach((f) => options.push(el('option', {
+    value: f.name, text: f.targets ? t('folder_row', f.name, f.targets, f.spectra) : t('folder_empty', f.name) })));
   if (!options.length) options.push(el('option', { value: '', text: t('folder_none') }));
   $('data_folder').replaceChildren(...options);
   $('data_folder').value = S.folder;
@@ -576,7 +578,58 @@ function drawFolders() {
   $('downloads_label').textContent = t('downloads_n', down ? down.files : 0);
   $('downloads').title = down ? t('downloads_title', down.path) : '';
   $('downloads').disabled = !S.root;
+  drawTree();
   drawDispatch();
+}
+
+// The root as a tree: what waits in Downloads (by name: its headers are
+//   read when it is dispatched), each instrument folder (its targets and
+//   their spectra, its empty folders, calib, models), the shared models,
+//   the old layout's science/ and the rest
+function drawTree() {
+  const box = $('root_tree');
+  box.hidden = !LAYOUT || !LAYOUT.exists;
+  if (box.hidden) return;
+  const L = LAYOUT;
+  const sum = (key) => L.folders.reduce((n, f) => n + f[key], 0);
+  $('root_tree_summary').textContent = t('tree_summary', L.downloads.files, L.folders.length, sum('targets'), sum('spectra'));
+  const name = (text) => el('span', { class: 'tree-name', text });
+  const note = (text) => el('span', { class: 'tree-note', text });
+  const line = (deep, ...kids) => el('div', { class: deep ? 'tree-line deep' : 'tree-line' }, ...kids);
+  const count = (n) => el('span', { class: 'tree-count', text: n });
+  const node = (key, head, ...kids) => {
+    const box = el('details', { class: `tree-node${key === `${S.folder}/` ? ' current' : ''}`, open: TREE_OPEN.has(key) || null }, el('summary', {}, ...head), ...kids);
+    box.addEventListener('toggle', () => { if (box.open) TREE_OPEN.add(key); else TREE_OPEN.delete(key); });
+    return box;
+  };
+  const d = L.downloads;
+  const nodes = [node('Downloads/', [name('Downloads/'), note(d.files ? t('tree_downloads', d.files, human(d.size)) : t('tree_downloads_none'))],
+    ...d.kinds.map((k) => line(false, count(k.n), name(k.kind))),
+    d.unused ? line(false, name('unused/'), note(t('tree_unused', d.unused))) : null)];
+  L.folders.forEach((f) => {
+    const here = f.name === S.folder;
+    nodes.push(node(`${f.name}/`, [name(`${f.name}/`), note(f.targets ? t('tree_home', f.targets, f.spectra) : t('tree_home_empty')),
+      here ? el('span', { class: 'tree-here good-text', text: `● ${t('tree_current')}` })
+        : el('button', { type: 'button', class: 'button tree-open', text: t('tree_open'), onclick: (event) => { event.preventDefault(); S.folder = f.name; openFolder(); } })],
+    line(false, name('science/')),
+    ...f.list.map((one) => line(true, count(one.files), name(`${one.name}/`))),
+    f.empty.length ? line(true, note(t('tree_empty', f.empty.length, f.empty.join(', ')))) : null,
+    line(false, name('calib/'), note(t('tree_calib', f.calib))),
+    line(false, name('models'), note(t(f.models === 'merge' ? 'tree_models_own' : f.models === 'link' ? 'tree_models_none' : 'tree_models_link')))));
+  });
+  if (L.models.exists) nodes.push(line(false, name('models/'), note(t('tree_models', L.models.files, human(L.models.size)))));
+  // the root as the data folder it was (one for every instrument)
+  const old = L.science;
+  const lblFolders = L.old_folders || [];
+  if (old || lblFolders.length) {
+    nodes.push(node('(root)', [name(t('tree_old')), note(t('tree_old_note'))],
+      old ? line(false, name('science/'), note(old.targets.length ? t('tree_home', old.targets.length, old.spectra) : t('tree_legacy_empty', old.empty.length))) : null,
+      ...(old ? old.targets.map((one) => line(true, count(one.files), name(`${one.name}/`))) : []),
+      old && old.targets.length && old.empty.length ? line(true, note(t('tree_empty', old.empty.length, old.empty.join(', ')))) : null,
+      lblFolders.length ? line(false, note(t('tree_old_folders', lblFolders.join(' ')))) : null));
+  }
+  if (L.others.length) nodes.push(line(false, note(t('tree_others', L.others.join(' ')))));
+  $('root_tree_body').replaceChildren(...nodes);
 }
 
 /* the folder chosen: its instrument and data source are the wrap's, and
@@ -717,6 +770,9 @@ function drawTargets() {
       : SCIENCE.state === 'empty' ? t('empty_science', SCIENCE.folder) : '';
   $('targets_message').textContent = message;
   $('targets_message').hidden = !message;
+  // folders without spectra are no targets: said under the table
+  const empty = SCIENCE.empty || [];
+  $('targets_empty').textContent = empty.length ? t('targets_empty_hidden', empty.length, empty.join(', ')) : '';
   $('targets_wrap').hidden = Boolean(message);
   const instruments = [...new Set(TARGETS.map((row) => row.instrument))].sort();
   $('instrument_filters').replaceChildren(...instruments.map((name) => el('label', { class: 'check' },
@@ -1753,6 +1809,12 @@ async function loadRuns() {
       el('td', { class: 'num', text: human(report.size) }))));
 }
 
+/* a table's flavour, the data folder it is in before it when that is not
+   the one the window works in (another instrument's, the root's own) */
+function flavourOf(file) {
+  return file.own === false ? `${file.home || t('explore_root_home')}: ${file.flavour}` : file.flavour;
+}
+
 // ── cleanup ─────────────────────────────────────────────────────────────
 let CLEANUP = [];
 async function measure() {
@@ -1867,7 +1929,8 @@ function loadPlotly() {
 //   ticked), table, fips }. picked: the columns chosen in the menus, kept
 //   from one table to the next (the others are the first table's own: MJD,
 //   vrad, BERV); c '': no colour
-const XP = { files: [], sets: [], nightly: false, x: '', y: '', c: '', picked: {}, gen: 0, tpls: [], tplRange: null };
+const XP = { files: [], sets: [], nightly: false, x: '', y: '', c: '', picked: {}, gen: 0, tpls: [], tplRange: null,
+  tplY: null, tplDraw: 0, lines: null, vsys: null, rest: true, showLines: true };
 // water blue, O2 red, CH4 green (as in the PCA2D figures)
 const MOLECULE_COLOURS = { H2O: '--series-1', O2: '--series-8', CH4: '--series-3', CO2: '--series-4',
   O3: '--series-7', N2O: '--series-5', NO2: '--series-other', others: '--series-2' };
@@ -1893,7 +1956,7 @@ function tableName(set) {
   const file = XP.files.find((row) => row.path === set.base) || {};
   if (!file.object) return baseName(set.path).replace(/\.rdb$/, '');
   const stars = new Set(XP.sets.map((other) => (XP.files.find((row) => row.path === other.base) || {}).object));
-  return stars.size === 1 && XP.sets.length > 1 ? file.flavour : `${file.object}: ${file.flavour}`;
+  return stars.size === 1 && XP.sets.length > 1 ? flavourOf(file) : `${file.object}: ${flavourOf(file)}`;
 }
 const setColour = (set) => css(SERIES[set.slot % SERIES.length]);
 const finite = (values) => values.filter((v) => v !== null && Number.isFinite(v));
@@ -1984,7 +2047,7 @@ function drawTableRows() {
     } }, objects.map((name) => el('option', { value: name, text: `${name} (${count(name)})` })));
     star.value = current.object;
     const flavour = el('select', { class: 'explore-flavour', onchange: (event) => { set.base = event.target.value; drawTableRows(); openSets(); } },
-      XP.files.filter((file) => file.object === current.object).map((file) => el('option', { value: file.path, text: `${file.flavour} · ${stamp(file)}` })));
+      XP.files.filter((file) => file.object === current.object).map((file) => el('option', { value: file.path, text: `${flavourOf(file)} · ${stamp(file)}` })));
     flavour.value = set.base;
     return el('div', { class: 'explore-table-row' },
       several ? el('span', { class: 'swatch', style: `background: ${setColour(set)}` }) : null,
@@ -2240,8 +2303,11 @@ async function loadTemplates(lo, hi) {
   const n = Math.round(Math.max(400, $('template_plot').clientWidth || 1000));
   const key = JSON.stringify([groups.map((g) => g.path), lo, hi, n]);
   templateAsked = key;
+  // in the star's rest frame: the velocity typed, else the one found
+  const vsys = XP.rest ? (XP.vsys === null ? 'auto' : XP.vsys) : '';
+  if (XP.showLines && !XP.lines) XP.lines = await api.get('/api/explore/lines');
   const data = await Promise.all(groups.map((group, i) => api.get('/api/explore/template', {
-    data_dir: S.data_dir, path: group.sets[0].path, lo: lo ?? '', hi: hi ?? '', n, tapas: i ? 0 : 1 })));
+    data_dir: S.data_dir, path: group.sets[0].path, lo: lo ?? '', hi: hi ?? '', n, tapas: i ? 0 : 1, vsys })));
   if (templateAsked !== key) return;
   XP.tpls = groups.map((group, i) => ({ ...group, data: data[i] }));
   XP.tplRange = lo === undefined ? null : [lo, hi];
@@ -2281,12 +2347,52 @@ function drawTemplate() {
       hovertemplate: `${label} %{x:.4f} nm<br>${t('template_transmission_short')} %{y:.3f}<extra></extra>` });
   });
   const range = XP.tplRange || [Math.min(...tpls.map((tpl) => tpl.data.range[0])), Math.max(...tpls.map((tpl) => tpl.data.range[1]))];
-  // the footer a quarter as high as the templates, one x axis for both
+  // y: the range cut by the user, else that of what is seen
+  let yRange = XP.tplY;
+  if (!yRange) {
+    const seen = traces.filter((tr) => tr.yaxis === 'y').flatMap((tr) => tr.y.filter((v, i) => v !== null && tr.x[i] >= range[0] && tr.x[i] <= range[1]));
+    if (seen.length) {
+      const lo = Math.min(...seen);
+      const hi = Math.max(...seen);
+      const pad = 0.04 * (hi - lo || Math.abs(hi) || 1);
+      yRange = [lo - pad, hi + pad];
+    }
+  }
+  // copies: Plotly keeps the arrays it is given, and changes them in place
+  //   when the plot is zoomed
+  XP.tplYShown = yRange ? [...yRange] : null;
+  // the lines of interest in the template's frame: at their vacuum
+  //   wavelengths in the star's, moved by v_sys otherwise
+  const vsys = tpls[0].data.vsys || {};
+  const used = vsys.shift ?? null;
+  const moved = !used && vsys.value !== null && vsys.value !== undefined ? vsys.value : 0;
+  const factor = moved ? Math.sqrt((1 + moved / C_KMS) / (1 - moved / C_KMS)) : 1;
+  const shapes = [];
+  const notes = [];
+  if (XP.showLines && XP.lines) {
+    XP.lines.forEach((line) => {
+      const centre = line.wave * factor;
+      if (centre < range[0] || centre > range[1]) return;
+      const colour = css(line.kind === 'flare' ? '--series-2' : '--series-3');
+      shapes.push({ type: 'rect', xref: 'x', yref: 'y domain', x0: centre - line.width * factor / 2, x1: centre + line.width * factor / 2,
+        y0: 0, y1: 1, fillcolor: colour, opacity: 0.18, line: { width: 0 }, layer: 'below' });
+      shapes.push({ type: 'line', xref: 'x', yref: 'y domain', x0: centre, x1: centre, y0: 0, y1: 1, opacity: 0.55, line: { color: colour, width: 1, dash: 'dot' } });
+      notes.push({ xref: 'x', yref: 'y domain', x: centre, y: 0.99, yanchor: 'top', xanchor: 'right', textangle: -90, showarrow: false,
+        text: esc(line.label), font: { size: 10, color: css('--muted') },
+        hovertext: `${esc(line.label)} · ${esc(line.species)} · ${line.wave.toFixed(4)} nm (vacuum)` });
+    });
+  }
+  XP.tplDraw += 1;
+  // the footer a quarter as high as the templates, one x axis for both; the
+  //   axes' ranges are the window's own (uirevision a new one each time),
+  //   the rest of what the user did (the legend) is kept
   Plotly.react(div, traces, xpLayout({
     uirevision: tpls.map((tpl) => tpl.path).join('|'), margin: { l: 70, r: 16, t: several ? 48 : 28, b: 48 },
     legend: { orientation: 'h', x: 1, xanchor: 'right', y: 1.0, yanchor: 'bottom', font: { size: 11 } },
-    xaxis: xpAxis({ title: { text: t('template_wavelength') }, range, autorange: false, anchor: 'y2' }),
-    yaxis: xpAxis({ domain: [0.25, 1], title: { text: t(several ? 'template_flux_median' : 'template_flux') }, autorange: true, fixedrange: true }),
+    shapes, annotations: notes,
+    xaxis: xpAxis({ title: { text: t('template_wavelength') }, range: [...range], autorange: false, anchor: 'y2', uirevision: XP.tplDraw }),
+    yaxis: xpAxis({ domain: [0.25, 1], title: { text: t(several ? 'template_flux_median' : 'template_flux') },
+      range: yRange ? [...yRange] : undefined, autorange: !yRange, uirevision: XP.tplDraw }),
     // transmission, 1 clear to 0 opaque
     yaxis2: xpAxis({ domain: [0, 0.1875], range: [0, 1.04], fixedrange: true, tickvals: [0, 0.5, 1],
       title: { text: t('template_transmission'), font: { size: 11 } } }),
@@ -2294,15 +2400,35 @@ function drawTemplate() {
     if (div.dataset.zoom) return;
     div.dataset.zoom = '1';
     div.on('plotly_relayout', (event) => {
-      let zoom = null;
-      if (event['xaxis.range[0]'] !== undefined) zoom = [event['xaxis.range[0]'], event['xaxis.range[1]']];
-      else if (Array.isArray(event['xaxis.range'])) zoom = event['xaxis.range'];
-      else if (!event['xaxis.autorange']) return;
+      const pair = (axis) => (event[`${axis}.range[0]`] !== undefined ? [event[`${axis}.range[0]`], event[`${axis}.range[1]`]]
+        : (Array.isArray(event[`${axis}.range`]) ? event[`${axis}.range`] : null));
+      const zoom = pair('xaxis');
+      const cut = pair('yaxis');
+      if (event['xaxis.autorange'] || event['yaxis.autorange']) {
+        // a double click: all of it, y to what is seen
+        XP.tplY = null;
+        clearTimeout(templateTimer);
+        templateTimer = setTimeout(() => loadTemplates(), 120);
+        return;
+      }
+      if (!zoom && !cut) return;
+      // y cut by a box or a scroll: kept; moved in x alone (a thin box, or
+      //   a pan that keeps y's extent when y was not cut): y follows what
+      //   is seen
+      // the extent of y as it was drawn (the layout holds the new one)
+      const before = XP.tplYShown || [0, 0];
+      const panned = cut && !XP.tplY && Math.abs((cut[1] - cut[0]) - (before[1] - before[0])) < 1e-9 * Math.abs(before[1] - before[0] || 1);
+      XP.tplY = cut && !panned ? cut : (cut ? XP.tplY : null);
       clearTimeout(templateTimer);
-      templateTimer = setTimeout(() => (zoom ? loadTemplates(zoom[0], zoom[1]) : loadTemplates()), 120);
+      templateTimer = setTimeout(() => (zoom ? loadTemplates(zoom[0], zoom[1]) : drawTemplate()), 120);
     });
   });
   const said = [t(several ? 'template_several' : 'template_of', tpls.map((tpl) => tpl.data.template.name).join(', '))];
+  if (used !== null) said.push(t('template_shifted', Number(used).toFixed(2), XP.vsys === null ? (vsys.source || '') : t('template_vsys_typed')));
+  else if (XP.rest && (vsys.value === null || vsys.value === undefined)) said.push(t('template_vsys_unknown'));
+  else if (moved && XP.showLines) said.push(t('template_lines_moved', Number(moved).toFixed(2)));
+  // the velocity found shown in the field, unless one was typed
+  if (XP.vsys === null) $('template_vsys').value = vsys.value ?? '';
   if (tapas) {
     said.push(t(tapas.kind === 'molecules' ? 'template_tapas' : 'template_tapas_lbl', tapas.file));
     const bervs = shownSets().map((set) => set.table.berv).filter(Boolean);
@@ -2416,6 +2542,15 @@ async function init() {
   $('explore_x').onchange = (event) => { XP.x = event.target.value; XP.picked.x = true; drawExplore(); loadFips(); };
   $('explore_y').onchange = (event) => { XP.y = event.target.value; XP.picked.y = true; drawExplore(); loadFips(); };
   $('explore_c').onchange = (event) => { XP.c = event.target.value; XP.picked.c = true; drawExplore(); };
+  const sameWindow = () => (XP.tplRange ? loadTemplates(XP.tplRange[0], XP.tplRange[1]) : loadTemplates());
+  $('template_lines').onchange = (event) => { XP.showLines = event.target.checked; sameWindow(); };
+  $('template_rest').onchange = (event) => { XP.rest = event.target.checked; sameWindow(); };
+  $('template_vsys').onchange = (event) => {
+    const value = event.target.value.trim();
+    XP.vsys = value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+    if (XP.vsys !== null) { XP.rest = true; $('template_rest').checked = true; }
+    sameWindow();
+  };
   $('best_all').onclick = () => bestMatch(S.ticked);
   $('simbad_teff').onclick = () => askSimbad(S.ticked, true);
   // read the folder again: new or removed targets and spectra, and the

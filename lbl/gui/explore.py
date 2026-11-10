@@ -55,6 +55,11 @@ _NAMES = {}
 _TEMPLATES = {}
 _TAPAS = {}
 _FIPS = {}
+_SYSTEMIC = {}
+#: where a template's systemic velocity is found: the SYSTVELO [m/s] that
+#:    LBL writes in the masks it makes from the template (its own
+#:    measurement), else SIMBAD's
+MASK_VELOCITY = "SYSTVELO"
 
 
 # =============================================================================
@@ -119,39 +124,69 @@ def object_flavour(science: str, template: str) -> tuple:
     return star, ("%s / %s" % (variant, template) if variant else template)
 
 
+def data_dir_of(path: str) -> str:
+    """The data folder a table belongs to: DATA_DIR of DATA_DIR/lblrdb/x.rdb
+    (its templates, masks and models are that folder's)."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(path)))
+
+
+def _homes(data_dir: str) -> list:
+    """The data folders whose tables the explorer lists: DATA_DIR, and when
+    it is one of a root's (ROOT/{INSTRUMENT}_{SOURCE}, lbl.gui.dispatch),
+    the root's others and the root itself (the old layout), as (folder,
+    its name in the root: '' for the root)."""
+    from .dispatch import readers, split
+    root, mine = split(data_dir)
+    if not mine and not any(os.path.isdir(os.path.join(root, name))
+                            for name in readers()):
+        return [(os.path.abspath(data_dir or ""), "")]
+    homes = [(os.path.join(root, name), name) for name in sorted(readers())
+             if os.path.isdir(os.path.join(root, name, RDB_FOLDER))]
+    if os.path.isdir(os.path.join(root, RDB_FOLDER)):
+        homes.append((root, ""))
+    # DATA_DIR's own first
+    return sorted(homes, key=lambda h: h[1] != mine)
+
+
 def rdb_files(data_dir: str) -> dict:
-    """The rdb tables of DATA_DIR/lblrdb, the newest first, each with its
-    star and its flavour (object_flavour). A table of every spectrum
-    (lbl_X.rdb) carries that of its nights (lbl2_X.rdb, written in the same
-    run) as 'nightly', which is not listed apart; an lbl2_ table without
-    its lbl_ is."""
-    folder = os.path.join(data_dir or "", RDB_FOLDER)
-    found = {}
-    for path in glob.glob(os.path.join(folder, "*.rdb")):
-        try:
-            stat = os.stat(path)
-        except OSError:
-            continue
-        name = os.path.basename(path)
-        found[name] = dict(path=path, name=name, mtime=stat.st_mtime,
-                           size=stat.st_size, nightly=None)
+    """The rdb tables of DATA_DIR/lblrdb (and, in a root's DATA_DIR, those
+    of the root's other ones and of the root itself: _homes), the newest
+    first, each with its star and its flavour (object_flavour), its data
+    folder's name in the root (home; own: DATA_DIR's). A table
+    of every spectrum (lbl_X.rdb) carries that of its nights (lbl2_X.rdb,
+    written in the same run) as 'nightly', which is not listed apart; an
+    lbl2_ table without its lbl_ is."""
+    from .dispatch import split
+    homes = _homes(data_dir)
+    mine = split(data_dir)[1]
     rows = []
-    for name, row in found.items():
-        if name.startswith("lbl2_") and \
-                "lbl_" + name[len("lbl2_"):] in found:
-            continue
-        if name.startswith("lbl_"):
-            twin = found.get("lbl2_" + name[len("lbl_"):])
-            if twin is not None:
-                row["nightly"] = {key: twin[key]
-                                  for key in ("path", "name", "mtime")}
-        row["object"], row["flavour"] = object_flavour(
-            *names_of(row["path"], data_dir))
-        rows.append(row)
-    # a run's two tables: as new as the newer of them
-    rows.sort(key=lambda row: -max(row["mtime"], (row["nightly"] or row)
-                                   ["mtime"]))
-    return dict(folder=folder, files=rows,
+    for home_dir, home in homes:
+        found = {}
+        for path in glob.glob(os.path.join(home_dir, RDB_FOLDER, "*.rdb")):
+            try:
+                stat = os.stat(path)
+            except OSError:
+                continue
+            name = os.path.basename(path)
+            found[name] = dict(path=path, name=name, mtime=stat.st_mtime,
+                               size=stat.st_size, nightly=None, home=home,
+                               own=home == mine)
+        for name, row in found.items():
+            if name.startswith("lbl2_") and \
+                    "lbl_" + name[len("lbl2_"):] in found:
+                continue
+            if name.startswith("lbl_"):
+                twin = found.get("lbl2_" + name[len("lbl_"):])
+                if twin is not None:
+                    row["nightly"] = {key: twin[key]
+                                      for key in ("path", "name", "mtime")}
+            row["object"], row["flavour"] = object_flavour(
+                *names_of(row["path"], home_dir))
+            rows.append(row)
+    # a run's two tables: as new as the newer of them; DATA_DIR's first
+    rows.sort(key=lambda row: (not row["own"], -max(
+        row["mtime"], (row["nightly"] or row)["mtime"])))
+    return dict(folder=os.path.join(data_dir or "", RDB_FOLDER), files=rows,
                 latest=rows[0]["path"] if rows else None)
 
 
@@ -458,15 +493,87 @@ def _tapas_arrays(path: str, kind: str):
     return kept
 
 
+def systemic(info: dict, data_dir: str) -> dict:
+    """The systemic velocity of a template's star [km/s]: the SYSTVELO of a
+    mask LBL made from it (DATA_DIR/masks/LBL_Mask_<object>_*, or beside a
+    vetted template), else SIMBAD's (lbl.gui.simbad.ask, once per star).
+    dict(value, source), value None when neither says."""
+    key = (info["path"], data_dir)
+    with _LOCK:
+        if key in _SYSTEMIC:
+            return dict(_SYSTEMIC[key])
+    from astropy.io import fits
+    obj = info.get("object") or ""
+    found = dict(value=None, source=None)
+    masks = sorted(glob.glob(os.path.join(data_dir, "masks",
+                                          "LBL_Mask_%s_*.fits" % obj)))
+    masks += sorted(glob.glob(os.path.join(os.path.dirname(info["path"]),
+                                           "LBL_Mask_%s_*.fits" % obj)))
+    for mask in masks:
+        try:
+            value = fits.getheader(mask).get(MASK_VELOCITY)
+        except (OSError, ValueError):
+            continue
+        if value is not None and np.isfinite(float(value)):
+            found = dict(value=round(float(value) / 1000.0, 4),
+                         source=os.path.basename(mask))
+            break
+    if found["value"] is None and obj:
+        from lbl.core.simbad import SUFFIXES
+        from . import simbad
+        star = SUFFIXES.sub("", obj)
+        star = star[len("VETTED_"):] if star.upper().startswith("VETTED_") \
+            else star
+        answer = simbad.ask(star)
+        if answer.get("rv") is not None:
+            found = dict(value=round(float(answer["rv"]), 4),
+                         source="SIMBAD (%s)" % answer.get("main", star))
+    with _LOCK:
+        _SYSTEMIC[key] = dict(found)
+    return found
+
+
+def doppler(velocity_kms: float) -> float:
+    """The wavelength ratio of a velocity [km/s, positive receding]:
+    relativistic, c from astropy."""
+    from astropy import constants
+    beta = float(velocity_kms) / constants.c.to("km/s").value
+    return float(np.sqrt((1.0 + beta) / (1.0 - beta)))
+
+
+def lines_of_interest() -> list:
+    """The lines LBL measures the activity of (lbl/resources/
+    activity_lines.yaml), in vacuum [nm]: label, species, wave, width (the
+    window LBL measures in), kind."""
+    from lbl.science.activity_lines import load_lines
+    return [dict(label=line["LABEL"], species=line["SPECIES"],
+                 wave=line["WAVE"], width=line["WIDTH"], kind=line["KIND"])
+            for line in load_lines()]
+
+
 def template_view(rdb: str, data_dir: str, lo=None, hi=None,
-                  nbin: int = 1500, tapas: bool = True) -> dict:
+                  nbin: int = 1500, tapas: bool = True,
+                  vsys=None) -> dict:
     """The template of a table over [lo, hi] nm (all of it when not given)
     and (tapas) the TAPAS transmission of each molecule over the same
-    range, both cut to about nbin bins."""
+    range, both cut to about nbin bins. `vsys` [km/s]: the template brought
+    to its star's rest frame (its wavelengths divided by the Doppler factor
+    of vsys), where the lines of a species are at their laboratory
+    wavelengths; 'auto' for the systemic velocity found (systemic), None
+    or '' for the template as it is. The TAPAS transmission stays in the
+    telescope's frame."""
     info = template_of(rdb, data_dir)
     if info is None:
         return dict(template=None)
     wave, flux = _template_arrays(info["path"])
+    found = systemic(info, data_dir)
+    shift = None
+    if vsys == "auto":
+        shift = found["value"]
+    elif vsys not in (None, ""):
+        shift = float(vsys)
+    if shift:
+        wave = wave / doppler(shift)
     finite = np.isfinite(flux)
     full = [float(wave[finite].min()), float(wave[finite].max())]
     lo = full[0] if lo in (None, "") else float(lo)
@@ -474,7 +581,8 @@ def template_view(rdb: str, data_dir: str, lo=None, hi=None,
     nbin = int(min(max(int(nbin), 100), 5000))
     x, y = envelope(wave, flux, lo, hi, nbin)
     out = dict(template=info, full=full, range=[lo, hi],
-               x=np.round(x, 6).tolist(), y=_listed(np.round(y, 6)))
+               x=np.round(x, 6).tolist(), y=_listed(np.round(y, 6)),
+               vsys=dict(found, shift=shift))
     tapas = tapas_file(data_dir, info.get("instrument") or "") \
         if tapas else None
     if tapas is not None:

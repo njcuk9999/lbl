@@ -150,6 +150,11 @@ ESO_CALIB = {"BLAZE_A"}
 #:    blazes): what is an instrument's own has its name in it
 #:    (template_SPIROU_APERO, pca2d_NIRPS_HE_CADC, blaze_NIRPS_HE_ESO.fits)
 SHARED = ("models",)
+#: the folders LBL keeps in a data folder (lbl.instruments.select), PCA2D's
+#:    and the window's: at the top of a root, those of the old layout, when
+#:    the root was itself the data folder of every instrument
+LBL_FOLDERS = ("calib", "lblrdb", "lblreftable", "lblrv", "masks", "plots",
+               "templates", "pca2d", "reports", "gui", "log")
 #: the SIMBAD names asked in one dispatch, at most (each unknown name takes
 #:    a few seconds)
 SIMBAD_MOST = 40
@@ -199,9 +204,32 @@ def split(data_dir: str):
     return path, ""
 
 
+#: what the files of Downloads are, from their names alone (their headers
+#:    are read when they are dispatched): a product of the HARPS DRS
+#:    (_e2ds_A, _ccf_K5_A), an ESO product (_S2D_BLAZE_TELL_CORR_A), an
+#:    APERO product (t.fits), else their extension
+KINDS = (re.compile(r"(_[a-z0-9]+(?:_[A-Za-z0-9]+)*_[AB])\.fits(\.gz)?$"),
+         re.compile(r"(_[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_[AB])\.fits(\.gz)?$"),
+         re.compile(r"(?<=[0-9.])([a-z])\.fits(\.gz)?$"))
+
+
+def _kind_of_name(name: str) -> str:
+    """A file's kind by its name: *_S2D_BLAZE_TELL_CORR_A.fits, *t.fits,
+    *.hd5..."""
+    for pattern in KINDS:
+        found = pattern.search(name)
+        if found:
+            return "*%s.fits%s" % (found.group(1), found.group(2) or "")
+    ext = name.lower()[name.lower().rfind("."):] if "." in name else ""
+    if ext == ".gz" and name.lower().endswith(".fits.gz"):
+        ext = ".fits.gz"
+    return "*" + ext if ext else name
+
+
 def downloads(root: str) -> dict:
-    """The Downloads folder of a root, made if the root is there, and how
-    many files wait in it (those put aside in UNUSED and hidden ones not
+    """The Downloads folder of a root, made if the root is there: how many
+    files wait in it to be dispatched, their size and their kinds (by
+    name), and how many were put aside in UNUSED (hidden files not
     counted)."""
     path = os.path.join(root, DOWNLOADS)
     if os.path.isdir(root) and not os.path.isdir(path):
@@ -209,7 +237,8 @@ def downloads(root: str) -> dict:
             os.makedirs(path, exist_ok=True)
         except OSError:
             pass
-    files = spectra = unused = 0
+    files = spectra = unused = size = 0
+    kinds = Counter()
     for top, dirs, names in os.walk(path):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
         aside = os.path.relpath(top, path).split(os.sep)[0] == UNUSED
@@ -221,29 +250,87 @@ def downloads(root: str) -> dict:
                 continue
             files += 1
             spectra += name.lower().endswith(SPECTRA)
+            kinds[_kind_of_name(name)] += 1
+            try:
+                size += os.path.getsize(os.path.join(top, name))
+            except OSError:
+                pass
     return dict(path=path, exists=os.path.isdir(path), files=files,
-                spectra=spectra, unused=unused)
+                spectra=spectra, unused=unused, size=size,
+                kinds=[dict(kind=k, n=n) for k, n in sorted(
+                    kinds.items(), key=lambda kv: (-kv[1], kv[0]))])
+
+
+def _targets(data_dir: str) -> dict:
+    """The target folders of a data folder: those that hold spectra (each
+    with how many), and the empty ones, which are no targets."""
+    full, empty = [], []
+    for name in targets.target_names(data_dir):
+        count = len(targets.files_of(data_dir, name))
+        if count:
+            full.append(dict(name=name, files=count))
+        else:
+            empty.append(name)
+    return dict(targets=full, empty=empty,
+                spectra=sum(one["files"] for one in full))
+
+
+def _files_in(path: str):
+    """(files, bytes) under a folder, links followed once."""
+    count = size = 0
+    for top, _, names in os.walk(path):
+        for name in names:
+            if not name.startswith("."):
+                count += 1
+                try:
+                    size += os.path.getsize(os.path.join(top, name))
+                except OSError:
+                    pass
+    return count, size
 
 
 def layout(root: str) -> dict:
-    """What a root holds: its DATA_DIRs (each with its instrument, data
-    source and number of targets), whether it is itself a data folder of
-    the old kind (a science/ of its own), and its Downloads."""
+    """What a root holds, as the window shows it: its Downloads, its
+    DATA_DIRs (each with its instrument and data source, its targets, the
+    number of their spectra, its empty folders, its calibrations and how
+    its models stand), the root's models, a science/ of its own (the old
+    layout: legacy only when it holds spectra) and what else is there."""
     root = os.path.abspath(os.path.expanduser(root or ""))
     known = readers()
-    folders = []
+    folders, old_folders, others = [], [], []
     if os.path.isdir(root):
-        for entry in sorted(os.scandir(root), key=lambda e: e.name):
+        for entry in sorted(os.scandir(root), key=lambda e: e.name.lower()):
+            if entry.name.startswith("."):
+                continue
             if entry.name in known and entry.is_dir():
                 inst, source = known[entry.name]
-                folders.append(dict(name=entry.name, instrument=inst,
-                                    source=source, path=entry.path,
-                                    targets=len(targets.target_names(
-                                        entry.path))))
+                found = _targets(entry.path)
+                calib = os.path.join(entry.path, "calib")
+                folders.append(dict(
+                    name=entry.name, instrument=inst, source=source,
+                    path=entry.path, targets=len(found["targets"]),
+                    spectra=found["spectra"], list=found["targets"],
+                    empty=found["empty"],
+                    calib=len(os.listdir(calib)) if os.path.isdir(calib)
+                    else 0,
+                    models=sharing(root, entry.name).get("models")))
+            elif entry.name in LBL_FOLDERS and entry.is_dir():
+                old_folders.append(entry.name + "/")
+            elif entry.name not in (DOWNLOADS, "models", "science"):
+                others.append(entry.name + ("/" if entry.is_dir() else ""))
+    old = _targets(root) if os.path.isdir(os.path.join(root, "science")) \
+        else None
+    models = os.path.join(root, "models")
+    count, size = _files_in(models) if os.path.isdir(models) else (0, 0)
     return dict(root=root, exists=os.path.isdir(root),
-                legacy=os.path.isdir(os.path.join(root, "science")),
-                legacy_targets=len(targets.target_names(root)),
-                folders=folders, downloads=downloads(root))
+                legacy=bool(old and old["targets"]),
+                legacy_targets=len(old["targets"]) if old else 0,
+                legacy_spectra=old["spectra"] if old else 0,
+                science=old, folders=folders, old_folders=old_folders,
+                others=others,
+                models=dict(exists=os.path.isdir(models), files=count,
+                            size=size),
+                downloads=downloads(root))
 
 
 def sharing(root: str, home: str) -> dict:

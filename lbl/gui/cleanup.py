@@ -17,6 +17,12 @@ Every product is put in one kind, which says what deleting it costs:
 Only scratch and rebuildable can be deleted from the window, and only inside
 the data folder. A link is removed as a link: what it points to (spectra
 kept on another disk, a scratch volume) is left where it is.
+
+In a data root (lbl.gui.dispatch: ROOT/Downloads, one DATA_DIR per
+instrument and source), the whole root is weighed, whichever of its
+DATA_DIRs the window works in: the root's own LBL folders (the old layout,
+one DATA_DIR for everything), each DATA_DIR's, the shared models once, and
+what waits in Downloads or was put aside there.
 """
 from __future__ import annotations
 
@@ -66,7 +72,10 @@ WHAT = dict(
     reports="the reports",
     components="observer bases and stars' components",
     models="LBL's models: stellar models, TAPAS, vetted templates, kept"
-           " PCA2D bases")
+           " PCA2D bases",
+    downloads="downloaded, waiting to be dispatched",
+    unused="products LBL does not read, put aside by the dispatch (CCF,"
+           " S1D...)")
 
 
 def _item(path: str, kind: str, code: str) -> dict:
@@ -77,9 +86,56 @@ def _item(path: str, kind: str, code: str) -> dict:
                 link=os.path.realpath(path) if link else None)
 
 
+def scope(data_dir: str):
+    """What the cleanup weighs from DATA_DIR: (the folder deletions stay
+    in, [(data folder, its name in it)]): DATA_DIR alone, or, when it is a
+    data root or one of its DATA_DIRs, the root (its own LBL folders, name
+    '') and each of its DATA_DIRs."""
+    from .dispatch import readers, split
+    root, mine = split(data_dir)
+    homes = [(os.path.join(root, name), name) for name in sorted(readers())
+             if os.path.isdir(os.path.join(root, name))]
+    if not mine and not homes:
+        return os.path.abspath(data_dir), [(os.path.abspath(data_dir), "")]
+    return root, [(root, "")] + homes
+
+
 def survey(data_dir: str) -> list:
-    """Everything the window can say about a data folder's products, the
-    heaviest first in each kind."""
+    """Everything the window can say about the products of a data folder,
+    or of all of a data root's (scope), the heaviest first in each kind;
+    each item with the name of its data folder in the root ('home')."""
+    root, homes = scope(data_dir)
+    out = []
+    for folder, home in homes:
+        for item in _survey(folder):
+            # a DATA_DIR's models: the root's, weighed once
+            if item["code"] == "models" and item["link"]:
+                continue
+            item["home"] = home
+            out.append(item)
+    # what waits in Downloads, and what was put aside there: one line each
+    from .dispatch import DOWNLOADS, UNUSED, downloads
+    down = os.path.join(root, DOWNLOADS)
+    if os.path.isdir(down):
+        waiting = downloads(root)
+        if waiting["files"]:
+            out.append(dict(path=down, kind="data", code="downloads",
+                            what=WHAT["downloads"], bytes=waiting["size"],
+                            files=waiting["files"], link=None,
+                            home=DOWNLOADS))
+        aside = os.path.join(down, UNUSED)
+        if os.path.isdir(aside):
+            item = _item(aside, "data", "unused")
+            if item["files"]:
+                item["home"] = DOWNLOADS
+                out.append(item)
+    order = {"scratch": 0, "rebuildable": 1, "results": 2, "data": 3}
+    out.sort(key=lambda r: (order[r["kind"]], -r["bytes"]))
+    return out
+
+
+def _survey(data_dir: str) -> list:
+    """The products of one data folder."""
     data_dir = os.path.abspath(data_dir)
     out = []
     cache = os.path.join(data_dir, "pca2d", "cache")
@@ -92,7 +148,10 @@ def survey(data_dir: str) -> list:
     for path in glob.glob(os.path.join(science, "*")):
         name = os.path.basename(path)
         if not DERIVED.search(name):
-            out.append(_item(path, "data", "spectra"))
+            item = _item(path, "data", "spectra")
+            # an empty folder is no target's spectra
+            if item["files"]:
+                out.append(item)
         elif "_pca2d" in name:
             out.append(_item(path, "rebuildable", "corrected"))
         else:
@@ -107,8 +166,6 @@ def survey(data_dir: str) -> list:
         path = os.path.join(data_dir, folder)
         if os.path.exists(path):
             out.append(_item(path, "results", code))
-    order = {"scratch": 0, "rebuildable": 1, "results": 2, "data": 3}
-    out.sort(key=lambda r: (order[r["kind"]], -r["bytes"]))
     return out
 
 
@@ -121,7 +178,7 @@ def busy(data_dir: str) -> list:
     When this system gives no way to tell (neither psutil nor lsof), one
     dict(pid=None, command="", unknown=True): nothing found is not nothing
     going, and the cleanup refuses to delete on it."""
-    found = _working_in(data_dir)
+    found = _working_in(scope(data_dir)[0])
     if found is None:
         return [dict(pid=None, command="", unknown=True)]
     procs = []
@@ -228,7 +285,7 @@ def delete(data_dir: str, paths: list) -> list:
         return [dict(path=path, done=False, why=why) for path in paths]
     allowed = {item["path"]: item for item in survey(data_dir)
                if item["kind"] in DELETABLE}
-    root = os.path.abspath(data_dir) + os.sep
+    root = scope(data_dir)[0] + os.sep
     out = []
     for path in paths:
         item = allowed.get(path)
