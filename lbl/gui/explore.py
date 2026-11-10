@@ -56,6 +56,10 @@ _TEMPLATES = {}
 _TAPAS = {}
 _FIPS = {}
 _SYSTEMIC = {}
+_PLANETS = {}
+#: two planets of a star whose periods agree this well are one, named by
+#:    two catalogs
+PLANET_SAME = 0.01
 #: where a template's systemic velocity is found: the SYSTVELO [m/s] that
 #:    LBL writes in the masks it makes from the template (its own
 #:    measurement), else SIMBAD's
@@ -267,6 +271,80 @@ def _binned(period, fip_values, edges):
     best = np.ones(len(edges) - 1)
     np.minimum.at(best, idx, np.clip(fip_values, 1e-15, 1.0))
     return np.round(-np.log10(best), 4)
+
+
+def planets_of(path: str) -> dict:
+    """The published planets of a table's star, for its FIP: those of the
+    catalogs LBL's PLANETS option reads (lbl.science.planets: a personal
+    catalog of the data folder or of LBL first, then known_planets.yaml,
+    from exoplanet.eu and the NASA Exoplanet Archive), the planets whose
+    orbit is incomplete included (only their period is drawn), and those
+    of ephemerides.yaml. The star is looked up by its folder's name less
+    LBL's suffixes, the names of the companion's header, each also as
+    SIMBAD writes it (GL699 as GJ 699). dict(star, planets: [dict(name,
+    period, k, reference)], catalog)."""
+    from astropy.io import fits
+    from lbl.core.simbad import name_variants
+    from lbl.science import planets as kepler
+    from .dispatch import NAME_KEYS
+    data_dir = data_dir_of(path)
+    science, _ = names_of(path, data_dir)
+    header = []
+    try:
+        head = fits.getheader(_companion(path))
+        header = [str(head[key]).strip() for key in NAME_KEYS
+                  if key in head and str(head[key]).strip()]
+    except (OSError, ValueError):
+        pass
+    names = []
+    for name in kepler.star_names(science, header):
+        for one in [name] + name_variants(name):
+            if one not in names:
+                names.append(one)
+    key = (tuple(names), data_dir)
+    with _LOCK:
+        if key in _PLANETS:
+            return _PLANETS[key]
+    out = dict(star=None, planets=[], catalog=None)
+    found = kepler.find_star(names, data_dir)
+    rows = []
+    if found is not None:
+        entry = found["entry"]
+        rows += list(entry.get("planets") or [])
+        rows += [one for one in entry.get("not_used") or []
+                 if one.get("period")]
+        out.update(star=found["star"],
+                   catalog=os.path.basename(found["catalog"]))
+    timed = kepler.ephemerides_for(names)
+    if timed is not None:
+        rows += timed["planets"]
+        out["star"] = out["star"] or timed["star"]
+        out["catalog"] = out["catalog"] or os.path.basename(timed["catalog"])
+    seen = set()
+    for row in rows:
+        try:
+            period = float(row.get("period"))
+        except (TypeError, ValueError):
+            continue
+        name = str(row.get("name") or "?")
+        if not np.isfinite(period) or period <= 0 \
+                or kepler.normalise(name) in seen:
+            continue
+        # one planet named twice by two catalogs (eps Eridani b, eps Eri
+        #   b): its period within PLANET_SAME of the other's
+        if any(abs(period / one["period"] - 1) < PLANET_SAME
+               for one in out["planets"]):
+            continue
+        seen.add(kepler.normalise(name))
+        k = row.get("k")
+        out["planets"].append(dict(
+            name=name, period=period,
+            k=float(k) if k is not None and np.isfinite(float(k)) else None,
+            reference=row.get("reference")))
+    out["planets"].sort(key=lambda one: one["period"])
+    with _LOCK:
+        _PLANETS[key] = out
+    return out
 
 
 def fip_of(path: str, column: str) -> dict:

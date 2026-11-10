@@ -225,3 +225,19 @@ def test_a_root_s_tables_every_data_folder_s(data):
     assert {f["home"] for f in files[1:]} == {""}
     assert not any(f["own"] for f in files[1:])
     assert explore.data_dir_of(files[1]["path"]) == str(data)
+
+
+def test_the_published_planets_of_a_table_s_star(data):
+    # a personal catalog of the data folder first (lbl.science.planets);
+    #   one planet named twice (its periods within 1 %) once
+    (data / "personal_planet_catalog.yaml").write_text(
+        "stars:\n"
+        "  GJ 1:\n"
+        "    planets:\n"
+        "    - {name: GJ 1 c, period: 30.5, k: 3.0}\n"
+        "    - {name: GJ 1 b, period: 7.0, k: 8.0, reference: mine}\n"
+        "    - {name: GJ 1 b bis, period: 7.03}\n")
+    found = explore.planets_of(str(data / "lblrdb" / "lbl_GJ_1_GJ_1.rdb"))
+    assert found["star"] == "GJ 1"
+    assert [(p["name"], p["period"], p["k"]) for p in found["planets"]] == [
+        ("GJ 1 b", 7.0, 8.0), ("GJ 1 c", 30.5, 3.0)]

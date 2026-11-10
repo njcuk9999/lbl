@@ -36,42 +36,19 @@
   </div>
 
   <main class="layout">
-    <section class="card span-3" id="setup">
-      <div class="setup-grid setup-one">
-        <label class="field wide">
-          <span class="label"><span data-t="data_dir"></span><span class="info" data-help="data_dir"></span></span>
-          <span class="row">
-            <input id="data_dir" type="text" spellcheck="false" autocomplete="off">
-            <button id="scan" type="button" class="button primary" data-t="scan"></button>
-          </span>
-          <span class="hint small" id="scan_status" data-t="data_dir_hint"></span>
-        </label>
-      </div>
-      <!-- the root's instrument folders, and its Downloads to dispatch -->
+    <!-- what every tab works in: an instrument folder of the root (the
+         Folders tab holds the root, its Downloads and their dispatch) -->
+    <section class="card span-3 setup-bar" id="setup">
       <div class="row gap wrap setup-folders">
         <label class="field inline"><span class="label"><span data-t="data_folder"></span><span class="info" data-help="data_folder"></span></span>
           <select id="data_folder"></select></label>
-        <button type="button" class="button" id="downloads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span id="downloads_label"></span></button>
-        <button type="button" class="button primary" id="dispatch"><span data-t="dispatch"></span></button>
-        <span class="info" data-help="dispatch"></span>
-        <span class="hint small" id="dispatch_status"></span>
-      </div>
-      <details id="root_tree" class="root-tree" hidden>
-        <summary id="root_tree_summary" class="small"></summary>
-        <div id="root_tree_body" class="root-tree-body small"></div>
-      </details>
-      <div id="dispatch_panel" class="dispatch-panel" hidden>
-        <p class="small" id="dispatch_summary"></p>
-        <div class="table-wrap dispatch-table" id="dispatch_wrap"><table class="data" id="dispatch_table"></table></div>
-        <ul class="small dispatch-notes" id="dispatch_notes"></ul>
-        <div class="row gap end" id="dispatch_buttons">
-          <button type="button" class="button" id="dispatch_cancel" data-t="dispatch_cancel"></button>
-          <button type="button" class="button primary" id="dispatch_go" data-t="dispatch_go"></button>
-        </div>
+        <span class="hint small mono" id="root_shown"></span>
+        <span class="hint small" id="scan_status"></span>
       </div>
     </section>
 
     <nav class="span-3 tabs" id="tabs">
+      <button type="button" data-tab="folders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span data-t="tab_folders"></span><span class="tab-badge" id="folders_badge" hidden></span></button>
       <button type="button" data-tab="targets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg><span data-t="tab_targets"></span></button>
       <button type="button" data-tab="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h3l2.5-7 3.5 14 3-10 2 5h6"/></svg><span data-t="tab_lbl"></span></button>
       <button type="button" data-tab="pca2d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg><span data-t="tab_pca2d"></span></button>
@@ -81,6 +58,43 @@
       <button type="button" data-tab="cleanup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span data-t="tab_cleanup"></span></button>
       <button type="button" data-tab="refs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4.5h6a2 2 0 0 1 2 2V20a1.5 1.5 0 0 0-1.5-1.5H4zM20 4.5h-6a2 2 0 0 0-2 2V20a1.5 1.5 0 0 1 1.5-1.5H20z"/></svg><span data-t="tab_refs"></span></button>
     </nav>
+
+    <!-- FOLDERS: the root, what waits in its Downloads and its dispatch,
+         and what the root holds -->
+    <section class="pane span-3" id="pane-folders" hidden>
+      <div class="stack">
+        <div class="card">
+          <label class="field wide">
+            <span class="label"><span data-t="data_dir"></span><span class="info" data-help="data_dir"></span></span>
+            <span class="row">
+              <input id="data_dir" type="text" spellcheck="false" autocomplete="off">
+              <button id="scan" type="button" class="button primary" data-t="scan"></button>
+            </span>
+            <span class="hint small" data-t="data_dir_hint"></span>
+          </label>
+          <div class="row gap wrap setup-folders">
+            <button type="button" class="button" id="downloads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span id="downloads_label"></span></button>
+            <button type="button" class="button primary" id="dispatch"><span data-t="dispatch"></span></button>
+            <span class="info" data-help="dispatch"></span>
+            <span class="hint small" id="dispatch_status"></span>
+          </div>
+          <div id="dispatch_panel" class="dispatch-panel" hidden>
+            <p class="small" id="dispatch_summary"></p>
+            <div class="table-wrap dispatch-table" id="dispatch_wrap"><table class="data" id="dispatch_table"></table></div>
+            <ul class="small dispatch-notes" id="dispatch_notes"></ul>
+            <div class="row gap end" id="dispatch_buttons">
+              <button type="button" class="button" id="dispatch_cancel" data-t="dispatch_cancel"></button>
+              <button type="button" class="button primary" id="dispatch_go" data-t="dispatch_go"></button>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="root_tree" hidden>
+          <h2 data-t="tree_title"></h2>
+          <p class="small" id="root_tree_summary"></p>
+          <div id="root_tree_body" class="root-tree-body small"></div>
+        </div>
+      </div>
+    </section>
 
     <!-- TARGETS -->
     <section class="pane span-3" id="pane-targets">

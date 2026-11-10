@@ -324,6 +324,8 @@ class Handler(BaseHTTPRequestHandler):
                 if route == "/api/explore/fip":
                     return self._json(explore.fip_of(path,
                                                      query.get("column", "")))
+                if route == "/api/explore/planets":
+                    return self._json(explore.planets_of(path))
                 if route == "/api/explore/template":
                     return self._json(explore.template_view(
                         path, data_dir, query.get("lo"), query.get("hi"),

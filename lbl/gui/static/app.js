@@ -239,6 +239,7 @@ function showTab(name) {
   if (name === 'cleanup') measure();
   if (name === 'explore') loadExplorer();
   if (name === 'targets') drawPlots();
+  if (name === 'folders') loadFolders();
   if (name === 'refs') loadRefs();
   save();
 }
@@ -509,7 +510,7 @@ async function loadTargets() {
     $('scan_status').textContent = t('scanning', scan.done, scan.total);
   } else {
     const files = TARGETS.reduce((sum, row) => sum + (row.files || 0), 0);
-    $('scan_status').textContent = TARGETS.length ? t('scan_done', TARGETS.length, files) : t('data_dir_hint');
+    $('scan_status').textContent = TARGETS.length ? t('scan_done', TARGETS.length, files) : '';
   }
   if (!scan.running && scanTimer) { clearInterval(scanTimer); scanTimer = null; }
   // an instrument from the targets when none was chosen yet
@@ -575,6 +576,10 @@ function drawFolders() {
   $('data_folder').value = S.folder;
   $('data_folder').disabled = !LAYOUT || (!LAYOUT.legacy && !LAYOUT.folders.length);
   const down = LAYOUT ? LAYOUT.downloads : null;
+  $('root_shown').textContent = S.root ? t('root_shown', S.root) : '';
+  // what waits in Downloads, said on the Folders tab from every other one
+  $('folders_badge').hidden = !(down && down.files);
+  $('folders_badge').textContent = down && down.files ? String(down.files) : '';
   $('downloads_label').textContent = t('downloads_n', down ? down.files : 0);
   $('downloads').title = down ? t('downloads_title', down.path) : '';
   $('downloads').disabled = !S.root;
@@ -2097,7 +2102,7 @@ async function openSets() {
     if (set.table && set.path === shown.path && set.mtime === shown.mtime) return;
     const table = await api.get('/api/explore/rdb', { data_dir: S.data_dir, path: shown.path });
     if (gen !== XP.gen) return;
-    Object.assign(set, { path: shown.path, mtime: shown.mtime, fips: {},
+    Object.assign(set, { path: shown.path, mtime: shown.mtime, fips: {}, planets: null,
       table: table.error || !table.columns ? null : table });
   }));
   if (gen !== XP.gen) return;
@@ -2243,10 +2248,15 @@ async function loadFips() {
   const asks = [];
   sets.forEach((set) => quantities.forEach((name) => { if (!set.fips[name]) asks.push([set, name]); }));
   if (asks.length) $('explore_fip_note').textContent = t('explore_fip_wait', [...new Set(asks.map(([, name]) => name))].join(', '));
-  await Promise.all(asks.map(async ([set, name]) => {
+  await Promise.all([...asks.map(async ([set, name]) => {
     const result = await api.get('/api/explore/fip', { data_dir: S.data_dir, path: set.path, column: name });
     if (gen === XP.gen) set.fips[name] = result;
-  }));
+  }),
+  // the published planets of each table's star (explore.planets_of)
+  ...sets.filter((set) => !set.planets).map(async (set) => {
+    const found = await api.get('/api/explore/planets', { data_dir: S.data_dir, path: set.path });
+    if (gen === XP.gen) set.planets = found && Array.isArray(found.planets) ? found : { planets: [] };
+  })]);
   if (gen !== XP.gen) return;
   drawFip();
   if (XP.c === 'outlier') drawExplore();
@@ -2288,6 +2298,25 @@ function drawFip() {
     shapes.push({ type: 'line', xref: 'x', x0: 365.25, x1: 365.25, yref: 'paper', y0: 0, y1: 1, line: { color: css('--muted'), width: 1, dash: 'dot' } });
     notes.push({ x: Math.log10(365.25), xref: 'x', y: 1, yref: 'paper', yanchor: 'bottom', text: t('explore_year'), showarrow: false, font: { size: 10, color: css('--muted') } });
   }
+  // the published planets of the tables' stars: a line at each period
+  //   the FIP reaches, named; a table's colour when there are several
+  const shortest = Math.min(...sets.flatMap((set) => quantities.map((name) => (set.fips[name] && set.fips[name].period && set.fips[name].period.length ? set.fips[name].period[0] : Infinity))));
+  const drawn = new Set();
+  const listed = [];
+  sets.forEach((set) => ((set.planets && set.planets.planets) || []).forEach((planet) => {
+    if (drawn.has(planet.name)) return;
+    drawn.add(planet.name);
+    const k = planet.k === null || planet.k === undefined ? '' : `, K ${planet.k.toFixed(1)} m/s`;
+    listed.push(`${planet.name} (${planet.period.toPrecision(6)} d${k})`);
+    if (planet.period < shortest || planet.period > longest) return;
+    const colour = several ? setColour(set) : css('--series-3');
+    shapes.push({ type: 'line', xref: 'x', x0: planet.period, x1: planet.period, yref: 'paper', y0: 0, y1: 1, opacity: 0.8,
+      line: { color: colour, width: 1.5, dash: 'dashdot' } });
+    notes.push({ x: Math.log10(planet.period), xref: 'x', y: 0.98, yref: 'paper', yanchor: 'top', xanchor: 'right', textangle: -90,
+      text: esc(planet.name), showarrow: false, font: { size: 10, color: colour },
+      hovertext: `${esc(planet.name)} · P ${planet.period.toPrecision(8)} d${k}${planet.reference ? ` · ${esc(planet.reference)}` : ''}` });
+  }));
+  if (listed.length) said.push(t('explore_planets', listed.join(', ')));
   Plotly.react($('explore_fip'), traces, xpLayout({
     uirevision: sets.map((set) => set.path).join('|'), shapes, annotations: notes,
     xaxis: xpAxis({ type: 'log', dtick: 'D2', title: { text: t('explore_period_axis') } }),
@@ -2591,7 +2620,9 @@ async function init() {
   // a plan or a dispatch going on (the page opened again meanwhile)
   DISPATCH = await api.get('/api/dispatch');
   if (['planning', 'moving'].includes(DISPATCH.state)) followDispatch(); else drawDispatch();
-  showTab(S.tab || 'targets');
+  // a root with nothing to work in yet (or none): its Folders tab first
+  const fresh = !S.root || (LAYOUT && !LAYOUT.folders.length && !LAYOUT.legacy);
+  showTab(fresh ? 'folders' : (S.tab || 'targets'));
   showSub(S.sub || 'local');
   pollQueue();
   setInterval(pollQueue, 2000);

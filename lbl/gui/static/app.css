@@ -160,6 +160,8 @@ body {
 .setup-grid.setup-one { grid-template-columns: 1fr; }
 /* the root's instrument folders, its Downloads and their dispatch */
 .setup-folders { margin-top: 10px; align-items: center; }
+.setup-bar .setup-folders { margin-top: 0; }
+.tab-badge { margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 0.72rem; background: var(--accent); color: #fff; }
 .setup-folders select { min-width: 18em; }
 .setup-folders .button svg { width: 1em; height: 1em; vertical-align: -0.15em; margin-right: 0.35em; }
 .dispatch-panel { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
@@ -170,9 +172,7 @@ body {
 .template-controls { margin-bottom: 6px; align-items: center; }
 .template-vsys { width: 7em; }
 /* the root as a tree: Downloads, the instrument folders, the rest */
-.root-tree { margin-top: 10px; }
-.root-tree > summary { cursor: pointer; }
-.root-tree-body { margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; max-height: 28em; overflow: auto; }
+.root-tree-body { margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; max-height: 70vh; overflow: auto; }
 .tree-node > summary { cursor: pointer; padding: 1px 0; }
 .tree-node > :not(summary), .root-tree-body > .tree-line { margin-left: 1.4em; }
 .tree-node > .tree-line.deep { margin-left: 2.8em; }
