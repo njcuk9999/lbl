@@ -392,10 +392,10 @@ def _tapas_arrays(path: str, kind: str):
 
 
 def template_view(rdb: str, data_dir: str, lo=None, hi=None,
-                  nbin: int = 1500) -> dict:
+                  nbin: int = 1500, tapas: bool = True) -> dict:
     """The template of a table over [lo, hi] nm (all of it when not given)
-    and the TAPAS transmission of each molecule over the same range,
-    both cut to about nbin bins."""
+    and (tapas) the TAPAS transmission of each molecule over the same
+    range, both cut to about nbin bins."""
     info = template_of(rdb, data_dir)
     if info is None:
         return dict(template=None)
@@ -408,7 +408,8 @@ def template_view(rdb: str, data_dir: str, lo=None, hi=None,
     x, y = envelope(wave, flux, lo, hi, nbin)
     out = dict(template=info, full=full, range=[lo, hi],
                x=np.round(x, 6).tolist(), y=_listed(np.round(y, 6)))
-    tapas = tapas_file(data_dir, info.get("instrument") or "")
+    tapas = tapas_file(data_dir, info.get("instrument") or "") \
+        if tapas else None
     if tapas is not None:
         twave, columns, cwave, coarse, _ = _tapas_arrays(tapas["path"],
                                                          tapas["kind"])

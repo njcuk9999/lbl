@@ -308,7 +308,8 @@ class Handler(BaseHTTPRequestHandler):
                 if route == "/api/explore/template":
                     return self._json(explore.template_view(
                         path, data_dir, query.get("lo"), query.get("hi"),
-                        int(query.get("n") or 1500)))
+                        int(query.get("n") or 1500),
+                        query.get("tapas", "1") != "0"))
                 return self.send_error(HTTPStatus.NOT_FOUND)
             if route == "/file":
                 path = query.get("path", "")

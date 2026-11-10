@@ -127,6 +127,10 @@ def test_tapas_per_molecule_the_instrument_s_site_first(data):
                                    str(data), 1049.99, 1050.01, nbin=300)
     assert min(narrow["tapas"]["molecules"]["H2O"]["y"]) == pytest.approx(
         0.1, abs=1e-3)
+    # a second table's template: no TAPAS asked, none read
+    alone = explore.template_view(str(data / "lblrdb" / "lbl_GJ_1_GJ_1.rdb"),
+                                  str(data), nbin=300, tapas=False)
+    assert "tapas" not in alone and alone["template"]["object"] == "GJ_1"
 
 
 def test_the_fip_finds_a_sinusoid_and_its_period(data):
