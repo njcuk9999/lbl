@@ -1188,7 +1188,12 @@ def rows_by_night(model, args, config=None):
     out, missing = [], 0
     config = config or TFITS_CONFIG
     pattern = (config.get("input") or {}).get("pattern") or "*t.fits"
-    for path in sorted(glob.glob(os.path.join(args.source_dir, pattern))):
+    paths = sorted(glob.glob(os.path.join(args.source_dir, pattern)))
+    # every spectrum read (its BJD, its BERV): half a minute for two
+    #   hundred, said and shown as it goes rather than in silence
+    log("  matching the %d spectra of %s to the fit's rows"
+        % (len(paths), os.path.basename(os.path.normpath(args.source_dir))))
+    for path in _bar(paths, desc="matching to the fit's rows", unit="file"):
         try:
             payload = _readers.read_any(path, config)
         except Exception as exc:                              # noqa: BLE001
@@ -1933,11 +1938,12 @@ def _correct_threaded(model, args, config, pairs, shifter, mask_mode,
                       workers):
     """correct_many's loop over exposures, `workers` at a time, in threads.
 
-    Each exposure is what the sequential loop does to it, in the same order
-    of results: refit (with --refit), its masks and cuts, then correct_file.
-    Returns (written, skipped, refitted) and appends to `covered`.
+    Each exposure is what the sequential loop does to it: refit (with
+    --refit), its masks and cuts, then correct_file; the results counted as
+    they come (`covered` in the order the files are done). Returns
+    (written, skipped, refitted) and appends to `covered`.
     """
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     def one(pair):
         path, preset = pair
@@ -1981,10 +1987,13 @@ def _correct_threaded(model, args, config, pairs, shifter, mask_mode,
     written = skipped = refitted = 0
     log("  correcting %d exposures, %d at a time" % (len(pairs), workers))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        results = pool.map(one, pairs)
-        progress = _bar(results, desc="correcting", unit="file",
-                        total=len(pairs))
-        for status, path, out in progress:
+        # each file as it is done, whichever thread did it: the bar moves
+        #   with the first one finished, not with the first of the list
+        futures = [pool.submit(one, pair) for pair in pairs]
+        progress = _bar(as_completed(futures), desc="correcting",
+                        unit="file", total=len(pairs))
+        for future in progress:
+            status, path, out = future.result()
             if status == "missing":
                 log("  missing, skipped: %s" % path)
                 skipped += 1
