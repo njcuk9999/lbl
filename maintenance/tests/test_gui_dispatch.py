@@ -319,3 +319,36 @@ def test_what_the_window_shows_of_a_root(root):
     assert shown["downloads"]["kinds"] == [dict(kind="*.txt", n=1),
                                            dict(kind="*_e2ds_A.fits", n=1)]
     assert shown["downloads"]["unused"] == 1
+
+
+def test_files_from_elsewhere_added_then_planned(root, tmp_path_factory):
+    # spectra elsewhere on the machine: copied into a folder of Downloads
+    #   of their own (the originals stay), then the plan of Downloads, as
+    #   Dispatch makes it
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    _harps(elsewhere / "HARPS.2016-01-01T00-00-00.000_e2ds_A.fits",
+           "eps Eri", ESO_EPS["alpha"], ESO_EPS["delta"])
+    _nirps(elsewhere / "NIRPS.2025-01-01T00:00:00.000t.fits")
+    picked = [str(p) for p in sorted(elsewhere.iterdir())]
+    box = dispatch.Dispatcher()
+    box.idents = {name: None for name in ("HR1084", "K3_01", "EPSILONERI",
+                                          "Eps_eri", "GJ 65 A", "GJ65B",
+                                          "eps Eri")}
+    assert box.start_add(str(root), picked)["state"] == "adding"
+    for _ in range(200):
+        if box.status()["state"] not in ("adding", "planning"):
+            break
+        time.sleep(0.05)
+    status = box.status()
+    assert status["state"] == "planned" and status["added"]["added"] == 2
+    added = status["added"]["folder"]
+    assert os.path.dirname(added) == str(root / "Downloads")
+    assert sorted(os.listdir(added)) == sorted(os.path.basename(p)
+                                               for p in picked)
+    assert all(os.path.exists(p) for p in picked)
+    assert status["plan"]["science"] == 7
+    # moved rather than copied: the original leaves its folder
+    one = elsewhere / "HARPS.2016-01-02T00-00-00.000_e2ds_A.fits"
+    _harps(one, "eps Eri", ESO_EPS["alpha"], ESO_EPS["delta"])
+    moved = dispatch.add(str(root), [str(one)], move=True)
+    assert moved["added"] == 1 and not one.exists()

@@ -68,6 +68,8 @@ import math
 import os
 import re
 import shutil
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -1571,6 +1573,95 @@ def default_blaze(root: str, instrument: str, source: str) -> str:
 
 
 # -----------------------------------------------------------------------------
+# Files from elsewhere on the machine
+# -----------------------------------------------------------------------------
+#: under DOWNLOADS: the files added from elsewhere, a folder per addition
+ADDED = "added_%y%m%d_%H%M%S"
+#: macOS's own window to pick files (several at once), their POSIX paths
+#:    one a line
+PICK_MAC = (
+    'activate\n'
+    'set picked to choose file with prompt "%s" with multiple selections '
+    'allowed\n'
+    'set out to ""\n'
+    'repeat with one in picked\n'
+    'set out to out & POSIX path of one & linefeed\n'
+    'end repeat\n'
+    'return out')
+#: Tk's, elsewhere: in a process of its own (Tk wants its main thread,
+#:    which the window's server holds)
+PICK_TK = ("import tkinter, tkinter.filedialog as fd; root = tkinter.Tk(); "
+           "root.withdraw(); root.attributes('-topmost', True); "
+           "print('\\n'.join(fd.askopenfilenames(title=%r)))")
+
+
+def pick_files(prompt: str = "Spectra to add to the root") -> dict:
+    """Files picked in the system's own window, on this machine (the
+    window's server runs on it): dict(paths, size [bytes], folder (the one
+    they share), cancelled, error)."""
+    try:
+        if sys.platform == "darwin":
+            prompt = str(prompt).replace("\\", "").replace('"', "'")
+            done = subprocess.run(["osascript", "-e", PICK_MAC % prompt],
+                                  capture_output=True, text=True)
+            # -128: the person cancelled
+            if done.returncode and "-128" in done.stderr:
+                return dict(paths=[], size=0, folder="", cancelled=True)
+        else:
+            done = subprocess.run([sys.executable, "-c", PICK_TK % prompt],
+                                  capture_output=True, text=True)
+    except OSError as exc:
+        return dict(paths=[], size=0, folder="", cancelled=False,
+                    error=str(exc))
+    if done.returncode:
+        return dict(paths=[], size=0, folder="", cancelled=False,
+                    error=(done.stderr or "").strip()[-300:])
+    paths = [line.strip() for line in done.stdout.splitlines()
+             if line.strip() and os.path.isfile(line.strip())]
+    size = sum(os.path.getsize(path) for path in paths)
+    folder = os.path.commonpath(paths) if paths else ""
+    if folder and os.path.isfile(folder):
+        folder = os.path.dirname(folder)
+    return dict(paths=paths, size=size, folder=folder,
+                cancelled=not paths, error=None)
+
+
+def add(root: str, paths, move: bool = False, progress=None) -> dict:
+    """Files from elsewhere into the root's Downloads, a folder of their own
+    (ADDED), copied (moved if `move`); one already there byte for byte is
+    not copied again. Returns dict(folder, added, same, failed)."""
+    say = progress or (lambda *args: None)
+    folder = os.path.join(root, DOWNLOADS,
+                          datetime.datetime.now().strftime(ADDED))
+    os.makedirs(folder, exist_ok=True)
+    out = dict(folder=folder, added=0, same=0, failed=[])
+    for count, src in enumerate(paths):
+        say(count, len(paths), "adding")
+        dest = os.path.join(folder, os.path.basename(src))
+        try:
+            if not os.path.isfile(src):
+                raise OSError("not a file")
+            if os.path.exists(dest):
+                if _same(src, dest):
+                    out["same"] += 1
+                    continue
+                stem, ext = os.path.splitext(dest)
+                dest = "%s_%s%s" % (stem, uuid.uuid4().hex[:6], ext)
+            if move:
+                shutil.move(src, dest)
+            else:
+                shutil.copy2(src, dest)
+            _record(root, src, dest, "added, moved" if move
+                    else "added, copied")
+            out["added"] += 1
+        except OSError as exc:
+            out["failed"].append(dict(name=os.path.basename(src),
+                                      why=str(exc)))
+    say(len(paths), len(paths), "adding")
+    return out
+
+
+# -----------------------------------------------------------------------------
 # The window's dispatcher
 # -----------------------------------------------------------------------------
 class Dispatcher:
@@ -1590,7 +1681,7 @@ class Dispatcher:
     def start_plan(self, root: str) -> dict:
         root = os.path.abspath(os.path.expanduser(root or ""))
         with self.lock:
-            busy = self.state["state"] in ("planning", "moving")
+            busy = self.state["state"] in ("adding", "planning", "moving")
             if not busy:
                 self.state = dict(state="planning", root=root, done=0,
                                   total=0, step="headers",
@@ -1601,6 +1692,38 @@ class Dispatcher:
         threading.Thread(target=self._run_plan, args=(root,),
                          daemon=True).start()
         return self.status()
+
+    def start_add(self, root: str, paths, move: bool = False) -> dict:
+        """Files from elsewhere into Downloads (add), then the plan of
+        Downloads, in a thread."""
+        root = os.path.abspath(os.path.expanduser(root or ""))
+        paths = [str(p) for p in paths or [] if os.path.isfile(str(p))]
+        with self.lock:
+            busy = self.state["state"] in ("adding", "planning", "moving")
+            if not busy and paths:
+                self.state = dict(state="adding", root=root, done=0,
+                                  total=len(paths), step="adding",
+                                  move=bool(move), started=time.time())
+                self._plan = None
+        if busy or not paths:
+            return dict(self.status(), error=None if paths
+                        else "no file to add")
+        threading.Thread(target=self._run_add, args=(root, paths, move),
+                         daemon=True).start()
+        return self.status()
+
+    def _run_add(self, root, paths, move):
+        try:
+            added = add(root, paths, move, self._say)
+        except Exception as exc:                          # noqa: BLE001
+            with self.lock:
+                self.state.update(state="error", error="%s: %s" % (
+                    type(exc).__name__, exc))
+            return
+        with self.lock:
+            self.state.update(state="planning", added=added, done=0,
+                              total=0, step="headers")
+        self._run_plan(root)
 
     def _run_plan(self, root):
         try:

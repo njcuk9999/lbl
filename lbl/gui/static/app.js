@@ -670,28 +670,51 @@ function followDispatch() {
   if (dispatchTimer) return;
   dispatchTimer = setInterval(async () => {
     DISPATCH = await api.get('/api/dispatch');
-    if (!['planning', 'moving'].includes(DISPATCH.state)) {
+    if (!['adding', 'planning', 'moving'].includes(DISPATCH.state)) {
       clearInterval(dispatchTimer);
       dispatchTimer = null;
       if (DISPATCH.state === 'done') {
         await loadFolders();
         await openFolder();
+      } else if (DISPATCH.state === 'planned') {
+        // files just added: Downloads counted again
+        await loadFolders();
       }
     }
     drawDispatch();
   }, 700);
 }
 
+// files from elsewhere on the machine: picked in the system's own window
+//   (the server's, on this machine: a page has no paths), then copied (or
+//   moved) into Downloads and planned as Dispatch does
+let PICKED = null;
+async function pickFiles() {
+  $('pick').disabled = true;
+  $('dispatch_status').textContent = t('pick_waiting');
+  const got = await api.post('/api/downloads/pick', { prompt: t('pick_prompt') });
+  $('pick').disabled = false;
+  $('dispatch_status').textContent = got.error ? t('pick_failed', got.error) : '';
+  PICKED = got.paths && got.paths.length ? got : null;
+  drawPicked();
+}
+function drawPicked() {
+  $('pick_panel').hidden = !PICKED;
+  if (PICKED) $('pick_summary').textContent = t('pick_summary', PICKED.paths.length, human(PICKED.size), PICKED.folder);
+}
+
 function dispatchNote(text) { return el('li', { text }); }
 
 function drawDispatch() {
   const d = DISPATCH || { state: 'idle' };
-  const busy = ['planning', 'moving'].includes(d.state);
+  const busy = ['adding', 'planning', 'moving'].includes(d.state);
   const down = LAYOUT ? LAYOUT.downloads : null;
   $('dispatch').disabled = busy || !down || !down.files;
+  $('pick').disabled = busy || !S.root;
   const step = d.step === 'simbad' ? t('dispatch_simbad', d.done, d.total)
     : d.step === 'folders' ? t('dispatch_looking') : t('dispatch_headers', d.done, d.total);
-  $('dispatch_status').textContent = d.state === 'planning' ? step
+  $('dispatch_status').textContent = d.state === 'adding' ? t(d.move ? 'dispatch_adding_move' : 'dispatch_adding', d.done, d.total)
+    : d.state === 'planning' ? step
     : d.state === 'moving' ? t('dispatch_moving', d.done, d.total)
       : d.state === 'error' ? t('dispatch_error', d.error) : '';
   const panel = $('dispatch_panel');
@@ -716,6 +739,7 @@ function drawDispatch() {
       el('thead', {}, el('tr', {}, ...['col_dispatch_folder', 'col_dispatch_files', null, 'col_dispatch_names'].map((key) => el('th', { class: key === 'col_dispatch_files' ? 'num' : null, text: key ? t(key) : '' })))),
       el('tbody', {}, ...rows));
     $('dispatch_wrap').hidden = !rows.length;
+    if (d.added) notes.push(dispatchNote(t('pick_added', d.added.added, relative(d.added.folder), d.added.same)));
     p.calibs.forEach((c) => notes.push(dispatchNote(t('dispatch_calib', c.n, c.home))));
     // the models of the instrument folders, the root's: one line a kind
     ['link', 'merge'].forEach((state) => {
@@ -2543,6 +2567,15 @@ async function init() {
   $('data_folder').onchange = async (event) => { S.folder = event.target.value; await openFolder(); };
   $('downloads').onclick = loadFolders;
   $('dispatch').onclick = startDispatch;
+  $('pick').onclick = pickFiles;
+  $('pick_cancel').onclick = () => { PICKED = null; drawPicked(); };
+  $('pick_go').onclick = async () => {
+    const paths = PICKED ? PICKED.paths : [];
+    PICKED = null;
+    drawPicked();
+    DISPATCH = await api.post('/api/downloads/add', { root: S.root, paths, move: $('pick_move').checked });
+    followDispatch();
+  };
   $('dispatch_go').onclick = async () => { DISPATCH = await api.post('/api/dispatch/go', { root: S.root }); followDispatch(); };
   $('dispatch_cancel').onclick = async () => { DISPATCH = await api.post('/api/dispatch/cancel', {}); drawDispatch(); };
   $('data_dir').onkeydown = (event) => { if (event.key === 'Enter') scan(); };
@@ -2619,7 +2652,7 @@ async function init() {
   setBackdrop();
   // a plan or a dispatch going on (the page opened again meanwhile)
   DISPATCH = await api.get('/api/dispatch');
-  if (['planning', 'moving'].includes(DISPATCH.state)) followDispatch(); else drawDispatch();
+  if (['adding', 'planning', 'moving'].includes(DISPATCH.state)) followDispatch(); else drawDispatch();
   // a root with nothing to work in yet (or none): its Folders tab first
   const fresh = !S.root || (LAYOUT && !LAYOUT.folders.length && !LAYOUT.legacy);
   showTab(fresh ? 'folders' : (S.tab || 'targets'));

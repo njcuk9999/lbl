@@ -427,6 +427,15 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/dispatch/go":
                 return self._json(ctx.dispatcher.start_go(
                     ctx.allow(body.get("root", ""))))
+            if route == "/api/downloads/pick":
+                # the system's own window, on this machine: the page has
+                #   no paths of the files it could pick
+                return self._json(dispatch.pick_files(
+                    body.get("prompt") or "Spectra to add to the root"))
+            if route == "/api/downloads/add":
+                return self._json(ctx.dispatcher.start_add(
+                    ctx.allow(body.get("root", "")), body.get("paths") or [],
+                    bool(body.get("move"))))
             if route == "/api/dispatch/cancel":
                 return self._json(ctx.dispatcher.cancel())
             if route == "/api/archive/search":

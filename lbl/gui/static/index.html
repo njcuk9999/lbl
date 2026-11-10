@@ -76,7 +76,17 @@
             <button type="button" class="button" id="downloads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span id="downloads_label"></span></button>
             <button type="button" class="button primary" id="dispatch"><span data-t="dispatch"></span></button>
             <span class="info" data-help="dispatch"></span>
+            <button type="button" class="button" id="pick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span data-t="pick"></span></button>
+            <span class="info" data-help="pick"></span>
             <span class="hint small" id="dispatch_status"></span>
+          </div>
+          <div id="pick_panel" class="dispatch-panel" hidden>
+            <p class="small" id="pick_summary"></p>
+            <label class="check small"><input type="checkbox" id="pick_move"><span data-t="pick_move"></span></label>
+            <div class="row gap end">
+              <button type="button" class="button" id="pick_cancel" data-t="dispatch_cancel"></button>
+              <button type="button" class="button primary" id="pick_go" data-t="pick_go"></button>
+            </div>
           </div>
           <div id="dispatch_panel" class="dispatch-panel" hidden>
             <p class="small" id="dispatch_summary"></p>
