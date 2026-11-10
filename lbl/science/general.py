@@ -2094,9 +2094,12 @@ def combine_rv_headers(headers: Dict[str, List[Any]],
         # ---------------------------------------------------------------------
         # otherwise, we need to combine depending on type
         if all(isinstance(x, (int, float)) for x in values):
-            # numerical values - take mean and std
-            mean_val = np.nanmean(values)
-            std_val = np.nanstd(values)
+            # numerical values - take mean and std. A value too large to be
+            #   squared (an ESO sensor's 2.45e198, ESO INS PRES102 VAL)
+            #   makes them inf or NaN, written 'NaN' below: no warning
+            with np.errstate(over='ignore', invalid='ignore'):
+                mean_val = np.nanmean(values)
+                std_val = np.nanstd(values)
             num = len(values)
             # deal with NaNs and infinite values
             if not np.isfinite(mean_val):

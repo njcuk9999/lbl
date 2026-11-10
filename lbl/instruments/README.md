@@ -64,6 +64,15 @@ by command line / yaml / main function and the default value (found in
 
 TODO
 
+The FITS reader every class goes through (`lbl.core.io.load_fits`,
+`load_fits_multi`) reads the 0 of a product of an ESO pipeline as NaN: espdr
+(NIRPS, HARPS, HARPS-N at the TNG, ESPRESSO) writes 0 where it has no data,
+and a 0 read as a flux, a blaze or an error divides by zero and makes lines
+of no data look measured. A product is known by `HIERARCH ESO PRO CATG` in
+its primary header; only images of floats are changed (not `QUALDATA`, not
+tables), and the files of other pipelines (APERO, the CADC, the HARPS DRS's
+e2ds, SOPHIE) are read as they are.
+
 ## Template read function
 
 TODO

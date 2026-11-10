@@ -929,36 +929,74 @@ def clean_directory(path: str, logmsg: bool = True,
 # =============================================================================
 # Define fits functions
 # =============================================================================
+#: the key of a product of an ESO pipeline (espdr: NIRPS, HARPS, HARPS-N at
+#:    the TNG, ESPRESSO), in its primary header. These pipelines write 0
+#:    where they have no data: read as NaN (eso_zeros_as_nan)
+ESO_PRODUCT_KEY = 'HIERARCH ESO PRO CATG'
+
+
+def eso_zeros_as_nan(data: np.ndarray, primary_header) -> np.ndarray:
+    """
+    An image of a product of an ESO pipeline with its 0 as NaN: the pipeline
+    writes 0 where it has no data (a NaN placeholder), and a 0 read as a
+    flux, a blaze or an error makes divisions by zero and lines of no data
+    that look measured. A file whose primary header has no ESO_PRODUCT_KEY
+    (APERO's, the CADC's, the DRS's e2ds, SOPHIE's...) is returned as it
+    is, and so are tables and images of integers (QUALDATA).
+
+    :param data: np.ndarray, the data read
+    :param primary_header: the file's primary header
+
+    :return: np.ndarray, the data, its 0 as NaN for such a product
+    """
+    if primary_header is None or ESO_PRODUCT_KEY not in primary_header:
+        return data
+    if data.dtype.kind != 'f' or data.ndim == 0:
+        return data
+    data[data == 0] = np.nan
+    return data
+
+
 def load_fits(filename: str,
               kind: Union[str, None] = None,
               extnum: Optional[int] = None,
               extname: Optional[str] = None) -> np.ndarray:
     """
-    Standard way to load fits files
+    Standard way to load fits files. The images of a product of an ESO
+    pipeline have their 0, the pipeline's placeholder for no data, as NaN
+    (eso_zeros_as_nan)
 
     :param filename: str, the filename
     :param kind: the kind (for error message)
-    :param extnum: int, the extension number (if not given uses first)
+    :param extnum: int, the extension number (if not given uses the first
+                   with data, as fits.getdata)
     :param extname: the extension name (if not given uses extnum)
 
-    :return: tuple, the data and the header
+    :return: np.ndarray, the data
     """
     # deal with no kind
     if kind is None:
         kind = 'fits file'
     # try to load fits file
     try:
-        if extnum is not None:
-            data = fits.getdata(filename, ext=extnum)
-        elif extname is not None:
-            data = fits.getdata(filename, extname=extname)
-        else:
-            data = fits.getdata(filename)
+        with fits.open(filename) as hdulist:
+            if extnum is not None:
+                data = hdulist[extnum].data
+            elif extname is not None:
+                data = hdulist[extname].data
+            else:
+                # the first extension with data, as fits.getdata takes it
+                data = next((hdu.data for hdu in hdulist
+                             if hdu.data is not None), None)
+                if data is None:
+                    raise IndexError('no data in any extension')
+            data = np.array(data)
+            primary = hdulist[0].header
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
         eargs = [kind, filename, type(e), str(e)]
         raise LblException(emsg.format(*eargs))
-    return np.array(data)
+    return eso_zeros_as_nan(data, primary)
 
 
 def load_fits_multi(filename: str, extnames: List[str],
@@ -967,7 +1005,8 @@ def load_fits_multi(filename: str, extnames: List[str],
     """
     Load several image extensions (by name) and one extension header from a
     fits file, opening the file once. Same data and header as load_fits and
-    load_header (np.array copies of the data, a copy of the header).
+    load_header (np.array copies of the data, an ESO product's 0 as NaN, a
+    copy of the header).
 
     :param filename: str, the filename
     :param extnames: list of str, the extension names to load the data of
@@ -983,7 +1022,9 @@ def load_fits_multi(filename: str, extnames: List[str],
     # try to load fits file
     try:
         with fits.open(filename) as hdulist:
-            datas = [np.array(hdulist[extname].data) for extname in extnames]
+            primary = hdulist[0].header
+            datas = [eso_zeros_as_nan(np.array(hdulist[extname].data),
+                                      primary) for extname in extnames]
             header = hdulist[header_extname].header.copy()
     except Exception as e:
         emsg = 'Cannot load {0}. Filename: {1} \n\t{2}: {3}'
