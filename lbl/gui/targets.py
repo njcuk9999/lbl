@@ -312,7 +312,9 @@ def load_index(data_dir: str) -> dict:
 def save_index(index: dict, data_dir: str) -> None:
     path = index_path(data_dir)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
+    # a name of its own: two windows (or two scans) saving the same index
+    #   at once each replace it whole, neither losing its file to the other
+    tmp = "%s.%d.%d.tmp" % (path, os.getpid(), threading.get_ident())
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(index, handle)
     os.replace(tmp, path)
