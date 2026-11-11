@@ -648,3 +648,28 @@ def test_a_folder_renamed_in_every_instrument_folder(root,
         "problem"][0] == "rename_missing"
     assert dispatch.rename_folder(str(root), "HARPS_ORIG", "../x", "X")[
         "problem"][0] == "rename_missing"
+
+
+def test_the_blazes_made_are_told_as_they_go(tmp_path):
+    down = tmp_path / "Downloads"
+    down.mkdir()
+    # three nights of HARPS without their blazes (ESO does not give them)
+    for night in range(3):
+        path = down / ("HARPS.2014-01-0%dT00-00-00.000_e2ds_A.fits"
+                       % (night + 1))
+        _harps(path, "HR1084", ESO_EPS["alpha"], ESO_EPS["delta"])
+        with fits.open(path, mode="update") as hdul:
+            hdul[0].header["HIERARCH ESO DRS BLAZE FILE"] = \
+                "HARPS.2014-01-0%dT20-00-00.000_blaze_A.fits" % (night + 1)
+    said = []
+    result = dispatch.go(dispatch.plan(str(tmp_path), ask_simbad=False),
+                         lambda *args: said.append(args))
+    assert len(result["made"]) == 3 and not result["failed"]
+    assert len(list((tmp_path / "HARPS_ORIG" / "calib").glob(
+        "*_blaze_A.fits"))) == 3
+    # every step told, the moves done before the blazes begin
+    steps = [one[2] for one in said]
+    assert (3, 3, "moving") in said and (3, 3, "blazes") in said
+    assert steps.index("blazes") > max(i for i, s in enumerate(steps)
+                                       if s == "moving")
+    assert steps[-1] == "done"

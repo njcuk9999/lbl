@@ -2022,8 +2022,9 @@ def go(plan_: dict, progress=None) -> dict:
     of a file already there taken out, the products LBL does not read put
     aside in Downloads/unused/; then the blazes the HARPS and HARPS-N
     spectra lack, the folders of Downloads left empty, and the models of
-    each DATA_DIR made a link to the root's (share)."""
-    from astropy.io import fits
+    each DATA_DIR made a link to the root's (share). `progress(done,
+    total, step)` is told each step: moving, blazes, aside, tidying,
+    models, done."""
     say = progress or (lambda *args: None)
     root = plan_["root"]
     top = os.path.join(root, DOWNLOADS)
@@ -2072,22 +2073,38 @@ def go(plan_: dict, progress=None) -> dict:
             cache.moved(src, dest)
         _record(root, src, dest, how)
         out["moved"] += 1
-    for e2ds, blaze in _blazes(moves):
+    say(len(moves), len(moves), "moving")
+    # the blazes ESO does not give, one a night: told as they are made (a
+    #   few hundred nights of HARPS take minutes), several at once (the
+    #   first read of a file of an external disk waits on the disk)
+    blazes = _blazes(moves)
+    lock = threading.Lock()
+    made = [0]
+
+    def one_blaze(pair):
+        e2ds, blaze = pair
         try:
-            from .fetch.spectra import empirical_blaze
-            with fits.open(e2ds, memmap=False) as hdul:
-                head = fits.Header()
-                head["HIERARCH LBL BLAZE"] = (
-                    "empirical", "envelope of " + os.path.basename(e2ds)[-40:])
-                os.makedirs(os.path.dirname(blaze), exist_ok=True)
-                _write_fits(fits.HDUList([fits.PrimaryHDU(
-                    empirical_blaze(hdul[0].data), header=head)]), blaze)
-            out["made"].append(os.path.basename(blaze))
+            _make_blaze(e2ds, blaze)
+            found = dict(made=os.path.basename(blaze))
         except Exception as exc:                          # noqa: BLE001
-            out["failed"].append(dict(name=os.path.basename(blaze),
-                                      why="%s: %s" % (type(exc).__name__,
-                                                      exc)))
-    for one in plan_["unused"]:
+            found = dict(name=os.path.basename(blaze), why="%s: %s" % (
+                type(exc).__name__, exc))
+        with lock:
+            made[0] += 1
+            say(made[0], len(blazes), "blazes")
+        return found
+
+    if blazes:
+        say(0, len(blazes), "blazes")
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            for found in pool.map(one_blaze, blazes):
+                if "made" in found:
+                    out["made"].append(found["made"])
+                else:
+                    out["failed"].append(found)
+    unused = plan_["unused"]
+    for count, one in enumerate(unused):
+        say(count, len(unused), "aside")
         src = one["path"]
         if not os.path.exists(src):
             continue
@@ -2108,6 +2125,7 @@ def go(plan_: dict, progress=None) -> dict:
         _record(root, src, aside, "put aside: " + one["why"])
         out["unused"] += 1
     # the folders an archive was unpacked in, now empty
+    say(0, 0, "tidying")
     for here, dirs, names in sorted(os.walk(top), key=lambda w: -len(w[0])):
         if here != top and not os.listdir(here) \
                 and os.path.relpath(here, top).split(os.sep)[0] != UNUSED:
@@ -2120,6 +2138,7 @@ def go(plan_: dict, progress=None) -> dict:
     planned = {(one["home"], one["name"]) for one in plan_.get("shares")
                or []}
     for home in plan_.get("homes") or []:
+        say(0, 0, "models")
         try:
             done = share(root, home)
         except OSError as exc:
@@ -2143,6 +2162,20 @@ def go(plan_: dict, progress=None) -> dict:
     cache.save()
     say(len(moves), len(moves), "done")
     return out
+
+
+def _make_blaze(e2ds: str, blaze: str) -> None:
+    """The blaze of an e2ds's night made from it (fetch.spectra.
+    empirical_blaze), written where its header names it."""
+    from astropy.io import fits
+    from .fetch.spectra import empirical_blaze
+    with fits.open(e2ds, memmap=False) as hdul:
+        head = fits.Header()
+        head["HIERARCH LBL BLAZE"] = (
+            "empirical", "envelope of " + os.path.basename(e2ds)[-40:])
+        os.makedirs(os.path.dirname(blaze), exist_ok=True)
+        _write_fits(fits.HDUList([fits.PrimaryHDU(
+            empirical_blaze(hdul[0].data), header=head)]), blaze)
 
 
 def default_blaze(root: str, instrument: str, source: str) -> str:

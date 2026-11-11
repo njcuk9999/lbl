@@ -820,7 +820,10 @@ function drawDispatch() {
       : d.step === 'folders' ? t('dispatch_looking') : t('dispatch_headers', d.done, d.total);
   $('dispatch_status').textContent = d.state === 'adding' ? t(d.move ? 'dispatch_adding_move' : 'dispatch_adding', d.done, d.total)
     : d.state === 'planning' ? step
-    : d.state === 'moving' ? t('dispatch_moving', d.done, d.total)
+    : d.state === 'moving' ? (d.step === 'blazes' ? t('dispatch_blazes', d.done, d.total)
+      : d.step === 'aside' ? t('dispatch_aside', d.done, d.total)
+        : d.step === 'tidying' || d.step === 'models' || d.step === 'done' ? t(`dispatch_${d.step === 'done' ? 'tidying' : d.step}`)
+          : t('dispatch_moving', d.done, d.total))
       : d.state === 'error' ? t('dispatch_error', d.error) : '';
   const panel = $('dispatch_panel');
   panel.hidden = !['planned', 'done'].includes(d.state);
