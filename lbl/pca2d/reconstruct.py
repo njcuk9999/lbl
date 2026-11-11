@@ -102,6 +102,12 @@ def parse_args(argv=None):
                         " corrected files carry samples the model never saw")
     p.add_argument("--corrected-dir", default="corrected",
                    help="where the t_M-N.fits files go")
+    p.add_argument("--residuals-dir", default=None,
+                   help="with --correct, also write the fit's residual of"
+                        " every exposure there, in the source's format and"
+                        " under its name: the flux replaced by ln f -"
+                        " savgol(ln f) - the model, star and observer; needs"
+                        " --cube and the fit's archive (fit.npz)")
     p.add_argument("--keep-name", action="store_true",
                    help="write each corrected file under its source's own name"
                         " rather than <stem>t_M-N.fits: what LBL needs when the"
@@ -827,6 +833,34 @@ def weighted_on_pixels(alive, wave, grid):
     return ~inside | (alive[near] & alive[near + 1])
 
 
+def flux_and_wave(path, config, out):
+    """The flux of a spectrum and its wavelengths, and where the flux is in
+    its open copy `out`: (flux, wave, bridged, place). Through LBL's class
+    (bridged) for an instrument pca2d does not read itself: the flux and the
+    wavelengths as the class reads them, in the frame the fit was made in
+    (input.to_observer), and the place of that flux in the file
+    (readers.flux_place: (extension, column)); otherwise from the
+    extension table the reader uses (a file that holds both a fibre-combined
+    (AB) flux and a single-fibre (A) one has the AB extensions read), the
+    place being the flux's extension."""
+    bridged = config is not None and not _readers.reads_natively(config)
+    if bridged:
+        payload = _readers.read_any(path, config)
+        flux = np.atleast_2d(np.asarray(payload["flux"], dtype=np.float64))
+        wave = np.atleast_2d(np.asarray(payload["wave"], dtype=np.float64))
+        place = _readers.flux_place(_readers.profile_of(config), path, flux)
+        if place is None:
+            raise SystemExit(
+                "%s: cannot find where the flux is in the file, so nothing is"
+                " written rather than writing in the wrong place"
+                % os.path.basename(path))
+        return flux, wave, True, place
+    e_flux, e_wave, _, _ = sptf.extensions_for(out)
+    flux = np.asarray(out[e_flux].data, dtype=np.float64)
+    wave = np.asarray(out[e_wave].data, dtype=np.float64)
+    return flux, wave, False, e_flux
+
+
 def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
                  halfwidth=8, overwrite=False, max_sky=None, alive=None,
                  clipped=None, clip_nsig=None, refit=False, weight="flux",
@@ -865,27 +899,8 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
     # does not exist here. A flux held in a table column (EXPRES) is
     # written back into that column, the rest of the table untouched
     # (_readers.flux_place, _readers.scale_flux).
-    bridged = config is not None and not _readers.reads_natively(config)
-    if bridged:
-        # THE FLUX AND THE WAVELENGTHS AS LBL'S CLASS READS THEM, in the frame
-        # the fit was made in (input.to_observer), and the place of that flux
-        # in the file, which the class names when it is a table column
-        payload = _readers.read_any(path, config)
-        flux = np.atleast_2d(np.asarray(payload["flux"], dtype=np.float64))
-        wave = np.atleast_2d(np.asarray(payload["wave"], dtype=np.float64))
-        place = _readers.flux_place(_readers.profile_of(config), path, flux)
-        if place is None:
-            raise SystemExit(
-                "%s: cannot find where the flux is in the file, so nothing is"
-                " written rather than writing in the wrong place"
-                % os.path.basename(path))
-    else:
-        # the same extension table the reader uses; a file that holds both a
-        # fibre-combined (AB) flux and a single-fibre (A) one must have the
-        # AB extensions corrected, the ones the reader reads
-        e_flux, e_wave, _, _ = sptf.extensions_for(out)
-        flux = np.asarray(out[e_flux].data, dtype=np.float64)
-        wave = np.asarray(out[e_wave].data, dtype=np.float64)
+    flux, wave, bridged, place = flux_and_wave(path, config, out)
+    e_flux = None if bridged else place
     n_orders = flux.shape[0]
     touched = 0
     blanked = 0
@@ -1048,6 +1063,134 @@ def write_fits(path, wave, recon, parity, row, model, source):
             fits.ImageHDU(parity.astype(np.int16), name="PARITY")]
     fits.HDUList(hdus).writeto(path, overwrite=True)
     log("wrote %s" % path)
+
+
+def on_pixels(grid, values, wave):
+    """Values on the grid at the wavelengths `wave`, linearly between the
+    two grid samples around each, NaN outside the grid or beside a NaN
+    sample. Linear and not a spline: a residual is mostly noise, and a
+    spline through it would put structure where there is none."""
+    out = np.full(np.shape(wave), np.nan)
+    ok = np.isfinite(wave) & (wave >= grid[0]) & (wave <= grid[-1])
+    if not ok.any():
+        return out
+    pos = np.interp(wave[ok], grid, np.arange(grid.size, dtype=float))
+    i0 = np.clip(np.floor(pos).astype(int), 0, grid.size - 2)
+    frac = pos - i0
+    out[ok] = values[i0] * (1.0 - frac) + values[i0 + 1] * frac
+    return out
+
+
+def residual_file(model, path, rows, members, grid, outdir, config=None,
+                  berv=None):
+    """Write one exposure's residual, in the format of its source: a copy of
+    the file whose flux is replaced by the fit's residual on its own pixels,
+    every other extension (the wavelengths, the blaze...) untouched, under
+    the source's name in `outdir`. Returns the new path.
+
+    THE RESIDUAL IS A LOG, panel 5 of the sequence figure:
+    ln f - savgol(ln f) - model, the model being the whole of it, the star
+    block carried into the exposure's frame and its star-frame means, the
+    observer block and its per-parity mean. Zero where the model explains
+    the data, -0.01 where the flux is 1 % below it; NaN where the fit gave
+    the sample no weight, and wherever the grid does not reach. `rows` are
+    residual_rows', on the cube's `grid`, `members` the rows of this file by
+    the parity of the orders they hold."""
+    with sptf.robust_open(path) as hdulist:
+        out = fits.HDUList([h.copy() for h in hdulist])
+    flux, wave, bridged, place = flux_and_wave(path, config, out)
+    resid = np.full(flux.shape, np.nan)
+    for order in range(flux.shape[0]):
+        # a cube of two rows per exposure (even and odd orders, t.fits), or
+        #   of one (no parity: row_parity), which holds every order
+        row = (members.get(order % 2) if len(members) > 1
+               else next(iter(members.values())))
+        if row is None:
+            continue
+        resid[order] = on_pixels(grid, np.asarray(rows[row], dtype=float),
+                                 wave[order])
+    if bridged:
+        _readers.put_flux(out, place, resid)
+    else:
+        out[place].data = resid
+    head = out[0].header
+    head["PCA2RES"] = (True, "flux holds the log residual of the fit")
+    head["PCA2RNST"] = (int(model["n_star"]), "star components in the model")
+    head["PCA2RNEA"] = (int(model["n_earth"]), "observer components in it")
+    if berv is not None:
+        head["PCA2BERV"] = (float(berv), "km/s used to carry the star basis")
+    head["PCA2RFIN"] = (int(np.isfinite(resid).sum()),
+                        "samples with a residual (the rest NaN)")
+    from .provenance import stamp as code_stamp
+    head["PCA2GIT"] = (code_stamp(), "pca2d commit that wrote it, + if modified")
+    head.add_history("two-frame PCA residual: the flux extension holds"
+                     " ln f - savgol(ln f) - model, star and observer")
+    head.add_history("not a flux: zero where the model explains the data;"
+                     " NaN where the fit gave no weight")
+    os.makedirs(outdir, exist_ok=True)
+    new = os.path.join(outdir, os.path.basename(path))
+    out.writeto(new, overwrite=True)
+    out.close()
+    return new
+
+
+def write_residuals(model, args, config, paths):
+    """The residual of every exposure of `paths` the fit has rows for, into
+    args.residuals_dir (residual_file). Returns how many were written.
+
+    From the cube and the fit's archive (fit.npz) beside the components:
+    the residual is the fit's own, its amplitudes as fitted (an exposure
+    refitted at correction time keeps the fit's residual). Built on the
+    cube's grid column block by column block (outliers.residual_rows) into a
+    temporary array on disk beside the residuals, of the cube's size,
+    removed at the end. A fit whose rows are nights or bundles has no
+    residual of any one exposure: none is written then, which the log says."""
+    outdir = args.residuals_dir
+    if args.by_night:
+        log("  residuals not written: the fit's rows are nights (or bundles),"
+            " and no exposure has a residual of its own", "warn")
+        return 0
+    fit_path = os.path.join(os.path.dirname(os.path.abspath(args.fits)),
+                            "fit.npz")
+    if not getattr(args, "cube", None) or not os.path.exists(fit_path):
+        log("  residuals not written: they need the cube (--cube) and the"
+            " fit's archive beside %s" % args.fits, "warn")
+        return 0
+    from .outliers import residual_rows
+    from .twoframe import cube_grid
+    grid = np.asarray(cube_grid(args.cube), dtype=float)
+    fit = np.load(fit_path)
+    os.makedirs(outdir, exist_ok=True)
+    tmp = os.path.join(outdir, ".residual_rows.%d.npy" % os.getpid())
+    rows = None
+    written = 0
+    log("  the residual of the fit, star and observer components removed,"
+        " to %s" % outdir)
+    try:
+        rows = np.lib.format.open_memmap(
+            tmp, mode="w+", dtype=np.float32,
+            shape=(len(fit["berv"]), grid.size))
+        rows, names, parity = residual_rows(args.cube, fit, rows)
+        where = {}
+        for i, (name, kind) in enumerate(zip(names, parity)):
+            where.setdefault(name, {})[int(kind)] = i
+        bervs = dict(zip([os.path.basename(str(v)) for v in
+                          model["coeffs"]["filename"]],
+                         np.asarray(model["coeffs"]["berv"], dtype=float)))
+        for path in paths:
+            name = os.path.basename(path)
+            if name not in where or not os.path.exists(path):
+                continue
+            residual_file(model, path, rows, where[name], grid, outdir,
+                          config, bervs.get(name))
+            written += 1
+    finally:
+        del rows
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    log("wrote %d residual file%s to %s"
+        % (written, "" if written == 1 else "s", outdir))
+    return written
 
 
 def plot(path, wave, recon, row, source):
@@ -1921,6 +2064,8 @@ def correct_many(model, args):
             keep_name=getattr(args, "keep_name", False))
             written += 1
             covered.append(100.0 * touched / max(total, 1))
+    if getattr(args, "residuals_dir", None):
+        write_residuals(model, args, config, [path for path, _ in pairs])
     if covered:
         import numpy as _np
         log("  samples corrected per file: median %.1f%%, worst %.1f%%"

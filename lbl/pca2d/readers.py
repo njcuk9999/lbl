@@ -463,6 +463,20 @@ def scale_flux(hdulist, place, factor):
     hdu.data[column][:] = values.reshape(factor.shape) * factor
 
 
+def put_flux(hdulist, place, values):
+    """Put `values` where the flux of an open copy of a spectrum is
+    (flux_place), in place: a REPLACEMENT, for another quantity on the
+    flux's pixels (PCA2D's residual, lbl.pca2d.reconstruct.residual_file),
+    where a correction multiplies (scale_flux)."""
+    extension, column = place
+    hdu = hdulist[extension]
+    values = np.asarray(values, dtype=np.float64)
+    if column is None:
+        hdu.data = values.reshape(np.shape(hdu.data))
+        return
+    hdu.data[column][:] = values.reshape(np.shape(hdu.data[column]))
+
+
 #: the instruments already told that their blaze is taken as 1
 _NO_BLAZE = set()
 

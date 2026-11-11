@@ -9,6 +9,7 @@ ROOT/<INSTRUMENT>_<SOURCE>/     a DATA_DIR
     science/<obj>/              the spectra (yours)
     science/<obj>_tc/           telluric-cleaned (optical)
     science/<obj>_pca2d/        corrected by PCA2D
+    science/<obj>_residuals/    PCA2D's residuals (with save_residuals)
     templates/                  LBL_Template_<obj>_<instrument>.fits
     masks/                      the lines
     lblrv/<obj>_<template>/     the velocity of every line, one file per spectrum

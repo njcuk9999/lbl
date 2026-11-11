@@ -31,9 +31,10 @@ TIMEOUT = 30
 #:   (2026-11-03: the CDS took no connection while the CfA answered in 0.3 s)
 SERVERS = ['simbad.cds.unistra.fr', 'simbad.harvard.edu']
 #: what LBL and its users append to a star's name: the telluric cleaning
-#:   (_tc), PCA2D's corrections (_pca2d...), an instrument, a data source
-#:   (HD10700_EXPRES, ADLeo_HARPSN_ESO)
-SUFFIXES = re.compile(r'(_tc|_pca2d[0-9A-Za-z._+-]*|_(SPIROU|NIRPS|NIRPS_HE|'
+#:   (_tc), PCA2D's corrections (_pca2d...) and residuals (_residuals...),
+#:   an instrument, a data source (HD10700_EXPRES, ADLeo_HARPSN_ESO)
+SUFFIXES = re.compile(r'(_tc|_pca2d[0-9A-Za-z._+-]*|_residuals[0-9A-Za-z._+-]*|'
+                      r'_(SPIROU|NIRPS|NIRPS_HE|'
                       r'NIRPS_HA|HARPS|HARPSN|HARPS-N|ESPRESSO|EXPRES|NEID|'
                       r'MAROONX|MAROON-X|CARMENES|SOPHIE|CORALIE|ESPADONS|'
                       r'ESO|CADC|APERO|ORIG|ESSP))+$', re.I)

@@ -18,6 +18,11 @@ Without that key nothing here is imported and LBL is what it was.
                                                 their own names and in their
                                                 own format, which LBL reads
                                                 like any other object
+             DATA_DIR/science/<object>_residuals/  with save_residuals, the
+                                                fit's residual of each
+                                                exposure in the same format,
+                                                its flux replaced by
+                                                ln f - savgol(ln f) - model
              DATA_DIR/pca2d/<object>/           the request, the fit, the
                                                 figures and the report
              DATA_DIR/pca2d/cache/              the cubes, rebuildable
@@ -39,6 +44,13 @@ Everything not given is the nominal set.
     figures      the river plots and the other figures of the correction
                  (as REPORT, True unless the wrap turns the report off)
     overwrite    redo the correction even when the same one is on disk (False)
+    save_residuals  also write the fit's residual of every exposure, star and
+                 observer components removed, as a log (ln f - savgol(ln f)
+                 - model), in the format of its source and under its name,
+                 into DATA_DIR/science/<object>_residuals[_<name>] (False).
+                 Not part of what makes a correction (as the figures): asked
+                 when the correction on disk has none, the correction is
+                 made again to write them
     name         a label: <object>_pca2d_<name>, for keeping several
                  corrections of one object side by side (None)
     joint        fit every OBJECT_SCIENCE of the wrap against one observer
@@ -89,10 +101,12 @@ __STRNAME__ = 'LBL PCA2D'
 LblException = base_classes.LblException
 #: what the corrected object is called, after the object it comes from
 SUFFIX = '_pca2d'
+#: what the folder of an object's residuals adds to its name
+RESIDUALS = '_residuals'
 #: the switches of this recipe, and what they are when not given
 DEFAULTS = dict(n_star=1, n_earth=None, figures=True, overwrite=False,
                 name=None, joint=False, compare=True, output_name=None,
-                input_name=None)
+                input_name=None, save_residuals=False)
 #: the switches that stand for a key of the pca2d configuration, which gives
 #: their value when they are not set (None above)
 SWITCH_PATHS = dict(n_earth='twoframe.n_earth')
@@ -442,7 +456,7 @@ def size_of(path: str) -> int:
 
 
 def supersede(data_dir: str, corr_dir: str, name: str, work: str, log,
-              science_subdir: str = 'science') -> None:
+              science_subdir: str = 'science', extra=()) -> None:
     """Move the previous corrected object, and what LBL made from it, aside.
 
     Moved and not deleted: a correction is minutes to hours, its velocities
@@ -450,6 +464,9 @@ def supersede(data_dir: str, corr_dir: str, name: str, work: str, log,
     The folder is said, with its size, so that it can be removed by hand.
     """
     going = ([corr_dir] if os.path.isdir(corr_dir) else [])
+    # the residuals of that correction (save_residuals), which another
+    #   correction does not explain
+    going += [path for path in extra if os.path.isdir(path)]
     going += lbl_products(data_dir, name, science_subdir)
     if not going:
         return
@@ -667,6 +684,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     science_root = os.path.join(data_dir, science_subdir)
     label = re.sub(r'[^0-9A-Za-z._+-]', '_', str(switches['name'] or ''))
     suffix = SUFFIX + ('_' + label if label else '')
+    rsuffix = RESIDUALS + ('_' + label if label else '')
     pca2d_root = os.path.join(data_dir, 'pca2d')
     work_root = os.path.join(pca2d_root, '_' + label) if label else pca2d_root
     together = len(objects) > 1
@@ -785,8 +803,28 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         'n_files'))
     same = state.get('stamp') == stamp
     corrected = ', '.join(names[n][0] for n in objects)
-    if on_disk and not switches['overwrite'] and skip is not False and (
-            same or skip is True):
+    # THE RESIDUALS (save_residuals) change nothing in the spectra, and are
+    #   not in the stamp: asked, they must be on disk as done.json counted
+    #   them, or the correction is made again to write them
+    residual_dirs = {name: os.path.join(science_root, name + rsuffix)
+                     for name in objects}
+    counted = state.get('residuals')
+    residuals_there = counted is not None and all(
+        len(glob.glob(os.path.join(residual_dirs[n], '*.fits')))
+        == counted.get(n, -1) for n in objects)
+    keep = on_disk and not switches['overwrite'] and skip is not False and (
+        same or skip is True)
+    if keep and switches['save_residuals'] and not residuals_there:
+        if skip is True:
+            log('PCA2D: SKIP_LBL_PCA2D=True keeps the correction in %s, made'
+                ' without its residuals: none are written' % corrected,
+                'warn')
+        else:
+            log('PCA2D: save_residuals, and the correction in %s has no'
+                ' residuals on disk: it is made again to write them'
+                % corrected, 'info')
+            keep = False
+    if keep:
         if same:
             log('PCA2D: this correction (%s) is already in %s, kept as it'
                 ' is. SKIP_LBL_PCA2D=False makes it again'
@@ -811,7 +849,8 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                   velocities)
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
-                  names[name][0], work, log, science_subdir)
+                  names[name][0], work, log, science_subdir,
+                  extra=[residual_dirs[name]])
 
     stages = ['cube', 'fit'] + (['figures'] if switches['figures'] else [])
     stages.append('correct')
@@ -825,6 +864,9 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
              '--corrected-dir', os.path.join(science_root,
                                              '{object}' + suffix),
              '--keep-names', '--any-object']
+    if switches['save_residuals']:
+        argv += ['--residuals-dir', os.path.join(science_root,
+                                                 '{object}' + rsuffix)]
     from lbl.pca2d.config import describe_star, free_star_components
     log('PCA2D on %s%s -> %s' % (', '.join(objects),
                                  ' together' if together else '',
@@ -888,10 +930,19 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         log('PCA2D: star components saved, %s' % saved, 'value')
     for name in objects:
         RUNS[names[name][0]] = run_dir
+    # the residuals written, counted as the corrected spectra are: a later
+    #   run asking for them finds them, or makes them (none, for a fit whose
+    #   rows are nights: counted as none)
+    residuals = None
+    if switches['save_residuals']:
+        residuals = {n: len(glob.glob(os.path.join(residual_dirs[n],
+                                                   '*.fits')))
+                     for n in objects}
     with open(state_file, 'w', encoding='utf-8') as handle:
         json.dump(dict(stamp=stamp, objects=[names[n][0] for n in objects],
                        run_dir=run_dir,
                        n_files={n: len(w) for n, w in written.items()},
+                       residuals=residuals,
                        code=code_stamp(), when=datetime.datetime.now(
                        ).isoformat(timespec='seconds'),
                        n_star=switches['n_star'],
@@ -903,6 +954,9 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
             % (len(written[name]), len(files[name]),
                os.path.join(science_root, names[name][0]), names[name][0]),
             'value')
+        if residuals is not None:
+            log('PCA2D: %d residuals (ln f - savgol(ln f) - model) in %s'
+                % (residuals[name], residual_dirs[name]), 'value')
     return names
 
 def report(data_dir: str, delivered: str, corrected: str,

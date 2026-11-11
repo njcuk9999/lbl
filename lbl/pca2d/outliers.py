@@ -460,6 +460,102 @@ def scaled_z(resid, sigma, window, origin=0):
         return (ratio - med) / sig
 
 
+def _residual_setup(cube, fit, window):
+    """What every block of a pass over the residual needs, read once: the
+    cube's pieces (_pieces), the fit's components and amplitudes, its means
+    and star-frame templates, and the rows whose star is another star's
+    template (sgroup, external: star_static)."""
+    from .twoframe import fit_means, fit_templates, fit_weight_settings
+    part = _pieces(cube, fit, window)
+    n, m = part["n"], part["m"]
+    out = dict(part=part, weighting=fit_weight_settings(fit),
+               P=np.asarray(fit["P"], dtype=float),
+               a=np.asarray(fit["a"], dtype=float),
+               Q=np.asarray(fit["Q"], dtype=float),
+               b=np.asarray(fit["b"], dtype=float))
+    out["means"], out["group"] = fit_means(fit, part["meta"], n, m)
+    out["T"], out["tgroup"] = fit_templates(fit, part["meta"], n, m)
+    files = list(getattr(fit, "files", []) or getattr(fit, "keys", lambda: [])())
+    # the rows whose star is another star's template, grouped by member and
+    #   parity: the star spectrum is in P (n_star = 1, a coefficient of 1),
+    #   not in the star-frame means, so the rows are found by their parity
+    sgroup, external = np.zeros(n, dtype=int), np.zeros(1, dtype=bool)
+    if "external_parities" in files and "parity" in files \
+            and len(fit["parity"]) == n:
+        parity_rows = np.asarray(fit["parity"], dtype=int)
+        kinds = np.unique(parity_rows)
+        sgroup = np.searchsorted(kinds, parity_rows)
+        external = np.isin(kinds, np.asarray(fit["external_parities"],
+                                             dtype=int))
+    out.update(sgroup=sgroup, external=external)
+    return out
+
+
+def _residual_block(cube, setup, a0, b0, chunk=16):
+    """Every row's residual over the grid's columns a0:b0, panel 5's: the
+    cube less the star block carried into the row's frame, the star-frame
+    means, the observer block and the parity offset, NaN where the fit gave
+    no weight. (resid, noise, trans), the last two as the block was read
+    (the photon sigma, the telluric transmission)."""
+    from .twoframe import (LanczosShifter, carried_means, load_cube,
+                           star_model)
+    part = setup["part"]
+    n = part["n"]
+    P, a, Q, b = setup["P"], setup["a"], setup["Q"], setup["b"]
+    T = setup["T"]
+    _, data, w, _, noise, trans = load_cube(
+        cube, dtype=np.float32, columns=np.arange(a0, b0),
+        with_sigma=True, with_trans=True, **setup["weighting"])
+    shifter = LanczosShifter(b0 - a0, a=8, max_shift=part["reach"])
+    Tf = shifter.prepare(T[:, a0:b0]) if np.any(T[:, a0:b0]) else None
+    resid = np.empty((n, b0 - a0), dtype=np.float32)
+    for start in range(0, n, chunk):
+        stop = min(start + chunk, n)
+        rows = slice(start, stop)
+        model = star_model(P[:, a0:b0], a[rows], shifter,
+                           part["delta"][rows], stop - start, b0 - a0)
+        if Tf is not None:
+            model += carried_means(Tf, setup["tgroup"], shifter,
+                                   part["delta"], start, stop)
+        model += b[rows] @ Q[:, a0:b0]
+        model += setup["means"][:, a0:b0][setup["group"][rows]]
+        resid[rows] = np.where(w[rows] > 0, data[rows] - model, np.nan)
+    del data, w
+    return resid, noise, trans
+
+
+def residual_rows(cube, fit, out=None, block=40000, chunk=16):
+    """The residual of every row of the cube over the whole grid, panel 5's
+    (_residual_block): ln f - savgol(ln f) less the whole model, star and
+    observer, NaN where the fit gave no weight. Not divided by any sigma,
+    and a star measured against another star's template keeps its static
+    mismatch to it (what residual_z takes out before testing): this is the
+    residual as it is. Written into `out`, (rows, grid columns), an array
+    or a memmap on disk for a large cube, made in memory when not given; the
+    cube is read `block` columns at a time, each with the margin the shift
+    needs, so that every column comes out as from the whole cube.
+
+    :return: (out, names, parity): each row's file name and the parity of
+             the orders it holds (0 even, 1 odd)
+    """
+    setup = _residual_setup(cube, fit, 1)
+    part = setup["part"]
+    n, m = part["n"], part["m"]
+    if out is None:
+        out = np.empty((n, m), dtype=np.float32)
+    if tuple(out.shape) != (n, m):
+        raise ValueError("residual_rows: out is %s, the cube %d x %d"
+                         % (tuple(out.shape), n, m))
+    step = m if block is None else int(block)
+    for c0 in range(0, m, step):
+        c1 = min(c0 + step, m)
+        a0, b0 = max(0, c0 - part["margin"]), min(m, c1 + part["margin"])
+        resid, _, _ = _residual_block(cube, setup, a0, b0, chunk)
+        out[:, c0:c1] = resid[:, c0 - a0:c1 - a0]
+        del resid
+    return out, list(part["names"]), np.asarray(part["parity"], dtype=int)
+
+
 def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
                columns=None):
     """Yield the residual's z, chunk by chunk: (rows, c0, c1, inner, z).
@@ -488,28 +584,9 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
     has its static mismatch to it taken out of the residual first
     (star_static): expected, it is not tested.
     """
-    from .twoframe import (LanczosShifter, carried_means, fit_means,
-                           fit_templates, fit_weight_settings, load_cube,
-                           star_model)
-    part = _pieces(cube, fit, window)
-    weighting = fit_weight_settings(fit)
+    setup = _residual_setup(cube, fit, window)
+    part = setup["part"]
     n, m = part["n"], part["m"]
-    P, a = np.asarray(fit["P"], dtype=float), np.asarray(fit["a"], dtype=float)
-    Q, b = np.asarray(fit["Q"], dtype=float), np.asarray(fit["b"], dtype=float)
-    means, group = fit_means(fit, part["meta"], n, m)
-    T, tgroup = fit_templates(fit, part["meta"], n, m)
-    files = list(getattr(fit, "files", []) or getattr(fit, "keys", lambda: [])())
-    # the rows whose star is another star's template, grouped by member and
-    #   parity: the star spectrum is in P (n_star = 1, a coefficient of 1),
-    #   not in the star-frame means, so the rows are found by their parity
-    sgroup, external = np.zeros(n, dtype=int), np.zeros(1, dtype=bool)
-    if "external_parities" in files and "parity" in files \
-            and len(fit["parity"]) == n:
-        parity_rows = np.asarray(fit["parity"], dtype=int)
-        kinds = np.unique(parity_rows)
-        sgroup = np.searchsorted(kinds, parity_rows)
-        external = np.isin(kinds, np.asarray(fit["external_parities"],
-                                             dtype=int))
     step = m if block is None else int(block)
     done = 0
     first, last = (0, m) if columns is None else (max(0, int(columns[0])),
@@ -520,35 +597,21 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
         done += 1
         c1 = min(c0 + step, last)
         a0, b0 = max(0, c0 - part["margin"]), min(m, c1 + part["margin"])
-        _, data, w, _, noise, trans = load_cube(
-            cube, dtype=np.float32, columns=np.arange(a0, b0),
-            with_sigma=True, with_trans=True, **weighting)
-        shifter = LanczosShifter(b0 - a0, a=8, max_shift=part["reach"])
-        Tf = shifter.prepare(T[:, a0:b0]) if np.any(T[:, a0:b0]) else None
         inner = slice(c0 - a0, c1 - a0)
         # every row's residual first: the static mismatch of a star measured
         #   against another star's template is a median over its rows
-        resid = np.empty((n, b0 - a0), dtype=np.float32)
-        for start in range(0, n, chunk):
-            stop = min(start + chunk, n)
-            rows = slice(start, stop)
-            model = star_model(P[:, a0:b0], a[rows], shifter,
-                               part["delta"][rows], stop - start, b0 - a0)
-            if Tf is not None:
-                model += carried_means(Tf, tgroup, shifter, part["delta"],
-                                       start, stop)
-            model += b[rows] @ Q[:, a0:b0]
-            model += means[:, a0:b0][group[rows]]
-            resid[rows] = np.where(w[rows] > 0, data[rows] - model, np.nan)
-        if external.any():
-            static = star_static(resid, part["delta"], sgroup, external, trans)
-            take_static(resid, static, part["delta"], sgroup, external)
+        resid, noise, trans = _residual_block(cube, setup, a0, b0, chunk)
+        if setup["external"].any():
+            static = star_static(resid, part["delta"], setup["sgroup"],
+                                 setup["external"], trans)
+            take_static(resid, static, part["delta"], setup["sgroup"],
+                        setup["external"])
         for start in range(0, n, chunk):
             stop = min(start + chunk, n)
             z = scaled_z(resid[start:stop], noise[start:stop], part["window"],
                          origin=a0)
             yield (start, stop), c0, c1, inner, z
-        del data, w, noise, trans, resid
+        del noise, trans, resid
 
 
 def noise_correlation(cube, fit, window, lags, blocks=4, chunk=16, clip_at=5.0,

@@ -53,6 +53,7 @@ report followed by LBL's.
 |---|---|
 | `science/<object>/` | read, never written |
 | `science/<object>_pca2d/` | the corrected spectra, same names, same format |
+| `science/<object>_residuals/` | with `save_residuals`: the fit's residual of each exposure, same names, same format, the flux replaced by `ln f - savgol(ln f) - model` (below) |
 | `pca2d/<object>/request.yaml` | the configuration that ran |
 | `pca2d/<object>/s<M>-o<N>/` | the fit, the figures, the report (PDF): M = n_star, N = n_earth |
 | `pca2d/cache/` | the registered cubes, rebuildable |
@@ -91,6 +92,7 @@ optical spectrographs.
 | `compare` | True | LBL measures the delivered object too, first, for the report |
 | `figures` | as `REPORT` | the river plots and the other figures of the correction |
 | `overwrite` | False | redo even when the same correction is on disk (as `SKIP_LBL_PCA2D=False`, below) |
+| `save_residuals` | False | also write the fit's residual of every exposure, star and observer components removed, as a log, into `science/<object>_residuals/` (below) |
 | `name` | None | `<object>_pca2d_<name>`, to keep variants side by side |
 | `joint` | False | every science object against one observer basis |
 | `output_name` | the object(s) | the name this fit's components are saved under (below) |
@@ -120,6 +122,38 @@ The short names: `velocity_term`, `iters`, `shrink`, `nsig_cut`,
 `bundle_berv`, `bundle_max`, `min_rjd`, `max_rjd`, `drs_modes`,
 `min_pixel_snr`, `windows`, `cache_directory`. An unknown key stops the run
 before anything is read, with the list of what is accepted.
+
+## The residuals (`save_residuals`)
+
+With `save_residuals=True`, the correct stage also writes, for every
+exposure the fit has a row of, its residual: panel 5 of the sequence
+figure, the high-passed log flux less the whole model,
+
+    r = ln f - savgol(ln f) - [S(T + P a) + mu + Q b]
+
+the star block carried into the exposure's frame with its star-frame means,
+the observer block and its per-parity mean. Zero where the model explains
+the data, -0.01 where the flux is 1 % below it, NaN where the fit gave the
+sample no weight. It is computed on the fit's grid from the cube, with the
+fit's own amplitudes, then put back on each order's own pixels (linearly:
+a spline through noise would invent structure).
+
+Each file is a copy of its source, same name, same format (a `t.fits` for
+APERO), whose flux is replaced by `r`; the other extensions (wavelengths,
+blaze...) are as they were, and `PCA2RES = T` in the primary header says
+what the flux is. They go in `science/<object>_residuals/`
+(`<object>_residuals_<name>/` for a named correction, `name`), which the
+window lists among the rebuildable products, not as a target. A fit whose
+rows are nights or bundles (`nightly_stack`, `bundle_minutes`) has no
+residual of one exposure: none is written, the log says so. Building them
+needs a temporary array of the cube's size, beside them, removed at the
+end.
+
+They are not part of what makes a correction (as the figures): asked of a
+correction already on disk without them, the correction is made again to
+write them (unless `SKIP_LBL_PCA2D=True`, which keeps it as it is). A new
+correction moves the previous residuals aside with the corrected spectra
+(`superseded/`).
 
 ## What a row of the fit is
 

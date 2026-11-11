@@ -217,7 +217,7 @@ GROUPS = (
                     "column_frac", "column_chi2", "bias_nsig",
                     "star_column_frac", "star_column_chi2", "star_bias_nsig",
                     "min_pixel_snr")),
-    ("runs", ("compare", "figures", "overwrite")),
+    ("runs", ("compare", "figures", "overwrite", "save_residuals")),
 )
 
 

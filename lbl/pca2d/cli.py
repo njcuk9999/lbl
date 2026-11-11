@@ -283,6 +283,11 @@ def parse_args(argv=None):
                         " <run>/corrected; {object} is each object's name")
     p.add_argument("--keep-names", action="store_true",
                    help="each corrected file under its source's own name")
+    p.add_argument("--residuals-dir", default=None, metavar="DIR",
+                   help="also write the fit's residual of every exposure"
+                        " here (ln f - savgol(ln f) - the model, star and"
+                        " observer, in the source's format and under its"
+                        " name); {object} is each object's name")
     p.add_argument("--any-object", action="store_true",
                    help="read every file of the object's folder, whatever"
                         " its OBJECT and DRSOBJN say")
@@ -630,7 +635,17 @@ def joint_plan(args, variant):
         member["corrdir"] = (corrected_dir(args, member["object"], None)
                              if getattr(args, "corrected_dir", None)
                              else os.path.join(plan["corrdir"], member["object"]))
+        member["resdir"] = residuals_dir(args, member["object"])
     return plan
+
+
+def residuals_dir(args, object_name):
+    """Where an object's residuals go (--residuals-dir, {object} being its
+    name), or None: none are written."""
+    asked = getattr(args, "residuals_dir", None)
+    if not asked:
+        return None
+    return os.path.abspath(str(asked).replace("{object}", str(object_name)))
 
 
 def corrected_dir(args, object_name, outdir):
@@ -719,6 +734,7 @@ def resolve(args):
         "tag": tag,
         "outdir": outdir,
         "corrdir": corrected_dir(args, args.object, outdir),
+        "resdir": residuals_dir(args, args.object),
         "keep_names": bool(getattr(args, "keep_names", False)),
     }
     plan["cube"] = os.path.join(config["output"]["cache_directory"],
@@ -1209,6 +1225,7 @@ def run_correct(plan):
     targets = plan.get("members") or [{"object": cfg["input"].get("object"),
                                        "directory": plan["directory"],
                                        "corrdir": plan["corrdir"],
+                                       "resdir": plan.get("resdir"),
                                        "files": plan["files"], "star_group": 0}]
     for target in targets:
         target_mode = list(mode)
@@ -1240,6 +1257,8 @@ def run_correct(plan):
             "--source-dir", target["directory"], "--cube", plan["cube"],
             "--corrected-dir", target["corrdir"], "--overwrite",
             *(["--keep-name"] if plan.get("keep_names") else []),
+            *(["--residuals-dir", target["resdir"]] if target.get("resdir")
+              else []),
             "--star-group", str(target.get("star_group", 0)),
             "--workers", str(int((cfg.get("correct") or {}).get("workers")
                                  or 1)),

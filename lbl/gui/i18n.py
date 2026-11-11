@@ -451,6 +451,7 @@ EN = {
     "what_superseded": "a correction replaced by a newer one, and what LBL made from it",
     "what_spectra": "the spectra of a target",
     "what_corrected": "corrected spectra (remade from the fit; tar them first if they are someone's)",
+    "what_residuals": "PCA2D's residuals of each exposure (remade from the fit, with save_residuals)",
     "what_cleaned": "telluric-cleaned spectra",
     "what_lblrv": "LBL's per-exposure velocities (about ten minutes to remake)",
     "what_template": "an LBL template",
@@ -1054,6 +1055,7 @@ FR = {
     "what_superseded": "une correction remplacée par une plus récente, et ce que LBL en a tiré",
     "what_spectra": "les spectres d'une cible",
     "what_corrected": "spectres corrigés (refaits à partir du fit ; à archiver d'abord s'ils sont destinés à quelqu'un)",
+    "what_residuals": "résidus PCA2D de chaque pose (refaits à partir du fit, avec save_residuals)",
     "what_cleaned": "spectres nettoyés des telluriques",
     "what_lblrv": "vitesses de LBL par pose (une dizaine de minutes à refaire)",
     "what_template": "un template LBL",
@@ -1691,6 +1693,33 @@ OPTIONS = {
          " précédents et tous les produits LBL qui en viennent sont déplacés"
          " dans pca2d/<objet>/superseded/<date>/ ; rien n'est effacé. Comme"
          " « la refaire » sous « correction sur disque ».")),
+    "save_residuals": (
+        ("save residuals", "sauver les résidus"),
+        ("Also write the residual of every exposure, its star and observer"
+         " components removed, into science/<target>_residuals/"
+         " (science/<target>_residuals_<name>/ for a named correction): one"
+         " file per exposure, in the format of its source (a t.fits for"
+         " APERO) and under its name, whose flux is replaced by the log"
+         " residual of the fit, ln f - savgol(ln f) - model. Zero where the"
+         " model explains the data, -0.01 where the flux is 1 % below it,"
+         " NaN where the fit gave the sample no weight; the other extensions"
+         " (wavelengths, blaze) as they were. Not written when the fit's"
+         " rows are nights or bundles (no exposure has a residual of its"
+         " own). Off by default. Asked of a correction already on disk"
+         " without them, the correction is made again to write them.",
+         "Écrire aussi le résidu de chaque pose, ses composantes stellaires"
+         " et observateur retirées, dans science/<cible>_residuals/"
+         " (science/<cible>_residuals_<nom>/ pour une correction nommée) :"
+         " un fichier par pose, au format de sa source (un t.fits pour"
+         " APERO) et sous son nom, dont le flux est remplacé par le résidu"
+         " du fit en log, ln f - savgol(ln f) - modèle. Zéro là où le modèle"
+         " explique les données, -0,01 là où le flux est 1 % en dessous,"
+         " NaN là où le fit n'a donné aucun poids à l'échantillon ; les"
+         " autres extensions (longueurs d'onde, blaze) telles quelles. Pas"
+         " écrit quand les lignes du fit sont des nuits ou des paquets"
+         " (aucune pose n'a son propre résidu). Désactivé par défaut."
+         " Demandé à une correction déjà sur disque sans résidus, la"
+         " correction est refaite pour les écrire.")),
 }
 
 

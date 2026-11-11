@@ -34,8 +34,9 @@ READER_VERSION = {"EXPRES": 2}
 #: the EXPRES order whose SNR the window shows (about 552 nm)
 EXPRES_SNR_ORDER = 111
 #: a folder made from another by LBL or PCA2D is not a target: the corrected
-#: (<object>_pca2d, <object>_pca2d_<name>) and the cleaned (<object>_tc)
-DERIVED = re.compile(r"(_pca2d(_.*)?|_tc(_.*)?)$")
+#: (<object>_pca2d, <object>_pca2d_<name>), the cleaned (<object>_tc) and
+#: PCA2D's residuals (<object>_residuals, <object>_residuals_<name>)
+DERIVED = re.compile(r"(_pca2d(_.*)?|_tc(_.*)?|_residuals(_.*)?)$")
 #: the spectra of a folder, by extension (the instrument's own pattern, LBL's
 #: INPUT_FILE, narrows it when the run is built)
 PATTERNS = ("*.fits", "*.fits.gz", "*.hd5")

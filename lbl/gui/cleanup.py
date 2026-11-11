@@ -65,6 +65,8 @@ WHAT = dict(
     corrected="corrected spectra (remade from the fit; tar them first if"
               " they are someone's)",
     cleaned="telluric-cleaned spectra",
+    residuals="PCA2D's residuals of each exposure (remade from the fit,"
+              " with save_residuals)",
     lblrv="LBL's per-exposure velocities (about ten minutes)",
     template="an LBL template",
     mask="an LBL mask",
@@ -155,6 +157,8 @@ def _survey(data_dir: str) -> list:
                 out.append(item)
         elif "_pca2d" in name:
             out.append(_item(path, "rebuildable", "corrected"))
+        elif "_residuals" in name:
+            out.append(_item(path, "rebuildable", "residuals"))
         else:
             out.append(_item(path, "rebuildable", "cleaned"))
     for folder, code in (("lblrv", "lblrv"), ("templates", "template"),
