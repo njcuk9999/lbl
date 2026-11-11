@@ -62,6 +62,15 @@ def _nirps(path, drsobjn="EPSILONERI", obj="Eps_eri"):
     fits.PrimaryHDU(np.ones((2, 8), "f4"), head).writeto(path)
 
 
+@pytest.fixture(autouse=True)
+def no_apero(tmp_path_factory, monkeypatch):
+    """No database of APERO's, and none fetched: the copy this machine may
+    keep says nothing here (a test gives its own)."""
+    empty = tmp_path_factory.mktemp("no_apero")
+    monkeypatch.setenv("LBL_APERO_ASTROMETRICS", str(empty))
+    return empty
+
+
 @pytest.fixture
 def root(tmp_path):
     down = tmp_path / "Downloads"
@@ -462,3 +471,180 @@ def test_what_cannot_be_dispatched_is_not_counted_as_waiting(tmp_path):
     assert {row["why"] for row in after["left"]} == {
         "not a spectrum (*.csv)", dispatch.EMPTY,
         "not a FITS file astropy reads (OSError)"}
+
+
+# -----------------------------------------------------------------------------
+# How a new star is named, and a name given by hand
+# -----------------------------------------------------------------------------
+#: AD Leo where ESO's observers point (J2000, arcsec/yr)
+ESO_ADLEO = dict(alpha=101936.28, delta=195212.0, pma=-0.4986, pmd=-0.0434)
+
+
+def _apero_db(folder):
+    """A database of APERO's with two stars, as its YAML files are."""
+    (folder / "verified").mkdir(parents=True)
+    entries = dict(
+        EPSILONERI=("* eps Eri", ["HR 1084", "HD 22049", "* eps Eri"],
+                    53.2326854, -9.4582610, -974.758, 20.876),
+        GL388=("V* AD Leo", ["GJ 388", "V* AD Leo", "BD+20 2465"],
+               154.9011700, 19.8700029, -498.6, -43.4))
+    for name, (simbad, aliases, ra, dec, pmra, pmde) in entries.items():
+        lines = ["APERO_NAME: %s" % name, "SIMBAD_NAME: '%s'" % simbad,
+                 "APERO_CLASS: STAR", "RA_J2000_DEG: %r" % ra,
+                 "DEC_J2000_DEG: %r" % dec,
+                 "PMRA:\n  value: %r" % pmra, "PMDE:\n  value: %r" % pmde,
+                 "ALIASES:"] + ["- '%s'" % one for one in aliases]
+        (folder / "verified" / (name + ".yaml")).write_text(
+            "\n".join(lines) + "\n")
+    return folder
+
+
+def test_the_database_of_apero(tmp_path, monkeypatch):
+    from lbl.gui.fetch import apero_names
+    monkeypatch.setenv("LBL_APERO_ASTROMETRICS",
+                       str(_apero_db(tmp_path / "db")))
+    # found as APERO finds a name: its spaces, signs and case aside
+    assert apero_names.lookup("hr1084")["apero"] == "EPSILONERI"
+    assert apero_names.lookup("GJ388")["apero"] == "GL388"
+    assert apero_names.lookup("BD+20 2465")["apero"] == "GL388"
+    assert apero_names.lookup("YO17") is None
+    # and by its place
+    near = apero_names.near(154.9012, 19.8701, 30.0)
+    assert [one["apero"] for one in near] == ["GL388"]
+    assert near[0]["sep"] < 1.0
+    assert apero_names.near(0.0, 0.0, 30.0) == []
+
+
+def test_new_stars_named_each_way(tmp_path, monkeypatch):
+    monkeypatch.setenv("LBL_APERO_ASTROMETRICS",
+                       str(_apero_db(tmp_path / "db")))
+    down = tmp_path / "root" / "Downloads"
+    down.mkdir(parents=True)
+    _harps(down / "HARPS.2014-01-01T00-00-00.000_e2ds_A.fits", "HR1084",
+           ESO_EPS["alpha"], ESO_EPS["delta"], ESO_EPS["pma"], ESO_EPS["pmd"])
+    # AD Leo under a programme's nickname nobody knows
+    _harps(down / "HARPS.2016-01-01T00-00-00.000_e2ds_A.fits", "YO17",
+           **ESO_ADLEO)
+    # SIMBAD's answers, as asked before
+    idents = dict(HR1084=dict(main="* eps Eri", ra=53.2326854,
+                              dec=-9.4582610, pmra=-974.758, pmdec=20.876),
+                  YO17=None)
+    named = {}
+    for naming in dispatch.NAMINGS:
+        plan = dispatch.plan(str(tmp_path / "root"), dict(idents),
+                             ask_simbad=False, naming=naming)
+        named[naming] = {r["names"][0]: (r["folder"], r["how"])
+                         for r in plan["folders"]}
+        assert plan["naming"] == naming
+    # APERO's name, by a name of the headers or by the place
+    assert named["apero"] == dict(HR1084=("EPSILONERI", "apero"),
+                                  YO17=("GL388", "apero"))
+    # SIMBAD's main name made a folder's; a name SIMBAD does not know
+    #   (SIMBAD not asked where the star is): the headers'
+    assert named["simbad"] == dict(HR1084=("eps_Eri", "simbad"),
+                                   YO17=("YO17", "headers"))
+    assert named["headers"] == dict(HR1084=("HR1084", "headers"),
+                                    YO17=("YO17", "headers"))
+
+
+def test_a_star_already_in_the_root_keeps_its_name(root):
+    dispatch.go(dispatch.plan(str(root), ask_simbad=False))
+    _harps(root / "Downloads" / "HARPS.2015-01-01T00-00-00.000_e2ds_A.fits",
+           "eps Eri", ESO_EPS["alpha"], ESO_EPS["delta"], ESO_EPS["pma"],
+           ESO_EPS["pmd"])
+    plan = dispatch.plan(str(root), ask_simbad=False, naming="headers")
+    row = [r for r in plan["folders"] if r["names"] == ["eps Eri"]][0]
+    assert (row["folder"], row["how"]) == ("EPSILONERI", "existing")
+
+
+def test_a_name_given_by_hand_is_a_folder_name():
+    problem = dispatch.name_problem
+    assert problem("Gl_699") is None and problem("BD+20_2465") is None
+    assert problem("")[0] == "name_empty"
+    assert problem(" GJ1")[0] == "name_space_ends"
+    assert problem("GJ1 ")[0] == "name_space_ends"
+    assert problem("GJ*1") == ("name_chars", ["*", "GJ_1"])
+    assert problem("GJ 1") == ("name_chars", ["(space)", "GJ_1"])
+    assert problem("_GJ1")[0] == "name_ends"
+    assert problem("GJ1_pca2d")[0] == "name_suffix"
+    assert problem("A" * 65)[0] == "name_long"
+
+
+def test_a_planned_folder_named_by_hand(root):
+    plan = dispatch.plan(str(root), ask_simbad=False)
+    star = [r for r in plan["folders"] if r["names"] == ["GJ 65 A"]][0]
+    assert star["folder"] == "GJ_65_A"
+    # the name of the other star of the plan, or a bad one: refused
+    assert dispatch.rename_planned(plan, star["star"], "GJ65B")[0] \
+        == "name_taken"
+    assert dispatch.rename_planned(plan, star["star"], "GJ 65A")[0] \
+        == "name_chars"
+    assert dispatch.rename_planned(plan, star["star"], "GJ65A") is None
+    assert (star["folder"], star["how"]) == ("GJ65A", "hand")
+    dispatch.go(plan)
+    assert (root / "HARPS_ORIG" / "science" / "GJ65A"
+            / "HARPS.2019-01-01T00-00-00.000_e2ds_A.fits").is_file()
+    assert not (root / "HARPS_ORIG" / "science" / "GJ_65_A").exists()
+
+
+def test_the_window_renames_a_planned_folder(root):
+    box = dispatch.Dispatcher()
+    box.idents = {name: None for name in ("HR1084", "K3_01", "EPSILONERI",
+                                          "Eps_eri", "GJ 65 A", "GJ65B")}
+    box.start_plan(str(root), naming="headers")
+    for _ in range(200):
+        if box.status()["state"] != "planning":
+            break
+        time.sleep(0.05)
+    rows = box.status()["plan"]["folders"]
+    star = [r for r in rows if r["names"] == ["GJ65B"]][0]["star"]
+    said = box.rename(str(root), star, "GJ65B_")
+    assert said["problem"]["key"] == "name_ends"
+    shown = box.rename(str(root), star, "UV_Cet")["plan"]["folders"]
+    assert [r["folder"] for r in shown if r["star"] == star] == ["UV_Cet"]
+
+
+def test_a_folder_renamed_in_every_instrument_folder(root,
+                                                     monkeypatch):
+    from lbl.gui import cleanup
+    monkeypatch.setattr(cleanup, "busy", lambda data_dir: [])
+    dispatch.go(dispatch.plan(str(root), ask_simbad=False))
+    # what LBL made of EPSILONERI in HARPS_ORIG, and of another star
+    rdb = root / "HARPS_ORIG" / "lblrdb"
+    rdb.mkdir()
+    (rdb / "lbl2_EPSILONERI_EPSILONERI.rdb").write_text("x")
+    (rdb / "lbl2_EPSILONERI2_EPSILONERI2.rdb").write_text("x")
+    (root / "HARPS_ORIG" / "science" / "EPSILONERI_pca2d").mkdir()
+    dry = dispatch.rename_folder(str(root), "HARPS_ORIG", "EPSILONERI",
+                                 "eps_Eri", dry=True)
+    assert dry["ok"] and not dry["done"]
+    assert [one["home"] for one in dry["folders"]] == [
+        "HARPS_ORIG", "HARPSN_ESO", "NIRPS_HE_APERO"]
+    assert dry["products"] == [dict(home="HARPS_ORIG", n=2, examples=[
+        "lblrdb/lbl2_EPSILONERI_EPSILONERI.rdb",
+        "science/EPSILONERI_pca2d"])]
+    assert (root / "HARPS_ORIG" / "science" / "EPSILONERI").is_dir()
+    # a name taken in one of them: nothing renamed
+    (root / "HARPSN_ESO" / "science" / "eps_Eri").mkdir()
+    taken = dispatch.rename_folder(str(root), "HARPS_ORIG", "EPSILONERI",
+                                   "eps_Eri")
+    assert taken["problem"] == ("name_taken", ["HARPSN_ESO/science/eps_Eri"])
+    assert not taken["done"]
+    (root / "HARPSN_ESO" / "science" / "eps_Eri").rmdir()
+    done = dispatch.rename_folder(str(root), "HARPS_ORIG", "EPSILONERI",
+                                  "eps_Eri")
+    assert done["done"]
+    for home in ("HARPS_ORIG", "HARPSN_ESO", "NIRPS_HE_APERO"):
+        assert (root / home / "science" / "eps_Eri").is_dir()
+        assert not (root / home / "science" / "EPSILONERI").exists()
+    lines = (root / "Downloads" / ".dispatched.jsonl").read_text()
+    assert lines.count("renamed by hand") == 3
+    # one instrument folder alone, and a folder that is not there
+    one = dispatch.rename_folder(str(root), "HARPS_ORIG", "eps_Eri", "EPSERI",
+                                 everywhere=False)
+    assert [f["home"] for f in one["folders"]] == ["HARPS_ORIG"]
+    assert (root / "HARPSN_ESO" / "science" / "eps_Eri").is_dir()
+    assert dispatch.rename_folder(str(root), "HARPS_ORIG", "nope", "X")[
+        "problem"][0] == "rename_missing"
+    assert dispatch.rename_folder(str(root), "HARPS_ORIG", "../x", "X")[
+        "problem"][0] == "rename_missing"

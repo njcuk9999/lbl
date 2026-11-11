@@ -69,6 +69,16 @@
             <span class="info" data-help="pick"></span>
             <span class="hint small" id="dispatch_status"></span>
           </div>
+          <!-- how a star new to the root is named (dispatch.NAMINGS) -->
+          <div class="row gap wrap naming-row">
+            <label class="field inline"><span class="label"><span data-t="naming"></span><span class="info" data-help="naming"></span></span>
+              <select id="naming">
+                <option value="apero" data-t="naming_apero"></option>
+                <option value="simbad" data-t="naming_simbad"></option>
+                <option value="headers" data-t="naming_headers"></option>
+              </select></label>
+            <span class="hint small" data-t="naming_hint"></span>
+          </div>
           <div id="pick_panel" class="dispatch-panel" hidden>
             <p class="small" id="pick_summary"></p>
             <label class="check small"><input type="checkbox" id="pick_move"><span data-t="pick_move"></span></label>
@@ -90,6 +100,7 @@
         <div class="card" id="root_tree" hidden>
           <h2 data-t="tree_title"></h2>
           <p class="small" id="root_tree_summary"></p>
+          <p class="small good-text" id="tree_said" hidden></p>
           <div id="root_tree_body" class="root-tree-body small"></div>
         </div>
       </div>

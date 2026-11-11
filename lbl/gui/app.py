@@ -307,6 +307,10 @@ class Handler(BaseHTTPRequestHandler):
                     query.get("root", ""))))
             if route == "/api/dispatch":
                 return self._json(ctx.dispatcher.status())
+            if route == "/api/names/check":
+                problem = dispatch.name_problem(query.get("name", ""))
+                return self._json(dict(problem=dict(
+                    key=problem[0], args=problem[1]) if problem else None))
             if route == "/api/explore/lines":
                 return self._json(explore.lines_of_interest())
             if route == "/api/explore/rdbs":
@@ -424,7 +428,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self._queue(body)
             if route == "/api/dispatch/plan":
                 return self._json(ctx.dispatcher.start_plan(
-                    ctx.allow(body.get("root", ""))))
+                    ctx.allow(body.get("root", "")),
+                    body.get("naming") or "apero"))
+            if route == "/api/dispatch/rename":
+                return self._json(ctx.dispatcher.rename(
+                    ctx.allow(body.get("root", "")), body.get("star", -1),
+                    body.get("name", "")))
+            if route == "/api/folders/rename":
+                done = dispatch.rename_folder(
+                    ctx.allow(body.get("root", "")), body.get("home", ""),
+                    body.get("old", ""), body.get("new", ""),
+                    everywhere=bool(body.get("everywhere", True)),
+                    dry=bool(body.get("dry")))
+                if done["problem"]:
+                    done["problem"] = dict(key=done["problem"][0],
+                                           args=done["problem"][1])
+                return self._json(done)
             if route == "/api/dispatch/go":
                 return self._json(ctx.dispatcher.start_go(
                     ctx.allow(body.get("root", ""))))
@@ -436,7 +455,7 @@ class Handler(BaseHTTPRequestHandler):
             if route == "/api/downloads/add":
                 return self._json(ctx.dispatcher.start_add(
                     ctx.allow(body.get("root", "")), body.get("paths") or [],
-                    bool(body.get("move"))))
+                    bool(body.get("move")), body.get("naming") or "apero"))
             if route == "/api/dispatch/cancel":
                 return self._json(ctx.dispatcher.cancel())
             if route == "/api/archive/search":

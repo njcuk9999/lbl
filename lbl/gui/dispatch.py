@@ -42,8 +42,20 @@ be either star's are put with the nearer, and said.
 
 A star's folder is the one it already has in that DATA_DIR (a target folder
 whose first spectrum is that star's); else the name it has in another
-DATA_DIR of the root; else the name its headers give most often, APERO's
-(DRSOBJN) first, then one SIMBAD knows at that place.
+DATA_DIR of the root. A star new to the root is named as the Folders tab
+says (NAMINGS):
+
+- apero: as APERO's astrometric database names it (fetch.apero_names): the
+  DRSOBJN of APERO's files, else the entry of one of its names or of its
+  place (a HARPS file of Gl 699 gives GL699); else as SIMBAD does;
+- simbad: SIMBAD's main identifier of the star, made a folder's name
+  (* eps Eri gives eps_Eri), else as its headers do;
+- headers: the name its headers give most often (the observer's OBJECT
+  before APERO's DRSOBJN).
+
+A name may be given by hand instead, to a folder planned (rename_planned)
+or to one already there (rename_folder): letters, digits, + - and _ only
+(name_problem).
 
 Nothing is overwritten: a file already in its place, byte for byte, is a
 copy and is taken out of Downloads; one of that name that differs is left
@@ -80,6 +92,14 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from . import targets
+
+#: how a star new to the root is named, the Folders tab's choice (see the
+#: module's text): APERO's database then SIMBAD, SIMBAD, its headers
+NAMINGS = ("apero", "simbad", "headers")
+#: SIMBAD's prefixes of a main identifier, taken off a folder's name
+SIMBAD_PREFIX = re.compile(r"^(NAME|\*\*?|V\*|EM\*|Cl\*)\s+")
+#: the longest folder name given by hand
+NAME_MOST = 64
 
 #: the folder of a data root the downloads are put in
 DOWNLOADS = "Downloads"
@@ -1308,10 +1328,106 @@ def _existing(root: str, reader=None) -> list:
     return out
 
 
-def _folder_name(star, records, idents):
-    """The name of a star's folders: its name in the root (its DATA_DIRs
-    first, then a science/ of the root's own), else APERO's, else the name
-    of its headers SIMBAD knows there, else the one they give most."""
+def simbad_folder(main) -> str:
+    """SIMBAD's main identifier as a folder's name: its prefixes (NAME, *,
+    V*) taken off, the rest as clean() has it (* eps Eri: eps_Eri,
+    NAME Barnard's star: Barnard_s_star)."""
+    text = re.sub(r"\s+", " ", str(main or "")).strip()
+    return clean(SIMBAD_PREFIX.sub("", text))
+
+
+def _sighting_of(rec):
+    """a record as the one sighting _known compares with a catalogue"""
+    place = rec.get("place")
+    if place is None:
+        return None
+    return dict(place=place, pm=place["pm"], loose=place["loose"])
+
+
+def _named_there(ident, sight) -> bool:
+    """Whether a catalogue's star of a name a file carries is the file's:
+    within SAME_NAME of its place, or its tolerance (one name and a place
+    within a few arcmin is one star, as _same_name has it); a file without
+    a place takes the name's star."""
+    if not ident:
+        return False
+    if sight is None:
+        return True
+    if ident.get("ra") is None or ident.get("dec") is None:
+        return False
+    sep = separation((ident["ra"], ident["dec"]),
+                     (sight["place"]["ra"], sight["place"]["dec"]))
+    return sep <= SAME_NAME or _known(ident, sight)
+
+
+def _apero_entry(rec, apero):
+    """The entry of APERO's database a downloaded file's star is: the
+    entry of one of its names that is where the file is (or any, when the
+    file says no place), else the nearest entry where it is."""
+    from .fetch import apero_names
+    sight = _sighting_of(rec)
+    for name in rec["names"]:
+        entry = apero(name)
+        if entry is not None and apero_names.is_star(entry) and \
+                _named_there(dict(entry, main=entry["apero"]), sight):
+            return entry
+    if sight is None:
+        return None
+    place = sight["place"]
+    # as far as the fastest star (Barnard's, 10.4 arcsec/yr) moves from
+    #   2000 to a night whose place is the pointing's; _known decides
+    radius = 120.0 + 10.5 * place["loose"]
+    for entry in apero_names.near(place["ra"], place["dec"], radius,
+                                  fetch=False):
+        if _known(dict(entry, main=entry["apero"]), sight):
+            return entry
+    return None
+
+
+def simbad_at(place, idents, failed=None):
+    """SIMBAD's star at a place no name of the files says (a programme's
+    nickname: YO17, M112): the brightest in G of those whose place agrees
+    within the file's tolerance, kept in `idents` under '@ra+dec'; None
+    when there is none. When SIMBAD does not answer, None, not kept, and
+    `failed` (a list) told."""
+    key = "@%.4f%+.4f" % (place["ra"], place["dec"])
+    if key in idents:
+        return idents[key]
+    from lbl.core.simbad import tap
+    radius = (120.0 + 10.5 * place["loose"]) / 3600.0
+    try:
+        rows = tap("SELECT TOP 40 b.main_id, b.ra, b.dec, b.pmra, b.pmdec,"
+                   " f.flux FROM basic AS b LEFT JOIN flux AS f ON"
+                   " f.oidref = b.oid AND f.filter = 'G' WHERE CONTAINS("
+                   "POINT('ICRS', b.ra, b.dec), CIRCLE('ICRS', %.7f, %.7f,"
+                   " %.6f)) = 1" % (place["ra"], place["dec"], radius))
+    except OSError:
+        if failed is not None:
+            failed.append(key)
+        return None
+    sight = dict(place=place, pm=place["pm"], loose=place["loose"])
+    found = []
+    for row in rows:
+        if row.get("ra") is None or row.get("dec") is None:
+            continue
+        ident = dict(main=" ".join(str(row["main_id"]).split()),
+                     ra=row["ra"], dec=row["dec"], pmra=row.get("pmra"),
+                     pmdec=row.get("pmdec"))
+        if _known(ident, sight):
+            flux = row.get("flux")
+            found.append((99.0 if flux is None else float(flux), ident))
+    idents[key] = min(found, key=lambda f: f[0])[1] if found else None
+    return idents[key]
+
+
+def _folder_name(star, records, idents, naming="apero", apero=None,
+                 near=None):
+    """The name of a star's folders, and where it comes from: its name in
+    the root (its DATA_DIRs first, then a science/ of the root's own:
+    'root'); else as `naming` says (NAMINGS): 'apero' (APERO's DRSOBJN, or
+    the entry of APERO's database `apero(name)` finds), 'simbad' (SIMBAD's
+    main identifier of a name it knows there, else of the star `near(place)`
+    finds there), 'headers' (the name the files give most often)."""
     homes = [records[i]["folder"] for i in star if records[i].get("folder")]
     for new in (True, False):
         names = Counter()
@@ -1319,34 +1435,65 @@ def _folder_name(star, records, idents):
             if bool(one["home"]) == new:
                 names[one["base"]] += one["files"]
         if names:
-            return names.most_common(1)[0][0]
+            return names.most_common(1)[0][0], "root"
     files = [records[i] for i in star if not records[i].get("folder")]
-    for pick in ("apero", "known", "any"):
+    steps = dict(apero=("drsobjn", "apero", "simbad", "headers"),
+                 simbad=("simbad", "headers"),
+                 headers=("headers",))[naming if naming in NAMINGS
+                                        else "apero"]
+    seen = {}
+    for pick in steps:
+        if pick == "apero" and apero is None:
+            continue
         names = Counter()
         for rec in files:
-            if pick == "apero":
+            if pick == "drsobjn":
                 chosen = [rec["drsobjn"]] if rec.get("drsobjn") else []
-            elif pick == "known":
-                chosen = [n for n in rec["names"]
-                          if rec["place"] is not None
-                          and _known(idents.get(n), dict(
-                              place=rec["place"], pm=rec["place"]["pm"],
-                              loose=rec["place"]["loose"]))]
+            elif pick == "apero":
+                # the files of a night say the same: asked once
+                place = rec.get("place") or {}
+                key = (tuple(rec["names"]), place.get("how"),
+                       round(place.get("ra") or 0, 4),
+                       round(place.get("dec") or 0, 4))
+                if key not in seen:
+                    seen[key] = _apero_entry(rec, apero)
+                chosen = [seen[key]["apero"]] if seen[key] else []
+            elif pick == "simbad":
+                sight = _sighting_of(rec)
+                chosen = [simbad_folder(idents[n]["main"])
+                          for n in rec["names"]
+                          if _named_there(idents.get(n), sight)]
             else:
-                chosen = rec["names"]
+                # the observer's name before APERO's
+                chosen = [n for n in rec["names"]
+                          if n != rec.get("drsobjn")] or rec["names"]
             for name in chosen[:1]:
-                names[clean(name)] += 1
+                if clean(name):
+                    names[clean(name)] += 1
+        if not names and pick == "simbad" and near is not None:
+            # no name SIMBAD knows there: its star at the best place
+            places = sorted((r["place"] for r in files if r.get("place")),
+                            key=lambda p: (p["how"] != "catalogue",
+                                           p["loose"]))
+            found = near(places[0]) if places else None
+            if found:
+                names[simbad_folder(found["main"])] += 1
         if names:
             best = max(names.values())
             return min((n for n, c in names.items() if c == best),
-                       key=lambda n: (len(n), n))
-    return "star"
+                       key=lambda n: (len(n), n)), \
+                "apero" if pick == "drsobjn" else pick
+    return "star", "headers"
 
 
-def plan(root: str, idents=None, progress=None, ask_simbad=True) -> dict:
+def plan(root: str, idents=None, progress=None, ask_simbad=True,
+         naming: str = "apero", apero=None) -> dict:
     """Where each file of a root's Downloads goes, and why: a plan to show
     before anything is moved (go). `idents`: SIMBAD's answers by name, kept
-    between plans; `progress(done, total, step)`: told as it reads."""
+    between plans; `progress(done, total, step)`: told as it reads;
+    `naming`: how a star new to the root is named (NAMINGS); `apero`: the
+    entry of APERO's database of a name (fetch.apero_names.lookup by
+    default, the database copied once when there is none)."""
     root = os.path.abspath(os.path.expanduser(root))
     idents = {} if idents is None else idents
     say = progress or (lambda *args: None)
@@ -1405,8 +1552,31 @@ def plan(root: str, idents=None, progress=None, ask_simbad=True) -> dict:
     star_records = [[i for i, n in star_of.items() if n == number]
                     for number in range(len(groups))]
     warnings_ += _either(sightings, groups, apart, idents, stars_of)
+    naming = naming if naming in NAMINGS else "apero"
+    if naming == "apero" and apero is None and any(
+            not stars_of[i].get("folder") for i in range(len(stars_of))):
+        say(0, 0, "apero")
+        apero = _apero_lookup(fetch=ask_simbad)
+        if apero is None:
+            warnings_.append(dict(key="apero_unreachable", args=[]))
     return _destinations(root, records, stars_of, star_records, idents,
-                         warnings_, simbad)
+                         warnings_, simbad, naming, apero, ask_simbad)
+
+
+def _apero_lookup(fetch=True):
+    """lookup(name) of APERO's database (copied from APERO's server the
+    first time, a few MB, if `fetch`), each name asked once; None when
+    there is no copy and none is made."""
+    from .fetch import apero_names
+    if not apero_names.available(fetch=fetch):
+        return None
+    found = {}
+
+    def lookup(name):
+        if name not in found:
+            found[name] = apero_names.lookup(name, fetch=False)
+        return found[name]
+    return lookup
 
 
 def _either(sightings, groups, apart, idents, records) -> list:
@@ -1470,14 +1640,20 @@ def _ask_simbad(names, idents, say) -> str:
 
 
 def _destinations(root, records, stars_of, star_records, idents, warnings_,
-                  simbad) -> dict:
+                  simbad, naming="apero", apero=None, ask=True) -> dict:
     """Each file its place: science/<folder> of its DATA_DIR, calib/, or
     UNUSED; the folders shown star by star."""
     moves, left, unused = [], [], []
     rows = {}
     taken = {}
+    failed = []
+
+    def near(place):
+        return simbad_at(place, idents, failed)
+
     for number, members in enumerate(star_records):
-        base = _folder_name(members, stars_of, idents)
+        base, how = _folder_name(members, stars_of, idents, naming, apero,
+                                 near if ask else None)
         homes = {}
         for i in members:
             folder = stars_of[i].get("folder")
@@ -1505,14 +1681,16 @@ def _destinations(root, records, stars_of, star_records, idents, warnings_,
                 row = rows.setdefault((home, name), dict(
                     star=number, home=home, folder=name, new=new,
                     instrument=inst, source=source, science=0,
-                    names=Counter(), size=0))
+                    names=Counter(), size=0, setting=rec["setting"],
+                    how=how if new else "existing"))
                 row["science"] += 1
                 row["size"] += rec["size"]
                 for one in rec["names"][:1]:
                     row["names"][one] += 1
                 moves.append(dict(src=rec["path"], dest=os.path.join(
                     root, home, "science", name, _target_name(rec)),
-                    kind="science", home=home, blaze=rec.get("blaze"),
+                    kind="science", home=home, row=[home, name],
+                    blaze=rec.get("blaze"),
                     split=rec.get("split"), family=rec.get("family"),
                     link=(inst, source) != (rec["instrument"],
                                             rec["source"])))
@@ -1533,6 +1711,9 @@ def _destinations(root, records, stars_of, star_records, idents, warnings_,
         elif rec.get("kind") is None:
             left.append(dict(path=rec["path"], name=rec["name"],
                              why=rec["why"]))
+    if failed and not any(w["key"] == "simbad_unreachable"
+                          for w in warnings_):
+        warnings_.append(dict(key="simbad_unreachable", args=[]))
     calib = Counter(m["home"] for m in moves if m["kind"] == "calib")
     folders = sorted(rows.values(), key=lambda r: (r["star"], r["home"],
                                                    r["folder"]))
@@ -1550,7 +1731,7 @@ def _destinations(root, records, stars_of, star_records, idents, warnings_,
                        and not os.path.exists(default_blaze(root,
                                                             *m["reader"]))})
     return dict(root=root, folders=folders, homes=homes, shares=shares,
-                defaults=defaults,
+                defaults=defaults, naming=naming,
                 calibs=[dict(home=h, n=c) for h, c in sorted(calib.items())],
                 unused=unused, left=left, warnings=warnings_, simbad=simbad,
                 moves=moves, files=len(records),
@@ -1577,6 +1758,164 @@ def _free(root, home, name, taken, number) -> str:
             return out
         count += 1
         out = "%s_%d" % (name, count)
+
+
+# -----------------------------------------------------------------------------
+# A name given by hand
+# -----------------------------------------------------------------------------
+def name_problem(name):
+    """What makes a name given by hand no folder name of LBL's, as
+    (i18n key, args) the page says, None when it is one: letters, digits,
+    + - and _ only, a letter or a digit first and last, not a suffix LBL
+    gives its own folders (_tc, _pca2d, _SPIROU...), NAME_MOST at most."""
+    from lbl.core.simbad import SUFFIXES
+    text = "" if name is None else str(name)
+    if not text.strip():
+        return "name_empty", []
+    if text != text.strip():
+        return "name_space_ends", []
+    bad = sorted({c for c in text if not re.match(r"[A-Za-z0-9+_-]", c)})
+    if bad:
+        shown = " ".join("(space)" if c == " " else c for c in bad)
+        return "name_chars", [shown, clean(text) or "?"]
+    if not re.match(r"^[A-Za-z0-9].*[A-Za-z0-9]$|^[A-Za-z0-9]$", text):
+        return "name_ends", [clean(text).strip("+-") or "?"]
+    if len(text) > NAME_MOST:
+        return "name_long", [NAME_MOST]
+    if SUFFIXES.search(text):
+        return "name_suffix", [SUFFIXES.search(text).group(0)]
+    return None
+
+
+def rename_planned(plan_: dict, star: int, name: str):
+    """The folders a plan makes for a star (its new ones: the files that go
+    to a folder already there stay with it) named `name` (+ _<setting>),
+    their moves with them. None when done, else (i18n key, args)."""
+    problem = name_problem(name)
+    if problem:
+        return problem
+    root = plan_["root"]
+    rows = [r for r in plan_["folders"] if r["star"] == star and r["new"]]
+    if not rows:
+        return "rename_nothing_new", []
+    wanted = {}
+    for row in rows:
+        new = name + ("_" + row["setting"] if row.get("setting") else "")
+        mine = os.path.join(root, row["home"], "science", new)
+        other = any(o["home"] == row["home"] and o["folder"] == new
+                    and o["star"] != star for o in plan_["folders"])
+        if new != row["folder"] and (os.path.lexists(mine) or other):
+            return "name_taken", ["%s/science/%s" % (row["home"], new)]
+        wanted[(row["home"], row["folder"])] = new
+    for move in plan_["moves"]:
+        key = tuple(move.get("row") or ())
+        if key in wanted:
+            move["dest"] = os.path.join(root, key[0], "science",
+                                        wanted[key],
+                                        os.path.basename(move["dest"]))
+            move["row"] = [key[0], wanted[key]]
+    for row in rows:
+        row["folder"] = wanted[(row["home"], row["folder"])]
+        row["how"] = "hand"
+    return None
+
+
+#: the folders of a DATA_DIR whose files LBL names after a target
+PRODUCTS = ("templates", "masks", "lblrv", "lblrdb", "lblreftable",
+            "plots", "reports", "pca2d")
+
+
+def products_named(data_dir: str, name: str) -> list:
+    """What LBL made of a target in a DATA_DIR, as it names it: the files
+    and folders of PRODUCTS whose name holds the target's as a word of its
+    own (lbl2_GJ1_GJ1.rdb is GJ1's, lbl2_GJ1214_GJ1214.rdb is not), and
+    its science/ folders made from it (<name>_pca2d, <name>_tc)."""
+    word = re.compile(r"(?<![A-Za-z0-9+-])%s(?![A-Za-z0-9+-])"
+                      % re.escape(name))
+    out = []
+    for sub in PRODUCTS:
+        here = os.path.join(data_dir, sub)
+        if not os.path.isdir(here) or os.path.islink(here):
+            continue
+        for entry in os.scandir(here):
+            if word.search(entry.name):
+                out.append(os.path.join(sub, entry.name))
+    science = os.path.join(data_dir, "science")
+    if os.path.isdir(science):
+        for entry in os.scandir(science):
+            if entry.name.startswith(name + "_") and word.search(
+                    entry.name) and entry.is_dir():
+                out.append(os.path.join("science", entry.name))
+    return sorted(out)
+
+
+def rename_folder(root: str, home: str, old: str, new: str,
+                  everywhere: bool = True, dry: bool = False) -> dict:
+    """A target folder of the root renamed by hand: science/<old> of the
+    DATA_DIR `home` ('' for a science/ of the root's own), and with
+    `everywhere` the folders of that name of the root's other DATA_DIRs
+    (dispatch names one star alike in all). The products LBL made under
+    the old name are not renamed (their names hold it in many ways, and a
+    run makes them again): they are counted, to be said. `dry`: what would
+    be done, nothing done.
+
+    :return: dict, ok, problem ((i18n key, args) or None), folders (each:
+             home, old, new), products (each: home, n, examples), done
+    """
+    root = os.path.abspath(os.path.expanduser(root))
+    out = dict(ok=False, problem=None, folders=[], products=[], done=False)
+    problem = name_problem(new)
+    if not problem and new == old:
+        problem = ("name_same", [])
+    # a folder of the root's, by its name alone
+    if (home and home not in readers()) or not old or old in (".", "..") \
+            or "/" in old or os.sep in old:
+        return dict(out, problem=("rename_missing", ["%s/science/%s" % (
+            home, old)]))
+    homes = [home]
+    if everywhere:
+        homes += [h for h in sorted(readers()) if h != home and
+                  os.path.isdir(os.path.join(root, h, "science", old))]
+    for one in homes:
+        data_dir = os.path.join(root, one) if one else root
+        src = os.path.join(data_dir, "science", old)
+        dest = os.path.join(data_dir, "science", new)
+        if not os.path.isdir(src):
+            problem = problem or ("rename_missing",
+                                  ["%s/science/%s" % (one, old)])
+            continue
+        # a name taken, but for its case only on a disk that ignores it
+        if os.path.lexists(dest) and not (
+                old.lower() == new.lower() and os.path.samefile(src, dest)):
+            problem = problem or ("name_taken",
+                                  ["%s/science/%s" % (one, new)])
+        out["folders"].append(dict(home=one, old=old, new=new))
+        made = products_named(data_dir, old)
+        if made:
+            out["products"].append(dict(home=one, n=len(made),
+                                        examples=made[:4]))
+    if not problem and not dry:
+        # a run reading the folder would lose it (cleanup.busy looks in the
+        #   whole root; a system that cannot tell does not stop a rename,
+        #   which is undone as easily)
+        from . import cleanup
+        running = [p for p in cleanup.busy(root) if not p.get("unknown")]
+        if running:
+            problem = ("rename_busy", [str(running[0]["pid"])])
+    out["problem"] = problem
+    out["ok"] = problem is None
+    if dry or problem:
+        return out
+    os.makedirs(os.path.join(root, DOWNLOADS), exist_ok=True)
+    for one in out["folders"]:
+        data_dir = os.path.join(root, one["home"]) if one["home"] else root
+        src = os.path.join(data_dir, "science", old)
+        dest = os.path.join(data_dir, "science", new)
+        os.rename(src, dest)
+        _record(root, src, dest, "renamed by hand")
+    _LISTINGS.clear()
+    out["done"] = True
+    return out
 
 
 # -----------------------------------------------------------------------------
@@ -1921,7 +2260,7 @@ class Dispatcher:
         with self.lock:
             self.state.update(done=done, total=total, step=step)
 
-    def start_plan(self, root: str) -> dict:
+    def start_plan(self, root: str, naming: str = "apero") -> dict:
         root = os.path.abspath(os.path.expanduser(root or ""))
         with self.lock:
             busy = self.state["state"] in ("adding", "planning", "moving")
@@ -1932,11 +2271,30 @@ class Dispatcher:
                 self._plan = None
         if busy:
             return self.status()
-        threading.Thread(target=self._run_plan, args=(root,),
+        threading.Thread(target=self._run_plan, args=(root, naming),
                          daemon=True).start()
         return self.status()
 
-    def start_add(self, root: str, paths, move: bool = False) -> dict:
+    def rename(self, root: str, star: int, name: str) -> dict:
+        """The folders the plan makes for a star given a name by hand
+        (rename_planned); the plan shown again, or why not."""
+        root = os.path.abspath(os.path.expanduser(root or ""))
+        with self.lock:
+            made = self._plan
+            if self.state["state"] != "planned" or made is None \
+                    or made["root"] != root:
+                problem = ("rename_no_plan", [])
+            else:
+                problem = rename_planned(made, int(star), str(name))
+                if problem is None:
+                    self.state["plan"] = _shown(made)
+        out = self.status()
+        if problem:
+            out["problem"] = dict(key=problem[0], args=problem[1])
+        return out
+
+    def start_add(self, root: str, paths, move: bool = False,
+                  naming: str = "apero") -> dict:
         """Files from elsewhere into Downloads (add), then the plan of
         Downloads, in a thread."""
         root = os.path.abspath(os.path.expanduser(root or ""))
@@ -1951,11 +2309,12 @@ class Dispatcher:
         if busy or not paths:
             return dict(self.status(), error=None if paths
                         else "no file to add")
-        threading.Thread(target=self._run_add, args=(root, paths, move),
+        threading.Thread(target=self._run_add,
+                         args=(root, paths, move, naming),
                          daemon=True).start()
         return self.status()
 
-    def _run_add(self, root, paths, move):
+    def _run_add(self, root, paths, move, naming="apero"):
         try:
             added = add(root, paths, move, self._say)
         except Exception as exc:                          # noqa: BLE001
@@ -1966,11 +2325,11 @@ class Dispatcher:
         with self.lock:
             self.state.update(state="planning", added=added, done=0,
                               total=0, step="headers")
-        self._run_plan(root)
+        self._run_plan(root, naming)
 
-    def _run_plan(self, root):
+    def _run_plan(self, root, naming="apero"):
         try:
-            made = plan(root, self.idents, self._say)
+            made = plan(root, self.idents, self._say, naming=naming)
         except Exception as exc:                          # noqa: BLE001
             with self.lock:
                 self.state.update(state="error", error="%s: %s" % (
@@ -2032,7 +2391,7 @@ def _shown(made: dict) -> dict:
                 for w, n in counts.most_common()]
     return dict(root=made["root"], folders=made["folders"],
                 calibs=made["calibs"], shares=made["shares"],
-                defaults=made["defaults"],
+                defaults=made["defaults"], naming=made.get("naming"),
                 unused=by_why(made["unused"]),
                 left=by_why(made["left"]), warnings=made["warnings"],
                 simbad=made["simbad"], files=made["files"],

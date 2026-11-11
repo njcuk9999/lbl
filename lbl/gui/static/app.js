@@ -20,6 +20,7 @@ const DEFAULTS = {
   extra: {}, pca2d_extra: {},
   skip_pca2d: null, min_rjd: null, max_rjd: null, resproj: false,
   name: '', name_auto: true, sub: 'local', archive_instruments: null,
+  naming: 'apero',
 };
 const S = JSON.parse(JSON.stringify(DEFAULTS));
 let T = {};
@@ -40,7 +41,8 @@ let SCIENCE = { state: 'ok', folder: '' };
 let LAYOUT = null;       // the root: its instrument folders and its Downloads
 let DISPATCH = null;     // the dispatch of Downloads: its plan, then what it did
 let dispatchTimer = null;
-const TREE_OPEN = new Set(['Downloads/']);   // the tree's folders shown open
+const TREE_SHUT = new Set();   // the tree's folders closed by hand (all open else)
+let RENAMING = null;           // the target folder of the tree being renamed
 
 // ── plumbing ────────────────────────────────────────────────────────────
 const api = {
@@ -603,10 +605,14 @@ function drawTree() {
   const line = (deep, ...kids) => el('div', { class: deep ? 'tree-line deep' : 'tree-line' }, ...kids);
   const count = (n) => el('span', { class: 'tree-count', text: n });
   const node = (key, head, ...kids) => {
-    const box = el('details', { class: `tree-node${key === `${S.folder}/` ? ' current' : ''}`, open: TREE_OPEN.has(key) || null }, el('summary', {}, ...head), ...kids);
-    box.addEventListener('toggle', () => { if (box.open) TREE_OPEN.add(key); else TREE_OPEN.delete(key); });
+    const box = el('details', { class: `tree-node${key === `${S.folder}/` ? ' current' : ''}`, open: TREE_SHUT.has(key) ? null : true }, el('summary', {}, ...head), ...kids);
+    box.addEventListener('toggle', () => { if (box.open) TREE_SHUT.delete(key); else TREE_SHUT.add(key); });
     return box;
   };
+  // a target folder: its spectra, its name, renamed by hand
+  const target = (home, one) => (RENAMING && RENAMING.home === home && RENAMING.old === one.name
+    ? line(true, count(one.files), renameBox())
+    : line(true, count(one.files), name(`${one.name}/`), renameButton(home, one.name)));
   const d = L.downloads;
   const nodes = [node('Downloads/', [name('Downloads/'), note(d.files ? t('tree_downloads', d.files, human(d.size)) : t('tree_downloads_none'))],
     ...d.kinds.map((k) => line(false, count(k.n), name(k.kind))),
@@ -619,7 +625,7 @@ function drawTree() {
       here ? el('span', { class: 'tree-here good-text', text: `● ${t('tree_current')}` })
         : el('button', { type: 'button', class: 'button tree-open', text: t('tree_open'), onclick: (event) => { event.preventDefault(); S.folder = f.name; openFolder(); } })],
     line(false, name('science/')),
-    ...f.list.map((one) => line(true, count(one.files), name(`${one.name}/`))),
+    ...f.list.map((one) => target(f.name, one)),
     f.empty.length ? line(true, note(t('tree_empty', f.empty.length, f.empty.join(', ')))) : null,
     line(false, name('calib/'), note(t('tree_calib', f.calib))),
     line(false, name('models'), note(t(f.models === 'merge' ? 'tree_models_own' : f.models === 'link' ? 'tree_models_none' : 'tree_models_link')))));
@@ -631,7 +637,7 @@ function drawTree() {
   if (old || lblFolders.length) {
     nodes.push(node('(root)', [name(t('tree_old')), note(t('tree_old_note'))],
       old ? line(false, name('science/'), note(old.targets.length ? t('tree_home', old.targets.length, old.spectra) : t('tree_legacy_empty', old.empty.length))) : null,
-      ...(old ? old.targets.map((one) => line(true, count(one.files), name(`${one.name}/`))) : []),
+      ...(old ? old.targets.map((one) => target('', one)) : []),
       old && old.targets.length && old.empty.length ? line(true, note(t('tree_empty', old.empty.length, old.empty.join(', ')))) : null,
       lblFolders.length ? line(false, note(t('tree_old_folders', lblFolders.join(' ')))) : null));
   }
@@ -663,8 +669,104 @@ async function openFolder() {
 // the files of Downloads into the root's folders: a plan read from their
 //   headers first (dispatch.py), shown, then the files moved when asked
 async function startDispatch() {
-  DISPATCH = await api.post('/api/dispatch/plan', { root: S.root });
+  DISPATCH = await api.post('/api/dispatch/plan', { root: S.root, naming: S.naming });
   followDispatch();
+}
+
+// ── a folder name given by hand ─────────────────────────────────────────
+// letters, digits, + - and _ (dispatch.name_problem says why not, live)
+function problemText(problem) { return problem ? t(problem.key, ...(problem.args || [])) : ''; }
+
+/* an input for a new folder of the plan: checked as it is typed, given
+   to submit(name) on Enter or when left, whose answer (a problem or null)
+   is said beside it */
+function nameEditor(value, submit) {
+  const input = el('input', { type: 'text', class: 'name-edit mono', value, spellcheck: 'false', autocomplete: 'off', size: Math.max(8, value.length + 2), title: t('name_edit_title') });
+  const said = el('span', { class: 'name-problem warn-text small' });
+  const show = (problem) => { said.textContent = problemText(problem); input.classList.toggle('bad', !!problem); };
+  let timer = null;
+  input.oninput = () => {
+    input.size = Math.max(8, input.value.length + 2);
+    clearTimeout(timer);
+    timer = setTimeout(async () => show((await api.get('/api/names/check', { name: input.value })).problem), 200);
+  };
+  input.onkeydown = (event) => { if (event.key === 'Escape') { input.value = value; show(null); input.blur(); } };
+  input.onchange = async () => { if (input.value !== value) show(await submit(input.value)); };
+  return el('span', { class: 'name-editor' }, input, said);
+}
+
+// the folders of the root of a name, in every instrument folder
+function foldersNamed(name) {
+  if (!LAYOUT) return [];
+  const out = LAYOUT.folders.filter((f) => f.list.some((one) => one.name === name)).map((f) => f.name);
+  if (LAYOUT.science && LAYOUT.science.targets.some((one) => one.name === name)) out.push('');
+  return out;
+}
+
+function renameButton(home, old) {
+  return el('button', {
+    type: 'button', class: 'button tree-rename', title: t('tree_rename'), 'aria-label': t('tree_rename'),
+    onclick: (event) => { event.preventDefault(); RENAMING = { home, old, value: old, everywhere: true, check: null }; $('tree_said').hidden = true; drawTree(); },
+  }, el('span', { text: '✎' }));
+}
+
+/* the target folder being renamed: its new name, checked as it is typed
+   (dispatch.rename_folder, dry), the folders of that name elsewhere in
+   the root renamed with it if ticked, what LBL made under the old name */
+function renameBox() {
+  const R = RENAMING;
+  const others = foldersNamed(R.old).filter((home) => home !== R.home);
+  const input = el('input', { type: 'text', class: 'name-edit mono', value: R.value, spellcheck: 'false', autocomplete: 'off', size: Math.max(10, R.value.length + 2), title: t('name_edit_title') });
+  const said = el('div', { class: 'small rename-said' });
+  const ok = el('button', { type: 'button', class: 'button primary', text: t('rename_ok'), disabled: true });
+  const shut = el('button', { type: 'button', class: 'button', text: t('dispatch_cancel'), onclick: () => { RENAMING = null; drawTree(); } });
+  const everywhere = others.length ? el('label', { class: 'check small' },
+    el('input', { type: 'checkbox', checked: R.everywhere || null, onchange: (event) => { R.everywhere = event.target.checked; check(); } }),
+    el('span', { text: t('rename_everywhere', others.map((home) => home || t('tree_old')).join(', ')) })) : null;
+  const show = () => {
+    const c = R.check;
+    ok.disabled = !c || !c.ok || R.value === R.old;
+    input.classList.toggle('bad', !!(c && c.problem));
+    if (!c || R.value === R.old) { said.replaceChildren(); return; }
+    if (c.problem) { said.replaceChildren(el('span', { class: 'warn-text', text: problemText(c.problem) })); return; }
+    const where = c.folders.map((one) => `${one.home ? `${one.home}/` : ''}science/${one.old}`).join(', ');
+    const lines = [el('div', { text: t('rename_will', where, R.value) })];
+    c.products.forEach((one) => lines.push(el('div', { class: 'warn-text', text: t('rename_products', one.home || t('tree_old'), one.n, R.old, one.examples.join(', ')) })));
+    said.replaceChildren(...lines);
+  };
+  let timer = null;
+  const check = () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const asked = R.value;
+      const got = await api.post('/api/folders/rename', { root: S.root, home: R.home, old: R.old, new: asked, everywhere: R.everywhere, dry: true });
+      if (RENAMING !== R || R.value !== asked) return;
+      R.check = got;
+      show();
+    }, 200);
+  };
+  input.oninput = () => { R.value = input.value; input.size = Math.max(10, input.value.length + 2); R.check = null; show(); check(); };
+  input.onkeydown = (event) => {
+    if (event.key === 'Escape') { RENAMING = null; drawTree(); }
+    if (event.key === 'Enter' && !ok.disabled) ok.click();
+  };
+  ok.onclick = async () => {
+    ok.disabled = true;
+    const got = await api.post('/api/folders/rename', { root: S.root, home: R.home, old: R.old, new: R.value, everywhere: R.everywhere });
+    if (!got.done) { R.check = got; show(); return; }
+    RENAMING = null;
+    // the target keeps its place among those ticked, under its new name
+    S.ticked = S.ticked.map((one) => (one === R.old ? R.value : one));
+    save();
+    await loadFolders();
+    $('tree_said').textContent = t('rename_done', R.old, R.value, got.folders.length);
+    $('tree_said').hidden = false;
+    if (got.folders.some((one) => one.home === S.folder)) await scanFolder();
+  };
+  setTimeout(() => { input.focus(); input.select(); }, 0);
+  show();
+  if (R.value !== R.old && !R.check) check();
+  return el('div', { class: 'rename-box' }, el('div', { class: 'row gap wrap' }, input, ok, shut), everywhere, said);
 }
 
 function followDispatch() {
@@ -714,7 +816,8 @@ function drawDispatch() {
   $('dispatch').disabled = busy || !down || !down.files;
   $('pick').disabled = busy || !S.root;
   const step = d.step === 'simbad' ? t('dispatch_simbad', d.done, d.total)
-    : d.step === 'folders' ? t('dispatch_looking') : t('dispatch_headers', d.done, d.total);
+    : d.step === 'apero' ? t('dispatch_apero')
+      : d.step === 'folders' ? t('dispatch_looking') : t('dispatch_headers', d.done, d.total);
   $('dispatch_status').textContent = d.state === 'adding' ? t(d.move ? 'dispatch_adding_move' : 'dispatch_adding', d.done, d.total)
     : d.state === 'planning' ? step
     : d.state === 'moving' ? t('dispatch_moving', d.done, d.total)
@@ -731,14 +834,28 @@ function drawDispatch() {
     const rows = p.folders.map((r) => {
       const first = r.star !== last;
       last = r.star;
+      // a new folder's name given by hand (the star's: in every
+      //   instrument folder it goes to, its setting kept)
+      const tail = r.setting && r.folder.endsWith(`_${r.setting}`) ? `_${r.setting}` : '';
+      const base = tail ? r.folder.slice(0, -tail.length) : r.folder;
+      const folder = r.new
+        ? el('td', { class: 'mono' }, `${r.home}/science/`, nameEditor(base, async (name) => {
+          const got = await api.post('/api/dispatch/rename', { root: S.root, star: r.star, name });
+          if (got.problem) return got.problem;
+          DISPATCH = got;
+          drawDispatch();
+          return null;
+        }), tail)
+        : el('td', { class: 'mono', text: `${r.home}/science/${r.folder}` });
       return el('tr', { class: first ? 'star-first' : null },
-        el('td', { class: 'mono', text: `${r.home}/science/${r.folder}` }),
+        folder,
         el('td', { class: 'num', text: r.science }),
         el('td', { class: r.new ? 'good-text small' : 'muted small', text: t(r.new ? 'dispatch_new' : 'dispatch_existing') }),
+        el('td', { class: 'muted small', text: t(`how_${r.how || 'headers'}`) }),
         el('td', { class: 'small', text: r.names.join(', ') }));
     });
     $('dispatch_table').replaceChildren(
-      el('thead', {}, el('tr', {}, ...['col_dispatch_folder', 'col_dispatch_files', null, 'col_dispatch_names'].map((key) => el('th', { class: key === 'col_dispatch_files' ? 'num' : null, text: key ? t(key) : '' })))),
+      el('thead', {}, el('tr', {}, ...['col_dispatch_folder', 'col_dispatch_files', null, 'col_dispatch_how', 'col_dispatch_names'].map((key) => el('th', { class: key === 'col_dispatch_files' ? 'num' : null, text: key ? t(key) : '' })))),
       el('tbody', {}, ...rows));
     $('dispatch_wrap').hidden = !rows.length;
     if (d.added) notes.push(dispatchNote(t('pick_added', d.added.added, relative(d.added.folder), d.added.same)));
@@ -2560,6 +2677,7 @@ async function init() {
   INSTRUMENTS = await api.get('/api/instruments');
   fillInstruments();
   $('data_dir').value = S.root;
+  $('naming').value = ['apero', 'simbad', 'headers'].includes(S.naming) ? S.naming : 'apero';
   $('python').value = S.python;
   $('min_rjd').value = S.min_rjd ?? '';
   $('max_rjd').value = S.max_rjd ?? '';
@@ -2578,8 +2696,15 @@ async function init() {
     const paths = PICKED ? PICKED.paths : [];
     PICKED = null;
     drawPicked();
-    DISPATCH = await api.post('/api/downloads/add', { root: S.root, paths, move: $('pick_move').checked });
+    DISPATCH = await api.post('/api/downloads/add', { root: S.root, paths, move: $('pick_move').checked, naming: S.naming });
     followDispatch();
+  };
+  // a plan shown is made again with the new naming (the headers are read
+  //   once, SIMBAD's answers kept)
+  $('naming').onchange = (event) => {
+    S.naming = event.target.value;
+    save();
+    if (DISPATCH && DISPATCH.state === 'planned') startDispatch();
   };
   $('dispatch_go').onclick = async () => { DISPATCH = await api.post('/api/dispatch/go', { root: S.root }); followDispatch(); };
   $('dispatch_cancel').onclick = async () => { DISPATCH = await api.post('/api/dispatch/cancel', {}); drawDispatch(); };
