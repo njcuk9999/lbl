@@ -292,8 +292,11 @@ class Handler(BaseHTTPRequestHandler):
                                     int(query.get("from", 0)))
             if route == "/api/runs":
                 data_dir = ctx.allow(query.get("data_dir", ""))
+                # each run with the PCA2D basis it fitted, and where that
+                #   stands (to be frozen, frozen, replaced...)
                 return self._json(dict(
-                    window=history.window_runs(data_dir),
+                    window=[dict(run, basis=lblinfo.run_basis(data_dir, run))
+                            for run in history.window_runs(data_dir)],
                     reports=history.reports(data_dir)))
             if route == "/api/wraps":
                 data_dir = ctx.allow(query.get("data_dir", ""))
@@ -529,6 +532,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(dict(state=loaded["state"],
                                        notes=loaded["notes"],
                                        skipped=parsed["skipped"], path=path))
+            if route == "/api/freeze_basis":
+                data_dir = ctx.allow(body.get("data_dir", ""))
+                record = next((run for run in history.window_runs(data_dir)
+                               if run.get("id") == body.get("run")), None)
+                if record is None:
+                    return self._json(dict(ok=False, done=False, problem=dict(
+                        key="freeze_state_none", args=[])))
+                return self._json(lblinfo.freeze_basis(
+                    data_dir, record, str(body.get("name", "")),
+                    dry=bool(body.get("dry"))))
             if route == "/api/keep_basis":
                 data_dir = ctx.allow(body.get("data_dir", ""))
                 return self._json(lblinfo.keep_basis(

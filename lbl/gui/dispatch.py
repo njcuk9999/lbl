@@ -1837,11 +1837,12 @@ def _free(root, home, name, taken, number) -> str:
 # -----------------------------------------------------------------------------
 # A name given by hand
 # -----------------------------------------------------------------------------
-def name_problem(name):
+def name_problem(name, suffixes: bool = True):
     """What makes a name given by hand no folder name of LBL's, as
     (i18n key, args) the page says, None when it is one: letters, digits,
     + - and _ only, a letter or a digit first and last, not a suffix LBL
-    gives its own folders (_tc, _pca2d, _SPIROU...), NAME_MOST at most."""
+    gives its own folders (_tc, _pca2d, _SPIROU...; unless not
+    `suffixes`: a basis' name), NAME_MOST at most."""
     from lbl.core.simbad import SUFFIXES
     text = "" if name is None else str(name)
     if not text.strip():
@@ -1856,7 +1857,7 @@ def name_problem(name):
         return "name_ends", [clean(text).strip("+-") or "?"]
     if len(text) > NAME_MOST:
         return "name_long", [NAME_MOST]
-    if SUFFIXES.search(text):
+    if suffixes and SUFFIXES.search(text):
         return "name_suffix", [SUFFIXES.search(text).group(0)]
     return None
 

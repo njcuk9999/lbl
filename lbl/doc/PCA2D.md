@@ -214,7 +214,9 @@ A basis that is to stay is KEPT in
 beside LBL's other models, which nothing deletes (`lbl_reset` empties
 `templates/`, a cleanup of the PCA2D products empties `pca2d/`):
 `lbl.pca2d.basis.keep(name, DATA_DIR, instrument)` moves it there (the window
-has a *keep* button beside the basis), or put the file there yourself:
+has a *keep* button beside the basis, and in its Runs tab a *Freeze basis*
+box that copies a run's basis there under a name of your own), or put the
+file there yourself:
 a basis in any other subfolder of `models/` is found as well. `input_name`
 looks in `models/` first (the run's own `pca2d_` folder before the
 others), then in `pca2d/components/`; a fit whose `output_name` is that of

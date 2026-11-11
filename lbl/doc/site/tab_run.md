@@ -26,6 +26,40 @@ One row per run of this window: its name, its state (done, failed, stopped,
 cancelled), its start and duration, and links to its reports (LBL's, PCA2D's,
 its components). A failed run keeps its log: open it to see why.
 
+## Freezing a run's PCA2D basis
+
+A run that fitted PCA2D left its observer basis (what the corrections leave
+in our frame) in `pca2d/components/`, named after its targets; the next fit
+of the same targets writes over it. **Freeze basis**, in the run's row,
+keeps it for good under a name of yours:
+
+1. Tick **Freeze basis** and type a name (`nirps_2026a`): it is checked as
+   it is typed.
+2. **Freeze** copies the basis into
+   `models/pca2d_<INSTRUMENT>_<SOURCE>/PCA2D_Observer_<name>_<instrument>.fits`
+   (the root's `models/`, shared by its instrument folders), its name
+   (`BASISNAM`) the one typed, its identity (`BASISID`) unchanged, the run
+   it came from written in it (`FROMRUN`).
+3. From then on, the PCA2D settings of that instrument and data source
+   offer it among the observer bases: a star that cannot separate the two
+   frames itself (a narrow BERV range) uses it frozen (`input_name`). No
+   cleanup removes it.
+
+A name is refused, with why, when it is:
+
+- no file name: letters, digits, `+`, `-` and `_` only, a letter or a digit
+  first and last, 64 characters at most;
+- the name of a basis already there, kept or in `pca2d/components/`, of any
+  instrument, in any case;
+- the name of a target of the folder: its next fit would write a basis of
+  that name, and a fit updates a kept basis of its name.
+
+A basis already frozen (the same `BASISID`, under any name) is not frozen
+twice: the row says the name it has. The row also says when there is
+nothing to freeze: the run read a frozen basis, a later fit of the same name
+wrote over its basis, the basis is no longer on disk, or the run is not
+over.
+
 ## The window's help
 
 {{help run_name | Run name}}

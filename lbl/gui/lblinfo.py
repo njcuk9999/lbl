@@ -316,6 +316,189 @@ def keep_basis(data_dir: str, name: str, instrument: str = "") -> dict:
         return dict(error=str(exc))
 
 
+def _run_label(meta: dict) -> str:
+    """The name lbl_pca2d gives the observer basis of a run's fit (its
+    output_name, else its objects joined by + and its variant name), as
+    recipes/lbl_pca2d.py writes it."""
+    import re
+    pca2d = meta.get("pca2d") or {}
+    clean = lambda text: re.sub(r"[^0-9A-Za-z._+-]", "_", str(text or ""))
+    output = clean(pca2d.get("output_name"))
+    variant = clean(pca2d.get("name"))
+    return output or "+".join(meta.get("targets") or []) + (
+        "_" + variant if variant else "")
+
+
+def _date(text):
+    """the Unix time of a FITS DATE card (local time, as basis.save writes
+    it), None if unreadable"""
+    import datetime
+    try:
+        return datetime.datetime.fromisoformat(str(text)).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+#: how close [s] a basis' DATE may be to the end of the run that wrote it
+RUN_SLACK = 30.0
+
+
+def run_basis(data_dir: str, record: dict):
+    """The observer basis a run of the window fitted, and where it stands
+    (None for a run without PCA2D):
+
+    - 'used': the run read a frozen basis (input_name): nothing new;
+    - 'available': in pca2d/components, written by this run (its DATE in
+      the run's time), or by an earlier run of the same request that this
+      one reused (the same fit folder, s<M>-o<N>), and not frozen yet;
+    - 'frozen': that basis (its BASISID) is already kept, under `frozen`;
+    - 'replaced': a later fit of the same name wrote over it;
+    - 'running': the run is not over;
+    - 'missing': not in pca2d/components (deleted, or the fit failed).
+
+    dict(state, label, file, path, id, instrument, source, frozen)."""
+    from astropy.io import fits
+    from lbl.pca2d import basis as pbasis
+    meta = record.get("meta") or {}
+    pca2d = meta.get("pca2d")
+    if not pca2d:
+        return None
+    if pca2d.get("input_name"):
+        return dict(state="used", label=str(pca2d["input_name"]))
+    label = _run_label(meta)
+    inst = meta.get("instrument") or ""
+    path = pbasis.component_file("observer", label, inst, data_dir)
+    out = dict(state="missing", label=label, file=os.path.basename(path),
+               path=path, id=None, instrument=inst, source=None, frozen=[])
+    if not os.path.exists(path):
+        return out
+    try:
+        head = fits.getheader(path)
+    except Exception:                                     # noqa: BLE001
+        return out
+    made = _date(head.get("DATE"))
+    ended = record.get("ended") or record.get("started") or 0
+    started = record.get("started") or 0
+    folder = "s%s-o%s" % (pca2d.get("n_star", 1), pca2d.get("n_earth"))
+    same_fit = str(head.get("RUNDIR", "")) == folder or (
+        pca2d.get("n_earth") is None and str(head.get("RUNDIR", "")
+                                              ).startswith(folder[:3]))
+    out.update(id=str(head.get("BASISID", "")),
+               instrument=str(head.get("INSTRUME", "")).strip(),
+               source=str(head.get("DATASRC", "")).strip())
+    if record.get("state") in ("queued", "running"):
+        out["state"] = "running"
+        return out
+    if made is None or not same_fit or made > ended + RUN_SLACK:
+        # another fit of that name since (other settings, or later)
+        out["state"] = "replaced"
+        return out
+    if made < started - RUN_SLACK and record.get("state") != "done":
+        # an older fit's, and this run did not get as far as its own
+        out["state"] = "missing"
+        return out
+    out["frozen"] = [b["name"] for b in kept_bases(data_dir, out["instrument"],
+                                                   out["source"])
+                     if b["id"] == out["id"]]
+    out["state"] = "frozen" if out["frozen"] else "available"
+    return out
+
+
+def kept_bases(data_dir: str, instrument: str, source: str) -> list:
+    """The kept observer bases of an instrument and data source, in
+    models/: dict(name, file, path, id)."""
+    from astropy.io import fits
+    from lbl.pca2d import basis as pbasis
+    out = []
+    for path, kept in pbasis.observer_files(data_dir, instrument, source):
+        if not kept:
+            continue
+        try:
+            head = fits.getheader(path)
+        except Exception:                                 # noqa: BLE001
+            continue
+        if str(head.get("INSTRUME", "")).strip().upper() != \
+                str(instrument).upper() or \
+                str(head.get("DATASRC", "")).strip().upper() != \
+                str(source).upper():
+            continue
+        out.append(dict(name=str(head.get("BASISNAM", "")),
+                        file=os.path.basename(path), path=path,
+                        id=str(head.get("BASISID", ""))))
+    return out
+
+
+def freeze_basis(data_dir: str, record: dict, name: str,
+                 dry: bool = False) -> dict:
+    """The observer basis a run fitted kept for good under `name`: copied
+    into models/pca2d_<INSTRUMENT>_<SOURCE>/PCA2D_Observer_<name>_<inst>.fits
+    (its BASISNAM the new name, its BASISID unchanged, FROMRUN the run),
+    where every later PCA2D run of that instrument and source finds it
+    (input_name=<name>), and no cleanup reaches. Refused, with why: a name
+    that is no file name (dispatch.name_problem, suffixes aside); the name
+    of a basis already there (kept or in pca2d/components, any case); the
+    name of a target of the DATA_DIR (its next fit would write over the
+    frozen basis: a fit's basis takes its objects' name, and one of the
+    name of a kept basis updates it); a basis already frozen (the same
+    BASISID), or one that is no longer the run's.
+
+    :return: dict(ok, done, problem (dict(key, args) or None), path, name)
+    """
+    from astropy.io import fits
+    from lbl.pca2d import basis as pbasis
+    from . import dispatch, targets
+    out = dict(ok=False, done=False, problem=None, path=None, name=name)
+
+    def refuse(key, *args):
+        out["problem"] = dict(key=key, args=[str(a) for a in args])
+        return out
+
+    info = run_basis(data_dir, record)
+    if not info or info["state"] not in ("available", "frozen"):
+        return refuse("freeze_state_%s" % (info or {}).get("state", "none"))
+    if info["state"] == "frozen":
+        return refuse("freeze_already", ", ".join(info["frozen"]))
+    problem = dispatch.name_problem(name, suffixes=False)
+    if problem:
+        return refuse(problem[0], *problem[1])
+    inst, source = info["instrument"], info["source"]
+    if not inst or not source:
+        return refuse("freeze_no_source", info["file"])
+    folder = pbasis.kept_folder(data_dir, inst, source)
+    dest = os.path.join(folder, os.path.basename(pbasis.component_file(
+        "observer", name, inst, data_dir)))
+    low = str(name).lower()
+    for path, _ in pbasis.observer_files(data_dir, inst, source):
+        try:
+            head = fits.getheader(path)
+        except Exception:                                 # noqa: BLE001
+            continue
+        if str(head.get("BASISNAM", "")).lower() == low or \
+                os.path.basename(path).lower() == os.path.basename(
+                    dest).lower():
+            return refuse("freeze_taken", name,
+                          os.path.relpath(path, data_dir))
+    if low in {t.lower() for t in targets.target_names(data_dir)}:
+        return refuse("freeze_target", name)
+    out.update(ok=True, path=dest)
+    if dry:
+        return out
+    os.makedirs(folder, exist_ok=True)
+    part = dest + ".part"
+    with fits.open(info["path"], memmap=False) as hdul:
+        hdul[0].header["BASISNAM"] = (name, "name of this basis")
+        hdul[0].header["FROMRUN"] = (str(record.get("id", "")),
+                                     "the window's run it was fitted in")
+        hdul[0].header["FROMFILE"] = (info["file"], "its file in components")
+        hdul.writeto(part, overwrite=True)
+    if os.path.exists(dest):
+        os.remove(part)
+        return refuse("freeze_taken", name, os.path.relpath(dest, data_dir))
+    os.replace(part, dest)
+    out["done"] = True
+    return out
+
+
 #: the header keys a template's effective temperature is read from, in order
 TEFF_KEYS = ("PP_TEFF", "OBJTEMP", "TEFF")
 

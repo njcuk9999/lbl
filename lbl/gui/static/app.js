@@ -1947,7 +1947,8 @@ async function pollQueue() {
   // the Runs tab follows the queue: read again as a run is queued, starts
   //   or ends, and every 10 s while one goes (its duration)
   const runsNow = [S.data_dir, ...jobs.map((j) => `${j.id}:${j.state}`)].join(' ');
-  if (S.tab === 'runs' && (runsNow !== runsSeen || (jobs.some((j) => j.state === 'running') && Date.now() - runsRead > 10000))) loadRuns();
+  // not while a basis is being named: the table would lose what is typed
+  if (S.tab === 'runs' && !FREEZE && (runsNow !== runsSeen || (jobs.some((j) => j.state === 'running') && Date.now() - runsRead > 10000))) loadRuns();
   runsSeen = runsNow;
   const job = jobs.find((j) => j.id === selectedJob);
   if (job && job.steps && job.steps.length) drawSteps(job.steps, t('steps_of', job.name));
@@ -2037,14 +2038,21 @@ function table(holder, head, rows) {
 
 let runsSeen = '';
 let runsRead = 0;
+let FREEZE = null;     // the run whose PCA2D basis is being frozen, and its name
+let RUNS = [];
 async function loadRuns() {
   if (!S.data_dir) return;
   runsRead = Date.now();
   const data = await api.get('/api/runs', { data_dir: S.data_dir });
-  table($('runs_window'), ['col_name', 'col_state', 'col_started', 'col_duration', 'col_reports', 'log'],
-    (data.window || []).map((run) => el('tr', {},
+  RUNS = data.window || [];
+  if (FREEZE && !RUNS.some((run) => run.id === FREEZE.run)) FREEZE = null;
+  // the PCA2D basis beside the state: the reports' names make the table
+  //   wider than the window
+  table($('runs_window'), ['col_name', 'col_state', 'col_basis', 'col_started', 'col_duration', 'col_reports', 'log'],
+    RUNS.map((run) => el('tr', {},
       el('td', { class: 'mono', text: run.name }),
       el('td', {}, el('span', { class: `badge ${run.state}`, text: t(`state_${run.state}`) })),
+      el('td', { class: 'run-basis' }, basisCell(run)),
       el('td', { class: 'mono', text: when(run.started || run.created) }),
       el('td', { class: 'mono', text: run.started ? took(run.started, run.ended) : '' }),
       el('td', {}, (run.reports || []).map((p) => [fileLink(p, baseName(p)), ' '])),
@@ -2054,6 +2062,80 @@ async function loadRuns() {
       el('td', {}, fileLink(report.path, report.name)),
       el('td', { class: 'mono', text: when(report.mtime) }),
       el('td', { class: 'num', text: human(report.size) }))));
+}
+
+/* the PCA2D basis a run fitted: a box to freeze it (kept under a name, in
+   models/pca2d_<INSTRUMENT>_<SOURCE>/, where the later PCA2D runs of that
+   instrument and source find it), or where it stands */
+function basisCell(run) {
+  const b = run.basis;
+  if (!b) return '';
+  if (b.state === 'frozen') {
+    return el('label', { class: 'check small' }, el('input', { type: 'checkbox', checked: true, disabled: true }),
+      el('span', { text: t('basis_frozen_as', b.frozen.join(', ')) }));
+  }
+  if (b.state !== 'available') return el('span', { class: 'muted small', text: t(`basis_${b.state}`, b.label) });
+  const open = FREEZE && FREEZE.run === run.id;
+  const box = el('label', { class: 'check small', title: t('freeze_title', b.file) },
+    el('input', {
+      type: 'checkbox', checked: open || null,
+      onchange: (event) => {
+        FREEZE = event.target.checked ? { run: run.id, value: '', check: null } : null;
+        loadRuns();
+      },
+    }), el('span', { text: t('freeze_basis') }));
+  return open ? [box, freezeBox(run)] : box;
+}
+
+/* the name a basis is frozen under: checked as it is typed (a dry run of
+   lblinfo.freeze_basis: a file name, not a basis or a target already
+   there), then Freeze */
+function freezeBox(run) {
+  const F = FREEZE;
+  const input = el('input', { type: 'text', class: 'name-edit mono', value: F.value, spellcheck: 'false', autocomplete: 'off', size: 18, placeholder: t('freeze_placeholder') });
+  const said = el('div', { class: 'small rename-said' });
+  const go = el('button', { type: 'button', class: 'button primary', text: t('freeze_go'), disabled: true });
+  const shut = el('button', { type: 'button', class: 'button', text: t('dispatch_cancel'), onclick: () => { FREEZE = null; loadRuns(); } });
+  const show = () => {
+    const c = F.check;
+    go.disabled = !c || !c.ok;
+    input.classList.toggle('bad', !!(c && c.problem));
+    if (!F.value || !c) { said.replaceChildren(); return; }
+    said.replaceChildren(c.problem ? el('span', { class: 'warn-text', text: problemText(c.problem) })
+      : el('span', { text: t('freeze_will', relative(c.path), F.value) }));
+  };
+  let timer = null;
+  const check = () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const asked = F.value;
+      if (!asked) { F.check = null; show(); return; }
+      const got = await api.post('/api/freeze_basis', { data_dir: S.data_dir, run: run.id, name: asked, dry: true });
+      if (FREEZE !== F || F.value !== asked) return;
+      F.check = got;
+      show();
+    }, 200);
+  };
+  input.oninput = () => { F.value = input.value; F.check = null; show(); check(); };
+  input.onkeydown = (event) => {
+    if (event.key === 'Escape') { FREEZE = null; loadRuns(); }
+    if (event.key === 'Enter' && !go.disabled) go.click();
+  };
+  go.onclick = async () => {
+    go.disabled = true;
+    const got = await api.post('/api/freeze_basis', { data_dir: S.data_dir, run: run.id, name: F.value });
+    if (!got.done) { F.check = got; show(); return; }
+    FREEZE = null;
+    $('runs_said').textContent = t('freeze_done', got.name, relative(got.path));
+    $('runs_said').hidden = false;
+    // the PCA2D settings offer it from now on
+    BASES = await api.get('/api/bases', { data_dir: S.data_dir, instrument: S.instrument, source: S.source });
+    loadRuns();
+  };
+  setTimeout(() => input.focus(), 0);
+  show();
+  if (F.value && !F.check) check();
+  return el('div', { class: 'rename-box' }, el('div', { class: 'row gap wrap' }, input, go, shut), said);
 }
 
 /* a table's flavour, the data folder it is in before it when that is not

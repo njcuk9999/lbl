@@ -188,6 +188,9 @@ body {
 .rename-box { display: inline-flex; flex-direction: column; gap: 4px; vertical-align: top; padding: 4px 0; }
 .rename-box .button { padding: 2px 10px; min-height: 0; height: auto; font-size: 0.8rem; }
 .rename-said { max-width: 60em; }
+/* the Runs tab: a run's PCA2D basis, frozen under a name */
+.run-basis { min-width: 11em; }
+.run-basis .rename-box { display: flex; margin-top: 4px; }
 input[type=text].name-edit { width: auto; flex: 0 0 auto; font-size: 0.82rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: inherit; }
 input[type=text].name-edit.bad { border-color: var(--bad); outline-color: var(--bad); }
 .name-editor { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
