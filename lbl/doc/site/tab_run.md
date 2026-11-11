@@ -11,7 +11,11 @@
   installed in.
 - **The steps**: one pill per step (LBL on the delivered spectra, PCA2D's
   cube, fit, figures and correction, LBL on the corrected spectra, the
-  report), each filled as its counter goes.
+  report), each filled as its counter goes. Every step that runs has its
+  pill: a template or a mask whose step is unticked in the LBL settings but
+  that is not on disk is made all the same before the velocities, and its
+  pill (dashed) says "missing"; a step the log names that the plan did not
+  have gets a dashed pill where it comes.
 - **The log**: everything the run prints, timestamped, coloured by level;
   progress bars redraw in place. The arrows go to its top (it stops
   following) and its bottom (it follows again). **Stop** ends the run

@@ -49,6 +49,9 @@ COUNTERS = (re.compile(r"\bfile (\d+) of (\d+)\b"),
             re.compile(r"\bfile (\d+) / (\d+)\b"),
             re.compile(r"\|\s*(\d+)/(\d+) \["),
             re.compile(r"\b(\d+)/(\d+) files\b"))
+#: the steps of LBL's recipes a log may name that the plan did not have (a
+#: template made because it was missing...): given a pill where they come
+UNPLANNED = ("telluclean", "template", "mask", "compute", "compile")
 #: how long a run is given to stop before it is killed [s]
 GRACE = 10.0
 #: what a run is started with, by the wrap's own interpreter (python -u -c
@@ -271,6 +274,22 @@ class Job:
                 step.setdefault("at", len(self.events) - 1)
                 self.step_at = index + 1 if done else index
                 return
+        # a recipe the plan did not have: a pill of its own where it comes,
+        #   the steps before it done, so that every step of the run shows
+        if obj is not None and kind in UNPLANNED:
+            # after the step going (step_at is the running one, or the next)
+            index = self.step_at
+            if index < len(self.steps) and \
+                    self.steps[index]["state"] in ("running", "done"):
+                index += 1
+            for before in self.steps[:index]:
+                if before["state"] in ("pending", "running"):
+                    before["state"] = "done"
+                before.pop("progress", None)
+            self.steps.insert(index, dict(
+                kind=kind, obj=obj, state="done" if done else "running",
+                added=True, at=len(self.events) - 1))
+            self.step_at = index + 1 if done else index
 
     def finish_steps(self) -> None:
         """At the end: every step done when the run succeeded; otherwise the

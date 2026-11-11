@@ -228,3 +228,45 @@ def test_the_steps_tick_off_as_the_log_goes(tmp_path):
     job.finish_steps()
     assert job.steps[6]["state"] == "failed"
     assert all(s["state"] == "pending" for s in job.steps[7:])
+
+
+def test_every_step_shows_a_missing_template_planned_and_one_unplanned(
+        tmp_path):
+    from lbl.gui import wrapgen
+    # the template and the mask unticked: those not on disk are planned all
+    #   the same (lbl_wrap makes them before the velocities), said so
+    data_dir = tmp_path / "NIRPS_HE_CADC"
+    (data_dir / "templates").mkdir(parents=True)
+    (data_dir / "masks").mkdir()
+    (data_dir / "templates" / "LBL_Template_GJ1_nirps_he.fits").write_text("t")
+    (data_dir / "masks" / "LBL_Mask_GJ1_full_nirps_he.fits").write_text("m")
+    rparams = dict(OBJECT_SCIENCE=["GJ1", "TOI904"],
+                   OBJECT_COMPARISON=["GJ1", "TOI904"], INSTRUMENT="NIRPS_HE",
+                   DATA_SOURCE="CADC", DATA_DIR=str(data_dir),
+                   RUN_LBL_TELLUCLEAN=False, RUN_LBL_TEMPLATE=False,
+                   RUN_LBL_MASK=False, RUN_LBL_COMPUTE=True,
+                   RUN_LBL_COMPILE=True, REPORT=True)
+    planned = [(s["kind"], s["obj"], s.get("label"))
+               for s in wrapgen.steps(rparams)]
+    assert planned == [
+        ("compute", "GJ1", None), ("compile", "GJ1", None),
+        ("report", "GJ1", None),
+        ("template", "TOI904", "step_template_needed"),
+        ("mask", "TOI904", "step_mask_needed"),
+        ("compute", "TOI904", None), ("compile", "TOI904", None),
+        ("report", "TOI904", None)]
+    # a step the plan did not have, named by the log: a pill of its own
+    #   where it comes, the one going before it done
+    job = runner.Job("x", "x", str(tmp_path), "wrap.py", "python",
+                     str(tmp_path), dict(steps=wrapgen.steps(rparams)))
+    for text in ("\tLBL Compute", '\tOBJECT_SCIENCE="GJ1"',
+                 "\tLBL Mask", '\tOBJECT_SCIENCE="GJ1"'):
+        job.add(_line(text), False)
+    got = [(s["kind"], s["obj"], s["state"], s.get("added", False))
+           for s in job.steps[:3]]
+    assert got == [("compute", "GJ1", "done", False),
+                   ("mask", "GJ1", "running", True),
+                   ("compile", "GJ1", "pending", False)]
+    for text in ("\tLBL Compil", '\tOBJECT_SCIENCE="GJ1"'):
+        job.add(_line(text), False)
+    assert [s["state"] for s in job.steps[:3]] == ["done", "done", "running"]

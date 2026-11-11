@@ -502,13 +502,58 @@ def files_pattern(paths: list):
     return "*" + tail
 
 
+def _needed(rparams: dict):
+    """missing(science, comparison) -> (template, mask): whether lbl_compute
+    will lack the template of the science object or of its comparison (a
+    vetted one is fetched by lbl_compute itself) and the comparison's mask,
+    by the paths LBL's instrument class gives them, as lbl_wrap's
+    _missing_for_compute finds them before it makes them anyway; (False,
+    False) when it cannot be told (no DATA_DIR, a class that needs more)."""
+    from lbl.core import vetted
+    from .lblinfo import instrument_object
+    data_dir = rparams.get("DATA_DIR")
+    inst = instrument_object(rparams.get("INSTRUMENT"),
+                             str(rparams.get("DATA_SOURCE"))) \
+        if data_dir and rparams.get("INSTRUMENT") else None
+
+    def missing(science, comparison):
+        if inst is None:
+            return False, False
+        try:
+            inst.params["DATA_DIR"] = data_dir
+            inst.params["DATA_TYPE"] = "SCIENCE"
+            inst.params["OBJECT_SCIENCE"] = science
+            template = False
+            for one in dict.fromkeys((science, comparison)):
+                if vetted.is_vetted(one):
+                    continue
+                inst.params["OBJECT_COMPARISON"] = one
+                path = inst.template_file(os.path.join(data_dir, "templates"),
+                                          "comparison", required=False)
+                template = template or not os.path.exists(path)
+            inst.params["OBJECT_COMPARISON"] = comparison
+            mask = inst.mask_file(os.path.join(data_dir, "models"),
+                                  os.path.join(data_dir, "masks"),
+                                  required=False)
+            return template, not os.path.exists(mask)
+        except Exception:                                 # noqa: BLE001
+            return False, False
+    return missing
+
+
 def steps(rparams: dict) -> list:
     """The steps of a run, in the order lbl_wrap goes through them:
     [dict(kind, obj)], kind one of telluclean, template, mask, compute,
     compile, report, pca2d_cube, pca2d_fit, pca2d_figures, pca2d_correct.
-    The window ticks them off as the log names them (runner.Job)."""
+    The window ticks them off as the log names them (runner.Job). Every
+    step that will run is there: a template or a mask whose step is
+    unticked but that is not on disk is made all the same before the
+    velocities (lbl_wrap), and planned with a label that says why
+    (step_template_needed, step_mask_needed)."""
     out = []
     targets = list(rparams.get("OBJECT_SCIENCE") or [])
+    comparisons = dict(zip(targets, rparams.get("OBJECT_COMPARISON") or []))
+    missing = _needed(rparams)
     pca2d = rparams.get("PCA2D")
     on = pca2d not in (None, False)
     pca2d = pca2d if isinstance(pca2d, dict) else {}
@@ -519,12 +564,26 @@ def steps(rparams: dict) -> list:
     tellu = bool(rparams.get("RUN_LBL_TELLUCLEAN"))
     measured = set()
 
-    def lbl(obj, template=True):
+    def lbl(obj, template=True, target=None):
+        # the template it is measured against: its own (the corrected
+        #   object's own, when the target's was its own), or another star's
+        other = comparisons.get(target or obj) or (target or obj)
+        comparison = obj if other == (target or obj) else other
+        asked = {kind: bool(rparams.get(switch, True))
+                 for kind, switch in LBL_STEPS}
+        needed = (False, False)
+        if asked["compute"] and not (asked["template"] and asked["mask"]):
+            needed = missing(obj, comparison)
         for kind, switch in LBL_STEPS:
             if kind == "template" and not template:
                 continue
-            if rparams.get(switch, True):
+            if asked[kind]:
                 out.append(dict(kind=kind, obj=obj))
+            elif kind == "template" and needed[0]:
+                out.append(dict(kind=kind, obj=obj,
+                                label="step_template_needed"))
+            elif kind == "mask" and needed[1]:
+                out.append(dict(kind=kind, obj=obj, label="step_mask_needed"))
         if rparams.get("REPORT", True) and rparams.get("RUN_LBL_COMPILE", True):
             out.append(dict(kind="report", obj=obj))
 
@@ -546,10 +605,10 @@ def steps(rparams: dict) -> list:
                                 label=label))
             obj = target + "_tc"
         if not on:
-            lbl(obj, template=not tellu)
+            lbl(obj, template=not tellu, target=target)
             continue
         if compare and obj not in measured:
-            lbl(obj, template=not tellu)
+            lbl(obj, template=not tellu, target=target)
             measured.add(obj)
         if joint and not fitted and compare and not tellu:
             for other in targets:
@@ -563,5 +622,5 @@ def steps(rparams: dict) -> list:
                 out.append(dict(kind="pca2d_" + stage,
                                 obj="+".join(targets) if joint else obj))
             fitted = True
-        lbl(obj + "_pca2d" + ("_" + name if name else ""))
+        lbl(obj + "_pca2d" + ("_" + name if name else ""), target=target)
     return out

@@ -625,6 +625,8 @@ h2 .info { vertical-align: 3px; }
 .archive-log-lines .muted { color: #7f8ba3; }
 .chip.stopped { color: #b4700a; border-color: rgba(250, 178, 25, 0.55); }
 .step.linked { cursor: pointer; }
+/* a step its switch did not ask for (a missing template made all the same) */
+.step.unplanned { border-style: dashed; }
 
 /* ── references ─────────────────────────────────────────────────────── */
 .refs-used { margin-top: 22px; }

@@ -1818,9 +1818,11 @@ function drawSteps(steps, title) {
     el('span', { class: 'step-obj mono', text: group.obj }),
     ...group.steps.map((step) => el('span', {
       // a step going whose files are counted fills its pill as it goes
-      class: `step ${step.state || 'pending'}${step.at === undefined ? '' : ' linked'}${step.state === 'running' && step.progress !== undefined ? ' counted' : ''}`,
+      class: `step ${step.state || 'pending'}${step.at === undefined ? '' : ' linked'}${step.state === 'running' && step.progress !== undefined ? ' counted' : ''}${step.added || step.label === 'step_template_needed' || step.label === 'step_mask_needed' ? ' unplanned' : ''}`,
       style: step.state === 'running' && step.progress !== undefined ? `--progress: ${(100 * step.progress).toFixed(1)}%` : null,
-      title: [step.at === undefined ? null : t('step_goto'),
+      title: [step.added ? t('step_added') : null,
+        step.label === 'step_template_needed' || step.label === 'step_mask_needed' ? t('step_needed_tip') : null,
+        step.at === undefined ? null : t('step_goto'),
         step.state === 'running' && step.progress !== undefined ? `${Math.round(100 * step.progress)} %` : null].filter(Boolean).join(' · ') || null,
       onclick: step.at === undefined ? null : () => showStep(step),
     },
