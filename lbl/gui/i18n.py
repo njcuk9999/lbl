@@ -390,7 +390,7 @@ EN = {
     "state_failed": "failed",
     "state_stopped": "stopped",
     "state_cancelled": "cancelled",
-    "runs_window": "Runs from this window",
+    "runs_window": "Runs from the window",
     "runs_reports": "Reports",
     "refresh": "Read again",
     "open": "open",

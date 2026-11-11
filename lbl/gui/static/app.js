@@ -2048,20 +2048,30 @@ async function loadRuns() {
   const data = await api.get('/api/runs', { data_dir: S.data_dir });
   RUNS = data.window || [];
   if (FREEZE && !RUNS.some((run) => run.id === FREEZE.run)) FREEZE = null;
+  // the runs of every folder of the root (history.root_runs): their
+  //   folder beside their name when they are of more than one, the
+  //   current folder's in bold
+  const homeOf = (row) => (row.home === undefined ? '' : row.home || t('explore_root_home'));
+  const bare = (path) => flatPath(path).replace(/\/+$/, '');
+  const mine = (row) => !row.data_dir || bare(row.data_dir) === bare(S.data_dir);
+  const folders = new Set([...RUNS, ...(data.reports || [])].map(homeOf)).size > 1;
+  const folderCell = (row) => (folders ? el('td', { class: `mono${mine(row) ? ' strong' : ''}`, text: homeOf(row) }) : null);
   // the PCA2D basis beside the state: the reports' names make the table
   //   wider than the window
-  table($('runs_window'), ['col_name', 'col_state', 'col_basis', 'col_started', 'col_duration', 'col_reports', 'log'],
+  table($('runs_window'), ['col_name', ...(folders ? ['col_folder'] : []), 'col_state', 'col_basis', 'col_started', 'col_duration', 'col_reports', 'log'],
     RUNS.map((run) => el('tr', {},
       el('td', { class: 'mono', text: run.name }),
+      folderCell(run),
       el('td', {}, el('span', { class: `badge ${run.state}`, text: t(`state_${run.state}`) })),
       el('td', { class: 'run-basis' }, basisCell(run)),
       el('td', { class: 'mono', text: when(run.started || run.created) }),
       el('td', { class: 'mono', text: run.started ? took(run.started, run.ended) : '' }),
       el('td', {}, (run.reports || []).map((p) => [fileLink(p, baseName(p)), ' '])),
       el('td', {}, fileLink(run.log, run.log ? baseName(run.log) : 'log'), ' ', fileLink(run.wrap, 'wrap.py')))));
-  table($('runs_reports'), ['col_name', 'col_date', 'col_bytes'],
+  table($('runs_reports'), ['col_name', ...(folders ? ['col_folder'] : []), 'col_date', 'col_bytes'],
     (data.reports || []).map((report) => el('tr', {},
       el('td', {}, fileLink(report.path, report.name)),
+      folderCell(report),
       el('td', { class: 'mono', text: when(report.mtime) }),
       el('td', { class: 'num', text: human(report.size) }))));
 }
@@ -2112,7 +2122,7 @@ function freezeBox(run) {
     timer = setTimeout(async () => {
       const asked = F.value;
       if (!asked) { F.check = null; show(); return; }
-      const got = await api.post('/api/freeze_basis', { data_dir: S.data_dir, run: run.id, name: asked, dry: true });
+      const got = await api.post('/api/freeze_basis', { data_dir: run.data_dir || S.data_dir, run: run.id, name: asked, dry: true });
       if (FREEZE !== F || F.value !== asked) return;
       F.check = got;
       show();
@@ -2125,7 +2135,7 @@ function freezeBox(run) {
   };
   go.onclick = async () => {
     go.disabled = true;
-    const got = await api.post('/api/freeze_basis', { data_dir: S.data_dir, run: run.id, name: F.value });
+    const got = await api.post('/api/freeze_basis', { data_dir: run.data_dir || S.data_dir, run: run.id, name: F.value });
     if (!got.done) { F.check = got; show(); return; }
     FREEZE = null;
     $('runs_said').textContent = t('freeze_done', got.name, relative(got.path));

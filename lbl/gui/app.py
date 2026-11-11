@@ -80,6 +80,12 @@ class Context:
             self.runner.adopt(path, history.GUI_RUNS)
         return path
 
+    def serve(self, path: str) -> None:
+        """A folder whose files may be served, its runs left as they are
+        (a run queued there by another window is not queued again here)."""
+        with self.lock:
+            self.roots.add(os.path.abspath(path))
+
     def servable(self, path: str) -> bool:
         real = os.path.realpath(path)
         plain = os.path.abspath(path)
@@ -292,12 +298,16 @@ class Handler(BaseHTTPRequestHandler):
                                     int(query.get("from", 0)))
             if route == "/api/runs":
                 data_dir = ctx.allow(query.get("data_dir", ""))
-                # each run with the PCA2D basis it fitted, and where that
-                #   stands (to be frozen, frozen, replaced...)
+                # the runs of every folder of the root, each with the PCA2D
+                #   basis it fitted, and where that stands (to be frozen,
+                #   frozen, replaced...); the other folders' files served
+                for folder, _ in history.homes(data_dir):
+                    ctx.serve(folder)
                 return self._json(dict(
-                    window=[dict(run, basis=lblinfo.run_basis(data_dir, run))
-                            for run in history.window_runs(data_dir)],
-                    reports=history.reports(data_dir)))
+                    window=[dict(run, basis=lblinfo.run_basis(
+                        run["data_dir"], run))
+                        for run in history.root_runs(data_dir)],
+                    reports=history.root_reports(data_dir)))
             if route == "/api/wraps":
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 return self._json(wrapload.wraps_in(data_dir))

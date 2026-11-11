@@ -270,3 +270,36 @@ def test_every_step_shows_a_missing_template_planned_and_one_unplanned(
     for text in ("\tLBL Compil", '\tOBJECT_SCIENCE="GJ1"'):
         job.add(_line(text), False)
     assert [s["state"] for s in job.steps[:3]] == ["done", "done", "running"]
+
+
+def test_runs_of_every_folder_of_the_root(tmp_path):
+    """The Runs tab lists the runs of all the instrument folders of a data
+    root (history.root_runs), each with its folder, the current one first
+    when they are as new; a folder outside a root lists its own."""
+    from lbl.gui import history
+
+    def run(folder, ident, created):
+        path = tmp_path / folder / "gui" / "runs" / ident
+        path.mkdir(parents=True)
+        (path / "run.json").write_text(json.dumps(dict(
+            id=ident, name=ident, state="done", created=created)))
+    run("NIRPS_HE_CADC", "toi1078", 300.0)
+    run("HARPS_ORIG", "gj1", 200.0)
+    (tmp_path / "SPIROU_CADC" / "reports").mkdir(parents=True)
+    (tmp_path / "SPIROU_CADC" / "reports" / "lbl_report.pdf").write_bytes(b"%PDF")
+    here = str(tmp_path / "HARPS_ORIG")
+    homes = history.homes(here)
+    assert homes[0] == (here, "HARPS_ORIG")
+    assert {h for _, h in homes} == {"HARPS_ORIG", "NIRPS_HE_CADC",
+                                     "SPIROU_CADC"}
+    runs = history.root_runs(here)
+    assert [(r["name"], r["home"]) for r in runs] == [
+        ("toi1078", "NIRPS_HE_CADC"), ("gj1", "HARPS_ORIG")]
+    assert runs[0]["data_dir"] == str(tmp_path / "NIRPS_HE_CADC")
+    assert [r["home"] for r in history.root_reports(here)] == ["SPIROU_CADC"]
+    # not a root's folder: its own runs only
+    alone = tmp_path / "elsewhere"
+    (alone / "gui" / "runs" / "x").mkdir(parents=True)
+    (alone / "gui" / "runs" / "x" / "run.json").write_text(json.dumps(
+        dict(id="x", name="x", state="done", created=1.0)))
+    assert [r["name"] for r in history.root_runs(str(alone))] == ["x"]

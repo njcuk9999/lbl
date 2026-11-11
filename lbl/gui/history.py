@@ -3,6 +3,11 @@ window: what the window ran (DATA_DIR/gui/runs/*/run.json), the PCA2D
 corrections on disk (DATA_DIR/pca2d/**/resolved_config.yaml, the record
 lbl_pca2d writes with every fit) and LBL's reports (DATA_DIR/reports/*.pdf).
 A run made from a terminal shows up as well as one made from the window.
+
+When the data folder is one of a data root's (ROOT/{INSTRUMENT}_{SOURCE},
+lbl.gui.dispatch), the runs and reports of all its folders are listed
+(homes), each with its folder: a run does not vanish from the list when
+the window moves to another instrument.
 """
 from __future__ import annotations
 
@@ -45,6 +50,47 @@ def window_runs(data_dir: str) -> list:
         record["log"] = run_log(record["folder"])
         out.append(record)
     out.sort(key=lambda r: r.get("created") or 0, reverse=True)
+    return out
+
+
+def homes(data_dir: str) -> list:
+    """The data folders whose runs are listed: DATA_DIR, and when it is one
+    of a root's, the root's other folders and the root itself (the old
+    layout), as (folder, its name in the root: '' for the root); DATA_DIR's
+    first."""
+    from .dispatch import readers, split
+    root, mine = split(data_dir)
+    if not mine:
+        return [(os.path.abspath(data_dir or ""), "")]
+    out = [(os.path.join(root, name), name) for name in sorted(readers())
+           if name == mine or os.path.isdir(os.path.join(root, name, GUI_RUNS))
+           or glob.glob(os.path.join(root, name, "reports", "*.pdf"))]
+    if os.path.isdir(os.path.join(root, GUI_RUNS)):
+        out.append((root, ""))
+    return sorted(out, key=lambda h: h[1] != mine)
+
+
+def root_runs(data_dir: str) -> list:
+    """The runs of every folder of homes(data_dir), newest first, each with
+    its data_dir and home (its folder's name in the root)."""
+    out = []
+    for folder, home in homes(data_dir):
+        for record in window_runs(folder):
+            record.update(data_dir=folder, home=home)
+            out.append(record)
+    out.sort(key=lambda r: r.get("created") or 0, reverse=True)
+    return out
+
+
+def root_reports(data_dir: str) -> list:
+    """LBL's reports of every folder of homes(data_dir), newest first, each
+    with its home."""
+    out = []
+    for folder, home in homes(data_dir):
+        for report in reports(folder):
+            report["home"] = home
+            out.append(report)
+    out.sort(key=lambda r: r["mtime"], reverse=True)
     return out
 
 

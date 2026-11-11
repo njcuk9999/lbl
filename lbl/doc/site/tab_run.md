@@ -26,9 +26,18 @@ The log is kept in `gui/runs/<name>/run.raw`, with the wrap as it ran and
 
 ## Runs
 
-One row per run of this window: its name, its state (done, failed, stopped,
-cancelled), its start and duration, and links to its reports (LBL's, PCA2D's,
-its components). A failed run keeps its log: open it to see why.
+One row per run made from the window, read back from the disk
+(`gui/runs/*/run.json`, so a run made before the window was restarted is
+there too): its name, its state (done, failed, stopped, cancelled), its start
+and duration, and links to its reports (LBL's, PCA2D's, its components). A
+failed run keeps its log: open it to see why.
+
+The runs of every instrument folder of the data root are listed, newest
+first, not only those of the folder chosen: a run of `NIRPS_HE_CADC` stays
+in the list when the window moves to `HARPS_ORIG`. When they come from more
+than one folder, a **folder** column names each run's, the current folder's
+in bold; LBL's reports (`reports/*.pdf`) below are listed the same way.
+Freezing a run's basis acts on the run's own folder.
 
 ## Freezing a run's PCA2D basis
 

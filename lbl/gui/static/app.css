@@ -841,3 +841,5 @@ table.data.star-planets th { text-transform: none; letter-spacing: 0; }
 .explore-stats { margin: 4px 0 2px; }
 .explore-stats table { width: auto; }
 .explore-stats td, .explore-stats th { padding: 3px 14px 3px 0; }
+/* the Runs tab: the current folder's runs, their folder in bold */
+td.strong { font-weight: 600; }
