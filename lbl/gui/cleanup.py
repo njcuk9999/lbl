@@ -118,11 +118,12 @@ def survey(data_dir: str) -> list:
     down = os.path.join(root, DOWNLOADS)
     if os.path.isdir(down):
         waiting = downloads(root)
-        if waiting["files"]:
+        if waiting["files"] or waiting["n_left"]:
             out.append(dict(path=down, kind="data", code="downloads",
-                            what=WHAT["downloads"], bytes=waiting["size"],
-                            files=waiting["files"], link=None,
-                            home=DOWNLOADS))
+                            what=WHAT["downloads"],
+                            bytes=waiting["size"] + waiting["left_size"],
+                            files=waiting["files"] + waiting["n_left"],
+                            link=None, home=DOWNLOADS))
         aside = os.path.join(down, UNUSED)
         if os.path.isdir(aside):
             item = _item(aside, "data", "unused")

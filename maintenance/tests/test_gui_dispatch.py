@@ -316,9 +316,11 @@ def test_what_the_window_shows_of_a_root(root):
     harps = next(f for f in shown["folders"] if f["name"] == "HARPS_ORIG")
     assert (harps["targets"], harps["spectra"], harps["models"]) == (
         3, 3, "linked")
-    # what waits in Downloads, by kind of name
-    assert shown["downloads"]["kinds"] == [dict(kind="*.txt", n=1),
-                                           dict(kind="*_e2ds_A.fits", n=1)]
+    # what waits in Downloads, by kind of name; what cannot be dispatched
+    #   apart, with why
+    assert shown["downloads"]["kinds"] == [dict(kind="*_e2ds_A.fits", n=1)]
+    assert shown["downloads"]["left"] == [dict(
+        why="not a spectrum (*.txt)", n=1, example="notes.txt")]
     assert shown["downloads"]["unused"] == 1
 
 
@@ -420,7 +422,8 @@ def test_headers_read_once_and_kept_when_moved(root, monkeypatch):
     dispatch.plan(str(root), ask_simbad=False)
     assert "HARPS.2017-01-01T00-00-00.000_e2ds_A.fits" in calls
     assert not [c for c in calls if c.startswith("NIRPS")]
-    assert dispatch.downloads(str(root))["files"] == 2
+    # notes.txt is no spectrum: left, not counted as waiting
+    assert dispatch.downloads(str(root))["files"] == 1
 
 
 def test_the_primary_header_says_enough():
@@ -437,3 +440,25 @@ def test_the_primary_header_says_enough():
     assert dispatch._primary_source("HARPS", fits.Header(dict(NAXIS=0))) \
         is None
     assert dispatch._primary_source("EXPRES", fits.Header()) is None
+
+
+def test_what_cannot_be_dispatched_is_not_counted_as_waiting(tmp_path):
+    down = tmp_path / "Downloads"
+    down.mkdir()
+    _harps(down / "HARPS.2014-01-01T00-00-00.000_e2ds_A.fits", "HR1084",
+           ESO_EPS["alpha"], ESO_EPS["delta"])
+    (down / "index.csv").write_text("a,b\n")
+    # a download that did not finish
+    (down / "NIRPS.2023-10-30T00:32:50.266t.fits").write_bytes(b"")
+    (down / "garbled.fits").write_text("not fits at all")
+    before = dispatch.downloads(str(tmp_path))
+    # the garbled one is known only once a plan has read it
+    assert before["files"] == 2 and before["n_left"] == 2
+    plan = dispatch.plan(str(tmp_path), ask_simbad=False)
+    whys = {row["why"] for row in plan["left"]}
+    assert dispatch.EMPTY in whys
+    after = dispatch.downloads(str(tmp_path))
+    assert after["files"] == 1 and after["n_left"] == 3
+    assert {row["why"] for row in after["left"]} == {
+        "not a spectrum (*.csv)", dispatch.EMPTY,
+        "not a FITS file astropy reads (OSError)"}

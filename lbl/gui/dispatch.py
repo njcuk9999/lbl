@@ -173,6 +173,8 @@ HEADERS = ".dispatch_headers.json"
 HEADERS_VERSION = 1
 #: HEADERS written every so many files read
 SAVE_EVERY = 250
+#: why a file of no byte is not dispatched
+EMPTY = "an empty file (0 bytes): a download that did not finish?"
 #: the instruments whose extensions tell what a file is (EXPRES's optimal
 #:    extraction, the ESSP's FLUX, the blaze SOPHIE's archive puts in its
 #:    e2ds): every header of theirs is read. The others' primary header
@@ -299,33 +301,86 @@ def _walk(top: str, skip=()):
                  if not (here == top and d in skip)]
 
 
+_JUDGED = {}
+
+
+def _judged(root: str) -> dict:
+    """What the plans made of the files they read (HEADERS): {path: (size,
+    why)} of those they could not dispatch (no instrument LBL reads, not a
+    FITS file astropy reads: an empty download), read again only when
+    HEADERS changed."""
+    path = os.path.join(root, DOWNLOADS, HEADERS)
+    try:
+        stamp = os.stat(path).st_mtime_ns
+    except OSError:
+        return {}
+    with _LISTING_LOCK:
+        known = _JUDGED.get(path)
+    if known is not None and known[0] == stamp:
+        return known[1]
+    try:
+        with open(path, encoding="utf-8") as handle:
+            kept = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    if kept.get("version") == HEADERS_VERSION:
+        for name, one in (kept.get("files") or {}).items():
+            record = one.get("record") or {}
+            if record.get("kind") is None:
+                out[name] = (one.get("size"), record.get("why") or "?")
+    with _LISTING_LOCK:
+        _JUDGED[path] = (stamp, out)
+    return out
+
+
 def downloads(root: str) -> dict:
     """The Downloads folder of a root, made if the root is there: how many
     files wait in it to be dispatched, their size and their kinds (by
-    name), and how many were put aside in UNUSED (hidden files not
-    counted)."""
+    name); those that cannot be (not a spectrum by their name, or one a
+    plan could not read: an empty download), counted apart with why; and
+    how many were put aside in UNUSED (hidden files not counted)."""
     path = os.path.join(root, DOWNLOADS)
     if os.path.isdir(root) and not os.path.isdir(path):
         try:
             os.makedirs(path, exist_ok=True)
         except OSError:
             pass
-    files = spectra = unused = size = 0
+    files = spectra = unused = size = left_size = 0
     kinds = Counter()
+    left, examples = Counter(), {}
+    judged = _judged(root)
     for top, names in _walk(path):
         aside = os.path.relpath(top, path).split(os.sep)[0] == UNUSED
         for name, nbytes in names:
             if aside:
                 unused += 1
                 continue
+            why = None
+            if not name.lower().endswith(SPECTRA):
+                why = "not a spectrum (%s)" % _kind_of_name(name)
+            elif not nbytes:
+                why = EMPTY
+            else:
+                known = judged.get(os.path.join(top, name))
+                if known is not None and known[0] == nbytes:
+                    why = known[1]
+            if why:
+                left[why] += 1
+                examples.setdefault(why, name)
+                left_size += nbytes
+                continue
             files += 1
-            spectra += name.lower().endswith(SPECTRA)
+            spectra += 1
             kinds[_kind_of_name(name)] += 1
             size += nbytes
     return dict(path=path, exists=os.path.isdir(path), files=files,
                 spectra=spectra, unused=unused, size=size,
                 kinds=[dict(kind=k, n=n) for k, n in sorted(
-                    kinds.items(), key=lambda kv: (-kv[1], kv[0]))])
+                    kinds.items(), key=lambda kv: (-kv[1], kv[0]))],
+                left=[dict(why=w, n=n, example=examples[w])
+                      for w, n in left.most_common()],
+                n_left=sum(left.values()), left_size=left_size)
 
 
 def _targets(data_dir: str) -> dict:
@@ -819,6 +874,9 @@ def read(path: str) -> dict:
     its headers give the target, the component of a binary they say, and
     the target's place (position)."""
     out = _blank(path)
+    if not out["size"]:
+        out["why"] = EMPTY
+        return out
     if path.lower().endswith((".hd5", ".h5")):
         return _maroonx(path, out)
     try:

@@ -610,6 +610,8 @@ function drawTree() {
   const d = L.downloads;
   const nodes = [node('Downloads/', [name('Downloads/'), note(d.files ? t('tree_downloads', d.files, human(d.size)) : t('tree_downloads_none'))],
     ...d.kinds.map((k) => line(false, count(k.n), name(k.kind))),
+    // what cannot be dispatched (not a spectrum, an empty download), said
+    ...(d.left || []).map((one) => line(false, note(t('tree_left', one.n, one.why, one.example)))),
     d.unused ? line(false, name('unused/'), note(t('tree_unused', d.unused))) : null)];
   L.folders.forEach((f) => {
     const here = f.name === S.folder;
