@@ -665,8 +665,10 @@ def test_the_blazes_made_are_told_as_they_go(tmp_path):
     result = dispatch.go(dispatch.plan(str(tmp_path), ask_simbad=False),
                          lambda *args: said.append(args))
     assert len(result["made"]) == 3 and not result["failed"]
-    assert len(list((tmp_path / "HARPS_ORIG" / "calib").glob(
-        "*_blaze_A.fits"))) == 3
+    made = sorted((tmp_path / "HARPS_ORIG" / "calib").glob("*_blaze_A.fits"))
+    assert len(made) == 3
+    # each says its instrument, so that it can be dispatched again
+    assert fits.getheader(made[0])["INSTRUME"] == "HARPS"
     # every step told, the moves done before the blazes begin
     steps = [one[2] for one in said]
     assert (3, 3, "moving") in said and (3, 3, "blazes") in said
@@ -724,3 +726,41 @@ def test_templates_copied_where_no_link_can_be_made(tmp_path, monkeypatch):
                                   ["GJ1"]) == ["GJ1"]
     copy = data_dir / "templates" / tpl.name
     assert copy.read_text() == "template" and not copy.is_symlink()
+
+
+def test_blazes_the_window_made_are_dispatched_again(tmp_path):
+    """A blaze the window made (HIERARCH LBL BLAZE) before it wrote the
+    instrument in it, put back in Downloads: placed by its name's prefix in
+    the calib/ of its instrument; a copy of one already there removed, one
+    that differs kept in Downloads, calib's untouched."""
+    down = tmp_path / "Downloads"
+    down.mkdir()
+    calib = tmp_path / "HARPS_ORIG" / "calib"
+    calib.mkdir(parents=True)
+
+    def blaze(path, value):
+        head = fits.Header()
+        head["HIERARCH LBL BLAZE"] = ("empirical", "envelope of an e2ds")
+        fits.PrimaryHDU(np.full((2, 8), value, "f4"), head).writeto(path)
+    blaze(down / "HARPS.2005-01-02T20:03:59.870_blaze_A.fits", 1.0)
+    blaze(down / "HARPS.2005-01-04T20:18:16.757_blaze_A.fits", 1.0)
+    blaze(calib / "HARPS.2005-01-04T20:18:16.757_blaze_A.fits", 1.0)
+    blaze(down / "HARPS.2005-01-05T19:58:50.363_blaze_A.fits", 1.0)
+    blaze(calib / "HARPS.2005-01-05T19:58:50.363_blaze_A.fits", 2.0)
+    # an unknown file without an instrument stays unknown
+    fits.PrimaryHDU(np.ones((2, 8), "f4")).writeto(down / "mystery.fits")
+    record = dispatch.read(str(down / "HARPS.2005-01-02T20:03:59.870_blaze_A.fits"))
+    assert (record["instrument"], record["source"], record["kind"]) == (
+        "HARPS", "ORIG", "calib")
+    assert dispatch.read(str(down / "mystery.fits"))["why"] == \
+        "no instrument in its header"
+    result = dispatch.go(dispatch.plan(str(tmp_path), ask_simbad=False))
+    assert (calib / "HARPS.2005-01-02T20:03:59.870_blaze_A.fits").is_file()
+    assert not (down / "HARPS.2005-01-02T20:03:59.870_blaze_A.fits").exists()
+    assert not (down / "HARPS.2005-01-04T20:18:16.757_blaze_A.fits").exists()
+    assert result["copies"] == 1
+    assert (down / "HARPS.2005-01-05T19:58:50.363_blaze_A.fits").is_file()
+    assert fits.getdata(calib / "HARPS.2005-01-05T19:58:50.363_blaze_A.fits"
+                        )[0, 0] == 2.0
+    assert [k["name"] for k in result["kept"]] == [
+        "HARPS.2005-01-05T19:58:50.363_blaze_A.fits"]

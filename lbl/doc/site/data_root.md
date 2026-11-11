@@ -53,7 +53,12 @@ tab counts those that can be dispatched. **Dispatch** reads their headers
 On the way: gzipped spectra are gunzipped, SOPHIE's blaze is split out of
 its spectra, a header astropy cannot write back is fixed, and the HARPS and
 HARPS-N spectra whose blaze ESO does not give get one made from them (one a
-night; a long series takes a few minutes, said as it goes).
+night; a long series takes a few minutes, said as it goes). A blaze made so
+carries `HIERARCH LBL BLAZE = 'empirical'` and the instrument of its
+spectrum (`INSTRUME`): put back in `Downloads/`, it goes to the `calib/` of
+its instrument again. One made before the instrument was written in it
+(until 2026-11-11) is placed by its name, as the DRS names its files
+(`HARPS.<date>_blaze_A.fits`, `HARPN.<date>_blaze_A.fits`).
 
 Nothing is overwritten: a copy of a file already in its place is taken out
 of `Downloads/`; a different file of the same name is left there, and said.

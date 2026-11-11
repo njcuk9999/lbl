@@ -571,6 +571,10 @@ def _get_harps(one: Dict[str, Any], science: str, calib: str) -> str:
             blaze = os.path.join(calib, os.path.basename(bname))
             if not os.path.exists(blaze):
                 head = fits.Header()
+                # the instrument, so that the blaze can be dispatched again
+                #   (lbl.gui.dispatch.read finds no other way)
+                head['INSTRUME'] = str(hdul[0].header.get('INSTRUME')
+                                       or 'HARPS').strip()
                 head['HIERARCH LBL BLAZE'] = (
                     'empirical', 'envelope of ' + flux[0][-40:])
                 part = f'{blaze}.{uuid.uuid4().hex}.part'

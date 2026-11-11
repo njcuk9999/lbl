@@ -111,6 +111,11 @@ RECORD = ".dispatched.jsonl"
 SPECTRA = (".fits", ".fits.gz", ".fit", ".hd5", ".h5")
 #: INSTRUME (EXPRES: INSTRMNT) as the headers write it, and the family of
 #:    LBL's instruments it is
+#: THE BLAZES THE WINDOW MAKES (empirical_blaze, HIERARCH LBL BLAZE): until
+#:    2026-11-11 written without the instrument, which no header then said,
+#:    so that one put back in Downloads stayed there; their name's prefix
+#:    says it, as the DRS names its files (HARPS.<date>, HARPN.<date>)
+MADE_BLAZE_PREFIXES = {"HARPS.": "HARPS", "HARPN.": "HARPN"}
 FAMILIES = {"SPIROU": "SPIROU", "NIRPS": "NIRPS", "HARPS": "HARPS",
             "HARPN": "HARPSN", "HARPS-N": "HARPSN", "HARPSN": "HARPSN",
             "ESPRESSO": "ESPRESSO", "SOPHIE": "SOPHIE", "CORALIE": "CORALIE",
@@ -998,6 +1003,10 @@ def read(path: str) -> dict:
         out["why"] = "not a FITS file astropy reads (%s)" % type(exc).__name__
         return out
     said = targets._instrument(headers)
+    if said == "?" and "HIERARCH LBL BLAZE" in primary:
+        # a blaze this window made before it wrote the instrument in it
+        said = next((name for prefix, name in MADE_BLAZE_PREFIXES.items()
+                     if out["name"].startswith(prefix)), said)
     family = FAMILIES.get(re.sub(r"[^A-Z0-9-]", "", said))
     if family is None:
         out["why"] = ("no instrument in its header" if said == "?"
@@ -2246,6 +2255,10 @@ def _make_blaze(e2ds: str, blaze: str) -> None:
     from .fetch.spectra import empirical_blaze
     with fits.open(e2ds, memmap=False) as hdul:
         head = fits.Header()
+        # the instrument, so that the blaze is dispatched again wherever it
+        #   goes (read() finds no other way)
+        if hdul[0].header.get("INSTRUME"):
+            head["INSTRUME"] = str(hdul[0].header["INSTRUME"]).strip()
         head["HIERARCH LBL BLAZE"] = (
             "empirical", "envelope of " + os.path.basename(e2ds)[-40:])
         os.makedirs(os.path.dirname(blaze), exist_ok=True)
