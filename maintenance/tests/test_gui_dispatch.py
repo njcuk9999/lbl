@@ -182,7 +182,8 @@ def test_the_files_moved_recorded_and_the_models_shared(root):
     down = root / "Downloads"
     # what LBL does not read put aside, what is no spectrum left, the
     #   folder an archive was unpacked in taken away once empty
-    assert sorted(os.listdir(down)) == [".dispatched.jsonl", "notes.txt",
+    assert sorted(os.listdir(down)) == [".dispatch_headers.json",
+                                        ".dispatched.jsonl", "notes.txt",
                                         "unused"]
     lines = (down / ".dispatched.jsonl").read_text().splitlines()
     assert len(lines) == 6 and json.loads(lines[0])["how"]
@@ -388,3 +389,51 @@ def test_templates_of_the_same_mode_across_the_root(tmp_path):
     assert link.is_symlink() and link.resolve() == (
         tmp_path / "templates" / "LBL_Template_GL1_nirps_he.fits")
     assert lblinfo.templates(home, "NIRPS_HE", "CADC")[0]["here"]
+
+
+def test_headers_read_once_and_kept_when_moved(root, monkeypatch):
+    # a plan made again reads no header it has read (Downloads/HEADERS),
+    #   even after the window started again; moved, a file keeps its record
+    calls = []
+    real = dispatch.read
+
+    def counted(path):
+        calls.append(os.path.basename(path))
+        return real(path)
+
+    monkeypatch.setattr(dispatch, "read", counted)
+    first = dispatch.plan(str(root), ask_simbad=False)
+    read_first = len(calls)
+    assert read_first == 7
+    calls.clear()
+    again = dispatch.plan(str(root), ask_simbad=False)
+    assert calls == [] and again["folders"] == first["folders"]
+    dispatch.go(again)
+    kept = json.loads((root / "Downloads" / dispatch.HEADERS).read_text())
+    moved = str(root / "NIRPS_HE_APERO" / "science" / "EPSILONERI"
+                / "NIRPS.2024-10-03T07:04:44.397t.fits")
+    assert moved in kept["files"]
+    # a new file, and only it, read: the folder listed again by its date
+    _harps(root / "Downloads" / "HARPS.2017-01-01T00-00-00.000_e2ds_A.fits",
+           "HR1084", ESO_EPS["alpha"], ESO_EPS["delta"])
+    calls.clear()
+    dispatch.plan(str(root), ask_simbad=False)
+    assert "HARPS.2017-01-01T00-00-00.000_e2ds_A.fits" in calls
+    assert not [c for c in calls if c.startswith("NIRPS")]
+    assert dispatch.downloads(str(root))["files"] == 2
+
+
+def test_the_primary_header_says_enough():
+    # ESO's products, APERO's t.fits, the CADC's, the DRS's e2ds: by the
+    #   primary header alone; the others' extensions are read
+    assert dispatch._primary_source("NIRPS", fits.Header(
+        {"HIERARCH ESO PRO CATG": "S2D_A"})) == "ESO"
+    assert dispatch._primary_source("SPIROU", fits.Header(
+        dict(NAXIS=2, WAVEORDN=1))) == "APERO"
+    assert dispatch._primary_source("SPIROU", fits.Header(dict(NAXIS=0))) \
+        == "CADC"
+    assert dispatch._primary_source("HARPS", fits.Header(dict(NAXIS=2))) \
+        == "ORIG"
+    assert dispatch._primary_source("HARPS", fits.Header(dict(NAXIS=0))) \
+        is None
+    assert dispatch._primary_source("EXPRES", fits.Header()) is None

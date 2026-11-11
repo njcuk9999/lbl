@@ -160,8 +160,27 @@ LBL_FOLDERS = ("calib", "lblrdb", "lblreftable", "lblrv", "masks", "plots",
 #: the SIMBAD names asked in one dispatch, at most (each unknown name takes
 #:    a few seconds)
 SIMBAD_MOST = 40
-#: the headers read at once
+#: the headers read at once (on a hard disk too: a disk serves several
+#:    requests better than one at a time, measured on an external exFAT one)
 WORKERS = 8
+#: under DOWNLOADS: what read() said of each file, by its path, size and
+#:    date, kept between plans and the window's sessions (_Headers); a slow
+#:    disk reads a header in a third of a second, five thousand in half an
+#:    hour, and a plan made again need not read them again
+HEADERS = ".dispatch_headers.json"
+#: the version of what read() records, raised when it says more or
+#:    otherwise (the headers are then read again)
+HEADERS_VERSION = 1
+#: HEADERS written every so many files read
+SAVE_EVERY = 250
+#: the instruments whose extensions tell what a file is (EXPRES's optimal
+#:    extraction, the ESSP's FLUX, the blaze SOPHIE's archive puts in its
+#:    e2ds): every header of theirs is read. The others' primary header
+#:    says it all (_primary_source), and is all that is read: a read where
+#:    an ESO S2D has eight headers, each a seek on a disk
+WHOLE = ("EXPRES", "NEID", "SOPHIE")
+#: the files of a target folder (targets.PATTERNS)
+SPECTRUM_PATTERNS = ("*.fits", "*.fits.gz", "*.hd5")
 #: ESPRESSO's setting that needs no folder of its own (the most used; the
 #:    archive search names its folders alike: fetch.spectra.ESPRESSO_MAIN)
 ESPRESSO_MAIN = "HR11"
@@ -228,6 +247,58 @@ def _kind_of_name(name: str) -> str:
     return "*" + ext if ext else name
 
 
+_LISTINGS = {}
+_LISTING_LOCK = threading.Lock()
+
+
+def listing(folder: str):
+    """(files [(name, size)], subfolders) of a folder, hidden ones left out,
+    listed again only when the folder's own date changed (it does when an
+    entry is added, renamed or removed, on an exFAT disk too): an external
+    disk lists five thousand files in a minute, and the window counts
+    Downloads every time it shows the root."""
+    try:
+        stamp = os.stat(folder).st_mtime_ns
+    except OSError:
+        return [], []
+    with _LISTING_LOCK:
+        known = _LISTINGS.get(folder)
+    if known is not None and known[0] == stamp:
+        return known[1], known[2]
+    files, dirs = [], []
+    try:
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                if entry.name.startswith("."):
+                    continue
+                try:
+                    if entry.is_dir():
+                        dirs.append(entry.name)
+                    else:
+                        files.append((entry.name, entry.stat().st_size))
+                except OSError:
+                    continue
+    except OSError:
+        return [], []
+    files.sort()
+    dirs.sort()
+    with _LISTING_LOCK:
+        _LISTINGS[folder] = (stamp, files, dirs)
+    return files, dirs
+
+
+def _walk(top: str, skip=()):
+    """(folder, [(name, size)]) of a folder and those under it (listing),
+    the subfolders of `top` named in `skip` left out."""
+    todo = [top]
+    while todo:
+        here = todo.pop(0)
+        files, dirs = listing(here)
+        yield here, files
+        todo += [os.path.join(here, d) for d in dirs
+                 if not (here == top and d in skip)]
+
+
 def downloads(root: str) -> dict:
     """The Downloads folder of a root, made if the root is there: how many
     files wait in it to be dispatched, their size and their kinds (by
@@ -241,22 +312,16 @@ def downloads(root: str) -> dict:
             pass
     files = spectra = unused = size = 0
     kinds = Counter()
-    for top, dirs, names in os.walk(path):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+    for top, names in _walk(path):
         aside = os.path.relpath(top, path).split(os.sep)[0] == UNUSED
-        for name in names:
-            if name.startswith("."):
-                continue
+        for name, nbytes in names:
             if aside:
                 unused += 1
                 continue
             files += 1
             spectra += name.lower().endswith(SPECTRA)
             kinds[_kind_of_name(name)] += 1
-            try:
-                size += os.path.getsize(os.path.join(top, name))
-            except OSError:
-                pass
+            size += nbytes
     return dict(path=path, exists=os.path.isdir(path), files=files,
                 spectra=spectra, unused=unused, size=size,
                 kinds=[dict(kind=k, n=n) for k, n in sorted(
@@ -266,9 +331,12 @@ def downloads(root: str) -> dict:
 def _targets(data_dir: str) -> dict:
     """The target folders of a data folder: those that hold spectra (each
     with how many), and the empty ones, which are no targets."""
+    import fnmatch
     full, empty = [], []
     for name in targets.target_names(data_dir):
-        count = len(targets.files_of(data_dir, name))
+        files, _ = listing(os.path.join(data_dir, "science", name))
+        count = sum(1 for one, _ in files if any(
+            fnmatch.fnmatch(one, pattern) for pattern in SPECTRUM_PATTERNS))
         if count:
             full.append(dict(name=name, files=count))
         else:
@@ -650,6 +718,101 @@ def _blank(path: str) -> dict:
                 calib_name=None)
 
 
+class _Headers:
+    """What read() said of each file, by its path, its size and its date,
+    kept in Downloads/HEADERS: a plan made again, or after the window was
+    started again, reads only the files it has not seen, and a file moved
+    by go() keeps what was read of it under its new path."""
+
+    def __init__(self, root: str):
+        self.path = os.path.join(root, DOWNLOADS, HEADERS)
+        self.lock = threading.Lock()
+        self.files = {}
+        self.changed = 0
+        try:
+            with open(self.path, encoding="utf-8") as handle:
+                kept = json.load(handle)
+            if kept.get("version") == HEADERS_VERSION:
+                self.files = kept.get("files") or {}
+        except (OSError, ValueError, AttributeError):
+            pass
+
+    def read(self, path: str) -> dict:
+        """read(path), or what it said of the same file before."""
+        try:
+            stat = os.stat(path)
+        except OSError:
+            return read(path)
+        key = os.path.abspath(path)
+        with self.lock:
+            known = self.files.get(key)
+        if known and known.get("size") == stat.st_size \
+                and known.get("mtime_ns") == stat.st_mtime_ns:
+            return _revived(known["record"], path)
+        rec = read(path)
+        with self.lock:
+            self.files[key] = dict(size=stat.st_size,
+                                   mtime_ns=stat.st_mtime_ns,
+                                   record=json.loads(json.dumps(rec)))
+            self.changed += 1
+        return rec
+
+    def moved(self, src: str, dest: str) -> None:
+        """A file moved as it is (its size and its date kept)."""
+        with self.lock:
+            known = self.files.pop(os.path.abspath(src), None)
+            if known is not None:
+                self.files[os.path.abspath(dest)] = known
+                self.changed += 1
+
+    def save(self) -> None:
+        """Written when something changed, by a copy put in its place."""
+        with self.lock:
+            if not self.changed or not os.path.isdir(os.path.dirname(
+                    self.path)):
+                return
+            text = json.dumps(dict(version=HEADERS_VERSION,
+                                   files=self.files))
+            self.changed = 0
+        part = "%s.%s.part" % (self.path, uuid.uuid4().hex)
+        try:
+            with open(part, "w", encoding="utf-8") as handle:
+                handle.write(text)
+            os.replace(part, self.path)
+        except OSError:
+            pass
+
+
+def _revived(rec: dict, path: str) -> dict:
+    """A record read back from HEADERS, as read() makes it: its path, its
+    tuples (JSON keeps lists)."""
+    out = dict(rec, path=path, name=os.path.basename(path))
+    if out.get("component"):
+        out["component"] = tuple(out["component"])
+    if out.get("place") and out["place"].get("pm") is not None:
+        out["place"] = dict(out["place"], pm=tuple(out["place"]["pm"]))
+    out["extra"] = [tuple(one) for one in out.get("extra") or []]
+    out["names"] = list(out.get("names") or [])
+    return out
+
+
+def _primary_source(family, primary):
+    """The DATA_SOURCE a file's primary header alone says, or None when its
+    extensions must be read: an ESO pipeline's product (PRO CATG), APERO's
+    t.fits (its flux in the primary, WAVEORDN), the CADC's (an empty
+    primary, its flux in named extensions), the DRS's e2ds (one image)."""
+    if family not in ("SPIROU", "NIRPS", "HARPS", "HARPSN"):
+        return None
+    if "HIERARCH ESO PRO CATG" in primary:
+        return "ESO"
+    naxis = primary.get("NAXIS", 0)
+    if family in ("SPIROU", "NIRPS"):
+        if naxis and "WAVEORDN" in primary:
+            return "APERO"
+        return "CADC" if not naxis else None
+    return "ORIG" if naxis == 2 else None
+
+
 def read(path: str) -> dict:
     """One file: its instrument and data source, what LBL makes of it
     (kind: science, calib, unused, or None and why), its setting, the names
@@ -662,12 +825,23 @@ def read(path: str) -> dict:
         from astropy.io import fits
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            with fits.open(path, memmap=False, lazy_load_hdus=False) as hdul:
-                headers = [hdu.header for hdu in hdul]
-                extnames = {str(hdu.name).upper() for hdu in hdul}
-                primary = headers[0]
-                source = targets.layout_source(targets._instrument(headers),
-                                               hdul)
+            with fits.open(path, memmap=False, lazy_load_hdus=True) as hdul:
+                primary = hdul[0].header
+                said = targets._instrument([primary])
+                family = FAMILIES.get(re.sub(r"[^A-Z0-9-]", "", said))
+                source = _primary_source(family, primary)
+                # the primary header says it all, or every header is read
+                #   (WHOLE)
+                if source is None and (family is None or family in WHOLE
+                                       or family in ("SPIROU", "NIRPS",
+                                                     "HARPS", "HARPSN")):
+                    headers = [hdu.header for hdu in hdul]
+                    extnames = {str(hdu.name).upper() for hdu in hdul}
+                    source = targets.layout_source(
+                        targets._instrument(headers), hdul)
+                else:
+                    headers = [primary]
+                    extnames = {str(hdul[0].name).upper()}
     except Exception as exc:                              # noqa: BLE001
         out["why"] = "not a FITS file astropy reads (%s)" % type(exc).__name__
         return out
@@ -1038,19 +1212,16 @@ def star_folder(data_dir: str, ident: dict, setting: str = ""):
 def _files(root: str) -> list:
     """The files of Downloads/ waiting (not hidden, not put aside)."""
     top = os.path.join(root, DOWNLOADS)
-    out = []
-    for here, dirs, names in os.walk(top):
-        dirs[:] = sorted(d for d in dirs if not d.startswith(".")
-                         and not (here == top and d == UNUSED))
-        out += [os.path.join(here, n) for n in sorted(names)
-                if not n.startswith(".")]
-    return out
+    return [os.path.join(here, name) for here, names in _walk(top, (UNUSED,))
+            for name, _ in names]
 
 
-def _existing(root: str) -> list:
+def _existing(root: str, reader=None) -> list:
     """The target folders already in the root, each as a record of its
-    first spectrum: in its DATA_DIRs (folder: (DATA_DIR name, folder)), and
-    in a science/ of the root's own (DATA_DIR name '')."""
+    first spectrum (read by `reader`, read() by default: the plan's goes
+    through its _Headers): in its DATA_DIRs (folder: (DATA_DIR name,
+    folder)), and in a science/ of the root's own (DATA_DIR name '')."""
+    reader = reader or read
     from lbl.core.simbad import SUFFIXES
     out = []
     homes = [(name, os.path.join(root, name)) for name in readers()
@@ -1063,7 +1234,7 @@ def _existing(root: str) -> list:
             if not paths:
                 continue
             try:
-                rec = read(paths[0])
+                rec = reader(paths[0])
             except OSError:
                 continue
             if rec["place"] is None and not rec["names"]:
@@ -1126,20 +1297,28 @@ def plan(root: str, idents=None, progress=None, ask_simbad=True) -> dict:
     records = [None] * len(paths)
     done = [0]
     lock = threading.Lock()
+    # what was read before of the same files, and what is read now kept as
+    #   it goes (a plan stopped half way is not read again)
+    cache = _Headers(root)
 
     def one(index):
         try:
-            records[index] = read(paths[index])
+            records[index] = cache.read(paths[index])
         except OSError as exc:
             records[index] = dict(_blank(paths[index]), why=str(exc))
         with lock:
             done[0] += 1
             say(done[0], len(paths), "headers")
+            keep = done[0] % SAVE_EVERY == 0
+        if keep:
+            cache.save()
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         list(pool.map(one, range(len(paths))))
+    cache.save()
     say(len(paths), len(paths), "folders")
-    existing = _existing(root)
+    existing = _existing(root, cache.read)
+    cache.save()
     stars_of = [r for r in records if r.get("kind") == "science"] + existing
     sightings = _sightings(stars_of)
     groups = stars(sightings)
@@ -1452,6 +1631,8 @@ def go(plan_: dict, progress=None) -> dict:
     root = plan_["root"]
     top = os.path.join(root, DOWNLOADS)
     moves = plan_["moves"]
+    # what was read of each file follows it (_Headers)
+    cache = _Headers(root)
     out = dict(moved=0, copies=0, unused=0, made=[], kept=[], failed=[])
     # a file named twice (MAROON-X's _x_ in both arms) is linked first,
     #   then moved
@@ -1490,6 +1671,8 @@ def go(plan_: dict, progress=None) -> dict:
             os.makedirs(os.path.dirname(aside), exist_ok=True)
             os.replace(src, aside)
             how = "converted (as downloaded: %s)" % aside
+        elif not one.get("link"):
+            cache.moved(src, dest)
         _record(root, src, dest, how)
         out["moved"] += 1
     for e2ds, blaze in _blazes(moves):
@@ -1524,6 +1707,7 @@ def go(plan_: dict, progress=None) -> dict:
                                  os.path.splitext(stem)[1])
         os.makedirs(os.path.dirname(aside), exist_ok=True)
         os.replace(src, aside)
+        cache.moved(src, aside)
         _record(root, src, aside, "put aside: " + one["why"])
         out["unused"] += 1
     # the folders an archive was unpacked in, now empty
@@ -1559,6 +1743,7 @@ def go(plan_: dict, progress=None) -> dict:
             shutil.copy2(one["dest"], default)
             _record(root, one["dest"], default, "default blaze")
             out["defaults"].append(one["home"])
+    cache.save()
     say(len(moves), len(moves), "done")
     return out
 
