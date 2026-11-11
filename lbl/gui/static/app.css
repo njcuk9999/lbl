@@ -192,6 +192,47 @@ input[type=text].name-edit { width: auto; flex: 0 0 auto; font-size: 0.82rem; pa
 input[type=text].name-edit.bad { border-color: var(--bad); outline-color: var(--bad); }
 .name-editor { display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .naming-row { margin-top: 10px; align-items: center; }
+/* the Documentation tab: contents, page, table of contents */
+.docs { display: grid; grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 16px; align-items: start; }
+.docs-side, .docs-toc { position: sticky; top: 92px; max-height: calc(100vh - 110px); overflow: auto; scrollbar-gutter: stable; }
+.docs-side input[type=search] { width: 100%; margin-bottom: 10px; background: var(--input-bg); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; font: inherit; font-size: 0.88rem; }
+.docs-side input[type=search]:focus { outline: none; border-color: var(--accent); }
+.docs-section { margin-bottom: 12px; }
+.docs-section-title { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 4px 0; font-weight: 600; }
+.docs-nav a, .docs-toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; line-height: 1.35; }
+.docs-nav a:hover, .docs-toc a:hover { background: var(--surface); }
+.docs-nav a.active { background: var(--accent); color: #fff; }
+.docs-toc h3 { margin: 0 0 6px; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.docs-toc a.toc-3 { padding-left: 20px; font-size: 0.82rem; color: var(--muted); }
+.docs-results { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); max-height: 45vh; overflow: auto; }
+.docs-hit { display: block; padding: 5px 8px; border-radius: 6px; text-decoration: none; color: var(--text); }
+.docs-hit:hover { background: var(--surface); }
+.docs-hit-where { display: block; font-weight: 600; font-size: 0.84rem; }
+.docs-hit-text { display: block; color: var(--muted); font-size: 0.78rem; line-height: 1.35; }
+.docs-page { min-width: 0; padding: 22px 30px; }
+.docs-body { line-height: 1.6; font-size: 0.95rem; max-width: 52em; }
+.docs-body h1 { font-size: 1.7rem; margin: 0 0 14px; }
+.docs-body h2 { font-size: 1.25rem; margin: 26px 0 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.docs-body h3 { font-size: 1.05rem; margin: 20px 0 6px; }
+.docs-body h4 { font-size: 0.95rem; margin: 16px 0 4px; }
+.docs-body h1, .docs-body h2, .docs-body h3, .docs-body h4 { scroll-margin-top: 96px; }
+.docs-body p, .docs-body ul, .docs-body ol { margin: 8px 0; }
+.docs-body li { margin: 3px 0; }
+.docs-body code { font-family: "IBM Plex Mono", monospace; font-size: 0.86em; padding: 1px 5px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); }
+.docs-body pre { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; overflow-x: auto; }
+.docs-body pre code { padding: 0; border: 0; background: none; font-size: 0.84rem; line-height: 1.5; }
+.docs-body .doc-table { overflow-x: auto; margin: 10px 0; }
+.docs-body table { border-collapse: collapse; font-size: 0.86rem; }
+.docs-body th, .docs-body td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+.docs-body th { background: var(--surface); }
+.docs-body blockquote { margin: 10px 0; padding: 4px 14px; border-left: 3px solid var(--accent); color: var(--muted); }
+.docs-body img { max-width: 100%; }
+.docs-body a { color: var(--accent); }
+.docs-pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 26px; padding-top: 12px; border-top: 1px solid var(--line); }
+.docs-pager a { color: var(--accent); text-decoration: none; font-weight: 600; }
+#docs_file { margin-top: 8px; }
+@media (max-width: 1150px) { .docs { grid-template-columns: 230px minmax(0, 1fr); } .docs-toc { display: none; } }
+@media (max-width: 780px) { .docs { grid-template-columns: 1fr; } .docs-side { position: static; max-height: none; } }
 .naming-row select { min-width: 18em; }
 .setup-status { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .setup-status .button { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; }

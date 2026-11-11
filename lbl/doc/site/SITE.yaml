@@ -1,0 +1,33 @@
+# The Documentation tab of lbl_gui (lbl/gui/docs.py): its sections and pages,
+# in order. `file` is relative to this folder; a page's title is its first
+# '# ' heading. Every page here must exist, and every help text of the
+# window must be in one of them (maintenance/tests/test_gui_docs.py).
+- section: Getting started
+  pages:
+    - {id: welcome, file: welcome.md}
+    - {id: install, file: install.md}
+    - {id: concepts, file: concepts.md}
+- section: Your data
+  pages:
+    - {id: data-root, file: data_root.md}
+    - {id: naming, file: naming.md}
+    - {id: archives, file: archives.md}
+- section: The window, tab by tab
+  pages:
+    - {id: targets, file: tab_targets.md}
+    - {id: settings, file: tab_settings.md}
+    - {id: running, file: tab_run.md}
+    - {id: explorer, file: tab_explore.md}
+    - {id: cleanup, file: tab_cleanup.md}
+- section: Methods
+  pages:
+    - {id: pca2d, file: ../PCA2D.md}
+    - {id: template, file: ../TEMPLATE.md}
+    - {id: outputs, file: outputs.md}
+- section: Reference
+  pages:
+    - {id: pca2d-options, file: pca2d_options.md}
+    - {id: troubleshooting, file: troubleshooting.md}
+    - {id: limitations, file: ../KnownLimitations.md}
+    - {id: instruments, file: ../AddingAnInstrument.md}
+    - {id: about-docs, file: about_docs.md}

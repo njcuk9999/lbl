@@ -68,5 +68,10 @@ If you wish to help develop we have a simple branch hierarchy:
 3. working branch - This is where you should make your branches from and push to. Code will be tested and merged into 
    the developer branch (and subsequently the main branch) from here.
 
+The documentation of the window `lbl_gui` (its Documentation tab: the pages
+of `lbl/doc/site/` and the documents of `lbl/doc/`) is updated in the same
+commit as any change of the window or of what LBL does; see
+[CLAUDE.md](CLAUDE.md) and `maintenance/tests/test_gui_docs.py`.
+
 
 [back to top](#contents)

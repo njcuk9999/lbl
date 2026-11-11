@@ -198,6 +198,9 @@ async function loadStrings() {
   document.querySelectorAll('[data-t-title]').forEach((node) => { node.title = t(node.dataset.tTitle); node.setAttribute('aria-label', node.title); });
   document.querySelectorAll('[data-t-placeholder]').forEach((node) => { node.placeholder = t(node.dataset.tPlaceholder); });
   document.querySelectorAll('[data-help]').forEach((node) => { node.textContent = 'i'; node.dataset.tip = helpHtml(t(`help_${node.dataset.help}`)); });
+  // the documentation's pages are in English: said in the other languages
+  $('docs_lang').textContent = t('docs_english');
+  $('docs_lang').hidden = !t('docs_english');
   $('lang').textContent = T.lang_switch;
   drawSetupStatus();
   applyTheme();
@@ -243,7 +246,85 @@ function showTab(name) {
   if (name === 'targets') drawPlots();
   if (name === 'folders') loadFolders();
   if (name === 'refs') loadRefs();
+  if (name === 'docs') loadDocs();
   save();
+}
+
+// ── documentation ───────────────────────────────────────────────────────
+// a small website: the pages of lbl/doc/site and lbl/doc, rendered by the
+//   server (docs.py) from Markdown, with their contents, a table of
+//   contents per page and a search; #doc/<page>/<anchor> opens one
+let DOCS = null;
+let docsTimer = null;
+async function loadDocs() {
+  if (!DOCS) DOCS = await api.get('/api/docs');
+  const ids = DOCS.sections.flatMap((s) => s.pages.map((p) => p.id));
+  const hash = location.hash.match(/^#doc\/([^/]+)(?:\/(.+))?$/);
+  let id = hash ? hash[1] : S.doc;
+  if (!ids.includes(id)) id = DOCS.first;
+  drawDocsNav();
+  await openDoc(id, hash ? decodeURIComponent(hash[2] || '') : '');
+}
+function drawDocsNav() {
+  $('docs_nav').replaceChildren(...DOCS.sections.map((section) => el('div', { class: 'docs-section' },
+    el('div', { class: 'docs-section-title', text: section.title }),
+    ...section.pages.map((p) => el('a', {
+      href: `#doc/${p.id}`, class: p.id === S.doc ? 'active' : null, 'data-doc': p.id, text: p.title,
+      onclick: (event) => { event.preventDefault(); openDoc(p.id, ''); },
+    })))));
+}
+/* a page: its HTML (escaped by the server), its links to other pages
+   opened here, its table of contents, the pages before and after */
+async function openDoc(id, anchor) {
+  const got = await api.get('/api/docs/page', { id });
+  if (got.error) { $('docs_body').textContent = got.error; return; }
+  S.doc = id;
+  save();
+  history.replaceState(null, '', `#doc/${id}${anchor ? `/${anchor}` : ''}`);
+  const body = $('docs_body');
+  body.innerHTML = got.html;
+  body.querySelectorAll('a[data-doc]').forEach((a) => {
+    a.onclick = (event) => { event.preventDefault(); openDoc(a.dataset.doc, a.dataset.anchor || ''); };
+  });
+  body.querySelectorAll('a[data-anchor]:not([data-doc])').forEach((a) => {
+    a.onclick = (event) => { event.preventDefault(); scrollDoc(a.dataset.anchor); };
+  });
+  $('docs_toc').replaceChildren(...got.toc.map(([level, key, title]) => el('a', {
+    href: `#doc/${id}/${key}`, class: `toc-${level}`, text: title,
+    onclick: (event) => { event.preventDefault(); scrollDoc(key); },
+  })));
+  document.querySelector('.docs-toc').hidden = !got.toc.length;
+  const pager = (node, near, key) => {
+    node.hidden = !near;
+    if (!near) return;
+    node.textContent = t(key, near.title);
+    node.href = `#doc/${near.id}`;
+    node.onclick = (event) => { event.preventDefault(); openDoc(near.id, ''); };
+  };
+  pager($('docs_prev'), got.prev, 'docs_prev');
+  pager($('docs_next'), got.next, 'docs_next');
+  $('docs_file').textContent = t('docs_file', got.file);
+  drawDocsNav();
+  if (anchor) scrollDoc(anchor);
+  else document.querySelector('.docs-page').scrollIntoView({ block: 'start' });
+}
+function scrollDoc(anchor) {
+  const node = document.getElementById(anchor);
+  if (node) node.scrollIntoView({ block: 'start' });
+  history.replaceState(null, '', `#doc/${S.doc}/${anchor}`);
+}
+async function searchDocs() {
+  const query = $('docs_search').value.trim();
+  const box = $('docs_results');
+  if (!query) { box.hidden = true; return; }
+  const got = await api.get('/api/docs/search', { q: query });
+  if ($('docs_search').value.trim() !== query) return;
+  box.hidden = false;
+  box.replaceChildren(...(got.results.length ? got.results.map((r) => el('a', {
+    href: `#doc/${r.page}/${r.anchor}`, class: 'docs-hit',
+    onclick: (event) => { event.preventDefault(); openDoc(r.page, r.anchor); },
+  }, el('span', { class: 'docs-hit-where', text: r.heading === r.title ? r.title : `${r.title} › ${r.heading}` }),
+  el('span', { class: 'docs-hit-text', text: r.snippet }))) : [el('p', { class: 'hint', text: t('docs_none', query) })]));
 }
 
 // ── references ──────────────────────────────────────────────────────────
@@ -2704,6 +2785,15 @@ async function init() {
   };
   // a plan shown is made again with the new naming (the headers are read
   //   once, SIMBAD's answers kept)
+  // a link to a page of the documentation followed in this window
+  window.addEventListener('hashchange', () => {
+    const hash = location.hash.match(/^#doc\/([^/]+)(?:\/(.+))?$/);
+    if (!hash) return;
+    if (S.tab !== 'docs') showTab('docs');
+    else openDoc(hash[1], decodeURIComponent(hash[2] || ''));
+  });
+  $('docs_search').oninput = () => { clearTimeout(docsTimer); docsTimer = setTimeout(searchDocs, 200); };
+  $('docs_search').onkeydown = (event) => { if (event.key === 'Escape') { $('docs_search').value = ''; searchDocs(); } };
   $('naming').onchange = (event) => {
     S.naming = event.target.value;
     save();
@@ -2788,7 +2878,8 @@ async function init() {
   if (['adding', 'planning', 'moving'].includes(DISPATCH.state)) followDispatch(); else drawDispatch();
   // a root with nothing to work in yet (or none): its Folders tab first
   const fresh = !S.root || (LAYOUT && !LAYOUT.folders.length && !LAYOUT.legacy);
-  showTab(fresh ? 'folders' : (S.tab || 'targets'));
+  // a link to a page of the documentation opens it
+  showTab(location.hash.startsWith('#doc/') ? 'docs' : fresh ? 'folders' : (S.tab || 'targets'));
   showSub(S.sub || 'local');
   pollQueue();
   setInterval(pollQueue, 2000);

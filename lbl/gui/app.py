@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from astropy import constants
 
 from . import __version__, cleanup, history, i18n, lblinfo, runner
-from . import archives, dispatch, explore, simbad, targets
+from . import archives, dispatch, docs, explore, simbad, targets
 from . import wrapgen, wrapload
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -307,6 +307,13 @@ class Handler(BaseHTTPRequestHandler):
                     query.get("root", ""))))
             if route == "/api/dispatch":
                 return self._json(ctx.dispatcher.status())
+            if route == "/api/docs":
+                return self._json(docs.nav())
+            if route == "/api/docs/page":
+                return self._json(docs.page(query.get("id", "")))
+            if route == "/api/docs/search":
+                return self._json(dict(results=docs.search(
+                    query.get("q", ""))))
             if route == "/api/names/check":
                 problem = dispatch.name_problem(query.get("name", ""))
                 return self._json(dict(problem=dict(
