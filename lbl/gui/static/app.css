@@ -816,6 +816,24 @@ h2 .info { vertical-align: 3px; }
 @media (max-width: 760px) { .explore-form { grid-template-columns: 1fr 1fr; } }
 .explore-nightly { margin-top: 30px; }
 .explore-nightly input:disabled + span { opacity: 0.45; }
+/* the star of each table (starinfo.py), above the time series */
+.explore-star { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 12px; }
+.star-card { border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; background: var(--row-alt); }
+.star-card > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 2px 0; }
+.star-title { font-weight: 600; font-size: 1.02rem; }
+.star-facts { color: var(--muted); font-size: 0.88rem; }
+.star-actions { margin-left: auto; display: inline-flex; gap: 10px; align-items: baseline; }
+.star-aliases { margin: 2px 0 6px; }
+.star-groups { display: flex; flex-wrap: wrap; gap: 6px 24px; }
+.star-group { flex: 0 1 auto; min-width: 0; }
+.star-group h4, .star-card > h4 { margin: 6px 0 2px; font-size: 0.86rem; color: var(--accent); font-weight: 600; }
+.star-kv { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+.star-kv th { text-align: left; font-weight: 500; padding: 1px 8px 1px 0; vertical-align: top; white-space: nowrap; }
+.star-kv td { padding: 1px 0; white-space: nowrap; }
+.star-how { color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+.star-planets td, .star-planets th { font-size: 0.82rem; }
+table.data.star-planets th { text-transform: none; letter-spacing: 0; }
+.star-group > p { max-width: 19em; margin: 4px 0; }
 .xplot { width: 100%; height: 440px; }
 .xplot.fip { height: 300px; }
 .xplot.tall { height: 560px; }

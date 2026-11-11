@@ -347,6 +347,36 @@ def planets_of(path: str) -> dict:
     return out
 
 
+def star_of(path: str, refresh: bool = False) -> dict:
+    """The summary of a table's star (starinfo.summary): SIMBAD asked its
+    folder's name less LBL's suffixes, the names of the companion's header
+    (lbl.gui.simbad.candidates: as SIMBAD writes them), kept per star in
+    the data folder; the planets of LBL's catalog (planets_of) when the
+    NASA Exoplanet Archive cannot be reached."""
+    from astropy.io import fits
+    from lbl.core.simbad import SUFFIXES
+    from . import simbad as gui_simbad
+    from . import starinfo
+    from .dispatch import NAME_KEYS
+    data_dir = data_dir_of(path)
+    science, _ = names_of(path, data_dir)
+    star = SUFFIXES.sub("", science) or science
+    header = []
+    try:
+        head = fits.getheader(_companion(path))
+        header = [str(head[key]).strip() for key in NAME_KEYS
+                  if key in head and str(head[key]).strip()]
+    except (OSError, ValueError):
+        pass
+    names = []
+    for one in [star] + header:
+        for name in gui_simbad.candidates(one):
+            if name not in names:
+                names.append(name)
+    return starinfo.summary(data_dir, star, names, refresh,
+                            fallback_planets=lambda: planets_of(path))
+
+
 def fip_of(path: str, column: str) -> dict:
     """The gaussian and the outlier-aware FIP of a column of a table,
     against its time (lbl.report.fip, as the report computes them), over

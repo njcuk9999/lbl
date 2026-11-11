@@ -2335,6 +2335,7 @@ async function loadExplorer() {
     ['explore_note', 'explore_fip_note', 'template_note'].forEach((id) => { $(id).textContent = ''; });
     XP.sets = [];
     $('explore_tables').replaceChildren();
+    drawStars();
     return;
   }
   exploreMessage('');
@@ -2445,6 +2446,7 @@ async function openSets() {
   drawTableRows();
   drawExplore();
   loadFips();
+  loadStars();
   // the same templates (a run's two tables): seen where they were
   const same = templatesBefore === sets.map((set) => (set.table.template || {}).path).join('|');
   if (same && XP.tplRange) loadTemplates(XP.tplRange[0], XP.tplRange[1]); else loadTemplates();
@@ -2637,6 +2639,144 @@ function drawFip() {
     yaxis: xpAxis({ title: { text: t('explore_fip_axis') }, range: [0, Math.max(2.5, top * 1.08)] }),
   }), PLOT_CONFIG);
   $('explore_fip_note').textContent = said.join(' · ');
+}
+
+// ── the star of each table ──────────────────────────────────────────────
+// above the time series, one card per star shown: who it is, where it is
+//   and how it moves, its photometry, its parameters as the star-o-meter
+//   derives them, what is published of it, its planets, and when in the
+//   year its lines sit on the telluric lines (starinfo.py). Asked once per
+//   window; the server keeps the answer in the data folder.
+const STARS = { answers: {}, asking: {}, shut: {} };
+
+/* one table per star among those shown: [star, set] */
+function starsShown() {
+  const seen = new Map();
+  shownSets().forEach((set) => {
+    const name = fileOf(set).object || baseName(set.path);
+    if (!seen.has(name)) seen.set(name, set);
+  });
+  return [...seen.entries()];
+}
+
+async function loadStars(again) {
+  const pairs = starsShown();
+  drawStars();
+  await Promise.all(pairs.map(async ([name, set]) => {
+    if ((STARS.answers[name] && again !== name) || STARS.asking[name]) return;
+    STARS.asking[name] = true;
+    drawStars();
+    let answer;
+    try {
+      answer = await api.get('/api/explore/star', { data_dir: S.data_dir, path: set.path, refresh: again === name ? '1' : '0' });
+    } catch (err) {
+      answer = { state: 'failed', error: String(err) };
+    }
+    STARS.answers[name] = answer;
+    delete STARS.asking[name];
+    drawStars();
+  }));
+}
+
+/* a label as the server writes it, M_Ks with Ks under */
+function symbol(text) {
+  return String(text || '').split(/_([A-Za-z]+)/).map((part, i) => (i % 2 ? el('sub', { text: part }) : part));
+}
+/* a date of the year as the window's language writes it (5 Sep) */
+function dayOf(iso) {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' });
+}
+const refLink = (ref, text) => (ref && ref.url
+  ? el('a', { href: ref.url, target: '_blank', rel: 'noopener', title: ref.text, text: text || ref.text })
+  : (ref ? el('span', { class: 'muted', title: ref.text, text: text || ref.text }) : null));
+
+function starRows(group) {
+  return el('table', { class: 'star-kv' }, el('tbody', {}, group.rows.map((row) => el('tr', {},
+    el('th', {}, symbol(row.label), row.how ? el('span', { class: 'star-how' }, ' (', symbol(row.how), ')') : null),
+    el('td', { class: 'mono' }, row.value, row.unit ? el('span', { class: 'muted' }, ` ${row.unit}`) : null,
+      row.note ? el('span', { class: 'star-how' }, ` ${t(row.note.key, ...row.note.args)}`) : null,
+      row.ref ? [' ', refLink(row.ref, '↗')] : null)))));
+}
+
+function starPlanets(planets) {
+  const rows = (planets && planets.rows) || [];
+  if (!rows.length) return el('p', { class: 'hint small', text: t(planets && planets.source === 'lbl' ? 'star_planets_none_lbl' : 'star_planets_none') });
+  const num = (value, digits) => (value === null || value === undefined ? '' : Number(value).toFixed(digits));
+  const head = ['star_pl_name', 'star_pl_period', 'star_pl_k', 'star_pl_mass', 'star_pl_radius', 'star_pl_a', 'star_pl_e', 'star_pl_teq', 'star_pl_method', 'star_pl_refs'];
+  return el('div', { class: 'table-wrap' }, el('table', { class: 'data star-planets' },
+    el('thead', {}, el('tr', {}, head.map((key) => el('th', { text: t(key) })))),
+    el('tbody', {}, rows.map((p) => el('tr', {},
+      el('td', {}, p.name, p.controversial ? el('span', { class: 'warn-text', title: t('star_pl_controversial'), text: ' ?' }) : null),
+      el('td', { class: 'mono', text: num(p.period, p.period < 10 ? 5 : 3) }),
+      el('td', { class: 'mono', text: num(p.k, 2) }),
+      el('td', { class: 'mono' }, num(p.mass, p.mass < 10 ? 2 : 1), p.mass_kind === 'Msini' ? el('span', { class: 'muted', text: ' sin i' }) : null),
+      el('td', { class: 'mono', text: num(p.radius, 2) }),
+      el('td', { class: 'mono', text: num(p.a, 4) }),
+      el('td', { class: 'mono', text: num(p.e, 2) }),
+      el('td', { class: 'mono', text: num(p.teq, 0) }),
+      el('td', { text: [p.method, p.year].filter(Boolean).join(', ') }),
+      el('td', { class: 'small' }, refLink(p.discovery), p.orbit && (!p.discovery || p.orbit.url !== p.discovery.url) ? [' · ', refLink(p.orbit)] : null))))));
+}
+
+function starTellurics(tel) {
+  if (!tel) return el('p', { class: 'hint small', text: t('star_tellurics_no_rv') });
+  const windows = tel.windows.map(([a, b]) => (a === b ? dayOf(a) : t('star_window', dayOf(a), dayOf(b)))).join(', ');
+  return el('p', { class: 'small' }, el('strong', { text: t('star_tellurics', tel.threshold) }), ' ',
+    tel.windows.length ? windows : t('star_tellurics_never'),
+    el('span', { class: 'muted', text: ` (${t('star_tellurics_range', tel.rv.toFixed(2), tel.berv[0].toFixed(1), tel.berv[1].toFixed(1), tel.year)})` }));
+}
+
+function starCard(name) {
+  const answer = STARS.answers[name];
+  const asking = !!STARS.asking[name];
+  const card = el('details', { class: 'star-card', open: !STARS.shut[name] });
+  card.addEventListener('toggle', () => { STARS.shut[name] = !card.open; });
+  const again = el('button', { type: 'button', class: 'button small', text: t('star_again'), title: t('star_refresh'), disabled: asking,
+    onclick: (event) => { event.preventDefault(); loadStars(name); } });
+  const facts = [];
+  if (answer && answer.state === 'done') {
+    if (answer.sptype) facts.push(answer.sptype);
+    if (answer.distance) facts.push(`${answer.distance.toFixed(answer.distance < 10 ? 2 : 1)} pc`);
+    if (answer.teff) facts.push(`${answer.teff.split(' ')[0]} K`);
+    const n = ((answer.planets || {}).rows || []).length;
+    facts.push(n > 1 ? t('star_n_planets', n) : t(n ? 'star_one_planet' : 'star_no_planet'));
+  }
+  // the star by the name SIMBAD knew it by (the folder's, as SIMBAD writes
+  //   it), SIMBAD's main identifier beside it when another
+  const done = answer && answer.state === 'done';
+  const title = done ? answer.asked_as || answer.title : name;
+  card.append(el('summary', {},
+    el('span', { class: 'star-title', text: title }),
+    done && answer.title && answer.title !== title ? el('span', { class: 'muted', text: ` (SIMBAD: ${answer.title})` }) : null,
+    facts.length ? el('span', { class: 'star-facts', text: facts.join(' · ') }) : null,
+    asking ? el('span', { class: 'hint small', text: ` ${t('star_asking')}` }) : null,
+    el('span', { class: 'star-actions' },
+      answer && answer.simbad ? el('a', { href: answer.simbad, target: '_blank', rel: 'noopener', class: 'small', text: 'SIMBAD ↗' }) : null,
+      again)));
+  if (!answer) return card;
+  if (answer.state !== 'done') {
+    card.append(el('p', { class: 'message warning', text: answer.state === 'unknown'
+      ? t('star_unknown', (answer.asked || []).join(', ')) : t('star_failed', answer.error || '') }));
+    return card;
+  }
+  if (answer.aliases && answer.aliases.length) card.append(el('p', { class: 'small muted star-aliases', text: answer.aliases.join(' · ') }));
+  card.append(el('div', { class: 'star-groups' }, answer.groups.map((group) => el('div', { class: 'star-group' },
+    el('h4', { text: group.key === 'derived' ? t('star_g_derived', t(`star_mode_${group.mode || 'none'}`)) : t(`star_g_${group.key}`) }),
+    group.rows.length ? starRows(group) : (group.key === 'published' ? el('p', { class: 'hint small', text: t('star_published_none') }) : null),
+    (group.notes || []).map((note) => el('p', { class: 'small warn-text', text: t(note.key, ...note.args) }))))));
+  card.append(starTellurics(answer.tellurics));
+  card.append(el('h4', { text: answer.planets && answer.planets.source === 'lbl' ? t('star_planets_lbl') : t('star_planets') }));
+  card.append(starPlanets(answer.planets));
+  const src = answer.sources || {};
+  card.append(el('p', { class: 'hint small', text: t('star_sources', src.simbad || '?', src.gaia || t('star_unreached'), src.wise || t('star_unreached'),
+    src.nasa ? 'NASA Exoplanet Archive' : t('star_nasa_down'), answer.when ? answer.when.replace('T', ' ') : '') }));
+  return card;
+}
+
+function drawStars() {
+  const pairs = starsShown();
+  $('explore_star').hidden = !pairs.length;
+  $('explore_star').replaceChildren(...pairs.map(([name]) => starCard(name)));
 }
 
 // ── template explorer ───────────────────────────────────────────────────

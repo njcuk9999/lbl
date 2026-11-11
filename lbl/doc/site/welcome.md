@@ -29,8 +29,9 @@ ordinary LBL wrap you can also run by hand.
 5. **Targets**: choose the instrument folder, tick a target.
 6. **LBL settings** and **PCA2D settings**: the defaults are a good start.
 7. **Run**: read the wrap, press Run, follow the steps and the log.
-8. **Runs** opens the reports; the **Data Explorer** plots any column of
-   the velocity tables against any other.
+8. **Runs** opens the reports; the **Data Explorer** sums up each star
+   (its parameters, its published planets) and plots any column of the
+   velocity tables against any other.
 
 ## The tabs, left to right
 
@@ -42,7 +43,7 @@ ordinary LBL wrap you can also run by hand.
 | PCA2D settings | the precleaning: on or off, its model, its bases, its correction | [Settings](tab_settings.md) |
 | Run | the wrap, the queue, the steps and the log of the run going | [Running](tab_run.md) |
 | Runs | every run of this window, its log and its reports | [Running](tab_run.md) |
-| Data Explorer | the velocity tables, column against column, their periodograms, the template | [Data Explorer](tab_explore.md) |
+| Data Explorer | the star and its published planets, the velocity tables, column against column, their periodograms, the template | [Data Explorer](tab_explore.md) |
 | Cleanup | what takes the disk, and what can go | [Cleanup](tab_cleanup.md) |
 | Documentation | these pages | [About](about_docs.md) |
 | References | the method's paper and the papers that used it | [Cleanup](tab_cleanup.md) |

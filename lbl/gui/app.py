@@ -341,6 +341,9 @@ class Handler(BaseHTTPRequestHandler):
                                                      query.get("column", "")))
                 if route == "/api/explore/planets":
                     return self._json(explore.planets_of(path))
+                if route == "/api/explore/star":
+                    return self._json(explore.star_of(
+                        path, query.get("refresh", "0") == "1"))
                 if route == "/api/explore/template":
                     return self._json(explore.template_view(
                         path, data_dir, query.get("lo"), query.get("hi"),
