@@ -2585,6 +2585,26 @@ async function loadTemplates(lo, hi) {
   drawTemplate();
 }
 
+/* the y range a template starts with: twice the span of the 3rd to 97th
+   percentiles of the values seen, about their middle, cut to what is seen
+   (a margin of 4 % beyond its extremes) */
+function templateYRange(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const at = (q) => {
+    const k = q * (sorted.length - 1);
+    const i = Math.floor(k);
+    return i + 1 < sorted.length ? sorted[i] + (k - i) * (sorted[i + 1] - sorted[i]) : sorted[i];
+  };
+  const p3 = at(0.03);
+  const p97 = at(0.97);
+  const lo = sorted[0];
+  const hi = sorted[sorted.length - 1];
+  const pad = 0.04 * (hi - lo || Math.abs(hi) || 1);
+  const half = p97 - p3 || pad;
+  const mid = 0.5 * (p3 + p97);
+  return [Math.max(mid - half, lo - pad), Math.min(mid + half, hi + pad)];
+}
+
 function drawTemplate() {
   const div = $('template_plot');
   if (!window.Plotly) return;
@@ -2618,16 +2638,13 @@ function drawTemplate() {
       hovertemplate: `${label} %{x:.4f} nm<br>${t('template_transmission_short')} %{y:.3f}<extra></extra>` });
   });
   const range = XP.tplRange || [Math.min(...tpls.map((tpl) => tpl.data.range[0])), Math.max(...tpls.map((tpl) => tpl.data.range[1]))];
-  // y: the range cut by the user, else that of what is seen
+  // y: the range cut by the user, else that of what is seen: twice the
+  //   span of its 3rd to 97th percentiles about their middle (a few
+  //   spurious points do not set the scale), no wider than what is seen
   let yRange = XP.tplY;
   if (!yRange) {
-    const seen = traces.filter((tr) => tr.yaxis === 'y').flatMap((tr) => tr.y.filter((v, i) => v !== null && tr.x[i] >= range[0] && tr.x[i] <= range[1]));
-    if (seen.length) {
-      const lo = Math.min(...seen);
-      const hi = Math.max(...seen);
-      const pad = 0.04 * (hi - lo || Math.abs(hi) || 1);
-      yRange = [lo - pad, hi + pad];
-    }
+    const seen = traces.filter((tr) => tr.yaxis === 'y').flatMap((tr) => tr.y.filter((v, i) => v !== null && Number.isFinite(v) && tr.x[i] >= range[0] && tr.x[i] <= range[1]));
+    if (seen.length) yRange = templateYRange(seen);
   }
   // copies: Plotly keeps the arrays it is given, and changes them in place
   //   when the plot is zoomed
