@@ -673,3 +673,54 @@ def test_the_blazes_made_are_told_as_they_go(tmp_path):
     assert steps.index("blazes") > max(i for i, s in enumerate(steps)
                                        if s == "moving")
     assert steps[-1] == "done"
+
+
+def test_a_disk_without_links_keeps_the_models_where_they_are(
+        tmp_path, monkeypatch):
+    # a DATA_DIR with models of its own (a kept PCA2D basis), on a disk
+    #   that refuses links (FAT, exFAT under Linux, Windows without the
+    #   right): nothing of it leaves, it stays a folder of its own
+    mine = tmp_path / "HARPS_ORIG" / "models" / "pca2d_HARPS_ORIG"
+    mine.mkdir(parents=True)
+    (mine / "basis_2026a.npz").write_text("kept")
+
+    def refused(*args, **kwargs):
+        raise OSError(1, "Operation not permitted")
+    monkeypatch.setattr(os, "symlink", refused)
+    monkeypatch.setattr(dispatch, "_junction", lambda target, link: False)
+    done = dispatch.share(str(tmp_path), "HARPS_ORIG")
+    assert "no link" in done["models"]
+    assert (mine / "basis_2026a.npz").read_text() == "kept"
+    assert not (tmp_path / "models" / "pca2d_HARPS_ORIG").exists()
+
+
+def test_a_link_seen_as_one_however_it_is_made(tmp_path):
+    # a junction (Windows) is no symbolic link to os.path.islink: the
+    #   folder that leads to the root's models is linked all the same
+    (tmp_path / "models").mkdir()
+    (tmp_path / "HARPS_ORIG").mkdir()
+    os.symlink(str(tmp_path / "models"), str(tmp_path / "HARPS_ORIG"
+                                             / "models"))
+    assert dispatch.sharing(str(tmp_path), "HARPS_ORIG") == dict(
+        models="linked")
+    assert dispatch.share(str(tmp_path), "HARPS_ORIG") == dict(
+        models="linked")
+
+
+def test_templates_copied_where_no_link_can_be_made(tmp_path, monkeypatch):
+    from lbl.gui import lblinfo
+    other = tmp_path / "HARPS_ORIG" / "templates"
+    other.mkdir(parents=True)
+    tpl = other / "LBL_Template_GJ1_harps_orig.fits"
+    tpl.write_text("template")
+    monkeypatch.setattr(lblinfo, "templates", lambda *args: [dict(
+        name="GJ1", here=False, path=str(tpl))])
+
+    def refused(*args, **kwargs):
+        raise OSError(1, "Operation not permitted")
+    monkeypatch.setattr(os, "symlink", refused)
+    data_dir = tmp_path / "HARPS_ESO"
+    assert lblinfo.link_templates(str(data_dir), "HARPS", "ESO",
+                                  ["GJ1"]) == ["GJ1"]
+    copy = data_dir / "templates" / tpl.name
+    assert copy.read_text() == "template" and not copy.is_symlink()

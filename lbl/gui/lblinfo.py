@@ -16,6 +16,7 @@ import functools
 import glob
 import os
 import re
+import shutil
 
 #: the folder the bases live in, under DATA_DIR (lbl.pca2d.basis.FOLDER)
 BASES = os.path.join("pca2d", "components")
@@ -414,7 +415,8 @@ def _made_with(path: str, instrument: str, source) -> bool:
 def link_templates(data_dir: str, instrument: str, source, names) -> list:
     """The templates a run names (OBJECT_COMPARISON) that are elsewhere in
     the root (templates) linked into DATA_DIR/templates, where LBL reads
-    them, their .inputs beside them; nothing copied, nothing replaced.
+    them, their .inputs beside them (copied where no link can be made);
+    nothing replaced.
     Returns the names linked."""
     wanted = {str(n) for n in names or []}
     linked = []
@@ -426,7 +428,12 @@ def link_templates(data_dir: str, instrument: str, source, names) -> list:
         for src in (row["path"], row["path"] + ".inputs"):
             dest = os.path.join(folder, os.path.basename(src))
             if os.path.exists(src) and not os.path.lexists(dest):
-                os.symlink(os.path.relpath(src, folder), dest)
+                try:
+                    os.symlink(os.path.relpath(src, folder), dest)
+                except (OSError, NotImplementedError):
+                    # a disk or a system without links (exFAT outside
+                    #   macOS, Windows without developer mode): a copy
+                    shutil.copy2(src, dest)
         linked.append(row["name"])
     return linked
 

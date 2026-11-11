@@ -478,6 +478,15 @@ def layout(root: str) -> dict:
                 downloads=downloads(root))
 
 
+def _resolves_elsewhere(path: str) -> bool:
+    """Whether a folder is a link of some kind (a symbolic link, or a
+    junction of Windows, which os.path.islink does not call one): its real
+    place is not where it is."""
+    parent = os.path.realpath(os.path.dirname(os.path.abspath(path)))
+    return os.path.realpath(path) != os.path.join(parent,
+                                                  os.path.basename(path))
+
+
 def sharing(root: str, home: str) -> dict:
     """How each SHARED folder of a DATA_DIR of the root stands: 'linked'
     (a link to the root's), 'link' (none yet: a link will be made),
@@ -486,7 +495,8 @@ def sharing(root: str, home: str) -> dict:
     out = {}
     for name in SHARED:
         path = os.path.join(root, home, name)
-        if os.path.islink(path):
+        if os.path.islink(path) or (os.path.isdir(path)
+                                    and _resolves_elsewhere(path)):
             same = os.path.realpath(path) == os.path.realpath(
                 os.path.join(root, name))
             out[name] = "linked" if same else "other"
@@ -497,14 +507,71 @@ def sharing(root: str, home: str) -> dict:
     return out
 
 
+def _junction(target: str, link: str) -> bool:
+    """A junction of Windows from `link` to the folder `target` (NTFS: no
+    right needed, unlike a symbolic link); False elsewhere, or refused."""
+    if os.name != "nt":
+        return False
+    try:
+        import _winapi
+        _winapi.CreateJunction(os.path.abspath(target), link)
+    except (ImportError, AttributeError, OSError):
+        return False
+    return True
+
+
+def _folder_link(target: str, link: str) -> bool:
+    """`link` made a link to the folder `target` (relative to the link's
+    folder): a symbolic link (macOS, Linux; Windows in developer mode or
+    for an administrator), else a junction (Windows, NTFS); False when the
+    disk or the system takes neither (FAT, exFAT outside macOS, some
+    network shares)."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+        return True
+    except (OSError, NotImplementedError):
+        pass
+    return _junction(os.path.join(os.path.dirname(link), target), link)
+
+
+def _unlink(path: str) -> None:
+    """a link to a folder removed (a junction is removed as a folder)"""
+    try:
+        os.unlink(path)
+    except OSError:
+        os.rmdir(path)
+
+
+def can_link(folder: str) -> bool:
+    """Whether a link to a folder can be made in `folder` (tried, then
+    removed)."""
+    probe = os.path.join(folder, ".lbl_link_probe_" + uuid.uuid4().hex[:8])
+    if not _folder_link(os.curdir, probe):
+        return False
+    try:
+        _unlink(probe)
+    except OSError:
+        pass
+    return True
+
+
+#: why a SHARED folder stays one of its own (share)
+NO_LINK = ("no link: this disk or this system makes none (FAT or exFAT "
+           "outside macOS, Windows without developer mode, some network "
+           "shares): a folder of its own, its files left where they are")
+
+
 def share(root: str, home: str) -> dict:
     """Each SHARED folder of a DATA_DIR of the root made a link to the
     root's (ROOT/{INSTRUMENT}_{SOURCE}/models -> ../models): LBL's models
     are downloaded once for every instrument. A folder of the DATA_DIR's
     own is merged into the root's first: a file the root lacks is moved
     there, a copy of one it has is removed; one that differs stays where it
-    is, and so does its folder, not linked. Returns {name: what was done:
-    linked, merged, kept (with the files that differ), or why not}."""
+    is, and so does its folder, not linked. Where no link can be made
+    (can_link), nothing is moved: the folder stays the DATA_DIR's own,
+    with its files (a PCA2D basis kept there is not lost to it). Returns
+    {name: what was done: linked, merged, kept (with the files that
+    differ), or why not}."""
     out = {}
     for name, state in sharing(root, home).items():
         mine = os.path.join(root, home, name)
@@ -512,8 +579,13 @@ def share(root: str, home: str) -> dict:
         if state in ("linked", "other"):
             out[name] = state
             continue
+        os.makedirs(os.path.join(root, home), exist_ok=True)
+        if not can_link(os.path.join(root, home)):
+            os.makedirs(mine, exist_ok=True)
+            out[name] = NO_LINK
+            continue
         os.makedirs(common, exist_ok=True)
-        differ = []
+        differ, moved = [], []
         if state == "merge":
             for here, _, files in os.walk(mine):
                 for one in files:
@@ -522,6 +594,7 @@ def share(root: str, home: str) -> dict:
                     if not os.path.exists(dest):
                         os.makedirs(os.path.dirname(dest), exist_ok=True)
                         os.replace(src, dest)
+                        moved.append((src, dest))
                     elif _same(src, dest):
                         os.remove(src)
                     else:
@@ -537,12 +610,13 @@ def share(root: str, home: str) -> dict:
             if os.path.exists(mine):
                 out[name] = "not emptied"
                 continue
-        try:
-            os.symlink(os.path.join(os.pardir, name), mine,
-                       target_is_directory=True)
-        except OSError as exc:
+        if not _folder_link(os.path.join(os.pardir, name), mine):
+            # refused after all: what was moved goes back
+            for src, dest in moved:
+                os.makedirs(os.path.dirname(src), exist_ok=True)
+                os.replace(dest, src)
             os.makedirs(mine, exist_ok=True)
-            out[name] = "no link (%s): a folder of its own" % exc
+            out[name] = NO_LINK
             continue
         out[name] = "merged" if state == "merge" else "linked"
     return out
