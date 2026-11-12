@@ -13,8 +13,8 @@
   cube, fit, figures and correction, LBL on the corrected spectra, the
   report), each filled as its counter goes. Every step that runs has its
   pill: a template or a mask whose step is unticked in the LBL settings but
-  that is not on disk is made all the same before the velocities, and its
-  pill (dashed) says "missing"; a step the log names that the plan did not
+  that is not on disk is made all the same before the velocities: its pill
+  is dashed, its tip says why; a step the log names that the plan did not
   have gets a dashed pill where it comes.
 - **The log**: everything the run prints, timestamped, coloured by level;
   progress bars redraw in place. The arrows go to its top (it stops
