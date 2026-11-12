@@ -38,8 +38,8 @@ tab counts those that can be dispatched. **Dispatch** reads their headers
   `S2D_A`, the CADC's, the HARPS DRS's `e2ds_A`...).
 - **What it is**: a spectrum LBL reads (into `science/<star>/`), a
   calibration (a blaze, into `calib/`, under the name the spectra's headers
-  give it), or another product of its pipeline (a CCF, an S1D...), put
-  aside in `Downloads/unused/`.
+  give it, below), or another product of its pipeline (a CCF, an S1D...),
+  put aside in `Downloads/unused/`.
 - **A setting** a template must not mix gets a folder of its own:
   HARPS's EGGS, SOPHIE's HE, ESPRESSO's settings other than HR 1x1
   (`<star>_EGGS`).
@@ -59,6 +59,16 @@ spectrum (`INSTRUME`): put back in `Downloads/`, it goes to the `calib/` of
 its instrument again. One made before the instrument was written in it
 (until 2026-11-11) is placed by its name, as the DRS names its files
 (`HARPS.<date>_blaze_A.fits`, `HARPN.<date>_blaze_A.fits`).
+
+A blaze's name as the spectra's headers give it is ESO's, the time it was
+taken: `r.NIRPS.2023-04-11T12:56:58.825_BLAZE_A.fits`. No Windows disk (nor
+exFAT) takes a `:`, so the window writes every blaze it places, fetches
+(the [archive search](archives.md)) or makes with the characters Windows
+refuses (`< > : " | ? *`) as `-`:
+`r.NIRPS.2023-04-11T12-56-58.825_BLAZE_A.fits`, on every system, so that a
+root moves between them. LBL looks for a blaze under the header's name,
+then under that one; a blaze already in `calib/` under ESO's own name (one
+placed before 2026-11-12) is still found, and not fetched or made again.
 
 Nothing is overwritten: a copy of a file already in its place is taken out
 of `Downloads/`; a different file of the same name is left there, and said.

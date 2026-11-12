@@ -286,11 +286,12 @@ def test_nirps_at_eso_its_telluric_corrected_s2d_and_its_blaze(tmp_path):
         "r.NIRPS.2026-02-27T02:15:29.476_S2D_A.fits"]
     assert plan["defaults"] == ["NIRPS_HE_ESO"]
     result = dispatch.go(plan)
-    # the blaze under the name the spectra's headers give it, and the
+    # the blaze under the name the spectra's headers give it, as every
+    #   disk can hold it (':' as '-', where LBL looks for it too), and the
     #   setup's default blaze, in the root's models
     calib = tmp_path / "NIRPS_HE_ESO" / "calib"
     assert os.listdir(calib) == [
-        "r.NIRPS.2025-09-09T12:12:29.357_BLAZE_A.fits"]
+        "r.NIRPS.2025-09-09T12-12-29.357_BLAZE_A.fits"]
     assert result["defaults"] == ["NIRPS_HE_ESO"]
     assert (tmp_path / "models" / "default-blaze"
             / "blaze_NIRPS_HE_ESO.fits").is_file()

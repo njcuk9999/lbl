@@ -91,6 +91,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from lbl.core.base import portable_name
+
 from . import targets
 
 #: how a star new to the root is named, the Folders tab's choice (see the
@@ -1048,13 +1050,15 @@ def read(path: str) -> dict:
     if kind == "calib":
         # ESO's archive writes ':' as '_' in the names of the files it
         #   gives: the name the spectra's headers give it again, from the
-        #   raw frame it was made of (r.<ARCFILE>_BLAZE_A.fits)
+        #   raw frame it was made of (r.<ARCFILE>_BLAZE_A.fits), as every
+        #   disk can hold it (':' as '-', which no Windows disk takes), where
+        #   LBL looks for it too (Instrument.blaze_path)
         catg = str(_card(headers, "HIERARCH ESO PRO CATG") or "").upper()
         arcfile = str(_card(headers, "ARCFILE") or "")
         if catg in ESO_CALIB and arcfile.endswith(".fits"):
             named = "r.%s_%s.fits" % (arcfile[:-5], catg)
             if named.replace(":", "_") == out["name"].replace(":", "_"):
-                out["calib_name"] = named
+                out["calib_name"] = portable_name(named)
         return out
     mjd = targets._first(headers, targets.MJD_KEYS)
     if mjd is not None and mjd > 2400000.5:
@@ -2037,8 +2041,9 @@ def _put(move: dict) -> str:
     if move.get("split"):
         with fits.open(src, memmap=False) as hdul:
             head = hdul[0].header.copy()
-            blaze = move.get("blaze") or os.path.basename(dest).replace(
-                "_e2ds_A", "_blaze_A")
+            # under a name every disk can hold, which the header then gives
+            blaze = portable_name(move.get("blaze") or os.path.basename(
+                dest).replace("_e2ds_A", "_blaze_A"))
             head["HIERARCH OHP DRS BLAZE FILE"] = blaze
             calib = os.path.join(os.path.dirname(os.path.dirname(
                 os.path.dirname(dest))), "calib")
@@ -2092,8 +2097,11 @@ def _blazes(moves) -> list:
             continue
         calib = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
             one["dest"]))), "calib")
-        path = os.path.join(calib, one["blaze"])
-        if path in seen or os.path.exists(path):
+        # made under a name every disk can hold, where LBL looks for it too
+        #   (Instrument.blaze_path); one here under its own name is that one
+        path = os.path.join(calib, portable_name(one["blaze"]))
+        if path in seen or os.path.exists(path) or os.path.exists(
+                os.path.join(calib, one["blaze"])):
             continue
         seen.add(path)
         out.append((one["dest"], path))

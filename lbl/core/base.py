@@ -49,6 +49,23 @@ AstropyTime = Time
 AstropyTimeDelta = TimeDelta
 
 
+def portable_name(name: str) -> str:
+    """
+    A file name every disk can hold: the characters Windows (and exFAT)
+    refuse in a name, < > : " | ? * and the control characters, as '-'.
+    ESO names its calibrations by the time they were taken
+    (r.NIRPS.2023-04-11T12:56:58.825_BLAZE_A.fits), and the spectra's
+    headers name them so: the window writes such a file under this name,
+    and Instrument.blaze_path looks for it under both
+
+    :param name: str, a file name (separators are left as they are)
+
+    :return: str, the same name with only characters every disk takes
+    """
+    return ''.join('-' if char in '<>:"|?*' or ord(char) < 32 else char
+                   for char in str(name))
+
+
 # must define the tqdm module as we need to turn it off in certain circumstances
 def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
     """

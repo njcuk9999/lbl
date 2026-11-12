@@ -27,8 +27,11 @@ visible in a first run: GJ 581 b, P = 5.37 d, K = 13 m/s ([Bonfils et al.
 The search found 321 public HARPS spectra at ESO (482 MB, on 2026-11-09):
 ESO's HARPS pipeline `e2ds` (about 1.5 MB each), read as `HARPS ORIG`,
 into `HARPS_ORIG/science/GJ581/`, with a nightly blaze made from the
-spectra in `calib/` (ESO does not give it). HARPS is optical: LBL's
-telluric cleaning is on by default (off for NIRPS and SPIRou).
+spectra in `calib/` (ESO does not give it for HARPS; for NIRPS it gives the
+blaze of each night, fetched beside the spectra). Every blaze is written
+under a name any disk takes, Windows included ([Your data](data_root.md)).
+HARPS is optical: LBL's telluric cleaning is on by default (off for NIRPS
+and SPIRou).
 
 ## Spectra downloaded by hand
 

@@ -1074,6 +1074,12 @@ class Instrument:
             named = os.path.join(calib_directory, blaze_file)
             if os.path.exists(named):
                 return named
+            # the name as a disk under Windows can hold it (no colon): the
+            #   window writes the blazes of ESO under it
+            portable = os.path.join(calib_directory,
+                                    base.portable_name(blaze_file))
+            if os.path.exists(portable):
+                return portable
         default = self.default_blaze_file()
         if default is not None and os.path.exists(default):
             if default not in Instrument._DEFAULT_BLAZES_SAID:

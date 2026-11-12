@@ -71,6 +71,8 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
+from lbl.core.base import portable_name
+
 from . import observatories as obs
 from . import tng
 from .log import log
@@ -483,14 +485,20 @@ def _get_nirps(one: Dict[str, Any], science: str, calib: str) -> str:
                       and '_S2D_' not in part[0]), None)
         if not flux or not tell or not blaze:
             return 'no S2D_BLAZE_A, telluric model or blaze in its tar'
+        # the name the header gives it, as every disk can hold it (ESO's
+        #   has colons: r.NIRPS.2023-04-11T12:56:58.825_BLAZE_A.fits), where
+        #   LBL looks for it too (Instrument.blaze_path); a blaze fetched
+        #   before under ESO's own name is that blaze
         bname = os.path.basename(blaze[0])
-        if not os.path.exists(os.path.join(calib, bname)):
+        stored = os.path.join(calib, portable_name(bname))
+        if not any(os.path.exists(os.path.join(calib, name))
+                   for name in (bname, os.path.basename(stored))):
             # the blaze of a night, which several spectra share: each its
             #   own part, the last one written wins
-            part = os.path.join(calib, f'{bname}.{uuid.uuid4().hex}.part')
+            part = f'{stored}.{uuid.uuid4().hex}.part'
             with open(part, 'wb') as handle:
                 handle.write(_range(url, blaze[1], blaze[2]))
-            os.replace(part, os.path.join(calib, bname))
+            os.replace(part, stored)
         with fits.open(io.BytesIO(_range(url, flux[1], flux[2]))) as hdul, \
                 fits.open(io.BytesIO(_range(url, tell[1], tell[2]))) as model:
             trans = np.asarray(model['SCIDATA'].data, float)
@@ -568,8 +576,12 @@ def _get_harps(one: Dict[str, Any], science: str, calib: str) -> str:
                         or '').strip()
             if not bname:
                 return 'no blaze named in its header'
-            blaze = os.path.join(calib, os.path.basename(bname))
-            if not os.path.exists(blaze):
+            # under a name every disk can hold, where LBL looks for it too
+            #   (Instrument.blaze_path), unless it is here under its own
+            bname = os.path.basename(bname)
+            blaze = os.path.join(calib, portable_name(bname))
+            if not os.path.exists(blaze) and \
+                    not os.path.exists(os.path.join(calib, bname)):
                 head = fits.Header()
                 # the instrument, so that the blaze can be dispatched again
                 #   (lbl.gui.dispatch.read finds no other way)
