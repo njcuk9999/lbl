@@ -31,3 +31,23 @@ def test_the_star_table_survives_simbad_not_answering():
     assert len(row) == 1
     assert "This could be due to" in row[0]
     assert "\n\n" not in table
+
+
+def test_a_panel_with_nothing_labelled_gets_no_legend(tmp_path):
+    """The temperature figure of a series without BERV (no V_tot): its
+    lower panels are empty, and no legend is asked of them (matplotlib
+    warned 'No artists with labels found to put in legend')"""
+    import warnings
+
+    import numpy as np
+    rng = np.random.default_rng(1)
+
+    def run(label):
+        return dict(t=np.arange(20.0), dtemp=rng.normal(0, 5, 20),
+                    sdtemp=np.full(20, 2.0), dtemp_name="DTEMP3000",
+                    label=label)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        path = texreport.figure_dtemp(run("delivered"), run("corrected"),
+                                      str(tmp_path / "dtemp.pdf"))
+    assert path and (tmp_path / "dtemp.pdf").is_file()

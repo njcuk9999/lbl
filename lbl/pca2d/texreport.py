@@ -747,6 +747,16 @@ def verdict(before, after, better="lower", tolerance=0.02):
 
 
 # --------------------------------------------------------------- drawing --
+def _legend(ax, **kwargs):
+    """ax.legend(**kwargs) when something in it has a label, else None:
+    a panel left empty (no V_tot for the star, a curve with no point) has
+    no legend, rather than matplotlib's warning that it has nothing to
+    put in one"""
+    if not ax.get_legend_handles_labels()[0]:
+        return None
+    return ax.legend(**kwargs)
+
+
 def _style(ax):
     ax.grid(True, color=GRID, lw=0.6)
     ax.set_axisbelow(True)
@@ -868,7 +878,7 @@ def figure_time(before, after, path):
         ax.set_ylabel("velocity - median (m/s)\nmedian = %.1f m/s" % middle,
                       fontsize=8, color=INK)
         ax.set_ylim(*lim)
-        ax.legend(fontsize=7, frameon=False, loc="upper right", ncol=3)
+        _legend(ax, fontsize=7, frameon=False, loc="upper right", ncol=3)
         _style(ax)
         spreads.append((run["v"] - middle, run["v"] - line, slope, colour,
                         run["label"]))
@@ -895,7 +905,7 @@ def figure_time(before, after, path):
         ax.set_xlabel("velocity (m/s)", fontsize=8, color=INK)
         ax.set_xlim(*lim)
         ax.set_ylim(0, ax.get_ylim()[1] * 1.35)
-        ax.legend(fontsize=6.5, frameon=False, loc="upper left")
+        _legend(ax, fontsize=6.5, frameon=False, loc="upper left")
         _style(ax)
     plt.setp(right.get_yticklabels(), visible=False)
     fig.subplots_adjust(left=0.1, right=0.98, bottom=0.07, top=0.96)
@@ -976,7 +986,7 @@ def figure_berv(before, after, path):
     top[0].set_ylim(*lim)
     top[0].set_ylabel("velocity - fitted DC level (m/s)", fontsize=8,
                       color=INK)
-    top[0].legend(fontsize=6, frameon=False, loc="upper left")
+    _legend(top[0], fontsize=6, frameon=False, loc="upper left")
     _close_band(both)
     for run, x, key, colour in ((before, vb, "before", BEFORE),
                                 (after, va, "after", AFTER)):
@@ -992,12 +1002,13 @@ def figure_berv(before, after, path):
     both.set_xlabel(VTOT_LABEL, fontsize=8, color=INK)
     both.set_ylabel("fitted bias (m/s)", fontsize=8, color=INK)
     # the title is the legend's own: set apart, the two overlapped
-    legend = both.legend(fontsize=6.5, frameon=False, loc="lower left",
-                         bbox_to_anchor=(0.0, 1.02), ncol=1,
-                         borderaxespad=0.0,
-                         title="both fits, 1$\\sigma$ envelopes, over the"
-                               " binned medians", title_fontsize=7.5)
-    legend._legend_box.align = "left"
+    legend = _legend(both, fontsize=6.5, frameon=False, loc="lower left",
+                     bbox_to_anchor=(0.0, 1.02), ncol=1,
+                     borderaxespad=0.0,
+                     title="both fits, 1$\\sigma$ envelopes, over the"
+                           " binned medians", title_fontsize=7.5)
+    if legend is not None:
+        legend._legend_box.align = "left"
     _style(both)
     fig.tight_layout()
     return _save(fig, path, before.get("star"))
@@ -1108,8 +1119,8 @@ def figure_corner(before, after, path):
                 ax.set_xlim(*xr)
                 ax.set_yticks([])
                 if row == 0:
-                    ax.legend(fontsize=7.5, frameon=False, loc="upper left",
-                              bbox_to_anchor=(1.1, 1.0))
+                    _legend(ax, fontsize=7.5, frameon=False,
+                            loc="upper left", bbox_to_anchor=(1.1, 1.0))
             else:
                 yname, yi, yr = params[row]
                 # the wider posterior first, so the narrower lies on top
@@ -1284,7 +1295,7 @@ def figure_dtemp(before, after, path):
             _style(ax)
     axes[0, 0].set_ylabel("%s - median (K)" % name, fontsize=7.5, color=INK)
     axes[1, 0].set_ylabel("%s - median (K)" % name, fontsize=7.5, color=INK)
-    axes[1, 0].legend(fontsize=6.5, frameon=False, loc="upper left")
+    _legend(axes[1, 0], fontsize=6.5, frameon=False, loc="upper left")
     fig.tight_layout()
     return _save(fig, path, before.get("star"))
 
@@ -1468,7 +1479,7 @@ def figure_phase(before, after, planets, path, most=4):
                          % (run["label"], k, err, dbic,
                             bervbias.bic_words(dbic, "sine"), rms, typical),
                          fontsize=7.5, color=INK, loc="left")
-            ax.legend(fontsize=6, frameon=False, loc="lower left", ncol=1)
+            _legend(ax, fontsize=6, frameon=False, loc="lower left", ncol=1)
             _style(ax)
         row[0].set_ylabel("%s\nP = %s d\nvelocity (m/s)"
                           % (planet["name"], ("%.6f" % planet["period"])
@@ -1557,8 +1568,8 @@ def figure_periodograms(before, after, planets, path):
             ax.text(period, top, name + " ", fontsize=6, color=MUTED,
                     va="top", ha="right", rotation=90)
         ax.set_ylabel("%s power" % what, fontsize=8, color=INK)
-        ax.legend(fontsize=6.5, frameon=False, loc="lower left",
-                  bbox_to_anchor=(0.0, 1.0), ncol=2, borderaxespad=0.2)
+        _legend(ax, fontsize=6.5, frameon=False, loc="lower left",
+                bbox_to_anchor=(0.0, 1.0), ncol=2, borderaxespad=0.2)
         _style(ax)
     if not drawn:
         plt.close(fig)
