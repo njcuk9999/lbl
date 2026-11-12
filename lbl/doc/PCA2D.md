@@ -171,7 +171,13 @@ The default (`nightly_stack`) is the instrument's, its `PCA2D_NIGHTLY_STACK`.
 A night runs from local noon to the next local noon at the observatory, in
 local mean solar time from the longitude of the site the instrument's LBL
 class names (`EARTH_LOCATION`): the nights of LBL's own compile, so a night on
-Mauna Kea is not cut at noon UT. The cube records that longitude, and its
+Mauna Kea is not cut at noon UT. The time of an exposure is read in its file
+name when it is there (APERO's and ESO's names of exposures carry it), else
+in its headers: DATE-OBS of the flux's extension or of the primary header
+(where ESO's S2D has it), else MJD-OBS. The date in the name of an ESO
+archive product (`ADP.<date>`, and the window's archive search names
+ESO's NIRPS spectra after it) is when the archive processed it, and is
+never taken. The cube records that longitude, and its
 cache key holds it, so a cube coadded at another boundary is built again.
 The cube is in the observer's frame, so a coadd smears the star by the BERV
 range of what it holds, and a long sequence is not one sky either: over a

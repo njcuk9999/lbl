@@ -282,3 +282,42 @@ def test_without_astropy_s_site_registry_it_says_what_is_missing(
             conf.set_temp("allow_internet", False):
         with pytest.raises(ValueError, match="sites.json"):
             astro.site_longitude("La Silla Observatory")
+
+
+def test_an_archive_product_s_date_is_not_the_exposure_s():
+    # the date in an ESO archive product's name is when the archive
+    #   processed it: taken, every exposure would be one night
+    for name in ("r.NIRPS.ADP.2025-04-11T12-47-12.315_S2D_BLAZE_TCORR_A.fits",
+                 "ADP.2025-04-11T12:47:12.315.fits",
+                 "ADP.2025-04-11T12_47_12.315.fits"):
+        assert nights.timestamp_from_name(name) is None
+    for name in ("NIRPS.2023-01-20T08:42:08.941t.fits",
+                 "r.NIRPS.2023-01-20T08_42_08.941_S2D_A.fits"):
+        assert nights.timestamp_from_name(name) == dt.datetime(
+            2023, 1, 20, 8, 42, 8)
+
+
+def test_the_time_of_an_s2d_comes_from_its_primary_header(tmp_path):
+    """ESO's S2D: DATE-OBS in the primary header alone, the flux in
+    extension 1, the name of the archive search (no time in it)"""
+    from astropy.io import fits
+
+    def s2d(name, primary):
+        head = fits.Header()
+        head.update(primary)
+        path = str(tmp_path / name)
+        fits.HDUList([fits.PrimaryHDU(header=head), fits.ImageHDU(
+            np.ones((2, 4), "f4"), name="SCIDATA")]).writeto(path)
+        return path
+    files = [s2d("r.NIRPS.ADP.2025-04-11T12-47-12.3%02d_S2D_A.fits" % k,
+                 {"DATE-OBS": stamp.isoformat()})
+             for k, stamp in enumerate(STAMPS)]
+    _, labels = nights.group_files(files, True, extension=1,
+                                   longitude=LA_SILLA)
+    assert len(set(labels)) == 2
+    # MJD-OBS when there is no DATE-OBS
+    mjd = s2d("r.NIRPS.ADP.x_S2D_A.fits", {"MJD-OBS": 60041.25})
+    assert nights._stamp_from_header(mjd, 1) == dt.datetime(2023, 4, 7, 6)
+    bare = s2d("r.NIRPS.ADP.y_S2D_A.fits", {})
+    with pytest.raises(RuntimeError, match="DATE-OBS or MJD-OBS"):
+        nights.group_files([bare], True, extension=1, longitude=LA_SILLA)

@@ -39,8 +39,12 @@ from .logger import log
 LONGITUDE_KEY = "NIGHTLON"
 
 # <INSTRUMENT>.2023-01-20T08:42:08.941t.fits or
-# <INSTRUMENT>_2023-01-20T08_42_08_941_pp_...
-_STAMP = re.compile(r"(\d{4})-(\d{2})-(\d{2})T(\d{2})[:_](\d{2})[:_](\d{2})")
+# <INSTRUMENT>_2023-01-20T08_42_08_941_pp_...; never the date of an ESO
+# archive product (ADP.2025-04-11T12:47:13.918, the archive search's
+# r.NIRPS.ADP.2025-04-11T12-47-13.918_S2D_BLAZE_TCORR_A.fits), which is the
+# day the archive processed it: every exposure would be one night
+_STAMP = re.compile(
+    r"(?<!ADP\.)(\d{4})-(\d{2})-(\d{2})T(\d{2})[:_](\d{2})[:_](\d{2})")
 
 
 def timestamp_from_name(path: str):
@@ -170,17 +174,32 @@ def _stacked(cube: str) -> bool:
 
 
 def _stamp_from_header(path: str, extension: int) -> _dt.datetime | None:
-    try:
-        header = fits.getheader(path, extension)
-    except Exception:                                   # noqa: BLE001
-        return None
-    value = header.get("DATE-OBS") or header.get("DATE_OBS")
-    if value is None:
-        return None
-    try:
-        return _dt.datetime.fromisoformat(str(value).strip()[:19])
-    except ValueError:
-        return None
+    """The UT start of an exposure from its headers: DATE-OBS (or DATE_OBS)
+    of the extension given, else of the primary header (APERO writes it in
+    every extension of a t.fits, ESO in the primary header of an S2D
+    alone), else their MJD-OBS; None when none says it."""
+    headers = []
+    for ext in dict.fromkeys((extension, 0)):
+        try:
+            headers.append(fits.getheader(path, ext))
+        except Exception:                               # noqa: BLE001
+            continue
+    for header in headers:
+        value = header.get("DATE-OBS") or header.get("DATE_OBS")
+        if value is None:
+            continue
+        try:
+            return _dt.datetime.fromisoformat(str(value).strip()[:19])
+        except ValueError:
+            continue
+    for header in headers:
+        try:
+            mjd = float(header.get("MJD-OBS"))
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(mjd):
+            return _dt.datetime(1858, 11, 17) + _dt.timedelta(days=mjd)
+    return None
 
 
 def header_bjd(path: str):
@@ -343,7 +362,9 @@ def group_files(files: list[str], stack: bool, extension: int = 0,
     elif stack:
         raise RuntimeError(
             "cannot group %d file(s) into nights: no timestamp in the filename "
-            "and no DATE-OBS in the header" % (len(files) - len(known))
+            "and no DATE-OBS or MJD-OBS in the headers, first %s"
+            % (len(files) - len(known),
+               files[next(i for i, s in enumerate(stamps) if s is None)])
         )
 
     if not stack:
