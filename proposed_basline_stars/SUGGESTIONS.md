@@ -68,10 +68,12 @@ instrument dont `science/<OBJET>/` n'est fait que de liens symboliques vers
 les t.fits d'APERO (les poses comptées par la sélection ; aucune copie), et
 un wrap par base (`wraps/`, écrits par le générateur de la fenêtre) : PCA2D
 `joint=True`, `n_star=1`, le `n_earth` de l'instrument, `compare=False`,
-les étapes LBL coupées. Les trois bases d'un instrument passent l'une après
-l'autre (`run_<INSTRUMENT>.sh`), les deux instruments en parallèle, en
-`nice 10` et 12 fils BLAS chacun ; chaque base faite est rangée par
-`basis.keep` dans `<INSTRUMENT>/models/pca2d_<INSTRUMENT>_CADC/` :
+les étapes LBL coupées. Les six bases tournent en parallèle, une par
+lanceur (`run_<INSTRUMENT>_<base>.sh`), en `nice 10` et 12 fils BLAS
+chacune : un ajustement SPIRou prend environ 14 min par itération, et les
+enchaîner menait à plusieurs jours (chaque ajustement SPIRou tient 25 à
+50 Go, rali en a 376). Chaque base faite est rangée par `basis.keep` dans
+`<INSTRUMENT>/models/pca2d_<INSTRUMENT>_CADC/` :
 
 | base (`input_name`) | NIRPS HE | SPIRou |
 |---|---|---|
@@ -99,7 +101,7 @@ d'entraînement (`science/<OBJET>_pca2d/`, environ 18 Mo par pose SPIRou et
 15 Mo par pose NIRPS, ~330 Go en tout, refaisables) et ses figures.
 
     cd ~/proposed_basline_stars && ~/miniconda3/envs/lbl-pca2d/bin/python build_bases.py ~/pca2d_bases
-    cd ~/pca2d_bases && for i in SPIROU NIRPS_HE; do nohup setsid bash run_$i.sh > /dev/null 2>&1 < /dev/null & done
+    cd ~/pca2d_bases && for s in run_*_baseline_*.sh; do nohup setsid bash $s > /dev/null 2>&1 < /dev/null & done
 
 ## Refaire
 

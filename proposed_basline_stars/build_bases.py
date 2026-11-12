@@ -14,7 +14,8 @@ bundles of a night refuse it, the river plots lose their line). A basis
 filed as CADC is also the one a run on CADC data takes.
 
     python build_bases.py [root]          # links, wraps, runners
-    nohup setsid bash <root>/run_<INSTRUMENT>.sh > /dev/null 2>&1 &
+    cd <root> && for s in run_*_baseline_*.sh; do
+        nohup setsid bash $s > /dev/null 2>&1 < /dev/null & done
 
 What it writes, all under root (~/pca2d_bases by default), never beside
 APERO's files:
@@ -25,8 +26,10 @@ APERO's files:
   them (lbl.gui.wrapgen.render): PCA2D joint, n_star=1, the instrument's
   n_earth, LBL's own steps off (the bases are the product; the corrected
   spectra of the training stars are written by the fit as always);
-- <root>/run_<INSTRUMENT>.sh: its three wraps one after the other, each
-  basis kept once made; logs in <root>/logs/, one line per basis in
+- <root>/run_<INSTRUMENT>_<basis>.sh: one wrap, its basis kept once made;
+  the six run side by side (a SPIRou fit is about 14 min an iteration, the
+  bases one after the other took days; each SPIRou fit holds 25 to 50 GB,
+  rali has 376), logs in <root>/logs/, one line per step in
   <root>/logs/status.txt.
 """
 import csv
@@ -137,31 +140,48 @@ def wrap(inst, name, stars, data_dir):
                           python=sys.executable)
 
 
-def runner(inst, wraps, data_dir, root):
+def runner(inst, name, wrap_path, data_dir, root):
+    """<root>/run_<INSTRUMENT>_<basis>.sh: the wrap of one basis, then the
+    basis kept (basis.keep) when the fit wrote it. With a PID as argument,
+    a run of that wrap already going is waited for instead of starting
+    one. One line per step in <root>/logs/status.txt."""
     logs = os.path.join(root, "logs")
     status = os.path.join(logs, "status.txt")
-    lines = ["#!/bin/bash",
-             "# the %s bases, one after the other (build_bases.py)" % inst,
-             "export OMP_NUM_THREADS=%d OPENBLAS_NUM_THREADS=%d"
-             " MKL_NUM_THREADS=%d MPLBACKEND=Agg" % ((THREADS,) * 3),
-             "mkdir -p %s" % logs]
-    for name, path in wraps:
-        log = os.path.join(logs, "%s_%s.log" % (inst, name))
-        lines += [
-            'echo "$(date "+%%F %%T") %s %s started" >> %s'
-            % (inst, name, status),
-            "if nice -n %d %s %s > %s 2>&1; then"
-            % (NICE, sys.executable, path, log),
-            "  kept=$(%s -c 'from lbl.pca2d import basis; print(basis.keep("
-            '"%s", "%s", "%s"))\' 2>&1 | tail -1)'
-            % (sys.executable, name, data_dir, inst),
-            '  echo "$(date "+%%F %%T") %s %s done: $kept" >> %s'
-            % (inst, name, status),
-            "else",
-            '  echo "$(date "+%%F %%T") %s %s FAILED (exit $?): see %s"'
-            " >> %s" % (inst, name, log, status),
-            "fi"]
-    path = os.path.join(root, "run_%s.sh" % inst)
+    log = os.path.join(logs, "%s_%s.log" % (inst, name))
+    made = os.path.join(data_dir, "pca2d", "components",
+                        "PCA2D_Observer_%s_%s.fits" % (name, inst.lower()))
+    kept = os.path.join(data_dir, "models", "pca2d_%s_%s" % (
+        inst, DATA_SOURCE), os.path.basename(made))
+    def say(what):
+        return 'echo "$(date "+%%F %%T") %s %s %s" >> %s' % (inst, name, what,
+                                                           status)
+    lines = [
+        "#!/bin/bash",
+        "# the basis %s of %s (build_bases.py); with a PID, that run of"
+        " its wrap is waited for instead of starting one" % (name, inst),
+        "export OMP_NUM_THREADS=%d OPENBLAS_NUM_THREADS=%d"
+        " MKL_NUM_THREADS=%d MPLBACKEND=Agg" % ((THREADS,) * 3),
+        "mkdir -p %s" % logs,
+        "code=0",
+        'if [ -n "$1" ]; then',
+        "  " + say("waiting for its run (PID $1)"),
+        '  while kill -0 "$1" 2>/dev/null; do sleep 60; done',
+        "else",
+        "  " + say("started"),
+        "  nice -n %d %s %s > %s 2>&1; code=$?" % (NICE, sys.executable,
+                                                  wrap_path, log),
+        "fi",
+        'if [ "$code" = 0 ] && [ -f %s ]; then' % made,
+        "  where=$(%s -c 'from lbl.pca2d import basis; print(basis.keep("
+        '"%s", "%s", "%s"))\' 2>&1 | tail -1)' % (sys.executable, name,
+                                                   data_dir, inst),
+        "  " + say("done: $where"),
+        'elif [ "$code" = 0 ] && [ -f %s ]; then' % kept,
+        "  " + say("done, updated where it is kept: %s" % kept),
+        "else",
+        "  " + say("FAILED (exit $code, no basis written): see %s" % log),
+        "fi"]
+    path = os.path.join(root, "run_%s_%s.sh" % (inst, name))
     text = "\n".join(lines) + "\n"
     # not rewritten when it is the same: bash reads a running script as it
     #   goes, and a file truncated under it ends the run
@@ -185,7 +205,6 @@ def main(root):
     order = list(NAMES)
     for inst in sorted({inst for inst, _ in plan}):
         data_dir = os.path.join(root, inst)
-        wraps = []
         for snr_bin in order:
             stars = plan.get((inst, snr_bin))
             if not stars:
@@ -197,8 +216,8 @@ def main(root):
                                                              NAMES[snr_bin]))
             with open(path, "w", encoding="utf-8") as handle:
                 handle.write(wrap(inst, NAMES[snr_bin], stars, data_dir))
-            wraps.append((NAMES[snr_bin], path))
-        print("runner:", runner(inst, wraps, data_dir, root))
+            print("runner:", runner(inst, NAMES[snr_bin], path, data_dir,
+                                    root))
 
 
 if __name__ == "__main__":
