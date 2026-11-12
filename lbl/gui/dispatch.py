@@ -91,7 +91,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from lbl.core.base import portable_name
+from lbl.core.base import harps_eggs, portable_name
 
 from . import targets
 
@@ -849,8 +849,9 @@ def _kind(family, source, name, headers, extnames, primary):
 def _setting(family, headers) -> str:
     """The setting of a file one template must not mix with the others, ''
     for the instrument's main one."""
-    if family == "HARPS" and str(_card(headers, "HIERARCH ESO INS MODE")
-                                 or "").strip().upper() == "EGGS":
+    # EGGS+NIRPS is EGGS observed together with NIRPS: the same fibre
+    if family == "HARPS" and harps_eggs(_card(headers,
+                                              "HIERARCH ESO INS MODE")):
         return "EGGS"
     if family == "SOPHIE" and str(_card(headers, "HIERARCH OHP INS FIBER")
                                   or "").strip().upper() == "HE":

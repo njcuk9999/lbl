@@ -48,6 +48,11 @@ def parse_args(argv=None):
                         help="do not force registration.frame to observer. Only"
                              " for a deliberate control experiment; the two-frame"
                              " fit expects an observer-frame cube")
+    parser.add_argument("--member", action="store_true",
+                        help="an object's own cube in a joint fit: its rows"
+                             " join the other objects', so it needs only one"
+                             " (a cube of its own fit needs more rows than"
+                             " the fit has components)")
     return parser.parse_args(argv)
 
 
@@ -84,7 +89,8 @@ def main(argv=None):
         % (fmt, config["registration"]["frame"], config["highpass"]["mode"]), "value")
     log("cube cache key: cache/cube_%s_%s" % (fmt, key), "value")
 
-    grid, data, sigma, trans, meta = cube.build_cube(config)
+    grid, data, sigma, trans, meta = cube.build_cube(
+        config, own_fit=not args.member)
     dv = grids.grid_dv(grid)
     log("cube: %d rows x %d columns, %.1f - %.1f nm, dv = %.4f km/s"
         % (data.shape[0], data.shape[1], grid.min(), grid.max(), dv), "value")

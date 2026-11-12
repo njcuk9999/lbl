@@ -765,3 +765,16 @@ def test_blazes_the_window_made_are_dispatched_again(tmp_path):
                         )[0, 0] == 2.0
     assert [k["name"] for k in result["kept"]] == [
         "HARPS.2005-01-05T19:58:50.363_blaze_A.fits"]
+
+
+def test_harps_eggs_with_nirps_goes_with_eggs():
+    """EGGS+NIRPS is HARPS's EGGS fibre observed together with NIRPS: its
+    files go to <star>_EGGS, as EGGS's do, and never with HAM's"""
+    from lbl.core.base import harps_eggs
+
+    for mode, eggs in (("EGGS", True), ("EGGS+NIRPS", True),
+                       ("eggs+nirps ", True), ("HARPS", False),
+                       ("HARPS+NIRPS", False), (None, False), ("", False)):
+        assert harps_eggs(mode) is eggs
+        head = {} if mode is None else {"HIERARCH ESO INS MODE": mode}
+        assert dispatch._setting("HARPS", [head]) == ("EGGS" if eggs else "")

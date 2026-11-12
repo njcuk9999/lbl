@@ -71,7 +71,7 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
-from lbl.core.base import portable_name
+from lbl.core.base import harps_eggs, portable_name
 
 from . import observatories as obs
 from . import tng
@@ -697,8 +697,9 @@ def groups(target: str, inst: str, root: str,
         found = eso_spectra(star, 'HARPS', 'ANCILLARY.HARPSTAR')
         out = []
         for mode, key in (('HAM', ''), ('EGGS', 'EGGS')):
+            # EGGS+NIRPS is EGGS too, observed together with NIRPS
             mine = [one for one in found
-                    if (one['mode'].upper() == 'EGGS') == (mode == 'EGGS')]
+                    if harps_eggs(one['mode']) == (mode == 'EGGS')]
             if mine:
                 out.append(dict(
                     key=key, obj=_setting(obj, key), lbl='HARPS',

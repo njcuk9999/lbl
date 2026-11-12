@@ -66,6 +66,24 @@ def portable_name(name: str) -> str:
                    for char in str(name))
 
 
+#: HARPS's two fibres, by their modes (HIERARCH ESO INS MODE): HAM and the
+#:    high-efficiency EGGS, each alone or observed together with NIRPS
+#:    ('+NIRPS'). The two have their own resolution and velocity zero point
+HARPS_MODES = (('HARPS', 'HARPS+NIRPS'), ('EGGS', 'EGGS+NIRPS'))
+
+
+def harps_eggs(mode) -> bool:
+    """
+    Whether a HARPS mode (HIERARCH ESO INS MODE) is the EGGS fibre's:
+    'EGGS', or 'EGGS+NIRPS' when HARPS observes together with NIRPS
+
+    :param mode: the header's value (None when it has none)
+
+    :return: bool, True for EGGS, False for HAM or no mode
+    """
+    return str(mode or '').strip().upper().split('+')[0] == 'EGGS'
+
+
 # must define the tqdm module as we need to turn it off in certain circumstances
 def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
     """

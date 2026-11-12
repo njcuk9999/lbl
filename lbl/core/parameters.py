@@ -904,9 +904,12 @@ params.set(key='PCA2D_MASK_SHARE', value=1.0, source=__NAME__,
                 'PCA2D to keep it in the corrected files', dtype=float)
 # The instrument modes PCA2D keeps (the DRS mode in the headers), or None
 #    for all. Two modes (another fibre, another resolution) are two
-#    instruments for a common basis, with their own velocity zero points
+#    instruments for a common basis, with their own velocity zero points.
+#    A list of groups of modes (lists): PCA2D keeps the group most of a
+#    run's files are in (HARPS: HAM or EGGS)
 params.set(key='PCA2D_DRS_MODES', value=None, source=__NAME__,
-           desc='the instrument modes PCA2D keeps (None for all)')
+           desc='the instrument modes PCA2D keeps: a list, or a list of '
+                'groups of which the one most files are in (None for all)')
 # The number of observer-frame components PCA2D fits and divides out when
 #    the wrap's PCA2D dict does not say
 params.set(key='PCA2D_N_EARTH', value=7, source=__NAME__,

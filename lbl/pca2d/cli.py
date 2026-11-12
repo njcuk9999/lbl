@@ -532,11 +532,15 @@ def joint_members(args, variant):
             log("no directory %s: %s has no spectra under the input root"
                 % (directory, name), "error")
             raise SystemExit(2)
+        files = sorted(glob.glob(os.path.join(
+            directory, cfg["input"].get("pattern", "*t.fits"))))
+        # each star's own modes (HARPS: the fibre most of ITS files are in)
+        from .readers import settle_drs_modes
+        settle_drs_modes(cfg, files)
         key = cache_key(cfg)
         members.append({
             "object": name, "config": cfg, "directory": directory,
-            "files": sorted(glob.glob(os.path.join(
-                directory, cfg["input"].get("pattern", "*t.fits")))),
+            "files": files,
             "key": key,
             "shared_key": cache_key(without_object(cfg)),
             "cube": os.path.join(cfg["output"]["cache_directory"],
@@ -725,11 +729,16 @@ def resolve(args):
     # made the input tree both read and written and meant a shared or
     # read-only archive of spectra could not be used as it stands.
     outdir = os.path.join(config["output"]["directory"], args.object, tag)
+    files = sorted(glob.glob(os.path.join(
+        directory, config["input"].get("pattern", "*t.fits"))))
+    # the instrument modes kept, from groups (HARPS's two fibres) to the
+    #   one most files are in, before the cube's key is taken
+    from .readers import settle_drs_modes
+    settle_drs_modes(config, files)
     plan = {
         "config": config,
         "directory": directory,
-        "files": sorted(glob.glob(os.path.join(
-            directory, config["input"].get("pattern", "*t.fits")))),
+        "files": files,
         "key": cache_key(config),
         "tag": tag,
         "outdir": outdir,
@@ -826,8 +835,9 @@ def build_member_cube(plan, member, build_main):
                        default_flow_style=False)
     log("  %-10s %d spectra of its own" % (member["object"],
                                            len(member["files"])), "info")
-    build_main([path] + ([] if plan["config"]["output"]["use_cache"]
-                         else ["--no-cache"]))
+    build_main([path, "--member"]
+               + ([] if plan["config"]["output"]["use_cache"]
+                  else ["--no-cache"]))
 
 
 def run_joint_cube(plan, build_main):

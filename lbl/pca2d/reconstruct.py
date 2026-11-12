@@ -814,9 +814,49 @@ def fit_weights_mask(cube, mode="exposure", share=1.0, weighting=None):
                 for name in group:
                     votes += out[name]
                 shared = votes >= max(1, int(np.ceil(fraction * len(group))))
+            _enough_in_common(shared, group, out, fraction,
+                              joint=len(names_of) > 1)
             for name in group:
                 out[name] = shared.copy()
     return out
+
+
+#: the least the common mask keeps of the samples a campaign's exposures
+#: weighted (any of them): below it, the corrected files are all but empty
+MIN_COMMON_SHARE = 0.05
+
+
+def _enough_in_common(shared, group, alive, fraction, joint=False):
+    """Stop when the common mask keeps under MIN_COMMON_SHARE of what the
+    campaign's exposures weighted: its corrected files would be all but NaN,
+    and LBL's template and mask, made from them, fail further on with
+    nothing said of why. It happens when a few exposures weight almost
+    nothing (a pixel SNR under the fit's floor nearly everywhere): those are
+    named. In a joint fit, a warning, and the run goes on: the basis is the
+    others' too."""
+    weighted = np.zeros_like(shared)
+    for name in group:
+        weighted |= alive[name]
+    if not weighted.any():
+        return
+    kept = float(shared.sum()) / float(weighted.sum())
+    if kept >= MIN_COMMON_SHARE:
+        return
+    own = sorted((float(alive[name].sum()) / float(weighted.sum()), name)
+                 for name in group)
+    faintest = ", ".join("%s %.1f%%" % (name, 100 * part)
+                         for part, name in own[:3])
+    message = ("the corrected files would keep %.2f%% of the samples the %d"
+               " exposures weighted: a sample is kept where %.0f%% of them"
+               " weighted it (mask_share %.2f), and the faintest weight almost"
+               " nothing (%s, of those samples). Leave the faintest exposures"
+               " out of the object's folder, or lower mask_share in the PCA2D"
+               " settings" % (100 * kept, len(group), 100 * fraction,
+                              fraction, faintest))
+    if joint:
+        log("  " + message, "warn")
+        return
+    raise RuntimeError(message + "; nothing is written")
 
 
 def weighted_on_pixels(alive, wave, grid):

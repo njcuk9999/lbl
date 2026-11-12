@@ -373,6 +373,75 @@ def file_observer_berv(config, path, inst=None):
         return float("nan")
 
 
+def file_drs_mode(config, path, inst=None):
+    """The instrument mode of a file (KW_DRS_MODE of LBL's profile, else the
+    keywords input.header_keys gives drs_mode), from its primary header or
+    its first extension's; '' when it has none"""
+    from astropy.io import fits
+
+    wanted = []
+    try:
+        named = profile_of(config, inst).params["KW_DRS_MODE"]
+        wanted += list(named) if isinstance(named, (list, tuple)) else [named]
+    except Exception:                                          # noqa: BLE001
+        pass
+    wanted += list(((config.get("input") or {}).get("header_keys") or {})
+                   .get("drs_mode") or [])
+    wanted = [name for name in wanted if name]
+    for extension in (0, 1):
+        try:
+            header = fits.getheader(path, extension)
+        except Exception:                                      # noqa: BLE001
+            continue
+        for name in wanted:
+            value = header.get(name)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+    return ""
+
+
+def choose_drs_modes(config, files, inst=None):
+    """The modes a run keeps, when quality.drs_modes gives GROUPS of modes
+    (a list of lists, such as HARPS's HAM and EGGS fibres): the group most
+    of `files` are in, read in their headers (the first group listed on a
+    tie). A plain list of modes, or none, is kept as it is.
+
+    :return: (modes, message): the modes to keep (a plain list, or None),
+        and what was chosen and from what counts ('' when nothing was)
+    """
+    modes = (config.get("quality") or {}).get("drs_modes")
+    if not modes or not any(isinstance(m, (list, tuple)) for m in modes):
+        return modes, ""
+    groups = [[str(m).strip() for m in (group if isinstance(group, (list,
+                                                                  tuple))
+                                        else [group])] for group in modes]
+    from collections import Counter
+    seen = Counter(file_drs_mode(config, path, inst) for path in files)
+    counts = [sum(seen[m] for m in group) for group in groups]
+    best = int(np.argmax(counts))
+    found = ", ".join("%d %s" % (n, m or "(no mode)")
+                      for m, n in seen.most_common())
+    others = sum(seen.values()) - counts[best]
+    message = ("instrument modes: %s; kept %s (%d files)%s" % (
+        found, " and ".join(groups[best]), counts[best],
+        ", the other %d set aside: each fibre has its own resolution and"
+        " velocity zero point" % others if others else ""))
+    return groups[best], message
+
+
+def settle_drs_modes(config, files, inst=None):
+    """quality.drs_modes given as groups: replaced in `config` by the group
+    choose_drs_modes picks, and said. Called before the configuration's
+    cache key is taken, so that the cube and every stage after it read the
+    same modes, and resolved_config.yaml says which"""
+    modes, message = choose_drs_modes(config, files, inst)
+    if message:
+        from .logger import log
+        config["quality"]["drs_modes"] = modes
+        log(message, "value")
+    return config
+
+
 def flux_extension(path, flux):
     """The name (or the number) of the extension this flux comes from.
 

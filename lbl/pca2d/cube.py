@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import warnings
+from collections import Counter
 
 import numpy as np
 from astropy import constants
@@ -436,19 +437,26 @@ FLAT_FORMATS = frozenset({"s1d"})
 # --------------------------------------------------------------------------
 # main entry point
 # --------------------------------------------------------------------------
-def build_cube(config: dict):
+def build_cube(config: dict, own_fit: bool = True):
     """Read every spectrum, high-pass it, register it and stack.
+
+    `own_fit` False: the cube of one object of a joint fit, whose rows join
+    the others' (it needs one row, not more rows than the fit has
+    components; _require_rows).
 
     Returns (grid, data, sigma, trans, meta). `data` is the high-passed log
     spectrum on the common grid, `sigma` its per-pixel uncertainty with NaN
     marking unusable samples, `trans` the telluric transmission carried through
     the identical resampling, and `meta` one row per cube row.
     """
-    cache = _cache_dir(config)
     out = config["output"]
     inp = config["input"]
     source = spectra_dir(config)
     files = spio.find_spectra(source, inp["pattern"], inp["max_files"])
+    # groups of modes not settled yet (a caller other than cli.resolve): the
+    #   one most files are in, before the cache key is taken
+    _readers.settle_drs_modes(config, files)
+    cache = _cache_dir(config)
     # THE SPECTRA A CUBE IS MADE FROM, as a token (lbl.core.provenance),
     #   beside its meta.fits: the cache key holds the configuration, not the
     #   files, so a cube of the same configuration made from other spectra
@@ -486,9 +494,9 @@ def build_cube(config: dict):
     fmt = str(inp.get("format", "tfits"))
     snippets = {}
     if fmt in ORDER_FORMATS:
-        result = _build_tfits(config, files, grid, snippets)
+        result = _build_tfits(config, files, grid, snippets, own_fit)
     elif fmt in FLAT_FORMATS:
-        result = _build_s1d(config, files, grid)
+        result = _build_s1d(config, files, grid, own_fit)
     else:
         raise ValueError("unknown input.format: %r (expected one of %s)"
                          % (fmt, ", ".join(sorted(ORDER_FORMATS | FLAT_FORMATS))))
@@ -657,7 +665,7 @@ def _prepare_exposure(path, config, grid, blocks):
     if reason is not None:
         out["log"].append(("rejecting %s: %s" % (meta["filename"], reason),
                            "warn"))
-        out["status"] = "rejected"
+        out.update(status="rejected", reason=reason)
         return out
 
     # each exposure is registered with its OWN BERV before it is coadded:
@@ -669,7 +677,7 @@ def _prepare_exposure(path, config, grid, blocks):
     if n_orders == 0 or not good.any():
         out["log"].append(("rejecting %s: no order survived in the domain"
                            % meta["filename"], "warn"))
-        out["status"] = "rejected"
+        out.update(status="rejected", reason="no order survived in the domain")
         return out
     out.update(status="ok", meta=meta, values=values, sigma=sig, trans=tr,
                good=good, segments=segments,
@@ -681,7 +689,7 @@ def _prepare_exposure(path, config, grid, blocks):
 
 
 def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
-                 snippets=None):
+                 snippets=None, own_fit=True):
     dom = config["domain"]
     inp = config["input"]
     n_pixels = grid.size
@@ -702,6 +710,8 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     coadd = _Coadder(n_groups, 2, n_pixels, CUBE_DTYPE, use_recon)
 
     n_rejected = 0
+    #: why the rejected ones were, and how many for each reason
+    reasons = Counter()
     #: the exposures waiting for the template, when the high-pass is deferred
     held = []
     n_used = 0
@@ -724,6 +734,7 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
             log(message, level)
         if out["status"] == "rejected":
             n_rejected += 1
+            reasons[out.get("reason", "")] += 1
         if out["status"] != "ok":
             continue
         meta = out["meta"]
@@ -749,11 +760,12 @@ def _build_tfits(config: dict, files: list[str], grid: np.ndarray,
     if held:
         n_used += _highpass_against_template(coadd, held, grid, config)
 
-    if n_used == 0:
-        raise RuntimeError("every exposure was rejected")
     if n_rejected:
-        log("%d exposures failed the quality cuts" % n_rejected, "warn")
+        log("%d exposures failed the quality cuts: %s"
+            % (n_rejected, _reasons(reasons)), "warn")
     data, sigma, trans, meta_table = coadd.result()
+    _require_rows(config, n_used, coadd.n_groups, len(files), reasons,
+                  own_fit)
     log("kept %d exposures -> %d groups -> %d cube rows (even + odd orders)"
         % (n_used, coadd.n_groups, data.shape[0]), "value")
     if parity_ratio:
@@ -815,7 +827,8 @@ def _parity_agreement(values, sigma, good, segments=None, highpass=None):
 # --------------------------------------------------------------------------
 # s1d path (rows are exposures, parity is always 0)
 # --------------------------------------------------------------------------
-def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
+def _build_s1d(config: dict, files: list[str], grid: np.ndarray,
+               own_fit=True):
     dom = config["domain"]
     inp = config["input"]
     reg = config["registration"]
@@ -842,6 +855,7 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
     n_missing_recon = 0
     n_used = 0
     n_rejected = 0
+    reasons = Counter()
     observer_frame = reg["frame"] == "observer"
     pad = max(40.0, abs(reg["target_berv"]) + 40.0)
 
@@ -867,6 +881,7 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
         if reason is not None:
             log("rejecting %s: %s" % (meta["filename"], reason), "warn")
             n_rejected += 1
+            reasons[reason] += 1
             continue
 
         if wcf["mode"] == "photon":
@@ -941,13 +956,14 @@ def _build_s1d(config: dict, files: list[str], grid: np.ndarray):
                   reg_good[None, :], meta)
         n_used += 1
 
-    if n_used == 0:
-        raise RuntimeError("every spectrum was rejected")
     if n_rejected:
-        log("%d spectra failed the quality cuts" % n_rejected, "warn")
+        log("%d spectra failed the quality cuts: %s"
+            % (n_rejected, _reasons(reasons)), "warn")
     if n_missing_recon:
         log("%d spectra had no recon partner" % n_missing_recon, "warn")
     data, sigma, trans, meta_table = coadd.result()
+    _require_rows(config, n_used, coadd.n_groups, len(files), reasons,
+                  own_fit)
     log("kept %d / %d spectra -> %d cube rows" % (n_used, len(files), data.shape[0]),
         "value")
     return grid, data, sigma, trans, meta_table
@@ -1150,6 +1166,39 @@ def _nights_longitude(config):
     if not config["quality"].get("nights"):
         return None
     return spnights.config_longitude(config)
+
+
+def _reasons(reasons, most=3) -> str:
+    """The commonest reasons exposures were rejected for, with their
+    counts: '56 instrument mode ...; 2 rjd ...'"""
+    common = reasons.most_common(most)
+    text = "; ".join("%d %s" % (n, why or "(no reason given)")
+                     for why, n in common)
+    others = sum(reasons.values()) - sum(n for _, n in common)
+    return text + ("; %d for other reasons" % others if others else "")
+
+
+def _require_rows(config, n_used, n_rows, n_files, reasons, own_fit=True):
+    """Stop before the fit when it would have no more rows (exposures, or
+    nights when they are stacked) than components: each row then gets a
+    perfect fit, R2 = 1, nothing is learned, and the corrected spectra are
+    no better than the delivered ones (an LBL template made of a few of
+    them breaks further on). Says what rejected the others. One object of a
+    joint fit (own_fit False) needs one row: the others' rows join it."""
+    twoframe = config.get("twoframe") or {}
+    n_components = (int(twoframe.get("n_earth") or 0)
+                    + int(twoframe.get("n_star") or 0))
+    if n_rows > (n_components if own_fit else 0):
+        return
+    why = (": %s" % _reasons(reasons)) if reasons else ""
+    if not own_fit:
+        raise RuntimeError("none of the %d exposures passed the quality"
+                           " cuts%s" % (n_files, why))
+    raise RuntimeError(
+        "%d of the %d exposures passed the quality cuts%s. They make %d"
+        " row(s) for a fit of %d components, which needs at least %d: nothing"
+        " is fitted or corrected"
+        % (n_used, n_files, why, n_rows, n_components, n_components + 1))
 
 
 def _quality_reason(meta, wave, quality, longitude=None):

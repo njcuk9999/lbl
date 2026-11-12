@@ -101,10 +101,12 @@ class Harps(Instrument):
         #    atmosphere is mostly O2, which follows the airmass, and water,
         #    which follows the water column
         self.param_set('PCA2D_N_EARTH', 2, source=func_name)
-        # PCA2D keeps one instrument mode (HIERARCH ESO INS MODE): the
-        #    high-efficiency fibre (EGGS) has its own velocity zero point.
-        #    HARPS+NIRPS is HARPS observed together with NIRPS
-        self.param_set('PCA2D_DRS_MODES', ['HARPS', 'HARPS+NIRPS'],
+        # PCA2D keeps one fibre (HIERARCH ESO INS MODE): HAM or the
+        #    high-efficiency EGGS, which has its own velocity zero point,
+        #    each alone or with NIRPS ('+NIRPS'). Two groups: PCA2D keeps the
+        #    one most of the files are in
+        self.param_set('PCA2D_DRS_MODES',
+                       [list(modes) for modes in base.HARPS_MODES],
                        source=func_name)
         # the windows of the PCA2D figures (centre:width in nm): the O2 B and
         #    gamma bands and water, near the middle of an order's blaze, and

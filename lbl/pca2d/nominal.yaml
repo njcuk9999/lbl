@@ -162,7 +162,8 @@ general:
     min_rjd: null
     max_rjd: null
     # drs_modes: the instrument modes kept (PCA2D_DRS_MODES of the
-    # instrument's LBL class), null for all
+    # instrument's LBL class), null for all; a list of groups (lists) keeps
+    # the group most of the files are in (HARPS: HAM or EGGS)
 
   weights:
     mode: photon

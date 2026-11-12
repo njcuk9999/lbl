@@ -206,9 +206,32 @@ A line that zigzags means the rows are not in that order. Yellow is NaN
 page.
 
 The DRS modes kept are the instrument's (`PCA2D_DRS_MODES`: an LBL
-instrument named after a mode keeps that mode's files). The folder is the
-object: the OBJECT keyword of the files is not
-checked against its name.
+instrument named after a mode keeps that mode's files). HARPS gives two
+groups, its two fibres, which have their own resolution and velocity zero
+point: HAM (`HARPS`, `HARPS+NIRPS`) and EGGS (`EGGS`, `EGGS+NIRPS`). A run
+keeps the group most of its files are in, read in their headers before
+the cube is named, and says the counts (`instrument modes: 56 EGGS+NIRPS,
+1 HARPS+NIRPS; kept EGGS and EGGS+NIRPS`); the others are rejected.
+`drs_modes` in the PCA2D dict (a plain list) overrides it. The folder is
+the object: the OBJECT keyword of the files is not checked against its
+name.
+
+The run stops before the fit when the exposures that pass the quality cuts
+make no more rows (exposures, or nights when stacked) than the fit has
+components (`n_earth` plus the star's free ones): each row would be fitted
+exactly and the corrections would be noise. The error gives how many
+passed and the commonest reasons the others were rejected; the warning
+that counts the rejected exposures gives them too. In a joint fit, each
+object's own cube needs one row: its rows join the others'.
+
+The correct stage stops too, before writing anything, when the common mask
+(the samples at least `mask_share` of the exposures weighted, all of them
+by default) keeps under 5% of the samples any exposure weighted: the
+corrected files would be all but NaN, and LBL's template and mask made
+from them fail. It happens when a few exposures weight almost nothing (a
+pixel SNR under `min_pixel_snr` nearly everywhere, as in faint HARPS EGGS
+campaigns); the error names the three that weight least. In a joint fit it
+is a warning for that object and the run goes on.
 
 ## Running it again
 

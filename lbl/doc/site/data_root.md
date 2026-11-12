@@ -41,8 +41,8 @@ tab counts those that can be dispatched. **Dispatch** reads their headers
   give it, below), or another product of its pipeline (a CCF, an S1D...),
   put aside in `Downloads/unused/`.
 - **A setting** a template must not mix gets a folder of its own:
-  HARPS's EGGS, SOPHIE's HE, ESPRESSO's settings other than HR 1x1
-  (`<star>_EGGS`).
+  HARPS's EGGS (alone or with NIRPS, `EGGS+NIRPS`), SOPHIE's HE,
+  ESPRESSO's settings other than HR 1x1 (`<star>_EGGS`).
 - **The star**: the files of one star go to one folder whatever their
   observers called it (HR1084, Eps_eri and K3_01 are all eps Eri), matched
   by where the star is in J2000, from the target's coordinates in the
