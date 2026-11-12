@@ -53,7 +53,7 @@ import numpy as np
 import yaml
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 
-from . import bervbias
+from . import bervbias, keplerfit
 from .lblscan import AFTER, BEFORE, amplitude_at, nightly, rdb_rows, velocity_stats
 from .logger import log
 from lbl.core.math import mad_to_sigma
@@ -616,10 +616,21 @@ def star_numbers(before, after, planets=(), seed=0):
                                 else np.ones_like(run["d2v"]))[good])
             if spot:
                 row.update(d2v_peak_period=spot[2], d2v_peak_fap=spot[4])
-        row["planets"] = [amplitude_at(run["t"], for_phase(run, p), run["e"],
-                                       p) for p in planets]
-        row["planet_bic"] = [planet_bic(run["t"], for_phase(run, p),
-                                        run["e"], p) for p in planets]
+        # every known planet at once, circular orbits at their periods
+        #   (keplerfit): none read through another's signal. A series too
+        #   short for them all, each planet alone
+        joint = keplerfit.fit_planets(run["t"], run["v"], run["e"], planets,
+                                      with_keplerian=False)
+        if joint is not None and len(joint["circular"].planets) == len(
+                planets):
+            row["planets"] = [(p["k"], p["k_err"])
+                              for p in joint["circular"].planets]
+            row["planet_bic"] = list(joint["planet_bic"])
+        else:
+            row["planets"] = [amplitude_at(run["t"], for_phase(run, p),
+                                           run["e"], p) for p in planets]
+            row["planet_bic"] = [planet_bic(run["t"], for_phase(run, p),
+                                            run["e"], p) for p in planets]
         out[key] = row
     change = after["v"] - before["v"]
     out["change_rms"] = float(np.std(change - np.median(change)))
@@ -1363,23 +1374,6 @@ def phase_of(t, planet):
     return ((t - zero) / planet["period"] + 0.5) % 1.0 - 0.5
 
 
-def sine_fit(phase, y, e):
-    """(K, its error, the curve's function of phase): y = c + A cos + B sin."""
-    w = 1.0 / np.asarray(e, float) ** 2
-    ang = 2 * np.pi * np.asarray(phase, float)
-    A = np.column_stack([np.cos(ang), np.sin(ang), np.ones_like(ang)])
-    cov = np.linalg.inv(A.T @ (A * w[:, None]))
-    p = cov @ ((A * w[:, None]).T @ y)
-    resid = y - A @ p
-    scale = float(np.sum(w * resid ** 2) / max(len(y) - 3, 1))
-    k = float(np.hypot(p[0], p[1]))
-    var = (p[0] ** 2 * cov[0, 0] + p[1] ** 2 * cov[1, 1]
-           + 2 * p[0] * p[1] * cov[0, 1])
-    err = float(np.sqrt(max(scale * var, 0.0)) / max(k, 1e-9))
-    return k, err, (lambda x: p[0] * np.cos(2 * np.pi * x)
-                    + p[1] * np.sin(2 * np.pi * x) + p[2])
-
-
 def _profile_lnl(A, y, e):
     """ln L_max of a linear model with a free jitter: for each jitter the
     weighted least squares, and the jitter that does best (the 2 pi left
@@ -1420,76 +1414,168 @@ def planet_bic(t, y, e, period):
     return float(2.0 * (sine - null) - 2.0 * np.log(t.size))
 
 
+def _phase_bins(x, y, e, bins=10):
+    """Weighted means of y in `bins` tenths of the phase (3 points or more),
+    their error the larger of the formal one and the scatter's"""
+    edges = np.linspace(-0.5, 0.5, bins + 1)
+    centres, means, errors = [], [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        inside = (x >= lo) & (x < hi) & np.isfinite(y) & np.isfinite(e)
+        if inside.sum() >= 3:
+            w = 1.0 / e[inside] ** 2
+            centres.append(0.5 * (lo + hi))
+            means.append(np.sum(w * y[inside]) / np.sum(w))
+            errors.append(max(1.0 / np.sqrt(np.sum(w)),
+                              np.std(y[inside]) / np.sqrt(inside.sum())))
+    return centres, means, errors
+
+
+def _bin_marks(ax, centres, means, errors, label=None):
+    ax.errorbar(centres, means, yerr=errors, fmt="s", ls="none", ms=4.0,
+                mfc="white", mec=INK, mew=0.8, ecolor=INK, elinewidth=0.7,
+                capsize=0, zorder=5, label=label)
+
+
 def figure_phase(before, after, planets, path, most=4):
     """The velocities folded at each known planet's period, delivered and
-    corrected side by side on one scale, with the sine fitted at that period
-    and, for a transiting planet with a published K, the orbit it implies."""
-    planets = [p for p in (planets or []) if isinstance(p, dict)][:most]
-    if not planets:
+    corrected side by side on one scale, every known planet fitted at once
+    (keplerfit), as circular orbits and as full Keplerians: in each panel
+    the other planets of the Keplerian fit taken out, this planet's two
+    orbits drawn and, for a transiting planet with a published K, the orbit
+    it implies; under it, the residuals to the whole Keplerian fit at this
+    planet's phase."""
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    if not known:
         return None
-    fig, axes = plt.subplots(len(planets), 2, figsize=(WIDTH,
-                             2.35 * len(planets) + 0.3), sharex=True,
-                             sharey="row", squeeze=False)
-    grid = np.linspace(-0.5, 0.5, 400)
-    for row, planet in zip(axes, planets):
-        folded = [(run, colour, phase_of(run["t"], planet),
-                   for_phase(run, planet["period"]))
-                  for run, colour in ((before, BEFORE), (after, AFTER))]
+    periods = [float(p["period"]) for p in known]
+    runs = ((before, BEFORE), (after, AFTER))
+    fits = [keplerfit.fit_planets(run["t"], run["v"], run["e"], periods)
+            for run, _ in runs]
+    if any(f is None for f in fits):
+        return None
+    shown = known[:most]
+    n = len(shown)
+    # constrained: each orbit and its residuals one block, close together,
+    #   the blocks apart by their titles (tight_layout gives every row the
+    #   same gap, the tallest title's)
+    fig = plt.figure(figsize=(WIDTH, 3.5 * n + 0.4), layout="constrained")
+    outer = fig.add_gridspec(n, 2)
+    phases = np.linspace(-0.5, 0.5, 400)
+    for index, planet in enumerate(shown):
+        main_row, resid_row = [], []
+        for col in range(2):
+            inner = outer[index, col].subgridspec(2, 1,
+                                                  height_ratios=[3.0, 1.0])
+            main = fig.add_subplot(inner[0],
+                                   sharey=main_row[0] if col else None)
+            resid = fig.add_subplot(inner[1], sharex=main,
+                                    sharey=resid_row[0] if col else None)
+            main_row.append(main)
+            resid_row.append(resid)
+        panels = []
+        for (run, colour), fit in zip(runs, fits):
+            circ, kep = fit["circular"], fit["keplerian"]
+            t = np.asarray(run["t"], float)
+            v = np.asarray(run["v"], float)
+            v = v - np.nanmedian(v)
+            x = phase_of(t, planet)
+            # this planet alone: the others, the offset and the line of the
+            #   Keplerian fit taken out
+            y = v - kep.others(index, t)
+            o_c = v - kep.model(t)
+            panels.append((run, colour, fit, x, y, o_c))
         # the bulk, not the few exposures far off it: a planet of a few m/s
-        # disappears on an axis stretched to the outliers
-        lim = _limits(*[y for _r, _c, _x, y in folded], q=97.0)
-        for ax, (run, colour, x, y) in zip(row, folded):
-            _points(ax, x, y, run["e"], colour, "exposures", size=2.6,
+        #   disappears on an axis stretched to the outliers
+        lim = _limits(*[y for *_r, y, _o in panels], q=97.0)
+        rlim = _limits(*[o for *_r, o in panels], q=97.0)
+        zero = planet.get("t0")
+        for col, (run, colour, fit, x, y, o_c) in enumerate(panels):
+            circ, kep = fit["circular"], fit["keplerian"]
+            main, resid = main_row[col], resid_row[col]
+            t0 = (zero - 2400000.0) if zero else float(np.nanmin(run["t"]))
+            times = t0 + phases * planet["period"]
+            _points(main, x, y, run["e"], colour, "exposures", size=2.6,
                     alpha=0.45)
-            edges = np.linspace(-0.5, 0.5, 11)
-            centres, means, errors = [], [], []
-            for lo, hi in zip(edges[:-1], edges[1:]):
-                inside = (x >= lo) & (x < hi)
-                if inside.sum() >= 3:
-                    w = 1.0 / run["e"][inside] ** 2
-                    centres.append(0.5 * (lo + hi))
-                    means.append(np.sum(w * y[inside]) / np.sum(w))
-                    errors.append(max(1.0 / np.sqrt(np.sum(w)),
-                                      np.std(y[inside])
-                                      / np.sqrt(inside.sum())))
-            ax.errorbar(centres, means, yerr=errors, fmt="s", ls="none",
-                        ms=4.5, mfc="white", mec=INK, mew=0.8, ecolor=INK,
-                        elinewidth=0.7, capsize=0, zorder=5,
-                        label="phase bins, weighted mean")
-            k, err, curve = sine_fit(x, y, run["e"])
-            dbic = planet_bic(run["t"], y, run["e"], planet["period"])
-            # what the sine leaves: the rms of the residuals to it, beside
-            #   the median error bar that says what noise alone would leave
-            ok = np.isfinite(x) & np.isfinite(y)
-            resid = y[ok] - curve(x[ok])
-            rms = float(np.sqrt(np.mean(resid ** 2))) if resid.size else np.nan
-            typical = float(np.nanmedian(run["e"][ok])) if resid.size else np.nan
-            ax.plot(grid, curve(grid), color=colour, lw=1.6, zorder=6,
-                    label="sine at P: K = %.2f $\\pm$ %.2f m/s" % (k, err))
-            if planet.get("k") and planet.get("t0"):
+            _bin_marks(main, *_phase_bins(x, y, run["e"]),
+                       label="phase bins, weighted mean")
+            pc, pk = circ.planets[index], kep.planets[index]
+            main.plot(phases, circ.planet(index, times), color=colour,
+                      lw=1.6, zorder=6, label="circular")
+            main.plot(phases, kep.planet(index, times), color=INK, lw=1.0,
+                      ls="-.", zorder=7, label="Keplerian")
+            if planet.get("k") and zero:
                 # circular and transiting: v = -K sin(2 pi phase)
-                ax.plot(grid, -planet["k"] * np.sin(2 * np.pi * grid),
-                        color=MUTED, lw=1.0, ls="--", zorder=4,
-                        label="published K = %.2f m/s" % planet["k"])
-            ax.axhline(0, color=MUTED, lw=0.6)
-            ax.set_ylim(*lim)
-            ax.set_xlim(-0.5, 0.5)
-            ax.set_title("%s: K = %.2f $\\pm$ %.2f m/s\n\u0394BIC %+.1f (%s)\n"
-                         "residuals: %.2f m/s rms (errors %.2f)"
-                         % (run["label"], k, err, dbic,
-                            bervbias.bic_words(dbic, "sine"), rms, typical),
-                         fontsize=7.5, color=INK, loc="left")
-            _legend(ax, fontsize=6, frameon=False, loc="lower left", ncol=1)
-            _style(ax)
-        row[0].set_ylabel("%s\nP = %s d\nvelocity (m/s)"
-                          % (planet["name"], ("%.6f" % planet["period"])
-                             if planet["period"] < 100
-                             else "%.3f" % planet["period"]),
-                          fontsize=7.5, color=PLANET)
-    for ax in axes[-1]:
-        ax.set_xlabel("phase%s" % (" (0 = transit)" if all(
-            p.get("t0") for p in planets) else ""), fontsize=8, color=INK)
-    fig.tight_layout()
+                main.plot(phases, -planet["k"] * np.sin(2 * np.pi * phases),
+                          color=MUTED, lw=1.0, ls="--", zorder=4,
+                          label="published K = %.2f m/s" % planet["k"])
+            main.axhline(0, color=MUTED, lw=0.6)
+            main.set_ylim(*lim)
+            main.set_xlim(-0.5, 0.5)
+            angle = ("" if not (pk["e_err"] > 0 and pk["e"] > 2 * pk["e_err"])
+                     else ", $\\omega$ = %.0f $\\pm$ %.0f$^\\circ$"
+                     % (pk["omega"], pk["omega_err"]))
+            # each fit's Delta BIC: the fit against no planet, this planet in
+            #   it, and its eccentricity. Short lines: a panel is half the
+            #   page
+            ecc = ("e = %.2f (at its bound)" % pk["e"] if pk.get("at_bound")
+                   else "e = %.2f $\\pm$ %.2f" % (pk["e"], pk["e_err"]))
+            main.set_title(
+                "%s\ncircular: K = %.2f $\\pm$ %.2f m/s\n"
+                "    ΔBIC fit %+.1f, planet %+.1f\n"
+                "Keplerian: K = %.2f $\\pm$ %.2f m/s, %s\n"
+                "    ΔBIC fit %+.1f, planet %+.1f, e %+.1f%s"
+                % (run["label"], pc["k"], pc["k_err"],
+                   fit["fit_bic"]["circular"], fit["planet_bic"][index],
+                   pk["k"], pk["k_err"], ecc,
+                   fit["fit_bic"]["keplerian"], fit["kep_planet_bic"][index],
+                   fit["ecc_bic"][index], angle),
+                fontsize=6.5, color=INK, loc="left")
+            if index == 0 and col == 0:
+                legend_from = main
+            main.tick_params(labelbottom=False)
+            _style(main)
+            # what the Keplerian fit of every planet leaves, at this phase:
+            #   the rms beside the median error bar, what the noise alone
+            #   would leave
+            ok = np.isfinite(o_c) & np.isfinite(x)
+            rms = float(np.sqrt(np.mean(o_c[ok] ** 2))) if ok.any() else np.nan
+            typical = float(np.nanmedian(np.asarray(run["e"])[ok])) \
+                if ok.any() else np.nan
+            _points(resid, x, o_c, run["e"], colour, None, size=2.0,
+                    alpha=0.45)
+            _bin_marks(resid, *_phase_bins(x, o_c, run["e"]))
+            resid.axhline(0, color=MUTED, lw=0.6)
+            resid.set_ylim(*rlim)
+            # inside the panel: a title there would open a gap between the
+            #   orbit and its residuals
+            resid.text(0.01, 0.96, "residuals to the Keplerian fit: %.2f m/s"
+                       " rms (errors %.2f, jitter %.2f)"
+                       % (rms, typical, kep.jitter), transform=resid.transAxes,
+                       ha="left", va="top", fontsize=5.8, color=INK,
+                       zorder=8, bbox=dict(facecolor="white", edgecolor="none",
+                                           alpha=0.8, pad=0.8))
+            _style(resid)
+        main_row[0].set_ylabel("%s\nP = %s d\nvelocity (m/s)"
+                               % (planet["name"], ("%.6f" % planet["period"])
+                                  if planet["period"] < 100
+                                  else "%.3f" % planet["period"]),
+                               fontsize=7.5, color=PLANET)
+        resid_row[0].set_ylabel("O $-$ C\n(m/s)", fontsize=7, color=INK)
+        for col in (0, 1):
+            if index == n - 1:
+                resid_row[col].set_xlabel("phase%s" % (
+                    " (0 = transit)" if all(p.get("t0") for p in shown)
+                    else ""), fontsize=8, color=INK)
+            else:
+                resid_row[col].tick_params(labelbottom=False)
+    # one legend for the figure, under it: in a panel it hid the points
+    handles, labels = legend_from.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="outside lower center", ncol=len(labels),
+               fontsize=6.3, frameon=False)
+    fig.get_layout_engine().set(h_pad=0.02, hspace=0.0)
+    # the layout made once, then held: _named moves every axis down
+    fig.canvas.draw()
+    fig.set_layout_engine("none")
     return _save(fig, path, before.get("star"))
 
 
@@ -2076,13 +2162,14 @@ def summary_table(star, numbers):
             # the planet stand out more, one that took the planet makes it less
             word = ("gain" if va > vb + 2 else "loss" if va < vb - 2
                     else "same")
-            rows.append("$\\Delta$BIC of a sine at %s d (%s) & %s & %s & & %s"
-                        " \\\\" % (number(period, 4), tex(letter),
-                                    "%s (%s)" % (tex("%+.1f" % vb),
-                                                 bervbias.bic_words(vb, "sine")),
-                                    "%s (%s)" % (tex("%+.1f" % va),
-                                                 bervbias.bic_words(va, "sine")),
-                                    mark(word)))
+            rows.append(
+                "$\\Delta$BIC of %s at %s d (joint fit) & %s & %s & & %s"
+                " \\\\" % (tex(letter), number(period, 4),
+                             "%s (%s)" % (tex("%+.1f" % vb),
+                                          bervbias.bic_words(vb, "planet")),
+                             "%s (%s)" % (tex("%+.1f" % va),
+                                          bervbias.bic_words(va, "planet")),
+                             mark(word)))
     rows.append("\\midrule")
     rows.append("rms of corrected - delivered (m/s) & \\multicolumn{2}{c}{%s}"
                 " & & \\\\" % number(numbers["change_rms"]))
@@ -2487,22 +2574,35 @@ def velocity_section(star, before, after, numbers, folder, stale):
          "%s: the velocities folded at the known planets' periods" % name,
          "The velocities folded at the period of each known planet (a"
          " confirmed planet of the NASA Exoplanet Archive, or a period the"
-         " configuration gives), delivered"
-         " on the left and corrected on the right, on one scale; phase 0 is"
-         " the transit when the archive gives one, the first exposure"
-         " otherwise. Each series is less its straight line in time (fitted"
-         " with the error bars as weights), except at a period of a third of"
-         " the campaign or more, where the line would take the planet with"
-         " it. The squares are weighted means in tenths of the phase; the"
-         " line is a sine at that period, its amplitude $K$ in the title with"
-         " $\\Delta$BIC = BIC(constant) $-$ BIC(constant + sine), both with a"
-         " free jitter ($k$ = 2 against 4), positive when the data prefer the"
-         " sine (above 2, 6 and 10: positive, strong, very strong);"
-         " dashed, where the archive gives a transit time and a"
-         " semi-amplitude, the circular orbit they imply. Under it, the rms"
-         " of the residuals to the sine, beside the median error bar: what"
-         " the fit leaves, against what the noise alone would. A correction"
-         " that left the planet alone keeps $K$."),
+         " configuration gives), delivered on the left and corrected on the"
+         " right, on one scale; phase 0 is the transit when the archive"
+         " gives one, the first exposure otherwise. All the known planets"
+         " are fitted at once, so that none is read through another's"
+         " signal, twice: as circular orbits (solid line, in the series'"
+         " colour) and as full Keplerians ($K$, $e$, $\\omega$ and the"
+         " phase free, with a Gaussian of width 0.3 on $e\\cos\\omega$"
+         " and $e\\sin\\omega$, without which a few points far off the"
+         " others are fitted by an orbit of $e$ near 1; dash-dotted; $e$ at"
+         " its bound of 0.95 says that is what happened), the periods held"
+         " at the published ones, each fit with an offset, a straight line"
+         " in time when every"
+         " period is under a third of the campaign (at a longer one the line"
+         " would take the planet with it), and a free jitter. Each panel is"
+         " the series less the other planets, the offset and the line of the"
+         " Keplerian fit; the squares are weighted means in tenths of the"
+         " phase; dashed, where the archive gives a transit time and a"
+         " semi-amplitude, the circular orbit they imply. In the title,"
+         " each fit's $K$ and its $\\Delta$BIC: of the fit = BIC(no"
+         " planet: the offset, the line and the jitter alone) $-$ BIC(fit);"
+         " of the planet = BIC(the same fit without it) $-$ BIC(fit); of $e$"
+         " = BIC(Keplerian fit with this planet circular) $-$ BIC(Keplerian"
+         " fit); positive when the data prefer the richer model (above 2, 6"
+         " and 10: positive, strong, very strong); $\\omega$ when $e$ is"
+         " over twice its error. Under each panel, the residuals to the"
+         " whole Keplerian fit at this planet's phase, their rms beside the"
+         " median error bar and the fit's jitter: what the fit leaves,"
+         " against what the noise alone would. A correction that left the"
+         " planets alone keeps $K$ and $e$."),
     ]
     for path, short, caption in drawn:
         if path:

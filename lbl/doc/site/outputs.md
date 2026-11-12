@@ -62,3 +62,18 @@ false inclusion probability ([Hara et al.
 the semi-amplitudes of known planets at their ephemerides and, with PCA2D,
 its own pages first (the river plots, the components, the velocities before
 and after).
+
+The known planets (the NASA Exoplanet Archive's confirmed planets, and any
+period the configuration gives) are fitted together, so that none is read
+through another's signal, and twice, whatever their number: as circular
+orbits and as full Keplerians (K, e, omega and the phase free, a Gaussian
+of width 0.3 on e cos omega and e sin omega keeping a few outlying points
+from being fitted by an orbit of e near 1), the periods
+held at the published ones, each fit with an offset, a straight line in
+time when every period is under a third of the campaign, and a free jitter
+(`lbl/pca2d/keplerfit.py`). The figure of the folded velocities shows each
+planet with the others taken out, its two orbits with each fit's Delta BIC
+(the fit against no planet, the planet in it, and for the Keplerian fit
+the planet's eccentricity), and under it the residuals to the whole
+Keplerian fit; the summary table gives each planet's K and Delta BIC from
+the joint circular fit.
