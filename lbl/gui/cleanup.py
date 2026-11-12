@@ -306,3 +306,101 @@ def delete(data_dir: str, paths: list) -> list:
         except OSError as exc:
             out.append(dict(path=path, done=False, why=str(exc)))
     return out
+
+
+# =============================================================================
+# LBL's full reset (lbl_reset), one data folder at a time
+# =============================================================================
+#: how long a reset may take: the recipe also fetches LBL's models a data
+#:    folder lacks before it empties anything
+RESET_TIMEOUT = 1800
+
+
+def reset_homes(data_dir: str, instrument: str = "", source: str = "") -> list:
+    """The data folders LBL's reset can empty, each with what it would
+    delete (lbl_reset.reset_plan, io.files_to_clean): in a data root, every
+    instrument folder (its instrument and source from its name); a lone
+    DATA_DIR, with the instrument and source the window works with.
+    [dict(folder, home, instrument, source, files, bytes, parts=[dict(what,
+    path, files, bytes)])]; a folder whose instrument cannot be told has
+    why instead of parts."""
+    from lbl.core.io import files_to_clean
+    from lbl.recipes.lbl_reset import reset_plan
+    from .dispatch import readers
+    from .lblinfo import instrument_object
+    root, homes = scope(data_dir)
+    known = readers()
+    out = []
+    for folder, home in homes:
+        inst, src = known.get(home, ("", ""))
+        if not home:
+            # the root's own LBL folders: a DATA_DIR of the old layout, or
+            #   a lone one
+            if len(homes) > 1:
+                continue
+            inst, src = instrument, source
+        row = dict(folder=folder, home=home, instrument=inst, source=src,
+                   files=0, bytes=0, parts=[])
+        profile = instrument_object(inst, src) if inst and src else None
+        if profile is None:
+            row["why"] = "no instrument and data source for this folder"
+            out.append(row)
+            continue
+        for what, path, kwargs in reset_plan(folder, profile.params):
+            names = files_to_clean(path, **kwargs)
+            size = 0
+            for name in names:
+                try:
+                    size += os.lstat(name).st_size
+                except OSError:
+                    pass
+            row["parts"].append(dict(what=what, path=path, files=len(names),
+                                     bytes=size))
+            row["files"] += len(names)
+            row["bytes"] += size
+        out.append(row)
+    return out
+
+
+def reset(data_dir: str, folder: str, instrument: str = "",
+          source: str = "") -> dict:
+    """LBL's reset (lbl_reset) of one data folder of this one's scope, in a
+    process of its own, if nothing runs in the root; dict(done, folder,
+    deleted, output, why)."""
+    import sys
+    running = busy(data_dir)
+    if any(p.get("unknown") for p in running):
+        return dict(done=False, folder=folder, deleted=0, output="",
+                    why="whether a run is going in this folder cannot be"
+                        " told on this system (install psutil): nothing is"
+                        " reset")
+    if running:
+        return dict(done=False, folder=folder, deleted=0, output="",
+                    why="a run is going in this folder (pid %s): nothing is"
+                        " reset" % ", ".join(str(p["pid"]) for p in running))
+    homes = {os.path.abspath(row["folder"]): row
+             for row in reset_homes(data_dir, instrument, source)}
+    row = homes.get(os.path.abspath(folder))
+    if row is None or row.get("why"):
+        return dict(done=False, folder=folder, deleted=0, output="",
+                    why=(row or {}).get("why")
+                    or "not a data folder of this one")
+    code = ("from lbl.recipes import lbl_reset; lbl_reset.main(instrument=%r,"
+            " data_source=%r, data_dir=%r)" % (row["instrument"],
+                                                row["source"], row["folder"]))
+    try:
+        proc = subprocess.run([sys.executable, "-c", code],
+                              capture_output=True, text=True,
+                              timeout=RESET_TIMEOUT, cwd=row["folder"])
+    except (OSError, subprocess.SubprocessError) as exc:
+        return dict(done=False, folder=folder, deleted=0, output="",
+                    why="%s: %s" % (type(exc).__name__, exc))
+    output = (proc.stdout + proc.stderr)[-4000:]
+    after = {os.path.abspath(r["folder"]): r
+             for r in reset_homes(data_dir, instrument, source)}
+    left = after.get(os.path.abspath(folder), {}).get("files", 0)
+    return dict(done=proc.returncode == 0, folder=folder,
+                deleted=max(row["files"] - left, 0), left=left,
+                output=output,
+                why="" if proc.returncode == 0
+                else "lbl_reset stopped (exit %d)" % proc.returncode)

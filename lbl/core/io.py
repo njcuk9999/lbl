@@ -861,6 +861,39 @@ def find_files(path_list: List[Path],
     return valid_files
 
 
+def files_to_clean(path: str, dir_suffix: str = '',
+                   include_files: Optional[List[str]] = None,
+                   dir_regex: Optional[str] = None) -> List[str]:
+    """
+    The files clean_directory removes (the same arguments), without removing
+    them: what a reset would delete can be said before it is done
+
+    :return: list of str, the files (links not followed into folders)
+    """
+    if not os.path.exists(path):
+        return []
+    if isinstance(include_files, str):
+        include_files = [include_files]
+    pattern = re.compile(dir_regex) if dir_regex else None
+    files = []
+    for _root, _dirs, _files in os.walk(path):
+        if pattern is not None:
+            # a directory below path whose name matches, or inside one
+            relpath = os.path.relpath(_root, path)
+            parts = [] if relpath == os.curdir else relpath.split(os.sep)
+            if not any(pattern.search(part) for part in parts):
+                continue
+        # dir_suffix
+        elif not _root.endswith(dir_suffix):
+            continue
+        for filename in _files:
+            if include_files is not None:
+                if filename not in include_files:
+                    continue
+            files.append(os.path.join(_root, filename))
+    return [name for name in files if os.path.isfile(name)]
+
+
 def clean_directory(path: str, logmsg: bool = True,
                     dir_suffix: str = '',
                     include_files: Optional[List[str]] = None,
@@ -895,26 +928,9 @@ def clean_directory(path: str, logmsg: bool = True,
     else:
         msg = 'Cleaning directory {0} --suffix={1}'
         log.general(msg.format(path, dir_suffix))
-    # get all files in path that match filter
-    files = []
-    for _root, _dirs, _files in os.walk(path):
-        if pattern is not None:
-            # a directory below path whose name matches, or inside one
-            relpath = os.path.relpath(_root, path)
-            parts = [] if relpath == os.curdir else relpath.split(os.sep)
-            if not any(pattern.search(part) for part in parts):
-                continue
-        # dir_suffix
-        elif not _root.endswith(dir_suffix):
-            continue
-        for filename in _files:
-            if include_files is not None:
-                if filename not in include_files:
-                    continue
-            files.append(os.path.join(_root, filename))
-
     # loop around files
-    for filename in files:
+    for filename in files_to_clean(path, dir_suffix, include_files,
+                                   dir_regex):
         # if filename is a file then remove it
         if os.path.isfile(filename):
             # noinspection PyBroadException

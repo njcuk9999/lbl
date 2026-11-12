@@ -315,6 +315,11 @@ class Handler(BaseHTTPRequestHandler):
                 data_dir = ctx.allow(query.get("data_dir", ""))
                 return self._json(dict(items=cleanup.survey(data_dir),
                                        busy=cleanup.busy(data_dir)))
+            if route == "/api/reset_plan":
+                data_dir = ctx.allow(query.get("data_dir", ""))
+                return self._json(dict(homes=cleanup.reset_homes(
+                    data_dir, query.get("instrument", ""),
+                    query.get("source", "")), busy=cleanup.busy(data_dir)))
             if route == "/api/folders":
                 return self._json(dispatch.layout(ctx.allow(
                     query.get("root", ""))))
@@ -564,6 +569,12 @@ class Handler(BaseHTTPRequestHandler):
                 data_dir = ctx.allow(body.get("data_dir", ""))
                 return self._json(cleanup.delete(data_dir,
                                                  body.get("paths") or []))
+            if route == "/api/reset":
+                data_dir = ctx.allow(body.get("data_dir", ""))
+                # the folder is checked against the data folder's own
+                return self._json(cleanup.reset(
+                    data_dir, os.path.abspath(str(body.get("folder", ""))),
+                    body.get("instrument", ""), body.get("source", "")))
             return self.send_error(HTTPStatus.NOT_FOUND)
         except (BrokenPipeError, ConnectionResetError):
             return None

@@ -17,6 +17,18 @@ The kinds it weighs:
 
 {{cleanup}}
 
+### Full reset of LBL
+
+Under the list, one row per instrument folder with what LBL's own reset
+(`lbl_reset`, `RUN_LBL_RESET` in a wrap) would delete there, by part, its
+size and its number of files, and a **Reset** button: after a confirmation
+that lists every part, the window runs `lbl_reset` on that folder, in a
+process of its own, and says how many files went. A folder whose instrument
+and source its name does not tell (a lone DATA_DIR is reset with the
+instrument and source of the Settings tab) has no button.
+
+{{help reset_lbl | Full reset of LBL}}
+
 ## Documentation
 
 These pages: see [About this documentation](about_docs.md).

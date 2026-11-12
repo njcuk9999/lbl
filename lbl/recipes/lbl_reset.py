@@ -44,13 +44,46 @@ ARGS_MASK = [  # core
 DESCRIPTION_MASK = 'Use this code to clean out any LBL data from DATA_DIR'
 # the science folders LBL derives from an object: <object>_tc (telluric
 #   cleaning), <object>_pca2d and <object>_tc_pca2d (PCA2D, with an optional
-#   _<name> after it)
-DERIVED_SCIENCE = r'(_tc|_pca2d(_[0-9A-Za-z._+-]+)?)$'
+#   _<name> after it), <object>_residuals (PCA2D's save_residuals, the same)
+DERIVED_SCIENCE = (r'(_tc|_pca2d(_[0-9A-Za-z._+-]+)?'
+                   r'|_residuals(_[0-9A-Za-z._+-]+)?)$')
 
 
 # =============================================================================
 # Define functions
 # =============================================================================
+def reset_plan(data_dir: str, params) -> list:
+    """
+    What the reset empties in DATA_DIR, in the order it does it:
+    [(what, folder, keyword arguments of io.clean_directory)]. The recipe
+    and the window (its Cleanup tab says what a reset deletes before it is
+    done, io.files_to_clean) both take it from here
+
+    :param data_dir: str, LBL's DATA_DIR
+    :param params: the instrument's parameters (its subfolders, its sample
+                   wave grid file)
+
+    :return: list of (str, str, dict)
+    """
+    def join(key):
+        return os.path.join(data_dir, params[key])
+
+    return [
+        # the science folders LBL derived (telluric cleaning, PCA2D), never
+        #   the spectra
+        ('derived', join('SCIENCE_SUBDIR'), dict(dir_regex=DERIVED_SCIENCE)),
+        ('reftable', join('LBLREFTAB_SUBDIR'), dict()),
+        ('rdb', join('LBLRDB_SUBDIR'), dict()),
+        ('lblrv', join('LBLRV_SUBDIR'), dict()),
+        ('masks', join('MASK_SUBDIR'), dict()),
+        ('templates', join('TEMPLATE_SUBDIR'), dict()),
+        ('plots', os.path.join(data_dir, 'plots'), dict()),
+        # of calib/, the sample wave grid alone (the blazes stay)
+        ('wavegrid', join('CALIB_SUBDIR'),
+         dict(include_files=[params['SAMPLE_WAVE_GRID_FILE']])),
+    ]
+
+
 def main(**kwargs):
     """
     Wrapper around __main__ recipe code (deals with errors and loads instrument
@@ -110,23 +143,11 @@ def __main__(inst: InstrumentsType, **kwargs):
     # -------------------------------------------------------------------------
     # Step 2: clean directories
     # -------------------------------------------------------------------------
-    # clean the science folders LBL derived (telluric cleaning, PCA2D)
-    io.clean_directory(dparams['SCIENCE_DIR'], dir_regex=DERIVED_SCIENCE)
-    # clean reftable directory
-    io.clean_directory(dparams['LBLRT_DIR'])
-    # clean rdb directory
-    io.clean_directory(dparams['LBL_RDB_DIR'])
-    # clean rv directory
-    io.clean_directory(dparams['LBLRV_ALL'])
-    # clean mask directory
-    io.clean_directory(dparams['MASK_DIR'])
-    # clean template directory
-    io.clean_directory(dparams['TEMPLATE_DIR'])
-    # clean plot directory
-    io.clean_directory(dparams['PLOT_DIR'])
-    # clean calib directory
-    io.clean_directory(dparams['CALIB_DIR'],
-                       include_files=[inst.params['SAMPLE_WAVE_GRID_FILE']])
+    # the derived science folders, reftable, rdb, lblrv, masks, templates,
+    #   plots, the sample wave grid (reset_plan)
+    for _what, folder, kwargs in reset_plan(dparams['DATA_DIR'],
+                                            inst.params):
+        io.clean_directory(folder, **kwargs)
     # -------------------------------------------------------------------------
     # return local namespace
     # -------------------------------------------------------------------------

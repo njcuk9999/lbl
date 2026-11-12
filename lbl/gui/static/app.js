@@ -2206,6 +2206,44 @@ async function measure() {
   }
   $('cleanup').replaceChildren(...parts);
   cleanupSelection();
+  measureReset(busy.length > 0);
+}
+
+/* LBL's full reset (lbl_reset), one instrument folder at a time: what it
+   would delete in each, and its button (none while a run works in the
+   root) */
+async function measureReset(busy) {
+  const data = await api.get('/api/reset_plan', { data_dir: S.data_dir, instrument: S.instrument || '', source: S.source || '' });
+  const homes = data.homes || [];
+  const blocked = busy || (data.busy || []).length > 0;
+  const name = (home) => home.home || relative(home.folder) || home.folder;
+  const rows = homes.map((home) => {
+    const parts = (home.parts || []).filter((part) => part.files);
+    return el('tr', {},
+      el('td', { class: 'mono', text: name(home) }),
+      el('td', { class: 'muted small', text: home.why ? t('reset_unknown')
+        : parts.map((part) => `${T[`reset_part_${part.what}`] || part.what} ${part.files}`).join(' \u00B7 ') || t('reset_nothing') }),
+      el('td', { class: 'num', text: human(home.bytes) }),
+      el('td', { class: 'num', text: home.files }),
+      el('td', {}, el('button', {
+        type: 'button', class: 'button small danger', text: t('reset_button'),
+        disabled: blocked || !home.files || Boolean(home.why), onclick: () => resetFolder(home, name(home)),
+      })));
+  });
+  $('reset_list').replaceChildren(rows.length
+    ? el('div', { class: 'table-wrap' }, el('table', { class: 'data' }, el('tbody', {}, rows)))
+    : el('p', { class: 'hint small', text: t('reset_none') }));
+}
+
+async function resetFolder(home, name) {
+  const parts = home.parts.filter((part) => part.files)
+    .map((part) => `  ${relative(part.path)}: ${T[`reset_part_${part.what}`] || part.what}, ${part.files} (${human(part.bytes)})`).join('\n');
+  if (!(await confirmBox(`${t('reset_confirm', name, home.files, human(home.bytes))}\n\n${parts}`))) return;
+  $('reset_status').textContent = t('reset_going', name);
+  const got = await api.post('/api/reset', { data_dir: S.data_dir, folder: home.folder, instrument: home.instrument, source: home.source });
+  $('reset_status').textContent = got.done ? t('reset_done', name, got.deleted)
+    : t('reset_failed', name, got.why || got.error || '');
+  measure();
 }
 
 /* every box that matches `which`: all ticked if one was not, else none */
