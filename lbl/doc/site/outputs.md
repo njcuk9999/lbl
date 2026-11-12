@@ -72,11 +72,12 @@ from being fitted by an orbit of e near 1), the periods
 held at the published ones, each fit with an offset, a straight line in
 time when every period is under a third of the campaign, and a free jitter
 (`lbl/pca2d/keplerfit.py`). The figure of the folded velocities shows each
-planet with the others taken out, its two orbits with each fit's Delta BIC
-(the fit against no planet, the planet in it, and for the Keplerian fit
-the planet's eccentricity), and under it the residuals to the whole
-Keplerian fit; the summary table gives each planet's K and Delta BIC from
-the joint circular fit. Each of the two fits is then sampled by an MCMC of
+planet with the others taken out, its two orbits with each fit's K and e,
+and under it, touching it, the residuals to the whole Keplerian fit. A
+table gives each fit's Delta BIC (against no planet, the Keplerian against
+the circular), each planet's in each fit and each planet's eccentricity;
+the summary table gives each planet's K and Delta BIC from the joint
+circular fit. Each of the two fits is then sampled by an MCMC of
 its own (from its maximum likelihood, priors uniform in K, the phase, e and
 omega): a figure of the posteriors of K, e and omega, a corner of each
 fit (every pair of parameters, the covariances, delivered and corrected

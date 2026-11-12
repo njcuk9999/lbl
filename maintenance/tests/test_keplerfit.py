@@ -186,6 +186,13 @@ def test_the_report_s_mcmc_figure_and_table(tmp_path, monkeypatch):
     table = texreport.mcmc_table(posts, PLANETS, before, after, "TOI-TEST")
     assert table.count("K (b, m/s)") == 1 and "e (c)" in table
     assert "0 (fixed)" in table and "--" not in table
+    # the Delta BIC of figure 7's fits, in a table of their own
+    bics = texreport.bic_table(posts, PLANETS, before, after, "TOI-TEST")
+    for row in ("circular fit, against no planet", "b in the Keplerian fit",
+                "eccentricity of c"):
+        assert row in bics
+    assert "no eccentric orbit preferred" in bics
+    assert texreport.bic_table(None, PLANETS, before, after, "x") == ""
     # no planet known: neither
     assert texreport.planet_posteriors(before, after, []) is None
     assert texreport.mcmc_table(None, PLANETS, before, after, "x") == ""

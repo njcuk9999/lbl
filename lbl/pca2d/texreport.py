@@ -1458,9 +1458,10 @@ def figure_phase(before, after, planets, path, most=4):
     # constrained: each orbit and its residuals one block, close together,
     #   the blocks apart by their titles (tight_layout gives every row the
     #   same gap, the tallest title's)
-    fig = plt.figure(figsize=(WIDTH, 3.5 * n + 0.4), layout="constrained")
+    fig = plt.figure(figsize=(WIDTH, 3.0 * n + 0.4), layout="constrained")
     outer = fig.add_gridspec(n, 2)
     phases = np.linspace(-0.5, 0.5, 400)
+    pairs = []
     for index, planet in enumerate(shown):
         main_row, resid_row = [], []
         for col in range(2):
@@ -1472,6 +1473,7 @@ def figure_phase(before, after, planets, path, most=4):
                                     sharey=resid_row[0] if col else None)
             main_row.append(main)
             resid_row.append(resid)
+            pairs.append((main, resid))
         panels = []
         for (run, colour), fit in zip(runs, fits):
             circ, kep = fit["circular"], fit["keplerian"]
@@ -1514,21 +1516,15 @@ def figure_phase(before, after, planets, path, most=4):
             angle = ("" if not (pk["e_err"] > 0 and pk["e"] > 2 * pk["e_err"])
                      else ", $\\omega$ = %.0f $\\pm$ %.0f$^\\circ$"
                      % (pk["omega"], pk["omega_err"]))
-            # each fit's Delta BIC: the fit against no planet, this planet in
-            #   it, and its eccentricity. Short lines: a panel is half the
-            #   page
             ecc = ("e = %.2f (at its bound)" % pk["e"] if pk.get("at_bound")
                    else "e = %.2f $\\pm$ %.2f" % (pk["e"], pk["e_err"]))
+            # each fit's K and e; their Delta BIC in a table of their own
+            #   (bic_table): short titles, short gaps
             main.set_title(
                 "%s\ncircular: K = %.2f $\\pm$ %.2f m/s\n"
-                "    ΔBIC fit %+.1f, planet %+.1f\n"
-                "Keplerian: K = %.2f $\\pm$ %.2f m/s, %s\n"
-                "    ΔBIC fit %+.1f, planet %+.1f, e %+.1f%s"
-                % (run["label"], pc["k"], pc["k_err"],
-                   fit["fit_bic"]["circular"], fit["planet_bic"][index],
-                   pk["k"], pk["k_err"], ecc,
-                   fit["fit_bic"]["keplerian"], fit["kep_planet_bic"][index],
-                   fit["ecc_bic"][index], angle),
+                "Keplerian: K = %.2f $\\pm$ %.2f m/s\n    %s%s"
+                % (run["label"], pc["k"], pc["k_err"], pk["k"], pk["k_err"],
+                   ecc, angle),
                 fontsize=6.5, color=INK, loc="left")
             if index == 0 and col == 0:
                 legend_from = main
@@ -1576,6 +1572,12 @@ def figure_phase(before, after, planets, path, most=4):
     # the layout made once, then held: _named moves every axis down
     fig.canvas.draw()
     fig.set_layout_engine("none")
+    # an orbit and its residuals touch: each residual panel grows up to
+    #   the bottom of its orbit's (the layout leaves a pad between them)
+    for main, resid in pairs:
+        top = main.get_position().y0
+        box = resid.get_position()
+        resid.set_position([box.x0, box.y0, box.width, top - box.y0])
     return _save(fig, path, before.get("star"))
 
 
@@ -1793,6 +1795,55 @@ def figure_posterior_corner(posts, planets, before, after, scenario, path):
     fig.subplots_adjust(left=0.08, right=0.99, bottom=0.08, top=0.96,
                         wspace=0.08, hspace=0.08)
     return _save(fig, path, before.get("star"))
+
+
+def bic_table(posts, planets, before, after, name):
+    """The Delta BIC of the planet fits of figure 7, both series: each fit
+    against no planet, the Keplerian against the circular, each planet in
+    each fit, each planet's eccentricity (keplerfit.fit_planets, as
+    planet_posteriors kept them)"""
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    if not posts or not known:
+        return ""
+    fits = [posts[run["label"]]["fits"] for run in (before, after)]
+
+    def cell(value, what):
+        if value is None or not np.isfinite(value):
+            return "n/a"
+        return "%s (%s)" % (tex("%+.1f" % value),
+                            bervbias.bic_words(value, what))
+
+    rows = [
+        "circular fit, against no planet & %s & %s \\\\" % tuple(
+            cell(f["fit_bic"]["circular"], "orbit") for f in fits),
+        "Keplerian fit, against no planet & %s & %s \\\\" % tuple(
+            cell(f["fit_bic"]["keplerian"], "orbit") for f in fits),
+        "Keplerian fit, against the circular one & %s & %s \\\\" % tuple(
+            cell(f["fit_bic"]["keplerian"] - f["fit_bic"]["circular"],
+                 "eccentric orbit") for f in fits),
+        "\\midrule"]
+    for i, planet in enumerate(known):
+        letter = tex(str(planet.get("short") or planet["name"]))
+        rows += [
+            "%s in the circular fit & %s & %s \\\\" % ((letter,) + tuple(
+                cell(f["planet_bic"][i], "planet") for f in fits)),
+            "%s in the Keplerian fit & %s & %s \\\\" % ((letter,) + tuple(
+                cell(f["kep_planet_bic"][i], "planet") for f in fits)),
+            "eccentricity of %s & %s & %s \\\\" % ((letter,) + tuple(
+                cell(f["ecc_bic"][i], "eccentric orbit") for f in fits))]
+    return ("\\subsubsection*{%s: the evidence of the planet fits}\n"
+            "$\\Delta$BIC = BIC(the simpler model) $-$ BIC(the richer one),"
+            " every model with an offset, the straight line of figure 7 and"
+            " a free jitter, positive when the data prefer the richer"
+            " (above 2, 6 and 10: positive, strong, very strong evidence,"
+            " Kass and Raftery's scale). A fit against no planet: the"
+            " offset, the line and the jitter alone; a planet in a fit: the"
+            " same fit without it; an eccentricity: the Keplerian fit with"
+            " that planet circular.\n\n"
+            "\\begin{longtable}{l c c}\n\\toprule\n$\\Delta$BIC & %s & %s"
+            " \\\\\n\\midrule\n\\endhead\n%s\n\\bottomrule\n\\end{longtable}\n"
+            % (name, tex(before["label"]), tex(after["label"]),
+               "\n".join(rows)))
 
 
 def _posterior(quantiles, digits):
@@ -2875,13 +2926,10 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " Keplerian fit; the squares are weighted means in tenths of the"
          " phase; dashed, where the archive gives a transit time and a"
          " semi-amplitude, the circular orbit they imply. In the title,"
-         " each fit's $K$ and its $\\Delta$BIC: of the fit = BIC(no"
-         " planet: the offset, the line and the jitter alone) $-$ BIC(fit);"
-         " of the planet = BIC(the same fit without it) $-$ BIC(fit); of $e$"
-         " = BIC(Keplerian fit with this planet circular) $-$ BIC(Keplerian"
-         " fit); positive when the data prefer the richer model (above 2, 6"
-         " and 10: positive, strong, very strong); $\\omega$ when $e$ is"
-         " over twice its error. Under each panel, the residuals to the"
+         " each fit's $K$, and the Keplerian fit's $e$ ($\\omega$ when $e$"
+         " is over twice its error); the $\\Delta$BIC of each fit, of each"
+         " planet in it and of its eccentricity are in the table after the"
+         " figures. Under each panel, touching it, the residuals to the"
          " whole Keplerian fit at this planet's phase, their rms beside the"
          " median error bar and the fit's jitter: what the fit leaves,"
          " against what the noise alone would. A correction that left the"
@@ -2925,6 +2973,8 @@ def velocity_section(star, before, after, numbers, folder, stale):
             parts.append(figure_block("figures/" + os.path.basename(path),
                                       "\\textbf{%s.} %s" % (name, caption),
                                       short=short))
+    parts.append(bic_table(posts, numbers.get("planets_known"), before,
+                           after, name))
     parts.append(mcmc_table(posts, numbers.get("planets_known"), before,
                             after, name))
     parts.append("\\clearpage\n")
