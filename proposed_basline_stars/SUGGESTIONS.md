@@ -61,6 +61,46 @@ Le détail de chacune (et pourquoi une étoile est écartée) :
 7. Non vérifié : binaires (SB2), grands K planétaires, et NIRPS HA (non fait,
    même script). La Teff et le type viennent de la base d'APERO.
 
+## Construction des bases (rali, lancée le 2026-11-12)
+
+`build_bases.py` fait, dans `~/pca2d_bases` sur rali, un DATA_DIR par
+instrument dont `science/<OBJET>/` n'est fait que de liens symboliques vers
+les t.fits d'APERO (les poses comptées par la sélection ; aucune copie), et
+un wrap par base (`wraps/`, écrits par le générateur de la fenêtre) : PCA2D
+`joint=True`, `n_star=1`, le `n_earth` de l'instrument, `compare=False`,
+les étapes LBL coupées. Les trois bases d'un instrument passent l'une après
+l'autre (`run_<INSTRUMENT>.sh`), les deux instruments en parallèle, en
+`nice 10` et 12 fils BLAS chacun ; chaque base faite est rangée par
+`basis.keep` dans `<INSTRUMENT>/models/pca2d_<INSTRUMENT>_CADC/` :
+
+| base (`input_name`) | NIRPS HE | SPIRou |
+|---|---|---|
+| `baseline_snr20-40` | WASP-127, WASP-107, TOI-782, TOI-5524 | TOI-2120, TOI-736, TOI-4616, TOI-4479 |
+| `baseline_snr40-80` | GJ 3090, TOI-667, TOI-4565, TOI-1078 | GJ 905, GJ 1289, GJ 1286, PM J21463+3813 |
+| `baseline_snr80plus` | Gl 699, Proxima, **GJ 1**, GJ 682 | Gl 699, Gl 846, **GJ 411**, **Gl 15 A** |
+
+Le classement, sauf les remplacements acceptés le 2026-11-12 (suggestions 2
+et 3, `SWAPS` dans `build_bases.py`) : des naines M calmes à la place d'AU
+Mic et V1298 Tau (jeunes, très actives) et d'eps Eri (K2, 73 nuits). Gl 15 A
+plutôt que Gl 880 : le meilleur score (699 contre 674) et pas d'émission
+dans son type (Gl 880 est M1.5Ve).
+
+`DATA_SOURCE='CADC'` : ces t.fits sont ceux que distribue la CADC, et LBL
+lit ce format avec ses classes CADC (le BERV dans l'en-tête de `FluxAB` /
+`FluxA`). Ses classes APERO attendent les `e2dsff_tcorr` de `red/` : sur un
+t.fits elles ne trouvent pas le BERV (en-tête primaire), le BERV de
+l'observateur est NaN partout et `bundle_berv` refuse les nuits de NIRPS.
+Une base rangée CADC sert aussi telle quelle aux runs sur données CADC.
+
+Suivi : `~/pca2d_bases/logs/status.txt` (une ligne par base : lancée, faite
+avec son fichier, ou FAILED et son log), les logs complets à côté. L'ajustement
+écrit aussi, comme toujours, les spectres corrigés des étoiles
+d'entraînement (`science/<OBJET>_pca2d/`, environ 18 Mo par pose SPIRou et
+15 Mo par pose NIRPS, ~330 Go en tout, refaisables) et ses figures.
+
+    cd ~/proposed_basline_stars && ~/miniconda3/envs/lbl-pca2d/bin/python build_bases.py ~/pca2d_bases
+    cd ~/pca2d_bases && for i in SPIROU NIRPS_HE; do nohup setsid bash run_$i.sh > /dev/null 2>&1 < /dev/null & done
+
 ## Refaire
 
 Sur rali, dans `~/proposed_basline_stars` (copie des scripts et de la base
