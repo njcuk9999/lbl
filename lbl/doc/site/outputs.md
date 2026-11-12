@@ -78,5 +78,7 @@ the planet's eccentricity), and under it the residuals to the whole
 Keplerian fit; the summary table gives each planet's K and Delta BIC from
 the joint circular fit. Each of the two fits is then sampled by an MCMC of
 its own (from its maximum likelihood, priors uniform in K, the phase, e and
-omega): a figure of the posteriors of K, e and omega, and a table of every
-parameter (median, 16th and 84th percentiles) close the star's pages.
+omega): a figure of the posteriors of K, e and omega, a corner of each
+fit (every pair of parameters, the covariances, delivered and corrected
+overlaid) and a table of every parameter (median, 16th and 84th
+percentiles) close the star's pages.

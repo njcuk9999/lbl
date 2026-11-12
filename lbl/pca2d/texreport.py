@@ -1655,6 +1655,146 @@ def figure_mcmc(posts, planets, before, after, path, most=4):
     return _save(fig, path, before.get("star"))
 
 
+#: the most parameters a corner of the posteriors shows: the phases
+#:    (lambda) go first, then the planets beyond
+CORNER_MAX = 12
+
+
+def corner_parameters(posts, planets, scenario):
+    """[(key, label)] of a corner of `scenario`'s posteriors: each planet's
+    K, e, omega (Keplerian) and lambda, then the offset, the slope and the
+    jitter; past CORNER_MAX, without the lambdas, then the last planets"""
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    common = set.intersection(*[set(post[scenario]["samples"])
+                                for post in posts.values()])
+
+    def build(with_lambda, n_planets):
+        out = []
+        for i, planet in enumerate(known[:n_planets]):
+            letter = str(planet.get("short") or i)
+            for key, label in (("K_%d", "K$_{%s}$ (m/s)"), ("e_%d", "e$_{%s}$"),
+                               ("omega_%d", "$\\omega_{%s}$ (deg)"),
+                               ("lam_%d", "$\\lambda_{%s}$ (deg)")):
+                if key.startswith("lam") and not with_lambda:
+                    continue
+                if key % i in common:
+                    out.append((key % i, label % letter))
+        out += [(key, label) for key, label in (
+            ("offset", "offset (m/s)"), ("slope", "slope (m/s/yr)"),
+            ("jitter", "jitter (m/s)")) if key in common]
+        return out
+
+    chosen = build(True, len(known))
+    if len(chosen) > CORNER_MAX:
+        chosen = build(False, len(known))
+    n = len(known)
+    while len(chosen) > CORNER_MAX and n > 1:
+        n -= 1
+        chosen = build(False, n)
+    return chosen
+
+
+def _levels(hist, fractions=(0.865, 0.393)):
+    """The densities above which these fractions of a 2D histogram lie,
+    increasing (2 sigma, then 1 sigma of a 2D Gaussian)"""
+    flat = np.sort(hist.ravel())[::-1]
+    cum = np.cumsum(flat)
+    if not cum.size or cum[-1] <= 0:
+        return None
+    cum /= cum[-1]
+    levels = [flat[min(np.searchsorted(cum, f), flat.size - 1)]
+              for f in fractions]
+    levels = np.unique(levels)
+    return levels if levels.size == len(fractions) and levels[0] > 0 \
+        else None
+
+
+def figure_posterior_corner(posts, planets, before, after, scenario, path):
+    """The covariances of one fit's posteriors (`scenario`, circular or
+    keplerian): every pair of parameters, delivered and corrected in their
+    colours, contours holding 39% and 86% of the samples (1 and 2 sigma of
+    a 2D Gaussian) and each series' correlation coefficient; on the
+    diagonal, each parameter's posterior"""
+    from scipy.ndimage import gaussian_filter
+    if not posts:
+        return None
+    chosen = corner_parameters(posts, planets, scenario)
+    if len(chosen) < 2:
+        return None
+    runs = [(run, colour, posts[run["label"]][scenario]["samples"])
+            for run, colour in ((before, BEFORE), (after, AFTER))]
+    # each axis over both series' central 98%
+    ranges = {}
+    for key, _label in chosen:
+        lo = min(np.percentile(s[key], 1) for *_r, s in runs)
+        hi = max(np.percentile(s[key], 99) for *_r, s in runs)
+        pad = 0.05 * (hi - lo) if hi > lo else 1.0
+        ranges[key] = (lo - pad, hi + pad)
+    n = len(chosen)
+    size = WIDTH
+    fig, axes = plt.subplots(n, n, figsize=(size, size + 0.3),
+                             squeeze=False)
+    for row, (key_y, label_y) in enumerate(chosen):
+        for col, (key_x, label_x) in enumerate(chosen):
+            ax = axes[row, col]
+            if col > row:
+                ax.set_axis_off()
+                continue
+            for run, colour, samples in runs:
+                x = samples[key_x]
+                if col == row:
+                    ax.hist(x, bins=40, range=ranges[key_x],
+                            histtype="step", color=colour, lw=1.0,
+                            density=True)
+                    continue
+                y = samples[key_y]
+                hist, xe, ye = np.histogram2d(
+                    x, y, bins=30, range=[ranges[key_x], ranges[key_y]])
+                hist = gaussian_filter(hist, 1.0)
+                levels = _levels(hist)
+                if levels is not None:
+                    ax.contour(0.5 * (xe[1:] + xe[:-1]),
+                               0.5 * (ye[1:] + ye[:-1]), hist.T,
+                               levels=levels, colors=colour,
+                               linewidths=[0.6, 1.0])
+            if col < row:
+                # each series' correlation, its colour, top left
+                for k, (run, colour, samples) in enumerate(runs):
+                    r = np.corrcoef(samples[key_x], samples[key_y])[0, 1]
+                    ax.text(0.03 + 0.48 * k, 0.97, "%+.2f" % r,
+                            transform=ax.transAxes, ha="left", va="top",
+                            fontsize=4.8, color=colour, zorder=8,
+                            bbox=dict(facecolor="white", edgecolor="none",
+                                      alpha=0.75, pad=0.3))
+                ax.set_ylim(*ranges[key_y])
+            ax.set_xlim(*ranges[key_x])
+            if col == row:
+                ax.set_yticks([])
+            ax.tick_params(labelsize=4.5, length=2, pad=1)
+            ax.xaxis.set_major_locator(MaxNLocator(3))
+            if col != row:
+                ax.yaxis.set_major_locator(MaxNLocator(3))
+            for tick in ax.get_xticklabels():
+                tick.set_rotation(45)
+            if row < n - 1:
+                ax.set_xticklabels([])
+            else:
+                ax.set_xlabel(label_x, fontsize=5.5, color=INK, labelpad=1)
+            if col == 0 and row > 0:
+                ax.set_ylabel(label_y, fontsize=5.5, color=INK, labelpad=1)
+            elif col != row:
+                ax.set_yticklabels([])
+            _style(ax)
+    handles = [plt.Line2D([], [], color=colour, lw=1.2) for _r, colour, _s
+               in runs]
+    fig.legend(handles, ["%s, %s fit" % (run["label"], scenario.replace(
+        "keplerian", "Keplerian")) for run, _c, _s in runs],
+        loc="upper right", fontsize=7, frameon=False)
+    fig.subplots_adjust(left=0.08, right=0.99, bottom=0.08, top=0.96,
+                        wspace=0.08, hspace=0.08)
+    return _save(fig, path, before.get("star"))
+
+
 def _posterior(quantiles, digits):
     """$m^{+u}_{-l}$ of (median, 16th, 84th percentiles)"""
     mid, low, high = quantiles
@@ -2755,7 +2895,29 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " Keplerian one (solid), $e$ and $\\omega$ of the Keplerian one,"
          " delivered and corrected in their colours. A correction that"
          " left the planets alone keeps their posteriors."),
-    ]
+    ] + [
+        (figure_posterior_corner(posts, numbers.get("planets_known"), before,
+                                 after, scenario, os.path.join(
+                                     figures, base + "-corner-%s.pdf"
+                                     % scenario)),
+         "%s: the covariances of the %s fit" % (name, words),
+         "The covariances of the %s fit's posteriors (its MCMC): every pair"
+         " of its parameters, delivered and corrected in their colours,"
+         " the contours holding 39\\%% and 86\\%% of the samples (1 and 2"
+         " $\\sigma$ of a two-dimensional Gaussian), each series'"
+         " correlation coefficient in its colour at the top left of the"
+         " panel; on the diagonal, each parameter's posterior. Each axis"
+         " spans both series' central 98\\%%. %s Past %d parameters, the"
+         " phases $\\lambda$ are left out, then the last planets." % (
+             words, extra, CORNER_MAX))
+        for scenario, words, extra in (
+            ("circular", "circular",
+             "$\\lambda$ is the mean longitude at the middle of the"
+             " campaign."),
+            ("keplerian", "Keplerian",
+             "$\\lambda$ is the mean longitude at the middle of the"
+             " campaign, $M + \\omega$; $\\omega$ is only defined as $e$"
+             " moves away from 0."))]
     for path, short, caption in drawn:
         if path:
             # the star first in every caption too: a joint report repeats

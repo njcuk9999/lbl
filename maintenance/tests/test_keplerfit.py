@@ -14,6 +14,7 @@ Created on 2026-11-12
 
 @author: artigau
 """
+import os
 import warnings
 
 import numpy as np
@@ -188,3 +189,33 @@ def test_the_report_s_mcmc_figure_and_table(tmp_path, monkeypatch):
     # no planet known: neither
     assert texreport.planet_posteriors(before, after, []) is None
     assert texreport.mcmc_table(None, PLANETS, before, after, "x") == ""
+
+
+def test_the_corners_of_both_fits(tmp_path, monkeypatch):
+    monkeypatch.setattr(kf.posteriors, "__defaults__", (400, 200, 0))
+    before, after = _run("delivered", 3.0, 4), _run("corrected", 1.5, 5)
+    posts = texreport.planet_posteriors(before, after, PLANETS)
+    keys = {s: [k for k, _ in texreport.corner_parameters(posts, PLANETS, s)]
+            for s in ("circular", "keplerian")}
+    assert keys["circular"] == ["K_0", "lam_0", "K_1", "lam_1", "offset",
+                                "slope", "jitter"]
+    assert keys["keplerian"][:4] == ["K_0", "e_0", "omega_0", "lam_0"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        for scenario in ("circular", "keplerian"):
+            path = texreport.figure_posterior_corner(
+                posts, PLANETS, before, after, scenario,
+                str(tmp_path / ("corner-%s.pdf" % scenario)))
+            assert path and os.path.getsize(path) > 0
+    # past CORNER_MAX parameters, the phases go first, then the planets
+    many = [dict(name="p%d" % i, short="bcde"[i], period=3.0 + i)
+            for i in range(4)]
+    fake = {label: dict(keplerian=dict(samples={
+        name: np.zeros(3) for i in range(4)
+        for name in ("K_%d" % i, "e_%d" % i, "omega_%d" % i, "lam_%d" % i)}
+        | dict(offset=0, slope=0, jitter=0))) for label in ("a", "b")}
+    chosen = [k for k, _ in texreport.corner_parameters(fake, many,
+                                                        "keplerian")]
+    assert len(chosen) <= texreport.CORNER_MAX
+    assert not any(k.startswith("lam") for k in chosen)
+    assert chosen[-3:] == ["offset", "slope", "jitter"]
