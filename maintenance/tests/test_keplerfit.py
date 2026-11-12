@@ -151,3 +151,40 @@ def test_the_report_s_figure_and_table(tmp_path):
         joint["circular"].planets[1]["k"])
     assert numbers["after"]["planet_bic"] == pytest.approx(
         joint["planet_bic"])
+
+
+def test_the_two_mcmcs_find_the_orbits():
+    t, v, e = _series()
+    post = kf.posteriors(t, v, e, [B["period"], C["period"]], steps=600,
+                         burn=300)
+    circ, kep = post["circular"]["quantiles"], post["keplerian"]["quantiles"]
+    # the circular MCMC has no eccentricity; the Keplerian one finds b's
+    assert "e_0" not in circ and "e_0" in kep
+    mid, low, high = kep["e_0"]
+    truth = np.hypot(B["ecosw"], B["esinw"])
+    assert low - 0.05 < truth < high + 0.05
+    for i, planet in enumerate((B, C)):
+        mid, low, high = kep["K_%d" % i]
+        assert low - 0.5 < planet["k"] < high + 0.5
+    assert 0.15 < post["keplerian"]["acceptance"] < 0.7
+    assert post["circular"]["walkers"] >= kf.MIN_WALKERS
+
+
+def test_the_report_s_mcmc_figure_and_table(tmp_path, monkeypatch):
+    monkeypatch.setattr(kf, "MCMC_STEPS", 400)
+    monkeypatch.setattr(kf, "MCMC_BURN", 200)
+    monkeypatch.setattr(kf.posteriors, "__defaults__", (400, 200, 0))
+    before, after = _run("delivered", 3.0, 4), _run("corrected", 1.5, 5)
+    posts = texreport.planet_posteriors(before, after, PLANETS)
+    assert set(posts) == {"delivered", "corrected"}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        path = texreport.figure_mcmc(posts, PLANETS, before, after,
+                                     str(tmp_path / "mcmc.pdf"))
+    assert path and (tmp_path / "mcmc.pdf").stat().st_size > 0
+    table = texreport.mcmc_table(posts, PLANETS, before, after, "TOI-TEST")
+    assert table.count("K (b, m/s)") == 1 and "e (c)" in table
+    assert "0 (fixed)" in table and "--" not in table
+    # no planet known: neither
+    assert texreport.planet_posteriors(before, after, []) is None
+    assert texreport.mcmc_table(None, PLANETS, before, after, "x") == ""

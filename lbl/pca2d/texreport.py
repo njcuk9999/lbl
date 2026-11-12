@@ -1579,6 +1579,146 @@ def figure_phase(before, after, planets, path, most=4):
     return _save(fig, path, before.get("star"))
 
 
+def planet_posteriors(before, after, planets):
+    """{series label: keplerfit.posteriors} of both series, the circular
+    and the Keplerian MCMC of every known planet; None without known
+    planets, or when a series has too few points for them"""
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    if not known:
+        return None
+    periods = [float(p["period"]) for p in known]
+    out = {}
+    for run in (before, after):
+        post = keplerfit.posteriors(run["t"], run["v"], run["e"], periods)
+        if post is None:
+            return None
+        out[run["label"]] = post
+    return out
+
+
+def figure_mcmc(posts, planets, before, after, path, most=4):
+    """The posteriors of the planets' fits, one row a planet: K of both
+    MCMCs (circular dashed, Keplerian solid), e and omega of the
+    Keplerian one, delivered and corrected in their colours"""
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    if not posts or not known:
+        return None
+    shown = known[:most]
+    fig, axes = plt.subplots(len(shown), 3, figsize=(WIDTH, 1.9 * len(shown)
+                                                     + 0.7), squeeze=False)
+    for i, planet in enumerate(shown):
+        ax_k, ax_e, ax_w = axes[i]
+        # K's axis: up to three times the width of all but the widest of
+        #   the four posteriors (a Keplerian fit of a few outlying points
+        #   reaches hundreds of m/s and would flatten the others); what
+        #   lies beyond is said
+        curves = [(run, colour, scenario, style,
+                   posts[run["label"]][scenario]["samples"]["K_%d" % i])
+                  for run, colour in ((before, BEFORE), (after, AFTER))
+                  for scenario, style in (("circular", "--"),
+                                          ("keplerian", "-"))]
+        tops = sorted(float(np.percentile(k, 97.5)) for *_c, k in curves)
+        k_max = 1.1 * min(tops[-1], 3.0 * tops[-2])
+        beyond = []
+        for run, colour, scenario, style, k in curves:
+            ax_k.hist(k, bins=60, range=(0.0, k_max), histtype="step",
+                      color=colour, ls=style, lw=1.1, density=True,
+                      label="%s, %s" % (run["label"], scenario.replace(
+                          "keplerian", "Keplerian")))
+            if np.median(k) > k_max:
+                beyond.append("%s, %s: K = %.0f m/s" % (
+                    run["label"], scenario.replace("keplerian", "Keplerian"),
+                    np.median(k)))
+        if beyond:
+            ax_k.text(0.98, 0.95, "off the axis:\n" + "\n".join(beyond),
+                      transform=ax_k.transAxes, ha="right", va="top",
+                      fontsize=5.8, color=INK)
+        for run, colour in ((before, BEFORE), (after, AFTER)):
+            post = posts[run["label"]]
+            kep = post["keplerian"]["samples"]
+            ax_e.hist(kep["e_%d" % i], bins=60, range=(0.0, keplerfit.E_MAX),
+                      histtype="step", color=colour, lw=1.1, density=True)
+            ax_w.hist(kep["omega_%d" % i], bins=60, histtype="step",
+                      color=colour, lw=1.1, density=True)
+        for ax, label in ((ax_k, "K (m/s)"), (ax_e, "e (Keplerian)"),
+                          (ax_w, "$\\omega$ (deg, Keplerian)")):
+            ax.set_xlabel(label, fontsize=7.5, color=INK)
+            ax.set_yticks([])
+            _style(ax)
+        ax_k.set_ylabel("%s\nP = %s d" % (planet["name"], (
+            "%.6f" % planet["period"]) if planet["period"] < 100
+            else "%.3f" % planet["period"]), fontsize=7.5, color=PLANET)
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=4, fontsize=6.5,
+               frameon=False)
+    fig.tight_layout(rect=(0.0, 0.05, 1.0, 1.0))
+    return _save(fig, path, before.get("star"))
+
+
+def _posterior(quantiles, digits):
+    """$m^{+u}_{-l}$ of (median, 16th, 84th percentiles)"""
+    mid, low, high = quantiles
+    return "$%.*f^{+%.*f}_{-%.*f}$" % (digits, mid, digits, high - mid,
+                                       digits, mid - low)
+
+
+def mcmc_table(posts, planets, before, after, name):
+    """Every parameter of both MCMCs of both series: median and the 16th
+    and 84th percentiles"""
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    if not posts or not known:
+        return ""
+    runs = [(run["label"], posts[run["label"]]) for run in (before, after)]
+    columns = [(label, post[scenario]) for label, post in runs
+               for scenario in ("circular", "keplerian")]
+    head = " & ".join("%s, %s" % (tex(label), scenario)
+                      for label, post in runs
+                      for scenario in ("circular", "Keplerian"))
+    rows = []
+    for i, planet in enumerate(known):
+        letter = tex(str(planet.get("short") or planet["name"]))
+        for key, label, digits in (
+                ("K_%d" % i, "K (%s, m/s)" % letter, 2),
+                ("e_%d" % i, "e (%s)" % letter, 3),
+                ("omega_%d" % i, "$\\omega$ (%s, deg)" % letter, 0),
+                ("lam_%d" % i, "$\\lambda$ (%s, deg)" % letter, 0)):
+            cells = [_posterior(post["quantiles"][key], digits)
+                     if key in post["quantiles"] else "0 (fixed)"
+                     if key.startswith("e_") else "n/a"
+                     for _label, post in columns]
+            rows.append("%s & %s \\\\" % (label, " & ".join(cells)))
+        rows.append("\\midrule")
+    for key, label, digits in (("offset", "offset (m/s)", 2),
+                               ("slope", "slope (m/s/yr)", 2),
+                               ("jitter", "jitter (m/s)", 2)):
+        if not any(key in post["quantiles"] for _label, post in columns):
+            continue
+        rows.append("%s & %s \\\\" % (label, " & ".join(
+            _posterior(post["quantiles"][key], digits)
+            if key in post["quantiles"] else "n/a"
+            for _label, post in columns)))
+    rows.append("acceptance & %s \\\\" % " & ".join(
+        "%.2f" % post["acceptance"] for _label, post in columns))
+    first = columns[0][1]
+    return ("\\subsubsection*{%s: the planets' fits by MCMC}\n"
+            "Median and 16th to 84th percentiles of each parameter of the"
+            " two fits of figure 7, circular and Keplerian, each sampled"
+            " on its own (an affine-invariant ensemble, twice as many"
+            " walkers as parameters and at least %d, %d steps, the first %d"
+            " dropped), from"
+            " its maximum likelihood. Each planet as $\\sqrt{K}\\cos"
+            "\\lambda$, $\\sqrt{K}\\sin\\lambda$ and, Keplerian,"
+            " $\\sqrt{e}\\cos\\omega$, $\\sqrt{e}\\sin\\omega$ (priors uniform"
+            " in $K$, $\\lambda$, $e$ and $\\omega$; $\\lambda$ the mean"
+            " longitude at the middle of the campaign), with the Gaussian of"
+            " width %.1f on $e\\cos\\omega$ and $e\\sin\\omega$; the periods"
+            " held at the published ones, the jitter log-uniform.\n\n"
+            "\\begin{longtable}{l c c c c}\n\\toprule\nparameter & %s \\\\\n"
+            "\\midrule\n\\endhead\n%s\n\\bottomrule\n\\end{longtable}\n"
+            % (name, keplerfit.MIN_WALKERS, first["steps"], first["burn"],
+               keplerfit.E_SIGMA, head, "\n".join(rows)))
+
+
 def figure_periodograms(before, after, planets, path):
     lines = planet_lines(planets)
     # down to the shortest known period, which may be under a day (an
@@ -2457,6 +2597,9 @@ def velocity_section(star, before, after, numbers, folder, stale):
                      " one, LBL measures the projection on the model nearest"
                      " the star's Teff (lbl.dtemp).}\n")
     name = tex(star)
+    # the MCMCs of the known planets' fits, circular and Keplerian: a figure
+    #   after the folded velocities, and a table of every parameter
+    posts = planet_posteriors(before, after, numbers.get("planets_known"))
     drawn = [
         (figure_time(before, after, os.path.join(figures, base + "-time.pdf")),
          "%s: the velocities over the campaign" % name,
@@ -2603,6 +2746,15 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " median error bar and the fit's jitter: what the fit leaves,"
          " against what the noise alone would. A correction that left the"
          " planets alone keeps $K$ and $e$."),
+        (figure_mcmc(posts, numbers.get("planets_known"), before, after,
+                     os.path.join(figures, base + "-mcmc.pdf")),
+         "%s: the posteriors of the planets' fits" % name,
+         "The posteriors of the fits of the previous figure, each sampled by"
+         " an MCMC of its own (the table after the figures gives every"
+         " parameter): $K$ of the circular fit (dashed) and of the"
+         " Keplerian one (solid), $e$ and $\\omega$ of the Keplerian one,"
+         " delivered and corrected in their colours. A correction that"
+         " left the planets alone keeps their posteriors."),
     ]
     for path, short, caption in drawn:
         if path:
@@ -2611,6 +2763,8 @@ def velocity_section(star, before, after, numbers, folder, stale):
             parts.append(figure_block("figures/" + os.path.basename(path),
                                       "\\textbf{%s.} %s" % (name, caption),
                                       short=short))
+    parts.append(mcmc_table(posts, numbers.get("planets_known"), before,
+                            after, name))
     parts.append("\\clearpage\n")
     return "".join(parts)
 

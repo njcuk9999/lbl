@@ -427,3 +427,171 @@ def _without(fit: Fit, index: int) -> Fit:
     out.jitter, out.lnl = fit.jitter, fit.lnl
     out.n_par = fit.n_par - (4 if fit.planets[index]["eccentric"] else 2)
     return out
+
+
+# =============================================================================
+# The posteriors: one MCMC per scenario, circular and Keplerian
+# =============================================================================
+#: the steps of each MCMC and the first of them dropped, and the fewest
+#:    walkers (twice the dimensions otherwise)
+MCMC_STEPS, MCMC_BURN, MIN_WALKERS = 2000, 1000, 24
+#: the largest semi-amplitude a walker may take [m/s]
+K_MAX = 1e4
+
+
+def keplerian_many(t, period: float, amp, ecosw, esinw, lam,
+                   t_ref: float) -> np.ndarray:
+    """keplerian for many parameter sets at once: amp, ecosw, esinw, lam of
+    shape (m,), the velocities (m, len(t))"""
+    t = np.asarray(t, float)[None, :]
+    amp, ecosw, esinw, lam = (np.asarray(x, float)[:, None]
+                              for x in (amp, ecosw, esinw, lam))
+    ecc = np.hypot(ecosw, esinw)
+    shrink = np.where(ecc > E_MAX, E_MAX / np.maximum(ecc, 1e-300), 1.0)
+    ecosw, esinw, ecc = ecosw * shrink, esinw * shrink, ecc * shrink
+    omega = np.where(ecc > 0, np.arctan2(esinw, ecosw), 0.0)
+    mean = lam - omega + 2.0 * np.pi * (t - t_ref) / period
+    if not np.any(ecc > 0):
+        return amp * np.cos(mean + omega)
+    ecc_anom = mean + 0.85 * ecc * np.sign(np.sin(mean))
+    for _ in range(60):
+        step = ((ecc_anom - ecc * np.sin(ecc_anom) - mean)
+                / (1.0 - ecc * np.cos(ecc_anom)))
+        ecc_anom = ecc_anom - step
+        if np.max(np.abs(step)) < 1e-10:
+            break
+    true = 2.0 * np.arctan2(np.sqrt(1.0 + ecc) * np.sin(ecc_anom / 2.0),
+                            np.sqrt(1.0 - ecc) * np.cos(ecc_anom / 2.0))
+    return amp * (np.cos(true + omega) + ecc * np.cos(omega))
+
+
+def _centred_degrees(radians) -> np.ndarray:
+    """Angles in degrees within 180 of their circular mean, so that
+    percentiles of a posterior across +-180 mean something"""
+    radians = np.asarray(radians, float)
+    mid = np.arctan2(np.mean(np.sin(radians)), np.mean(np.cos(radians)))
+    return np.degrees(mid + (radians - mid + np.pi) % (2 * np.pi) - np.pi)
+
+
+def mcmc(t, v, err, start: Fit, eccentric: bool, steps: int = MCMC_STEPS,
+         burn: int = MCMC_BURN, seed: int = 0) -> Dict:
+    """The posterior of a fit's parameters (its periods, offset, line and
+    jitter as `start`, the maximum likelihood it starts from): circular
+    orbits, or Keplerians with `eccentric`. Each planet's sqrt(K) cos lam,
+    sqrt(K) sin lam and, Keplerian, sqrt(e) cos omega and sqrt(e) sin omega
+    (priors uniform in K, lam, e and omega), the Gaussian of E_SIGMA on
+    e cos omega and e sin omega as the maximum likelihood has it, ln jitter
+    uniform. t, v as fit_planets has them (v less its median).
+
+    Returns dict(samples={name: array}, quantiles={name: (50, 16, 84)},
+    acceptance, walkers, steps, burn, eccentric); names: offset, slope (when
+    the fit has a line), jitter, and for planet i: K_i, lam_i [deg], and
+    Keplerian e_i, omega_i [deg]."""
+    from .bervbias import stretch
+    periods, t_ref, drift = start.periods, start.t_ref, start.drift
+    n_planets = len(periods)
+    per = 4 if eccentric else 2
+    nb = 2 if drift else 1
+    ndim = nb + per * n_planets + 1
+    tau = (t - t_ref) / 365.25
+    lo_j, hi_j = np.log(JITTER_MIN), np.log(JITTER_MAX)
+
+    def unpack(theta):
+        out = dict(offset=theta[:, 0],
+                   slope=theta[:, 1] if drift else np.zeros(len(theta)),
+                   ljit=theta[:, -1], planets=[])
+        for i in range(n_planets):
+            s = theta[:, nb + per * i:nb + per * (i + 1)]
+            amp = s[:, 0] ** 2 + s[:, 1] ** 2
+            lam = np.arctan2(s[:, 1], s[:, 0])
+            if eccentric:
+                root = np.hypot(s[:, 2], s[:, 3])
+                ecc = root ** 2
+                ecosw, esinw = s[:, 2] * root, s[:, 3] * root
+            else:
+                ecc = ecosw = esinw = np.zeros(len(theta))
+            out["planets"].append((amp, lam, ecc, ecosw, esinw))
+        return out
+
+    def log_prob(theta):
+        theta = np.atleast_2d(theta)
+        par = unpack(theta)
+        lp = np.zeros(len(theta))
+        bad = (par["ljit"] < lo_j) | (par["ljit"] > hi_j)
+        model = par["offset"][:, None] + par["slope"][:, None] * tau[None, :]
+        for period, (amp, lam, ecc, ecosw, esinw) in zip(periods,
+                                                         par["planets"]):
+            bad |= (amp > K_MAX) | (ecc >= E_MAX)
+            if eccentric and E_SIGMA:
+                lp -= 0.5 * (ecosw ** 2 + esinw ** 2) / E_SIGMA ** 2
+            model = model + keplerian_many(t, period, amp, ecosw, esinw, lam,
+                                           t_ref)
+        var = err[None, :] ** 2 + np.exp(2.0 * par["ljit"])[:, None]
+        lp += -0.5 * np.sum((v[None, :] - model) ** 2 / var + np.log(var),
+                            axis=1)
+        lp[bad] = -np.inf
+        return lp
+
+    # the start: the maximum likelihood, and a small ball about it
+    centre = [start.offset] + ([start.slope] if drift else [])
+    scale = [0.1 * float(np.median(err))] + ([0.1] if drift else [])
+    for p in start.planets:
+        root_k = np.sqrt(max(p["k"], 0.0))
+        centre += [root_k * np.cos(p["lam"]), root_k * np.sin(p["lam"])]
+        scale += [0.05 * max(root_k, 0.5)] * 2
+        if eccentric:
+            ecc = float(np.hypot(p["ecosw"], p["esinw"]))
+            omega = float(np.arctan2(p["esinw"], p["ecosw"])) if ecc else 0.0
+            centre += [np.sqrt(ecc) * np.cos(omega),
+                       np.sqrt(ecc) * np.sin(omega)]
+            scale += [0.03, 0.03]
+    centre.append(float(np.clip(np.log(max(start.jitter, JITTER_MIN)),
+                                lo_j + 0.2, hi_j - 0.2)))
+    scale.append(0.1)
+    walkers = max(MIN_WALKERS, 2 * ndim)
+    walkers += walkers % 2
+    rng = np.random.default_rng(seed)
+    begin = np.array(centre) + np.array(scale) * rng.normal(
+        size=(walkers, ndim))
+    # every walker inside the prior
+    for _ in range(100):
+        out = ~np.isfinite(log_prob(begin))
+        if not out.any():
+            break
+        begin[out] = np.array(centre) + 0.3 * np.array(scale) * rng.normal(
+            size=(int(out.sum()), ndim))
+    chain, acceptance = stretch(log_prob, begin, steps, rng)
+    flat = chain[burn:].reshape(-1, ndim)
+    par = unpack(flat)
+    samples = dict(offset=par["offset"], jitter=np.exp(par["ljit"]))
+    if drift:
+        samples["slope"] = par["slope"]
+    for i, (amp, lam, ecc, ecosw, esinw) in enumerate(par["planets"]):
+        samples["K_%d" % i] = amp
+        samples["lam_%d" % i] = _centred_degrees(lam)
+        if eccentric:
+            samples["e_%d" % i] = ecc
+            samples["omega_%d" % i] = _centred_degrees(np.arctan2(esinw,
+                                                                  ecosw))
+    quantiles = {name: tuple(float(q) for q in np.percentile(x, [50, 16, 84]))
+                 for name, x in samples.items()}
+    return dict(samples=samples, quantiles=quantiles, acceptance=acceptance,
+                walkers=walkers, steps=steps, burn=burn, eccentric=eccentric,
+                n=len(t))
+
+
+def posteriors(t, v, err, periods, steps: int = MCMC_STEPS,
+               burn: int = MCMC_BURN, seed: int = 0) -> Optional[Dict]:
+    """Both MCMCs of a star's known planets, each from its own maximum
+    likelihood (fit_planets): dict(circular, keplerian, fits), None when
+    fit_planets has none"""
+    fits = fit_planets(t, v, err, periods)
+    if fits is None:
+        return None
+    t, v, err = _clean(t, v, err)
+    v = v - np.median(v)
+    return dict(circular=mcmc(t, v, err, fits["circular"], False, steps,
+                              burn, seed),
+                keplerian=mcmc(t, v, err, fits["keplerian"], True, steps,
+                               burn, seed + 1),
+                fits=fits)

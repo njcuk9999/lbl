@@ -76,4 +76,7 @@ planet with the others taken out, its two orbits with each fit's Delta BIC
 (the fit against no planet, the planet in it, and for the Keplerian fit
 the planet's eccentricity), and under it the residuals to the whole
 Keplerian fit; the summary table gives each planet's K and Delta BIC from
-the joint circular fit.
+the joint circular fit. Each of the two fits is then sampled by an MCMC of
+its own (from its maximum likelihood, priors uniform in K, the phase, e and
+omega): a figure of the posteriors of K, e and omega, and a table of every
+parameter (median, 16th and 84th percentiles) close the star's pages.
