@@ -271,7 +271,10 @@ def fit_order(data: OrderData, io_: int, shifts: np.ndarray,
         derivs, errs = scatter_savgol(x, flux, lngrid[i0:i1], params['fwhm'],
                                       weights=weight, polyorder=3,
                                       nderiv=NDERIV, sigma_clip=params['clip'],
-                                      clip_iter=2, presorted=True)
+                                      clip_iter=2, presorted=True,
+                                      max_gap=params.get('max_gap'),
+                                      min_balance=params.get('min_balance',
+                                                             0.0))
         out = dict(i0=i0, i1=i1, derivs=derivs, errs=errs)
         if ite == niter - 1:
             break
@@ -420,6 +423,13 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
                             params['APPROX_RESOLUTION']),
                       clip=bsd_param(params, 'CLIP'),
                       obs_clip=bsd_param(params, 'OBS_CLIP'))
+    # no value across a hole of the pixels (TEMPLATE_BSD_MAX_GAP window
+    #   FWHM), in ln(wavelength)
+    fit_params['max_gap'] = (float(params['TEMPLATE_BSD_MAX_GAP'] or 0)
+                             * fit_params['fwhm'])
+    #   nor at the edge of one: the least share of the window's weight on
+    #   each side (TEMPLATE_BSD_MIN_BALANCE)
+    fit_params['min_balance'] = float(params['TEMPLATE_BSD_MIN_BALANCE'] or 0)
     niter = int(bsd_param(params, 'NITER'))
     # the geometry, the reference wavelength of each order and the low pass
     #   width of each order in pixels (HP_WIDTH)

@@ -87,3 +87,25 @@ def test_unsorted_and_invalid_points_are_handled():
     out, _ = scatter_savgol(x[order], y2[order], grid, 0.5,
                             weights=w2[order])
     assert np.allclose(out[:, 0], ref[:, 0], atol=2e-3)
+
+
+def test_no_polynomial_across_a_hole():
+    """A stretch with no point (every spectrum blanked there): with max_gap
+    and min_balance, no value inside it nor at its edges, where a cubic held
+    by the few points beyond it would swing; elsewhere the same values"""
+    rng = np.random.default_rng(3)
+    x = np.sort(rng.uniform(0.0, 100.0, 20000))
+    y = np.sin(x / 3.0) + rng.normal(0.0, 0.01, x.size)
+    hole = (x > 50.0) & (x < 51.2)
+    x, y = x[~hole], y[~hole]
+    x_out = np.linspace(5.0, 95.0, 1801)
+    old, _ = scatter_savgol(x, y, x_out, 1.0, polyorder=3, nderiv=0)
+    new, _ = scatter_savgol(x, y, x_out, 1.0, polyorder=3, nderiv=0,
+                            max_gap=0.5, min_balance=0.1)
+    inside = (x_out > 50.3) & (x_out < 50.9)
+    assert np.isfinite(old[inside, 0]).all()        # bridged before
+    assert not np.isfinite(new[inside, 0]).any()
+    far = np.abs(x_out - 50.6) > 2.0
+    assert np.allclose(new[far, 0], old[far, 0])
+    good = np.isfinite(new[:, 0])
+    assert np.max(np.abs(new[good, 0] - np.sin(x_out[good] / 3.0))) < 0.01

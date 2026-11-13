@@ -42,7 +42,18 @@ Order by order (`lbl/science/template_scatter.py`):
      cores of lines the cubic cannot follow are not clipped more than
      elsewhere);
    - points on both sides of the grid point, or no value: the polynomial is
-     never extrapolated over the end of an order or a masked band.
+     never extrapolated over the end of an order or a masked band;
+   - nor drawn across a hole of the points: no value where the nearest point
+     on either side is further than `TEMPLATE_BSD_MAX_GAP` window FWHM (a
+     stretch every spectrum blanked, as PCA2D's corrected spectra have
+     where the fit gave no weight), nor where less than
+     `TEMPLATE_BSD_MIN_BALANCE` of the window's weight is on one side of
+     the point (the edge of such a hole, where the cubic would be
+     extrapolated from the other side). Without them, the cubic held by the
+     few points beyond a hole swung far from the spectrum: on TOI-756's 167
+     NIRPS spectra corrected by PCA2D, 222 template samples of 1180-1230 nm
+     had an rms above 10% of the flux and 33 were 15% off the uncorrected
+     template; with them, 0 and 0, for 2% of the samples.
 3. A pixel of the detector whose residual, over the spectra, has a median
    beyond `TEMPLATE_BSD_OBS_CLIP` sigma is left out of all spectra: what
    stays on the detector while the star moves (telluric residuals, bad
@@ -88,6 +99,8 @@ these uncertainties.
 | `TEMPLATE_BSD_NITER` | 4 | passes per order |
 | `TEMPLATE_BSD_CLIP` | 5.0 | clip of the local outliers, in units of the RMS of their window |
 | `TEMPLATE_BSD_OBS_CLIP` | 2.0 | clip of the detector pixels, in sigma of their median residual |
+| `TEMPLATE_BSD_MAX_GAP` | 0.5 | no value where the nearest point on either side is further than this many window FWHM (0: no limit) |
+| `TEMPLATE_BSD_MIN_BALANCE` | 0.1 | no value where less than this share of the window's weight is on one side of the point (0: no limit) |
 | `TEMPLATE_BSD_MEMORY` | 2.0 | memory for the orders read at once [GB]; more orders take more reads of the files |
 
 ## What the template file holds

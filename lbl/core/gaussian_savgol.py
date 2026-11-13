@@ -70,10 +70,12 @@ def _solve(mat: np.ndarray, vec: np.ndarray) -> np.ndarray:
 
 
 @njit(parallel=True, cache=True)
-def _fit(x, y, w, x_out, sigma_x, radius, polyorder, min_side):
+def _fit(x, y, w, x_out, sigma_x, radius, polyorder, min_side, max_gap,
+         min_balance):
     """The coefficients of the local polynomial in u = (x - x0) / radius at
     each x0 of x_out, their uncertainties, and the mean square of the
-    normalised residuals in the window (NaN without enough points); the
+    normalised residuals in the window (NaN without enough points, or when
+    the nearest point on either side of x0 is further than max_gap); the
     points of weight 0 are left out"""
     n_out = len(x_out)
     m = polyorder + 1
@@ -97,6 +99,12 @@ def _fit(x, y, w, x_out, sigma_x, radius, polyorder, min_side):
         sumg = 0.0
         nleft = 0
         nright = 0
+        # the nearest point on each side of x0
+        near_left = np.inf
+        near_right = np.inf
+        # the window's weight on each side of x0
+        mass_left = 0.0
+        mass_right = 0.0
         for k in range(left, right):
             wk = w[k]
             if wk <= 0:
@@ -118,11 +126,25 @@ def _fit(x, y, w, x_out, sigma_x, radius, polyorder, min_side):
             sumg += g
             if d < 0:
                 nleft += 1
+                near_left = min(near_left, -d)
+                mass_left += gw
             else:
                 nright += 1
+                near_right = min(near_right, d)
+                mass_right += gw
         # points on both sides: the polynomial is never extrapolated (edges
         #   of an order, a masked telluric band)
         if nleft + nright < m + 1 or nleft < min_side or nright < min_side:
+            continue
+        # no polynomial across a hole either: points only far on one side
+        #   (a sample in a masked stretch, or at its edge) would make the
+        #   polynomial bridge it, and a cubic held by a few points beyond the
+        #   hole swings far from the spectrum
+        if near_left > max_gap or near_right > max_gap:
+            continue
+        # nor at the edge of one: the window's weight there is nearly all on
+        #   one side, and the polynomial at x0 is extrapolated from it
+        if min(mass_left, mass_right) < min_balance * (mass_left + mass_right):
             continue
         mat = np.empty((m, m))
         bmat = np.empty((m, m))
@@ -186,7 +208,8 @@ def scatter_savgol(x: np.ndarray, y: np.ndarray, x_out: np.ndarray,
                    window_fwhm: float, weights: np.ndarray = None,
                    polyorder: int = 3, nderiv: int = 3,
                    sigma_clip: float = 5.0, clip_iter: int = 3,
-                   min_side: int = 2, presorted: bool = False):
+                   min_side: int = 2, presorted: bool = False,
+                   max_gap: float = None, min_balance: float = 0.0):
     """
     A Gaussian-weighted local polynomial through scattered points, at x_out
 
@@ -209,6 +232,15 @@ def scatter_savgol(x: np.ndarray, y: np.ndarray, x_out: np.ndarray,
     :param clip_iter: int, the iterations of the clip
     :param min_side: int, the points needed on each side of x_out
     :param presorted: bool, x is already sorted and all points are valid
+    :param max_gap: float or None, in units of x: an x_out whose nearest
+                    point on either side is further than this gets NaN, so
+                    that no polynomial is drawn across a hole in the points
+                    (None: only min_side applies)
+    :param min_balance: float, the least share of the window's weight (the
+                        Gaussian times the points' weights) on each side of
+                        x_out: below it, x_out is at the edge of the points
+                        and gets NaN rather than an extrapolated value
+                        (0: no check)
 
     :return: (derivs, errs), both (len(x_out), nderiv + 1): the value and its
              derivatives in x (NaN where there are too few points), and their
@@ -229,10 +261,12 @@ def scatter_savgol(x: np.ndarray, y: np.ndarray, x_out: np.ndarray,
         w = np.ascontiguousarray(w[good][order])
     sigma_x = window_fwhm / (2.0 * np.sqrt(2.0 * np.log(2.0)))
     radius = 1.5 * window_fwhm
+    gap = np.inf if max_gap is None or max_gap <= 0 else float(max_gap)
     w_fit = w
     for it in range(clip_iter + 1):
         coeffs, errors, msr = _fit(x, y, w_fit, x_out, sigma_x, radius,
-                                   int(polyorder), int(min_side))
+                                   int(polyorder), int(min_side), gap,
+                                   float(min_balance or 0.0))
         if it == clip_iter or sigma_clip <= 0:
             break
         # the residuals in units of each point's own error, against the RMS

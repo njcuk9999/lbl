@@ -845,6 +845,27 @@ params.set(key='TEMPLATE_BSD_OBS_CLIP', value=2.0, source=__NAME__,
            desc='BSD template: clip of the detector pixels whose median '
                 'residual over the spectra exceeds this many sigma',
            dtype=float)
+# BSD: no template value where the nearest pixel on either side is further
+#   than this many window FWHM: in a hole of the pixels (a stretch every
+#   spectrum blanked, as PCA2D's corrected spectra do where the fit gave no
+#   weight), the local cubic would otherwise be drawn between the few pixels
+#   beyond the hole, and swing far from the spectrum at its edges. Half a
+#   FWHM is about two pixels at NIRPS's and SPIRou's sampling; a lone bad
+#   pixel does not make a hole
+params.set(key='TEMPLATE_BSD_MAX_GAP', value=0.5, source=__NAME__,
+           desc='BSD template: NaN where the nearest pixel on either side '
+                'is further than this many window FWHM (0: no limit)',
+           dtype=float)
+# BSD: no template value where less than this share of the window's weight
+#   (the Gaussian times the pixels' weights) is on one side of the point: at
+#   the edge of a hole the polynomial would be extrapolated from the other
+#   side. On TOI-756's 167 NIRPS spectra corrected by PCA2D, 0.1 took the
+#   99th percentile of the template's rms / flux (1180-1230 nm) from 0.029
+#   to 0.021, for 0.6% of the samples
+params.set(key='TEMPLATE_BSD_MIN_BALANCE', value=0.1, source=__NAME__,
+           desc='BSD template: NaN where less than this share of the '
+                "window's weight is on one side of the point (0: no limit)",
+           dtype=float)
 # BSD: the memory for the pixels of the orders read at once [GB]; more
 #   orders than fit are read in several passes over the files
 params.set(key='TEMPLATE_BSD_MEMORY', value=2.0, source=__NAME__,
