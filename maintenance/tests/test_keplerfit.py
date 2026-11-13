@@ -154,6 +154,66 @@ def test_the_report_s_figure_and_table(tmp_path):
         joint["planet_bic"])
 
 
+
+def test_delivered_and_corrected_are_as_wide_as_each_other(tmp_path,
+                                                           monkeypatch):
+    """The layout took the first column's y labels (planet, period, velocity,
+    O - C) out of that column: the delivered panels came out narrower than
+    the corrected ones (TOI1452's report, 2026-11-13)."""
+    before, after = _run("delivered", 3.0, 4), _run("corrected", 1.5, 5)
+    boxes = []
+    real = texreport._save
+
+    def spy(fig, path, name=None):
+        boxes.extend(ax.get_position() for ax in fig.axes)
+        return real(fig, path, name)
+    monkeypatch.setattr(texreport, "_save", spy)
+    texreport.figure_phase(before, after, PLANETS, str(tmp_path / "phase.pdf"))
+    # per planet: its orbit and residuals, delivered, then corrected
+    assert len(boxes) == 4 * len(PLANETS)
+    widths = [box.width for box in boxes]
+    assert max(widths) - min(widths) < 1e-9
+    for k in range(0, len(boxes), 4):
+        left, right = boxes[k], boxes[k + 2]
+        assert boxes[k + 1].x0 == pytest.approx(left.x0)
+        assert boxes[k + 3].x0 == pytest.approx(right.x0)
+        # side by side, a gap for the tick labels between them
+        assert right.x0 > left.x1 + 0.01
+
+
+
+def test_what_the_keplerian_fit_leaves_is_in_the_caption(tmp_path,
+                                                         monkeypatch):
+    """The rms of the residuals, the median error bar and the jitter, once
+    per series in the caption: in each residual panel the line ran into the
+    gap between the columns and off the figure on the right (TOI1452's
+    report, 2026-11-13)."""
+    before, after = _run("delivered", 3.0, 4), _run("corrected", 1.5, 5)
+    texts = []
+    real = texreport._save
+
+    def spy(fig, path, name=None):
+        texts.extend(t.get_text() for ax in fig.axes for t in ax.texts)
+        return real(fig, path, name)
+    monkeypatch.setattr(texreport, "_save", spy)
+    got = {}
+    texreport.figure_phase(before, after, PLANETS, str(tmp_path / "phase.pdf"),
+                           residuals=got)
+    assert not any("rms" in t for t in texts)
+    assert set(got) == {"delivered", "corrected"}
+    # the noisier series leaves more, and its error bars say so
+    assert got["delivered"]["rms"] > got["corrected"]["rms"] > 0
+    assert got["delivered"]["typical"] == pytest.approx(3.0, rel=0.3)
+    words = texreport.phase_residuals_words(got, ("delivered", "corrected"))
+    assert words.startswith("their rms %.2f m/s delivered and %.2f m/s"
+                            " corrected" % (got["delivered"]["rms"],
+                                            got["corrected"]["rms"]))
+    assert "jitter of %.2f and" % got["delivered"]["jitter"] in words
+    # without numbers, the general words
+    assert "median error bar" in texreport.phase_residuals_words(
+        {}, ("delivered", "corrected"))
+
+
 def test_the_two_mcmcs_find_the_orbits():
     t, v, e = _series()
     post = kf.posteriors(t, v, e, [B["period"], C["period"]], steps=600,

@@ -1436,14 +1436,19 @@ def _bin_marks(ax, centres, means, errors, label=None):
                 capsize=0, zorder=5, label=label)
 
 
-def figure_phase(before, after, planets, path, most=4):
+def figure_phase(before, after, planets, path, most=4, residuals=None):
     """The velocities folded at each known planet's period, delivered and
     corrected side by side on one scale, every known planet fitted at once
     (keplerfit), as circular orbits and as full Keplerians: in each panel
     the other planets of the Keplerian fit taken out, this planet's two
     orbits drawn and, for a transiting planet with a published K, the orbit
     it implies; under it, the residuals to the whole Keplerian fit at this
-    planet's phase."""
+    planet's phase.
+
+    `residuals`, a dict, receives what the Keplerian fit leaves in each
+    series, {label: dict(rms, typical, jitter)} in m/s (the rms of the
+    residuals, the median error bar, the fit's jitter), for the caption
+    (phase_residuals_words)."""
     known = [p for p in (planets or []) if isinstance(p, dict)]
     if not known:
         return None
@@ -1530,26 +1535,25 @@ def figure_phase(before, after, planets, path, most=4):
                 legend_from = main
             main.tick_params(labelbottom=False)
             _style(main)
-            # what the Keplerian fit of every planet leaves, at this phase:
-            #   the rms beside the median error bar, what the noise alone
-            #   would leave
-            ok = np.isfinite(o_c) & np.isfinite(x)
-            rms = float(np.sqrt(np.mean(o_c[ok] ** 2))) if ok.any() else np.nan
-            typical = float(np.nanmedian(np.asarray(run["e"])[ok])) \
-                if ok.any() else np.nan
+            # what the Keplerian fit of every planet leaves: the rms beside
+            #   the median error bar, what the noise alone would leave, and
+            #   the fit's jitter. One set per series, the same at every
+            #   planet's phase, so in the caption (residuals) rather than in
+            #   each panel, where it ran into the gap between the columns
+            #   and off the figure on the right
+            if residuals is not None and index == 0:
+                ok = np.isfinite(o_c)
+                residuals[run["label"]] = dict(
+                    rms=float(np.sqrt(np.mean(o_c[ok] ** 2)))
+                    if ok.any() else np.nan,
+                    typical=float(np.nanmedian(np.asarray(run["e"])[ok]))
+                    if ok.any() else np.nan,
+                    jitter=float(kep.jitter))
             _points(resid, x, o_c, run["e"], colour, None, size=2.0,
                     alpha=0.45)
             _bin_marks(resid, *_phase_bins(x, o_c, run["e"]))
             resid.axhline(0, color=MUTED, lw=0.6)
             resid.set_ylim(*rlim)
-            # inside the panel: a title there would open a gap between the
-            #   orbit and its residuals
-            resid.text(0.01, 0.96, "residuals to the Keplerian fit: %.2f m/s"
-                       " rms (errors %.2f, jitter %.2f)"
-                       % (rms, typical, kep.jitter), transform=resid.transAxes,
-                       ha="left", va="top", fontsize=5.8, color=INK,
-                       zorder=8, bbox=dict(facecolor="white", edgecolor="none",
-                                           alpha=0.8, pad=0.8))
             _style(resid)
         main_row[0].set_ylabel("%s\nP = %s d\nvelocity (m/s)"
                                % (planet["name"], ("%.6f" % planet["period"])
@@ -1571,6 +1575,16 @@ def figure_phase(before, after, planets, path, most=4):
     fig.get_layout_engine().set(h_pad=0.02, hspace=0.0)
     # the layout made once, then held: _named moves every axis down
     fig.canvas.draw()
+    # what the second column's tick labels need left of it, as drawn
+    renderer = fig.canvas.get_renderer()
+    room = 0.0
+    for k in range(1, len(pairs), 2):
+        for ax in pairs[k]:
+            ticks = [t.get_window_extent(renderer) for t in ax.get_yticklabels()
+                     if t.get_visible() and t.get_text()]
+            if ticks:
+                room = max(room, (ax.get_window_extent(renderer).x0
+                                  - min(b.x0 for b in ticks)) / fig.bbox.width)
     fig.set_layout_engine("none")
     # an orbit and its residuals touch: each residual panel grows up to
     #   the bottom of its orbit's (the layout leaves a pad between them)
@@ -1578,7 +1592,43 @@ def figure_phase(before, after, planets, path, most=4):
         top = main.get_position().y0
         box = resid.get_position()
         resid.set_position([box.x0, box.y0, box.width, top - box.y0])
+    # delivered and corrected as wide as each other, and every planet's
+    #   panels under the last one's: the layout takes the first column's y
+    #   labels (planet, period, velocity, O - C) out of that column, so the
+    #   delivered panels came out narrower than the corrected ones, and by
+    #   how much depended on each planet's label. One left edge for all (the
+    #   widest labels'), one right edge, and between the columns the room
+    #   the second one's tick labels need and a little more; never more
+    #   than the layout gave
+    lefts = [pairs[k][0].get_position() for k in range(0, len(pairs), 2)]
+    rights = [pairs[k][0].get_position() for k in range(1, len(pairs), 2)]
+    x0 = max(box.x0 for box in lefts)
+    x1 = min(box.x1 for box in rights)
+    gap = min(max(r.x0 - l.x1 for l, r in zip(lefts, rights)), room + 0.025)
+    width = (x1 - x0 - gap) / 2.0
+    for k, (main, resid) in enumerate(pairs):
+        start = x0 if k % 2 == 0 else x0 + width + gap
+        for ax in (main, resid):
+            box = ax.get_position()
+            ax.set_position([start, box.y0, width, box.height])
     return _save(fig, path, before.get("star"))
+
+
+def phase_residuals_words(residuals, labels):
+    """The caption's account of what the Keplerian fit leaves in each series
+    (figure_phase's `residuals`), in the order of `labels`; the general
+    words when a series has none."""
+    got = [(residuals or {}).get(label) for label in labels]
+    if not got or not all(got):
+        return ("their rms beside the median error bar and the fit's jitter")
+
+    def both(key):
+        return " and ".join("%.2f" % g[key] for g in got)
+    return ("their rms %s, beside median error bars of %s m/s and a fitted"
+            " jitter of %s m/s"
+            % (" and ".join("%.2f m/s %s" % (g["rms"], tex(label))
+                            for g, label in zip(got, labels)),
+               both("typical"), both("jitter")))
 
 
 def planet_posteriors(before, after, planets):
@@ -2791,6 +2841,9 @@ def velocity_section(star, before, after, numbers, folder, stale):
     # the MCMCs of the known planets' fits, circular and Keplerian: a figure
     #   after the folded velocities, and a table of every parameter
     posts = planet_posteriors(before, after, numbers.get("planets_known"))
+    # what the Keplerian fit leaves in each series, filled by figure_phase
+    #   for its caption: a tuple's items are made in order, the figure first
+    phase_residuals = {}
     drawn = [
         (figure_time(before, after, os.path.join(figures, base + "-time.pdf")),
          "%s: the velocities over the campaign" % name,
@@ -2904,7 +2957,8 @@ def velocity_section(star, before, after, numbers, folder, stale):
          % (" and of the temperature projection"
             if before.get("dtemp") is not None else "")),
         (figure_phase(before, after, numbers.get("planets_known"),
-                      os.path.join(figures, base + "-phase.pdf")),
+                      os.path.join(figures, base + "-phase.pdf"),
+                      residuals=phase_residuals),
          "%s: the velocities folded at the known planets' periods" % name,
          "The velocities folded at the period of each known planet (a"
          " confirmed planet of the NASA Exoplanet Archive, or a period the"
@@ -2930,10 +2984,11 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " is over twice its error); the $\\Delta$BIC of each fit, of each"
          " planet in it and of its eccentricity are in the table after the"
          " figures. Under each panel, touching it, the residuals to the"
-         " whole Keplerian fit at this planet's phase, their rms beside the"
-         " median error bar and the fit's jitter: what the fit leaves,"
-         " against what the noise alone would. A correction that left the"
-         " planets alone keeps $K$ and $e$."),
+         " whole Keplerian fit at this planet's phase, the same at every"
+         " planet's: %s; what the fit leaves, against what the noise alone"
+         " would. A correction that left the planets alone keeps $K$ and"
+         " $e$." % phase_residuals_words(phase_residuals,
+                                          (before["label"], after["label"]))),
         (figure_mcmc(posts, numbers.get("planets_known"), before, after,
                      os.path.join(figures, base + "-mcmc.pdf")),
          "%s: the posteriors of the planets' fits" % name,
