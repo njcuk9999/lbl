@@ -140,3 +140,37 @@ def test_the_noise_correlation_is_measured_beyond_the_first_block(tmp_path,
     outliers.noise_correlation(cube, np.load(fit), 51, 4, blocks=2, block=1000)
     # two blocks, spread over the grid rather than the first two
     assert seen == [(0, 1000), (2000, 3000)]
+
+
+def test_the_correct_stage_s_pass_says_how_far_it_has_got(tmp_path,
+                                                          monkeypatch):
+    """The correct stage's pass over the residual reads the cube block by
+    block, half an hour for a large cube on an external disk, and said
+    nothing at all meanwhile (TOI1452, SPIRou, 2026-11-13): narrated, it says
+    what it is about to do, how many blocks are done as it goes and how long
+    it took, and finds the same masks."""
+    from lbl.pca2d import progress
+    cube, fit_path = _cube(tmp_path)
+    said = []
+    monkeypatch.setattr(outliers, "log",
+                        lambda message, level="info": said.append(message))
+    monkeypatch.setattr(progress, "log",
+                        lambda message, level="info": said.append(message))
+    # a line at every block, rather than every half minute
+    monkeypatch.setattr(outliers, "bar",
+                        lambda total=None, desc="", unit="it":
+                        progress._Narrator(None, total, desc, unit, every=0.0))
+    fit = np.load(fit_path)
+    options = dict(block=700, bias_nsig=10.0, bias_samples=9)
+    quiet, _ = residual_outliers(cube, fit, 3.0, 51, **options)
+    assert not said
+    loud, _ = residual_outliers(cube, fit, 3.0, 51, narrate=True, **options)
+    text = "\n".join(said)
+    assert "first the residual's own correlation" in text
+    assert "residual correlation: 1/1 block," in text
+    assert "6 blocks of 700 grid columns" in text and "for its 24 rows" in text
+    assert "residual clip: 3/6 blocks" in text
+    assert "residual clip: 6/6 blocks" in text
+    assert "the residual's pass over the grid:" in text
+    for name in quiet:
+        assert np.array_equal(quiet[name], loud[name])

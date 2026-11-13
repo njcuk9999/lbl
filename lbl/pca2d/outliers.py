@@ -74,6 +74,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 import warnings
 
 import numpy as np
@@ -81,6 +82,7 @@ from astropy import constants
 
 from .grids import pixel_shift
 from .logger import log
+from .progress import bar, human
 from lbl.core.math import mad_to_sigma
 
 #: the light speed the resolution element is measured with, km/s
@@ -615,7 +617,7 @@ def residual_z(cube, fit, window, block=40000, chunk=16, blocks=None,
 
 
 def noise_correlation(cube, fit, window, lags, blocks=4, chunk=16, clip_at=5.0,
-                      block=40000):
+                      block=40000, narrate=False):
     """The residual's rho_1..rho_lags, measured on the run's own cube.
 
     A few blocks of `block` columns are enough: the whole point is the shape
@@ -627,6 +629,10 @@ def noise_correlation(cube, fit, window, lags, blocks=4, chunk=16, clip_at=5.0,
     for independent samples and every Z too large. When the spread blocks are
     empty, the others are tried in turn. Averaged over the chunks of rows,
     weighted by their valid samples.
+
+    `narrate` says how far it has got, every half minute (progress.bar): a
+    block is the cube read there and the model rebuilt for every row, a minute
+    or more on a slow disk.
     """
     from .twoframe import cube_grid_size
     m = int(cube_grid_size(cube))
@@ -635,6 +641,8 @@ def noise_correlation(cube, fit, window, lags, blocks=4, chunk=16, clip_at=5.0,
     spread = starts[::stride]
     order = spread + [s for s in starts if s not in spread]
     weights, total, used = 0.0, np.zeros(int(lags)), 0
+    pace = (bar(total=min(int(blocks), len(starts)), unit="block",
+                desc="residual correlation") if narrate else None)
     for c0 in order:
         if used >= int(blocks):
             break
@@ -650,6 +658,10 @@ def noise_correlation(cube, fit, window, lags, blocks=4, chunk=16, clip_at=5.0,
             weights += count
             found += count
         used += bool(found)
+        if pace is not None:
+            pace.update(int(bool(found)))
+    if pace is not None:
+        pace.close()
     if not weights:
         log("the residual has no valid sample in any block of the grid: its"
             " correlation is taken as zero", "warn")
@@ -663,7 +675,7 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
                       excess_nsig=None, excess_chi2=None, excess_samples=None,
                       excess_clip=10.0, bias_nsig=None, bias_samples=None,
                       bias_clip=5.0, star_frac=None, star_chi2=None,
-                      star_bias_nsig=None, within=None):
+                      star_bias_nsig=None, within=None, narrate=False):
     """(file -> (2, grid) mask of what to NaN, a report).
 
     Row 0 of each mask is the even orders, row 1 the odd ones, as
@@ -704,6 +716,13 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     runs before the correct stage and has to find what it will mask; with a
     margin as wide as the largest shift and the widest test window, the
     window's masks are the whole grid's.
+
+    `narrate`, for the correct stage's pass over the whole grid: what is about
+    to happen, then every half minute how many blocks are done and how long is
+    left, then how long it took. Each block is the cube read over its columns
+    (flux, sigma, transmission) and the model rebuilt there for every row; on
+    an external disk that is most of the time, and without these lines the log
+    stays silent for the half hour a large cube can take.
     """
     part = _pieces(cube, fit, window)
     n, m, names, parity = part["n"], part["m"], part["names"], part["parity"]
@@ -725,7 +744,15 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
             or (bool(star_bias_nsig) and bool(bias_samples))) and rho is None:
         lags = max(len(widths) - 1, int(excess_samples or 0),
                    int(bias_samples or 0), 8)
-        rho = noise_correlation(cube, fit, window, lags, chunk=chunk)
+        if narrate:
+            log("  first the residual's own correlation, on 4 blocks spread"
+                " over the grid: it sets what a window of samples is worth")
+            started = time.time()
+        rho = noise_correlation(cube, fit, window, lags, chunk=chunk,
+                                narrate=narrate)
+        if narrate:
+            log("  the residual's correlation measured in %s"
+                % human(time.time() - started), "value")
     rho = list(rho or [])
     # per order parity and per OBSERVER column, over every exposure: how many
     # were measured there, how many were flagged, and the z^2 of the rest
@@ -757,6 +784,16 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
     kept = np.zeros((2, span), dtype=np.int32)
     sum_z2 = np.zeros((2, span), dtype=float)
     flagged = 0
+    pace = None
+    if narrate:
+        width = span if block is None else min(int(block), span)
+        n_blocks = 1 if block is None else len(range(first, last, int(block)))
+        log("  the residual, block by block: %d blocks of %d grid columns,"
+            " each read from the cube (flux, sigma, transmission) with the"
+            " model rebuilt there for its %d rows, then tested"
+            % (n_blocks, width, n))
+        pace = bar(total=n_blocks, unit="block", desc="residual clip")
+        started = time.time()
     for (start, stop), c0, c1, inner, z in residual_z(
             cube, fit, window, block=block, chunk=chunk, columns=(first, last)):
         # the grid's columns c0:c1 are the arrays' d0:d1
@@ -827,6 +864,13 @@ def residual_outliers(cube, fit, nsig, window, block=40000, chunk=16,
                 taken[p, d0:d1] += gone.sum(axis=0)
                 kept[p, d0:d1] += np.isfinite(survivor).sum(axis=0)
                 sum_z2[p, d0:d1] += np.nansum(survivor ** 2, axis=0)
+        # the block's last rows: one more block done
+        if pace is not None and stop == n:
+            pace.update(1)
+    if pace is not None:
+        pace.close()
+        log("  the residual's pass over the grid: %s"
+            % human(time.time() - started), "value")
 
     frac = np.divide(taken, seen, out=np.zeros((2, span)), where=seen > 0)
     chi2 = np.divide(sum_z2, kept, out=np.zeros((2, span)), where=kept > 0)

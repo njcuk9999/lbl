@@ -1823,7 +1823,8 @@ def correct_many(model, args):
             excursion_nsig=excursion, excursion_samples=samples,
             excess_nsig=excess, excess_chi2=getattr(args, "excess_chi2", None),
             excess_samples=wide, bias_nsig=bias, bias_samples=bias_wide,
-            star_frac=star_frac, star_chi2=star_chi2, star_bias_nsig=star_bias)
+            star_frac=star_frac, star_chi2=star_chi2, star_bias_nsig=star_bias,
+            narrate=True)
         if clip_report["rho"]:
             rho = clip_report["rho"]
             log("  the residual's own autocorrelation: rho_1 = %.3f, rho_2 ="

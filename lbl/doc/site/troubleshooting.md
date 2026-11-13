@@ -19,6 +19,7 @@
 | what you see | what to check |
 |---|---|
 | the log is silent for long | a long step without a progress bar, or memory: look at the warnings atop the log and at the free memory |
+| the correct stage is slow after "clipping the residual" | it reads the cube block by block (flux, sigma, transmission) and rebuilds the model there: it says how many blocks, then every half minute how many are done and how long is left. A large cube on an external disk takes half an hour; two runs reading one external disk at once slow each other many times over |
 | "two instruments ticked" | keep one: one instrument per run |
 | a template is missing | LBL makes it, and says so, before measuring against it |
 | the report is unchanged after adding spectra | a product is made again when its inputs change: run the target again |
