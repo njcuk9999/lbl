@@ -203,6 +203,7 @@ def test_a_new_correction_moves_the_old_residuals_aside(tmp_path):
 
 def test_the_window_offers_it_and_files_it_as_a_product(tmp_path):
     from lbl.core.simbad import SUFFIXES
+    pytest.importorskip("lbl.gui")
     from lbl.gui import cleanup, i18n, lblinfo
     from lbl.gui.targets import DERIVED
     row = next(r for r in lblinfo.pca2d_options("NIRPS_HE")

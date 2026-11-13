@@ -123,7 +123,7 @@ def test_a_fit_of_the_name_of_a_kept_basis_updates_it_there(tmp_path):
 
 
 def test_the_window_lists_the_kept_bases_and_keeps_one(tmp_path):
-    from lbl.gui import lblinfo
+    lblinfo = pytest.importorskip("lbl.gui.lblinfo")
     data_dir = str(tmp_path)
     _basis_file(os.path.join(data_dir, 'pca2d', 'components'), 'a')
     _basis_file(os.path.join(data_dir, 'models', 'pca2d_SPIROU_CADC'), 'b')
@@ -202,7 +202,7 @@ def test_the_science_template_is_not_looked_for_beside_a_vetted_one(
 def test_a_basis_in_any_subfolder_of_models_is_found(tmp_path):
     # a basis put in another subfolder of models/ (here
     #   template_NIRPS_HE_CADC): LBL and the window look in every subfolder
-    from lbl.gui import lblinfo
+    lblinfo = pytest.importorskip("lbl.gui.lblinfo")
     data_dir = str(tmp_path)
     folder = os.path.join(data_dir, 'models', 'template_NIRPS_HE_CADC')
     head = fits.Header()

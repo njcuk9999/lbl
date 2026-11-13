@@ -17,7 +17,6 @@ from astropy.table import Table
 
 from lbl.core import astro, base_classes, parameters
 from lbl.core.astro import night_number, observatory_longitude
-from lbl.gui import targets
 from lbl.instruments import select
 from lbl.pca2d import config as spconfig
 from lbl.pca2d import diagnostics, lblscan, nights, reconstruct
@@ -167,6 +166,18 @@ def test_a_night_across_midnight_ut_is_one_night_everywhere():
     # without the observatory the summary counts no night, at no boundary
     rows = {label: text for label, text, _ in stats.summarise(table, None)}
     assert "Nights" not in rows and "Nightly rms" not in rows
+
+
+def _window_targets():
+    """the window's scan (lbl.gui.targets); its checks are skipped where the
+    window is not installed: a headless server, a checkout without the GUI,
+    which LBL and PCA2D do not need"""
+    return pytest.importorskip("lbl.gui.targets")
+
+
+def test_the_window_counts_a_la_silla_night_once():
+    targets = _window_targets()
+    rjd = JD - 2400000.0
     records = {str(i): dict(mjd=float(r - 0.5), instrument="NIRPS", berv=0.0)
                for i, r in enumerate(rjd)}
     assert targets.summary(records)["nights"] == 2
@@ -185,6 +196,11 @@ def test_a_mauna_kea_night_is_one_night_everywhere():
              series.ERROR: np.ones(5)}
     rows = {label: text for label, text, _ in stats.summarise(table, MAUNA_KEA)}
     assert rows["Nights"] == "2"
+
+
+def test_the_window_counts_a_mauna_kea_night_once():
+    targets = _window_targets()
+    rjd = JD_HAWAII - 2400000.0
     records = {str(i): dict(mjd=float(r - 0.5), instrument="SPIRou", berv=0.0)
                for i, r in enumerate(rjd)}
     assert targets.summary(records)["nights"] == 2

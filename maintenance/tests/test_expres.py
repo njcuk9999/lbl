@@ -112,7 +112,7 @@ def test_the_window_reads_an_expres_file(tmp_path):
     INSTRMNT and takes the date and the BERV as LBL's class does: the
     flux-weighted midpoint and its barycentric redshift."""
     from lbl.core.math import speed_of_light
-    from lbl.gui import targets
+    targets = pytest.importorskip("lbl.gui.targets")
     from lbl.instruments import expres
     primary = fits.PrimaryHDU()
     primary.header['INSTRMNT'] = 'EXPRES'
@@ -164,7 +164,7 @@ def _expres_file(path, snr=None):
 
 
 def test_the_window_reads_the_expres_snr_of_order_111(tmp_path):
-    from lbl.gui import targets
+    targets = pytest.importorskip("lbl.gui.targets")
     _expres_file(tmp_path / 'a.fits', snr=234.0)
     assert targets.read_file(str(tmp_path / 'a.fits'))['snr'] == 234.0
 
@@ -172,7 +172,7 @@ def test_the_window_reads_the_expres_snr_of_order_111(tmp_path):
 def test_only_the_expres_records_are_read_again(tmp_path, monkeypatch):
     """A record read by an older EXPRES reader is read again; the others
     are kept (READER_VERSION, not a new VERSION of the whole index)"""
-    from lbl.gui import targets
+    targets = pytest.importorskip("lbl.gui.targets")
     for name in ('EXP', 'OTHER'):
         (tmp_path / 'science' / name).mkdir(parents=True)
     _expres_file(tmp_path / 'science' / 'EXP' / 'a.fits', snr=200.0)
