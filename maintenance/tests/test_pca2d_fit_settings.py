@@ -47,12 +47,13 @@ def _cube(path, n=24, m=2400, dv=0.5):
     return m
 
 
-def _fit(tmp_path, monkeypatch, cube, name, weights=None):
+def _fit(tmp_path, monkeypatch, cube, name, weights=None, noise=False):
     outdir = str(tmp_path / name)
     os.makedirs(outdir)
     config = dict(twoframe=dict(n_star=0, n_earth=1, mean="star",
                                 star_basis="spline", template=False,
-                                leakage=False, dtype="float64", iters=3))
+                                leakage=False, dtype="float64", iters=3,
+                                noise_model=noise))
     if weights:
         config["weights"] = weights
     path = os.path.join(outdir, "config.yaml")
@@ -74,13 +75,18 @@ def test_the_pixel_snr_of_the_configuration_reaches_the_fit(tmp_path,
     m = _cube(cube)
     plain = _fit(tmp_path, monkeypatch, cube, "plain")
     strict = _fit(tmp_path, monkeypatch, cube, "strict",
-                  dict(min_pixel_snr=100.0))
+                  dict(min_pixel_snr=100.0), noise=True)
     right = slice(m // 2 + 10, m - twoframe.EDGE)
     assert np.any(plain["Q"][:, right])
     assert not np.any(strict["Q"][:, right])
     # recorded, and read back by the later readers of the cube
-    assert twoframe.fit_weight_settings(strict) == dict(
+    settings = twoframe.fit_weight_settings(strict)
+    assert {k: settings[k] for k in ("min_pixel_snr", "ln_clip_low",
+                                     "ramp_zero")} == dict(
         min_pixel_snr=100.0, ln_clip_low=None, ramp_zero=0.5)
+    # and the noise model the fit measured on its residuals, when asked
+    assert settings["noise_model"].alpha >= 0.5
+    assert "noise_model" not in twoframe.fit_weight_settings(plain)
     assert twoframe.fit_weight_settings(plain)["min_pixel_snr"] == 5.0
     masks = reconstruct.fit_weights_mask(
         cube, "common", 1.0, twoframe.fit_weight_settings(strict))

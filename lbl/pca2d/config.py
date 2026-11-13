@@ -397,6 +397,13 @@ DEFAULTS = {
         "template_berv_min_entries": 3,
         "max_mad": 10.0,
         "max_mad_rounds": 2,
+        # The weights from the noise the fit's own residuals show, rather
+        # than from the photon model alone (pca2d.noise): a first fit with
+        # the photon weights, the variance of its residuals fitted as alpha
+        # sigma^2 + modal + additive sigma^4, and the fit made again with
+        # those weights. False keeps the photon weights (the default until
+        # its effect on the velocities is measured).
+        "noise_model": False,
         "clip": 3.0,
         "min_snr_frac": 0.5,
         # Storage for the two (rows, pixels) arrays the fit lives in. float32

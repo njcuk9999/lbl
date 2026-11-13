@@ -152,9 +152,12 @@ general:
     min_snr: 1.0
     require_positive_flux: true
     max_nan_fraction: 0.9
-    max_sky_ratio: 4.0      # drop a sample where the sky emission the pipeline
-                            # subtracted was more than this many times the
-                            # stellar flux. null keeps everything.
+    max_sky_ratio: 4.0      # drop a sample where the sky emission LINES the
+                            # pipeline subtracted (the sky less its smooth
+                            # background, a running minimum over 51 pixels)
+                            # were more than this many times the stellar flux:
+                            # a smooth thermal background at the red end of K
+                            # is not masked. null keeps everything.
     isolated_window: 3      # drop a valid sample that has a gap within this many
                             # samples on BOTH sides. It passed every cut but its
                             # neighbourhood did not, so its high pass came from a
@@ -229,6 +232,10 @@ general:
     tie_parities: true
     max_mad: 10.0           # rejection threshold in ROBUST SIGMAS, 1.4826 x MAD
     max_mad_rounds: 2
+    noise_model: false      # true: weights from the noise of the fit's
+                            # residuals (photon scale, modal and additive
+                            # terms, pca2d.noise), the fit made again with
+                            # them; false keeps the photon weights
     clip: 3.0
     min_snr_frac: 0.5
     dtype: float32          # storage for the two (rows, samples) arrays the fit

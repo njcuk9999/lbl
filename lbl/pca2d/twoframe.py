@@ -176,6 +176,11 @@ def parse_args(argv=None):
                         " refit; 0 disables the cut. 10 sigma = 14.83 MAD")
     p.add_argument("--max-mad-rounds", type=int, default=None,
                    help="how many times to reject and refit at most")
+    p.add_argument("--noise-model", dest="noise_model", default=None,
+                   action=argparse.BooleanOptionalAction,
+                   help="after a first fit, weigh the samples by the noise its"
+                        " residuals show (photon scale, modal and additive"
+                        " terms, pca2d.noise) and fit again")
     p.add_argument("--holdout", choices=("even", "odd"), default=None,
                    help="CROSS-VALIDATION: hold out of the fit the nights of"
                         " even or odd rank (pca2d.diagnostics). They keep"
@@ -192,7 +197,8 @@ def parse_args(argv=None):
 # every option the YAML can supply; the CLI still wins over it
 CONFIGURABLE = ("n_star", "n_earth", "iters", "order", "tie_parities", "max_mad",
                 "template_berv_bin", "template_berv_min_entries",
-                "max_mad_rounds", "clip", "min_snr_frac", "template", "shift",
+                "max_mad_rounds", "noise_model", "clip", "min_snr_frac",
+                "template", "shift",
                 "kernel_halfwidth", "gap_guard", "leakage", "chunk", "dtype",
                 "velocity_term", "velocity_min_transmission", "mean",
                 "patience", "keep", "star_resolution", "star_basis",
@@ -1148,7 +1154,8 @@ def fit_weight_settings(fit):
     """The settings of the weights a fit was made with, from its fit.npz (a
     path or what np.load gave), for every later reader of its cube to weigh
     the samples as the fit did. A fit that does not record them was made
-    with the defaults."""
+    with the defaults, and one without a noise model (pca2d.noise) with the
+    photon sigma alone."""
     if isinstance(fit, (str, os.PathLike)):
         if not os.path.exists(fit):
             return weight_settings()
@@ -1160,9 +1167,15 @@ def fit_weight_settings(fit):
             return default
         value = float(np.asarray(fit[name]))
         return None if not np.isfinite(value) else value
-    return dict(min_pixel_snr=stored("min_pixel_snr", DEFAULT_MIN_PIXEL_SNR),
-                ln_clip_low=stored("ln_clip_low", None),
-                ramp_zero=stored("ramp_zero", DEFAULT_RAMP_ZERO))
+    from .noise import from_fit
+    out = dict(min_pixel_snr=stored("min_pixel_snr", DEFAULT_MIN_PIXEL_SNR),
+               ln_clip_low=stored("ln_clip_low", None),
+               ramp_zero=stored("ramp_zero", DEFAULT_RAMP_ZERO))
+    # the noise model the fit measured on its residuals, when it did
+    model = from_fit(fit)
+    if model is not None:
+        out["noise_model"] = model
+    return out
 
 
 def read_cube_files(path, dtype=np.float64, columns=None, lazy=False):
@@ -1737,7 +1750,7 @@ def load_cube(path, ln_clip_low=None, ramp_zero=DEFAULT_RAMP_ZERO,
               min_snr_frac=0.5,
               dtype=np.float64, columns=None, spill=None,
               min_pixel_snr=DEFAULT_MIN_PIXEL_SNR, with_sigma=False,
-              with_trans=False):
+              with_trans=False, noise_model=None, weights_only=False):
     """The observer-frame cube plus the weights, condensed from cube.py.
 
     `min_snr_frac` drops spectra whose band SNR is below that fraction of the
@@ -1759,6 +1772,13 @@ def load_cube(path, ln_clip_low=None, ramp_zero=DEFAULT_RAMP_ZERO,
     carry the telluric ramp as well; what is noise alone is the sigma.
     `with_trans` (with `with_sigma`) returns the telluric transmission of
     every sample too, sixth, None for a cube that has none.
+
+    `noise_model` (pca2d.noise.NoiseModel, the one a fit measured on its
+    residuals and saved in fit.npz) weighs each sample by the inverse of its
+    modelled variance, alpha sigma^2 + gamma + beta sigma^4, rather than of
+    the photon sigma^2; the cut on the pixel SNR stays on the photon sigma,
+    so that the same samples are masked. `weights_only` builds the weights
+    alone and returns (grid, None, weights, meta), the data not copied.
     """
     grid, data, sigma, trans, meta = read_cube_files(path, dtype, columns,
                                                     lazy=True)
@@ -1806,7 +1826,8 @@ def load_cube(path, ln_clip_low=None, ramp_zero=DEFAULT_RAMP_ZERO,
     n_rows = len(rows) if rows is not None else data.shape[0]
     n_cols = data.shape[1]
     # in memory, or mapped onto a file under `spill` when they will not fit
-    out = workspace((n_rows, n_cols), dtype, spill, tag="data")
+    out = None if weights_only else workspace((n_rows, n_cols), dtype, spill,
+                                              tag="data")
     w = workspace((n_rows, n_cols), dtype, spill, tag="weights")
     noise = workspace((n_rows, n_cols), dtype, spill, tag="sigma") \
         if with_sigma else None
@@ -1835,7 +1856,13 @@ def load_cube(path, ln_clip_low=None, ramp_zero=DEFAULT_RAMP_ZERO,
         # come from order overlaps that leave samples at the dying edge of
         # an order.
         with np.errstate(invalid="ignore", divide="ignore", over="ignore"):
-            wb = np.where(np.isfinite(s_blk) & (s_blk > 0), 1.0 / s_blk ** 2, 0.0)
+            if noise_model is None:
+                wb = np.where(np.isfinite(s_blk) & (s_blk > 0),
+                              1.0 / s_blk ** 2, 0.0)
+            else:
+                var = noise_model.variance(s_blk, grid[first:last])
+                wb = np.where(np.isfinite(s_blk) & (s_blk > 0)
+                              & np.isfinite(var) & (var > 0), 1.0 / var, 0.0)
         wb[~np.isfinite(d_blk)] = 0.0
         # THE PER-PIXEL THRESHOLD, and it is HERE that it acts: the cube
         # keeps only raw data and sigma, never the weights, so they are
@@ -1859,12 +1886,15 @@ def load_cube(path, ln_clip_low=None, ramp_zero=DEFAULT_RAMP_ZERO,
         # came in
         here = np.arange(first, last) if cols is None else cols[first:last]
         wb[:, (here < EDGE) | (here >= grid_size - EDGE)] = 0.0
-        d_blk[wb <= 0] = 0.0
         w[:, sl] = wb
-        out[:, sl] = d_blk
+        if out is not None:
+            d_blk[wb <= 0] = 0.0
+            out[:, sl] = d_blk
         if noise is not None:
             noise[:, sl] = np.where(wb > 0, s_blk, np.nan)
     del sigma, trans, data
+    if weights_only:
+        return grid, None, w, meta
     if with_trans and noise is not None:
         return grid, out, w, meta, noise, tr_out
     if noise is not None:
@@ -3080,6 +3110,28 @@ def replot(outdir, cube=None):
               " skipping correlations.pdf")
 
 
+def noise_from_fit(cube, residual, w, n_params, weighting, min_snr_frac):
+    """The noise model (pca2d.noise) from a fit's residuals, on a sample of
+    the grid's columns (noise.measure_columns): their photon sigma read from
+    the cube, the residual and the weights the fit's. None when too few."""
+    from . import noise as _noise
+
+    cols = _noise.measure_columns(residual.shape[1], EDGE)
+    grid_c, _, w_c, _, sig_c = load_cube(cube, min_snr_frac=min_snr_frac,
+                                         dtype=np.float64, columns=cols,
+                                         with_sigma=True, **weighting)
+    live = (np.asarray(w[:, cols]) > 0) & (w_c > 0)
+    residual_c = np.where(live, np.asarray(residual[:, cols], dtype=float),
+                          np.nan)
+    sigma_c = np.where(live, sig_c, np.nan)
+    rows = np.sum(live, axis=0)
+    rows = float(np.median(rows[rows > 0])) if np.any(rows > 0) else 0.0
+    # the fit's parameters per column over the rows it has there: the share
+    #   of each column's variance the fit itself took
+    dof = float(n_params) / rows if rows > 0 else 0.0
+    return _noise.measure(residual_c, sigma_c, grid_c, dof)
+
+
 def main(argv=None):
     args = parse_args(argv)
     if not args.outdir:
@@ -3588,7 +3640,13 @@ def main(argv=None):
     # over.
     rejected = (held.copy() if held is not None
                 else np.zeros(n_spectra, dtype=bool))
-    for mad_round in range(int(args.max_mad_rounds) + 1):
+    # THE NOISE MODEL (pca2d.noise): after the first round, the noise its
+    #   residuals show replaces the photon sigma in the weights, and the fit
+    #   goes on from where it is. One round more than the MAD cut alone
+    noise_pending = bool(getattr(args, "noise_model", False))
+    noise_model = None
+    mad_done = 0
+    for mad_round in range(int(args.max_mad_rounds) + 1 + int(noise_pending)):
         best = None
         best_chi2 = best_at = None
         worse = 0
@@ -3798,14 +3856,58 @@ def main(argv=None):
         log("  best iterate: %d, R2 = %.6f, %.4f of the raw weighted variance"
               " left" % (best_iter, 1 - chi2 / chi2_null, chi2 / chi2_raw))
 
+        # ---- the noise model: once, after the first round -----------------
+        reweighted = False
+        if noise_pending:
+            noise_pending = False
+            a_now, b_now, alpha_now, _ = joint_coeffs(
+                data, w, P, Q, shifter, delta, chunk=chunk, exposure=tie,
+                velocity_from=a_lin, velocity_mask=velocity_mask,
+                star_mean=star_mean, desc="noise model, coefficients")
+            model_residual(data, P, Q, a_now, b_now, shifter, delta, chunk,
+                           alpha=alpha_now, velocity_mask=velocity_mask,
+                           star_mean=star_mean, out=work)
+            n_params = (np.shape(P)[0] + np.shape(Q)[0] + 2
+                        + int(bool(velocity_term)))
+            noise_model = noise_from_fit(args.cube, work, w0, n_params,
+                                         weighting, args.min_snr_frac)
+            if noise_model is None:
+                log("  noise model: too few weighted samples to measure it;"
+                    " the photon weights stay", "warn")
+            else:
+                _, _, w_new, _ = load_cube(
+                    args.cube, min_snr_frac=args.min_snr_frac,
+                    dtype=np.dtype(args.dtype), spill=spill,
+                    noise_model=noise_model, weights_only=True, **weighting)
+                w_new[rejected] = 0.0
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    change = np.nanmedian(np.where(w0 > 0, w_new / w0,
+                                                   np.nan)[:, ::97])
+                log("  noise model from the residuals: var(ln f) = alpha"
+                    " sigma^2 + modal + additive sigma^4; %s. Median weight"
+                    " now %.2f of the photon one; fitting again with these"
+                    " weights" % (noise_model.describe(), change), "value")
+                chi2_before = chi2_null
+                w0[...] = w_new
+                del w_new
+                w = w0
+                chi2_null = weighted_power(data, w0, chunk)
+                # the raw variance in the same weights (the data before the
+                #   means are gone): scaled as the null one was
+                chi2_raw = chi2_raw * chi2_null / chi2_before
+                reweighted = True
+
         # ---- MAD cut: retire a spectrum the components disagree about ------
         # After the fit, not before: an outlier is only definable against the
         # other spectra's coefficients, which is what the fit just produced.
         # The rejected rows keep their place in every array and simply lose
         # their weight, so nothing downstream has to be re-indexed and
         # joint_coeffs leaves their coefficients at zero of its own accord.
-        if args.max_mad <= 0 or mad_round == int(args.max_mad_rounds):
+        if args.max_mad <= 0 or mad_done == int(args.max_mad_rounds):
+            if reweighted:
+                continue
             break
+        mad_done += 1
         a_now, b_now, _, _ = joint_coeffs(data, w, P, Q, shifter, delta,
                                           chunk=chunk, exposure=tie,
                                           velocity_from=a_lin,
@@ -3815,6 +3917,8 @@ def main(argv=None):
                              rejected)
         if not fresh.any():
             log("  MAD cut at %.1f sigma: nothing left to reject" % args.max_mad)
+            if reweighted:
+                continue
             break
         rejected |= fresh
         log("  MAD cut at %.1f sigma: rejecting %d rows (%d exposures) this"
@@ -3955,6 +4059,10 @@ def main(argv=None):
                                              ("ramp_zero", "ramp_zero"))},
                         clip_rows=clip_rows, clip_cols=clip_cols,
                         clip_factor=clip_factor, clip_nsig=float(args.clip),
+                        # the noise model the weights came from, for every
+                        #   later reader of the cube (fit_weight_settings)
+                        **(noise_model.arrays() if noise_model is not None
+                           else {}),
                         velocity_term=bool(velocity_term),
                         anc_labels=np.asarray(anc_labels, dtype="U32"),
                         anc_values=np.asarray(anc_values, dtype=float),

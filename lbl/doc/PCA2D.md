@@ -120,7 +120,7 @@ The short names: `velocity_term`, `iters`, `shrink`, `nsig_cut`,
 `bias_nsig`, `column_frac`, `column_chi2`, `weight`, `mask`, `mask_share`,
 `width_kms` (or `high_pass`), `dv`, `nightly_stack`, `bundle_minutes`,
 `bundle_berv`, `bundle_max`, `min_rjd`, `max_rjd`, `drs_modes`,
-`min_pixel_snr`, `windows`, `cache_directory`. An unknown key stops the run
+`min_pixel_snr`, `noise_model`, `windows`, `cache_directory`. An unknown key stops the run
 before anything is read, with the list of what is accepted.
 
 ## The residuals (`save_residuals`)
@@ -224,6 +224,15 @@ passed and the commonest reasons the others were rejected; the warning
 that counts the rejected exposures gives them too. In a joint fit, each
 object's own cube needs one row: its rows join the others'.
 
+Where the files carry the sky emission the pipeline subtracted (APERO's
+`OHLine`), a sample is dropped where the sky's emission LINES were more
+than `max_sky_ratio` (4) times the stellar flux, in the fit and in the
+corrected files: the sky less its smooth background (a running minimum
+over 51 pixels, smoothed as wide). Only a local maximum of the sky is
+masked; a smooth thermal background, several times the star at the red
+end of K, is not. APERO's `OHLine` is the lines alone, and the mask is then
+the sky/flux one.
+
 The correct stage stops too, before writing anything, when the common mask
 (the samples at least `mask_share` of the exposures weighted, all of them
 by default) keeps under 5% of the samples any exposure weighted: the
@@ -232,6 +241,39 @@ from them fail. It happens when a few exposures weight almost nothing (a
 pixel SNR under `min_pixel_snr` nearly everywhere, as in faint HARPS EGGS
 campaigns); the error names the three that weight least. In a joint fit it
 is a warning for that object and the run goes on.
+
+## The weights and the noise model
+
+The fit weighs each sample by the inverse of its variance in ln(flux). By
+default that is the photon model: 1 / (f T), f T the counts before the
+telluric division (so the photons the telluric correction amplifies are
+counted), scaled per order to the pipeline's SNR at the order's centre.
+Samples with a pixel SNR under `min_pixel_snr` (5) get no weight.
+
+`noise_model=True` measures the noise on the fit's own residuals instead.
+After a first round with the photon weights, the robust variance of the
+residuals, in bins of the photon sigma between nodes 1% apart in
+wavelength, is fitted as
+
+    alpha sigma^2 + modal(lambda) + additive(lambda) sigma^4
+
+- **alpha**, one photon scale, at least 0.5;
+- **modal**, a fixed fraction of the flux;
+- **additive**, the read noise of the extraction, the dark, the photons of
+  the subtracted backgrounds (the thermal emission at the red end of K).
+
+The last two are linear in ln(lambda) between the nodes. The fit then goes
+on with these weights, one round more, and the model is saved in
+`fit.npz`, so the figures, the masks and the correction weigh the samples
+the same way. The cut on the pixel SNR stays on the photon sigma: the model
+changes the weights, not what is masked. It needs no pair of exposures and
+no detector model, so it serves every instrument.
+
+On SPIRou the photon model misses a lot: consecutive exposures of TOI-2120
+scatter 1.16 times the photon model at 6000 e- per pixel and 1.77 times
+below 380 e-, and at 2260 nm 3 to 5 times. The baseline fit of SNR 20-40
+had a median reduced chi2 of 5.0; NIRPS's, which has no K band, 1.2 to 1.5.
+Off by default until its effect on the velocities is measured.
 
 ## Running it again
 

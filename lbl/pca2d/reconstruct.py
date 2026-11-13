@@ -96,8 +96,9 @@ def parse_args(argv=None):
     p.add_argument("--n-earth", type=int, default=None,
                    help="N, Earth components to remove (default: all in the fit)")
     p.add_argument("--max-sky-ratio", type=float, default=None,
-                   help="set to NaN any sample where the subtracted sky"
-                        " emission exceeded this many times the stellar flux."
+                   help="set to NaN any sample where the subtracted sky's"
+                        " emission lines (the sky less its smooth background)"
+                        " exceeded this many times the stellar flux."
                         " Must match quality.max_sky_ratio of the fit, or the"
                         " corrected files carry samples the model never saw")
     p.add_argument("--corrected-dir", default="corrected",
@@ -991,9 +992,9 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
         if e_sky:
             sky = np.asarray(out[e_sky].data, dtype=np.float64)
             if sky.shape == flux.shape:
-                with np.errstate(invalid="ignore", divide="ignore"):
-                    ratio = np.abs(sky) / np.where(flux > 0, flux, np.nan)
-                drown = np.isfinite(ratio) & (ratio > float(max_sky))
+                # the sky's lines only, not its smooth background: the mask
+                #   the fit's cube was made with (tfits.sky_drowned)
+                drown = sptf.sky_drowned(sky, flux, max_sky)
                 flux[drown] = np.nan
                 masked = int(drown.sum())
 
@@ -1003,7 +1004,7 @@ def correct_file(model, row, path, outdir, n_star=None, n_earth=None,
         out[e_flux].data = flux
     head = out[0].header
     if max_sky:
-        head["PCA2SKYR"] = (float(max_sky), "sky/flux above this was set to NaN")
+        head["PCA2SKYR"] = (float(max_sky), "sky lines/flux above this were set to NaN")
         head["PCA2SKYN"] = (masked, "samples removed as sky-dominated")
     head["PCA2REF"] = (True, "two-frame PCA correction applied")
     head["PCA2BERV"] = (float(row["berv"]), "km/s used to carry the star basis")

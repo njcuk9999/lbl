@@ -1684,6 +1684,24 @@ OPTIONS = {
          " l'étoile dont le résidu moyen sur les poses dépasse ce nombre de"
          " sigmas est masquée dans toutes les poses où elle tombe. Désactivé"
          " (vide) par défaut.")),
+    "noise_model": (
+        ("noise from the fit", "bruit mesuré sur le fit"),
+        ("Weigh the samples by the noise the fit's own residuals show,"
+         " rather than by the photon noise alone. After a first round, the"
+         " variance of the residuals is fitted as a photon scale, a fixed"
+         " fraction of the flux (modal noise) and a term independent of the"
+         " star (read noise of the extraction, the subtracted thermal"
+         " background at the red end of K), and the fit goes on with those"
+         " weights, one round more. The same samples are masked. Off by"
+         " default.",
+         "Pondère les échantillons par le bruit que montrent les résidus du"
+         " fit lui-même, plutôt que par le seul bruit de photons. Après une"
+         " première passe, la variance des résidus est ajustée en une"
+         " échelle de photons, une fraction fixe du flux (bruit modal) et un"
+         " terme indépendant de l'étoile (bruit de lecture de l'extraction,"
+         " fond thermique soustrait au bout de la bande K), et le fit"
+         " continue avec ces poids, une passe de plus. Les mêmes"
+         " échantillons sont masqués. Désactivé par défaut.")),
     "min_pixel_snr": (
         ("least pixel SNR", "SNR minimal par pixel"),
         ("A sample whose own SNR (1/σ of the log flux, from the photon"

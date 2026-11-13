@@ -257,9 +257,7 @@ def order_quality(payload: dict, config: dict):
     max_sky = config["quality"].get("max_sky_ratio")
     sky = payload.get("sky")
     if max_sky and sky is not None and sky.shape == flux.shape:
-        with np.errstate(invalid="ignore", divide="ignore"):
-            ratio = np.abs(sky) / np.where(flux > 0, flux, np.nan)
-        good &= ~(np.isfinite(ratio) & (ratio > float(max_sky)))
+        good &= ~sky_drowned(sky, flux, max_sky)
 
     # A WAVELENGTH SOLUTION THAT RUNS BACKWARDS IS NOT A SOLUTION. The
     # resampling is a spline, which requires increasing abscissae, and scipy
@@ -293,6 +291,57 @@ def order_quality(payload: dict, config: dict):
     fraction = good.mean(axis=1)
     orders = [o for o in wanted if 0 <= o < n_orders and fraction[o] >= min_fraction]
     return good, orders
+
+
+#: the width [pixels] of the running minimum, and of its smoothing, that
+#: gives the smooth background under the sky's emission lines (sky_drowned):
+#: wider than an OH line and its wings, narrower than the rise of the
+#: thermal background at the red end of K
+SKY_ENVELOPE_PIXELS = 51
+
+
+def sky_envelope(sky: np.ndarray, width: int = SKY_ENVELOPE_PIXELS
+                 ) -> np.ndarray:
+    """The smooth background under the sky's emission lines, per order (the
+    last axis): a running minimum over `width` pixels, smoothed by a running
+    mean as wide. NaN pixels are left out; an order with too few gets 0."""
+    from scipy.ndimage import minimum_filter1d, uniform_filter1d
+
+    sky = np.atleast_2d(np.asarray(sky, dtype=float))
+    out = np.zeros_like(sky)
+    for k in range(sky.shape[0]):
+        row = sky[k]
+        valid = np.isfinite(row)
+        if valid.sum() < width:
+            continue
+        low = minimum_filter1d(np.where(valid, row, np.inf), width,
+                               mode="nearest")
+        finite = np.isfinite(low)
+        low = np.where(finite, low, np.median(low[finite]))
+        out[k] = uniform_filter1d(low, width, mode="nearest")
+    return out
+
+
+def sky_drowned(sky: np.ndarray, flux: np.ndarray, max_sky: float
+                ) -> np.ndarray:
+    """The samples the sky's emission LINES drowned: the sky less its smooth
+    background (sky_envelope) above max_sky times the stellar flux.
+
+    ONLY A LOCAL MAXIMUM OF THE SKY IS MASKED. An OH line varies from one
+    exposure to the next and a percent of it left by its subtraction is a
+    percent of a line many times the star's flux, which no fixed component
+    absorbs. A smooth background does not: where a sky extension carries the
+    thermal emission at the red end of K, it can exceed the stellar flux
+    several times over along whole stretches of an order, and masking it
+    would cut the ends of the orders for what the high pass takes out.
+    APERO's OHLine is the lines alone (zero between them), and the mask is
+    then the sky/flux one.
+    """
+    sky = np.asarray(sky, dtype=float)
+    lines = sky - sky_envelope(sky).reshape(sky.shape)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ratio = lines / np.where(flux > 0, flux, np.nan)
+    return np.isfinite(ratio) & (ratio > float(max_sky))
 
 
 def _filled(values: np.ndarray, good: np.ndarray) -> np.ndarray:

@@ -122,3 +122,20 @@ def test_a_common_mask_left_empty_stops_the_correction():
     for value in bright.values():
         shared &= value
     reconstruct._enough_in_common(shared, set(bright), bright, 1.0)
+
+
+def test_only_the_sky_s_lines_drown_the_star():
+    """max_sky_ratio masks where the sky's emission LINES exceed the star,
+    not a smooth thermal background that does along a whole stretch"""
+    from lbl.pca2d import tfits
+
+    n = 2000
+    flux = np.full((2, n), 100.0)
+    sky = np.zeros((2, n))
+    sky[:, 500:504] = 1000.0                     # an OH line, 10x the star
+    sky[1] += np.linspace(0.0, 800.0, n)         # a thermal ramp to 8x
+    drowned = tfits.sky_drowned(sky, flux, 4.0)
+    assert drowned[0, 500:504].all() and drowned[0].sum() == 4
+    # the line still masked over the ramp, the ramp itself not
+    assert drowned[1, 500:504].all() and drowned[1].sum() <= 6
+    assert not drowned[1, 1500:].any()

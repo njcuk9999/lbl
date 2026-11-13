@@ -137,6 +137,7 @@ ALIASES = {
     'max_rjd': 'quality.max_rjd',
     'drs_modes': 'quality.drs_modes',
     'min_pixel_snr': 'weights.min_pixel_snr',
+    'noise_model': 'twoframe.noise_model',
     'windows': 'output.windows',
     'cache_directory': 'output.cache_directory',
 }
