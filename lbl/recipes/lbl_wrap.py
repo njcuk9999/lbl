@@ -258,10 +258,15 @@ def main(runparams: dict):
             pca2d = runparams['PCA2D']
             delivered = object_science
             # the delivered object measured first, so that the report can set
-            # its velocities beside the corrected ones (PCA2D compare=True)
+            # its velocities beside the corrected ones (PCA2D compare=True).
+            # Measured only: ONE REPORT per star, the corrected one's below,
+            # whose own pages hold the delivered velocities; a second PDF
+            # beside it (<object>_<template>.pdf next to
+            # <object>_pca2d_<template>.pdf) only confused
             if lbl_pca2d.compare(pca2d) and object_science not in measured:
                 _lbl_steps(object_science=object_science,
-                           object_comparison=object_comparison, **steps)
+                           object_comparison=object_comparison,
+                           report=False, **steps)
                 measured.add(object_science)
             # A JOINT FIT: every other star measured as delivered too, BEFORE
             #   it, since a star whose OBJECT_COMPARISON is another star needs
@@ -288,7 +293,7 @@ def main(runparams: dict):
                     _lbl_steps(object_science=object_sciences[other],
                                object_comparison=lbl_misc.wraplistcheck(
                                    object_comparisons, 'OBJECT_COMPARISON',
-                                   **kw_other), **steps_other)
+                                   **kw_other), report=False, **steps_other)
                     measured.add(object_sciences[other])
             pca2d_args = dict(instrument=instrument, data_dir=data_dir,
                               data_source=data_source, pca2d=pca2d,
@@ -403,11 +408,13 @@ def _missing_for_compute(keyword_args, **kwargs):
 
 def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                data_type, object_science, object_comparison, object_teff,
-               blaze_corr, blaze_file):
+               blaze_corr, blaze_file, report=True):
     """Template, mask, compute, compile and report, as asked, on one object.
 
     A function of its own so that a PCA2D run can measure the delivered
     object and then the corrected one. Returns the report's PDF, or None.
+    `report=False` measures without a report of its own: a PCA2D run's
+    delivered object, whose velocities the corrected one's report holds.
     """
     lbl_report = None
     # ---------------------------------------------------------------------
@@ -518,7 +525,8 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
     # THE REPORT, at the very end and never fatal. It is an account of the
     # run, not a computation step: if it cannot be drawn, the run stays
     # good and this is said, the run is not lost.
-    if runparams.get('REPORT', True) and runparams['RUN_LBL_COMPILE']:
+    if report and runparams.get('REPORT', True) and \
+            runparams['RUN_LBL_COMPILE']:
         try:
             from lbl.report import make_report
             rdb = os.path.join(data_dir, 'lblrdb',

@@ -121,3 +121,35 @@ def test_cleaning_with_another_star_not_cleaned_stops(tmp_path, calls):
                               OBJECT_TEFF=3500, RUN_LBL_TELLUCLEAN=True))
     # it stops before cleaning anything
     assert not [name for name, _ in calls if name == 'lbl_telluclean']
+
+
+def test_a_pca2d_run_writes_one_report(tmp_path, calls, monkeypatch):
+    """The delivered object is measured, for the report to set its
+    velocities beside the corrected ones, but gets no report of its own:
+    <object>_<template>.pdf beside <object>_pca2d_<template>.pdf confused
+    (TOI1452 against VETTED_GJ1289, 2026-11-13). Its velocities are in the
+    corrected object's report, the only one."""
+    import lbl.report
+    from lbl.recipes import lbl_pca2d
+    reports, merged = [], []
+    monkeypatch.setattr(lbl.report, 'make_report',
+                        lambda **kw: reports.append(kw['title'])
+                        or '%s.pdf' % kw['title'])
+    monkeypatch.setattr(lbl_pca2d, 'frozen_basis', lambda *a, **k: None)
+    monkeypatch.setattr(lbl_pca2d, 'main',
+                        lambda object_science, object_comparison, **kw:
+                        (object_science + '_pca2d', object_comparison))
+    monkeypatch.setattr(lbl_pca2d, 'report',
+                        lambda **kw: merged.append(kw))
+    lbl_wrap.main(_params(tmp_path, OBJECT_SCIENCE=['TOI1452'],
+                          OBJECT_COMPARISON=['VETTED_GJ1289'],
+                          DATA_TYPES=['SCIENCE'], OBJECT_TEFF=[3200],
+                          RUN_LBL_COMPILE=True, REPORT=True,
+                          PCA2D=dict(n_star=1)))
+    compiled = [kw['object_science'] for name, kw in calls
+                if name == 'lbl_compile']
+    assert compiled == ['TOI1452', 'TOI1452_pca2d']
+    assert reports == ['TOI1452_pca2d_VETTED_GJ1289']
+    assert len(merged) == 1
+    assert merged[0]['delivered'] == 'TOI1452'
+    assert merged[0]['lbl_report'] == 'TOI1452_pca2d_VETTED_GJ1289.pdf'

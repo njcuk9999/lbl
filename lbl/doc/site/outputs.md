@@ -61,7 +61,9 @@ false inclusion probability ([Hara et al.
 2022](https://ui.adsabs.harvard.edu/abs/2022A%26A...663A..14H/abstract)),
 the semi-amplitudes of known planets at their ephemerides and, with PCA2D,
 its own pages first (the river plots, the components, the velocities before
-and after).
+and after). With PCA2D, one report per star, the corrected one's,
+`<object>_pca2d_<template>.pdf`: the delivered object is measured for its
+velocities but gets no report of its own.
 
 The known planets (the NASA Exoplanet Archive's confirmed planets, and any
 period the configuration gives) are fitted together, so that none is read

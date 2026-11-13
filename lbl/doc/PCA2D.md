@@ -59,7 +59,7 @@ report followed by LBL's.
 | `pca2d/cache/` | the registered cubes, rebuildable |
 | `pca2d/components/` | the components of every fit, observer and star (below) |
 | `models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/` | the observer bases one keeps (below): no cleanup touches `models/` |
-| `reports/<object>_pca2d_<object>_pca2d.pdf` | THE report: pca2d's, then LBL's |
+| `reports/<object>_pca2d_<template>.pdf` | THE report, the only one: pca2d's, then LBL's (`<template>` is `<object>_pca2d` with the star's own); the delivered object, measured for it, gets none of its own |
 
 The report, when `REPORT` is on: the star as SIMBAD describes it, the
 delivered and corrected velocities on the exposures they share with what got
@@ -89,7 +89,7 @@ optical spectrographs.
 |---|---|---|
 | `n_star` | 1 | the star's spectra, the template included: 1 is the template alone, not adjusted in depth; 2 adds one star-frame component with a free amplitude (never divided out); 0 is refused |
 | `n_earth` | the instrument's | observer-frame components fitted and divided out: without it, the class's `PCA2D_N_EARTH` (7 for NIRPS, 2 for HARPS); with `input_name`, all of the basis' |
-| `compare` | True | LBL measures the delivered object too, first, for the report |
+| `compare` | True | LBL measures the delivered object too, first, for the report: its velocities only, no report of its own |
 | `figures` | as `REPORT` | the river plots and the other figures of the correction |
 | `overwrite` | False | redo even when the same correction is on disk (as `SKIP_LBL_PCA2D=False`, below) |
 | `save_residuals` | False | also write the fit's residual of every exposure, star and observer components removed, as a log, into `science/<object>_residuals/` (below) |
