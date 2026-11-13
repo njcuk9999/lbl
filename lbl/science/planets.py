@@ -12,11 +12,12 @@ by its name and by every synonym the catalogs give it:
                                               your own solutions, for every
                                               run of this LBL
     lbl/resources/planets/known_planets.yaml  the published orbits of
-                                              confirmed planets (exoplanet.eu
-                                              and the NASA Exoplanet Archive,
-                                              with APERO's names), made by
-                                              maintenance/planets/
-                                              build_known_planets.py
+                                              confirmed planets whose K is
+                                              measured at more than 3 sigma
+                                              (exoplanet.eu and the NASA
+                                              Exoplanet Archive, with APERO's
+                                              names), made by maintenance/
+                                              planets/build_known_planets.py
 
 The first catalog that knows the star gives ALL its orbits: a personal entry
 replaces the published one, it does not add to it.

@@ -8,7 +8,9 @@ of confirmed planets whose K the report fits.
     python maintenance/planets/build_known_planets.py
 
 CONFIRMED PLANETS ONLY. A planet of exoplanet.eu is used only if its status
-is confirmed and it was published in a refereed paper; a planet whose
+is confirmed and it was published in a refereed paper (its TAP table no
+longer has the planet_status column since late 2026 and holds only its
+confirmed planets: then every row is); a planet whose
 confirmation the NASA Exoplanet Archive flags as questioned in the
 literature (pl_controv_flag) is left out, whatever exoplanet.eu says; and a
 value of the NASA archive is used only from a paper that published the
@@ -61,9 +63,20 @@ each part comes from:
              catalog's own paper for every planet, so the paper behind each
              value is not known
 
-A planet with no K or no epoch is listed under `not_used`, with why, so
-that LBL can say that the star has a companion it cannot follow. A star with
-no complete orbit is not written at all.
+MEASURED K ONLY: an orbit is used only if its K is measured at more than
+MIN_K_SIGMA (3) sigma, K over its error toward zero (NASA's pl_rvamperr2,
+exoplanet.eu's k_error_min; the upper error when that one is not given). A
+K given as a limit (NASA's pl_rvamplim, exoplanet.eu's K -K +0) or with no
+error is not a measurement: LBL would build the template on a velocity the
+data may not have (TOI-1696 b's 63 m/s, the upper limit of Beard et al.
+2022, was read as an orbit). A paper's solution whose K is not measured is
+not taken; the orbit put together from exoplanet.eu takes the first K that
+is (exoplanet.eu's, the NASA default solution's, the one from M sin i, its
+error scaled from that of M sin i).
+
+A planet with no K measured or no epoch is listed under `not_used`, with
+why, so that LBL can say that the star has a companion it cannot follow. A
+star with no complete orbit is not written at all.
 
 ephemerides.yaml holds every confirmed planet of the NASA archive with a time
 of inferior conjunction (pl_tranmid: the transit of a transiting planet, the
@@ -102,15 +115,15 @@ APERO_SHEET = ('https://docs.google.com/spreadsheets/d/'
                'tqx=out:csv&sheet={0}')
 APERO_TABS = ('main_list', 'pending_list')
 EXOEU_COLUMNS = ('target_name, alt_target_name, star_name, detection_type, '
-                 'mass_detection_type, planet_status, publication_status, '
-                 'period, '
+                 'mass_detection_type, publication_status, period, '
                  'eccentricity, eccentricity_error_min, '
-                 'eccentricity_error_max, periastron, k, t_peri, mass, '
-                 'mass_error_min, '
-                 'mass_sin_i, mass_sin_i_error_min, star_mass, inclination, '
-                 'ra, dec, external_link')
+                 'eccentricity_error_max, periastron, k, k_error_min, '
+                 'k_error_max, t_peri, mass, mass_error_min, mass_error_max, '
+                 'mass_sin_i, mass_sin_i_error_min, mass_sin_i_error_max, '
+                 'star_mass, inclination, ra, dec, external_link')
 NASA_COLUMNS = ('pl_name, hostname, hd_name, hip_name, tic_id, gaia_dr3_id, '
                 'pl_letter, pl_refname, soltype, pl_orbper, pl_rvamp, '
+                'pl_rvamperr1, pl_rvamperr2, pl_rvamplim, '
                 'pl_orbeccen, pl_orbeccenlim, '
                 'pl_orblper, pl_orbtper, pl_tranmid, ra, dec')
 #: exoplanet.eu: only the confirmed planets, and only those published in a
@@ -123,8 +136,12 @@ NASA_PLANETS = 'pl_controv_flag = 0'
 NASA_SOLTYPE = 'Published Confirmed'
 NASA_CONFIRMED = "{0} and soltype = '{1}'".format(NASA_PLANETS, NASA_SOLTYPE)
 #: the values of a solution, blanked when it is not NASA_SOLTYPE's
-NASA_VALUES = ('pl_rvamp', 'pl_orbeccen', 'pl_orbeccenlim', 'pl_orblper',
-               'pl_orbtper', 'pl_tranmid')
+NASA_VALUES = ('pl_rvamp', 'pl_rvamperr1', 'pl_rvamperr2', 'pl_rvamplim',
+               'pl_orbeccen', 'pl_orbeccenlim', 'pl_orblper', 'pl_orbtper',
+               'pl_tranmid')
+#: an orbit is used only if its K is measured at more than this many sigma,
+#:  K over its error toward zero (a limit, or a K with no error, is not)
+MIN_K_SIGMA = 3.0
 #: a mass from which K can be computed: one measured in radial velocity.
 #:  Not astrometry, whose masses can be limits read as values (a
 #:  short-period planet then gets a K of km/s); nor TTV
@@ -196,6 +213,33 @@ def eccentricity_limit(row: dict) -> bool:
     low, high = num(row['eccentricity_error_min']), num(
         row['eccentricity_error_max'])
     return bool(ecc > 0 and (high == 0 or low >= ecc))
+
+
+def is_limit(flag) -> bool:
+    """Whether a NASA limit flag (pl_rvamplim...) says the value is a limit
+    (1 upper, -1 lower)"""
+    return str(flag if flag is not None else '').strip() not in ('', '0')
+
+
+def k_unmeasured(k: float, lower, upper=None, limit: bool = False
+                 ) -> Optional[str]:
+    """None when K is measured at more than MIN_K_SIGMA sigma: K over its
+    error toward zero (`lower`; `upper` when it is not given). Otherwise
+    why not: a limit, a lower error that reaches 0 (K -K +0, exoplanet.eu's
+    way of giving a limit), no error at all, or too few sigma"""
+    if limit:
+        return 'K {0:.4g} m/s is a limit'.format(k)
+    errors = [abs(num(error)) for error in (lower, upper)]
+    errors = [error for error in errors if np.isfinite(error) and error > 0]
+    if not errors:
+        return 'K {0:.4g} m/s has no error'.format(k)
+    sigma = errors[0]
+    if sigma >= k:
+        return 'K {0:.4g} m/s is a limit (-{1:.4g})'.format(k, sigma)
+    if k / sigma <= MIN_K_SIGMA:
+        return 'K {0:.4g} +- {1:.2g} m/s is {2:.1f} sigma'.format(
+            k, sigma, k / sigma)
+    return None
 
 
 def semi_amplitude(msini_jup: float, star_mass: float, period: float,
@@ -280,29 +324,50 @@ def orbit(row: dict, nasa: Optional[dict], ephem: Optional[dict]) -> dict:
             # circular, with exoplanet.eu's own omega kept for its own tp
             ecc = 0.0
             sources.append('e = 0 (exoplanet.eu: a limit)')
-    # --- the semi-amplitude
-    k = num(row['k'])
-    if np.isfinite(k) and k > 0:
-        sources.append('K exoplanet.eu')
-    elif nasa is not None and num(nasa['pl_rvamp']) > 0:
-        k = num(nasa['pl_rvamp'])
-        sources.append('K NASA ' + strip_tags(nasa['pl_refname']))
+    # --- the semi-amplitude: the first of exoplanet.eu's, the NASA default
+    #     solution's and the one from M sin i that is measured (k_unmeasured)
+    candidates = []
+    if num(row['k']) > 0:
+        candidates.append((num(row['k']), k_unmeasured(
+            num(row['k']), row['k_error_min'], row['k_error_max']),
+            'K exoplanet.eu'))
+    if nasa is not None and num(nasa['pl_rvamp']) > 0:
+        candidates.append((num(nasa['pl_rvamp']), k_unmeasured(
+            num(nasa['pl_rvamp']), nasa['pl_rvamperr2'], nasa['pl_rvamperr1'],
+            is_limit(nasa['pl_rvamplim'])),
+            'K NASA ' + strip_tags(nasa['pl_refname'])))
+    star_mass = num(row['star_mass'])
+    msini, low, high = math.nan, math.nan, math.nan
+    if row['mass_detection_type'] in MEASURED_MASSES:
+        if np.isfinite(num(row['mass_sin_i_error_min'])):
+            msini = num(row['mass_sin_i'])
+            low, high = (num(row['mass_sin_i_error_min']),
+                         num(row['mass_sin_i_error_max']))
+        elif np.isfinite(num(row['mass_error_min'])):
+            incl = num(row['inclination'])
+            incl = 90.0 if not np.isfinite(incl) else incl
+            sin_i = math.sin(math.radians(incl))
+            msini = num(row['mass']) * sin_i
+            low, high = (num(row['mass_error_min']) * sin_i,
+                         num(row['mass_error_max']) * sin_i)
+    if (np.isfinite(msini) and msini > 0 and np.isfinite(star_mass)
+            and star_mass > 0 and np.isfinite(period) and period > 0
+            and 0 <= ecc < 1):
+        k_mass = semi_amplitude(msini, star_mass, period, ecc)
+        # its error, that of M sin i (the star's mass is not counted)
+        candidates.append((k_mass, k_unmeasured(
+            k_mass, k_mass * low / msini, k_mass * high / msini),
+            'K from M sin i and M star, exoplanet.eu'))
+    k, k_why = math.nan, None
+    for value, unmeasured, label in candidates:
+        if unmeasured is None:
+            k = value
+            sources.append(label)
+            break
     else:
-        k = math.nan
-        star_mass = num(row['star_mass'])
-        msini = math.nan
-        if row['mass_detection_type'] in MEASURED_MASSES:
-            if np.isfinite(num(row['mass_sin_i_error_min'])):
-                msini = num(row['mass_sin_i'])
-            elif np.isfinite(num(row['mass_error_min'])):
-                incl = num(row['inclination'])
-                incl = 90.0 if not np.isfinite(incl) else incl
-                msini = num(row['mass']) * math.sin(math.radians(incl))
-        if (np.isfinite(msini) and msini > 0 and np.isfinite(star_mass)
-                and star_mass > 0 and np.isfinite(period) and period > 0
-                and ecc < 1):
-            k = semi_amplitude(msini, star_mass, period, ecc)
-            sources.append('K from M sin i and M star, exoplanet.eu')
+        if candidates:
+            k_why = '; '.join('{0} ({1})'.format(unmeasured, label)
+                              for _, unmeasured, label in candidates)
     # --- the epoch
     epoch = dict()
     if ephem is not None:
@@ -329,7 +394,10 @@ def orbit(row: dict, nasa: Optional[dict], ephem: Optional[dict]) -> dict:
     why = []
     if not (np.isfinite(period) and period > 0):
         why.append('no period')
-    if not np.isfinite(k):
+    if not np.isfinite(k) and k_why:
+        why.append('K not measured at more than {0:g} sigma: {1}'.format(
+            MIN_K_SIGMA, k_why))
+    elif not np.isfinite(k):
         why.append('no K (and no mass measured in radial velocity)')
     if not epoch:
         if num(row['t_peri']) > MIN_JD and not np.isfinite(omega):
@@ -346,6 +414,8 @@ def orbit(row: dict, nasa: Optional[dict], ephem: Optional[dict]) -> dict:
             out['period'] = float(period)
         if np.isfinite(k):
             out['k'] = round(float(k), 3)
+        elif candidates:
+            out['k'] = round(float(candidates[0][0]), 3)
         return out
     out.update(period=float(period), k=round(float(k), 3),
                e=round(float(ecc), 5), omega=round(float(omega), 3))
@@ -367,10 +437,14 @@ def reference(refname: str) -> str:
 
 def complete_solution(sol: dict) -> Optional[dict]:
     """A NASA solution (one paper) as an orbit, if it has all of it: P, K, an
-    epoch, and omega when it is eccentric. An eccentricity given as a limit
-    is a circular fit."""
+    epoch, and omega when it is eccentric, its K measured at more than
+    MIN_K_SIGMA sigma (k_unmeasured: not a limit). An eccentricity given as a
+    limit is a circular fit."""
     period, k = num(sol['pl_orbper']), num(sol['pl_rvamp'])
     if not (period > 0 and k > 0):
+        return None
+    if k_unmeasured(k, sol.get('pl_rvamperr2'), sol.get('pl_rvamperr1'),
+                    is_limit(sol.get('pl_rvamplim'))):
         return None
     ecc = num(sol['pl_orbeccen'])
     omega = num(sol['pl_orblper'])
@@ -460,11 +534,19 @@ def strip_tags(text: str) -> str:
 def build(path: str = PUBLISHED):
     """Query the three sources and write the catalog"""
     log('exoplanet.eu: querying {0}'.format(EXOEU_TAP))
+    # its status, when the table still has the column: it no longer does
+    #   (November 2026), holding only the confirmed planets (its CSV export,
+    #   which still gives the status, lists only those too)
+    has_status = 'planet_status' in {row['column_name'] for row in tap(
+        EXOEU_TAP, "SELECT column_name FROM TAP_SCHEMA.columns WHERE "
+                   "table_name = 'exoplanet.epn_core'")}
     exoeu = tap(EXOEU_TAP, 'SELECT {0} FROM exoplanet.epn_core'.format(
-        EXOEU_COLUMNS))
-    log('exoplanet.eu: {0} planets in all'.format(len(exoeu)))
+        EXOEU_COLUMNS + (', planet_status' if has_status else '')))
+    log('exoplanet.eu: {0} planets in all{1}'.format(
+        len(exoeu), '' if has_status else
+        ' (no planet_status column: the table holds confirmed planets only)'))
     exoeu = [row for row in exoeu
-             if row['planet_status'] == PLANET_STATUS
+             if (not has_status or row['planet_status'] == PLANET_STATUS)
              and row['publication_status'] == PUBLISHED_STATUS]
     log('exoplanet.eu: {0} confirmed planets published in a refereed '
         'paper'.format(len(exoeu)))
@@ -490,7 +572,7 @@ def build(path: str = PUBLISHED):
         NASA_TAP + '?' + urllib.parse.urlencode(dict(
             query='select pl_name, hostname, pl_refname, pl_pubdate, '
                   'default_flag, pl_orbper, pl_orbpererr1, pl_rvamp, '
-                  'pl_rvamperr1, pl_orbeccen, '
+                  'pl_rvamperr1, pl_rvamperr2, pl_rvamplim, pl_orbeccen, '
                   'pl_orbeccenlim, pl_orblper, pl_orbtper, pl_tranmid, '
                   'pl_tranmiderr1 from ps where {0}'.format(NASA_CONFIRMED),
             format='csv'))))))
@@ -656,6 +738,8 @@ def build(path: str = PUBLISHED):
             for star, short in variants:
                 stars[star]['names'].add(short)
     # --- write
+    n_weak = sum('K not measured' in planet.get('why', '')
+                 for entry in stars.values() for planet in entry['planets'])
     out, n_orbits, n_skipped, n_apero = dict(), 0, 0, 0
     for star in sorted(stars):
         entry = stars[star]
@@ -684,13 +768,15 @@ def build(path: str = PUBLISHED):
     header = HEADER.format(
         date=datetime.date.today().isoformat(), nstars=len(out),
         norbits=n_orbits, nskipped=n_skipped, napero=n_apero,
-        nobjects=len(objects))
+        nobjects=len(objects), nweak=n_weak, nsigma=MIN_K_SIGMA)
     with open(path, 'w') as handle:
         handle.write(header)
         yaml.safe_dump(dict(stars=out), handle, sort_keys=False,
                        default_flow_style=None, width=100, allow_unicode=True)
     log('{0}: {1} stars, {2} orbits, {3} planets not used, {4} stars with '
-        'an APERO name'.format(path, len(out), n_orbits, n_skipped, n_apero))
+        'an APERO name; {5} planets whose K is not measured at more than '
+        '{6:g} sigma left out'.format(path, len(out), n_orbits, n_skipped,
+                                      n_apero, n_weak, MIN_K_SIGMA))
 
 
 HEADER = """\
@@ -712,6 +798,11 @@ HEADER = """\
 # refereed paper, less those whose confirmation the NASA Exoplanet Archive
 # flags as questioned (pl_controv_flag); the NASA values come only from
 # papers that published the planet as confirmed.
+#
+# Measured K only: an orbit is used only if its K is more than {nsigma:g} times
+# its error toward zero. {nweak} planets whose K is a limit, has no error, or
+# is {nsigma:g} sigma or less are left out (under `not_used` when their star
+# has another orbit).
 #
 # Each orbit is, whenever one exists, ONE PAPER'S complete Keplerian solution
 # (P, K, e, omega, tp or t0), taken whole from the NASA Exoplanet Archive
