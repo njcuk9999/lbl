@@ -705,14 +705,13 @@ def make_dir(path: str, directory: str, kind: str,
     # else try to create directory
     else:
         try:
-            # make directory path
-            if subdir is None:
-                abspath.mkdir()
-            elif abspath.parent.exists():
-                abspath.mkdir()
-            else:
-                abspath.parent.mkdir()
-                abspath.mkdir()
+            # make directory path. exist_ok: another run started at the same
+            #   moment in the same DATA_DIR (a queue of wraps) may have made
+            #   it since the check above; that is not an error (it stopped
+            #   every run but the first with FileExistsError)
+            if subdir is not None:
+                abspath.parent.mkdir(exist_ok=True)
+            abspath.mkdir(exist_ok=True)
             # return absolute path directory
             return str(abspath)
         except Exception as e:
