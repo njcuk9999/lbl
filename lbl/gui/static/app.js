@@ -2371,6 +2371,9 @@ function exploreMessage(text) {
 
 /* the tables read: each set with its table */
 const shownSets = () => XP.sets.filter((set) => set.table);
+// the templates a table's curves come from: the one it was measured against,
+//   and a corrected star's own (loadTemplates)
+const templatesOf = (set) => [(set.table.template || {}).path, (set.table.pca2d_template || {}).path].join('+');
 
 async function loadExplorer() {
   if (!S.data_dir) return;
@@ -2459,7 +2462,7 @@ function addTable() {
    columns picked stay when all the tables have them */
 async function openSets() {
   const gen = ++XP.gen;
-  const templatesBefore = shownSets().map((set) => (set.table.template || {}).path).join('|');
+  const templatesBefore = shownSets().map(templatesOf).join('|');
   await Promise.all(XP.sets.map(async (set) => {
     const shown = shownOf(set);
     if (set.table && set.path === shown.path && set.mtime === shown.mtime) return;
@@ -2496,7 +2499,7 @@ async function openSets() {
   loadFips();
   loadStars();
   // the same templates (a run's two tables): seen where they were
-  const same = templatesBefore === sets.map((set) => (set.table.template || {}).path).join('|');
+  const same = templatesBefore === sets.map(templatesOf).join('|');
   if (same && XP.tplRange) loadTemplates(XP.tplRange[0], XP.tplRange[1]); else loadTemplates();
 }
 
@@ -2836,11 +2839,18 @@ function drawStars() {
 let templateAsked = '';
 let templateTimer = null;
 async function loadTemplates(lo, hi) {
+  // each table's template, the one its velocities were measured against
+  //   (one for the tables that share it); and for a table of PCA2D-corrected
+  //   spectra measured against another one, the corrected star's own, with
+  //   which LBL found its systemic velocity
   const groups = [];
-  shownSets().forEach((set) => {
-    const path = set.table.template ? set.table.template.path : `none:${set.path}`;
+  const add = (path, set, which) => {
     const group = groups.find((g) => g.path === path);
-    if (group) group.sets.push(set); else groups.push({ path, sets: [set] });
+    if (group) group.sets.push(set); else groups.push({ path, sets: [set], which });
+  };
+  shownSets().forEach((set) => {
+    add(set.table.template ? set.table.template.path : `none:${set.path}`, set, 'measured');
+    if (set.table.pca2d_template) add(set.table.pca2d_template.path, set, 'pca2d');
   });
   if (!groups.length) return;
   const n = Math.round(Math.max(400, $('template_plot').clientWidth || 1000));
@@ -2850,7 +2860,8 @@ async function loadTemplates(lo, hi) {
   const vsys = XP.rest ? (XP.vsys === null ? 'auto' : XP.vsys) : '';
   if (XP.showLines && !XP.lines) XP.lines = await api.get('/api/explore/lines');
   const data = await Promise.all(groups.map((group, i) => api.get('/api/explore/template', {
-    data_dir: S.data_dir, path: group.sets[0].path, lo: lo ?? '', hi: hi ?? '', n, tapas: i ? 0 : 1, vsys })));
+    data_dir: S.data_dir, path: group.sets[0].path, lo: lo ?? '', hi: hi ?? '', n, tapas: i ? 0 : 1, vsys,
+    which: group.which })));
   if (templateAsked !== key) return;
   XP.tpls = groups.map((group, i) => ({ ...group, data: data[i] }));
   XP.tplRange = lo === undefined ? null : [lo, hi];
@@ -2890,6 +2901,16 @@ function drawTemplate() {
   }
   div.hidden = false;
   const several = tpls.length > 1;
+  // a corrected star's own template takes its table's colour; the template
+  //   it was measured against, that of a table with no such one of its own,
+  //   else the text's
+  const owners = new Set(tpls.filter((tpl) => tpl.which === 'pca2d').flatMap((tpl) => tpl.sets));
+  const colourOf = (tpl) => {
+    if (!several) return css('--text');
+    if (tpl.which === 'pca2d') return setColour(tpl.sets[0]);
+    const free = tpl.sets.find((set) => !owners.has(set));
+    return free ? setColour(free) : css('--text');
+  };
   const traces = tpls.map((tpl) => {
     // several: each divided by its median over what is shown
     let y = tpl.data.y;
@@ -2897,9 +2918,10 @@ function drawTemplate() {
       const mid = median(y) || 1;
       y = y.map((v) => (v === null ? null : v / mid));
     }
-    const name = tpl.sets.map(tableName).join(', ');
+    // named by its template, and what LBL did with it
+    const name = `${tpl.data.template.object} · ${t(tpl.which === 'pca2d' ? 'template_role_vsys' : 'template_role_measured')}`;
     return { x: tpl.data.x, y, mode: 'lines', name, showlegend: several, legendgroup: 'templates',
-      line: { color: several ? setColour(tpl.sets[0]) : css('--text'), width: 1 }, xaxis: 'x', yaxis: 'y',
+      line: { color: colourOf(tpl), width: 1 }, xaxis: 'x', yaxis: 'y',
       hovertemplate: `%{x:.4f} nm<br>%{y:.4f}<extra>${several ? esc(tpl.data.template.name) : ''}</extra>` };
   });
   const tapas = tpls[0].data.tapas;

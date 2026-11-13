@@ -249,7 +249,8 @@ def read_rdb(path: str, data_dir: str = "") -> dict:
                 time=TIME if TIME in numeric else None,
                 times=[name for name in numeric if name in TIMES],
                 x=x, y=y, c=_first(DEFAULT_C, numeric),
-                berv=berv, template=template_of(path, data_dir))
+                berv=berv, template=template_of(path, data_dir),
+                pca2d_template=pca2d_template_of(path, data_dir))
 
 
 # =============================================================================
@@ -467,6 +468,12 @@ def template_of(path: str, data_dir: str = "") -> dict | None:
         stem = os.path.splitext(os.path.basename(path))[0]
         parts = stem.split("_")[1:]
         names = ["_".join(parts[i:]) for i in range(1, len(parts))]
+    return _find_template(names, folders, instrument, mode)
+
+
+def _find_template(names, folders, instrument="", mode=""):
+    """The first of `names` with an LBL_Template_<name>_*.fits in one of
+    `folders`: dict(path, name, object, instrument), or None."""
     suffixes = [s for s in ("%s_%s" % (instrument, mode), instrument) if s
                 and s != "_"]
     for name in names:
@@ -486,6 +493,27 @@ def template_of(path: str, data_dir: str = "") -> dict | None:
         return dict(path=candidate, name=os.path.basename(candidate),
                     object=name, instrument=instrument.upper() or None)
     return None
+
+
+def pca2d_template_of(path: str, data_dir: str = "") -> dict | None:
+    """For a table of PCA2D-corrected spectra measured against another
+    template (lbl_TOI5524_pca2d_VETTED_GJ3090.rdb), the corrected star's own
+    template, DATA_DIR/templates/LBL_Template_<science>_*.fits: the one LBL
+    found the star's systemic velocity with, and so where its fit started,
+    while the velocities were measured against the other. None for any
+    other table, or when it is the template of the measurement itself.
+    dict(path, name, object, instrument), as template_of."""
+    data_dir = data_dir or os.path.dirname(os.path.dirname(path))
+    science, _template = names_of(path, data_dir)
+    if PCA2D_MARK not in science:
+        return None
+    measured = template_of(path, data_dir)
+    instrument = (measured or {}).get("instrument") or ""
+    found = _find_template([science], [os.path.join(data_dir, "templates")],
+                           instrument.lower())
+    if found is None or (measured and found["path"] == measured["path"]):
+        return None
+    return found
 
 
 def _template_arrays(path: str):
@@ -613,10 +641,15 @@ def systemic(info: dict, data_dir: str) -> dict:
     from astropy.io import fits
     obj = info.get("object") or ""
     found = dict(value=None, source=None)
-    masks = sorted(glob.glob(os.path.join(data_dir, "masks",
-                                          "LBL_Mask_%s_*.fits" % obj)))
-    masks += sorted(glob.glob(os.path.join(os.path.dirname(info["path"]),
-                                           "LBL_Mask_%s_*.fits" % obj)))
+    # a PCA2D-corrected star's template: the star's own masks next, the
+    #   correction does not move it
+    names = [obj] + ([obj.split(PCA2D_MARK)[0]] if PCA2D_MARK in obj else [])
+    masks = []
+    for name in names:
+        masks += sorted(glob.glob(os.path.join(data_dir, "masks",
+                                               "LBL_Mask_%s_*.fits" % name)))
+        masks += sorted(glob.glob(os.path.join(
+            os.path.dirname(info["path"]), "LBL_Mask_%s_*.fits" % name)))
     for mask in masks:
         try:
             value = fits.getheader(mask).get(MASK_VELOCITY)
@@ -661,7 +694,7 @@ def lines_of_interest() -> list:
 
 def template_view(rdb: str, data_dir: str, lo=None, hi=None,
                   nbin: int = 1500, tapas: bool = True,
-                  vsys=None) -> dict:
+                  vsys=None, which: str = "measured") -> dict:
     """The template of a table over [lo, hi] nm (all of it when not given)
     and (tapas) the TAPAS transmission of each molecule over the same
     range, both cut to about nbin bins. `vsys` [km/s]: the template brought
@@ -669,8 +702,11 @@ def template_view(rdb: str, data_dir: str, lo=None, hi=None,
     of vsys), where the lines of a species are at their laboratory
     wavelengths; 'auto' for the systemic velocity found (systemic), None
     or '' for the template as it is. The TAPAS transmission stays in the
-    telescope's frame."""
-    info = template_of(rdb, data_dir)
+    telescope's frame. `which`: 'measured', the template the velocities
+    were measured against (template_of); 'pca2d', the corrected star's own,
+    which LBL found its systemic velocity with (pca2d_template_of)."""
+    info = (pca2d_template_of(rdb, data_dir) if which == "pca2d"
+            else template_of(rdb, data_dir))
     if info is None:
         return dict(template=None)
     wave, flux = _template_arrays(info["path"])

@@ -111,6 +111,47 @@ def test_a_table_its_errors_its_defaults_and_its_template(data):
     assert vetted["name"] == "LBL_Template_VETTED_GL1_spirou.fits"
 
 
+
+def _companion(data, stem, science, template):
+    _rdb(data / "lblrdb" / ("%s.rdb" % stem))
+    header = fits.Header(dict(LBL_OBJS=science, LBL_OBJC=template,
+                              LBLINSTR="SPIROU", LBLIMODE="CADC"))
+    fits.PrimaryHDU(header=header).writeto(data / "lblrdb"
+                                           / ("%s.fits" % stem))
+    return str(data / "lblrdb" / ("%s.rdb" % stem))
+
+
+def test_a_corrected_table_brings_its_star_s_template(data):
+    """PCA2D-corrected spectra measured against another star's template
+    (TOI5524_pca2d against VETTED_GJ3090, 2026-11-13): the template they
+    were measured against, and the corrected star's own, with which LBL
+    found its systemic velocity; nothing more for any other table."""
+    corrected = _companion(data, "lbl_GJ_1_pca2d_VETTED_GL1", "GJ_1_pca2d",
+                           "VETTED_GL1")
+    table = explore.read_rdb(corrected, str(data))
+    assert table["template"]["name"] == "LBL_Template_VETTED_GL1_spirou.fits"
+    assert table["pca2d_template"]["name"] == \
+        "LBL_Template_GJ_1_pca2d_spirou.fits"
+    # delivered spectra, and corrected ones against their own template
+    alone = _companion(data, "lbl_GJ_1_pca2d_GJ_1_pca2d", "GJ_1_pca2d",
+                       "GJ_1_pca2d")
+    assert explore.pca2d_template_of(alone, str(data)) is None
+    assert explore.read_rdb(str(data / "lblrdb" / "lbl_GJ_1_GJ_1.rdb"),
+                            str(data))["pca2d_template"] is None
+    # served on its own, in the star's rest frame by the star's own mask
+    (data / "masks").mkdir()
+    fits.PrimaryHDU(header=fits.Header(dict(SYSTVELO=-44701.0))).writeto(
+        data / "masks" / "LBL_Mask_GJ_1_full_spirou.fits")
+    view = explore.template_view(corrected, str(data), nbin=300,
+                                 tapas=False, vsys="auto", which="pca2d")
+    assert view["template"]["object"] == "GJ_1_pca2d"
+    assert view["vsys"]["value"] == pytest.approx(-44.701)
+    assert view["vsys"]["source"] == "LBL_Mask_GJ_1_full_spirou.fits"
+    measured = explore.template_view(corrected, str(data), nbin=300,
+                                     tapas=False)
+    assert measured["template"]["object"] == "VETTED_GL1"
+
+
 def test_the_template_is_cut_to_what_is_shown(data):
     rdb = str(data / "lblrdb" / "lbl_GJ_1_GJ_1.rdb")
     wide = explore.template_view(rdb, str(data), nbin=500)

@@ -363,7 +363,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(explore.template_view(
                         path, data_dir, query.get("lo"), query.get("hi"),
                         int(query.get("n") or 1500),
-                        query.get("tapas", "1") != "0", query.get("vsys")))
+                        query.get("tapas", "1") != "0", query.get("vsys"),
+                        query.get("which", "measured")))
                 return self.send_error(HTTPStatus.NOT_FOUND)
             if route == "/file":
                 path = query.get("path", "")

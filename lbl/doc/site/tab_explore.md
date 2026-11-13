@@ -4,7 +4,9 @@ The velocity tables of the data folder, column against column: a sequence
 of one star, several sequences overplotted (delivered against corrected,
 two templates, two instruments), their periodograms with the false inclusion
 probability, their histograms, and the template they were measured against
-over the atmosphere's transmission. Above the plot, a card per star shown:
+(with, for corrected spectra measured against another star's template, the
+corrected star's own, which gave LBL its systemic velocity) over the
+atmosphere's transmission. Above the plot, a card per star shown:
 what is known of it and its published planets.
 
 {{help explore | The tables and their flavours}}
