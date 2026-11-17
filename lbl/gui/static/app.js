@@ -499,8 +499,12 @@ function drawArchive() {
       el('div', { class: 'bar-text small', text: t('archive_progress', `${bar.label} ${whose} (${bar.home}/science/${bar.folder})`, bar.done, bar.total, bar.failed) + barTime(bar, ARCHIVE.now) }),
       el('div', { class: 'bar' }, el('div', { class: `bar-fill${bar.failed ? ' with-failed' : ''}`, style: `width:${share.toFixed(1)}%` })));
   }));
+  // a fetch that could not start, or whose thread died: said, in red
+  $('archive_progress').classList.toggle('error-text', fetch.state === 'failed');
   if (fetch.state === 'running') {
     $('archive_progress').textContent = '';
+  } else if (fetch.state === 'failed') {
+    $('archive_progress').textContent = t('archive_failed', fetch.why || '?');
   } else if (fetch.state === 'done' || fetch.state === 'stopped') {
     $('archive_progress').textContent = `${t('archive_done', (fetch.folders || []).map((f) => `science/${f}`).join(', '))}${fetch.failed ? ` · ${t('archive_progress', '', fetch.done, fetch.total, fetch.failed)}${fetch.why ? ` (${fetch.why})` : ''}` : ''}`;
   } else {

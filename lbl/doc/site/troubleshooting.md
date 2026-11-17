@@ -5,6 +5,7 @@
 | what you see | what to check |
 |---|---|
 | the window does not open | another program holds port 8765: the window takes the next free one and prints its address; or start it with `--port` |
+| an archive fetch does not start, "is a link to ..., which is not there" | the root, or the disk it is on, is not mounted: mount it, or choose another root |
 | files in `Downloads/` are not counted | they cannot be dispatched: the tree lists them under `Downloads/` with why (not a spectrum, an empty download, a file astropy cannot read) |
 | the first plan of a big folder is slow | each header is read once, the first time (on an external disk, the disk is slow to answer); the next plans read only new files |
 | a star is split in two folders | its files carry no place, or places far apart: rename one folder like the other, or move its files into it |

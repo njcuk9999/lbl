@@ -184,3 +184,48 @@ def test_several_stars_at_once_and_none_out_of_reach(tmp_path, monkeypatch):
     assert {(r["home"], r["folder"]) for r in search["groups"]} == {
         ("HARPS_None", "GJ1"), ("HARPS_None", "ADLeo"), ("SOPHIE", "ADLeo")}
     assert search["stars"]["AD Leo"]["place"].startswith("10:19:")
+
+
+def test_a_fetch_into_a_folder_that_is_not_there_does_not_start(tmp_path):
+    """A root that is a link to a disk not mounted: said, and no thread
+    (GJ1 NIRPS into lbl-demo, its disk unplugged, stayed at 0 of 168
+    without a word, 2026-11-17)"""
+    from lbl.gui import archives
+    dead = tmp_path / 'root'
+    os.symlink('/Volumes/nowhere_lbl_test/x', dead)
+    assert 'is its disk mounted?' in archives.unreachable(str(dead))
+    assert archives.unreachable(str(tmp_path)) == ''
+    box = archives.Archives()
+    box.search = dict(groups=[dict(id='g', n=2, have=0, label='NIRPS',
+                                   folder='GJ1', home='NIRPS_HE_ESO',
+                                   inst='NIRPS')])
+    box._groups = {'g': dict(obj='GJ1', spectra=[])}
+    status = box.start_fetch(str(dead), ['g'])
+    assert status['fetch']['state'] == 'failed'
+    assert 'which is not there' in status['error']
+    assert any(line['level'] == 'error' for line in status['log'])
+
+
+def test_a_fetch_whose_thread_dies_says_so(tmp_path, monkeypatch):
+    import time
+    from lbl.gui import archives
+    box = archives.Archives()
+    box.search = dict(groups=[dict(id='g', n=2, have=0, label='NIRPS',
+                                   folder='GJ1', home='NIRPS_HE_ESO',
+                                   inst='NIRPS')])
+    box._groups = {'g': dict(obj='GJ1', spectra=[])}
+
+    def boom(root, groups):
+        raise PermissionError('no writing here')
+    monkeypatch.setattr(box, '_fetch', boom)
+    box.start_fetch(str(tmp_path), ['g'])
+    for _ in range(50):
+        if box.status()['fetch']['state'] != 'running':
+            break
+        time.sleep(0.05)
+    status = box.status()
+    assert status['fetch']['state'] == 'failed'
+    assert status['fetch']['why'].startswith('PermissionError: no writing'
+                                             ' here')
+    assert [line for line in status['log'] if line['level'] == 'error'
+            and line['text'].startswith('the fetch stopped')]

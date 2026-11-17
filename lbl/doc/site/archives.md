@@ -17,7 +17,10 @@ reads of one star or several, and fetches those you tick into the root.
    the folder the star already has there, found by its place, if any), and
    the star appears in **My targets**.
 
-The log under the table says each archive's answer.
+The log under the table says each archive's answer. A root that is not
+there (a link to a disk not mounted) is said at the search, and the fetch
+does not start; a fetch or a search that stops on an error says it in red,
+with where it happened, instead of waiting.
 
 ## An example: GJ 581 with HARPS
 

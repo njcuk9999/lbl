@@ -107,6 +107,7 @@ body {
 .small { font-size: 0.82rem; }
 .muted { color: var(--muted); }
 .warn-text { color: var(--warn-text); }
+.error-text { color: var(--bad); }
 [hidden] { display: none !important; }
 .bg-orb { z-index: -1; opacity: var(--orb-opacity); }
 

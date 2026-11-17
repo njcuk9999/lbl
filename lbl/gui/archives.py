@@ -28,8 +28,10 @@ import datetime
 import json
 import os
 import re
+import sys
 import threading
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from . import dispatch
@@ -105,6 +107,20 @@ def provenance(folder: str):
             return json.load(handle)
     except (OSError, ValueError):
         return None
+
+
+def unreachable(folder: str) -> str:
+    """Why a data folder cannot be written into, "" when it can: not there,
+    or a link to a folder that is not there (a disk not mounted)"""
+    folder = os.path.expanduser(folder or "")
+    if not folder:
+        return "no data folder chosen"
+    if os.path.isdir(folder):
+        return ""
+    if os.path.islink(folder):
+        return ("%s is a link to %s, which is not there: is its disk"
+                " mounted?" % (folder, os.path.realpath(folder)))
+    return "%s is not there" % folder
 
 
 def split_targets(text) -> list:
@@ -252,8 +268,12 @@ class Archives:
             self._groups = {}
         self.say("search: %s, in %s" % (", ".join(targets),
                                         ", ".join(instruments)))
-        threading.Thread(target=self._search, args=(targets, instruments,
-                                                    data_dir, number),
+        if data_dir and unreachable(data_dir):
+            self.say("the spectra found cannot be fetched now: %s"
+                     % unreachable(data_dir), "warn")
+        threading.Thread(target=self._guarded,
+                         args=("search", self._search, targets, instruments,
+                               data_dir, number),
                          daemon=True).start()
         return self.status()
 
@@ -469,9 +489,17 @@ class Archives:
     # -- fetching ------------------------------------------------------------
     def start_fetch(self, data_dir: str, ids) -> dict:
         self._log_into(data_dir)
+        why = unreachable(data_dir)
         with self.lock:
             if self.fetch.get("state") == "running":
                 return self.status()
+            if why:
+                self.fetch = dict(state="failed", total=0, done=0, failed=0,
+                                  why=why, current="", folders=[], bars=[])
+        if why:
+            self.say("fetch: not started, %s" % why, "error")
+            return dict(self.status(), error=why)
+        with self.lock:
             rows = [r for r in self.search.get("groups", []) if r["id"] in ids]
             groups = [(r, self._groups[r["id"]]) for r in rows
                       if r["id"] in self._groups]
@@ -495,9 +523,34 @@ class Archives:
                 r.setdefault("target", self.search.get("target"))
                 if r.get("teff") is None:
                     r["teff"] = self.search.get("teff")
-        threading.Thread(target=self._fetch, args=(data_dir, groups),
+        threading.Thread(target=self._guarded,
+                         args=("fetch", self._fetch, data_dir, groups),
                          daemon=True).start()
         return self.status()
+
+    def _guarded(self, kind: str, work, *args) -> None:
+        """A search's or a fetch's thread: an exception that ends it is said
+        in the log, in red, with where it happened, and its state becomes
+        failed, rather than the page waiting on a thread that is gone (a
+        fetch into a folder on a disk not mounted stayed "running", 0 of 168,
+        without a word, 2026-11-17). The whole traceback goes to the
+        window's terminal."""
+        try:
+            work(*args)
+        except BaseException as exc:                      # noqa: BLE001
+            frames = traceback.extract_tb(exc.__traceback__)
+            where = (" (%s, line %d)" % (os.path.basename(frames[-1].filename),
+                                         frames[-1].lineno)
+                     if frames else "")
+            text = "%s: %s%s" % (type(exc).__name__, exc, where)
+            with self.lock:
+                if kind == "search":
+                    self.search.update(state="failed", error=text)
+                else:
+                    self.fetch.update(state="failed", why=text[:300],
+                                      current="")
+            self.say("the %s stopped: %s" % (kind, text), "error")
+            traceback.print_exc(file=sys.stderr)
 
     def stop_fetch(self) -> None:
         self._stop = True
