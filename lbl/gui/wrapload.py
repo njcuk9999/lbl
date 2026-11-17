@@ -24,7 +24,8 @@ from . import lblinfo
 #: the run parameters the window holds itself (the rest is kept as extra)
 MANAGED = {"INSTRUMENT", "DATA_SOURCE", "DATA_DIR", "DATA_TYPES",
            "OBJECT_SCIENCE", "OBJECT_COMPARISON", "OBJECT_TEFF", "PCA2D",
-           "RESPROJ_TABLES", lblinfo.SKIP_PCA2D}
+           "RESPROJ_TABLES", lblinfo.SKIP_PCA2D, "FAKE_KEPLERIAN",
+           "fake_keplerian"}
 
 
 class _Reader(ast.NodeVisitor):
@@ -123,7 +124,15 @@ def to_state(rparams: dict, instrument_hint: str = "") -> dict:
               if isinstance(v, (int, float))},
         lbl={}, pca2d_on="PCA2D" in rparams, pca2d={}, pca2d_extra={},
         skip_pca2d=rparams.get(lblinfo.SKIP_PCA2D),
-        resproj=bool(rparams.get("RESPROJ_TABLES")), extra={})
+        resproj=bool(rparams.get("RESPROJ_TABLES")), extra={},
+        injection=dict(on=False, signals=[]))
+    fake = rparams.get("FAKE_KEPLERIAN", rparams.get("fake_keplerian"))
+    if fake:
+        found, said = injection_state(fake)
+        if found is not None:
+            state["injection"] = dict(on=True, signals=found)
+        if said:
+            notes.append(said)
     switches = {row["key"] for row in lblinfo.lbl_switches()}
     for key, value in rparams.items():
         if key in switches:
@@ -152,6 +161,30 @@ def to_state(rparams: dict, instrument_hint: str = "") -> dict:
             notes.append("PCA2D keys kept as they are: %s"
                          % ", ".join(sorted(state["pca2d_extra"])))
     return dict(state=state, notes=notes)
+
+
+def injection_state(fake) -> tuple:
+    """The window's signals of a FAKE_KEPLERIAN (lbl.science.injection):
+    ([dict(k, period, phase, e, omega)], note). A signal given by its t0 or
+    tp gets the phase they mean, said; one the window cannot read gives
+    (None, why): the window then holds no injection test."""
+    from lbl.science import injection
+    try:
+        found = injection.signals(fake)
+    except Exception as exc:                              # noqa: BLE001
+        return None, "FAKE_KEPLERIAN not read, no injection test: %s" % exc
+    rows, moved = [], False
+    for signal in found:
+        phase = signal.get("phase")
+        if phase is None:
+            moved = True
+            phase = ((injection.EPOCH - injection.conjunction(signal))
+                     / signal["period"]) % 1.0
+        rows.append(dict(k=signal["k"], period=signal["period"],
+                         phase=round(float(phase), 6), e=signal["e"],
+                         omega=signal["omega"]))
+    return rows, ("FAKE_KEPLERIAN: t0 or tp given as the phase they mean at"
+                  " BJD %.1f" % injection.EPOCH if moved else "")
 
 
 def wraps_in(data_dir: str) -> list:

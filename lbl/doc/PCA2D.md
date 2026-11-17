@@ -297,6 +297,18 @@ A correction with no `done.json` beside it was interrupted and is made again
 in every case. `SKIP_LBL_PCA2D=True` with `overwrite=True` stops the run:
 they ask opposite things.
 
+## What it leaves of a signal: the injection test
+
+`FAKE_KEPLERIAN` in the wrap adds Keplerian signals to the BERV of the
+spectra (relativistically, at each spectrum's BJD), so that the star's lines
+follow them in the frame LBL and PCA2D take for the star's while the
+telluric lines stay put; each object is measured as `<object>_inj`, so that
+its own products are not touched. The report fits each signal by MCMC at its
+period, delivered and corrected, and gives the recovered K against the
+injected one and K corrected over K delivered. The signals are part of the
+correction's request: other signals, another correction. Details:
+[settings, injection test](site/tab_settings.md#injection-test).
+
 ## Components: saved, and read back
 
 Every fit writes its components to `DATA_DIR/pca2d/components/`, named as

@@ -20,7 +20,7 @@ const DEFAULTS = {
   extra: {}, pca2d_extra: {},
   skip_pca2d: null, min_rjd: null, max_rjd: null, resproj: false,
   name: '', name_auto: true, sub: 'local', archive_instruments: null,
-  naming: 'apero',
+  naming: 'apero', injection: { on: false, signals: [] },
 };
 const S = JSON.parse(JSON.stringify(DEFAULTS));
 let T = {};
@@ -1632,6 +1632,36 @@ function drawSwitches() {
   }));
   drawOverwrite();
   $('resproj').checked = Boolean(S.resproj);
+  drawInjection();
+}
+
+// ── an injection test: Keplerian signals added to the BERV of every
+//   target's spectra (FAKE_KEPLERIAN, lbl.science.injection). One signal to
+//   start with, more added; K and P must be given, the rest has a default
+const INJ_KEYS = [['k', 'inj_k', 0.1], ['period', 'inj_period', 0.001],
+  ['phase', 'inj_phase', 0.01], ['e', 'inj_e', 0.01], ['omega', 'inj_omega', 1]];
+const INJ_NEW = { k: '', period: '', phase: 0, e: 0, omega: 90 };
+function drawInjection() {
+  if (!S.injection || typeof S.injection !== 'object') S.injection = { on: false, signals: [] };
+  const inj = S.injection;
+  if (!Array.isArray(inj.signals) || !inj.signals.length) inj.signals = [{ ...INJ_NEW }];
+  $('inj_on').checked = Boolean(inj.on);
+  $('inj_box').hidden = !inj.on;
+  const changed = () => { wrapEdited = false; save(); };
+  const rows = inj.signals.map((signal, index) => el('tr', {},
+    el('td', { class: 'mono', text: String(index + 1) }),
+    ...INJ_KEYS.map(([key, , step]) => el('td', {}, el('input', {
+      type: 'number', step, value: signal[key] ?? '', class: 'small',
+      placeholder: key === 'k' || key === 'period' ? '?' : String(INJ_NEW[key]),
+      onchange: (event) => { signal[key] = event.target.value === '' ? '' : Number(event.target.value); changed(); },
+    }))),
+    el('td', {}, inj.signals.length > 1 ? el('button', {
+      type: 'button', class: 'button small', text: '\u00d7', title: t('inj_remove'), 'aria-label': t('inj_remove'),
+      onclick: () => { inj.signals.splice(index, 1); changed(); drawInjection(); },
+    }) : null)));
+  $('inj_table').replaceChildren(
+    el('thead', {}, el('tr', {}, el('th', { text: '#' }), ...INJ_KEYS.map(([, label]) => el('th', { text: t(label) })), el('th', {}))),
+    el('tbody', {}, rows));
 }
 
 function drawPerTarget() {
@@ -1647,7 +1677,7 @@ function drawPerTarget() {
     const away = {};
     TEMPLATES.forEach((tp) => { if (tp.here === false) away[tp.name] = tp.home || t('explore_root_home'); });
     const labelled = (n) => `${n} (${temps[n] ? Math.round(temps[n]) : '?'} K)${away[n] ? ` · ${away[n]}` : ''}`;
-    const others = TEMPLATES.map((tp) => tp.name).filter((n) => !/_pca2d(_|$)/.test(n) && !/_tc$/.test(n) && n !== name);
+    const others = TEMPLATES.map((tp) => tp.name).filter((n) => !/_pca2d(_|$)/.test(n) && !/_tc$/.test(n) && !/_inj(_|$)/.test(n) && n !== name);
     const choices = [...new Set([...others, ...S.ticked.filter((n) => n !== name)])]
       .sort((a, b) => (temps[a] || 1e9) - (temps[b] || 1e9));
     const own = S.teff[name] || target.teff || simbadTeff(name) || temps[name];
@@ -1886,6 +1916,7 @@ function buildState() {
     pca2d_on: S.pca2d_on, pca2d: S.pca2d, skip_pca2d: S.skip_pca2d,
     extra: S.extra, pca2d_extra: S.pca2d_extra,
     min_rjd: S.min_rjd, max_rjd: S.max_rjd, resproj: S.resproj,
+    injection: S.injection,
     name: S.name_auto ? '' : S.name,
     lang: S.lang,
     // the instrument each target's headers give, checked against the one chosen
@@ -3060,6 +3091,9 @@ async function init() {
   S.ticked = [];
   S.hidden_instruments = [];
   S.setup_manual = false;
+  // an injection test is never left on from a previous session: its
+  //   signals are kept, unticked
+  if (S.injection && typeof S.injection === 'object') S.injection.on = false;
   // a window of before the roots: its data folder is its root
   if (!S.root) S.root = S.data_dir;
   document.documentElement.dataset.theme = S.theme;
@@ -3124,6 +3158,8 @@ async function init() {
   $('pca2d_on').onchange = (event) => { S.pca2d_on = event.target.checked; save(); drawOptions(); wrapEdited = false; };
   $('skip_pca2d').onchange = (event) => { S.skip_pca2d = event.target.value === '' ? null : event.target.value === 'true'; save(); wrapEdited = false; };
   $('resproj').onchange = (event) => { S.resproj = event.target.checked; save(); wrapEdited = false; };
+  $('inj_on').onchange = (event) => { S.injection.on = event.target.checked; save(); wrapEdited = false; drawInjection(); };
+  $('inj_add').onclick = () => { S.injection.signals.push({ ...INJ_NEW }); save(); wrapEdited = false; drawInjection(); };
   $('run_name').oninput = (event) => { S.name = event.target.value.trim(); S.name_auto = false; save(); };
   $('name_auto').onclick = () => { S.name_auto = true; save(); build(); };
   $('wrap_text').oninput = () => { wrapEdited = true; highlightWrap(); };

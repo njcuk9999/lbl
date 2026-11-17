@@ -213,6 +213,10 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     #   (ephemerides.yaml, PLANETS): their K fitted together at their period
     #   and time of conjunction, the known orbits held fixed
     fit = _fit_ephemerides(ephemerides_of, table, planets)
+    # AN INJECTION TEST (lbl.science.injection): the signals added to the
+    #   BERV of the spectra, fitted by MCMC at their periods, and what was
+    #   recovered of each against what was injected
+    injected = _injection_fit(science_dir, table)
     if fit is not None:
         known_periods = list(known_periods or []) + [
             float(planet['period']) for planet in fit['planets']]
@@ -341,6 +345,13 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                              % (k, sk, abs(k) / sk if sk > 0 else 0), 'm/s'))
             rows.append(('Jitter of the K fit', '%.2f' % fit['jitter'],
                          'm/s'))
+        for row in (injected or dict()).get('rows') or []:
+            signal = row['signal']
+            rows.append(('Injected signal, P = %g d' % signal['period'],
+                         'K %.2f injected, %.2f +%.2f -%.2f recovered '
+                         '(%+.1f sigma)'
+                         % (signal['k'], row['k'][0], row['k'][2] - row['k'][0],
+                            row['k'][0] - row['k'][1], row['sigma']), 'm/s'))
         if lines:
             chi2 = [figures.activity_stats(table, key)[2]
                     for key, _, _ in lines]
@@ -349,7 +360,7 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                          '%d measured, most variable %s (chi2_r %.2g)'
                          % (len(lines), lines[top][1], chi2[top]), ''))
         built = _build(work, out, title, rdb_file, rows, drawn, missing,
-                       planets, fit)
+                       planets, fit, injected)
         if built is None:
             built = _fallback(out, drawn, missing)
         return built
@@ -391,6 +402,81 @@ def _fit_ephemerides(object_name, table, planets):
         log.warning('report: no fit of K at the published ephemerides '
                     '({0})'.format(exc))
         return None
+
+
+def _injection_fit(science_dir, table):
+    """An injection test's signals (lbl.science.injection, recorded for the
+    spectra of science_dir) and the MCMC of the velocities at their periods
+    (lbl.pca2d.keplerfit.posteriors): dict(signals, rows, error), rows what
+    was recovered of each (injection.recovery), None when the fit could not
+    be made; None for spectra of no injection test"""
+    from lbl.science import injection
+    found = injection.read(science_dir) if science_dir else None
+    if not found:
+        return None
+    out = dict(signals=found, rows=None, error=None)
+    try:
+        from lbl.pca2d import keplerfit
+        from lbl.report import series
+        post = keplerfit.posteriors(series.column(table, series.TIME),
+                                    series.column(table, series.VELOCITY),
+                                    series.column(table, series.ERROR),
+                                    [signal['period'] for signal in found])
+        if post is None:
+            out['error'] = 'too few velocities for the fit'
+            return out
+        out['rows'] = injection.recovery(post, found)
+        for row in out['rows']:
+            log.general('report: injected P = {0:g} d, K = {1:.2f} m/s: '
+                        'recovered {2:.2f} +- {3:.2f} m/s ({4:+.1f} sigma)'
+                        .format(row['signal']['period'], row['signal']['k'],
+                                row['k'][0],
+                                0.5 * (row['k'][2] - row['k'][1]),
+                                row['sigma']))
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('report: no fit of the injected signals ({0})'.format(
+            exc))
+        out['error'] = str(exc)
+    return out
+
+
+def _injection_section(injected):
+    """The page of an injection test: the signals added to the BERV, and
+    what the MCMC recovered of each, as LaTeX"""
+    from lbl.science import injection
+    lines = [r'\subsection*{The injection test}',
+             'Keplerian signals were added to the BERV of these spectra '
+             '(relativistically, at each spectrum\'s BJD; '
+             '\\texttt{lbl.science.injection}): %s (phases at BJD %.1f, '
+             'from the inferior conjunction). Each is fitted by MCMC at its '
+             'injected period, all at once (circular for a circular signal, '
+             'Keplerian otherwise; one offset, a jitter); $\\Delta K$ is the '
+             'recovered $K$ less the injected one, $\\sigma$ the half 16--84 '
+             'width of $K$\'s posterior, $\\Delta\\lambda$ the recovered '
+             'mean longitude less the injected one at the middle of the '
+             'campaign.' % (_escape(injection.describe(injected['signals'])),
+                            injection.EPOCH)]
+    if not injected.get('rows'):
+        lines.append(r'\par No fit: %s.' % _escape(injected.get('error')
+                                                    or 'none made'))
+        return '\n'.join(lines)
+    lines += [r'\begin{center}\small', r'\begin{tabular}{rrrrrr}',
+              r'\toprule',
+              r'$P$ (d) & $K$ injected & $K$ recovered & $\Delta K$ (m/s) & '
+              r'$\Delta K/\sigma$ & $\Delta\lambda$ (deg) \\',
+              r'\midrule']
+
+    def spread(values, digits):
+        mid, low, high = values
+        return '$%.*f^{+%.*f}_{-%.*f}$' % (digits, mid, digits, high - mid,
+                                            digits, mid - low)
+    for row in injected['rows']:
+        lines.append('%g & %.2f & %s & %s & %+.1f & %s \\\\'
+                     % (row['signal']['period'], row['signal']['k'],
+                        spread(row['k'], 2), spread(row['dk'], 2),
+                        row['sigma'], spread(row['dlam'], 0)))
+    lines += [r'\bottomrule', r'\end{tabular}', r'\end{center}']
+    return '\n'.join(lines)
 
 
 def _ephemeris_section(fit):
@@ -514,7 +600,7 @@ def _tapas(data_dir):
 
 
 def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
-           fit=None):
+           fit=None, injected=None):
     """Run pdflatex on the assembled document. None if LaTeX is not there."""
     from lbl.core.io import find_pdflatex
     pdflatex = find_pdflatex()
@@ -540,6 +626,8 @@ def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
         body.append(_planet_section(planets))
     if fit is not None:
         body.append(_ephemeris_section(fit))
+    if injected is not None:
+        body.append(_injection_section(injected))
     for name, path in drawn:
         body.append(r'\clearpage')
         body.append(r'\subsection*{%s}'

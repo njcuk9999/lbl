@@ -1681,6 +1681,10 @@ def figure_mcmc(posts, planets, before, after, path, most=4):
                 beyond.append("%s, %s: K = %.0f m/s" % (
                     run["label"], scenario.replace("keplerian", "Keplerian"),
                     np.median(k)))
+        # an injected signal: the K (and e) it was given, dotted
+        if planet.get("injected"):
+            ax_k.axvline(planet["injected"]["k"], color=INK, ls=":", lw=1.0,
+                         label="injected")
         if beyond:
             ax_k.text(0.98, 0.95, "off the axis:\n" + "\n".join(beyond),
                       transform=ax_k.transAxes, ha="right", va="top",
@@ -1692,6 +1696,11 @@ def figure_mcmc(posts, planets, before, after, path, most=4):
                       histtype="step", color=colour, lw=1.1, density=True)
             ax_w.hist(kep["omega_%d" % i], bins=60, histtype="step",
                       color=colour, lw=1.1, density=True)
+        if planet.get("injected"):
+            ax_e.axvline(planet["injected"]["e"], color=INK, ls=":", lw=1.0)
+            if planet["injected"]["e"] > 0:
+                ax_w.axvline((planet["injected"]["omega"] + 180.0) % 360.0
+                             - 180.0, color=INK, ls=":", lw=1.0)
         for ax, label in ((ax_k, "K (m/s)"), (ax_e, "e (Keplerian)"),
                           (ax_w, "$\\omega$ (deg, Keplerian)")):
             ax.set_xlabel(label, fontsize=7.5, color=INK)
@@ -1700,9 +1709,13 @@ def figure_mcmc(posts, planets, before, after, path, most=4):
         ax_k.set_ylabel("%s\nP = %s d" % (planet["name"], (
             "%.6f" % planet["period"]) if planet["period"] < 100
             else "%.3f" % planet["period"]), fontsize=7.5, color=PLANET)
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=4, fontsize=6.5,
-               frameon=False)
+    # every row's labels once (an injected K is marked on its own row)
+    legend = {}
+    for row in axes:
+        for handle, label in zip(*row[0].get_legend_handles_labels()):
+            legend.setdefault(label, handle)
+    fig.legend(list(legend.values()), list(legend), loc="lower center",
+               ncol=5, fontsize=6.5, frameon=False)
     fig.tight_layout(rect=(0.0, 0.05, 1.0, 1.0))
     return _save(fig, path, before.get("star"))
 
@@ -1960,6 +1973,77 @@ def mcmc_table(posts, planets, before, after, name):
                keplerfit.E_SIGMA, head, "\n".join(rows)))
 
 
+def injection_section(posts, planets, before, after, name):
+    """An injection test's account (lbl.science.injection): the signals
+    added to the BERV, and what the MCMC of the planets' fits recovered of
+    each in the delivered and the corrected velocities: K, its difference
+    to the injected one (in m/s and in units of its posterior's width), the
+    phase's, and K corrected over K delivered. "" for a star of no
+    injection test."""
+    from lbl.science import injection
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    found = [p["injected"] for p in known if p.get("injected")]
+    if not found:
+        return ""
+    first = next(i for i, p in enumerate(known) if p.get("injected"))
+    parts = ["\\subsubsection*{%s: the injection test}\n" % name,
+             "The spectra of %s carry %s injected Keplerian signal%s,"
+             " added to their BERV (relativistically, at each spectrum's"
+             " BJD): in the frame LBL and PCA2D take for the star's, its"
+             " lines follow %s, and the telluric lines stay where they"
+             " are. %s (phases at BJD %.1f, from the inferior"
+             " conjunction). %s"
+             % (name, len(found) if len(found) > 1 else "one",
+                "s" if len(found) > 1 else "",
+                "them" if len(found) > 1 else "it",
+                tex(injection.describe(found)), injection.EPOCH,
+                "Each is fitted with the star's other planets, at its"
+                " injected period, by the MCMC of the planets' fits below"
+                " (circular for a circular signal, Keplerian otherwise)."
+                " $\\Delta K$ is the recovered $K$ less the injected one,"
+                " also in units of the posterior's half 16--84 width"
+                " ($\\sigma$); $\\Delta\\lambda$ the recovered mean longitude"
+                " less the injected one at the middle of the campaign. A"
+                " correction that leaves the signal alone keeps $K$:"
+                " corrected over delivered near 1. The star's own velocity"
+                " at the same period, if it has one, is in the recovered"
+                " $K$ too.\n")]
+    if not posts:
+        parts.append("\n\\watch{No MCMC of the planets' fits: too few"
+                     " exposures for %d planet%s at once.}\n"
+                     % (len(known), "" if len(known) == 1 else "s"))
+        return "".join(parts)
+    rows = []
+    found_rows = {run["label"]: injection.recovery(posts[run["label"]], found,
+                                                   first)
+                  for run in (before, after)}
+    for j, signal in enumerate(found):
+        letter = tex(str(known[first + j].get("short")))
+        for run in (before, after):
+            row = found_rows[run["label"]][j]
+            rows.append(
+                "%s & %s & %.2f & %s & %s & %+.1f & %s%s \\\\"
+                % (letter, tex(run["label"]), signal["k"],
+                   _posterior(row["k"], 2), _posterior(row["dk"], 2),
+                   row["sigma"], _posterior(row["dlam"], 0),
+                   (" & e = %s" % _posterior(row["e"], 3)) if "e" in row
+                   else " & "))
+        scenario = found_rows[after["label"]][j]["scenario"]
+        rows.append("%s & corrected / delivered & & %s & & & & \\\\"
+                    % (letter, _posterior(injection.ratio(
+                        posts[after["label"]], posts[before["label"]],
+                        first + j, scenario), 3)))
+        rows.append("\\midrule")
+    rows = rows[:-1]
+    parts.append("\n\\begin{longtable}{l l r c c r c l}\n\\toprule\n"
+                 "signal & velocities & $K$ injected & $K$ recovered &"
+                 " $\\Delta K$ (m/s) & $\\Delta K/\\sigma$ &"
+                 " $\\Delta\\lambda$ (deg) & $e$ \\\\\n\\midrule\n"
+                 "\\endhead\n"
+                 "%s\n\\bottomrule\n\\end{longtable}\n" % "\n".join(rows))
+    return "".join(parts)
+
+
 def figure_periodograms(before, after, planets, path):
     lines = planet_lines(planets)
     # down to the shortest known period, which may be under a day (an
@@ -2147,6 +2231,22 @@ def known_planets(outdir, config, star, joint, facts, folder):
                             "source": "configuration"})
     planets.sort(key=lambda p: p["period"])
     return planets, got
+
+
+def injected_planets(tree, star):
+    """The Keplerian signals of an injection test (lbl.science.injection),
+    as planets of the report: their name, period, conjunction (t0, BJD) and
+    injected K, and the signal itself (`injected`). [] for a star of no
+    injection test, or without LBL's tree."""
+    from lbl.science import injection
+    if not tree:
+        return []
+    found = injection.read(os.path.join(tree, "science", str(star))) or []
+    return [{"name": "injected %d" % (i + 1), "short": "inj%d" % (i + 1),
+             "period": float(signal["period"]),
+             "t0": injection.conjunction(signal), "k": float(signal["k"]),
+             "source": "injected", "injected": signal}
+            for i, signal in enumerate(found)]
 
 
 def planet_labels(numbers):
@@ -2841,6 +2941,10 @@ def velocity_section(star, before, after, numbers, folder, stale):
     # the MCMCs of the known planets' fits, circular and Keplerian: a figure
     #   after the folded velocities, and a table of every parameter
     posts = planet_posteriors(before, after, numbers.get("planets_known"))
+    # AN INJECTION TEST: what each series recovered of the injected signals,
+    #   before the figures, since it is what such a run is for
+    parts.append(injection_section(posts, numbers.get("planets_known"),
+                                   before, after, name))
     # what the Keplerian fit leaves in each series, filled by figure_phase
     #   for its caption: a tuple's items are made in order, the figure first
     phase_residuals = {}
@@ -3338,6 +3442,9 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
             continue
         known, status = known_planets(outdir, config, star, joint,
                                       facts[star], folder)
+        # AN INJECTION TEST: its signals fitted with the star's planets,
+        #   last, and what was recovered of them said (injection_section)
+        known = known + injected_planets(tree, star)
         planets[star] = (known, status)
         import zlib
         numbers = star_numbers(before, after, [p["period"] for p in known],
@@ -3354,8 +3461,9 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
 
     for star in stars:
         if star not in planets:
-            planets[star] = known_planets(outdir, config, star, joint,
+            known, status = known_planets(outdir, config, star, joint,
                                           facts[star], folder)
+            planets[star] = (known + injected_planets(tree, star), status)
     # THE VELOCITY SERIES FIRST, right after the contents: what one opens a
     #   report for
     body = series_section(series, folder)

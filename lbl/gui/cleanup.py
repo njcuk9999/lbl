@@ -65,6 +65,8 @@ WHAT = dict(
     corrected="corrected spectra (remade from the fit; tar them first if"
               " they are someone's)",
     cleaned="telluric-cleaned spectra",
+    injected="an injection test's spectra: links to the target's, with the"
+             " signals added to their BERV",
     residuals="PCA2D's residuals of each exposure (remade from the fit,"
               " with save_residuals)",
     lblrv="LBL's per-exposure velocities (about ten minutes)",
@@ -159,6 +161,10 @@ def _survey(data_dir: str) -> list:
             out.append(_item(path, "rebuildable", "corrected"))
         elif "_residuals" in name:
             out.append(_item(path, "rebuildable", "residuals"))
+        elif name.endswith("_inj"):
+            # links to the target's spectra (removed as links) and the
+            #   injection test's record, made again by the next one
+            out.append(_item(path, "rebuildable", "injected"))
         else:
             out.append(_item(path, "rebuildable", "cleaned"))
     for folder, code in (("lblrv", "lblrv"), ("templates", "template"),

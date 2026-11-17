@@ -593,10 +593,12 @@ def object_velocities(name: str, comparison, data_dir: str, instrument: str,
 
 def write_request(path: str, objects: list, block: dict, cache_dir: str,
                   model_dir: str, suffix: str = SUFFIX,
-                  orbits: dict = None, velocities: dict = None) -> None:
+                  orbits: dict = None, velocities: dict = None,
+                  injection: dict = None) -> None:
     """The request as a pca2d configuration file: the nominal one, with one
-    block per object holding the same settings, and each object's orbits
-    (registration.orbits) when PLANETS found some."""
+    block per object holding the same settings, each object's orbits
+    (registration.orbits) when PLANETS found some, and an injection test's
+    signals (registration.injection), which make another cube."""
     nominal = read_nominal()
     output = nominal.setdefault('general', dict()).setdefault('output', dict())
     output['cache_directory'] = cache_dir
@@ -612,6 +614,10 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
         if found:
             nominal['objects'][name].setdefault('registration', dict())[
                 'velocities'] = found
+    for name, found in (injection or dict()).items():
+        if found:
+            nominal['objects'][name].setdefault('registration', dict())[
+                'injection'] = found
     for name, found in (orbits or dict()).items():
         if found:
             nominal['objects'][name].setdefault('registration', dict())[
@@ -779,6 +785,19 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         request['orbits'] = orbits
     if any(velocities.values()):
         request['velocities'] = velocities
+    # AN INJECTION TEST (lbl.science.injection): the signals added to the
+    #   BERV of an object's spectra are part of what makes its correction;
+    #   other signals, another correction. Only when there are some, so that
+    #   every other correction keeps its stamp
+    from lbl.science import injection
+    injected = {name: injection.read(os.path.join(science_root, name))
+                for name in objects}
+    injected = {name: found for name, found in injected.items() if found}
+    if injected:
+        request['injection'] = injected
+        for name, found in injected.items():
+            log('PCA2D: %s is an injection test, %s added to its BERV'
+                % (name, injection.describe(found)), 'info')
     # the basis by its content, and how it is divided out (in full: shrunk
     #   by this star's own significance, it would be dropped): another basis
     #   is made again
@@ -847,7 +866,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     write_request(request_file, objects, block,
                   os.path.join(pca2d_root, 'cache'),
                   os.path.join(data_dir, 'models'), suffix, orbits,
-                  velocities)
+                  velocities, injected)
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
                   names[name][0], work, log, science_subdir,

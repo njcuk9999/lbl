@@ -290,8 +290,11 @@ def berv_of(inst, header, from_header=None):
     barycentric one. So the question is put to it rather than answered here,
     and the day a format changes convention, LBL is the one that will know.
     """
+    from lbl.science.injection import InjectionError
     try:
         value = inst.get_berv(header)          # LBL returns m/s
+    except InjectionError:
+        raise
     except Exception:                                          # noqa: BLE001
         value = None
     if value is None:
@@ -314,9 +317,12 @@ def observer_berv(inst, header):
     follows it, and the observer's frame (input.to_observer) and the
     bundles of a night (input.bundle_berv) are made with it. NaN when the
     profile cannot say."""
+    from lbl.science.injection import InjectionError
     try:
         value = (float(inst.get_berv(header))
                  + float(inst.get_berv_transmission(header)))
+    except InjectionError:
+        raise
     except Exception:                                          # noqa: BLE001
         return float("nan")
     return value / 1000.0
@@ -327,7 +333,13 @@ def as_science(inst, path):
     object, the folder it is in, when the profile has none (a get_berv can
     read it, to give no BERV for an FP; without it, it raises, and the BERV
     would be read from the header instead), DATA_TYPE SCIENCE
-    (instrument())"""
+    (instrument()). And the folder of the spectrum, where get_berv looks for
+    an injection test's signals (lbl.science.injection): the profile is
+    shared by every file, of every object"""
+    try:
+        inst.spectrum_folder = os.path.dirname(os.path.abspath(str(path)))
+    except Exception:                                          # noqa: BLE001
+        pass
     try:
         if not inst.params.get("OBJECT_SCIENCE"):
             inst.params.set("OBJECT_SCIENCE", value=os.path.basename(
@@ -366,9 +378,12 @@ def profile_header(inst, path):
 def file_observer_berv(config, path, inst=None):
     """observer_berv of a file, its header read as the template recipe
     reads it"""
+    from lbl.science.injection import InjectionError
     try:
         inst = as_science(profile_of(config, inst), path)
         return observer_berv(inst, profile_header(inst, path))
+    except InjectionError:
+        raise
     except Exception:                                          # noqa: BLE001
         return float("nan")
 
@@ -898,6 +913,7 @@ def read_any(path, config, inst=None):
 def _read_any(path, config, inst=None):
     """read_any, without the star's frame"""
     if reads_natively(config):
+        from lbl.science.injection import InjectionError
         from . import tfits as sptf
         inp = config.get("input") or {}
         payload = sptf.read_tfits(path, inp.get("extensions"),
@@ -914,6 +930,8 @@ def _read_any(path, config, inst=None):
             if np.isfinite(applied):
                 meta["berv"] = applied
             meta["berv_obs"] = observer_berv(prof, header)
+        except InjectionError:
+            raise
         except Exception:                                      # noqa: BLE001
             meta.setdefault("berv_obs", meta.get("berv", np.nan))
         return payload

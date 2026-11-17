@@ -10,6 +10,7 @@ Created on 2021-03-19
 @author: cook
 """
 from typing import List
+import datetime
 import glob
 import os
 import re
@@ -28,6 +29,7 @@ from lbl.recipes import lbl_template
 from lbl.recipes import lbl_reset
 from lbl.instruments import select
 from lbl.resources import lbl_misc
+from lbl.science import injection
 
 # =============================================================================
 # Define variables
@@ -59,7 +61,9 @@ REMOVE_KEYS = [  # core
     # the pca2d precleaning, lbl_pca2d's and no other recipe's
     'PCA2D',
     # the end-of-run report
-    'REPORT']
+    'REPORT',
+    # an injection test, the wrap's own (lbl.science.injection)
+    'FAKE_KEPLERIAN', 'fake_keplerian']
 
 # Define the default values
 DEFAULTS = dict()
@@ -146,6 +150,18 @@ def main(runparams: dict):
     if runparams['RUN_LBL_RESET']:
         lbl_reset.main(instrument=instrument, data_dir=data_dir,
                        data_source=data_source, **keyword_args)
+    # -------------------------------------------------------------------------
+    # AN INJECTION TEST (lbl.science.injection): FAKE_KEPLERIAN's Keplerian
+    #   signals added to the BERV of every science object's spectra, which
+    #   are measured as <object>_inj (a folder of links to its spectra, with
+    #   the record of the signals): nothing the object's own runs made is
+    #   touched, and its template becomes <object>_inj's when it was its own
+    found = injection.signals(runparams.get(
+        'FAKE_KEPLERIAN', runparams.get('fake_keplerian')))
+    if found:
+        object_sciences, object_comparisons = _inject(
+            data_dir, runparams.get('SCIENCE_SUBDIR', 'science'),
+            object_sciences, object_comparisons, data_types, found)
     # -------------------------------------------------------------------------
     # mark the expected length if a list
     olen = len(object_sciences)
@@ -339,6 +355,65 @@ def _object_list(object_sciences) -> list:
     emsg = ('LBL_WRAP ERROR: OBJECT_SCIENCE must be an object name or a list '
             'of them (got {0})')
     raise base_classes.LblException(emsg.format(repr(object_sciences)))
+
+
+def _inject(data_dir: str, science_subdir: str, object_sciences: list,
+            object_comparisons, data_types, found: list) -> tuple:
+    """The injection test's objects: each science object's <object>_inj
+    made (lbl.science.injection.prepare), and the run's names moved to
+    them: (object_sciences, object_comparisons). A template that was a
+    science object of the run becomes that object's injected one; another
+    star's, or a vetted one, stays as it is.
+
+    What LBL made from <object>_inj with other signals (or none) is put
+    aside in DATA_DIR/pca2d/<object>_inj/superseded/<date>, since none of
+    it may be reused; PCA2D makes its correction again by itself (the
+    signals are in its request)."""
+    science_root = os.path.join(data_dir, science_subdir)
+    renamed = dict()
+    count = len(object_sciences)
+    for num, objname in enumerate(object_sciences):
+        data_type = lbl_misc.wraplistcheck(data_types, 'DATA_TYPES',
+                                           iteration=num, length=count)
+        if data_type != 'SCIENCE':
+            continue
+        name, previous = injection.prepare(science_root, objname, found,
+                                           log=log.info)
+        renamed[objname] = name
+        if previous != found:
+            _put_aside(data_dir, name, science_subdir, previous)
+    sciences = [renamed.get(objname, objname) for objname in object_sciences]
+    if isinstance(object_comparisons, (list, tuple)):
+        comparisons = [renamed.get(other, other)
+                       for other in object_comparisons]
+    else:
+        comparisons = renamed.get(object_comparisons, object_comparisons)
+    return sciences, comparisons
+
+
+def _put_aside(data_dir: str, name: str, science_subdir: str, previous):
+    """What LBL made from an injected object with other signals, moved to
+    DATA_DIR/pca2d/<name>/superseded/<date> (moved, not deleted: two
+    injections are compared), said with its size"""
+    import shutil
+    from lbl.recipes import lbl_pca2d
+    going = lbl_pca2d.lbl_products(data_dir, name, science_subdir)
+    if not going:
+        return
+    stamp = datetime.datetime.now().strftime('%y%m%d_%H%M%S')
+    aside = os.path.join(data_dir, 'pca2d', name, 'superseded', stamp)
+    total = 0
+    for path in going:
+        target = os.path.join(aside, os.path.relpath(path, data_dir))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        total += lbl_pca2d.size_of(path)
+        shutil.move(path, target)
+    log.warning('injection test: what LBL made from {0} with {1} ({2} items, '
+                '{3:.1f} GB) moved to {4}: made with other signals, none of '
+                'it may be reused'.format(
+                    name, injection.describe(previous) if previous
+                    else 'no signal recorded', len(going), total / 1e9,
+                    aside))
 
 
 def _tc_name(objname: str) -> str:

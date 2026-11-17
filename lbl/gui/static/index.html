@@ -263,6 +263,18 @@
             <p class="hint small" data-t="extra_hint"></p>
           </div>
         </div>
+        <!-- an injection test: Keplerian signals added to the BERV
+             (FAKE_KEPLERIAN, lbl.science.injection) -->
+        <div class="card span-3" id="injection_card">
+          <div class="row spread">
+            <h2><span data-t="inj_title"></span><span class="info" data-help="injection"></span></h2>
+            <label class="switch"><input type="checkbox" id="inj_on"><span class="hint small" data-t="inj_on_hint"></span></label>
+          </div>
+          <div id="inj_box">
+            <div class="table-wrap"><table class="data" id="inj_table"></table></div>
+            <button type="button" class="button small" id="inj_add" data-t="inj_add"></button>
+          </div>
+        </div>
       </div>
     </section>
 

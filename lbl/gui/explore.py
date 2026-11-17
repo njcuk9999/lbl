@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import threading
 
 import numpy as np
@@ -119,11 +120,18 @@ def names_of(path: str, data_dir: str = "") -> tuple:
     return science, template
 
 
+#: what an injection test adds to the name of a star's folder
+#: (science/<star>_inj, lbl.science.injection), before any PCA2D mark
+INJECTION_MARK = re.compile(r"_inj(?=_|$)")
+
+
 def object_flavour(science: str, template: str) -> tuple:
     """A table's star and its flavour: the star its science folder is of
-    (GJ_1028_pca2d: GJ_1028), and what else its name says, the PCA2D
-    variant and the template ('pca2d / GJ_1028_pca2d', 'VETTED_GL880')."""
-    star = science.split(PCA2D_MARK)[0] or science
+    (GJ_1028_pca2d: GJ_1028; GJ_1028_inj, an injection test's: GJ_1028),
+    and what else its name says, the injection, the PCA2D variant and the
+    template ('pca2d / GJ_1028_pca2d', 'inj_pca2d / GJ_1028_inj_pca2d',
+    'VETTED_GL880')."""
+    star = INJECTION_MARK.split(science.split(PCA2D_MARK)[0], 1)[0] or science
     variant = science[len(star):].lstrip("_")
     return star, ("%s / %s" % (variant, template) if variant else template)
 

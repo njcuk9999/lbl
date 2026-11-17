@@ -63,6 +63,43 @@ def _family(name) -> str:
     return FAMILY_ALIASES.get(family, family)
 
 
+#: an injection test's keys, as the window lays them out, and the value a
+#:    field left empty takes (k and period have none: they must be given)
+INJECTION_KEYS = (("k", None), ("period", None), ("phase", 0.0),
+                  ("e", 0.0), ("omega", 90.0))
+
+
+def injection_params(injection):
+    """FAKE_KEPLERIAN from the window's injection test (dict(on, signals:
+    [dict(k, period, phase, e, omega)])): one list per key, one entry per
+    signal; None when off; the reason, a string, when a signal is not one
+    lbl.science.injection takes."""
+    from lbl.science import injection as inj
+    injection = injection or {}
+    if not injection.get("on"):
+        return None
+    rows = [row for row in injection.get("signals") or []
+            if any(row.get(key) not in (None, "") for key, _ in
+                   INJECTION_KEYS)]
+    if not rows:
+        return "no signal: give at least K and P"
+    fake = {key: [] for key, _ in INJECTION_KEYS}
+    for index, row in enumerate(rows):
+        for key, default in INJECTION_KEYS:
+            value = row.get(key)
+            try:
+                value = _coerce(value, "float")
+            except (TypeError, ValueError):
+                return "signal %d: %s is %r, not a number" % (index + 1, key,
+                                                              value)
+            fake[key].append(default if value is None else value)
+    try:
+        inj.signals(fake)
+    except Exception as exc:                              # noqa: BLE001
+        return str(exc).replace("FAKE_KEPLERIAN: ", "")
+    return fake
+
+
 def build(state: dict) -> dict:
     """The run parameters of a wrap from the window's state: dict(rparams,
     errors, warnings). Nothing is written."""
@@ -208,6 +245,13 @@ def build(state: dict) -> dict:
     if state.get("resproj"):
         rparams["RESPROJ_TABLES"] = {
             "DTEMP3500": "temperature_gradient_3500.fits"}
+    # AN INJECTION TEST (lbl.science.injection): the signals the window
+    #   holds, one list per key, checked as the wrap will check them
+    fake = injection_params(state.get("injection"))
+    if isinstance(fake, str):
+        errors.append(say("err_injection", fake))
+    elif fake:
+        rparams["FAKE_KEPLERIAN"] = fake
     # what a loaded wrap held that the window does not: written back as it
     #   was (wrapload.to_state)
     from .wrapload import MANAGED
@@ -350,6 +394,17 @@ WRAP_SECTIONS = (
          "(a binary, a brown dwarf, a hot Jupiter)"),
     )),
 )
+#: the injection test's section, after LBL's steps
+WRAP_SECTIONS = WRAP_SECTIONS + (
+    ("injection test: Keplerian signals added to the BERV", (
+        ("FAKE_KEPLERIAN", "one list per key, one entry per signal: K [m/s], "
+         "period [d], phase at BJD 2460000.0 from the inferior conjunction, "
+         "eccentricity, omega [deg]. Each target is measured as "
+         "<target>_inj, a folder of links to its spectra; LBL and PCA2D add "
+         "the signals to their BERV (lbl.science.injection), and the report "
+         "says what was recovered of them"),
+    )),
+)
 #: above the PCA2D settings
 WRAP_PCA2D = ("the telluric and instrumental residuals are fitted in two "
               "frames (the star's and the observer's) and taken out of the "
@@ -434,10 +489,11 @@ def render(rparams: dict, name: str = "", python: str = "") -> str:
         # raw: the interpreter's path below is a Windows one there, whose
         #   backslashes (C:\Users) would otherwise be escapes
         'r"""',
-        "%s: LBL%s on %s (%s, %s), written by the LBL window (lbl_gui)"
+        "%s: LBL%s%s on %s (%s, %s), written by the LBL window (lbl_gui)"
         " on %s."
         % (name or "run", " with the PCA2D precleaning"
-           if "PCA2D" in rparams else "", targets,
+           if "PCA2D" in rparams else "", ", an injection test,"
+           if rparams.get("FAKE_KEPLERIAN") else "", targets,
            rparams.get("INSTRUMENT"), rparams.get("DATA_SOURCE"), when),
         "",
         "    %s %s" % (python, "wrap.py"),
@@ -553,6 +609,18 @@ def steps(rparams: dict) -> list:
     out = []
     targets = list(rparams.get("OBJECT_SCIENCE") or [])
     comparisons = dict(zip(targets, rparams.get("OBJECT_COMPARISON") or []))
+    # an injection test measures <target>_inj (lbl_wrap._inject), and its
+    #   template when it was a target's own
+    from lbl.science import injection
+    try:
+        injected = bool(injection.signals(rparams.get("FAKE_KEPLERIAN")))
+    except Exception:                                     # noqa: BLE001
+        injected = False
+    if injected:
+        renamed = {t: t + injection.MARK for t in targets}
+        comparisons = {renamed[t]: renamed.get(c, c)
+                       for t, c in comparisons.items()}
+        targets = [renamed[t] for t in targets]
     missing = _needed(rparams)
     pca2d = rparams.get("PCA2D")
     on = pca2d not in (None, False)

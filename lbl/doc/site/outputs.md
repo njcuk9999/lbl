@@ -10,6 +10,8 @@ ROOT/<INSTRUMENT>_<SOURCE>/     a DATA_DIR
     science/<obj>_tc/           telluric-cleaned (optical)
     science/<obj>_pca2d/        corrected by PCA2D
     science/<obj>_residuals/    PCA2D's residuals (with save_residuals)
+    science/<obj>_inj/          an injection test: links to the spectra and
+                                fake_keplerian.yaml, the signals
     templates/                  LBL_Template_<obj>_<instrument>.fits
     masks/                      the lines
     lblrv/<obj>_<template>/     the velocity of every line, one file per spectrum
@@ -64,6 +66,17 @@ its own pages first (the river plots, the components, the velocities before
 and after). With PCA2D, one report per star, the corrected one's,
 `<object>_pca2d_<template>.pdf`: the delivered object is measured for its
 velocities but gets no report of its own.
+
+An [injection test](tab_settings.md#injection-test) adds a section: the
+signals added to the BERV, and for each, fitted by MCMC at its period with
+the star's other planets (circular for a circular signal, Keplerian
+otherwise), the K recovered from the delivered and the corrected
+velocities, its difference to the injected one in m/s and in units of its
+posterior's half 16-84 width, the difference of mean longitude at the middle
+of the campaign, and K corrected over K delivered (1: the correction left
+the signal alone). The MCMC figure marks the injected K and e. LBL's own
+report of an injected object (`<obj>_inj`, `<obj>_inj_pca2d`) gives the same
+for its one series.
 
 The known planets (the NASA Exoplanet Archive's confirmed planets, and any
 period the configuration gives) are fitted together, so that none is read

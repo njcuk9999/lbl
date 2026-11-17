@@ -64,9 +64,9 @@ PERSONAL = 'personal_planet_catalog.yaml'
 #: the confirmed planets with a published ephemeris (period and time of
 #:  inferior conjunction), K known or not, for the report's fit of their K
 EPHEMERIDES = os.path.join(PLANET_DIR, 'ephemerides.yaml')
-#: what LBL appends to an object's name (telluric cleaning, PCA2D): the star
-#:  is what is left once they are taken off
-SUFFIXES = re.compile(r'(_tc|_pca2d[0-9A-Za-z._+-]*)+$')
+#: what LBL appends to an object's name (telluric cleaning, an injection
+#:  test, PCA2D): the star is what is left once they are taken off
+SUFFIXES = re.compile(r'(_tc|_inj|_pca2d[0-9A-Za-z._+-]*)+$')
 #: the keys of an orbit, and what each one is
 ORBIT_KEYS = dict(period='period [d]',
                   k='semi-amplitude of the star [m/s]',

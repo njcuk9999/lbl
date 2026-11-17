@@ -211,6 +211,12 @@ DEFAULTS = {
         # alone (readers.star_frame). Set per object by LBL's PLANETS option.
         # Empty: the BERV alone
         "orbits": [],
+        # AN INJECTION TEST's signals (lbl.science.injection), which LBL's
+        #   get_berv adds to the BERV of each exposure from the record in its
+        #   folder: here for the cube's key and the run's record only, so
+        #   that other signals make another cube. Set per object by
+        #   lbl_pca2d. Empty: none
+        "injection": [],
         # THE VELOCITY OF EACH EXPOSURE, {file name: km/s}, from a free fit of
         # them (LBL's template, when it iterates on the velocities: its
         # SCI_TABLE's VSYS): the star's frame is then the BERV composed with
@@ -1328,7 +1334,8 @@ def cache_key(config: dict) -> str:
         # orbits omitted when there are none, so that the key's appearance does
         # not orphan the cubes built before it (the same as against_template)
         "registration": {k: v for k, v in config["registration"].items()
-                         if not (k in ("orbits", "velocities") and not v)},
+                         if not (k in ("orbits", "velocities", "injection")
+                                 and not v)},
         # the window the width resolved to, not the width: dv is hashed with
         # the domain, and a config in samples from before width_kms has to
         # keep the key its cube was built under

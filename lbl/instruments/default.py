@@ -23,6 +23,7 @@ from lbl.core import io
 from lbl.core import math as mp
 from lbl.core import vetted
 from lbl.science import activity_lines
+from lbl.science import injection
 
 
 # =============================================================================
@@ -48,6 +49,18 @@ USER_SOURCE_TAGS = ('[KWARGS]', '[CMD]', '[YAML]')
 class Instrument:
     name: str = 'None'
     params: ParamDict = ParamDict()
+
+    def __init_subclass__(cls, **kwargs):
+        """
+        AN INJECTION TEST (lbl.science.injection): every class's get_berv
+        adds the Keplerian signals recorded in the folder of the spectra it
+        reads to their BERV, so that LBL's recipes and PCA2D, which all take
+        a spectrum's BERV from get_berv, see the same injected velocity.
+        Nothing changes for a folder without a record.
+        """
+        super().__init_subclass__(**kwargs)
+        if 'get_berv' in cls.__dict__:
+            cls.get_berv = injection.with_signals(cls.__dict__['get_berv'])
 
     def __init__(self, name: str):
         """

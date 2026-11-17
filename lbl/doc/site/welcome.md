@@ -39,7 +39,7 @@ ordinary LBL wrap you can also run by hand.
 |---|---|---|
 | Folders | the data root, its Downloads, their dispatch, the folder tree | [Your data](data_root.md) |
 | Targets | the instrument folder, its targets, four plots to judge them, the archive search | [Targets](tab_targets.md) |
-| LBL settings | instrument, source, Python, each target's template and Teff, LBL's steps | [Settings](tab_settings.md) |
+| LBL settings | instrument, source, Python, each target's template and Teff, LBL's steps, an injection test | [Settings](tab_settings.md) |
 | PCA2D settings | the precleaning: on or off, its model, its bases, its correction | [Settings](tab_settings.md) |
 | Run | the wrap, the queue, the steps and the log of the run going | [Running](tab_run.md) |
 | Runs | every run of this window, its log and its reports | [Running](tab_run.md) |
