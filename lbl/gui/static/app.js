@@ -1651,6 +1651,7 @@ function drawInjection() {
   if (!Array.isArray(inj.signals) || !inj.signals.length) inj.signals = [{ ...INJ_NEW }];
   $('inj_on').checked = Boolean(inj.on);
   $('inj_box').hidden = !inj.on;
+  $('inj_known').checked = Boolean(inj.known);
   const changed = () => { wrapEdited = false; save(); };
   const rows = inj.signals.map((signal, index) => el('tr', {},
     el('td', { class: 'mono', text: String(index + 1) }),
@@ -3164,6 +3165,7 @@ async function init() {
   $('resproj').onchange = (event) => { S.resproj = event.target.checked; save(); wrapEdited = false; };
   $('inj_on').onchange = (event) => { S.injection.on = event.target.checked; save(); wrapEdited = false; drawInjection(); };
   $('inj_add').onclick = () => { S.injection.signals.push({ ...INJ_NEW }); save(); wrapEdited = false; drawInjection(); };
+  $('inj_known').onchange = (event) => { S.injection.known = event.target.checked; save(); wrapEdited = false; };
   $('run_name').oninput = (event) => { S.name = event.target.value.trim(); S.name_auto = false; save(); };
   $('name_auto').onclick = () => { S.name_auto = true; save(); build(); };
   $('wrap_text').oninput = () => { wrapEdited = true; highlightWrap(); };

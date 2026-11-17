@@ -130,7 +130,10 @@ def to_state(rparams: dict, instrument_hint: str = "") -> dict:
     if fake:
         found, said = injection_state(fake)
         if found is not None:
-            state["injection"] = dict(on=True, signals=found)
+            state["injection"] = dict(
+                on=True, known=any(row["known"] for row in found),
+                signals=[{k: v for k, v in row.items() if k != "known"}
+                         for row in found])
         if said:
             notes.append(said)
     switches = {row["key"] for row in lblinfo.lbl_switches()}
@@ -182,9 +185,17 @@ def injection_state(fake) -> tuple:
                      / signal["period"]) % 1.0
         rows.append(dict(k=signal["k"], period=signal["period"],
                          phase=round(float(phase), 6), e=signal["e"],
-                         omega=signal["omega"]))
-    return rows, ("FAKE_KEPLERIAN: t0 or tp given as the phase they mean at"
-                  " BJD %.1f" % injection.EPOCH if moved else "")
+                         omega=signal["omega"],
+                         known=bool(signal.get("known"))))
+    notes = []
+    if moved:
+        notes.append("FAKE_KEPLERIAN: t0 or tp given as the phase they mean"
+                     " at BJD %.1f" % injection.EPOCH)
+    known = [row["known"] for row in rows]
+    if any(known) and not all(known):
+        notes.append("FAKE_KEPLERIAN: known for some signals only; the"
+                     " window puts them all among the known planets")
+    return rows, "; ".join(notes)
 
 
 def wraps_in(data_dir: str) -> list:

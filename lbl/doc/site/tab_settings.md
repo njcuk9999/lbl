@@ -71,7 +71,17 @@ rparams['FAKE_KEPLERIAN'] = dict(k=[5.0, 3.0], period=[12.3, 40.0],
 
 `k` in m/s and `period` in days must be given; `phase` (0), `e` (0) and
 `omega` (90 deg) have defaults; `t0` (the conjunction) or `tp` (the
-periastron), in BJD, can replace the phase in a wrap written by hand. The
+periastron), in BJD, can replace the phase in a wrap written by hand.
+
+**Among the star's known planets** (`known=True`, for every signal or a
+list of one per signal): with `PLANETS`, the template is made on BERV +
+the known orbits of the catalogs + the injected signals, in one pass, as it
+would be for a planet whose orbit is known, and PCA2D's star frame follows
+them too. The catalogs' files are not edited: the signals are added to the
+star's orbits as `lbl/science/planets.py` reads them, from the record. The
+template's PLANETS table, and the report's page on it, list them as
+`injected 1`, `injected 2`... Without `PLANETS` they are not used, which the
+window and the wrap say. The
 velocity of each spectrum is the sum of the signals at its BJD (the time
 LBL's tables give, `rjd` + 2 400 000), composed relativistically with its
 BERV in every instrument class's `get_berv` (`lbl/science/injection.py`),

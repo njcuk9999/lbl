@@ -93,6 +93,9 @@ def injection_params(injection):
                 return "signal %d: %s is %r, not a number" % (index + 1, key,
                                                               value)
             fake[key].append(default if value is None else value)
+    # among the star's known planets (PLANETS): every signal
+    if injection.get("known"):
+        fake["known"] = True
     try:
         inj.signals(fake)
     except Exception as exc:                              # noqa: BLE001
@@ -252,6 +255,8 @@ def build(state: dict) -> dict:
         errors.append(say("err_injection", fake))
     elif fake:
         rparams["FAKE_KEPLERIAN"] = fake
+        if fake.get("known") and not rparams.get("PLANETS"):
+            warnings.append(say("warn_injection_known"))
     # what a loaded wrap held that the window does not: written back as it
     #   was (wrapload.to_state)
     from .wrapload import MANAGED
@@ -399,7 +404,9 @@ WRAP_SECTIONS = WRAP_SECTIONS + (
     ("injection test: Keplerian signals added to the BERV", (
         ("FAKE_KEPLERIAN", "one list per key, one entry per signal: K [m/s], "
          "period [d], phase at BJD 2460000.0 from the inferior conjunction, "
-         "eccentricity, omega [deg]. Each target is measured as "
+         "eccentricity, omega [deg]; known=True puts them among the star's "
+         "known planets, which the template follows with PLANETS. Each "
+         "target is measured as "
          "<target>_inj, a folder of links to its spectra; LBL and PCA2D add "
          "the signals to their BERV (lbl.science.injection), and the report "
          "says what was recovered of them"),

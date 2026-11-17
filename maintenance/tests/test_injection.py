@@ -310,3 +310,67 @@ def test_other_signals_make_another_pca2d_cube():
     # none: the key of every cube already built
     del other['registration']['injection']
     assert pconfig.cache_key(other) == key
+
+
+def test_the_signals_among_the_known_planets(tmp_path):
+    """known=True: PLANETS reads the injected signals with the catalog's
+    orbits of the star, so that the template follows both"""
+    from lbl.science import planets
+    both = injection.signals(dict(k=[5.0, 3.0], period=[8.0, 20.0],
+                                  known=True))
+    assert all(signal['known'] for signal in both)
+    one = injection.signals(dict(k=[5.0, 3.0], period=[8.0, 20.0],
+                                 known=[True, False]))
+    assert one[0]['known'] and 'known' not in one[1]
+    with pytest.raises(base_classes.LblException):
+        injection.signals(dict(k=5.0, period=8.0, known='maybe'))
+    assert 'a known planet' in injection.describe(both[:1])
+    # the star in a personal catalog of DATA_DIR, with one planet
+    with open(tmp_path / planets.PERSONAL, 'w') as handle:
+        yaml.safe_dump(dict(stars=dict(STAR=dict(planets=[dict(
+            name='STAR b', period=3.0, k=2.0, t0=2460000.5)]))), handle)
+    folder = str(tmp_path / 'science' / 'STAR_inj')
+    _record(folder, dict(k=[5.0, 3.0], period=[8.0, 20.0],
+                         known=[True, False]))
+    names = planets.star_names('STAR_inj')
+    found = planets.orbits_for(names, str(tmp_path), science_dir=folder)
+    assert [o['name'] for o in found['orbits']] == ['STAR b', 'injected 1']
+    assert found['orbits'][1]['k'] == 5.0
+    # the star's own spectra, or no folder: the catalog alone
+    plain = planets.orbits_for(planets.star_names('STAR'), str(tmp_path),
+                               science_dir=str(tmp_path / 'science' / 'STAR'))
+    assert [o['name'] for o in plain['orbits']] == ['STAR b']
+    # a star no catalog knows: the injected signals alone
+    _record(str(tmp_path / 'science' / 'NOBODY_XYZ_inj'),
+            dict(k=4.0, period=6.0, known=True))
+    alone = planets.orbits_for(['NOBODY_XYZ_inj', 'NOBODY_XYZ'],
+                               str(tmp_path), science_dir=str(
+                                   tmp_path / 'science' / 'NOBODY_XYZ_inj'))
+    assert [o['name'] for o in alone['orbits']] == ['injected 1']
+    assert alone['catalog'].endswith(injection.RECORD)
+    # the velocity PLANETS registers the spectra with: the injected one too
+    bjd = injection.EPOCH + 1.5
+    assert np.isclose(planets.star_velocity(bjd, alone['orbits'])[0],
+                      injection.velocity(bjd, injection.signals(
+                          dict(k=4.0, period=6.0)))[0])
+
+
+def test_the_window_holds_known():
+    from lbl.gui import wrapgen, wrapload
+    state = dict(on=True, known=True, signals=[dict(k=5, period=12)])
+    fake = wrapgen.injection_params(state)
+    assert fake['known'] is True
+    text = wrapgen.render(dict(OBJECT_SCIENCE=['STAR'],
+                               FAKE_KEPLERIAN=fake))
+    back = wrapload.to_state(wrapload.read_text(text)['rparams'])['state']
+    assert back['injection']['known'] is True
+    assert 'known' not in back['injection']['signals'][0]
+
+
+def test_an_injected_period_is_fitted_once():
+    from lbl.pca2d import texreport
+    known = [dict(name='b', period=3.0, source='archive'),
+             dict(name='8 d', period=8.0, source='configuration')]
+    injected = [dict(name='injected 1', period=8.0, source='injected')]
+    merged = texreport.with_injected(known, injected)
+    assert [p['name'] for p in merged] == ['b', 'injected 1']

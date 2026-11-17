@@ -750,9 +750,12 @@ def run_template(inst, objname: str, objkind: str):
     if use_planets:
         header_names = [refhdr.get(inst.params.get('KW_OBJNAME', 'OBJECT')),
                         refhdr.get('DRSOBJN')]
+        # science_dir is science/, the object's folder is in it (an
+        #   injection test's record, lbl.science.injection, is there)
         planets_used = planets.orbits_for(
             planets.star_names(objname, header_names),
-            inst.params['DATA_DIR'])
+            inst.params['DATA_DIR'],
+            science_dir=os.path.join(science_dir, str(objname)))
     if planets_used is not None:
         log.info('PLANETS: the template is made on BERV + the Keplerian '
                  'velocity of each spectrum, in one pass')

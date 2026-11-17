@@ -158,6 +158,11 @@ def main(runparams: dict):
     #   touched, and its template becomes <object>_inj's when it was its own
     found = injection.signals(runparams.get(
         'FAKE_KEPLERIAN', runparams.get('fake_keplerian')))
+    if found and any(signal.get('known') for signal in found) \
+            and not runparams.get('PLANETS', False):
+        log.warning('injection test: the signals are among the star\'s known '
+                    'planets (known=True), but PLANETS is off: the template '
+                    'does not follow known orbits, and these are not used')
     if found:
         object_sciences, object_comparisons = _inject(
             data_dir, runparams.get('SCIENCE_SUBDIR', 'science'),

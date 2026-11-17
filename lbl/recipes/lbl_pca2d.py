@@ -538,8 +538,12 @@ def object_orbits(name: str, files: list, data_dir: str, log) -> list:
             except Exception:                                 # noqa: BLE001
                 continue
             header_names += [header.get('OBJECT'), header.get('DRSOBJN')]
+    # the folder of its spectra, for an injection test's signals that are
+    #   among its known planets
+    folder = (os.path.dirname(os.path.abspath(files[0])) if files
+              else os.path.join(data_dir, 'science', name))
     found = planets.orbits_for(planets.star_names(name, header_names),
-                               data_dir)
+                               data_dir, science_dir=folder)
     if found is None:
         return []
     orbits = []

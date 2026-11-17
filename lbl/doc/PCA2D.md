@@ -306,7 +306,10 @@ telluric lines stay put; each object is measured as `<object>_inj`, so that
 its own products are not touched. The report fits each signal by MCMC at its
 period, delivered and corrected, and gives the recovered K against the
 injected one and K corrected over K delivered. The signals are part of the
-correction's request: other signals, another correction. Details:
+correction's request: other signals, another correction. With `known=True`
+and `PLANETS`, they are among the star's known planets: the template and
+PCA2D's star frame follow them, as they would a planet whose orbit is
+known. Details:
 [settings, injection test](site/tab_settings.md#injection-test).
 
 ## Components: saved, and read back

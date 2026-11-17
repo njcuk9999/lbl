@@ -21,7 +21,11 @@ each list (a single signal can be given as plain numbers):
     omega   argument of periastron of the star [deg], 90 by default
 
 t0 (the conjunction) or tp (the periastron), in BJD, can be given instead of
-the phase.
+the phase. known=True (for every signal, or a list of one per signal) adds
+the signals to the star's known planets as LBL's PLANETS reads them
+(lbl.science.planets.orbits_for), so that with PLANETS the template is made
+on BERV + the known orbits + the injected signals, as it would be for a
+planet whose orbit is known; the catalogs' files are not edited.
 
 NOTHING IS WRITTEN INTO THE SPECTRA. The wrap makes science/<object>_inj, a
 folder of links to the object's spectra holding fake_keplerian.yaml (RECORD),
@@ -73,7 +77,8 @@ KEYS = dict(k='semi-amplitude of the star [m/s]',
             e='eccentricity',
             omega='argument of periastron of the star [deg]',
             t0='time of inferior conjunction [BJD], instead of the phase',
-            tp='time of periastron [BJD], instead of the phase')
+            tp='time of periastron [BJD], instead of the phase',
+            known='True: one of the star\'s known planets for PLANETS')
 #: the names LBL derives from an object's (telluric cleaning, PCA2D): the
 #:   folder an injected object's derived spectra come from is what is left
 #:   once they are taken off
@@ -104,6 +109,17 @@ def _number(value, key: str, index: int) -> float:
     if not np.isfinite(out):
         raise _error('{0} of signal {1} is {2}'.format(key, index + 1, out))
     return out
+
+
+def _flag(value, key: str, index: int) -> bool:
+    if isinstance(value, (bool, np.bool_)) or value in (0, 1):
+        return bool(value)
+    if str(value).strip().lower() in ('true', 'yes', 'on', '1'):
+        return True
+    if str(value).strip().lower() in ('false', 'no', 'off', '0', '', 'none'):
+        return False
+    raise _error('{0} of signal {1} is {2!r}, not True or False'.format(
+        key, index + 1, value))
 
 
 def signals(fake) -> List[Dict]:
@@ -166,6 +182,10 @@ def signals(fake) -> List[Dict]:
                          .format(index + 1, ' and '.join(epochs)))
         epoch = epochs[0] if epochs else 'phase'
         signal[epoch] = _number(row.get(epoch) or 0.0, epoch, index)
+        # one of the star's known planets: said only when it is
+        if row.get('known') is not None and _flag(row['known'], 'known',
+                                                  index):
+            signal['known'] = True
         out.append(signal)
     return out
 
@@ -234,6 +254,8 @@ def describe(found: List[Dict]) -> str:
         if signal['e'] > 0:
             text += ', e = {0:g}, omega = {1:g} deg'.format(signal['e'],
                                                            signal['omega'])
+        if signal.get('known'):
+            text += ', a known planet'
         parts.append(text)
     return '; '.join(parts)
 
@@ -351,6 +373,28 @@ def read(folder: str) -> Optional[List[Dict]]:
         _READ[path] = (mtime, found)
         return found
     return None
+
+
+def known_orbits(folder: str) -> List[Dict]:
+    """
+    The injected signals recorded for a science folder that are to be among
+    the star's known planets (known=True), as orbits of the planet catalogs
+    (lbl.science.planets): [] for none
+
+    :param folder: str, a science folder
+
+    :return: list of dict (name, period, k, e, omega, t0 or tp, reference)
+    """
+    found = read(folder) or []
+    out = []
+    for index, signal in enumerate(found):
+        if not signal.get('known'):
+            continue
+        one = orbit(signal)
+        one.update(name='injected {0}'.format(index + 1),
+                   reference='injection test, {0}'.format(RECORD))
+        out.append(one)
+    return out
 
 
 def spectrum_folder(inst) -> Optional[str]:

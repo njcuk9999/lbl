@@ -2249,6 +2249,21 @@ def injected_planets(tree, star):
             for i, signal in enumerate(found)]
 
 
+def with_injected(known, injected):
+    """The star's planets and an injection test's signals: a period the
+    configuration gave (PLANETS with the signals among the known planets
+    puts theirs in target.planets) that is an injected signal's is taken
+    once, as that signal, rather than fitted twice"""
+    from . import archive
+
+    def taken(planet):
+        return any(abs(planet["period"] - other["period"])
+                   < archive.SAME_PERIOD * other["period"]
+                   for other in injected)
+    return [p for p in known if not (p.get("source") == "configuration"
+                                     and taken(p))] + list(injected)
+
+
 def planet_labels(numbers):
     """The short name of each planet the numbers were measured at."""
     names = numbers.get("planet_names")
@@ -3444,7 +3459,7 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
                                       facts[star], folder)
         # AN INJECTION TEST: its signals fitted with the star's planets,
         #   last, and what was recovered of them said (injection_section)
-        known = known + injected_planets(tree, star)
+        known = with_injected(known, injected_planets(tree, star))
         planets[star] = (known, status)
         import zlib
         numbers = star_numbers(before, after, [p["period"] for p in known],
@@ -3463,7 +3478,9 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
         if star not in planets:
             known, status = known_planets(outdir, config, star, joint,
                                           facts[star], folder)
-            planets[star] = (known + injected_planets(tree, star), status)
+            planets[star] = (with_injected(known,
+                                           injected_planets(tree, star)),
+                             status)
     # THE VELOCITY SERIES FIRST, right after the contents: what one opens a
     #   report for
     body = series_section(series, folder)

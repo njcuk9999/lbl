@@ -20,7 +20,9 @@ by its name and by every synonym the catalogs give it:
                                               planets/build_known_planets.py
 
 The first catalog that knows the star gives ALL its orbits: a personal entry
-replaces the published one, it does not add to it.
+replaces the published one, it does not add to it. An injection test's
+signals marked known (lbl.science.injection, FAKE_KEPLERIAN known=True) are
+added to them, from the record in the spectra's folder.
 
 If the star is found with at least one complete orbit, every spectrum is
 registered with its BERV and the sum of the Keplerian velocities at its time,
@@ -280,25 +282,38 @@ def star_velocity(bjd: np.ndarray, orbits: List[dict]) -> np.ndarray:
     return velocity
 
 
-def orbits_for(names: List[str], data_dir: Optional[str] = None
-               ) -> Optional[Dict]:
+def orbits_for(names: List[str], data_dir: Optional[str] = None,
+               science_dir: Optional[str] = None) -> Optional[Dict]:
     """
     The complete orbits of the first catalog entry that knows the object,
-    said in the log. None if no catalog knows it or none of its orbits is
-    complete: the template then iterates as it always has.
+    said in the log, and an injection test's signals to be among them
+    (known=True in the record of science_dir, lbl.science.injection). None
+    if there are none: the template then iterates as it always has.
 
     :param names: list of str, the names of the object
     :param data_dir: str, LBL's DATA_DIR
+    :param science_dir: str, the folder of the object's spectra, for an
+                        injection test's record
 
     :return: dict (star, catalog, orbits, skipped), or None
     """
+    injected = []
+    if science_dir:
+        from lbl.science import injection
+        injected = injection.known_orbits(science_dir)
     found = find_star(names, data_dir)
-    if found is None:
-        log.general('PLANETS: {0} is in none of the catalogs ({1}): the '
-                    'template iterates on the velocities'.format(
-                        ', '.join(names), ', '.join(catalog_files(data_dir))))
-        return None
     orbits, skipped = [], []
+    if found is None:
+        if not injected:
+            log.general('PLANETS: {0} is in none of the catalogs ({1}): the '
+                        'template iterates on the velocities'.format(
+                            ', '.join(names),
+                            ', '.join(catalog_files(data_dir))))
+            return None
+        log.general('PLANETS: {0} is in none of the catalogs ({1})'.format(
+            ', '.join(names), ', '.join(catalog_files(data_dir))))
+        found = dict(star=names[0], entry=dict(), catalog=os.path.join(
+            science_dir, injection.RECORD))
     for orbit in found['entry'].get('planets') or []:
         why = missing(orbit)
         if why is None:
@@ -308,13 +323,20 @@ def orbits_for(names: List[str], data_dir: Optional[str] = None
     for name, why in skipped:
         log.warning('PLANETS: {0} of {1} is not used: {2}'.format(
             name, found['star'], why))
-    if not orbits:
+    if not orbits and not injected:
         log.general('PLANETS: {0} is in {1} but has no complete orbit: the '
                     'template iterates on the velocities'.format(
                         found['star'], found['catalog']))
         return None
-    log.info('PLANETS: {0} found in {1}, {2} orbit(s)'.format(
-        found['star'], found['catalog'], len(orbits)))
+    if orbits:
+        log.info('PLANETS: {0} found in {1}, {2} orbit(s)'.format(
+            found['star'], found['catalog'], len(orbits)))
+    if injected:
+        log.info('PLANETS: and the {0} signal(s) of an injection test, '
+                 'among its known planets ({1})'.format(
+                     len(injected), os.path.join(science_dir,
+                                                 injection.RECORD)))
+        orbits = orbits + injected
     for orbit in orbits:
         log.general('\t{0}: P = {1} d, K = {2} m/s, e = {3}, omega = {4} deg'
                     ' ({5})'.format(orbit.get('name', '?'), orbit['period'],
