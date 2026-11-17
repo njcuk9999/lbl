@@ -57,6 +57,12 @@ The [Data Explorer](tab_explore.md) plots any of them against any other.
 
 ## Reports
 
+Every figure of a report carries a red warning sign in its upper right
+corner, a triangle with an exclamation mark and "Preliminary" (transparent,
+the figure seen through it; `lbl/report/stamp.py`), and the report opens
+with why: it is a look at a run, not figures for a paper, which are to be
+made from the tables after checking.
+
 With `REPORT` (on by default), each run writes a PDF in `reports/`: a
 summary, a page per step, the velocities and their periodogram with the
 false inclusion probability ([Hara et al.

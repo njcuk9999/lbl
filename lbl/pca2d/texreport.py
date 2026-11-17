@@ -3639,10 +3639,22 @@ def render(outdir, config=None, lbl_dir=None, out=None, stars=None):
             tex(now.strftime("%H:%M:%S %Z (UTC%z)"))),
         "RUNHEAD": tex("%s, %s" % (" + ".join(stars), tag)),
         "ABSTRACT": "\n\n".join(abstract),
+        "PRELIMINARY": "",
         "BODY": "".join(body),
     }
+    # PRELIMINARY: a red warning sign on every figure (lbl.report.stamp), so
+    #   that none is pasted into a paper as it is, and why, under the
+    #   abstract
+    from lbl.report import stamp
+    try:
+        stamp.write_sign(os.path.join(folder, "figures"))
+        fill["PRELIMINARY"] = stamp.explanation("figures/" + stamp.SIGN_NAME)
+    except Exception as exc:                              # noqa: BLE001
+        log("the Preliminary sign could not be drawn (%s)" % exc, "warn")
     for key, value in fill.items():
         document = document.replace("<<%s>>" % key, value)
+    if fill["PRELIMINARY"]:
+        document = stamp.stamp_tex(document, folder)
     with open(os.path.join(folder, name + ".tex"), "w", encoding="utf-8") as handle:
         handle.write(document)
     if not compile_tex(folder, name, pdflatex):

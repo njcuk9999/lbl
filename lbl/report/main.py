@@ -17,6 +17,7 @@ import traceback
 import numpy as np
 
 from lbl.core import logger
+from lbl.report import stamp
 
 log = logger.Log(filename='')
 
@@ -323,6 +324,14 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
             path = os.path.join(work, 'page%02d.pdf' % index)
             fig.savefig(path, bbox_inches='tight')
             plt.close(fig)
+            # PRELIMINARY: the red warning sign in its upper right corner
+            #   (lbl.report.stamp), so that no figure is pasted into a paper
+            #   as it is
+            try:
+                stamp.stamp_pdf(path, path)
+            except Exception as exc:                          # noqa: BLE001
+                log.warning('report page "{0}" has no Preliminary sign: {1}'
+                            .format(name, exc))
             drawn.append((name, path))
         rows = list(stats.summarise(table, _longitude(
             instrument, data_source, earth_location)))
@@ -613,6 +622,14 @@ def _build(work, out, title, rdb_file, rows, drawn, missing, planets=None,
             r'\section*{LBL report: %s}' % _escape(title),
             r'\textit{From %s}' % _escape(os.path.basename(rdb_file)),
             r'\vspace{2mm}']
+    # the red sign on every figure, and why (lbl.report.stamp)
+    try:
+        stamp.write_sign(work)
+        body.append(stamp.explanation(stamp.SIGN_NAME))
+        body.append(r'\vspace{2mm}')
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('the Preliminary sign could not be drawn: {0}'.format(
+            exc))
     # THE VELOCITY SERIES FIRST, before the table: it is what one opens the
     #   report for
     first = [one for one in drawn if one[0] == 'The velocity series']
