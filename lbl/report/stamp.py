@@ -44,6 +44,9 @@ WIDTH = SIDE + BORDER + 2.0
 #:   figure)
 FONTS = ('DIN Alternate', 'Avenir Next', 'Helvetica Neue', 'Arial',
          'DejaVu Sans')
+#: the sign on a figure, against its drawn size (the introduction shows it
+#:   whole): half, about 0.4 inch tall
+ON_FIGURE = 0.5
 #: from the figure's edges [points]
 MARGIN = 4.0
 #: the most of a figure's width and height the sign takes: a small figure
@@ -169,7 +172,7 @@ def stamp_pdf(source: str, target: str) -> str:
     for page in PdfReader(source).pages:
         box = page.mediabox
         page_width, page_height = float(box.width), float(box.height)
-        scale = min(1.0, MOST_WIDTH * page_width / width,
+        scale = min(ON_FIGURE, MOST_WIDTH * page_width / width,
                     MOST_HEIGHT * page_height / height)
         left = float(box.left) + page_width - (width + MARGIN) * scale
         bottom = float(box.bottom) + page_height - (height + MARGIN) * scale
