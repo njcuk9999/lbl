@@ -1774,6 +1774,36 @@ def _levels(hist, fractions=(0.865, 0.393)):
         else None
 
 
+def corner_truths(posts, planets, scenario, label):
+    """{parameter: value} an injection test gave the parameters of a
+    corner of `scenario`'s posteriors (lbl.science.injection): each injected
+    signal's K, e, omega and lambda (the mean longitude M + omega at the fit's
+    reference time), the angles on the branch of the series `label`'s
+    samples; {} without an injected signal"""
+    from lbl.science import injection
+    known = [p for p in (planets or []) if isinstance(p, dict)]
+    post = posts[label]
+    samples = post[scenario]["samples"]
+    t_ref = float(post["fits"]["circular"].t_ref) + 2400000.0
+    out = {}
+    for i, planet in enumerate(known):
+        signal = planet.get("injected")
+        if not signal:
+            continue
+        values = {"K_%d" % i: signal["k"], "e_%d" % i: signal["e"],
+                  "omega_%d" % i: signal["omega"],
+                  "lam_%d" % i: injection.mean_longitude(signal, t_ref)}
+        for key, value in values.items():
+            if key not in samples:
+                continue
+            if key.startswith(("omega_", "lam_")):
+                centre = np.degrees(np.angle(np.mean(np.exp(
+                    1j * np.radians(samples[key])))))
+                value = (value - centre + 180.0) % 360.0 - 180.0 + centre
+            out[key] = float(value)
+    return out
+
+
 def figure_posterior_corner(posts, planets, before, after, scenario, path):
     """The covariances of one fit's posteriors (`scenario`, circular or
     keplerian): every pair of parameters, delivered and corrected in their
@@ -1788,11 +1818,16 @@ def figure_posterior_corner(posts, planets, before, after, scenario, path):
         return None
     runs = [(run, colour, posts[run["label"]][scenario]["samples"])
             for run, colour in ((before, BEFORE), (after, AFTER))]
-    # each axis over both series' central 98%
+    # AN INJECTION TEST: the values the signals were given, a point where
+    #   both parameters of a panel have one, a dotted line where one has
+    truths = corner_truths(posts, planets, scenario, before["label"])
+    # each axis over both series' central 98%, and the injected value
     ranges = {}
     for key, _label in chosen:
         lo = min(np.percentile(s[key], 1) for *_r, s in runs)
         hi = max(np.percentile(s[key], 99) for *_r, s in runs)
+        if key in truths:
+            lo, hi = min(lo, truths[key]), max(hi, truths[key])
         pad = 0.05 * (hi - lo) if hi > lo else 1.0
         ranges[key] = (lo - pad, hi + pad)
     n = len(chosen)
@@ -1822,6 +1857,19 @@ def figure_posterior_corner(posts, planets, before, after, scenario, path):
                                0.5 * (ye[1:] + ye[:-1]), hist.T,
                                levels=levels, colors=colour,
                                linewidths=[0.6, 1.0])
+            if col == row and key_x in truths:
+                ax.axvline(truths[key_x], color=INK, ls=":", lw=0.9,
+                           zorder=6)
+            elif col < row and key_x in truths and key_y in truths:
+                ax.plot(truths[key_x], truths[key_y], marker="*", ms=6.5,
+                        color=INK, markeredgecolor="white",
+                        markeredgewidth=0.4, ls="none", zorder=9)
+            elif col < row and key_x in truths:
+                ax.axvline(truths[key_x], color=INK, ls=":", lw=0.6,
+                           zorder=6)
+            elif col < row and key_y in truths:
+                ax.axhline(truths[key_y], color=INK, ls=":", lw=0.6,
+                           zorder=6)
             if col < row:
                 # each series' correlation, its colour, top left
                 for k, (run, colour, samples) in enumerate(runs):
@@ -1852,9 +1900,14 @@ def figure_posterior_corner(posts, planets, before, after, scenario, path):
             _style(ax)
     handles = [plt.Line2D([], [], color=colour, lw=1.2) for _r, colour, _s
                in runs]
-    fig.legend(handles, ["%s, %s fit" % (run["label"], scenario.replace(
-        "keplerian", "Keplerian")) for run, _c, _s in runs],
-        loc="upper right", fontsize=7, frameon=False)
+    labels = ["%s, %s fit" % (run["label"], scenario.replace(
+        "keplerian", "Keplerian")) for run, _c, _s in runs]
+    if truths:
+        handles.append(plt.Line2D([], [], color=INK, marker="*", ms=6.5,
+                                  ls=":", lw=0.9))
+        labels.append("injected")
+    fig.legend(handles, labels, loc="upper right", fontsize=7,
+               frameon=False)
     fig.subplots_adjust(left=0.08, right=0.99, bottom=0.08, top=0.96,
                         wspace=0.08, hspace=0.08)
     return _save(fig, path, before.get("star"))
@@ -3130,8 +3183,13 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " correlation coefficient in its colour at the top left of the"
          " panel; on the diagonal, each parameter's posterior. Each axis"
          " spans both series' central 98\\%%. %s Past %d parameters, the"
-         " phases $\\lambda$ are left out, then the last planets." % (
-             words, extra, CORNER_MAX))
+         " phases $\\lambda$ are left out, then the last planets.%s" % (
+             words, extra, CORNER_MAX,
+             " The star and the dotted lines are the values an injected"
+             " signal was given ($\\lambda$ at the same middle of the"
+             " campaign)." if any(p.get("injected") for p in
+                                  numbers.get("planets_known") or []
+                                  if isinstance(p, dict)) else ""))
         for scenario, words, extra in (
             ("circular", "circular",
              "$\\lambda$ is the mean longitude at the middle of the"

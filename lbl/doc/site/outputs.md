@@ -74,7 +74,9 @@ otherwise), the K recovered from the delivered and the corrected
 velocities, its difference to the injected one in m/s and in units of its
 posterior's half 16-84 width, the difference of mean longitude at the middle
 of the campaign, and K corrected over K delivered (1: the correction left
-the signal alone). The MCMC figure marks the injected K and e. LBL's own
+the signal alone). The MCMC figure marks the injected K and e; the
+triangles of the posteriors put a star at the injected values (K, e, omega,
+and lambda at the middle of the campaign), with dotted lines. LBL's own
 report of an injected object (`<obj>_inj`, `<obj>_inj_pca2d`) gives the same
 for its one series.
 

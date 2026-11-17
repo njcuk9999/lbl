@@ -374,3 +374,36 @@ def test_an_injected_period_is_fitted_once():
     injected = [dict(name='injected 1', period=8.0, source='injected')]
     merged = texreport.with_injected(known, injected)
     assert [p['name'] for p in merged] == ['b', 'injected 1']
+
+
+def test_the_corner_marks_the_injected_values(tmp_path):
+    """The triangle of the posteriors puts a star at the values an injected
+    signal was given, its angles on the branch of the samples"""
+    from lbl.pca2d import keplerfit, texreport
+    rng = np.random.default_rng(13)
+    signal = injection.signals(dict(k=6.0, period=9.0, phase=0.3, e=0.3,
+                                    omega=200.0))[0]
+    t = np.sort(rng.uniform(0.0, 250.0, 90)) + 60100.0
+    err = np.ones(t.size)
+    v = injection.velocity(t + 2400000.0, [signal])
+    posts = {label: keplerfit.posteriors(
+        t, v + rng.normal(0.0, 1.0, t.size), err, [9.0], steps=600,
+        burn=200) for label in ('delivered', 'corrected')}
+    planets = [dict(name='injected 1', short='inj1', period=9.0, k=6.0,
+                    source='injected', injected=signal)]
+    truths = texreport.corner_truths(posts, planets, 'keplerian',
+                                     'delivered')
+    assert truths['K_0'] == 6.0 and truths['e_0'] == 0.3
+    centre = np.median(posts['delivered']['keplerian']['samples']['omega_0'])
+    # 200 deg, on the samples' branch (-160 when they sit about -160)
+    assert abs(truths['omega_0'] - centre) < 30.0
+    assert np.isclose(truths['omega_0'] % 360.0, 200.0)
+    assert 'e_0' not in texreport.corner_truths(posts, planets, 'circular',
+                                                'delivered')
+    assert texreport.corner_truths(posts, [dict(name='b', period=9.0)],
+                                   'keplerian', 'delivered') == {}
+    path = texreport.figure_posterior_corner(
+        posts, planets, dict(label='delivered', star='X'),
+        dict(label='corrected', star='X'), 'keplerian',
+        str(tmp_path / 'corner.pdf'))
+    assert path and os.path.exists(path)
