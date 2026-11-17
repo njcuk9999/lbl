@@ -2026,7 +2026,7 @@ def mcmc_table(posts, planets, before, after, name):
                keplerfit.E_SIGMA, head, "\n".join(rows)))
 
 
-def injection_section(posts, planets, before, after, name):
+def injection_section(posts, planets, before, after, name, figures=None):
     """An injection test's account (lbl.science.injection): the signals
     added to the BERV, and what the MCMC of the planets' fits recovered of
     each in the delivered and the corrected velocities: K, its difference
@@ -2039,7 +2039,10 @@ def injection_section(posts, planets, before, after, name):
     if not found:
         return ""
     first = next(i for i, p in enumerate(known) if p.get("injected"))
-    parts = ["\\subsubsection*{%s: the injection test}\n" % name,
+    # in the contents, so that the run's result is found in a long report
+    parts = ["\\subsubsection*{%s: the injection test}\n"
+             "\\addcontentsline{toc}{subsection}{%s: the injection test}\n"
+             % (name, name),
              "The spectra of %s carry %s injected Keplerian signal%s,"
              " added to their BERV (relativistically, at each spectrum's"
              " BJD): in the frame LBL and PCA2D take for the star's, its"
@@ -2060,7 +2063,12 @@ def injection_section(posts, planets, before, after, name):
                 " correction that leaves the signal alone keeps $K$:"
                 " corrected over delivered near 1. The star's own velocity"
                 " at the same period, if it has one, is in the recovered"
-                " $K$ too.\n")]
+                " $K$ too.%s\n" % (
+                    " The triangles of the posteriors, figures"
+                    " \\ref{fig:%s-corner-circular} (circular) and"
+                    " \\ref{fig:%s-corner-keplerian} (Keplerian), mark the"
+                    " injected values with a star." % (figures, figures)
+                    if figures and posts else ""))]
     if not posts:
         parts.append("\n\\watch{No MCMC of the planets' fits: too few"
                      " exposures for %d planet%s at once.}\n"
@@ -3012,7 +3020,7 @@ def velocity_section(star, before, after, numbers, folder, stale):
     # AN INJECTION TEST: what each series recovered of the injected signals,
     #   before the figures, since it is what such a run is for
     parts.append(injection_section(posts, numbers.get("planets_known"),
-                                   before, after, name))
+                                   before, after, name, figures=base))
     # what the Keplerian fit leaves in each series, filled by figure_phase
     #   for its caption: a tuple's items are made in order, the figure first
     phase_residuals = {}
@@ -3204,7 +3212,8 @@ def velocity_section(star, before, after, numbers, folder, stale):
             # these figures once per star
             parts.append(figure_block("figures/" + os.path.basename(path),
                                       "\\textbf{%s.} %s" % (name, caption),
-                                      short=short))
+                                      short=short, label="fig:" + os.path.
+                                      splitext(os.path.basename(path))[0]))
     parts.append(bic_table(posts, numbers.get("planets_known"), before,
                            after, name))
     parts.append(mcmc_table(posts, numbers.get("planets_known"), before,
