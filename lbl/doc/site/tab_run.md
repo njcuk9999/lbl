@@ -19,7 +19,8 @@
 - **The plots**, between the steps and the log, as LBL draws them, without
   stopping the run: the template once made, the velocities it measured on
   its spectra, with their uncertainties, against the spectrum's number and
-  its MJD, and the spectra registered at them (`SMALL_RV_SHIFT` unticked;
+  its MJD (an injection test's signal drawn over them), and the spectra
+  registered at them, coloured by epoch (`SMALL_RV_SHIFT` unticked;
   each spectrum's velocity is written in the log too), then the other
   steps' (the mask's CCF, compute's CCF and lines, PCA2D's fit: the variance
   share of each component, its eigenvalue, and the rank correlation of each

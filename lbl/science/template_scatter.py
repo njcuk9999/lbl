@@ -473,16 +473,43 @@ def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
     try:
         from lbl.science import plot
         io_ = len(reg) // 2
-        cloud_x, cloud_y = np.array([]), np.array([])
+        cloud_x, cloud_y, cloud_c = np.array([]), np.array([]), np.array([])
         grid_x, grid_y = np.array([]), np.array([])
         if fits.get(io_) is not None:
-            cloud_x, cloud_y, _ = _cloud(data, io_, star_shift(berv, rv0))
+            # the pixels of every spectrum at its velocity, each with its
+            #   spectrum's epoch (its MJD, else its number) for the colour
+            shifts = star_shift(berv, rv0)
+            x = (data.xobs[io_].astype(float) + data.ref[io_]
+                 + shifts[:, None])
+            flux = data.flux[io_].astype(float)
+            epoch = times if np.isfinite(times).any() else \
+                np.arange(1, len(rv0) + 1, dtype=float)
+            colour = np.broadcast_to(np.asarray(epoch, dtype=float)[:, None],
+                                     x.shape)
+            good = np.isfinite(x) & np.isfinite(flux) & np.isfinite(colour)
+            cloud_x, cloud_y, cloud_c = x[good], flux[good], colour[good]
             fit = fits[io_]
             grid_x = lngrid[fit['i0']:fit['i1']]
             grid_y = fit['derivs'][:, 0]
+        # AN INJECTION TEST: the signals added to the BERV of these
+        #   spectra (lbl.science.injection), drawn over the velocities
+        #   against MJD at their zero point (less their median at the
+        #   spectra's epochs)
+        injected = None
+        from lbl.science import injection
+        found = injection.read(injection.spectrum_folder(inst))
+        if found and np.isfinite(times).any():
+            curve_t = np.linspace(np.nanmin(times), np.nanmax(times), 3000)
+            curve_v = injection.velocity(curve_t + 2400000.5, found)
+            at = injection.velocity(times[np.isfinite(times)] + 2400000.5,
+                                    found)
+            injected = (curve_t, curve_v - np.nanmedian(at),
+                        'injected: ' + injection.describe(found))
         plot.template_velocity_plot(
             inst, rv0, rv_err, times, time_label, changes, cloud_x, cloud_y,
-            grid_x, grid_y, inst.params['OBJECT_SCIENCE'])
+            grid_x, grid_y, inst.params['OBJECT_SCIENCE'], cloud_c=cloud_c,
+            colour_label=(time_label or 'MJD') if np.isfinite(times).any()
+            else 'spectrum', injected=injected)
     except Exception as exc:                                  # noqa: BLE001
         log.warning('the plot of the template\'s velocities was not made: '
                     '{0}'.format(exc))

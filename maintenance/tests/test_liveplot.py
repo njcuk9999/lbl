@@ -91,9 +91,18 @@ def test_lbl_s_plots_go_to_the_window_first_file_only(tmp_path, monkeypatch):
                                 'MJD (KW_MID_EXP_TIME)', [12.0, 3.0],
                                 x, np.ones(x.size), x, np.ones(x.size),
                                 'STAR')
+    # the registered pixels coloured by their spectrum's epoch
+    plot.template_velocity_plot(_Inst(), np.array([1.0, -1.0]),
+                                np.array([2.0, 2.5]),
+                                np.array([60100.1, 60101.2]), 'MJD', [3.0],
+                                np.r_[x, x], np.ones(2 * x.size), x,
+                                np.ones(x.size), 'OTHER',
+                                cloud_c=np.r_[np.full(x.size, 60100.1),
+                                              np.full(x.size, 60101.2)])
     listed = liveplot.read_index(str(folder))
-    assert [row['title'] for row in listed][-2:] == [
-        'template', 'template velocities, the spectra registered']
+    assert [row['title'] for row in listed][-3:] == [
+        'template', 'template velocities, the spectra registered',
+        'template velocities, the spectra registered']
 
 
 def test_the_window_gives_the_folder_and_reads_the_plots(tmp_path):
@@ -190,3 +199,23 @@ def test_the_pca2d_fit_plot_once_per_fit(tmp_path, monkeypatch):
     assert titles == ['PCA2D fit: eigenvalues, correlations with the'
                       ' conditions', 'PCA2D fit: eigenvalues, correlations'
                       ' with the conditions, pass 2']
+
+
+def test_an_injected_signal_is_drawn_over_the_velocities(tmp_path,
+                                                         monkeypatch):
+    """the velocities against MJD with the injection test's signals drawn
+    over them"""
+    from lbl.science import plot
+    monkeypatch.setenv(liveplot.ENV, str(tmp_path / 'plots'))
+    drawn = []
+    monkeypatch.setattr(liveplot, 'finish',
+                        lambda plt_, *a, **k: drawn.append(plt_.gcf()))
+    curve = (np.linspace(60100.0, 60300.0, 50), np.sin(np.arange(50.0)),
+             'injected: K = 10 m/s, P = 200 d, phase 0')
+    plot.template_velocity_plot(_Inst(), np.array([1.0, -1.0]),
+                                np.array([2.0, 2.5]),
+                                np.array([60100.1, 60201.2]), 'MJD', [3.0],
+                                np.array([]), np.array([]), np.array([]),
+                                np.array([]), 'STAR', injected=curve)
+    labels = [line.get_label() for line in drawn[0].axes[1].lines]
+    assert any(label.startswith('injected: K = 10') for label in labels)

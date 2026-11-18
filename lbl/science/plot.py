@@ -195,7 +195,8 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
                            time_label: str, changes: List[float],
                            cloud_x: np.ndarray, cloud_y: np.ndarray,
                            grid_x: np.ndarray, grid_y: np.ndarray,
-                           objname: str):
+                           objname: str, cloud_c: np.ndarray = None,
+                           colour_label: str = 'MJD', injected=None):
     """
     The velocities the template measured on its spectra (SMALL_RV_SHIFT
     False), with their uncertainties, against the spectrum's number and
@@ -213,6 +214,10 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
     :param grid_x: np.ndarray, the template's ln(wavelength)
     :param grid_y: np.ndarray, the template there
     :param objname: str, the object
+    :param cloud_c: np.ndarray or None, each pixel's epoch, its colour
+    :param colour_label: str, what the epoch is
+    :param injected: (MJD, velocity, label) of an injection test's signals
+                     at the velocities' zero point, drawn over them, or None
     """
     key = _wanted(inst, None, lambda: 'template_velocities_' + str(objname))
     if key is None:
@@ -238,7 +243,12 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
         transform=frames[0].transAxes, va='top', fontsize=8)
     if np.isfinite(times).any():
         frames[1].errorbar(times, vel, yerr=err, fmt='.', ms=4, color='C3',
-                           ecolor='C3', elinewidth=0.6, alpha=0.8)
+                           ecolor='C3', elinewidth=0.6, alpha=0.8,
+                           label='measured')
+        if injected is not None:
+            frames[1].plot(injected[0], injected[1], color='k', lw=1.0,
+                           label=injected[2])
+            frames[1].legend(loc=0, fontsize=7)
         frames[1].set(xlabel=time_label or 'MJD',
                       ylabel='velocity less its median [m/s]')
     else:
@@ -253,9 +263,19 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
         half = 0.5 / np.exp(centre)
         inc = np.abs(cloud_x - centre) < half
         ing = np.abs(grid_x - centre) < half
-        frames[2].plot(np.exp(cloud_x[inc]), cloud_y[inc], ',', color='C0',
-                       alpha=0.5, rasterized=True,
-                       label='the spectra, registered')
+        if cloud_c is not None and len(cloud_c) == len(cloud_x):
+            # the pixels coloured by their spectrum's epoch: a spectrum
+            #   misplaced shows as a colour off the cloud
+            dots = frames[2].scatter(np.exp(cloud_x[inc]), cloud_y[inc],
+                                     c=np.asarray(cloud_c)[inc], s=0.6,
+                                     cmap='viridis', alpha=0.6, lw=0,
+                                     rasterized=True,
+                                     label='the spectra, registered')
+            fig.colorbar(dots, ax=frames[2], label=colour_label, pad=0.01)
+        else:
+            frames[2].plot(np.exp(cloud_x[inc]), cloud_y[inc], ',',
+                           color='C0', alpha=0.5, rasterized=True,
+                           label='the spectra, registered')
         frames[2].plot(np.exp(grid_x[ing]), grid_y[ing], color='k', lw=1.2,
                        label='template')
         frames[2].legend(loc=0)
