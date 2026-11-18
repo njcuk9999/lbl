@@ -39,3 +39,35 @@ def test_files_counted_as_they_are_done(tmp_path, monkeypatch):
     assert len(covered) == 8 and covered == [90.0] * 8
     # f0 started first and finished last
     assert done[-1] == "f0.fits"
+
+
+class _Args(types.SimpleNamespace):
+    """the stage's arguments: what is not set is None"""
+
+    def __getattr__(self, name):
+        return None
+
+
+def test_the_residuals_of_a_threaded_correction_are_written(tmp_path,
+                                                             monkeypatch):
+    """correct_many in threads hands every file to write_residuals (it once
+    emptied its list of files after the threads, so that save_residuals
+    wrote none)"""
+    names = ['f%d.fits' % i for i in range(5)]
+    for name in names:
+        (tmp_path / name).write_text('x')
+    given = []
+    monkeypatch.setattr(reconstruct, '_correct_threaded',
+                        lambda model, args, config, pairs, *a, **k:
+                        (len(pairs), 0, 0))
+    monkeypatch.setattr(reconstruct, 'write_residuals',
+                        lambda model, args, config, paths:
+                        given.extend(paths) or len(paths))
+    args = _Args(all=True, by_night=False, source_dir=str(tmp_path),
+                 refit=False, weight='flux', mask='none', workers=4,
+                 fits=str(tmp_path / 'components.fits'),
+                 corrected_dir=str(tmp_path / 'out'),
+                 residuals_dir=str(tmp_path / 'residuals'))
+    model = dict(coeffs=dict(filename=names), n_star=1, n_earth=2)
+    reconstruct.correct_many(model, args)
+    assert [os.path.basename(p) for p in given] == names

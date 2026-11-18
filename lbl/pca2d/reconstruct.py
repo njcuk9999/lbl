@@ -2009,6 +2009,9 @@ def correct_many(model, args):
     written = skipped = refitted = 0
     permute = getattr(args, "permute_b", None)
     prepared = []
+    # every file asked for, kept for the residuals: the threaded path empties
+    #   `pairs` once it has corrected them (so that the loop below has none)
+    asked = [path for path, _ in pairs]
     workers = int(getattr(args, "workers", 1) or 1)
     if workers > 1 and permute is None:
         # IN THREADS, NOT PROCESSES: every exposure reads the same model and
@@ -2107,7 +2110,7 @@ def correct_many(model, args):
             written += 1
             covered.append(100.0 * touched / max(total, 1))
     if getattr(args, "residuals_dir", None):
-        write_residuals(model, args, config, [path for path, _ in pairs])
+        write_residuals(model, args, config, asked)
     if covered:
         import numpy as _np
         log("  samples corrected per file: median %.1f%%, worst %.1f%%"
