@@ -20,7 +20,10 @@
   stopping the run: the template once made, the velocities it measured on
   its spectra, with their uncertainties, against the spectrum's number and
   its MJD, and the spectra registered at them (`SMALL_RV_SHIFT` unticked;
-  each spectrum's velocity is written in the log too), then the other steps' (the mask's CCF, compute's CCF and lines,
+  each spectrum's velocity is written in the log too), then the other
+  steps' (the mask's CCF, compute's CCF and lines, PCA2D's fit: the variance
+  share of each component, its eigenvalue, and the rank correlation of each
+  component's amplitude with the observing conditions, one plot per pass;
   compile's distributions and bands, the telluric correction); a plot drawn
   for every spectrum is shown for the first spectrum of each object only.
   One fixed frame: the newest as it comes, or the one picked with the

@@ -166,3 +166,27 @@ def test_the_lines_plot_is_divided_by_the_order_s_median(tmp_path,
     assert np.all(np.abs(top.lines[1].get_ydata()) < 1.1)
     assert np.all(np.abs(bottom.lines[0].get_ydata()) < 0.02)
     assert 'median of the order' in top.get_ylabel()
+
+
+def test_the_pca2d_fit_plot_once_per_fit(tmp_path, monkeypatch):
+    """PCA2D's fit: its eigenvalues and the correlations of its components
+    with the observing conditions, one plot per fit (a second pass gets its
+    own), nothing without a window"""
+    from lbl.pca2d import twoframe
+    rng = np.random.default_rng(0)
+    comps = [('b1', rng.normal(size=40)), ('b2', rng.normal(size=40))]
+    rho = np.array([[0.7, -0.1], [0.05, -0.5]])
+    outdir = tmp_path / 'STAR' / 's1-o7'
+    outdir.mkdir(parents=True)
+    monkeypatch.delenv(liveplot.ENV, raising=False)
+    twoframe.live_fit_plot(str(outdir), [], [5.0, 1.0], 100.0, rho, comps,
+                           ['BERV', 'airmass'])
+    folder = tmp_path / 'plots'
+    monkeypatch.setenv(liveplot.ENV, str(folder))
+    for _ in range(2):
+        twoframe.live_fit_plot(str(outdir), [], [5.0, 1.0], 100.0, rho,
+                               comps, ['BERV', 'airmass'])
+    titles = [row['title'] for row in liveplot.read_index(str(folder))]
+    assert titles == ['PCA2D fit: eigenvalues, correlations with the'
+                      ' conditions', 'PCA2D fit: eigenvalues, correlations'
+                      ' with the conditions, pass 2']

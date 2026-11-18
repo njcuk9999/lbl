@@ -3020,6 +3020,74 @@ def correlate_and_plot(outdir, a, b, labels, values, title=""):
     write_correlation_table(rho, comps, list(labels),
                             os.path.join(outdir, "correlations.csv"))
     report_correlations(rho, comps, list(labels))
+    return rho, comps
+
+
+def live_fit_plot(outdir, power_star, power_earth, chi2_null, rho, comps,
+                  labels):
+    """The fit at a glance, for the LBL window that watches the run
+    (lbl.science.liveplot; nothing otherwise): the share of the weighted
+    variance each component takes (its eigenvalue), star and observer
+    blocks, and the rank correlation of each component's amplitude with the
+    observing conditions (BERV, airmass, SNR, humidity, water...). Once per
+    fit: a second pass of the correction gets its own. Never fatal."""
+    from lbl.science import liveplot
+    if not liveplot.active():
+        return
+    try:
+        obj = os.path.basename(os.path.dirname(os.path.abspath(outdir)))
+        star = 100.0 * np.asarray(power_star, dtype=float) / chi2_null
+        earth = 100.0 * np.asarray(power_earth, dtype=float) / chi2_null
+        fig, (left, right) = plt.subplots(
+            1, 2, figsize=(12, 5.2), gridspec_kw=dict(width_ratios=[1, 1.6]))
+        names = (["a%d" % (k + 1) for k in range(star.size)]
+                 + ["b%d" % (k + 1) for k in range(earth.size)])
+        share = np.concatenate([star, earth])
+        colours = ["C0"] * star.size + ["C1"] * earth.size
+        left.bar(np.arange(share.size), np.where(share > 0, share, np.nan),
+                 color=colours)
+        left.set_yscale("log")
+        left.set_xticks(np.arange(share.size))
+        left.set_xticklabels(names, fontsize=8)
+        left.set_ylabel("share of the weighted variance [%]")
+        left.set_title("eigenvalues: star (a, blue) and observer (b, orange)"
+                       "\nblocks, %.1f %% of the variance in all"
+                       % float(np.nansum(share)), fontsize=9)
+        left.grid(color="lightgrey", linestyle="--", axis="y")
+        if rho is not None and len(labels):
+            image = right.imshow(rho, cmap="RdBu_r", vmin=-1, vmax=1,
+                                 aspect="auto")
+            right.set_xticks(np.arange(len(labels)))
+            right.set_xticklabels(list(labels), rotation=45, ha="right",
+                                  fontsize=8)
+            right.set_yticks(np.arange(len(comps)))
+            right.set_yticklabels([name for name, _ in comps], fontsize=8)
+            for i in range(rho.shape[0]):
+                for j in range(rho.shape[1]):
+                    if np.isfinite(rho[i, j]) and abs(rho[i, j]) >= 0.3:
+                        right.text(j, i, "%+.2f" % rho[i, j], ha="center",
+                                   va="center", fontsize=7,
+                                   fontweight="bold")
+            fig.colorbar(image, ax=right, label="Spearman rho")
+            right.set_title("each component's amplitude against the observing"
+                            " conditions\n(values shown where |rho| >= 0.3)",
+                            fontsize=9)
+        else:
+            right.text(0.5, 0.5, "no observing condition to correlate",
+                       ha="center", va="center", transform=right.transAxes)
+            right.set_axis_off()
+        fig.suptitle("PCA2D fit of %s" % obj)
+        fig.tight_layout()
+        done = sum(1 for row in liveplot.read_index()
+                   if str(row.get("key", "")).startswith("pca2d_fit_" + obj))
+        liveplot.save(fig, "pca2d_fit_%s%s" % (obj, "_%d" % (done + 1)
+                                               if done else ""),
+                      "PCA2D fit: eigenvalues, correlations with the"
+                      " conditions" + (", pass %d" % (done + 1) if done
+                                       else ""), "pca2d", obj)
+    except Exception as exc:                                  # noqa: BLE001
+        log("  the plot of the fit for the window was not made: %s" % exc,
+            "warn")
 
 
 def replot(outdir, cube=None):
@@ -4121,10 +4189,14 @@ def main(argv=None):
                          os.path.join(args.outdir, "variance.csv"))
     plot_components(grid, P, Q, power_star, power_earth, chi2_null,
                     os.path.join(args.outdir, "components.pdf"))
-    correlate_and_plot(args.outdir, a[keep], b[keep], anc_labels,
-                       anc_values[:, keep] if len(anc_labels) else anc_values,
-                       title=exposures_label(table["filename"], keep,
-                                             _per_row(table), row_unit(meta)))
+    found = correlate_and_plot(
+        args.outdir, a[keep], b[keep], anc_labels,
+        anc_values[:, keep] if len(anc_labels) else anc_values,
+        title=exposures_label(table["filename"], keep, _per_row(table),
+                              row_unit(meta)))
+    rho, comps = found if found else (None, [])
+    live_fit_plot(args.outdir, power_star, power_earth, chi2_null, rho, comps,
+                  anc_labels)
     write_components_fits(os.path.join(args.outdir, "twoframe_components.fits"),
                           grid, P, Q, template, means, power_star, power_earth,
                           chi2_null, chi2, table, dv, tied=bool(args.tie_parities),
