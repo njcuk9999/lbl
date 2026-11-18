@@ -9,6 +9,9 @@ Created on 2026-10-24
 
 @author: artigau
 """
+import glob
+import os
+
 import numpy as np
 from astropy import constants
 from astropy.io import fits
@@ -71,3 +74,22 @@ def test_the_free_fit_of_the_template_and_only_it(tmp_path):
               kepler=[1.0, 2.0, 3.0, 4.0])
     assert lbl_pca2d.object_velocities('STAR', None, str(tmp_path),
                                        'SPIROU', quiet) == {}
+
+
+def test_a_template_iterated_on_the_orbits_gives_its_velocities(tmp_path):
+    """PLANETS and SMALL_RV_SHIFT False: the template starts from the orbits
+    and iterates on top of them (RVITER), and its VSYS, the star's whole
+    velocity, goes to PCA2D; made on the orbits alone (no RVITER), none"""
+    def quiet(*args, **kwargs):
+        pass
+    _template(tmp_path, 'STAR', [100.0, 130.0, 70.0, 100.0],
+              kepler=[1.0, 2.0, 3.0, 4.0])
+    path = glob.glob(os.path.join(str(tmp_path), 'templates',
+                                  '*STAR*.fits'))[0]
+    assert lbl_pca2d.object_velocities('STAR', None, str(tmp_path),
+                                       'SPIROU', quiet) == {}
+    with fits.open(path, mode='update') as hdul:
+        hdul[0].header['RVITER'] = True
+    assert lbl_pca2d.object_velocities('STAR', None, str(tmp_path),
+                                       'SPIROU', quiet) == {
+        '0.fits': 0.0, '1.fits': 0.03, '2.fits': -0.03, '3.fits': 0.0}

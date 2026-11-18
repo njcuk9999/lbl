@@ -583,8 +583,16 @@ def object_velocities(name: str, comparison, data_dir: str, instrument: str,
         table = Table.read(path, 'SCI_TABLE')
     except Exception:                                         # noqa: BLE001
         return dict()
-    if 'VSYS' not in table.colnames or 'VKEP' in table.colnames \
-            or 'FILENAME' not in table.colnames:
+    # a template made on the known orbits alone holds no measured velocity
+    #   (VKEP, PCA2D follows the orbits); one that iterated on top of them
+    #   (RVITER, SMALL_RV_SHIFT False) holds the star's whole velocity
+    try:
+        from astropy.io import fits as _fits
+        iterated = bool(_fits.getheader(path).get('RVITER', False))
+    except Exception:                                         # noqa: BLE001
+        iterated = False
+    if 'VSYS' not in table.colnames or 'FILENAME' not in table.colnames \
+            or ('VKEP' in table.colnames and not iterated):
         return dict()
     vsys = np.asarray(table['VSYS'], dtype=float)
     good = np.isfinite(vsys)

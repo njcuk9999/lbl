@@ -783,6 +783,10 @@ class Instrument:
         # SMALL_RV_SHIFT: the star's velocity taken as constant, one pass
         header['SMALLRV'] = (bool(props.get('small_rv_shift', False)),
                              'template on BERV alone, constant velocity')
+        # the velocities of the spectra measured while the template was made
+        #   (SMALL_RV_SHIFT False, the orbits included when known): VSYS
+        header['RVITER'] = (bool(props.get('iterated', False)),
+                            'VSYS measured, iterating on the velocities')
         if found is not None:
             header['PLNSTAR'] = (str(found['star']), 'star in the catalog')
             header['PLNCAT'] = (os.path.basename(found['catalog']),

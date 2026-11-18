@@ -516,8 +516,9 @@ def _bervbin_template(inst, science_files, blaze, calib_dir, wavegrid,
             if sig < inst.params['MAX_CONVERGENCE_TEMPLATE_RV']:
                 break
         # with the companions' velocities the spectra are already where they
-        #   belong: one pass, no iteration on the velocities
-        if planets_used is not None:
+        #   belong: one pass, no iteration on the velocities (unless
+        #   SMALL_RV_SHIFT is False: n_passes)
+        if planets_used is not None and n_passes == 1:
             log.general('PLANETS: template made in one pass, on BERV + the '
                         'Keplerian velocity of each spectrum')
             break
@@ -773,9 +774,21 @@ def run_template(inst, objname: str, objkind: str):
         log.info('SMALL_RV_SHIFT: the velocity of the star is taken as '
                  'constant: the template is made on BERV alone, in one pass '
                  '(SMALL_RV_SHIFT = False iterates on the velocities)')
-    # the passes: one when the velocities are known (or taken as
-    #   constant), up to 5 otherwise
-    n_passes = 1 if (planets_used is not None or flat_rv) else 5
+    # the passes: one when the velocities are taken as known (the orbits,
+    #   SMALL_RV_SHIFT True) or constant, up to 5 otherwise. KNOWN ORBITS
+    #   AND SMALL_RV_SHIFT False: the template starts from the orbits and
+    #   iterates on top of them, since the planets were in the spectra to
+    #   start with: the velocities measured (VSYS) are then the star's whole
+    #   velocity, the orbits included, and PCA2D's star frame follows them
+    #   (lbl_pca2d.object_velocities, RVITER in the header)
+    orbits_only = (planets_used is not None
+                   and bool(inst.params['SMALL_RV_SHIFT']))
+    n_passes = 1 if (orbits_only or flat_rv) else 5
+    if planets_used is not None and not orbits_only:
+        log.info('PLANETS and SMALL_RV_SHIFT = False: the template starts '
+                 'from the known orbits and iterates on the velocities, '
+                 'which then hold the orbits and whatever else moves the '
+                 'star')
     # the template: local polynomials through the pixels of all the spectra,
     #   none resampled (BSD), or the median of the spectra resampled and
     #   stacked in bins of BERV (BERVBIN, also for the FP)
@@ -915,7 +928,8 @@ def run_template(inst, objname: str, objkind: str):
                  rms_even=rms_even, template_coverage=template_coverage,
                  total_nobs_berv=total_nobs_berv, template_nobs=nfiles,
                  savgol_fluxes=savgol_fluxes, template_type=template_type,
-                 planets=planets_used, small_rv_shift=flat_rv)
+                 planets=planets_used, small_rv_shift=flat_rv,
+                 iterated=(n_passes > 1))
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
     # and what it was made from (provenance)

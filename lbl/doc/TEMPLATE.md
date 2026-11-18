@@ -85,6 +85,17 @@ of bad pixels on the lines' flanks, after the scan, the velocities stay at
 0.8 m/s rms (the photon noise's) where the least squares of before are
 pulled to 22 m/s; without bad pixels the two agree (0.8 m/s).
 
+With `PLANETS` and the star's orbits known, `SMALL_RV_SHIFT = True` makes
+the template in one pass on the orbits; `False` starts from the orbits and
+iterates on top of them, since the planets were in the spectra to start
+with: `VSYS` is then the star's whole velocity, the orbits included (`VKEP`
+their part), and `RVITER` in the header says the velocities were measured.
+On GJ1 (NIRPS, 168 spectra, a K = 10 m/s signal injected, 2026-11-18), the
+template's velocities give K = 10.9 +- 0.7 m/s free and 11.0 +- 0.7 m/s
+starting from the injected orbit known (1.0 m/s of it added by the
+iteration), and follow LBL's velocities of the same spectra to 3.9 m/s rms
+(correlation 0.92).
+
 These velocities are kept in the template's table of spectra (`VSYS`).
 PCA2D's star frame follows them (`registration.velocities`, by file name),
 so that its star component is built where the star is and the PCA does not
