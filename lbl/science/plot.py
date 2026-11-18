@@ -21,6 +21,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.instruments import select
+from lbl.science import liveplot
 
 # =============================================================================
 # Define variables
@@ -49,6 +50,13 @@ def import_matplotlib():
     # deal with plt already set
     if PLT_MOD is not None:
         return PLT_MOD
+    # a run the LBL window watches: no window of its own, the plots are saved
+    #   for the window's (lbl.science.liveplot)
+    if liveplot.active():
+        matplotlib.use('Agg', force=True)
+        import matplotlib.pyplot as plt
+        PLT_MOD = plt
+        return plt
     # fix for MacOSX plots freezing
     if platform.system() == 'darwin':
         gui_env = ['MacOSX', 'Qt5Agg', 'GTKAgg', 'TKAgg', 'WXAgg', 'Agg']
@@ -66,6 +74,36 @@ def import_matplotlib():
         except Exception as _:
             continue
     return None
+
+
+def _wanted(inst: InstrumentsType, switch, key):
+    """
+    Whether to draw a plot: PLOT, or a run the LBL window watches
+    (lbl.science.liveplot), and the plot's own switch; for a watched run,
+    the first of its key only (a plot made per file is drawn for the first
+    file of each object, and not drawn at all for the others). The key is
+    made only past PLOT, which reads nothing else when the plot is off
+
+    :param inst: Instrument
+    :param switch: str or None, the plot's own parameter (PLOT_COMPUTE_CCF)
+    :param key: callable giving the plot and its object (or that str)
+
+    :return: str, the key, or None: no plot
+    """
+    if not (inst.params['PLOT'] or liveplot.active()):
+        return None
+    if switch is not None and not inst.params[switch]:
+        return None
+    key = key() if callable(key) else key
+    if liveplot.active() and not liveplot.claim(key):
+        return None
+    return key
+
+
+def _objects(inst: InstrumentsType) -> str:
+    """The science object and its template, for a plot's key"""
+    return '{0}_{1}'.format(inst.params['OBJECT_SCIENCE'],
+                            inst.params['OBJECT_COMPARISON'])
 
 
 # =============================================================================
@@ -95,6 +133,122 @@ def plot_blank(inst: InstrumentsType, **kwargs):
     plt.close()
 
 
+def template_plot(inst: InstrumentsType, wavegrid: np.ndarray,
+                  flux: np.ndarray, eflux: np.ndarray, objname: str):
+    """
+    The template once made: the whole spectrum, normalized, and a window of
+    2 nm about COMPIL_SLOPE_REF_WAVE with its uncertainty
+
+    :param inst: Instrument
+    :param wavegrid: np.ndarray, the template's grid [nm]
+    :param flux: np.ndarray, the template
+    :param eflux: np.ndarray or None, its uncertainty
+    :param objname: str, the object
+    """
+    key = _wanted(inst, None, lambda: 'template_' + str(objname))
+    if key is None:
+        return
+    plt = import_matplotlib()
+    flux = np.asarray(flux, dtype=float)
+    norm = np.nanmedian(flux)
+    if not np.isfinite(norm) or norm == 0:
+        norm = 1.0
+    fig, frames = plt.subplots(ncols=1, nrows=2, figsize=(9, 6.5))
+    frames[0].plot(wavegrid, flux / norm, color='k', lw=0.3, rasterized=True)
+    # the scale of the template, not of the few points at its edges that
+    #   the low blaze leaves far off
+    low, high = np.nanpercentile(flux / norm, [0.5, 99.5])
+    pad = 0.1 * (high - low) if high > low else 0.1
+    frames[0].set_ylim(low - pad, high + pad)
+    frames[0].set(xlabel='Wavelength [nm]', ylabel='flux / median',
+                  title='Template of {0}: {1} points'.format(
+                      objname, int(np.sum(np.isfinite(flux)))))
+    centre = float(inst.params['COMPIL_SLOPE_REF_WAVE'] or
+                   np.nanmedian(wavegrid))
+    good = np.isfinite(flux)
+    if good.any():
+        # the window where the template is, nearest the reference
+        centre = float(wavegrid[good][np.argmin(np.abs(wavegrid[good] -
+                                                       centre))])
+    zoom = np.abs(wavegrid - centre) < 1.0
+    # the window normalized by its own level
+    local = np.nanmedian(flux[zoom])
+    if not np.isfinite(local) or local == 0:
+        local = norm
+    frames[1].plot(wavegrid[zoom], flux[zoom] / local, color='k', lw=0.8)
+    if eflux is not None:
+        err = np.asarray(eflux, dtype=float)[zoom] / local
+        frames[1].fill_between(wavegrid[zoom], flux[zoom] / local - err,
+                               flux[zoom] / local + err, color='C0',
+                               alpha=0.3, lw=0, label='uncertainty')
+        frames[1].legend(loc=0)
+    frames[1].set(xlabel='Wavelength [nm]', ylabel='flux / local median',
+                  title='{0:.1f} to {1:.1f} nm'.format(centre - 1.0,
+                                                       centre + 1.0))
+    plt.tight_layout()
+    liveplot.finish(plt, key, 'template', 'template', objname)
+    plt.close()
+
+
+def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
+                           times: np.ndarray, time_label: str,
+                           changes: List[float], cloud_x: np.ndarray,
+                           cloud_y: np.ndarray, grid_x: np.ndarray,
+                           grid_y: np.ndarray, objname: str):
+    """
+    The velocities the template measured on its spectra (SMALL_RV_SHIFT
+    False), and the spectra registered at them on one order: the cloud of
+    their pixels in the star's frame, the template through it
+
+    :param inst: Instrument
+    :param velocities: np.ndarray, each spectrum's velocity [m/s]
+    :param times: np.ndarray, their times (or their numbers)
+    :param time_label: str, what the times are
+    :param changes: list of float, the rms change of each pass [m/s]
+    :param cloud_x: np.ndarray, the pixels' ln(wavelength), star's frame
+    :param cloud_y: np.ndarray, their normalized flux
+    :param grid_x: np.ndarray, the template's ln(wavelength)
+    :param grid_y: np.ndarray, the template there
+    :param objname: str, the object
+    """
+    key = _wanted(inst, None, lambda: 'template_velocities_' + str(objname))
+    if key is None:
+        return
+    plt = import_matplotlib()
+    fig, frames = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
+    vel = np.asarray(velocities, dtype=float)
+    vel = vel - np.nanmedian(vel)
+    frames[0].plot(times, vel, '.', ms=4, color='C3')
+    frames[0].set(xlabel=time_label, ylabel='velocity less its median [m/s]',
+                  title='Velocities of the {0} spectra of {1} (Bouchy, pixel '
+                        'by pixel, mixture model): rms {2:.1f} m/s'.format(
+                            int(np.sum(np.isfinite(vel))), objname,
+                            float(np.nanstd(vel))))
+    frames[0].text(0.01, 0.97, 'change per pass: ' + ', '.join(
+        '{0:.1f}'.format(c) for c in changes) + ' m/s rms',
+        transform=frames[0].transAxes, va='top', fontsize=8)
+    frames[0].grid(color='lightgrey', linestyle='--')
+    if len(cloud_x):
+        centre = float(np.nanmedian(cloud_x))
+        # 1 nm about the order's middle, in ln(wavelength)
+        half = 0.5 / np.exp(centre)
+        inc = np.abs(cloud_x - centre) < half
+        ing = np.abs(grid_x - centre) < half
+        frames[1].plot(np.exp(cloud_x[inc]), cloud_y[inc], ',', color='C0',
+                       alpha=0.5, rasterized=True,
+                       label='the spectra, registered')
+        frames[1].plot(np.exp(grid_x[ing]), grid_y[ing], color='k', lw=1.2,
+                       label='template')
+        frames[1].legend(loc=0)
+        frames[1].set(xlabel='Wavelength, star frame [nm]',
+                      ylabel='normalized flux',
+                      title='Every spectrum at its velocity, one order')
+    plt.tight_layout()
+    liveplot.finish(plt, key, 'template velocities, the spectra registered',
+                    'template', objname)
+    plt.close()
+
+
 def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
                      ccf_vector: np.ndarray, ccf_fit: np.ndarray,
                      gcoeffs: np.ndarray):
@@ -112,11 +266,10 @@ def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     # import matplotlib
     plt = import_matplotlib()
     # -------------------------------------------------------------------------
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
-        return
-    # plot specific switch
-    if not inst.params['PLOT_COMPUTE_CCF']:
+    # PLOT (or a watched run, its first spectrum) and its own switch
+    key = _wanted(inst, 'PLOT_COMPUTE_CCF',
+                  lambda: 'compute_ccf_' + _objects(inst))
+    if key is None:
         return
     # -------------------------------------------------------------------------
     # set up plot
@@ -138,7 +291,8 @@ def compute_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     # show and close plot
     plt.grid(color='lightgrey', linestyle='--')
     plt.tight_layout()
-    plt.show()
+    liveplot.finish(plt, key, 'CCF of the first spectrum against the '
+                    'template', 'compute', inst.params['OBJECT_SCIENCE'])
     plt.close()
 
 
@@ -158,11 +312,10 @@ def compute_plot_sysvel(inst: InstrumentsType, dvgrid: np.ndarray,
     """
     # import matplotlib
     plt = import_matplotlib()
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
-        return
-    # plot specific switch
-    if not inst.params['PLOT_COMPUTE_SYSVEL']:
+    # PLOT (or a watched run, its first spectrum) and its own switch
+    key = _wanted(inst, 'PLOT_COMPUTE_SYSVEL',
+                  lambda: 'compute_sysvel_' + _objects(inst))
+    if key is None:
         return
     # set up plot
     fig, frames = plt.subplots(ncols=1, nrows=2, sharex='all')
@@ -182,7 +335,8 @@ def compute_plot_sysvel(inst: InstrumentsType, dvgrid: np.ndarray,
              'fwhm={3:.4f} km/s\nCCF SNR={4:.4f}')
     plt.suptitle(title.format(*targs))
     # show and close plot
-    plt.show()
+    liveplot.finish(plt, key, 'systemic velocity, CCF with the mask',
+                    'compute', inst.params['OBJECT_SCIENCE'])
     plt.close()
 
 
@@ -198,11 +352,10 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
     # import matplotlib
     plt = import_matplotlib()
     # -------------------------------------------------------------------------
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
-        return
-    # plot specific switch
-    if not inst.params['PLOT_COMPUTE_LINES']:
+    # PLOT (or a watched run, its first spectrum) and its own switch
+    key = _wanted(inst, 'PLOT_COMPUTE_LINES',
+                  lambda: 'compute_lines_' + _objects(inst))
+    if key is None:
         return
     # -------------------------------------------------------------------------
     # extract values from plot dict
@@ -266,7 +419,8 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
     frame[0].legend(loc=0)
     # -------------------------------------------------------------------------
     # show and close plot
-    plt.show()
+    liveplot.finish(plt, key, 'lines of the first spectrum against the '
+                    'template', 'compute', inst.params['OBJECT_SCIENCE'])
     plt.close()
 
 
@@ -289,11 +443,10 @@ def compil_cumulative_plot(inst: InstrumentsType, vrange: List[np.ndarray],
     """
     # import matplotlib
     plt = import_matplotlib()
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
-        return
-    # plot specific switch
-    if not inst.params['PLOT_COMPIL_CUMUL']:
+    # PLOT (or a watched run) and its own switch
+    key = _wanted(inst, 'PLOT_COMPIL_CUMUL',
+                  lambda: 'compile_cumulative_' + _objects(inst))
+    if key is None:
         return
     # -------------------------------------------------------------------------
     # set up plot
@@ -317,6 +470,9 @@ def compil_cumulative_plot(inst: InstrumentsType, vrange: List[np.ndarray],
     plt.suptitle(title.format(*targs))
     # show and close plot
     plt.savefig(plot_path)
+    if liveplot.active():
+        liveplot.save(plt.gcf(), key, 'distribution of the lines\' '
+                      'velocities', 'compile', inst.params['OBJECT_SCIENCE'])
     plt.close()
 
 
@@ -331,11 +487,10 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     """
     # import matplotlib
     plt = import_matplotlib()
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
-        return
-    # plot specific switch
-    if not inst.params['PLOT_COMPIL_BINNED']:
+    # PLOT (or a watched run) and its own switch
+    key = _wanted(inst, 'PLOT_COMPIL_BINNED',
+                  lambda: 'compile_binned_' + _objects(inst))
+    if key is None:
         return
     # -------------------------------------------------------------------------
     # get the band names from params: a band with no column in the table
@@ -398,7 +553,8 @@ def compil_binned_band_plot(inst: InstrumentsType, rdb_table: Table):
     plt.suptitle(title.format(*targs))
     # -------------------------------------------------------------------------
     # show and close plot
-    plt.show()
+    liveplot.finish(plt, key, 'velocities, by band', 'compile',
+                    inst.params['OBJECT_SCIENCE'])
     plt.close()
 
 
@@ -417,11 +573,9 @@ def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
     # import matplotlib
     plt = import_matplotlib()
     # -------------------------------------------------------------------------
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
-        return
-    # plot specific switch
-    if not inst.params['PLOT_MASK_CCF']:
+    # PLOT (or a watched run) and its own switch
+    key = _wanted(inst, 'PLOT_MASK_CCF', lambda: 'mask_ccf_' + _objects(inst))
+    if key is None:
         return
     # -------------------------------------------------------------------------
     # set up plot
@@ -438,7 +592,8 @@ def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
               title=title.format(*targs))
     # -------------------------------------------------------------------------
     # show and close plot
-    plt.show()
+    liveplot.finish(plt, key, 'CCF of the template with its mask', 'mask',
+                    inst.params['OBJECT_SCIENCE'])
     plt.close()
 
 
@@ -448,10 +603,10 @@ def tellu_corr_plot(inst: InstrumentsType, wave_vector: np.ndarray,
                     template_flag: bool, objname: str):
     # import matplotlib
     plt = import_matplotlib()
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
-        return
-    if not inst.params['PLOT_TELLU_CORR_PLOT']:
+    # PLOT (or a watched run, its first spectrum) and its own switch
+    key = _wanted(inst, 'PLOT_TELLU_CORR_PLOT',
+                  lambda: 'telluclean_' + str(objname))
+    if key is None:
         return
     # get parameters from inst
     trans_threshold = inst.params['TELLUCLEAN_TRANSMISSION_THRESHOLD']
@@ -488,7 +643,8 @@ def tellu_corr_plot(inst: InstrumentsType, wave_vector: np.ndarray,
     frame.set(xlabel='Wavelength [nm]', ylabel='Normalized flux\n transmission',
               title='Object = {0}'.format(objname), ylim=[0, 1.1])
     # show and close plot
-    plt.show()
+    liveplot.finish(plt, key, 'telluric correction of the first spectrum',
+                    'telluclean', str(objname))
     plt.close()
 
 
@@ -499,8 +655,9 @@ def smart_nblaze_plot(inst: InstrumentsType, wa_ord: np.ndarray,
                       nth_deg: int):
     # import matplotlib
     plt = import_matplotlib()
-    # this is a plot skip if this is True
-    if not inst.params['PLOT']:
+    # PLOT (or a watched run) and its own switch
+    key = _wanted(inst, None, lambda: 'blaze_{0}'.format(inst.name))
+    if key is None:
         return
     # set up plot
     fig, frames = plt.subplots(ncols=1, nrows=2, sharex='all')
@@ -546,7 +703,10 @@ def smart_nblaze_plot(inst: InstrumentsType, wa_ord: np.ndarray,
     plt.suptitle(f'{inst.name} [{inst.params["DATA_SOURCE"]}]')
     # -------------------------------------------------------------------------
     # show and close plot
-    plt.show(block=True)
+    if liveplot.active():
+        liveplot.save(plt.gcf(), key, 'the blaze, normalized', 'blaze')
+    else:
+        plt.show(block=True)
     plt.close()
 
 

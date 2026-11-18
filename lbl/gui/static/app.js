@@ -1991,6 +1991,7 @@ async function pollQueue() {
   const job = jobs.find((j) => j.id === selectedJob);
   if (job && job.steps && job.steps.length) drawSteps(job.steps, t('steps_of', job.name));
   else drawSteps(plannedSteps);
+  drawRunPlots(job);
   if (job) {
     $('log_stage').textContent = [job.stage, job.counter].filter(Boolean).join(' · ');
     $('log_stage').className = `badge ${job.state}`;
@@ -1998,6 +1999,52 @@ async function pollQueue() {
     $('stop').textContent = job.state === 'queued' ? t('cancel') : t('stop');
     $('stop').disabled = !['queued', 'running'].includes(job.state);
   }
+}
+
+// ── the run's plots (lbl.science.liveplot): LBL saves them in the run's
+//   folder as it draws them; one fixed frame shows one, the newest as it
+//   comes ("follow"), or the one picked, which stays
+let RUNPLOTS = { job: null, list: [], index: -1, follow: true };
+function drawRunPlots(job) {
+  const list = (job && job.plots) || [];
+  $('plots_card').hidden = !list.length;
+  const sameJob = Boolean(job) && RUNPLOTS.job === job.id;
+  if (!sameJob) {
+    RUNPLOTS = { job: job ? job.id : null, list: [], index: -1, follow: true };
+    $('plot_view').removeAttribute('src');
+    delete $('plot_view').dataset.path;
+  }
+  if (!list.length) return;
+  if (list.length !== RUNPLOTS.list.length) {
+    RUNPLOTS.list = list;
+    $('plot_pick').replaceChildren(...list.map((plot, i) => el('option', {
+      value: String(i),
+      text: `${i + 1}. ${plot.title}${plot.object ? ` · ${plot.object}` : ''}${plot.step ? ` (${plot.step})` : ''}`,
+    })));
+    showRunPlot(RUNPLOTS.follow || RUNPLOTS.index < 0 ? list.length - 1 : RUNPLOTS.index);
+  }
+  $('plot_follow').checked = RUNPLOTS.follow;
+}
+function showRunPlot(index) {
+  const list = RUNPLOTS.list;
+  if (!list.length) return;
+  const i = Math.max(0, Math.min(list.length - 1, index));
+  RUNPLOTS.index = i;
+  $('plot_pick').value = String(i);
+  $('plot_prev').disabled = i === 0;
+  $('plot_next').disabled = i === list.length - 1;
+  const frame = $('plot_view');
+  // the same file is not loaded again (a frame reloaded flickers)
+  if (frame.dataset.path !== list[i].path) {
+    frame.src = `/file?path=${encodeURIComponent(list[i].path)}#toolbar=0&navpanes=0&view=FitH`;
+    frame.dataset.path = list[i].path;
+  }
+}
+function pickRunPlot(index) {
+  showRunPlot(index);
+  // picked: it stays, unless it is the newest, which the frame then follows
+  RUNPLOTS.follow = RUNPLOTS.index === RUNPLOTS.list.length - 1;
+  $('plot_follow').checked = RUNPLOTS.follow;
 }
 
 function selectJob(id) {
@@ -3174,6 +3221,13 @@ async function init() {
   $('load_wrap').onclick = loadWrap;
   $('wrap_list').onchange = (event) => { $('wrap_path').value = event.target.value; };
   $('queue').onclick = queue;
+  $('plot_prev').onclick = () => pickRunPlot(RUNPLOTS.index - 1);
+  $('plot_next').onclick = () => pickRunPlot(RUNPLOTS.index + 1);
+  $('plot_pick').onchange = (event) => pickRunPlot(Number(event.target.value));
+  $('plot_follow').onchange = (event) => {
+    RUNPLOTS.follow = event.target.checked;
+    if (RUNPLOTS.follow) showRunPlot(RUNPLOTS.list.length - 1);
+  };
   $('save_wrap').onclick = () => saveWrap(false);
   $('stop').onclick = stopJob;
   $('overwrite_all').onchange = (event) => setOverwrite(event.target.checked);

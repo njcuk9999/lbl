@@ -407,6 +407,38 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
     return C_MS * np.tanh(delta)
 
 
+def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
+                     reg: List[int], berv: np.ndarray, rv0: np.ndarray,
+                     lngrid: np.ndarray, sci_table: Dict[str, Any],
+                     changes: List[float]) -> None:
+    """The velocities measured and the spectra registered at them, on the
+    middle order of those measured (lbl.science.plot, for PCA2D's and the
+    window's eyes): never fatal"""
+    try:
+        from lbl.science import plot
+        times, label = np.arange(len(rv0)), 'spectrum'
+        for key in ('BJD', 'MJDMID', 'MJDATE', 'MJD-OBS', 'MJD'):
+            if key in sci_table and len(sci_table[key]) == len(rv0):
+                values = np.asarray(sci_table[key], dtype=float)
+                if np.isfinite(values).any():
+                    times, label = values, key
+                    break
+        io_ = len(reg) // 2
+        cloud_x, cloud_y = np.array([]), np.array([])
+        grid_x, grid_y = np.array([]), np.array([])
+        if fits.get(io_) is not None:
+            cloud_x, cloud_y, _ = _cloud(data, io_, star_shift(berv, rv0))
+            fit = fits[io_]
+            grid_x = lngrid[fit['i0']:fit['i1']]
+            grid_y = fit['derivs'][:, 0]
+        plot.template_velocity_plot(
+            inst, rv0, times, label, changes, cloud_x, cloud_y, grid_x,
+            grid_y, inst.params['OBJECT_SCIENCE'])
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('the plot of the template\'s velocities was not made: '
+                    '{0}'.format(exc))
+
+
 def build(inst, science_files: List[str], load_science: Callable, blaze,
           calib_dir: str, wavegrid: np.ndarray, berv: np.ndarray,
           rv0: np.ndarray, iterate_rv: bool, tqdm) -> Dict[str, Any]:
@@ -487,6 +519,7 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
         data = read_orders(inst, science_files, load_science, blaze,
                            calib_dir, reg, hp_pix, tqdm, sci_table, berv,
                            desc='Reading spectra (velocities)')
+        changes = []
         for ite in range(5):
             shifts = star_shift(berv, rv0)
             fits = {io_: fit_order(data, io_, shifts, lngrid, fit_params,
@@ -497,10 +530,13 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
             rv0 = mp.add_velocities(rv0, dv)
             n1, p1 = np.nanpercentile(dv, [16, 84])
             sig = (p1 - n1) / 2.0
+            changes.append(float(sig))
             msg = 'Velocities of the spectra, pass {0}: change RMS {1:.1f} m/s'
             log.general(msg.format(ite + 1, sig))
             if sig < params['MAX_CONVERGENCE_TEMPLATE_RV']:
                 break
+        _plot_velocities(inst, data, fits, reg, berv, rv0, lngrid,
+                         sci_table, changes)
         del data
     shifts = star_shift(berv, rv0)
     # -------------------------------------------------------------------------

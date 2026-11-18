@@ -348,6 +348,21 @@
           </div>
           <div id="steps" class="steps"></div>
         </div>
+        <!-- the run's plots, as LBL draws them (lbl.science.liveplot): one
+             fixed frame, the newest shown as it comes unless another is
+             picked -->
+        <div class="card span-3" id="plots_card" hidden>
+          <div class="row spread">
+            <h2><span data-t="plots_title"></span><span class="info" data-help="run_plots"></span></h2>
+            <span class="row gap">
+              <button type="button" class="button small" id="plot_prev" data-t-title="plot_prev">&lsaquo;</button>
+              <select id="plot_pick" class="small"></select>
+              <button type="button" class="button small" id="plot_next" data-t-title="plot_next">&rsaquo;</button>
+              <label class="check small"><input type="checkbox" id="plot_follow" checked> <span data-t="plots_follow"></span></label>
+            </span>
+          </div>
+          <div class="plot-frame"><iframe id="plot_view" title="plot"></iframe></div>
+        </div>
         <div class="card span-3">
           <div class="row spread">
             <h2><span data-t="log"></span> <span class="mono small muted" id="log_title"></span></h2>

@@ -844,3 +844,8 @@ table.data.star-planets th { text-transform: none; letter-spacing: 0; }
 .explore-stats td, .explore-stats th { padding: 3px 14px 3px 0; }
 /* the Runs tab: the current folder's runs, their folder in bold */
 td.strong { font-weight: 600; }
+
+/* the run's plots: one fixed frame, whatever plot is in it */
+.plot-frame { height: 540px; border: 1px solid var(--card-edge, rgba(127,127,127,0.3)); border-radius: 8px; overflow: hidden; background: #fff; }
+.plot-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+#plot_pick { max-width: 420px; }

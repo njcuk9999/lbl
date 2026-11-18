@@ -29,6 +29,7 @@ from lbl.resources import lbl_misc
 from lbl.science import apero
 from lbl.science import general
 from lbl.science import planets
+from lbl.science import plot
 from lbl.science import template_scatter
 
 # =============================================================================
@@ -932,6 +933,11 @@ def run_template(inst, objname: str, objkind: str):
                  iterated=(n_passes > 1))
     # write table
     inst.write_template(template_file, props, refhdr, sci_table)
+    # the template, for the window's eyes (or PLOT): never fatal
+    try:
+        plot.template_plot(inst, wavegrid, p50, eflux, objname)
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('the plot of the template was not made: {0}'.format(exc))
     # and what it was made from (provenance)
     provenance.record(template_file, inputs_token, len(science_files))
 

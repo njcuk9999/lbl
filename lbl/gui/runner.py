@@ -193,7 +193,7 @@ class Job:
                     log=_log_of(self.folder),
                     events=len(self.events),
                     reports=self.reports, meta=self.meta,
-                    steps=self.steps)
+                    steps=self.steps, plots=plots_of(self.folder))
 
     def events_from(self, start: int, wait: float = 0.0):
         """The events from index `start` on, waiting up to `wait` seconds
@@ -482,6 +482,10 @@ class Runner:
         #   every redraw is an event the window keeps
         env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8",
                    LBL_PROGRESS_BARS="1", TQDM_MININTERVAL="1")
+        # the run's plots: saved in its folder as they are drawn, for the
+        #   window to show them, instead of windows that wait to be closed
+        #   (lbl.science.liveplot)
+        env["LBL_LIVE_PLOTS"] = plots_folder(job.folder)
         job.state = "running"
         job.started = time.time()
         job.note("started: %s %s" % (job.python, os.path.basename(job.wrap)))
@@ -576,6 +580,37 @@ class Runner:
         job.finish_steps()
         job.record()
         self.wake.set()
+
+
+#: where a run's plots go, in its folder (lbl.science.liveplot)
+PLOTS = "plots"
+
+
+def plots_folder(folder: str) -> str:
+    """The folder of a run's plots"""
+    return os.path.join(folder, PLOTS)
+
+
+def plots_of(folder: str) -> list:
+    """The plots a run has saved so far, in the order they came:
+    [dict(path, title, step, object, time)] (lbl.science.liveplot's index,
+    each file given its full path); [] for none"""
+    where = plots_folder(folder)
+    try:
+        with open(os.path.join(where, "index.json"),
+                  encoding="utf-8") as handle:
+            listed = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    out = []
+    for row in listed if isinstance(listed, list) else []:
+        path = os.path.join(where, str(row.get("file", "")))
+        if os.path.isfile(path):
+            out.append(dict(path=path, title=row.get("title", ""),
+                            step=row.get("step", ""),
+                            object=row.get("object", ""),
+                            time=row.get("time", "")))
+    return out
 
 
 def _log_of(folder: str) -> str:

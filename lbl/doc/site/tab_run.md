@@ -16,6 +16,18 @@
   that is not on disk is made all the same before the velocities: its pill
   is dashed, its tip says why; a step the log names that the plan did not
   have gets a dashed pill where it comes.
+- **The plots**, between the steps and the log, as LBL draws them, without
+  stopping the run: the template once made, the velocities it measured on
+  its spectra with the spectra registered at them (`SMALL_RV_SHIFT`
+  unticked), then the other steps' (the mask's CCF, compute's CCF and lines,
+  compile's distributions and bands, the telluric correction); a plot drawn
+  for every spectrum is shown for the first spectrum of each object only.
+  One fixed frame: the newest as it comes, or the one picked with the
+  arrows or the list, which stays until **follow the newest** is ticked
+  again. They are PDFs in `gui/runs/<name>/plots/` (`index.json` lists
+  them): the window gives the run that folder (`LBL_LIVE_PLOTS`,
+  `lbl/science/liveplot.py`), and LBL saves its plots there instead of
+  opening windows that wait to be closed.
 - **The log**: everything the run prints, timestamped, coloured by level;
   progress bars redraw in place. The arrows go to its top (it stops
   following) and its bottom (it follows again). **Stop** ends the run
@@ -82,3 +94,5 @@ over.
 {{help load | Load a wrap}}
 
 {{help steps | The steps}}
+
+{{help run_plots | The plots of the run}}
