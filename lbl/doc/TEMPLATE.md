@@ -96,7 +96,10 @@ starting from the injected orbit known (1.0 m/s of it added by the
 iteration), and follow LBL's velocities of the same spectra to 3.9 m/s rms
 (correlation 0.92).
 
-These velocities are kept in the template's table of spectra (`VSYS`).
+Each spectrum's velocity, less their median, and its uncertainty (the
+mixture model's) are written in the log once measured, one line per
+spectrum (its number, file and MJD), and kept in the template's table of
+spectra (`VSYS`, `VSYS_ERR`).
 PCA2D's star frame follows them (`registration.velocities`, by file name),
 so that its star component is built where the star is and the PCA does not
 take in part of a real signal; `lbl_wrap` makes the object's own template

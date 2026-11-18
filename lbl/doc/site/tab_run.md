@@ -18,8 +18,9 @@
   have gets a dashed pill where it comes.
 - **The plots**, between the steps and the log, as LBL draws them, without
   stopping the run: the template once made, the velocities it measured on
-  its spectra with the spectra registered at them (`SMALL_RV_SHIFT`
-  unticked), then the other steps' (the mask's CCF, compute's CCF and lines,
+  its spectra, with their uncertainties, against the spectrum's number and
+  its MJD, and the spectra registered at them (`SMALL_RV_SHIFT` unticked;
+  each spectrum's velocity is written in the log too), then the other steps' (the mask's CCF, compute's CCF and lines,
   compile's distributions and bands, the telluric correction); a plot drawn
   for every spectrum is shown for the first spectrum of each object only.
   One fixed frame: the newest as it comes, or the one picked with the

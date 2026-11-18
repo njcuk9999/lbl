@@ -49,6 +49,7 @@ After templatepy (github.com/eartigau/templatepy, E. Artigau).
 
 @author: artigau
 """
+import os
 import warnings
 from typing import Any, Callable, Dict, List
 
@@ -314,7 +315,8 @@ def fit_order(data: OrderData, io_: int, shifts: np.ndarray,
 
 def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
                        shifts: np.ndarray, lngrid: np.ndarray,
-                       scan: bool, scan_step: float) -> np.ndarray:
+                       scan: bool, scan_step: float,
+                       errors: np.ndarray = None) -> np.ndarray:
     """
     The velocity of each spectrum against the templates of some orders: the
     shift of the template that matches the spectrum (a scan of +-50 steps
@@ -327,6 +329,8 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
     :param lngrid: np.ndarray, ln of the template's grid
     :param scan: bool, scan the shift first
     :param scan_step: float, the step of the scan [ln wavelength]
+    :param errors: np.ndarray or None, filled with each spectrum's
+                   uncertainty [m/s] (the mixture model's, last step)
 
     :return: np.ndarray, the velocity to add to each spectrum's [m/s]
     """
@@ -396,33 +400,78 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
                                           np.abs(deriv[good])))
             if not pix_dv or not sum(len(v) for v in pix_dv):
                 break
-            step, _ = mp.odd_ratio_mean(np.concatenate(pix_dv),
-                                        np.concatenate(pix_err))
+            step, step_err = mp.odd_ratio_mean(np.concatenate(pix_dv),
+                                               np.concatenate(pix_err))
             if not np.isfinite(step):
                 break
             shift += step
+            if errors is not None:
+                errors[ifile] = C_MS * step_err
         delta[ifile] = shift
     # a feature displaced by +shift in ln(wavelength) is a velocity
     #   c tanh(shift) to add to the star's
     return C_MS * np.tanh(delta)
 
 
+#: the keys of a spectrum's time in the table of spectra, in order of
+#:   preference (LBL's names of the instrument's keywords first)
+TIME_KEYS = ('KW_MID_EXP_TIME', 'KW_MJDATE', 'KW_BJD', 'MJDMID', 'MJDATE',
+             'MJD-OBS', 'BJD', 'MJD')
+
+
+def _times(sci_table: Dict[str, Any], nfiles: int):
+    """Each spectrum's MJD from the table of spectra (a BJD brought back to
+    an MJD), and what it is; (NaN, '') when the table has none"""
+    for key in TIME_KEYS:
+        values = sci_table.get(key)
+        if values is None or len(values) != nfiles:
+            continue
+        try:
+            values = np.asarray(values, dtype=float)
+        except (TypeError, ValueError):
+            continue
+        if not np.isfinite(values).any():
+            continue
+        if np.nanmedian(values) > 2.4e6:
+            values = values - 2400000.5
+        return values, 'MJD ({0})'.format(key)
+    return np.full(nfiles, np.nan), ''
+
+
+def _log_velocities(sci_table: Dict[str, Any], rv0: np.ndarray,
+                    rv_err: np.ndarray, times: np.ndarray,
+                    time_label: str) -> None:
+    """Each spectrum's velocity as the template measured it, in the log:
+    its number, file, time, velocity less the median and uncertainty"""
+    names = [os.path.basename(str(f)) for f in sci_table.get('FILENAME', [])]
+    median = np.nanmedian(rv0)
+    log.general('Velocities of the spectra (Bouchy 2001 pixel by pixel, '
+                'mixture model), less their median {0:.1f} m/s:'.format(
+                    median))
+    for it in range(len(rv0)):
+        name = names[it] if it < len(names) else ''
+        when = ('MJD {0:.5f}'.format(times[it]) if np.isfinite(times[it])
+                else '')
+        log.general('\t{0:4d}/{1}  {2}  {3}  {4:+9.2f} +- {5:6.2f} m/s'
+                    .format(it + 1, len(rv0), name, when, rv0[it] - median,
+                            rv_err[it]))
+    good = np.isfinite(rv0)
+    log.general('Velocities of the spectra: rms {0:.2f} m/s, median '
+                'uncertainty {1:.2f} m/s, {2} spectra'.format(
+                    float(np.nanstd(rv0[good])),
+                    float(np.nanmedian(rv_err)), int(good.sum())))
+
+
 def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
                      reg: List[int], berv: np.ndarray, rv0: np.ndarray,
-                     lngrid: np.ndarray, sci_table: Dict[str, Any],
+                     rv_err: np.ndarray, lngrid: np.ndarray,
+                     times: np.ndarray, time_label: str,
                      changes: List[float]) -> None:
     """The velocities measured and the spectra registered at them, on the
     middle order of those measured (lbl.science.plot, for PCA2D's and the
     window's eyes): never fatal"""
     try:
         from lbl.science import plot
-        times, label = np.arange(len(rv0)), 'spectrum'
-        for key in ('BJD', 'MJDMID', 'MJDATE', 'MJD-OBS', 'MJD'):
-            if key in sci_table and len(sci_table[key]) == len(rv0):
-                values = np.asarray(sci_table[key], dtype=float)
-                if np.isfinite(values).any():
-                    times, label = values, key
-                    break
         io_ = len(reg) // 2
         cloud_x, cloud_y = np.array([]), np.array([])
         grid_x, grid_y = np.array([]), np.array([])
@@ -432,8 +481,8 @@ def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
             grid_x = lngrid[fit['i0']:fit['i1']]
             grid_y = fit['derivs'][:, 0]
         plot.template_velocity_plot(
-            inst, rv0, times, label, changes, cloud_x, cloud_y, grid_x,
-            grid_y, inst.params['OBJECT_SCIENCE'])
+            inst, rv0, rv_err, times, time_label, changes, cloud_x, cloud_y,
+            grid_x, grid_y, inst.params['OBJECT_SCIENCE'])
     except Exception as exc:                                  # noqa: BLE001
         log.warning('the plot of the template\'s velocities was not made: '
                     '{0}'.format(exc))
@@ -520,13 +569,15 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
                            calib_dir, reg, hp_pix, tqdm, sci_table, berv,
                            desc='Reading spectra (velocities)')
         changes = []
+        rv_err = np.full(nfiles, np.nan)
         for ite in range(5):
             shifts = star_shift(berv, rv0)
             fits = {io_: fit_order(data, io_, shifts, lngrid, fit_params,
                                    hp_pix[order], 2)
                     for io_, order in enumerate(reg)}
             dv = measure_velocities(data, fits, shifts, lngrid,
-                                    scan=(ite == 0), scan_step=dln)
+                                    scan=(ite == 0), scan_step=dln,
+                                    errors=rv_err)
             rv0 = mp.add_velocities(rv0, dv)
             n1, p1 = np.nanpercentile(dv, [16, 84])
             sig = (p1 - n1) / 2.0
@@ -535,8 +586,11 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
             log.general(msg.format(ite + 1, sig))
             if sig < params['MAX_CONVERGENCE_TEMPLATE_RV']:
                 break
-        _plot_velocities(inst, data, fits, reg, berv, rv0, lngrid,
-                         sci_table, changes)
+        times, time_label = _times(sci_table, nfiles)
+        _log_velocities(sci_table, rv0, rv_err, times, time_label)
+        sci_table['VSYS_ERR'] = np.array(rv_err)
+        _plot_velocities(inst, data, fits, reg, berv, rv0, rv_err, lngrid,
+                         times, time_label, changes)
         del data
     shifts = star_shift(berv, rv0)
     # -------------------------------------------------------------------------

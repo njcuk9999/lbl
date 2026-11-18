@@ -86,7 +86,9 @@ def test_lbl_s_plots_go_to_the_window_first_file_only(tmp_path, monkeypatch):
     plot.template_plot(_Inst(), grid, flux, flux * 0.01, 'STAR')
     x = np.log(np.linspace(1599.0, 1601.0, 3000))
     plot.template_velocity_plot(_Inst(), np.array([1.0, -1.0, 2.0]),
-                                np.arange(3), 'spectrum', [12.0, 3.0],
+                                np.array([2.0, 2.5, 1.5]),
+                                np.array([60100.1, 60101.2, 60150.3]),
+                                'MJD (KW_MID_EXP_TIME)', [12.0, 3.0],
                                 x, np.ones(x.size), x, np.ones(x.size),
                                 'STAR')
     listed = liveplot.read_index(str(folder))
@@ -112,3 +114,30 @@ def test_the_window_gives_the_folder_and_reads_the_plots(tmp_path):
     job = runner.Job('r1', 'r1', str(run), str(run / 'wrap.py'), 'python',
                      str(tmp_path), dict())
     assert job.summary()['plots'] == found
+
+
+def test_the_template_s_velocities_have_times_and_errors():
+    """the table of spectra's MJD (LBL's keyword names), a BJD brought back
+    to an MJD, and each spectrum's velocity in the log"""
+    from lbl.science import template_scatter as ts
+    times, label = ts._times(dict(KW_MID_EXP_TIME=[60100.5, 60101.5]), 2)
+    assert list(times) == [60100.5, 60101.5] and 'KW_MID_EXP_TIME' in label
+    times, _ = ts._times(dict(BJD=[2460100.5, 2460101.0]), 2)
+    assert np.allclose(times, [60100.0, 60100.5])
+    times, label = ts._times(dict(FILENAME=['a', 'b']), 2)
+    assert not np.isfinite(times).any() and label == ''
+    said = []
+    import lbl.science.template_scatter as module
+    original = module.log.general
+    module.log.general = lambda message: said.append(message)
+    try:
+        ts._log_velocities(dict(FILENAME=['/x/a.fits', '/x/b.fits']),
+                           np.array([10.0, 14.0]), np.array([1.5, 2.0]),
+                           np.array([60100.5, np.nan]), 'MJD')
+    finally:
+        module.log.general = original
+    first = said[1].split()
+    assert first[:4] == ['1/2', 'a.fits', 'MJD', '60100.50000']
+    assert first[4:] == ['-2.00', '+-', '1.50', 'm/s']
+    assert 'b.fits' in said[2] and '+2.00' in said[2]
+    assert 'rms 2.00 m/s' in said[-1]

@@ -191,19 +191,22 @@ def template_plot(inst: InstrumentsType, wavegrid: np.ndarray,
 
 
 def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
-                           times: np.ndarray, time_label: str,
-                           changes: List[float], cloud_x: np.ndarray,
-                           cloud_y: np.ndarray, grid_x: np.ndarray,
-                           grid_y: np.ndarray, objname: str):
+                           errors: np.ndarray, times: np.ndarray,
+                           time_label: str, changes: List[float],
+                           cloud_x: np.ndarray, cloud_y: np.ndarray,
+                           grid_x: np.ndarray, grid_y: np.ndarray,
+                           objname: str):
     """
     The velocities the template measured on its spectra (SMALL_RV_SHIFT
-    False), and the spectra registered at them on one order: the cloud of
-    their pixels in the star's frame, the template through it
+    False), with their uncertainties, against the spectrum's number and
+    against its MJD, and the spectra registered at them on one order: the
+    cloud of their pixels in the star's frame, the template through it
 
     :param inst: Instrument
     :param velocities: np.ndarray, each spectrum's velocity [m/s]
-    :param times: np.ndarray, their times (or their numbers)
-    :param time_label: str, what the times are
+    :param errors: np.ndarray, their uncertainties [m/s]
+    :param times: np.ndarray, their MJD (NaN when unknown)
+    :param time_label: str, where the times come from
     :param changes: list of float, the rms change of each pass [m/s]
     :param cloud_x: np.ndarray, the pixels' ln(wavelength), star's frame
     :param cloud_y: np.ndarray, their normalized flux
@@ -215,32 +218,48 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
     if key is None:
         return
     plt = import_matplotlib()
-    fig, frames = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
+    fig, frames = plt.subplots(ncols=1, nrows=3, figsize=(9, 10))
     vel = np.asarray(velocities, dtype=float)
     vel = vel - np.nanmedian(vel)
-    frames[0].plot(times, vel, '.', ms=4, color='C3')
-    frames[0].set(xlabel=time_label, ylabel='velocity less its median [m/s]',
-                  title='Velocities of the {0} spectra of {1} (Bouchy, pixel '
-                        'by pixel, mixture model): rms {2:.1f} m/s'.format(
-                            int(np.sum(np.isfinite(vel))), objname,
-                            float(np.nanstd(vel))))
+    err = np.asarray(errors, dtype=float)
+    times = np.asarray(times, dtype=float)
+    title = ('Velocities of the {0} spectra of {1} (Bouchy, pixel by pixel, '
+             'mixture model): rms {2:.1f} m/s, median uncertainty {3:.1f} '
+             'm/s'.format(int(np.sum(np.isfinite(vel))), objname,
+                          float(np.nanstd(vel)), float(np.nanmedian(err))))
+    number = np.arange(1, vel.size + 1)
+    frames[0].errorbar(number, vel, yerr=err, fmt='.', ms=4, color='C3',
+                       ecolor='C3', elinewidth=0.6, alpha=0.8)
+    frames[0].set(xlabel='spectrum (Nth, in the order read)',
+                  ylabel='velocity less its median [m/s]')
+    frames[0].set_title(title, fontsize=9)
     frames[0].text(0.01, 0.97, 'change per pass: ' + ', '.join(
         '{0:.1f}'.format(c) for c in changes) + ' m/s rms',
         transform=frames[0].transAxes, va='top', fontsize=8)
-    frames[0].grid(color='lightgrey', linestyle='--')
+    if np.isfinite(times).any():
+        frames[1].errorbar(times, vel, yerr=err, fmt='.', ms=4, color='C3',
+                           ecolor='C3', elinewidth=0.6, alpha=0.8)
+        frames[1].set(xlabel=time_label or 'MJD',
+                      ylabel='velocity less its median [m/s]')
+    else:
+        frames[1].text(0.5, 0.5, 'no time in the table of spectra',
+                       ha='center', va='center',
+                       transform=frames[1].transAxes)
+    for frame in frames[:2]:
+        frame.grid(color='lightgrey', linestyle='--')
     if len(cloud_x):
         centre = float(np.nanmedian(cloud_x))
         # 1 nm about the order's middle, in ln(wavelength)
         half = 0.5 / np.exp(centre)
         inc = np.abs(cloud_x - centre) < half
         ing = np.abs(grid_x - centre) < half
-        frames[1].plot(np.exp(cloud_x[inc]), cloud_y[inc], ',', color='C0',
+        frames[2].plot(np.exp(cloud_x[inc]), cloud_y[inc], ',', color='C0',
                        alpha=0.5, rasterized=True,
                        label='the spectra, registered')
-        frames[1].plot(np.exp(grid_x[ing]), grid_y[ing], color='k', lw=1.2,
+        frames[2].plot(np.exp(grid_x[ing]), grid_y[ing], color='k', lw=1.2,
                        label='template')
-        frames[1].legend(loc=0)
-        frames[1].set(xlabel='Wavelength, star frame [nm]',
+        frames[2].legend(loc=0)
+        frames[2].set(xlabel='Wavelength, star frame [nm]',
                       ylabel='normalized flux',
                       title='Every spectrum at its velocity, one order')
     plt.tight_layout()
