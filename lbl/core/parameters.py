@@ -548,9 +548,11 @@ params.set(key='PLOT_COMPUTE_LINES', value=True, source=__NAME__,
            desc='Whether to do the compute line plot',
            arg='--plotline', dtype=bool)
 
-# Define whether to do the compil cumulative plot
+# Define whether to do the compil plot of the lines (the name is the one
+#   of the cumulative plot it replaced)
 params.set(key='PLOT_COMPIL_CUMUL', value=True, source=__NAME__,
-           desc='Whether to do the compil cumulative plot',
+           desc='Whether to do the compil plot of the lines (each line\'s '
+                'velocity and error bar against wavelength)',
            arg='--plotcumul', dtype=bool)
 
 # Define whether to do the compil binned plot

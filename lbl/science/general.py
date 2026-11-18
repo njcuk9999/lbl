@@ -29,7 +29,6 @@ from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import activity_lines
-from lbl.science import liveplot
 from lbl.science import plot
 
 # =============================================================================
@@ -2144,8 +2143,6 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
 
     :return: rdb dict for fits/rdb file data
     """
-    # set function name
-    func_name = __NAME__ + '.make_rdb_table()'
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # -------------------------------------------------------------------------
@@ -2300,9 +2297,6 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         msg = 'Residual projections per band: {0}'
         log.general(msg.format(', '.join([band[0] for band in resproj_bands])))
     ref_good_pix = np.array(good)  # if a calibration, we'll need this later
-    # get columns of rvtable0
-    dv0 = np.array(rvtable0_good['dv'])
-    sdv0 = np.array(rvtable0_good['sdv'])
     # size of arrays
     nby, nbx = len(lblrvfiles), np.sum(good)
     # set up rv and dvrms
@@ -2324,15 +2318,6 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             proj_model[key]['sproj_arr'] = np.zeros([nby, nbx])
     # store the berv
     berv = np.zeros(len(lblrvfiles))
-    # -------------------------------------------------------------------------
-    # work out for cumulative plot for first file
-    # -------------------------------------------------------------------------
-    # median velocity for first file rv table
-    med_velo = mp.nanmedian(dv0)
-    # work out the best lines (less than 5 sigma)
-    best_mask = sdv0 < np.nanpercentile(sdv0, 5.0)
-    # list for plot storage
-    vrange_all, pdf_all, pdf_fit_all = [], [], []
 
     # -------------------------------------------------------------------------
     # Validate all rvtables
@@ -2488,54 +2473,6 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # push into rdb_dict
         rdb_dict['d3v'][row] = d3v_guess
         rdb_dict['sd3v'][row] = d3v_bulk_error
-        # ---------------------------------------------------------------------
-        # if we don't have a calibration add plot values (only used by the
-        #   cumulative plot)
-        #   (PLOT, or a run the LBL window watches, lbl.science.liveplot:
-        #   the plot is drawn then too, and was drawn empty without them)
-        cumul_plot = ((inst.params['PLOT'] or liveplot.active())
-                      and inst.params['PLOT_COMPIL_CUMUL'])
-        if not flag_calib and cumul_plot:
-            # plot specific domain. We use the median velocity of the file
-            # for the plot domain. +-15 km/s to get an idea of residuals.
-            xlim = [med_velo - 15000, med_velo + 15000]
-            # get velocity range
-            vrange = np.arange(xlim[0], xlim[1], 50.0)
-            # mask the rv and dvrms by best_mask
-            best_rv = dv_arr[row][best_mask]
-            best_dvrms = sdv_arr[row][best_mask]
-            # track finite values
-            finite_mask = np.isfinite(best_rv) & np.isfinite(best_dvrms)
-            # the probability density function: the sum of each finite
-            #   line's Gaussian, divided by its width (all the lines at
-            #   once, as the loop over them did one by one)
-            rv_f = best_rv[finite_mask][:, None]
-            dvrms_f = best_dvrms[finite_mask][:, None]
-            pdf = np.sum(np.exp(-0.5 * ((vrange[None, :] - rv_f) /
-                                        dvrms_f) ** 2) / dvrms_f, axis=0)
-            # fit the probability density function
-            guess = [med_velo, 500.0, np.max(pdf), 0.0, 0.0]
-            # set specific func name for curve fit errors
-            sfuncname = '{0}.RDB1-ROW[{1}]'.format(func_name, row)
-            # try to compute curve fit
-            try:
-                pdf_coeffs, _ = mp.curve_fit(mp.gauss_fit_s, vrange, pdf,
-                                             p0=guess, funcname=sfuncname)
-                # fit pdf function
-                pdf_fit = mp.gauss_fit_s(vrange, *pdf_coeffs)
-            except base_classes.LblCurveFitException as e:
-                wmsg = 'CurveFit exception - skipping file'
-                wmsg += '\n\tFile = {0}'.format(lblrvfiles[row])
-                wmsg += '\n\tP0 = {0}'.format(e.p0)
-                wmsg += '\n\tFunction = {0}'.format(e.func)
-                wmsg += '\n\tError: {0}'.format(e.error)
-                log.warning(wmsg)
-                # do not add this file
-                continue
-            # append values to plot lists
-            vrange_all.append(vrange)
-            pdf_all.append(pdf)
-            pdf_fit_all.append(pdf_fit)
     # -------------------------------------------------------------------------
     # display missing keys
     if len(missing_keys) > 0:
@@ -2547,17 +2484,6 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
             wmsg = '\t{0}: missing in {1} file(s)'
             log.warning(wmsg.format(missing_key, missing_keys[missing_key]))
 
-    # -------------------------------------------------------------------------
-    # cumulative plot
-    # -------------------------------------------------------------------------
-    # plot if not a calibration
-    if not flag_calib:
-        # construct plot name
-        plot_name = os.path.basename(rdbfile.replace('.rdb', '')) + '_cumul.pdf'
-        plot_path = os.path.join(plot_dir, plot_name)
-        # plot the cumulative plot
-        plot.compil_cumulative_plot(inst, vrange_all, pdf_all,
-                                    pdf_fit_all, plot_path)
     # ---------------------------------------------------------------------
     # First guess at vrad
     # ---------------------------------------------------------------------
@@ -2694,6 +2620,17 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         #   used at all
         nsig = np.abs(per_line_mean / mp.estimate_sigma(per_line_mean))
         per_line_mean[nsig > 100] = np.nan
+        # ---------------------------------------------------------------------
+        # the plot of the lines: each line's velocity and error bar against
+        #   its wavelength, for one epoch and over all of them
+        plot_name = os.path.basename(rdbfile.replace('.rdb', '')) + '_lines.pdf'
+        plot.compil_lines_plot(inst,
+                               np.array(rvtable0_good['WAVE_START'],
+                                        dtype=float),
+                               dv_arr, sdv_arr, rdb_dict['vrad'],
+                               rdb_dict['svrad'], per_line_mean,
+                               per_line_error, lblrvfiles,
+                               os.path.join(plot_dir, plot_name))
 
         # ---------------------------------------------------------------------
         # Model per line

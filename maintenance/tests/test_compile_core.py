@@ -293,3 +293,48 @@ def test_numbers_written_as_text_are_averaged_per_night():
     assert list(rdb2['OBJECT']) == ['10700', '10700']
     assert list(rdb2['DATE']) == ['2024-01-01', '2024-01-02']
     assert list(rdb2['TAU']) == ['NaN', 'NaN']
+
+
+def test_the_plot_of_the_lines_against_wavelength(tmp_path, monkeypatch):
+    """compile's plot of the lines (it replaced the distribution of the
+    lines' velocities): each line's velocity and error bar against its
+    wavelength, for the epoch of median svrad and over all the epochs, the
+    smaller the error bar the more opaque, the y range the 3rd to 97th
+    percentiles of the lines; drawn for a run the window watches"""
+    from lbl.science import liveplot
+    wave, _, _, dv, sdv = synthetic_star(offsets=20.0, seed=5)
+    # a third of the lines ten times worse
+    sdv[:, ::3] *= 10.0
+    dv[:, ::3] += np.random.default_rng(6).normal(0, 45.0, dv[:, ::3].shape)
+    monkeypatch.setenv(liveplot.ENV, str(tmp_path / 'plots'))
+    drawn = []
+    save = liveplot.save
+    monkeypatch.setattr(liveplot, 'save', lambda fig, *a, **k: (
+        drawn.append([(ax.get_ylim(), ax.collections) for ax in fig.axes]),
+        save(fig, *a, **k)))
+    inst = SynthInst(make_tables(dv, sdv, wave), np.arange(12.0),
+                     PLOT_COMPIL_CUMUL=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out, saved = capture(general.make_rdb_table, inst, 'x.rdb',
+                             inst.files(), str(tmp_path),
+                             names=['per_line_mean'])
+    assert (tmp_path / 'x_lines.pdf').exists()
+    listed = liveplot.read_index(str(tmp_path / 'plots'))
+    assert [row['title'] for row in listed] == [
+        "the lines' velocities against wavelength"]
+    # two panels and their colour bars
+    assert len(drawn[0]) == 4
+    plm = np.array(saved['per_line_mean'])
+    ylim, collections = drawn[0][1]
+    assert np.allclose(ylim, np.nanpercentile(plm, [3, 97]))
+    # the bars: the best lines opaque, the ten times worse almost not
+    alpha = collections[0].get_colors()[:, 3]
+    assert alpha.max() > 0.95 and alpha.min() < 0.1
+    # nothing drawn without PLOT or a window
+    monkeypatch.delenv(liveplot.ENV)
+    drawn.clear()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        general.make_rdb_table(inst, 'y.rdb', inst.files(), str(tmp_path))
+    assert not (tmp_path / 'y_lines.pdf').exists() and drawn == []

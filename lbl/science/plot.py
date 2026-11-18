@@ -9,6 +9,7 @@ Created on 2021-03-17
 
 @author: cook
 """
+import os
 import platform
 from typing import Any, Dict, List
 
@@ -472,19 +473,92 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
     plt.close()
 
 
-def compil_cumulative_plot(inst: InstrumentsType, vrange: List[np.ndarray],
-                           pdf: List[np.ndarray], pdf_fit: List[np.ndarray],
-                           plot_path: str):
+def _line_colours(err: np.ndarray, cmap) -> tuple:
     """
-    This is the probability density fucntion plot for all files
+    The colour and opacity of each line from its error bar, on a log scale
+    between the 3rd and 97th percentiles of the error bars: the smallest
+    dark and opaque, the largest pale and almost transparent (the opacity
+    falls as the square of the distance from the smallest, so that the
+    thousands of poor lines do not hide the good ones)
 
-    :param inst:  Instrument, instrument this plot is used for
-    :param vrange: list of np.ndarray, the velocities array [m/s] for each
-                   file (for this object)
-    :param pdf: list of np.ndarray, the probability density function array
-                for each file (for this object)
-    :param pdf_fit: list of np.ndarray, the fit to the probability density
-                    function for each file (for this object)
+    :param err: np.ndarray, the lines' error bars (finite, > 0)
+    :param cmap: matplotlib colormap
+
+    :return: tuple, the RGBA of each line and the errors at the two ends
+    """
+    logerr = np.log10(err)
+    low, high = np.percentile(logerr, [3, 97])
+    high = max(high, low + 1e-3)
+    frac = np.clip((logerr - low) / (high - low), 0.0, 1.0)
+    rgba = cmap(frac)
+    rgba[:, 3] = 0.03 + 0.97 * (1.0 - frac) ** 2
+    return rgba, 10 ** low, 10 ** high
+
+
+def _lines_panel(fig, frame, wave: np.ndarray, vel: np.ndarray,
+                 err: np.ndarray, ylabel: str, title: str):
+    """
+    One panel of compile's plot of the lines: each line's velocity and its
+    error bar against its wavelength, coloured and made opaque by its error
+    bar (the best drawn last, on top), the y range the 3rd to 97th
+    percentiles of the lines' velocities. The lines are rasterized in the
+    PDF (tens of thousands of transparent marks), its axes and text are not
+
+    :return: int, the number of lines drawn
+    """
+    from matplotlib.collections import LineCollection
+    from matplotlib.colors import LogNorm
+    from matplotlib.cm import ScalarMappable
+    import matplotlib.pyplot as plt
+    keep = np.isfinite(wave) & np.isfinite(vel) & np.isfinite(err)
+    keep &= err > 0
+    if np.sum(keep) < 2:
+        frame.text(0.5, 0.5, 'no line', transform=frame.transAxes,
+                   ha='center', va='center')
+        frame.set(ylabel=ylabel, title=title)
+        return 0
+    # the largest error bars first, the best drawn over them
+    order = np.argsort(err[keep])[::-1]
+    wave, vel, err = wave[keep][order], vel[keep][order], err[keep][order]
+    cmap = plt.get_cmap('viridis')
+    rgba, err_low, err_high = _line_colours(err, cmap)
+    bars = np.stack([np.c_[wave, vel - err], np.c_[wave, vel + err]], axis=1)
+    frame.add_collection(LineCollection(bars, colors=rgba, linewidths=0.6,
+                                        rasterized=True))
+    frame.scatter(wave, vel, s=4, c=rgba, edgecolors='none', rasterized=True)
+    frame.axhline(0.0, color='grey', linestyle='--', linewidth=0.8,
+                  zorder=0)
+    span = np.max(wave) - np.min(wave)
+    frame.set_xlim(np.min(wave) - 0.01 * span, np.max(wave) + 0.01 * span)
+    frame.set_ylim(*np.percentile(vel, [3, 97]))
+    frame.set(ylabel=ylabel, title=title)
+    fig.colorbar(ScalarMappable(norm=LogNorm(err_low, err_high), cmap=cmap),
+                 ax=frame, label='error bar [m/s]', pad=0.01)
+    return len(vel)
+
+
+def compil_lines_plot(inst: InstrumentsType, wave: np.ndarray,
+                      dv: np.ndarray, sdv: np.ndarray, vrad: np.ndarray,
+                      svrad: np.ndarray, line_mean: np.ndarray,
+                      line_error: np.ndarray, names: List[str],
+                      plot_path: str):
+    """
+    compile's plot of the lines: each line's velocity with its error bar
+    against its wavelength, coloured and made more opaque the smaller its
+    error bar, the y range the 3rd to 97th percentiles of the lines. Top:
+    one epoch (the one of median svrad), each line's velocity minus the
+    epoch's; bottom: each line's offset from the epochs' velocities over
+    all of them (what compile removes from the lines)
+
+    :param inst: Instrument, instrument this plot is used for
+    :param wave: np.ndarray, each line's wavelength [nm] (WAVE_START)
+    :param dv: np.ndarray, the lines' velocities [m/s] (epochs x lines)
+    :param sdv: np.ndarray, their error bars [m/s] (epochs x lines)
+    :param vrad: np.ndarray, each epoch's velocity [m/s]
+    :param svrad: np.ndarray, its error bar [m/s]
+    :param line_mean: np.ndarray, each line's offset over the epochs [m/s]
+    :param line_error: np.ndarray, its error bar [m/s]
+    :param names: list of str, the epochs' files
     :param plot_path: str, the absolute path and filename to save the plot to
 
     :return: None - plots
@@ -493,34 +567,36 @@ def compil_cumulative_plot(inst: InstrumentsType, vrange: List[np.ndarray],
     plt = import_matplotlib()
     # PLOT (or a watched run) and its own switch
     key = _wanted(inst, 'PLOT_COMPIL_CUMUL',
-                  lambda: 'compile_cumulative_' + _objects(inst))
+                  lambda: 'compile_lines_' + _objects(inst))
     if key is None:
         return
     # -------------------------------------------------------------------------
-    # set up plot
-    fig, frames = plt.subplots(ncols=1, nrows=2)
-    # loop around list elements
-    for it in range(len(vrange)):
-        # plot functions here
-        frames[0].plot(vrange[it] / 1000.0, pdf[it],
-                       alpha=0.2, color='grey')
-        frames[1].plot(vrange[it] / 1000.0, pdf[it] - pdf_fit[it],
-                       alpha=0.2, color='grey')
+    # the epoch of median svrad (of those with a velocity)
+    valid = np.where(np.isfinite(vrad) & np.isfinite(svrad))[0]
+    fig, frames = plt.subplots(ncols=1, nrows=2, sharex=True,
+                               figsize=(11, 8), dpi=200)
+    if len(valid) > 0:
+        epoch = valid[np.argsort(svrad[valid])[len(valid) // 2]]
+        title = ('one epoch, {0} (the median svrad, {1:.2f} m/s)'
+                 ''.format(os.path.basename(str(names[epoch])),
+                           svrad[epoch]))
+        _lines_panel(fig, frames[0], wave, dv[epoch] - vrad[epoch],
+                     sdv[epoch], 'line velocity - epoch velocity [m/s]',
+                     title)
+    nlines = _lines_panel(fig, frames[1], wave, line_mean, line_error,
+                          'line offset [m/s]',
+                          'each line over the {0} epochs'.format(len(valid)))
+    frames[1].set(xlabel='Wavelength [nm]')
     # construct title
-    title = 'OBJECT_SCIENCE = {0}    OBJECT_COMPARISON_{1}'
-    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON']]
-    # set labels and titles
-    frames[0].set(xlabel='Velocity [km/s]',
-                  ylabel='Distribution function of RVs')
-    frames[1].set(xlabel='Velocity [km/s]',
-                  ylabel='Distribution function of RVs - gaussfit')
-    # set title
+    title = 'OBJECT_SCIENCE = {0}    OBJECT_COMPARISON = {1}    {2} lines'
+    targs = [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON'],
+             nlines]
     plt.suptitle(title.format(*targs))
-    # show and close plot
+    # save and close plot
     plt.savefig(plot_path)
     if liveplot.active():
-        liveplot.save(plt.gcf(), key, 'distribution of the lines\' '
-                      'velocities', 'compile', inst.params['OBJECT_SCIENCE'])
+        liveplot.save(plt.gcf(), key, 'the lines\' velocities against '
+                      'wavelength', 'compile', inst.params['OBJECT_SCIENCE'])
     plt.close()
 
 

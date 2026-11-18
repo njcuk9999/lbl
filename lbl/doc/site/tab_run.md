@@ -32,7 +32,11 @@
   steps' (the mask's CCF, compute's CCF and lines, PCA2D's fit: the variance
   share of each component, its eigenvalue, and the rank correlation of each
   component's amplitude with the observing conditions, one plot per pass;
-  compile's distributions and bands, the telluric correction); a plot drawn
+  compile's lines: each line's velocity and error bar against its
+  wavelength, for the epoch of median `svrad` and over all epochs, colour
+  and opacity by error bar (the smallest darkest and opaque), y range the
+  3rd to 97th percentiles of the lines; compile's bands, the telluric
+  correction); a plot drawn
   for every spectrum is shown for the first spectrum of each object only.
   One fixed frame: the newest as it comes, or the one picked with the
   arrows or the list, which stays until **follow the newest** is ticked
