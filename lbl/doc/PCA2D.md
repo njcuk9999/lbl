@@ -14,6 +14,16 @@ the template made first by the wrap whatever `OBJECT_COMPARISON` is; with
 `PLANETS`, the known orbits. The star component is then built where the star
 is, and the PCA does not take in part of a real signal.
 
+`SMALL_RV_SHIFT = False` makes the correction in TWO PASSES
+(`lbl_wrap._pca2d_passes`): the delivered spectra's velocities carry the
+tellurics' imprint where the star's lines cross them (the BERV crossing),
+and so would a star frame built on them. PCA2D corrects once on them; the
+corrected spectra's own template, iterating, measures cleaner velocities
+(the change between the two is logged); PCA2D corrects again on those
+(`lbl_pca2d.main(velocities_from=...)`), and LBL measures that correction.
+A template and a PCA2D more in the run. When the corrected spectra's
+template already has its velocities (a previous run's), one pass on them.
+
 ## Turning it on
 
 One key in the wrap's run parameters:

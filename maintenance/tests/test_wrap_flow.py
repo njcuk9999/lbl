@@ -153,3 +153,70 @@ def test_a_pca2d_run_writes_one_report(tmp_path, calls, monkeypatch):
     assert len(merged) == 1
     assert merged[0]['delivered'] == 'TOI1452'
     assert merged[0]['lbl_report'] == 'TOI1452_pca2d_VETTED_GJ1289.pdf'
+
+
+def _two_pass_wrap(tmp_path, calls, monkeypatch, small_rv, ready=False):
+    """a PCA2D run with SMALL_RV_SHIFT as given: the corrections asked of
+    PCA2D, with the velocities each was given"""
+    from lbl.recipes import lbl_pca2d
+    corrections = []
+
+    def main(object_science, object_comparison, velocities_from=None, **kw):
+        corrections.append(dict(velocities_from or {}))
+        return object_science + '_pca2d', object_comparison + '_pca2d'
+    monkeypatch.setattr(lbl_pca2d, 'frozen_basis', lambda *a, **k: None)
+    monkeypatch.setattr(lbl_pca2d, 'main', main)
+    monkeypatch.setattr(lbl_pca2d, 'report', lambda **kw: None)
+    monkeypatch.setattr(lbl_pca2d, 'object_velocities',
+                        lambda *a, **k: {'a.fits': 0.0})
+    # the velocity templates: made when missing (the recorder of the fixture)
+    monkeypatch.setattr(lbl_wrap, '_template_of', lambda *a: None)
+    monkeypatch.setattr(lbl_wrap, '_iterated', lambda *a: ready)
+    lbl_wrap.main(_params(tmp_path, OBJECT_SCIENCE=['STAR'],
+                          OBJECT_COMPARISON=['STAR'], DATA_TYPES=['SCIENCE'],
+                          OBJECT_TEFF=[3200], RUN_LBL_COMPILE=True,
+                          REPORT=False, SMALL_RV_SHIFT=small_rv,
+                          PCA2D=dict(n_star=1)))
+    templates = [kw['object_science'] for name, kw in calls
+                 if name == 'lbl_template']
+    return corrections, templates
+
+
+def test_fine_velocities_correct_twice(tmp_path, calls, monkeypatch):
+    """SMALL_RV_SHIFT False: PCA2D on the delivered spectra's velocities,
+    the corrected spectra's template (their velocities), PCA2D again on
+    those"""
+    corrections, templates = _two_pass_wrap(tmp_path, calls, monkeypatch,
+                                            small_rv=False)
+    assert corrections == [{}, {'STAR': 'STAR_pca2d'}]
+    # the delivered spectra's template first (and again for their
+    #   measurement), then the corrected spectra's, between the two passes
+    assert templates[0] == 'STAR' and 'STAR_pca2d' in templates
+    assert templates.index('STAR_pca2d') > templates.index('STAR')
+
+
+def test_coarse_velocities_correct_once(tmp_path, calls, monkeypatch):
+    corrections, _ = _two_pass_wrap(tmp_path, calls, monkeypatch,
+                                    small_rv=True)
+    assert corrections == [{}]
+
+
+def test_a_second_run_corrects_once_on_the_corrected_velocities(
+        tmp_path, calls, monkeypatch):
+    """the corrected spectra's template already has its velocities (a
+    previous run's second pass): one pass, on them"""
+    corrections, _ = _two_pass_wrap(tmp_path, calls, monkeypatch,
+                                    small_rv=False, ready=True)
+    assert corrections == [{'STAR': 'STAR_pca2d'}]
+
+
+def test_the_plan_has_the_second_pass():
+    from lbl.gui import wrapgen
+    base = dict(OBJECT_SCIENCE=['STAR'], OBJECT_COMPARISON=['STAR'],
+                RUN_LBL_COMPUTE=True, PCA2D=dict(n_star=1))
+    once = [s.get('label') or s['kind'] for s in wrapgen.steps(base)]
+    twice = [s.get('label') or s['kind']
+             for s in wrapgen.steps(dict(base, SMALL_RV_SHIFT=False))]
+    assert 'step_pca2d_correct_2' not in once
+    assert twice.index('pca2d_correct') < twice.index(
+        'step_template_velocities') < twice.index('step_pca2d_correct_2')

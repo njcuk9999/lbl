@@ -696,6 +696,18 @@ def steps(rparams: dict) -> list:
             for stage in stages:
                 out.append(dict(kind="pca2d_" + stage,
                                 obj="+".join(targets) if joint else obj))
+            # SMALL_RV_SHIFT False: the corrected spectra's template, for
+            #   their velocities, then the correction again on them
+            #   (lbl_wrap._pca2d_passes)
+            if not rparams.get("SMALL_RV_SHIFT", True):
+                for each in (targets if joint else [obj]):
+                    out.append(dict(kind="template", obj=each + "_pca2d" + (
+                        "_" + name if name else ""),
+                        label="step_template_velocities"))
+                for stage in stages:
+                    out.append(dict(kind="pca2d_" + stage,
+                                    obj="+".join(targets) if joint else obj,
+                                    label="step_pca2d_%s_2" % stage))
             fitted = True
         lbl(obj + "_pca2d" + ("_" + name if name else ""), target=target)
     return out

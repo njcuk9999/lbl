@@ -16,6 +16,8 @@ import os
 import re
 import sys
 
+import numpy as np
+
 from lbl.core import base
 from lbl.core import base_classes
 from lbl.core import io
@@ -354,15 +356,20 @@ def main(runparams: dict):
                 # every science object against ONE observer basis, done once,
                 # at the first of them
                 if pca2d_joint is None:
-                    pca2d_joint = _pca2d_joint(runparams, object_sciences,
-                                               data_types, object_comparisons,
-                                               pca2d_args)
+                    pca2d_joint = _pca2d_joint(
+                        runparams, object_sciences, data_types,
+                        object_comparisons, pca2d_args, keyword_args,
+                        instrument, data_dir, data_source, blaze_corrs,
+                        blaze_files)
                 object_science, object_comparison = \
                     pca2d_joint[object_science]
             else:
-                object_science, object_comparison = lbl_pca2d.main(
-                    object_science=object_science,
-                    object_comparison=object_comparison, **pca2d_args)
+                object_science, object_comparison = _pca2d_passes(
+                    runparams, keyword_args, instrument, data_dir,
+                    data_source, pca2d_args,
+                    {object_science: object_comparison},
+                    {object_science: (blaze_corr, blaze_file)},
+                    joint=False)[object_science]
             lbl_report = _lbl_steps(object_science=object_science,
                                     object_comparison=object_comparison,
                                     **steps)
@@ -736,7 +743,9 @@ def _template_of(data_dir: str, objname: str, instrument: str):
 
 
 def _pca2d_joint(runparams: dict, object_sciences, data_types,
-                 object_comparisons, pca2d_args: dict) -> dict:
+                 object_comparisons, pca2d_args: dict, keyword_args: dict,
+                 instrument: str, data_dir: str, data_source: str,
+                 blaze_corrs, blaze_files) -> dict:
     """The joint pca2d correction of every science object of this wrap.
 
     Not after the telluric cleaning: that is done one object at a time inside
@@ -749,7 +758,7 @@ def _pca2d_joint(runparams: dict, object_sciences, data_types,
                 'cleaning first, then the joint correction on the _tc objects')
         raise base_classes.LblException(emsg)
     olen = len(object_sciences)
-    objects, comparisons = [], dict()
+    objects, comparisons, blazes = [], dict(), dict()
     for num in range(olen):
         wkargs = dict(iteration=num, length=olen)
         if lbl_misc.wraplistcheck(data_types, 'DATA_TYPES',
@@ -758,12 +767,98 @@ def _pca2d_joint(runparams: dict, object_sciences, data_types,
         objects.append(object_sciences[num])
         comparisons[object_sciences[num]] = lbl_misc.wraplistcheck(
             object_comparisons, 'OBJECT_COMPARISON', **wkargs)
+        blazes[object_sciences[num]] = (
+            lbl_misc.wraplistcheck(blaze_corrs, 'BLAZE_CORRECTED', **wkargs),
+            lbl_misc.wraplistcheck(blaze_files, 'BLAZE_FILE', **wkargs))
     if len(objects) < 2:
         emsg = ('LBL_WRAP ERROR: PCA2D joint=True needs two science objects '
                 'or more, there is {0}')
         raise base_classes.LblException(emsg.format(', '.join(objects)))
-    return lbl_pca2d.joint(objects=objects, comparisons=comparisons,
-                           **pca2d_args)
+    return _pca2d_passes(runparams, keyword_args, instrument, data_dir,
+                         data_source, pca2d_args, comparisons, blazes,
+                         joint=True)
+
+
+def _fine_velocities(runparams: dict) -> bool:
+    """Whether the velocities are adjusted finely: SMALL_RV_SHIFT False,
+    the template iterating on them"""
+    return runparams.get('SMALL_RV_SHIFT', True) in (False, 'False', 0)
+
+
+def _iterated(data_dir: str, objname: str, instrument: str) -> bool:
+    """Whether the object's own template measured its spectra's velocities
+    (RVITER in its header)"""
+    path = _template_of(data_dir, objname, instrument)
+    if path is None:
+        return False
+    try:
+        from astropy.io import fits
+        return bool(fits.getheader(path).get('RVITER', False))
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
+def _pca2d_passes(runparams: dict, keyword_args: dict, instrument: str,
+                  data_dir: str, data_source: str, pca2d_args: dict,
+                  comparisons: dict, blazes: dict, joint: bool) -> dict:
+    """The PCA2D correction of these objects: {object: (corrected object,
+    its comparison)}.
+
+    SMALL_RV_SHIFT False, TWO PASSES: the velocities the delivered spectra's
+    template measured carry the tellurics' imprint where the star's lines
+    cross them (the BERV crossing), and so would the star frame PCA2D builds
+    on them. So: a first correction on them; the corrected spectra's own
+    template, iterating, whose velocities are cleaner; a second correction
+    on those (lbl_pca2d velocities_from), which LBL then measures. When the
+    corrected spectra's template already has its velocities (a previous
+    run's second pass), one pass on them, which finds its correction on
+    disk when nothing changed. SMALL_RV_SHIFT True: one pass, as always."""
+    from lbl.recipes import lbl_pca2d
+    objects = list(comparisons)
+
+    def correct(velocities_from):
+        if joint:
+            return lbl_pca2d.joint(objects=objects, comparisons=comparisons,
+                                   velocities_from=velocities_from,
+                                   **pca2d_args)
+        name = objects[0]
+        return {name: lbl_pca2d.main(object_science=name,
+                                     object_comparison=comparisons[name],
+                                     velocities_from=velocities_from,
+                                     **pca2d_args)}
+
+    if not _fine_velocities(runparams):
+        return correct(None)
+    corrected = {name: lbl_pca2d.corrected_name(
+        name, pca2d_args.get('pca2d'), pca2d_args.get('report', True))
+        for name in objects}
+    if all(_iterated(data_dir, corrected[name], instrument)
+           for name in objects):
+        log.info('SMALL_RV_SHIFT = False: the corrected spectra of {0} have '
+                 'a template with their velocities (a previous run\'s second '
+                 'pass): one PCA2D pass on them'.format(', '.join(objects)))
+        return correct(corrected)
+    log.info('SMALL_RV_SHIFT = False: PCA2D in two passes, the first on the '
+             'velocities of the delivered spectra\'s template, the second on '
+             'those of the corrected spectra\'s')
+    names = correct(None)
+    for name in objects:
+        _velocity_template(runparams, keyword_args, instrument, data_dir,
+                           data_source, names[name][0], *blazes[name])
+        before = lbl_pca2d.object_velocities(name, None, data_dir,
+                                             instrument, lambda *a: None)
+        after = lbl_pca2d.object_velocities(names[name][0], None, data_dir,
+                                            instrument, lambda *a: None)
+        common = sorted(set(before) & set(after))
+        if common:
+            change = np.array([after[f] - before[f] for f in common]) * 1000
+            change -= np.median(change)
+            log.info('velocities of {0}, delivered against corrected '
+                     'spectra: {1} spectra, change rms {2:.2f} m/s'.format(
+                         name, len(common), float(np.std(change))))
+    log.info('PCA2D, second pass: the star frame follows the velocities of '
+             'the corrected spectra\'s template')
+    return correct({name: names[name][0] for name in objects})
 
 
 def custom(runparams: dict, func, required_kwargs: List[str]):

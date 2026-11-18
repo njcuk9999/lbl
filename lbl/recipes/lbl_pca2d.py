@@ -601,7 +601,7 @@ def object_velocities(name: str, comparison, data_dir: str, instrument: str,
     median = float(np.median(vsys[good]))
     out = {os.path.basename(str(f)): float(v - median) / 1000.0
            for f, v, ok in zip(table['FILENAME'], vsys, good) if ok}
-    log('PCA2D: the star frame of %s follows the velocities its template'
+    log('PCA2D: the star frame follows the velocities the template of %s'
         ' fitted freely (%d spectra, %.1f m/s rms, %s), not the BERV alone'
         % (name, len(out), float(np.std(vsys[good])), os.path.basename(path)),
         'info')
@@ -653,25 +653,37 @@ def write_request(path: str, objects: list, block: dict, cache_dir: str,
                        default_flow_style=False)
 
 
+def corrected_name(name: str, pca2d, report: bool = True) -> str:
+    """The name of an object's corrected spectra (science/<name>_pca2d, or
+    <name>_pca2d_<label> with the PCA2D name), as correct() makes them"""
+    switches, _ = settings(pca2d, report)
+    label = re.sub(r'[^0-9A-Za-z._+-]', '_', str(switches['name'] or ''))
+    return name + SUFFIX + ('_' + label if label else '')
+
+
 def main(instrument: str, data_dir: str, object_science: str,
          object_comparison: str = None, data_source: str = None,
          pca2d=None, input_file: str = None, science_subdir: str = 'science',
          report: bool = True, skip=None, planets: bool = False,
-         **kwargs) -> tuple:
+         velocities_from: dict = None, **kwargs) -> tuple:
     """Correct one object, and return the names LBL goes on with:
     (object_science, object_comparison). skip is the wrap's
-    SKIP_LBL_PCA2D, planets its PLANETS."""
+    SKIP_LBL_PCA2D, planets its PLANETS, velocities_from {object: the
+    object whose template's velocities its star frame follows} (the
+    corrected spectra's, for lbl_wrap's second pass)."""
     _ = kwargs
     names = correct(instrument, data_dir, [object_science],
                     {object_science: object_comparison}, data_source, pca2d,
-                    input_file, science_subdir, report, skip, planets)
+                    input_file, science_subdir, report, skip, planets,
+                    velocities_from)
     return names[object_science]
 
 
 def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
           data_source: str = None, pca2d=None, input_file: str = None,
           science_subdir: str = 'science', report: bool = True, skip=None,
-          planets: bool = False, **kwargs) -> dict:
+          planets: bool = False, velocities_from: dict = None,
+          **kwargs) -> dict:
     """Correct several objects against one observer basis (pca2d.joint), each
     with its own star spectrum. {object: (object_science, object_comparison)}.
     skip is the wrap's SKIP_LBL_PCA2D.
@@ -679,12 +691,12 @@ def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
     _ = kwargs
     return correct(instrument, data_dir, list(objects), dict(comparisons),
                    data_source, pca2d, input_file, science_subdir, report,
-                   skip, planets)
+                   skip, planets, velocities_from)
 
 
 def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
             input_file, science_subdir, report=True, skip=None,
-            planets=False) -> dict:
+            planets=False, velocities_from=None) -> dict:
     """The correction of one object, or of several together. Returns
     {object: (corrected object, its comparison)}.
 
@@ -792,7 +804,13 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
               for name in objects} if planets else dict()
     # the velocities LBL's template fitted freely, when it did (its own
     #   template, made without known orbits): the star frame follows them
-    velocities = {name: object_velocities(name, comparisons.get(name),
+    # the star frame's velocities: those the object's own template measured
+    #   (SMALL_RV_SHIFT False), or, given in velocities_from, those of
+    #   another object's template, the corrected spectra's for lbl_wrap's
+    #   second pass (same file names)
+    velocities_from = velocities_from or dict()
+    velocities = {name: object_velocities(velocities_from.get(name, name),
+                                          comparisons.get(name),
                                           data_dir, instrument, log)
                   for name in objects}
     request = dict(block, objects=list(objects))
