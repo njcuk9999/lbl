@@ -15,7 +15,14 @@
   pill: a template or a mask whose step is unticked in the LBL settings but
   that is not on disk is made all the same before the velocities: its pill
   is dashed, its tip says why; a step the log names that the plan did not
-  have gets a dashed pill where it comes.
+  have gets a dashed pill where it comes. A step done says how long it took
+  (`template: 1m32s`). After the last, how long is left and when the run
+  should end: the step going from its counter when it has one, each step
+  to come from how long the same kind took already in this run (the
+  corrected spectra's LBL steps like the delivered ones', a second PCA2D
+  pass like the first), else from the median of the earlier runs of the
+  data folder (their `run.json` keeps when each step began and ended); a
+  step with neither is said, not guessed.
 - **The plots**, between the steps and the log, as LBL draws them, without
   stopping the run: the template once made, the velocities it measured on
   its spectra, with their uncertainties, against the spectrum's number and

@@ -193,7 +193,64 @@ class Job:
                     log=_log_of(self.folder),
                     events=len(self.events),
                     reports=self.reports, meta=self.meta,
-                    steps=self.steps, plots=plots_of(self.folder))
+                    steps=self.steps, plots=plots_of(self.folder),
+                    timing=self.timing())
+
+    # -- how long --------------------------------------------------------------
+    def _history(self) -> dict:
+        """How long each kind of step took in the earlier runs of this data
+        folder ({kind: [seconds]}, from their run.json), read once"""
+        if getattr(self, "_durations", None) is None:
+            self._durations = step_durations(os.path.dirname(self.folder),
+                                             skip=self.folder)
+        return self._durations
+
+    def timing(self) -> dict:
+        """What is left of a run going: dict(remaining, end, unknown,
+        now). The step going: its elapsed time scaled by its counter when it
+        has one, else its expected time less what has gone. Each step to
+        come: how long the last step of its kind took in this run (the
+        corrected spectra's LBL steps like the delivered ones', a second
+        PCA2D pass like the first), else the median of the earlier runs'.
+        `unknown` counts the steps with neither, left out of `remaining`.
+        {} when the run is not going."""
+        if self.state != "running":
+            return dict()
+        now = time.time()
+        own = dict()
+        for step in self.steps:
+            if step["state"] == "done" and "started" in step \
+                    and "ended" in step:
+                own[step["kind"]] = step["ended"] - step["started"]
+        history = self._history()
+
+        def expected(kind):
+            if kind in own:
+                return own[kind]
+            found = history.get(kind)
+            return float(sorted(found)[len(found) // 2]) if found else None
+
+        remaining, unknown = 0.0, 0
+        for step in self.steps:
+            if step["state"] == "running":
+                elapsed = now - step.get("started", now)
+                share = step.get("progress")
+                if share and share > 0.02:
+                    remaining += elapsed * (1.0 - share) / share
+                    continue
+                guess = expected(step["kind"])
+                if guess is None:
+                    unknown += 1
+                else:
+                    remaining += max(guess - elapsed, 0.0)
+            elif step["state"] == "pending":
+                guess = expected(step["kind"])
+                if guess is None:
+                    unknown += 1
+                else:
+                    remaining += guess
+        return dict(remaining=remaining, end=now + remaining,
+                    unknown=unknown, now=now)
 
     def events_from(self, start: int, wait: float = 0.0):
         """The events from index `start` on, waiting up to `wait` seconds
@@ -260,14 +317,25 @@ class Job:
     def _advance(self, kind: str, obj=None, done: bool = False) -> None:
         """The log has reached a step: the first one of this kind (and
         object) from the current on; those before it are done."""
+        now = time.time()
         for index in range(self.step_at, len(self.steps)):
             step = self.steps[index]
             if step["kind"] == kind and (obj is None or step["obj"] == obj):
                 for before in self.steps[:index]:
                     if before["state"] in ("pending", "running"):
                         before["state"] = "done"
+                        # it ended when the next one began (a step never
+                        #   seen going has no time of its own)
+                        if "started" in before:
+                            before.setdefault("ended", now)
                     before.pop("progress", None)
                 step["state"] = "done" if done else "running"
+                # when it began (and ended): its pill says how long it took,
+                #   and the steps to come are timed on it (timing)
+                if not done:
+                    step.setdefault("started", now)
+                elif "started" in step:
+                    step.setdefault("ended", now)
                 step.pop("progress", None)
                 # the event the log reached it at: a click on the step
                 #   shows that line
@@ -285,17 +353,25 @@ class Job:
             for before in self.steps[:index]:
                 if before["state"] in ("pending", "running"):
                     before["state"] = "done"
+                    if "started" in before:
+                        before.setdefault("ended", now)
                 before.pop("progress", None)
-            self.steps.insert(index, dict(
-                kind=kind, obj=obj, state="done" if done else "running",
-                added=True, at=len(self.events) - 1))
+            added = dict(kind=kind, obj=obj,
+                         state="done" if done else "running", added=True,
+                         at=len(self.events) - 1)
+            if not done:
+                added["started"] = now
+            self.steps.insert(index, added)
             self.step_at = index + 1 if done else index
 
     def finish_steps(self) -> None:
         """At the end: every step done when the run succeeded; otherwise the
         one it was in failed (or was stopped), the others stay as they
         are."""
+        end = self.ended or time.time()
         for step in self.steps:
+            if step["state"] in ("running", "pending") and "started" in step:
+                step.setdefault("ended", end)
             if self.state == "done":
                 step["state"] = "done"
             elif step["state"] == "running":
@@ -580,6 +656,29 @@ class Runner:
         job.finish_steps()
         job.record()
         self.wake.set()
+
+
+def step_durations(runs: str, skip: str = "") -> dict:
+    """How long each kind of step took in the runs of a folder of runs
+    (their run.json, the steps that ran to their end): {kind: [seconds]}"""
+    out = dict()
+    for path in glob.glob(os.path.join(runs, "*", "run.json")):
+        if skip and os.path.dirname(path) == os.path.normpath(skip):
+            continue
+        try:
+            with open(path, encoding="utf-8") as handle:
+                steps = json.load(handle).get("steps") or []
+        except (OSError, ValueError, AttributeError):
+            continue
+        for step in steps:
+            try:
+                if step.get("state") == "done" and "started" in step \
+                        and "ended" in step:
+                    out.setdefault(step["kind"], []).append(
+                        float(step["ended"]) - float(step["started"]))
+            except (TypeError, ValueError, AttributeError, KeyError):
+                continue
+    return out
 
 
 #: where a run's plots go, in its folder (lbl.science.liveplot)

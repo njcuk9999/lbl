@@ -849,3 +849,6 @@ td.strong { font-weight: 600; }
 .plot-frame { height: 540px; border: 1px solid var(--card-edge, rgba(127,127,127,0.3)); border-radius: 8px; overflow: hidden; background: #fff; }
 .plot-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
 #plot_pick { max-width: 420px; }
+
+/* after the last step: how long is left, and when the run should end */
+.step-eta { align-self: center; color: var(--muted, #888); margin-left: 6px; font-style: italic; }

@@ -1837,7 +1837,27 @@ function updateLaunch(running) {
 // ── the steps of a run, ticked off as its log goes ──────────────────────
 let plannedSteps = [];
 const STEP_ICON = { pending: '○', running: '◐', done: '✓', failed: '✗', stopped: '■' };
-function drawSteps(steps, title) {
+/* a short duration for a step's pill: 45s, 1m32s, 1h05m */
+function shortSpan(seconds) {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h ? `${h}h${String(m).padStart(2, '0')}m` : m ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`;
+}
+/* the end of a run going: how long is left and when it should end, from
+   the runner's timing (the steps done in this run, the earlier runs) */
+function stepsEta(timing) {
+  if (!timing || timing.remaining === undefined) return null;
+  const end = new Date(1000 * timing.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  let text;
+  if (!timing.unknown) text = t('steps_eta', shortSpan(timing.remaining), end);
+  else if (timing.remaining > 0) text = t('steps_eta_more', shortSpan(timing.remaining), timing.unknown, end);
+  else text = t('steps_eta_unknown', timing.unknown);
+  return el('span', { class: 'step-eta small', text, title: t('steps_eta_tip') });
+}
+
+function drawSteps(steps, title, timing) {
   const holder = $('steps');
   $('steps_note').textContent = title || t('steps_planned');
   const groups = [];
@@ -1863,7 +1883,9 @@ function drawSteps(steps, title) {
     },
       step.state === 'running' ? el('span', { class: 'ring' })
         : el('span', { class: 'step-icon', text: STEP_ICON[step.state || 'pending'] }),
-      t(step.label || `step_${step.kind}`))))));
+      // done: how long it took (template: 1m32s)
+      t(step.label || `step_${step.kind}`) + (step.state === 'done' && step.started && step.ended ? `: ${shortSpan(step.ended - step.started)}` : '')))),
+  ), ...[stepsEta(timing)].filter(Boolean));
 }
 
 // ── the wrap, with Python's colours ─────────────────────────────────────
@@ -1989,7 +2011,7 @@ async function pollQueue() {
   if (S.tab === 'runs' && !FREEZE && (runsNow !== runsSeen || (jobs.some((j) => j.state === 'running') && Date.now() - runsRead > 10000))) loadRuns();
   runsSeen = runsNow;
   const job = jobs.find((j) => j.id === selectedJob);
-  if (job && job.steps && job.steps.length) drawSteps(job.steps, t('steps_of', job.name));
+  if (job && job.steps && job.steps.length) drawSteps(job.steps, t('steps_of', job.name), job.timing);
   else drawSteps(plannedSteps);
   drawRunPlots(job);
   if (job) {
