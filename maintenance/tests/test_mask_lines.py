@@ -78,6 +78,38 @@ def test_the_systemic_velocity_inside_and_on_the_edges_of_the_range():
                                               spectrum) == edge
 
 
+def test_the_systemic_velocity_from_the_template_and_not_its_lines():
+    """the template's flux against the model finds the star, where the
+    lines' CCF is taken by a few spikes of weight (PROXIMA: three lines of a
+    noisy end, near 1830 nm, with up to 28 000 times the median weight, and
+    +157 km/s instead of -21): a template of 400 lines at -21.3 km/s, noise,
+    a gap and a noisy end of huge spikes"""
+    rng = np.random.default_rng(11)
+    wave = general.get_magic_grid(1500.0, 1600.0, 500.0)
+    centres = np.sort(rng.uniform(1502.0, 1598.0, 400))
+    depth = rng.uniform(0.05, 0.5, 400)
+    model = np.ones_like(wave)
+    for centre, dep in zip(centres, depth):
+        model *= _lines(wave, [centre], dep, 2.5)
+    ratio = np.sqrt((1 - 21.3e3 / C_MS) / (1 + 21.3e3 / C_MS))
+    flux = np.interp(wave, wave * ratio, model) * (
+        1 + 0.003 * rng.normal(size=wave.size))
+    flux[(wave > 1540.0) & (wave < 1545.0)] = np.nan
+    end = wave > 1590.0
+    flux[end] *= np.exp(rng.normal(size=end.sum()) * 0.8)
+    template = Table(dict(wavelength=wave, flux=flux))
+    velocity, dvs, ccf, signif = general.template_systemic_velocity(
+        wave, flux, wave, model)
+    assert abs(velocity - (-21.3)) < 0.3 and signif > 10
+    assert np.isclose(ccf.max(), 1.0) and abs(dvs[np.argmax(ccf)]
+                                                 + 21.3) < 0.6
+    # through mask_systemic_velocity, with lines whose weights a spike took
+    lines = Table(dict(ll_mask_s=[1595.0, 1500.5], ll_mask_e=[1595.0, 1500.5],
+                       w_mask=[3e4, 1.0]))
+    assert abs(general.mask_systemic_velocity(_Inst(), lines, wave, model,
+                                              template) + 21.3) < 0.3
+
+
 def test_the_mask_type_is_replaced_in_the_file_name_only(tmp_path):
     # a folder and an object whose names contain the mask type ('full')
     folder = tmp_path / 'fullrun' / 'masks'

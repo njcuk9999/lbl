@@ -3944,19 +3944,122 @@ def find_mask_lines_significant(inst: InstrumentsType, template_table: Table,
     return table
 
 
+#: the template against the model: a grid step of 0.5 km/s, the model
+#:   smoothed to 3 km/s FWHM, both high-passed over 100 km/s, a template
+#:   sample whose high-passed ln f is beyond 0.5 not used
+SYSVEL_STEP_KMS = 0.5
+SYSVEL_MODEL_FWHM_KMS = 3.0
+SYSVEL_HIGHPASS_KMS = 100.0
+SYSVEL_CLIP = 0.5
+
+
+def template_systemic_velocity(t_wave: np.ndarray, t_flux: np.ndarray,
+                               m_wavemap: np.ndarray, m_spectrum: np.ndarray,
+                               dv_max: float = 200.0):
+    """
+    The velocity of the star of a template against a model spectrum at
+    rest, from the cross-correlation of their fluxes: both in ln(flux) on
+    a grid uniform in ln(wavelength) of SYSVEL_STEP_KMS, high-passed (less
+    a running median over SYSVEL_HIGHPASS_KMS), the model smoothed to
+    SYSVEL_MODEL_FWHM_KMS; the template's missing samples, and those whose
+    high-passed ln f is beyond SYSVEL_CLIP (a telluric band, a noisy end),
+    count for nothing. Every shift at once by FFT, the peak refined by a
+    parabola through its three highest points. Positive: the template's
+    lines are redshifted against the model's.
+
+    The whole template is used rather than the mask's lines: the mask of
+    significant extrema holds many minima that are noise or blends, and
+    weighs each by its second derivative, so that a few spikes of a
+    template's noisy end (PROXIMA, NIRPS: three lines near 1830 nm with
+    hundreds to tens of thousands of times the median weight) made the
+    lines' CCF a comb of equal dips, and the velocity +157 km/s instead of
+    the star's -21.
+
+    :param t_wave, t_flux: the template [nm] (NaN where it has none)
+    :param m_wavemap, m_spectrum: the model [nm], at rest
+    :param dv_max: float, the shifts searched, +-dv_max km/s
+
+    :return: (velocity [km/s], the velocities and the CCF normalised to
+             1 at its peak, the peak's significance in robust sigmas)
+    """
+    from scipy.ndimage import gaussian_filter1d, median_filter
+    t_wave = np.asarray(t_wave, dtype=float)
+    t_flux = np.asarray(t_flux, dtype=float)
+    good = np.isfinite(t_wave) & np.isfinite(t_flux) & (t_flux > 0)
+    lo = max(np.min(t_wave[good]), np.min(m_wavemap))
+    hi = min(np.max(t_wave[good]), np.max(m_wavemap))
+    step = np.arctanh(SYSVEL_STEP_KMS / mp.speed_of_light)
+    grid = np.exp(np.arange(np.log(lo), np.log(hi), step))
+    # the template, and where it has a sample on both sides of the grid's
+    #   (a gap is not bridged)
+    order = np.argsort(t_wave[good])
+    tw, tl = t_wave[good][order], np.log(t_flux[good][order])
+    tmpl = np.interp(grid, tw, tl)
+    idx = np.clip(np.searchsorted(tw, grid), 1, tw.size - 1)
+    gap = (tw[idx] - tw[idx - 1]) / grid > 3 * step
+    model = np.interp(grid, m_wavemap, np.log(np.clip(m_spectrum, 1e-30,
+                                                      None)))
+    model = gaussian_filter1d(model, SYSVEL_MODEL_FWHM_KMS / 2.3548
+                              / SYSVEL_STEP_KMS)
+    window = int(SYSVEL_HIGHPASS_KMS / SYSVEL_STEP_KMS) | 1
+    tmpl = tmpl - median_filter(tmpl, window, mode='nearest')
+    model = model - median_filter(model, window, mode='nearest')
+    bad = gap | (np.abs(tmpl) > SYSVEL_CLIP)
+    tmpl[bad] = 0.0
+    tmpl[~bad] -= np.mean(tmpl[~bad])
+    model -= np.mean(model)
+    size = 1 << int(np.ceil(np.log2(2 * grid.size)))
+    corr = np.fft.irfft(np.fft.rfft(tmpl, size)
+                        * np.conj(np.fft.rfft(model, size)), size)
+    nlag = int(np.ceil(np.arctanh(dv_max / mp.speed_of_light) / step))
+    lags = np.arange(-nlag, nlag + 1)
+    ccf = corr[lags % size]
+    k = int(np.argmax(ccf))
+    if 0 < k < lags.size - 1:
+        y0, y1, y2 = ccf[k - 1], ccf[k], ccf[k + 1]
+        frac = 0.5 * (y0 - y2) / (y0 - 2 * y1 + y2)
+    else:
+        frac = 0.0
+    velocity = mp.speed_of_light * np.tanh((lags[k] + frac) * step)
+    dvs = mp.speed_of_light * np.tanh(lags * step)
+    spread = 1.4826 * np.median(np.abs(ccf - np.median(ccf)))
+    signif = (ccf[k] - np.median(ccf)) / spread if spread > 0 else np.nan
+    return float(velocity), dvs, ccf / ccf[k], float(signif)
+
+
 def mask_systemic_velocity(inst: InstrumentsType, line_table: Table,
                            m_wavemap: np.ndarray,
-                           m_spectrum: np.ndarray) -> float:
+                           m_spectrum: np.ndarray,
+                           template_table: Optional[Table] = None) -> float:
     """
-    Measure the systemic velocity of a mask compared to a model
+    Measure the systemic velocity of a mask compared to a model: from the
+    template's flux against the model when the template is given
+    (template_systemic_velocity), from the mask's lines otherwise
 
     :param inst: the instrument class
     :param line_table: astropy table, the table of lines
     :param m_wavemap: np.ndarray, the 1D model wave map
     :param m_spectrum: np.ndarray, the 1D model flux spectrum
+    :param template_table: astropy table, the template (wavelength, flux)
 
     :return: float, the systemic velocity
     """
+    if template_table is not None:
+        sys_vel, dvs, ccf, signif = template_systemic_velocity(
+            template_table['wavelength'], template_table['flux'], m_wavemap,
+            m_spectrum)
+        msg = ('System velocity for {0} is {1:.3f} km/s (the template '
+               'against the model, the peak at {2:.1f} sigma)')
+        log.general(msg.format(inst.params['OBJECT_COMPARISON'], sys_vel,
+                               signif))
+        if not signif > 5:
+            wmsg = ('The template correlates poorly with the model ({0:.1f} '
+                    'sigma): its systemic velocity, {1:.3f} km/s, is '
+                    'doubtful')
+            log.warning(wmsg.format(signif, sys_vel))
+        # the plot shows a dip at the velocity, as the lines' CCF did
+        plot.mask_plot_ccf(inst, dvs, 1.0 - ccf, sys_vel)
+        return sys_vel
     # get tqdm
     tqdm = base.tqdm_module(inst.params['USE_TQDM'], log.console_verbosity)
     # create a spline of the model spectrum

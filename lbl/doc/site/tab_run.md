@@ -36,7 +36,8 @@
   its MJD (an injection test's signal drawn over them), and the spectra
   registered at them, coloured by epoch (`SMALL_RV_SHIFT` unticked;
   each spectrum's velocity is written in the log too), then the other
-  steps' (the mask's CCF, compute's CCF and lines, PCA2D's fit: the variance
+  steps' (the template against the model, the mask's systemic velocity;
+  compute's CCF and lines, PCA2D's fit: the variance
   share of each component, its eigenvalue, and the rank correlation of each
   component's amplitude with the observing conditions, one plot per pass;
   compile's lines: each line's velocity and error bar against its

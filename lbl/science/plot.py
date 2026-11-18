@@ -716,7 +716,8 @@ def mask_plot_ccf(inst: InstrumentsType, dvgrid: np.ndarray,
               title=title.format(*targs))
     # -------------------------------------------------------------------------
     # show and close plot
-    liveplot.finish(plt, key, 'CCF of the template with its mask', 'mask',
+    liveplot.finish(plt, key, "the template against the model: the mask's"
+                    " systemic velocity", 'mask',
                     inst.params['OBJECT_SCIENCE'])
     plt.close()
 

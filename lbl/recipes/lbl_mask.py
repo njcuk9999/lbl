@@ -203,7 +203,7 @@ def __main__(inst: InstrumentsType, **kwargs):
     if not flag_calib:
         # work out the systemic velocity in km/s
         sys_vel = general.mask_systemic_velocity(inst, line_table, m_wavemap,
-                                                 m_spectrum)
+                                                 m_spectrum, template_table)
         # update line_table for the systemic velocity
         line_table['ll_mask_s'] = mp.doppler_shift(line_table['ll_mask_s'],
                                                    1000 * sys_vel)
