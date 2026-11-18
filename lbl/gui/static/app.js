@@ -1971,8 +1971,21 @@ async function build() {
   return data;
 }
 
-async function queue() {
-  const data = await api.post('/api/queue', { state: buildState(), name: S.name, wrap: $('wrap_text').value });
+async function queue(confirmed = false) {
+  // a wrap not edited by hand is built again from the settings first, so
+  //   that what runs (and what is shown) is what the tabs say now
+  if (!wrapEdited) {
+    const built = await build();
+    if (!built || (built.errors && built.errors.length)) return;
+  }
+  const data = await api.post('/api/queue', { state: buildState(), name: S.name, wrap: $('wrap_text').value, edited: wrapEdited, confirmed });
+  if (data.differs) {
+    // edited by hand and no longer what the settings say: asked first;
+    //   no rewrites it from the settings, to look at before running
+    if (await confirmBox(t('wrap_differs_q', data.differs.join(', ')))) queue(true);
+    else await build();
+    return;
+  }
   if (data.errors) { showMessages(data.errors, []); return; }
   if (data.error) { showMessages([data.error], []); return; }
   selectJob(data.id);
@@ -1980,7 +1993,8 @@ async function queue() {
 }
 
 async function saveWrap(overwrite) {
-  const data = await api.post('/api/save_wrap', { data_dir: S.data_dir, name: S.name, wrap: $('wrap_text').value, state: buildState(), overwrite });
+  if (!wrapEdited) await build();
+  const data = await api.post('/api/save_wrap', { data_dir: S.data_dir, name: S.name, wrap: $('wrap_text').value, state: buildState(), overwrite, edited: wrapEdited });
   if (data.exists && !overwrite) {
     if (await confirmBox(t('overwrite_q', data.path || data.error))) saveWrap(true);
     return;
@@ -3242,7 +3256,7 @@ async function init() {
   $('check').onclick = build;
   $('load_wrap').onclick = loadWrap;
   $('wrap_list').onchange = (event) => { $('wrap_path').value = event.target.value; };
-  $('queue').onclick = queue;
+  $('queue').onclick = () => queue();
   $('plot_prev').onclick = () => pickRunPlot(RUNPLOTS.index - 1);
   $('plot_next').onclick = () => pickRunPlot(RUNPLOTS.index + 1);
   $('plot_pick').onchange = (event) => pickRunPlot(Number(event.target.value));

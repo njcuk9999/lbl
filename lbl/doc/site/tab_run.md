@@ -4,11 +4,18 @@
 
 - **The name** of the run: its folder, `DATA_DIR/gui/runs/<name>/`.
 - **The wrap** that will run, built from the other tabs; edit it here if
-  you want (it then stops following the tabs until rebuilt). **Save** writes
-  it in the data folder as `wrap_<name>.py`; **Load** reads a wrap of yours
-  back into the tabs.
+  you want (it then stops following the tabs until a setting changes, which
+  rebuilds it). **Save** writes it in the data folder as `wrap_<name>.py`;
+  **Load** reads a wrap of yours back into the tabs.
 - **Run** puts it in the queue: one run at a time, in the environment LBL is
-  installed in.
+  installed in. A wrap not edited by hand is built again from the settings
+  as Run is pressed (and Save), so that what runs is what the tabs say,
+  even when the text shown dates from before a setting changed. A wrap
+  edited by hand that no longer says what the settings say (another
+  `FAKE_KEPLERIAN`, `OBJECT_SCIENCE`...) is not run before asking, with
+  the parameters that differ: yes runs it as it is, and the steps planned
+  are those of that text; no writes it again from the settings, to look at
+  before pressing Run again.
 - **The steps**: one pill per step (LBL on the delivered spectra, PCA2D's
   cube, fit, figures and correction, LBL on the corrected spectra, the
   report), each filled as its counter goes. Every step that runs has its

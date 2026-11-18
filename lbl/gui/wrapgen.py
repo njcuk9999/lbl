@@ -471,18 +471,53 @@ def window_text(posted: str, rparams: dict, name: str = "",
     current, when the text the page posts reads back to these very run
     parameters (the page can hold the same wrap without its comments, or
     with comments that are out of date); the posted text as it is when it
-    was edited by hand."""
+    was edited by hand (to_run, not told whether it was)."""
+    return to_run(posted, rparams, name, python)["text"]
+
+
+def differences(found: dict, rparams: dict) -> list:
+    """The run parameters whose values differ between a wrap's text and
+    the window's settings (one set in only one of them included), sorted."""
     import json
+    same = lambda value: json.dumps(value, sort_keys=True, default=str)
+    keys = set(found) | set(rparams)
+    return sorted(key for key in keys
+                  if same(found.get(key)) != same(rparams.get(key)))
+
+
+def to_run(posted: str, rparams: dict, name: str = "", python: str = "",
+           edited=None) -> dict:
+    """
+    What a run queued from the window runs: dict(text, rparams, differs).
+
+    A wrap not edited by hand (edited False: the page's text was built from
+    the settings, maybe before they last changed) is written again from the
+    settings, so that the run is always what the tabs say. One edited by
+    hand (edited True, or not said, as window_text) is run as it is when its
+    parameters differ from the settings: rparams are then its own (the steps
+    the window plans are those of the text that runs) and differs names the
+    parameters that differ, for the window to ask before running it.
+
+    :param posted: str, the page's wrap text
+    :param rparams: dict, the run parameters of the window's settings
+    :param name, python: as render()
+    :param edited: bool or None, whether the text was edited by hand
+
+    :return: dict(text=str, rparams=dict, differs=list of str)
+    """
     from .wrapload import read_text
-    fresh = render(rparams, name, python)
-    if not posted:
-        return fresh
+    if edited is False or not posted:
+        return dict(text=render(rparams, name, python), rparams=rparams,
+                    differs=[])
     try:
         found = read_text(posted)["rparams"]
     except (SyntaxError, ValueError):
-        return posted
-    same = lambda d: json.dumps(d, sort_keys=True, default=str)
-    return fresh if same(found) == same(rparams) else posted
+        return dict(text=posted, rparams=rparams, differs=[])
+    differs = differences(found, rparams)
+    if not differs:
+        return dict(text=render(rparams, name, python), rparams=rparams,
+                    differs=[])
+    return dict(text=posted, rparams=found, differs=differs)
 
 
 def render(rparams: dict, name: str = "", python: str = "") -> str:

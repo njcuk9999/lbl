@@ -513,14 +513,17 @@ class Handler(BaseHTTPRequestHandler):
                 if os.path.exists(path) and not body.get("overwrite"):
                     return self._json(dict(error="%s exists" % path,
                                            exists=True), HTTPStatus.CONFLICT)
-                # the window's own wrap is written commented and current,
-                #   a wrap edited by hand as it is (wrapgen.window_text)
+                # the window's own wrap is written commented and current
+                #   (from the settings when not edited by hand), a wrap
+                #   edited by hand as it is (wrapgen.to_run)
                 text = body.get("wrap", "")
                 if body.get("state"):
                     built = wrapgen.build(body["state"])
-                    text = wrapgen.window_text(
+                    edited = body.get("edited")
+                    text = wrapgen.to_run(
                         text, built["rparams"], body.get("name", ""),
-                        body["state"].get("python") or sys.executable)
+                        body["state"].get("python") or sys.executable,
+                        None if edited is None else bool(edited))["text"]
                     lblinfo.link_templates(
                         data_dir, built["rparams"].get("INSTRUMENT"),
                         built["rparams"].get("DATA_SOURCE"),
@@ -585,9 +588,13 @@ class Handler(BaseHTTPRequestHandler):
                               HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def _queue(self, body: dict):
-        """Write the run's folder and its wrap, then queue it. The wrap the
-        page sends is run as it is (it may have been edited); the state is
-        checked first all the same, so that a run with errors is refused."""
+        """Write the run's folder and its wrap, then queue it. A wrap not
+        edited by hand is written again from the settings (the page's text
+        can date from before they last changed); one edited by hand runs as
+        it is, but when it no longer says what the settings say the page is
+        told which parameters differ (409, differs) and asks first
+        (confirmed). The state is checked first all the same, so that a run
+        with errors is refused (wrapgen.to_run)."""
         state = body.get("state") or {}
         built = wrapgen.build(state)
         if built["errors"]:
@@ -596,8 +603,14 @@ class Handler(BaseHTTPRequestHandler):
         data_dir = self.ctx.allow(state.get("data_dir", ""))
         name = body.get("name") or suggest_name(state, built["rparams"])
         python = state.get("python") or sys.executable
-        text = wrapgen.window_text(body.get("wrap"), built["rparams"], name,
-                                   python)
+        edited = body.get("edited")
+        chosen = wrapgen.to_run(body.get("wrap"), built["rparams"], name,
+                                python, None if edited is None
+                                else bool(edited))
+        if chosen["differs"] and edited and not body.get("confirmed"):
+            return self._json(dict(differs=chosen["differs"]),
+                              HTTPStatus.CONFLICT)
+        text, ran = chosen["text"], chosen["rparams"]
         # the templates it names that are elsewhere in the root, linked
         #   where LBL reads them
         lblinfo.link_templates(data_dir, built["rparams"].get("INSTRUMENT"),
@@ -610,12 +623,13 @@ class Handler(BaseHTTPRequestHandler):
         with open(wrap, "w", encoding="utf-8") as handle:
             handle.write(text)
         os.chmod(wrap, 0o755)
+        # the plan is the one of the text that runs
         job = self.ctx.runner.submit(
             name, folder, wrap, python, data_dir,
-            dict(targets=built["rparams"].get("OBJECT_SCIENCE"),
-                 instrument=built["rparams"].get("INSTRUMENT"),
-                 pca2d=built["rparams"].get("PCA2D"),
-                 steps=wrapgen.steps(built["rparams"]),
+            dict(targets=ran.get("OBJECT_SCIENCE"),
+                 instrument=ran.get("INSTRUMENT"),
+                 pca2d=ran.get("PCA2D"),
+                 steps=wrapgen.steps(ran),
                  edited=text != wrapgen.render(built["rparams"], name,
                                                python)),
             job_id=job_id)
