@@ -29,6 +29,7 @@ from lbl.core import math as mp
 from lbl.instruments import default
 from lbl.instruments import select
 from lbl.science import activity_lines
+from lbl.science import liveplot
 from lbl.science import plot
 
 # =============================================================================
@@ -2490,31 +2491,28 @@ def make_rdb_table(inst: InstrumentsType, rdbfile: str,
         # ---------------------------------------------------------------------
         # if we don't have a calibration add plot values (only used by the
         #   cumulative plot)
-        cumul_plot = inst.params['PLOT'] and inst.params['PLOT_COMPIL_CUMUL']
+        #   (PLOT, or a run the LBL window watches, lbl.science.liveplot:
+        #   the plot is drawn then too, and was drawn empty without them)
+        cumul_plot = ((inst.params['PLOT'] or liveplot.active())
+                      and inst.params['PLOT_COMPIL_CUMUL'])
         if not flag_calib and cumul_plot:
             # plot specific domain. We use the median velocity of the file
             # for the plot domain. +-15 km/s to get an idea of residuals.
             xlim = [med_velo - 15000, med_velo + 15000]
             # get velocity range
             vrange = np.arange(xlim[0], xlim[1], 50.0)
-            # storage for probability density function
-            pdf = np.zeros_like(vrange, dtype=float)
             # mask the rv and dvrms by best_mask
             best_rv = dv_arr[row][best_mask]
             best_dvrms = sdv_arr[row][best_mask]
             # track finite values
             finite_mask = np.isfinite(best_rv) & np.isfinite(best_dvrms)
-            # loop around each line
-            for line_it in range(len(best_rv)):
-                # only deal with finite masks
-                if finite_mask[line_it]:
-                    # get exponent
-                    part = (vrange - best_rv[line_it]) / best_dvrms[line_it]
-                    # calculate pdf weights
-                    pdf_weight = np.exp(-0.5 * part ** 2)
-                    pdf_weight = pdf_weight / best_dvrms[line_it]
-                    # add to pdf for each vrange
-                    pdf = pdf + pdf_weight
+            # the probability density function: the sum of each finite
+            #   line's Gaussian, divided by its width (all the lines at
+            #   once, as the loop over them did one by one)
+            rv_f = best_rv[finite_mask][:, None]
+            dvrms_f = best_dvrms[finite_mask][:, None]
+            pdf = np.sum(np.exp(-0.5 * ((vrange[None, :] - rv_f) /
+                                        dvrms_f) ** 2) / dvrms_f, axis=0)
             # fit the probability density function
             guess = [med_velo, 500.0, np.max(pdf), 0.0, 0.0]
             # set specific func name for curve fit errors

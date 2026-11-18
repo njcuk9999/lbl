@@ -402,9 +402,14 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
             label1 = None
         else:
             used_labels.append(label1)
+        # the order's median flux, which every curve of the order is
+        #   divided by (the template's, smooth)
+        norm = np.nanmedian(model[ord_num])
+        if not np.isfinite(norm) or norm == 0:
+            norm = 1.0
         # plot the template
-        frame[0].plot(wavegrid[ord_num], model[ord_num], color='grey', lw=3,
-                      alpha=0.3, label=label1)
+        frame[0].plot(wavegrid[ord_num], model[ord_num] / norm, color='grey',
+                      lw=3, alpha=0.3, label=label1)
         # plot the lines
         for line_it in range(len(line_orders)):
             # get colour of line
@@ -418,10 +423,12 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
                 else:
                     used_labels.append(label2)
                 # plot the line
-                frame[0].plot(ww_ord_line[line_it], spec_ord_line[line_it],
+                frame[0].plot(ww_ord_line[line_it],
+                              spec_ord_line[line_it] / norm,
                               color=colour, label=label2)
                 frame[1].plot(ww_ord_line[line_it],
-                              spec_ord_line[line_it] - model_ord_line[line_it],
+                              (spec_ord_line[line_it] -
+                               model_ord_line[line_it]) / norm,
                               color=colour, label=label2)
     # construct title
     title = 'Line spectrum {0}\nOBJ_SCI={1} OBJ_TEMP={2}'
@@ -432,8 +439,10 @@ def compute_line_plot(inst: InstrumentsType, plot_dict: Dict[str, Any]):
         targs = ['orders {0}'.format(','.join(str_orders))]
     targs += [inst.params['OBJECT_SCIENCE'], inst.params['OBJECT_COMPARISON']]
     # set labels and title
-    frame[0].set(ylabel='Arbitrary flux', title=title.format(*targs))
-    frame[1].set(xlabel='Wavelength [nm]', ylabel='Residuals')
+    frame[0].set(ylabel='flux / median of the order',
+                 title=title.format(*targs))
+    frame[1].set(xlabel='Wavelength [nm]',
+                 ylabel='residuals / median of the order')
 
     frame[0].legend(loc=0)
     # -------------------------------------------------------------------------

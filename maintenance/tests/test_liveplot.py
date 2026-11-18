@@ -141,3 +141,28 @@ def test_the_template_s_velocities_have_times_and_errors():
     assert first[4:] == ['-2.00', '+-', '1.50', 'm/s']
     assert 'b.fits' in said[2] and '+2.00' in said[2]
     assert 'rms 2.00 m/s' in said[-1]
+
+
+def test_the_lines_plot_is_divided_by_the_order_s_median(tmp_path,
+                                                         monkeypatch):
+    """compute's plot of the lines: the template, the lines and their
+    residuals divided by the order's median flux"""
+    from lbl.science import plot
+    monkeypatch.setenv(liveplot.ENV, str(tmp_path / 'plots'))
+    drawn = []
+    monkeypatch.setattr(liveplot, 'finish',
+                        lambda plt_, *a, **k: drawn.append(plt_.gcf()))
+    wave = np.linspace(1600.0, 1610.0, 500)[None, :]
+    model = 1000.0 * (1 - 0.3 * np.exp(-0.5 * ((wave - 1605.0) / 0.02) ** 2))
+    plot_dict = dict(WAVEGRID=wave, MODEL=model, PLOT_ORDERS=0,
+                     LINE_ORDERS=[0], WW_ORD_LINE=[wave[0, 240:260]],
+                     SPEC_ORD_LINE=[model[0, 240:260] * 1.01],
+                     MODEL_ORD_LINE=[model[0, 240:260]])
+    inst = _Inst()
+    inst.params['PLOT_COMPUTE_LINES'] = True
+    plot.compute_line_plot(inst, plot_dict)
+    top, bottom = drawn[0].axes
+    assert np.isclose(np.median(top.lines[0].get_ydata()), 1.0, atol=0.01)
+    assert np.all(np.abs(top.lines[1].get_ydata()) < 1.1)
+    assert np.all(np.abs(bottom.lines[0].get_ydata()) < 0.02)
+    assert 'median of the order' in top.get_ylabel()
