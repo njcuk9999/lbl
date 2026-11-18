@@ -6,6 +6,14 @@ few anchored in the observer frame (residual tellurics, airglow, detector
 features). The observer-frame part is divided out of the spectra, which
 LBL then measures like any other object.
 
+The star's frame is its BERV, composed with its velocity in each exposure
+when LBL has one: with `SMALL_RV_SHIFT = False`, the velocities the object's
+own template measured while it was made (its `VSYS`, by file name; Bouchy et
+al. 2001 pixel by pixel with a mixture model, [TEMPLATE.md](TEMPLATE.md)),
+the template made first by the wrap whatever `OBJECT_COMPARISON` is; with
+`PLANETS`, the known orbits. The star component is then built where the star
+is, and the PCA does not take in part of a real signal.
+
 ## Turning it on
 
 One key in the wrap's run parameters:

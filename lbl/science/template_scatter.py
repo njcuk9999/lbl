@@ -33,8 +33,10 @@ ones and the even ones.
 
 With SMALL_RV_SHIFT False and no known orbits, the velocities of the spectra
 are first measured on the orders around COMPIL_SLOPE_REF_WAVE (a scan of the
-shift, then its projection on the derivative) until they agree to
-MAX_CONVERGENCE_TEMPLATE_RV.
+shift, then Bouchy et al. 2001 pixel by pixel on the template's Savitzky-
+Golay derivative, the pixels combined by LBL's mixture model, odd_ratio_mean)
+until they agree to MAX_CONVERGENCE_TEMPLATE_RV. They are kept in the
+template's SCI_TABLE (VSYS), where PCA2D reads them for its star frame.
 
 The window is about one resolution element, not the 3 steps of the grid of
 templatepy: in a narrow window each spectrum's own noise is copied sharply
@@ -315,9 +317,9 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
                        scan: bool, scan_step: float) -> np.ndarray:
     """
     The velocity of each spectrum against the templates of some orders: the
-    least-squares shift of the template that matches the spectrum (a scan of
-    +-50 steps first when scan is True, then its projection on the
-    derivative)
+    shift of the template that matches the spectrum (a scan of +-50 steps
+    first when scan is True, then Bouchy et al. 2001 pixel by pixel,
+    combined by a mixture model)
 
     :param data: OrderData of the orders
     :param fits: dict, order index in data -> fit_order output
@@ -364,19 +366,41 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
             fit = np.polyfit(steps[kmin - 1:kmin + 2], chi2[kmin - 1:kmin + 2],
                              2)
             shift = -fit[1] / (2 * fit[0]) if fit[0] > 0 else steps[kmin]
-        # the projection on the derivative, twice: y(x) = T(x - shift)
+        # BOUCHY ET AL. (2001), PIXEL BY PIXEL, COMBINED BY A MIXTURE MODEL.
+        #   y(x) = T(x - shift - d) ~ T(x - shift) - d T'(x - shift): each
+        #   pixel gives its own shift d_i = -(y_i - T_i) / T'_i, of
+        #   uncertainty sigma_i / |T'_i|, and their weighted mean is the
+        #   least-squares projection on the derivative (Bouchy's optimal
+        #   weights, (T' / sigma)^2). Combined by LBL's mixture model
+        #   (odd_ratio_mean: a Gaussian and a flat floor of outliers,
+        #   Artigau et al. 2022) rather than by the plain weighted mean: a
+        #   cosmic ray, a telluric residual or a bad pixel in one spectrum
+        #   does not pull its velocity, which goes to PCA2D's star frame.
+        #   Twice, the template taken again at the new shift
         for _ in range(2):
-            num, den = 0.0, 0.0
+            pix_dv, pix_err = [], []
             for x, y, w, (grid, d0, d1) in zip(xs, ys, ws, tm):
                 model = np.interp(x - shift, grid, d0, left=np.nan,
                                   right=np.nan)
                 deriv = np.interp(x - shift, grid, d1, left=np.nan,
                                   right=np.nan)
-                good = np.isfinite(model) & np.isfinite(deriv)
-                num += np.sum(w[good] * (y[good] - model[good]) * deriv[good])
-                den += np.sum(w[good] * deriv[good] ** 2)
-            if den > 0:
-                shift -= num / den
+                good = (np.isfinite(model) & np.isfinite(deriv) &
+                        (deriv != 0) & (w > 0))
+                # where T' is about zero (the continuum) a pixel says
+                #   nothing: its d_i is infinite and its weight nil, and the
+                #   mixture model leaves it out
+                with np.errstate(over='ignore', divide='ignore',
+                                 invalid='ignore'):
+                    pix_dv.append(-(y[good] - model[good]) / deriv[good])
+                    pix_err.append(1.0 / (np.sqrt(w[good]) *
+                                          np.abs(deriv[good])))
+            if not pix_dv or not sum(len(v) for v in pix_dv):
+                break
+            step, _ = mp.odd_ratio_mean(np.concatenate(pix_dv),
+                                        np.concatenate(pix_err))
+            if not np.isfinite(step):
+                break
+            shift += step
         delta[ifile] = shift
     # a feature displaced by +shift in ln(wavelength) is a velocity
     #   c tanh(shift) to add to the star's

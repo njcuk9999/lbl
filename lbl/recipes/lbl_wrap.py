@@ -174,6 +174,9 @@ def main(runparams: dict):
     pca2d_joint = None
     # the objects LBL has measured as delivered (PCA2D compare)
     measured = set()
+    # the objects whose own template has its spectra's velocities, for
+    #   PCA2D's star frame (SMALL_RV_SHIFT False)
+    velocity_templates = set()
     # loop around all files
     for num in range(olen):
         # get the science target
@@ -278,6 +281,29 @@ def main(runparams: dict):
             from lbl.recipes import lbl_pca2d
             pca2d = runparams['PCA2D']
             delivered = object_science
+            # SMALL_RV_SHIFT False: each object PCA2D corrects has its own
+            #   template made by iterating on its spectra's velocities,
+            #   before anything is measured against it, and PCA2D's star
+            #   frame follows them (lbl_pca2d.object_velocities)
+            joint_fit = isinstance(pca2d, dict) and pca2d.get('joint')
+            for num_v, objname_v in enumerate(object_sciences if joint_fit
+                                              else [object_science]):
+                if objname_v in velocity_templates:
+                    continue
+                kw_v = dict(iteration=num_v, length=olen)
+                if joint_fit and lbl_misc.wraplistcheck(
+                        data_types, 'DATA_TYPES', **kw_v) != 'SCIENCE':
+                    continue
+                _velocity_template(runparams, keyword_args, instrument,
+                                   data_dir, data_source, objname_v,
+                                   blaze_corr if not joint_fit else
+                                   lbl_misc.wraplistcheck(
+                                       blaze_corrs, 'BLAZE_CORRECTED',
+                                       **kw_v),
+                                   blaze_file if not joint_fit else
+                                   lbl_misc.wraplistcheck(
+                                       blaze_files, 'BLAZE_FILE', **kw_v))
+                velocity_templates.add(objname_v)
             # the delivered object measured first, so that the report can set
             # its velocities beside the corrected ones (PCA2D compare=True).
             # Measured only: ONE REPORT per star, the corrected one's below,
@@ -394,6 +420,42 @@ def _inject(data_dir: str, science_subdir: str, object_sciences: list,
     else:
         comparisons = renamed.get(object_comparisons, object_comparisons)
     return sciences, comparisons
+
+
+def _velocity_template(runparams: dict, keyword_args: dict, instrument: str,
+                       data_dir: str, data_source: str, objname: str,
+                       blaze_corr, blaze_file) -> None:
+    """SMALL_RV_SHIFT False: the object's own template, made by iterating on
+    the velocities of its spectra, before PCA2D, which takes them for its
+    star frame (lbl_pca2d.object_velocities: its star component is then
+    built where the star is, and the PCA does not take in part of a real
+    signal). Made when it is missing, or made again when it was made with
+    the velocity taken as constant (SMALLRV in its header): whatever
+    template the velocities are measured against (OBJECT_COMPARISON), only
+    the object's own knows its spectra. Nothing when SMALL_RV_SHIFT is
+    True."""
+    if runparams.get('SMALL_RV_SHIFT', True) not in (False, 'False', 0):
+        return
+    path = _template_of(data_dir, objname, instrument)
+    flat = False
+    if path is not None:
+        try:
+            from astropy.io import fits
+            flat = bool(fits.getheader(path).get('SMALLRV', False))
+        except Exception:                                     # noqa: BLE001
+            flat = True
+        if not flat:
+            return
+    log.info('SMALL_RV_SHIFT = False: the template of {0} {1}, iterating on '
+             'the velocities of its spectra, before PCA2D, whose star frame '
+             'follows them'.format(objname, 'is made again (it was made with '
+                                   'the velocity taken as constant)' if flat
+                                   else 'is made'))
+    lbl_template.main(instrument=instrument, data_dir=data_dir,
+                      data_source=data_source, data_type='SCIENCE',
+                      object_science=objname, object_comparison=objname,
+                      blaze_corrected=blaze_corr, blaze_file=blaze_file,
+                      overwrite=flat, **keyword_args)
 
 
 def _put_aside(data_dir: str, name: str, science_subdir: str, previous):

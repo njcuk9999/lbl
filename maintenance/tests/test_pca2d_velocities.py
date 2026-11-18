@@ -61,9 +61,11 @@ def test_the_free_fit_of_the_template_and_only_it(tmp_path):
                                         'SPIROU', quiet)
     assert found == {'0.fits': 0.0, '1.fits': 0.03, '2.fits': -0.03,
                      '3.fits': 0.0}
-    # another star's template knows other spectra
+    # measured against another star's template: the object's OWN template
+    #   still knows its spectra, and its velocities are the star frame's
+    #   (2026-11-18; before, nothing was passed then)
     assert lbl_pca2d.object_velocities('STAR', 'GL699', str(tmp_path),
-                                       'SPIROU', quiet) == {}
+                                       'SPIROU', quiet) == found
     # a template made on known orbits did not fit its velocities
     _template(tmp_path, 'STAR', [100.0, 130.0, 70.0, 100.0],
               kepler=[1.0, 2.0, 3.0, 4.0])

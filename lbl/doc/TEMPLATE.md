@@ -73,8 +73,25 @@ sums. No sort, no second pass.
 
 With `SMALL_RV_SHIFT = False` (and no known orbits), the velocity of each
 spectrum is measured first against the templates of the orders within 5 % of
-`COMPIL_SLOPE_REF_WAVE` (a scan of the shift, then its projection on the
-derivative), until the changes are below `MAX_CONVERGENCE_TEMPLATE_RV`.
+`COMPIL_SLOPE_REF_WAVE`, until the changes are below
+`MAX_CONVERGENCE_TEMPLATE_RV`: a scan of the shift, then Bouchy et al. (2001)
+pixel by pixel on the template's Savitzky-Golay derivative. Each pixel gives
+its own shift, `d_i = -(y_i - T_i) / T'_i`, of uncertainty `sigma_i / |T'_i|`
+(their weighted mean is the projection on the derivative, Bouchy's optimal
+weights), and the pixels are combined by LBL's mixture model
+(`odd_ratio_mean`, a Gaussian and a flat floor of outliers; Artigau et al.
+2022) rather than by the plain weighted mean. On synthetic spectra with 1 %
+of bad pixels on the lines' flanks, after the scan, the velocities stay at
+0.8 m/s rms (the photon noise's) where the least squares of before are
+pulled to 22 m/s; without bad pixels the two agree (0.8 m/s).
+
+These velocities are kept in the template's table of spectra (`VSYS`).
+PCA2D's star frame follows them (`registration.velocities`, by file name),
+so that its star component is built where the star is and the PCA does not
+take in part of a real signal; `lbl_wrap` makes the object's own template
+this way before PCA2D, whatever template it is measured against
+(`OBJECT_COMPARISON`), and makes it again when it was made with the velocity
+taken as constant (`SMALLRV` in its header).
 
 ## Explicit derivatives
 

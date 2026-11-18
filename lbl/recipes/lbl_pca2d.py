@@ -560,15 +560,20 @@ def object_orbits(name: str, files: list, data_dir: str, log) -> list:
 def object_velocities(name: str, comparison, data_dir: str, instrument: str,
                       log) -> dict:
     """The velocity of each of an object's spectra from a FREE FIT of them:
-    LBL's template of the object, when it iterated on the velocities (its
-    SCI_TABLE's VSYS, m/s; not when it was made on known orbits, VKEP),
-    relative to their median, in km/s, by file name: pca2d's star frame
-    (registration.velocities) then follows the star from one exposure to
-    the next, whatever moves it. Only the object's own template knows its
-    spectra: with another star's (OBJECT_COMPARISON), {}. {} as well when
-    there is no template yet, or it holds no velocities."""
-    if comparison not in (None, '', name):
-        return dict()
+    LBL's template of the object, when it iterated on the velocities
+    (SMALL_RV_SHIFT False: its SCI_TABLE's VSYS, m/s, measured by Bouchy's
+    projection pixel by pixel and a mixture model,
+    lbl.science.template_scatter; not when it was made on known orbits,
+    VKEP), relative to their median, in km/s, by file name: pca2d's star
+    frame (registration.velocities) then follows the star from one exposure
+    to the next, whatever moves it, and its star component is built in that
+    frame, so that the PCA does not take in part of a real signal. The
+    object's OWN template, whatever template its velocities are measured
+    against (OBJECT_COMPARISON, `comparison`, kept for the call): only it
+    knows the object's spectra (lbl_wrap makes it before PCA2D when
+    SMALL_RV_SHIFT is False). {} when there is no template yet, or it holds
+    no velocities."""
+    _ = comparison
     from lbl.recipes.lbl_wrap import _template_of
     path = _template_of(data_dir, name, instrument)
     if path is None:
