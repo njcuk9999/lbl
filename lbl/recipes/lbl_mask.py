@@ -212,15 +212,20 @@ def __main__(inst: InstrumentsType, **kwargs):
     else:
         sys_vel = 0.0
     # -------------------------------------------------------------------------
-    # remove lines that have a weight that is suscpiciously large
-    #   (not for the significant extrema: they are already significant, and
-    #   this cut removes the strongest lines of the star, whose second
-    #   derivative is the largest of all)
-    if not significant_edges:
-        med_weight = np.nanmedian(np.abs(line_table['w_mask']))
-        weight_nsig = np.abs(line_table['w_mask']) < 10 * med_weight
-        # cut down the line table
-        line_table = line_table[weight_nsig]
+    # remove lines whose weight is excessive: more than 10 times the median
+    #   for the lines between maxima, 50 times for the significant extrema
+    #   (at 10 the cut would take the strongest lines of the star, whose
+    #   second derivative is the largest of all; beyond 50 a weight is a
+    #   spike of the template, at its noisy ends)
+    line_table, n_cut, limit = general.cut_excessive_weights(
+        line_table, significant_edges)
+    if n_cut:
+        msg = ('{0} line(s) of excessive weight cut from the mask (above '
+               '{1:.3g}, {2:.0f} times the median)')
+        log.general(msg.format(n_cut, limit,
+                               general.MASK_WEIGHT_MAX_SIGNIFICANT
+                               if significant_edges
+                               else general.MASK_WEIGHT_MAX))
     # -------------------------------------------------------------------------
     # Step 7: Write masks to file
     # -------------------------------------------------------------------------

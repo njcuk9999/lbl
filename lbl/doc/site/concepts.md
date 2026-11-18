@@ -20,11 +20,14 @@ without resampling (see [The template](../TEMPLATE.md)).
 The **mask** is the list of lines measured on that template: a line runs
 from one maximum of the template to the next, and only maxima and minima
 that are significant (a derivative above 3 sigma on both sides) are kept.
-It is stored at rest, its systemic velocity in its header (SYSTVELO): the
+A line weighs its second derivative; one of more than 50 times the median
+weight (10 for a mask of lines between maxima) is a spike of the template,
+at its noisy ends, and is cut. It is stored at rest, its systemic velocity in its header (SYSTVELO): the
 velocity at which the template's flux best matches the PHOENIX model of the
-star's temperature (both in ln f, high-passed over 100 km/s, the model
-smoothed to 3 km/s, every shift within 200 km/s by FFT); a peak below 5
-sigma is said in the log. Not from the mask's lines against the model: a
+star's temperature, within the nominal photometric bandpasses only (u g r
+i z y J H K; both in ln f, high-passed over 100 km/s, the model smoothed to
+3 km/s, every shift within 200 km/s by FFT); a peak below 5 sigma is said
+in the log. Not from the mask's lines against the model: a
 few spikes of a template's noisy end can take most of their weight, and
 make that CCF a comb of equal dips.
 

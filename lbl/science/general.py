@@ -3944,6 +3944,34 @@ def find_mask_lines_significant(inst: InstrumentsType, template_table: Table,
     return table
 
 
+#: a mask line whose weight is more than this many times the median is cut:
+#:   10 for the lines between maxima, 50 for the significant extrema, whose
+#:   strongest real lines reach about 30 (masks of PROXIMA, GJ1 and HD 189733,
+#:   NIRPS: what is above 50 is, but for one line, at the noisy red end
+#:   beyond 1820 nm, up to 33 000 times the median)
+MASK_WEIGHT_MAX = 10.0
+MASK_WEIGHT_MAX_SIGNIFICANT = 50.0
+
+
+def cut_excessive_weights(line_table: Table, significant: bool):
+    """
+    A mask's lines less those of excessive weight: more than
+    MASK_WEIGHT_MAX_SIGNIFICANT (significant extrema) or MASK_WEIGHT_MAX
+    (lines between maxima) times the median absolute weight. Such a weight
+    is a spike of the template, not a line, and would take the mask.
+
+    :param line_table: astropy Table, the lines (w_mask)
+    :param significant: bool, whether the lines are significant extrema
+
+    :return: (the table kept, how many lines were cut, the limit)
+    """
+    weight = np.abs(np.asarray(line_table['w_mask'], dtype=float))
+    limit = (MASK_WEIGHT_MAX_SIGNIFICANT if significant
+             else MASK_WEIGHT_MAX) * np.nanmedian(weight)
+    keep = weight < limit
+    return line_table[keep], int(np.sum(~keep)), float(limit)
+
+
 #: the template against the model: a grid step of 0.5 km/s, the model
 #:   smoothed to 3 km/s FWHM, both high-passed over 100 km/s, a template
 #:   sample whose high-passed ln f is beyond 0.5 not used
@@ -3955,15 +3983,18 @@ SYSVEL_CLIP = 0.5
 
 def template_systemic_velocity(t_wave: np.ndarray, t_flux: np.ndarray,
                                m_wavemap: np.ndarray, m_spectrum: np.ndarray,
-                               dv_max: float = 200.0):
+                               dv_max: float = 200.0, bands=None):
     """
     The velocity of the star of a template against a model spectrum at
     rest, from the cross-correlation of their fluxes: both in ln(flux) on
     a grid uniform in ln(wavelength) of SYSVEL_STEP_KMS, high-passed (less
     a running median over SYSVEL_HIGHPASS_KMS), the model smoothed to
-    SYSVEL_MODEL_FWHM_KMS; the template's missing samples, and those whose
-    high-passed ln f is beyond SYSVEL_CLIP (a telluric band, a noisy end),
-    count for nothing. Every shift at once by FFT, the peak refined by a
+    SYSVEL_MODEL_FWHM_KMS. Only the nominal photometric bandpasses count
+    (astro.bands: u g r i z y J H K), so that the telluric bands between
+    them and a template's noisy ends outside them (NIRPS beyond 1809 nm)
+    have no say; within them, the template's missing samples and those
+    whose high-passed ln f is beyond SYSVEL_CLIP (a deep telluric line, a
+    spike) count for nothing. Every shift at once by FFT, the peak refined by a
     parabola through its three highest points. Positive: the template's
     lines are redshifted against the model's.
 
@@ -3978,6 +4009,7 @@ def template_systemic_velocity(t_wave: np.ndarray, t_flux: np.ndarray,
     :param t_wave, t_flux: the template [nm] (NaN where it has none)
     :param m_wavemap, m_spectrum: the model [nm], at rest
     :param dv_max: float, the shifts searched, +-dv_max km/s
+    :param bands: list of astro.Band, the bandpasses used (astro.bands)
 
     :return: (velocity [km/s], the velocities and the CCF normalised to
              1 at its peak, the peak's significance in robust sigmas)
@@ -4004,7 +4036,12 @@ def template_systemic_velocity(t_wave: np.ndarray, t_flux: np.ndarray,
     window = int(SYSVEL_HIGHPASS_KMS / SYSVEL_STEP_KMS) | 1
     tmpl = tmpl - median_filter(tmpl, window, mode='nearest')
     model = model - median_filter(model, window, mode='nearest')
-    bad = gap | (np.abs(tmpl) > SYSVEL_CLIP)
+    inband = np.zeros(grid.size, dtype=bool)
+    for band in (astro.bands if bands is None else bands):
+        inband |= (grid >= band.minimum) & (grid <= band.maximum)
+    if not inband.any():
+        raise ValueError('the template has no sample in a photometric band')
+    bad = gap | (np.abs(tmpl) > SYSVEL_CLIP) | ~inband
     tmpl[bad] = 0.0
     tmpl[~bad] -= np.mean(tmpl[~bad])
     model -= np.mean(model)

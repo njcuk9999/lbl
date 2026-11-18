@@ -128,3 +128,39 @@ def test_the_mask_type_is_replaced_in_the_file_name_only(tmp_path):
     assert written == ['LBL_Mask_fullmoon_full_default.fits',
                        'LBL_Mask_fullmoon_neg_default.fits',
                        'LBL_Mask_fullmoon_pos_default.fits']
+
+
+def test_only_the_photometric_bandpasses_count():
+    """beyond H's red end (1809 nm) the template's lines are at another
+    velocity, and deeper: the photometric bandpasses alone are used, and the
+    star is found where its in-band lines are"""
+    rng = np.random.default_rng(12)
+    wave = general.get_magic_grid(1700.0, 1850.0, 500.0)
+    centres = np.sort(rng.uniform(1702.0, 1848.0, 500))
+    depth = np.where(centres > 1812.0, 0.6, 0.15)
+    model = np.ones_like(wave)
+    for centre, dep in zip(centres, depth):
+        model *= _lines(wave, [centre], dep, 2.5)
+    flux = np.empty_like(wave)
+    for v, sel in ((-21.3, wave <= 1809.0), (150.0, wave > 1809.0)):
+        ratio = np.sqrt((1 + v * 1e3 / C_MS) / (1 - v * 1e3 / C_MS))
+        flux[sel] = np.interp(wave[sel], wave * ratio, model)
+    flux *= 1 + 0.002 * rng.normal(size=wave.size)
+    velocity, _, _, _ = general.template_systemic_velocity(wave, flux, wave,
+                                                           model)
+    assert abs(velocity + 21.3) < 0.3
+
+
+def test_lines_of_excessive_weight_are_cut():
+    """above 50 times the median weight for significant extrema (10 for the
+    lines between maxima), a line is a spike and is cut; the strong real
+    lines, up to about 30 times, stay"""
+    weights = np.r_[np.ones(1000), 30.0, -40.0, 55.0, 3e4, -1200.0]
+    table = Table(dict(ll_mask_s=np.arange(weights.size, dtype=float),
+                       ll_mask_e=np.arange(weights.size, dtype=float),
+                       w_mask=weights))
+    kept, n_cut, limit = general.cut_excessive_weights(table, True)
+    assert n_cut == 3 and np.isclose(limit, 50.0)
+    assert set(np.abs(kept['w_mask'])) == {1.0, 30.0, 40.0}
+    kept, n_cut, _ = general.cut_excessive_weights(table, False)
+    assert n_cut == 5 and np.all(np.abs(kept['w_mask']) == 1.0)
