@@ -21,6 +21,15 @@ GUI_RUNS = os.path.join("gui", "runs")
 #:   (<run>.log) and the archive search's and fetch's (archives.log).
 #:   LBL's own log/ folder stays LBL's.
 GUI_LOGS = os.path.join("gui", "logs")
+#: LBL's reports, under DATA_DIR (lbl.report.main.FOLDER)
+LBL_REPORTS = "reports"
+#: what the objects of the spectra PCA2D corrected end with
+#:   (lbl.recipes.lbl_pca2d.SUFFIX), and so the names of LBL's reports on them
+PCA2D_MARK = "_pca2d"
+#: PDFs of a PCA2D run folder that are not its report: the components'
+#:   figures, and the report's copy in its report/ folder
+PCA2D_EXTRA = ("components.pdf",)
+PCA2D_COPIES = "report"
 
 
 def run_log(folder: str) -> str:
@@ -48,9 +57,25 @@ def window_runs(data_dir: str) -> list:
             continue
         record["folder"] = os.path.dirname(path)
         record["log"] = run_log(record["folder"])
+        record["reports"] = final_reports(record.get("reports") or [])
         out.append(record)
     out.sort(key=lambda r: r.get("created") or 0, reverse=True)
     return out
+
+
+def final_reports(paths: list) -> list:
+    """The report a run is shown with, among the PDFs it wrote: LBL's report
+    of the spectra PCA2D corrected (reports/<object>_pca2d..._<template>.pdf),
+    one per star; when it corrected none, LBL's report of the spectra as
+    delivered; when LBL wrote none, PCA2D's own report. Never the
+    components' figures (components.pdf), nor the copy of PCA2D's report in
+    its report/ folder."""
+    lbl = [p for p in paths
+           if os.path.basename(os.path.dirname(p)) == LBL_REPORTS]
+    if lbl:
+        return [p for p in lbl if PCA2D_MARK in os.path.basename(p)] or lbl
+    return [p for p in paths if os.path.basename(p) not in PCA2D_EXTRA
+            and os.path.basename(os.path.dirname(p)) != PCA2D_COPIES]
 
 
 def homes(data_dir: str) -> list:

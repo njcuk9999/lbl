@@ -41,3 +41,27 @@ def test_a_host_named_after_its_toi_is_asked_for_as_the_archive_names_it():
     names = archive.identifiers({'main_id': 'GJ 699'}, folder='GL699')['names']
     assert not any(name.startswith('TOI') for name in names)
     assert 'Gl 699' in names
+
+
+def test_the_report_fits_tess_candidates_and_merges_confirmed_twins(
+        monkeypatch, tmp_path):
+    # the archive stood in for: one confirmed planet, its TOI, a candidate
+    #   and a false positive
+    def answer(query):
+        if 'from pscomppars' in query:
+            return [dict(pl_name='TOI-9 b', pl_letter='b', pl_orbper='3.0',
+                         pl_tranmid='', pl_rvamp='5.0')]
+        assert 'tid = 12' in query
+        return [dict(toi='9.01', pl_orbper='3.0001', pl_tranmid='2459000.5',
+                     tfopwg_disp='CP'),
+                dict(toi='9.02', pl_orbper='10.78', pl_tranmid='2459351.6',
+                     tfopwg_disp='PC'),
+                dict(toi='9.03', pl_orbper='1.5', tfopwg_disp='FP')]
+    monkeypatch.setattr(archive, '_get', answer)
+    got = archive.planets({'ids': ['TIC 12']}, folder='TOI9',
+                          cache=str(tmp_path), refresh=True)
+    assert [(p['name'], p['source']) for p in got['planets']] == [
+        ('TOI-9 b', 'confirmed'), ('TOI-9.02', 'TOI')]
+    # the confirmed planet takes its TOI's transit time
+    assert got['planets'][0]['t0'] == 2459000.5
+    assert got['planets'][1]['disposition'] == 'PC'

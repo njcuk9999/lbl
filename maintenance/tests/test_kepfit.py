@@ -67,3 +67,22 @@ def test_the_reduced_chi2_says_how_far_the_error_bars_are():
                        PLANETS[:1])
     assert abs(noisy['chi2_after'] - 4) < 0.6
     assert abs(noisy['chi2_jitter'] - 1) < 0.1
+
+
+def test_the_report_fits_a_stars_tess_objects_without_planets(monkeypatch):
+    # a TOI, confirmed or not, has its K fitted even without PLANETS (no
+    #   ephemerides_of): the archive's TOI table stood in for
+    from lbl.pca2d import archive
+    from lbl.report import main, series
+    toi = dict(name='TOI-9.01', period=PLANETS[0]['period'],
+               t0=PLANETS[0]['t0'], source='TOI', disposition='PC')
+    monkeypatch.setattr(archive, 'tess_objects', lambda name: [toi])
+    rng = np.random.default_rng(5)
+    time = np.sort(rng.uniform(2460300, 2461100, 80))
+    vrad = 7.0 * kepfit.basis(time, PLANETS[0]) + rng.normal(0, 1, 80)
+    table = {series.TIME: time - 2400000.0, series.VELOCITY: vrad,
+             series.ERROR: np.ones(80)}
+    fit = main._fit_ephemerides(None, table, None, tois_of='TOI9_pca2d')
+    assert [p['name'] for p in fit['planets']] == ['TOI-9.01 PC']
+    assert abs(fit['k'][0] - 7.0) < 4 * fit['sk'][0]
+    assert fit['star'] == 'TOI9'

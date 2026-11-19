@@ -637,7 +637,10 @@ class Runner:
                 time.sleep(0.2)
         job.exit = code
         job.ended = time.time()
-        job.reports = reports_since(job.cwd, job.started or job.created)
+        # the run's report, not every PDF it wrote (history.final_reports)
+        from .history import final_reports
+        job.reports = final_reports(
+            reports_since(job.cwd, job.started or job.created))
         took = duration(job.ended - (job.started or job.created))
         if job.stopping:
             job.state = "stopped"

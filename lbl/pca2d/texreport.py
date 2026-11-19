@@ -2261,15 +2261,14 @@ def planets_of(outdir, config, star, joint=False):
 
 def known_planets(outdir, config, star, joint, facts, folder):
     """(planets, status) of one star: the NASA Exoplanet Archive's confirmed
-    planets, and any period its configuration gives that the archive does
-    not.
+    planets and TESS objects of interest (archive.planets: candidates
+    included, false positives left out), and any period its configuration
+    gives that the archive does not.
 
     Each planet is a dictionary (name, short, period in days, t0 in BJD or
     None, k in m/s or None, source), shortest period first. The archive's
     answer is kept beside the report, and used again when the archive cannot
-    be reached; `status` says which it was. Only confirmed planets are used:
-    an entry whose source is "TOI" (a TESS object of interest, a candidate)
-    is left out, whichever file it was read from.
+    be reached; `status` says which it was.
     """
     from . import archive
 
@@ -2281,8 +2280,7 @@ def known_planets(outdir, config, star, joint, facts, folder):
     elif not got.get("planets") and os.path.exists(kept):
         with open(kept, encoding="utf-8") as handle:
             got = dict(json.load(handle), stale=True)
-    planets = [dict(p) for p in got.get("planets") or []
-               if p.get("source") != "TOI"]
+    planets = [dict(p) for p in got.get("planets") or []]
     for period in planets_of(outdir, config, star, joint):
         if not any(abs(p["period"] - period) < archive.SAME_PERIOD * period
                    for p in planets):
@@ -2545,11 +2543,13 @@ def star_table(star, facts, planets):
         [{"name": "%.6g d" % p, "period": p, "source": "configuration"}
          for p in planets], {"ok": True})
     # the source of each: "configuration" for a period the configuration
-    #   gives, else the archive's (confirmed planets only)
+    #   gives, else the archive's ("confirmed", or "TOI" and its TFOPWG
+    #   disposition: PC a candidate)
     said = "; ".join(
         "%s, %s d \\muted{(%s)}" % (
             tex(p["name"]), number(p["period"], 6 if p["period"] < 10 else 4),
-            tex(p.get("source") or "confirmed"))
+            tex(" ".join(filter(None, (p.get("source") or "confirmed",
+                                       p.get("disposition"))))))
         for p in known)
     where = ("the NASA Exoplanet Archive, read on %s" % tex(status["retrieved"])
              if status.get("retrieved") else "")
@@ -3129,8 +3129,9 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " dotted grey ones, the power a peak needs for a false-alarm"
          " probability of 1\\%%, 0.1\\%% and $10^{-4}$ (Baluev's approximation"
          " over the periods shown, the higher of the two series' levels);"
-         " green ones, named, the known planets (confirmed planets of the"
-         " NASA Exoplanet Archive), and any period the configuration gives."
+         " green ones, named, the known planets (confirmed planets and"
+         " TESS objects of interest of the NASA Exoplanet Archive), and any"
+         " period the configuration gives."
          " A known planet should keep its peak; a peak at a"
          " year or its harmonics is the Earth's; one shared with d2v or the"
          " temperature is the star's activity."
@@ -3141,8 +3142,8 @@ def velocity_section(star, before, after, numbers, folder, stale):
                       residuals=phase_residuals),
          "%s: the velocities folded at the known planets' periods" % name,
          "The velocities folded at the period of each known planet (a"
-         " confirmed planet of the NASA Exoplanet Archive, or a period the"
-         " configuration gives), delivered on the left and corrected on the"
+         " confirmed planet or a TESS object of interest of the NASA"
+         " Exoplanet Archive, or a period the configuration gives), delivered on the left and corrected on the"
          " right, on one scale; phase 0 is the transit when the archive"
          " gives one, the first exposure otherwise. All the known planets"
          " are fitted at once, so that none is read through another's"

@@ -303,3 +303,19 @@ def test_runs_of_every_folder_of_the_root(tmp_path):
     (alone / "gui" / "runs" / "x" / "run.json").write_text(json.dumps(
         dict(id="x", name="x", state="done", created=1.0)))
     assert [r["name"] for r in history.root_runs(str(alone))] == ["x"]
+
+
+def test_a_run_shows_its_final_report_only():
+    from lbl.gui import history
+    pca2d = '/d/pca2d/TOI2952/s1-o7/'
+    wrote = [pca2d + 'TOI2952_s1-o7_8e740b.pdf', pca2d + 'components.pdf',
+             pca2d + 'report/TOI2952_s1-o7_8e740b.pdf',
+             '/d/reports/TOI2952_VETTED_TOI756.pdf',
+             '/d/reports/TOI2952_pca2d_VETTED_TOI756.pdf']
+    # LBL's report of the corrected spectra, not the delivered ones'
+    assert history.final_reports(wrote) == [
+        '/d/reports/TOI2952_pca2d_VETTED_TOI756.pdf']
+    # no PCA2D: LBL's report
+    assert history.final_reports(wrote[3:4]) == wrote[3:4]
+    # no LBL report: PCA2D's own, without its components nor its copy
+    assert history.final_reports(wrote[:3]) == wrote[:1]

@@ -65,8 +65,11 @@ The log is kept in `gui/runs/<name>/run.raw`, with the wrap as it ran and
 One row per run made from the window, read back from the disk
 (`gui/runs/*/run.json`, so a run made before the window was restarted is
 there too): its name, its state (done, failed, stopped, cancelled), its start
-and duration, and links to its reports (LBL's, PCA2D's, its components). A
-failed run keeps its log: open it to see why.
+and duration, and a link to its report: LBL's report of the corrected
+spectra (`reports/<object>_pca2d_<template>.pdf`, one per star) when the run
+corrected some with PCA2D, else LBL's report of the spectra as delivered,
+else PCA2D's own report; never the components' figures. A failed run keeps
+its log: open it to see why.
 
 The runs of every instrument folder of the data root are listed, newest
 first, not only those of the folder chosen: a run of `NIRPS_HE_CADC` stays

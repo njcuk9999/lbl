@@ -706,6 +706,9 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                                      ephemerides_of=(object_science if
                                                     runparams.get('PLANETS')
                                                     else None),
+                                     # its TESS objects of interest,
+                                     #   confirmed or not, always fitted
+                                     tois_of=object_science,
                                      # its systemic velocity colours the
                                      #   series by V_tot (SIMBAD's)
                                      star=object_science)

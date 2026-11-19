@@ -132,7 +132,7 @@ def _planet_section(planets):
 def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                 known_periods=None, template_file=None, ephemerides_of=None,
                 star=None, instrument=None, data_source=None,
-                earth_location=None):
+                earth_location=None, tois_of=None):
     """Write the report of one run. Returns the path of the PDF, or None.
 
     :param data_dir: str, the run's DATA_DIR
@@ -148,6 +148,11 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
                            published ephemeris (ephemerides.yaml) have their
                            K fitted together (PLANETS), or None for no such
                            fit
+    :param tois_of: str, the object whose TESS objects of interest,
+                    confirmed or not, have their K fitted at their TESS
+                    ephemerides with the planets of ephemerides_of (the NASA
+                    Exoplanet Archive, lbl.pca2d.archive.tess_objects), or
+                    None
     :param star: str, the science object: with SIMBAD's systemic velocity
                  of it, the velocity series is coloured by the star's
                  velocity in the telluric frame rather than by the BERV
@@ -213,7 +218,7 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
     # THE CONFIRMED PLANETS OF THE STAR WITH A PUBLISHED EPHEMERIS
     #   (ephemerides.yaml, PLANETS): their K fitted together at their period
     #   and time of conjunction, the known orbits held fixed
-    fit = _fit_ephemerides(ephemerides_of, table, planets)
+    fit = _fit_ephemerides(ephemerides_of, table, planets, tois_of)
     # AN INJECTION TEST (lbl.science.injection): the signals added to the
     #   BERV of the spectra, fitted by MCMC at their periods, and what was
     #   recovered of each against what was injected
@@ -377,31 +382,50 @@ def make_report(data_dir, rdb_file, title, science_dir=None, tc_dir=None,
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _fit_ephemerides(object_name, table, planets):
-    """The joint fit of the K of the star's confirmed planets at their
-    published ephemerides (ephemerides.yaml, lbl.report.kepfit), the known
-    orbits of the template held fixed; None without object, planets or
-    velocities to fit"""
-    if not object_name:
+def _fit_ephemerides(object_name, table, planets, tois_of=None):
+    """The joint fit of the K of the star's planets at their published
+    ephemerides (lbl.report.kepfit): its confirmed planets of
+    ephemerides.yaml (object_name, PLANETS) and its TESS objects of
+    interest, confirmed or not (tois_of: lbl.pca2d.archive.tess_objects; a
+    TOI whose period is already fitted is not fitted twice), the known orbits
+    of the template held fixed; None without planets or velocities to fit"""
+    if not object_name and not tois_of:
         return None
     try:
         from lbl.report import kepfit, series
         from lbl.science import planets as kepler
-        found = kepler.ephemerides_for(kepler.star_names(object_name))
-        if found is None:
-            return None
+        found = (kepler.ephemerides_for(kepler.star_names(object_name))
+                 if object_name else None)
         known = planets['orbits'] if planets is not None else []
         # a planet whose orbit is known (by its name) is not fitted again
         taken = {kepler.normalise(orbit.get('name', '')) for orbit in known}
-        fitted = [planet for planet in found['planets']
+        fitted = [planet for planet in (found or {}).get('planets', [])
                   if kepler.normalise(planet.get('name', '')) not in taken]
+        sources = [os.path.basename(found['catalog'])] if found else []
+        if tois_of:
+            from lbl.pca2d import archive
+            tois = []
+            for toi in archive.tess_objects(tois_of):
+                period = float(toi['period'])
+                if any(abs(float(p['period']) - period)
+                       < archive.SAME_PERIOD * period
+                       for p in fitted + list(known)):
+                    continue
+                tois.append(dict(name=' '.join(filter(None, (
+                    toi['name'], toi.get('disposition')))), period=period,
+                    t0=float(toi['t0'])))
+            if tois:
+                fitted += tois
+                sources.append('the NASA Exoplanet Archive (TOI)')
         if not fitted:
             return None
         result = kepfit.fit(series.column(table, series.TIME) + 2400000.0,
                             series.column(table, series.VELOCITY),
                             series.column(table, series.ERROR),
                             fitted, known)
-        result.update(star=found['star'], catalog=found['catalog'])
+        result.update(star=found['star'] if found else
+                      kepler.SUFFIXES.sub('', str(tois_of)),
+                      catalog=' and '.join(sources))
         for planet, k, sk in zip(fitted, result['k'], result['sk']):
             log.general('report: {0}, P = {1:.6g} d: K = {2:.2f} +- {3:.2f} '
                         'm/s'.format(planet.get('name', '?'),
@@ -492,12 +516,13 @@ def _ephemeris_section(fit):
     """The page that says which planets had their K fitted at their
     published ephemerides and what K they got, as LaTeX"""
     lines = [r'\subsection*{K fitted at the published ephemerides}',
-             'The K of the confirmed planets fitted together on the '
+             'The K of the confirmed planets and TESS objects of interest '
+             '(candidates included) fitted together on the '
              'velocities (circular orbits, period and time of inferior '
-             'conjunction of \\texttt{%s} fixed, one offset, a jitter of '
+             'conjunction of %s fixed, one offset, a jitter of '
              '%.2f m/s added to the error bars%s), %d velocities. '
              'Star \\texttt{%s}:'
-             % (_escape(os.path.basename(fit['catalog'])), fit['jitter'],
+             % (_escape(fit['catalog']), fit['jitter'],
                 ', the known orbits held fixed' if fit['known'] else '',
                 fit['nfit'], _escape(fit['star'])),
              r'\begin{center}\small', r'\begin{tabular}{lrrrr}',

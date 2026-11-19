@@ -67,7 +67,10 @@ With `REPORT` (on by default), each run writes a PDF in `reports/`: a
 summary, a page per step, the velocities and their periodogram with the
 false inclusion probability ([Hara et al.
 2022](https://ui.adsabs.harvard.edu/abs/2022A%26A...663A..14H/abstract)),
-the semi-amplitudes of known planets at their ephemerides and, with PCA2D,
+the semi-amplitudes of known planets at their ephemerides (the confirmed
+planets of `ephemerides.yaml` with `PLANETS`, and always the star's TESS
+objects of interest, confirmed or not, at their TESS period and transit
+time, from the NASA Exoplanet Archive's TOI table) and, with PCA2D,
 its own pages first (the river plots, the components, the velocities before
 and after). With PCA2D, one report per star, the corrected one's,
 `<object>_pca2d_<template>.pdf`: the delivered object is measured for its
@@ -86,8 +89,10 @@ and lambda at the middle of the campaign), with dotted lines. LBL's own
 report of an injected object (`<obj>_inj`, `<obj>_inj_pca2d`) gives the same
 for its one series.
 
-The known planets (the NASA Exoplanet Archive's confirmed planets, and any
-period the configuration gives) are fitted together, so that none is read
+The known planets (the NASA Exoplanet Archive's confirmed planets, its
+TESS objects of interest, candidates included but not false positives or
+false alarms, and any period the configuration gives; a TOI that is a
+confirmed planet is that planet) are fitted together, so that none is read
 through another's signal, and twice, whatever their number: as circular
 orbits and as full Keplerians (K, e, omega and the phase free, a Gaussian
 of width 0.3 on e cos omega and e sin omega keeping a few outlying points

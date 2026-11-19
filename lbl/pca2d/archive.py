@@ -2,10 +2,21 @@
 
     python -m lbl.pca2d.archive TOI782 GL725B
 
-One table, through the archive's TAP service: pscomppars, the confirmed
-planets, one row each, with the archive's composite period, transit time and
-RV semi-amplitude. A planet whose confirmation has been questioned in the
-literature (pl_controv_flag = 1) is left out.
+Two tables, through the archive's TAP service:
+
+    pscomppars   the confirmed planets, one row each, with the archive's
+                 composite period, transit time and RV semi-amplitude; a
+                 planet whose confirmation has been questioned in the
+                 literature (pl_controv_flag = 1) is left out
+    toi          TESS objects of interest: candidates (PC, APC) and those
+                 known or confirmed, false positives and false alarms (FP,
+                 FA) left out, with the TESS period and transit time
+
+A TOI that is also a confirmed planet is one planet: the two are joined when
+their periods agree to SAME_PERIOD, and the confirmed planet's name and
+numbers are kept. Candidates are fitted by the reports only (texreport, and
+lbl.report through tess_objects): the catalogues LBL ships
+(lbl/resources/planets, PLANETS) hold confirmed planets only.
 
 A star is found by the identifiers SIMBAD gives it (pca2d.simbad): its TIC
 number above all, then its Gaia DR3, HD and HIP numbers and its names, since
@@ -40,7 +51,9 @@ TIMEOUT = 30
 MAX_AGE = 7 * 86400
 #: the table asked, written in each kept answer: an answer kept without it,
 #:  or from another table, is asked again
-TABLE = "pscomppars"
+TABLE = "pscomppars+toi"
+#: TOI dispositions that are not a planet: false positive, false alarm
+REJECTED = ("FP", "FA")
 #: two periods closer than this, relatively, are one planet
 SAME_PERIOD = 1e-3
 
@@ -70,11 +83,11 @@ def _float(value):
 
 
 def identifiers(facts, folder=None):
-    """What to ask the archive about: {'tic', 'gaia', 'hd', 'hip', 'names'},
-    from SIMBAD's facts and the folder's own name."""
+    """What to ask the archive about: {'tic', 'gaia', 'hd', 'hip', 'toi',
+    'names'}, from SIMBAD's facts and the folder's own name."""
     ids = list((facts or {}).get("ids") or [])
     names = [(facts or {}).get("main_id"), (facts or {}).get("resolved_from")]
-    out = {"tic": None, "gaia": None, "hd": None, "hip": None}
+    out = {"tic": None, "gaia": None, "hd": None, "hip": None, "toi": None}
     for ident in ids:
         if ident.startswith("TIC ") and out["tic"] is None:
             out["tic"] = ident[4:].strip()
@@ -92,6 +105,7 @@ def identifiers(facts, folder=None):
         number = toi_number(text)
         if number:
             names.append("TOI-%s" % number)
+            out["toi"] = number
             break
     # the archive writes GJ as Gl for some hosts, and names hosts as papers do
     spelled = set()
@@ -123,7 +137,7 @@ def confirmed(ids):
         return []
     rows = _get("select pl_name, pl_letter, hostname, pl_orbper,"
                 " pl_orbpererr1, pl_tranmid, pl_rvamp, pl_rvamperr1,"
-                " pl_orbeccen from " + TABLE + " where pl_controv_flag = 0"
+                " pl_orbeccen from pscomppars where pl_controv_flag = 0"
                 " and (" + " or ".join(clauses) + ")")
     out = []
     for row in rows:
@@ -141,6 +155,51 @@ def confirmed(ids):
     return sorted(out, key=lambda p: p["period"])
 
 
+def tois(ids):
+    """toi rows of the star (by its TIC number, else the TOI number of its
+    name), false positives and false alarms left out, as planet
+    dictionaries of source "TOI" with their TFOPWG disposition."""
+    if ids.get("tic"):
+        where = "tid = %d" % int(ids["tic"])
+    elif ids.get("toi"):
+        where = "toipfx = %d" % int(ids["toi"])
+    else:
+        return []
+    rows = _get("select toi, pl_orbper, pl_orbpererr1, pl_tranmid,"
+                " tfopwg_disp from toi where " + where)
+    out = []
+    for row in rows:
+        period = _float(row.get("pl_orbper"))
+        disposition = (row.get("tfopwg_disp") or "").strip()
+        if not period or disposition in REJECTED:
+            continue
+        out.append({"name": "TOI-%s" % row["toi"],
+                    "short": str(row["toi"]),
+                    "period": period,
+                    "period_err": _float(row.get("pl_orbpererr1")),
+                    "t0": _float(row.get("pl_tranmid")), "k": None,
+                    "k_err": None, "eccentricity": None, "source": "TOI",
+                    "disposition": disposition})
+    return out
+
+
+def merged(found):
+    """One entry per planet, shortest period first: a TOI whose period is a
+    confirmed planet's (to SAME_PERIOD) is that planet, which keeps its name
+    and numbers and takes the TOI's transit time if it has none."""
+    out = []
+    for planet in sorted(found, key=lambda p: p["source"] != "confirmed"):
+        twin = next((p for p in out if abs(p["period"] - planet["period"])
+                     < SAME_PERIOD * planet["period"]), None)
+        if twin is None:
+            out.append(dict(planet))
+            continue
+        twin.setdefault("also", []).append(planet["name"])
+        if twin.get("t0") is None and planet.get("t0") is not None:
+            twin["t0"] = planet["t0"]
+    return sorted(out, key=lambda p: p["period"])
+
+
 def _cache_file(ids, cache):
     key = ids.get("tic") or ids.get("gaia") or "+".join(ids.get("names") or [])
     key = re.sub(r"[^A-Za-z0-9_.+-]", "_", str(key)) or "unknown"
@@ -151,8 +210,8 @@ def planets(facts, folder=None, cache=None, refresh=False):
     """The known planets of one star: {'ok', 'planets', 'error', ...}.
 
     `planets` is a list of dictionaries (name, short, period, period_err,
-    t0 in BJD, k, k_err, eccentricity, source), shortest period first, all
-    confirmed planets. `ok` is False when the archive could not be asked;
+    t0 in BJD, k, k_err, eccentricity, source: "confirmed" or "TOI", with
+    the TOI's disposition), shortest period first (merged). `ok` is False when the archive could not be asked;
     the list is then what the cache last held, or empty.
     """
     ids = identifiers(facts, folder)
@@ -168,7 +227,7 @@ def planets(facts, folder=None, cache=None, refresh=False):
         elif not refresh and time.time() - os.path.getmtime(path) < MAX_AGE:
             return kept
     try:
-        found = confirmed(ids)
+        found = merged(confirmed(ids) + tois(ids))
     except Exception as exc:                                  # noqa: BLE001
         if kept is not None:
             kept = dict(kept, stale=True, error=str(exc))
@@ -181,6 +240,27 @@ def planets(facts, folder=None, cache=None, refresh=False):
     return out
 
 
+def tess_objects(name):
+    """The planets of the star LBL calls `name` (its suffixes _tc, _pca2d...
+    taken off) that are TESS objects of interest, confirmed or not: a
+    candidate is what the velocities are measured to confirm. Each with its
+    period and TESS transit time (t0, BJD), shortest period first; [] when
+    the star has none or the archive cannot be asked. SIMBAD gives the star's
+    TIC number; without it, the TOI number of the name is used."""
+    from lbl.science.planets import SUFFIXES
+    from . import simbad
+    base = SUFFIXES.sub("", str(name))
+    try:
+        facts = simbad.star(base)
+    except Exception:                                         # noqa: BLE001
+        facts = {}
+    got = planets(facts if facts.get("ok") else {}, folder=base)
+    return [p for p in got.get("planets") or []
+            if p.get("t0") is not None and (
+                p["source"] == "TOI" or any(str(other).startswith("TOI-")
+                                            for other in p.get("also") or []))]
+
+
 def main(argv=None):
     from . import simbad
 
@@ -190,7 +270,9 @@ def main(argv=None):
                           % len(got["planets"])))
         for p in got["planets"]:
             print("  %-16s P = %.6f d  T0 %s  K %s  (%s)"
-                  % (p["name"], p["period"], p["t0"], p["k"], p["source"]))
+                  % (p["name"], p["period"], p["t0"], p["k"],
+                     " ".join(filter(None, (p["source"],
+                                            p.get("disposition"))))))
 
 
 if __name__ == "__main__":
