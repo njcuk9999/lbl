@@ -65,7 +65,14 @@ def _nirps(path, drsobjn="EPSILONERI", obj="Eps_eri"):
 @pytest.fixture(autouse=True)
 def no_apero(tmp_path_factory, monkeypatch):
     """No database of APERO's, and none fetched: the copy this machine may
-    keep says nothing here (a test gives its own)."""
+    keep says nothing here (a test gives its own). Nor SIMBAD on the
+    network (a test gives its answers): a plan asking where a star is
+    waited on SIMBAD down (2026-11-19)."""
+    from lbl.core import simbad as core_simbad
+
+    def offline(query):
+        raise OSError("SIMBAD is not asked in the tests")
+    monkeypatch.setattr(core_simbad, "tap", offline)
     empty = tmp_path_factory.mktemp("no_apero")
     monkeypatch.setenv("LBL_APERO_ASTROMETRICS", str(empty))
     return empty
@@ -546,6 +553,81 @@ def test_new_stars_named_each_way(tmp_path, monkeypatch):
                                    YO17=("YO17", "headers"))
     assert named["headers"] == dict(HR1084=("HR1084", "headers"),
                                     YO17=("YO17", "headers"))
+
+
+def test_apero_s_database_before_simbad(tmp_path, monkeypatch):
+    # 2026-11-19: SIMBAD down (the CDS 404, its CfA mirror 504 after 60 s)
+    #   held a plan 4 minutes, each name it was asked a minute; APERO's
+    #   database names and places the stars it knows first
+    from lbl.gui.fetch import stars as fetch_stars
+    monkeypatch.setenv("LBL_APERO_ASTROMETRICS",
+                       str(_apero_db(tmp_path / "db")))
+    down = tmp_path / "root" / "Downloads"
+    down.mkdir(parents=True)
+    _harps(down / "HARPS.2014-01-01T00-00-00.000_e2ds_A.fits", "HR1084",
+           ESO_EPS["alpha"], ESO_EPS["delta"], ESO_EPS["pma"], ESO_EPS["pmd"])
+    _harps(down / "HARPS.2016-01-01T00-00-00.000_e2ds_A.fits", "YO17",
+           **ESO_ADLEO)
+    asked = []
+
+    def resolve(name):
+        asked.append(name)
+        raise ValueError("unknown")
+    monkeypatch.setattr(fetch_stars, "resolve", resolve)
+    monkeypatch.setattr(dispatch, "simbad_at", lambda *a, **k: asked.append(
+        "@place"))
+    idents = {}
+    plan = dispatch.plan(str(tmp_path / "root"), idents)
+    # a star APERO names, by a name or by its place: SIMBAD asked nothing
+    assert asked == [] and plan["simbad"] == "not needed"
+    named = {r["names"][0]: (r["folder"], r["how"]) for r in plan["folders"]}
+    assert named == dict(HR1084=("EPSILONERI", "apero"),
+                         YO17=("GL388", "apero"))
+    # a nickname beside a name APERO knows (a second star there?): SIMBAD
+    #   asked the nickname only, the known name placed by APERO's entry
+    _harps(down / "HARPS.2015-01-01T00-00-00.000_e2ds_A.fits", "K3_01",
+           ESO_EPS["alpha"], ESO_EPS["delta"], ESO_EPS["pma"], ESO_EPS["pmd"])
+    idents = {}
+    plan = dispatch.plan(str(tmp_path / "root"), idents)
+    assert asked == ["K3_01"]
+    assert idents["HR1084"]["apero"] == "EPSILONERI"
+    assert idents["HR1084"]["main"] == "* eps Eri"
+    folders = {r["folder"] for r in plan["folders"]}
+    assert folders == {"EPSILONERI", "GL388"}
+    # SIMBAD's main name asked of SIMBAD, as before
+    asked.clear()
+    dispatch.plan(str(tmp_path / "root"), {}, naming="simbad")
+    assert "HR1084" in asked
+
+
+def test_simbad_down_counted_to_the_end_and_not_waited_again(
+        tmp_path, monkeypatch):
+    from lbl.gui.fetch import stars as fetch_stars
+    down = tmp_path / "root" / "Downloads"
+    down.mkdir(parents=True)
+    for year, name in ((2014, "HR1084"), (2015, "K3_01"), (2016, "Eps_eri")):
+        _harps(down / ("HARPS.%d-01-01T00-00-00.000_e2ds_A.fits" % year),
+               name, ESO_EPS["alpha"], ESO_EPS["delta"], ESO_EPS["pma"],
+               ESO_EPS["pmd"])
+    asked = []
+
+    def resolve(name):
+        asked.append(name)
+        raise OSError("SIMBAD: no server answered")
+    monkeypatch.setattr(fetch_stars, "resolve", resolve)
+    places = []
+    monkeypatch.setattr(dispatch, "simbad_at", lambda *a, **k: places.append(
+        a[0]))
+    said = []
+    plan = dispatch.plan(str(tmp_path / "root"), {},
+                         lambda done, total, step: said.append(
+                             (step, done, total)), naming="simbad")
+    assert plan["simbad"] == "unreachable"
+    simbad = [s for s in said if s[0] == "simbad"]
+    # the count goes to its end, the names after a failure not asked
+    assert simbad[-1][1] == simbad[-1][2] == 3 and len(asked) < 3 + 1
+    # nor SIMBAD asked where the star is
+    assert places == []
 
 
 def test_a_star_already_in_the_root_keeps_its_name(root):

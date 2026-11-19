@@ -47,8 +47,9 @@ tab counts those that can be dispatched. **Dispatch** reads their headers
   observers called it (HR1084, Eps_eri and K3_01 are all eps Eri), matched
   by where the star is in J2000, from the target's coordinates in the
   headers brought back to 2000 by their proper motion. The two stars of a
-  binary stay apart: by their names (GJ 15 A and GJ 15 B), else by SIMBAD,
-  which knows BL Cet and UV Cet as two stars 2 arcsec apart.
+  binary stay apart: by their names (GJ 15 A and GJ 15 B), else by where
+  APERO's database (read first) or SIMBAD places each name: SIMBAD knows
+  BL Cet and UV Cet as two stars 2 arcsec apart.
 
 On the way: gzipped spectra are gunzipped, SOPHIE's blaze is split out of
 its spectra, a header astropy cannot write back is fixed, and the HARPS and

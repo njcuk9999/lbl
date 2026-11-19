@@ -16,6 +16,8 @@ GJ 699, and LBL's suffixes (_tc, _pca2d...) are taken off.
 @author: artigau
 """
 import re
+import threading
+import time
 from typing import Any, Dict, List, Optional
 
 # =============================================================================
@@ -25,6 +27,15 @@ from typing import Any, Dict, List, Optional
 #:   server that does not take the connection is left quickly for the next
 CONNECT_TIMEOUT = 5
 TIMEOUT = 30
+#: seconds a query may take on one server all told: a server that takes
+#:   the connection and sends its answer a trickle at a time starts
+#:   TIMEOUT again at each one (2026-11-19: the CfA mirror held a request
+#:   478 s with a 30 s TIMEOUT, while the CDS gave 404)
+DEADLINE = 40
+#: seconds a server that did not answer is left aside: the queries that
+#:   follow (the names of a dispatch, a report's) are not each held as
+#:   long again; after it, the server is asked again
+DOWN_FOR = 120
 #: SIMBAD's servers, the CDS first, then its mirror at the CfA, which serves
 #:   the same TAP tables. A query that no server before has answered goes
 #:   to the next, and the server that answered is asked first afterwards
@@ -47,6 +58,8 @@ FAMILIES = ((r'TOI', 'TOI-{0}'), (r'TIC', 'TIC {0}'),
             (r'KEPLER', 'Kepler-{0}'), (r'WASP', 'WASP-{0}'))
 
 _SIMBAD = None
+#: server: when it last did not answer (time.time())
+_DOWN: Dict[str, float] = {}
 
 
 # =============================================================================
@@ -144,9 +157,40 @@ def quoted(text: Any) -> str:
     return "'%s'" % str(text).replace("'", "''")
 
 
+def _within(seconds: float, func, *args):
+    """func(*args), waited for `seconds` at most (TimeoutError after: the
+    call is left to end in its own thread, which holds nothing)"""
+    out: Dict[str, Any] = {}
+
+    def run():
+        try:
+            out['value'] = func(*args)
+        except BaseException as exc:                      # noqa: BLE001
+            out['error'] = exc
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    if worker.is_alive():
+        raise TimeoutError('no answer in %g s' % seconds)
+    if 'error' in out:
+        raise out['error']
+    return out['value']
+
+
+def _no_answer(exc: BaseException) -> bool:
+    """whether an error says the server did not answer (not reached, timed
+    out, an HTTP error), rather than that it refused the query"""
+    try:
+        from pyvo.dal.exceptions import DALServiceError
+    except ImportError:
+        DALServiceError = OSError
+    return isinstance(exc, (OSError, DALServiceError))
+
+
 def tap(query: str) -> List[Dict[str, Any]]:
     """
-    The rows of an ADQL query of SIMBAD's tables
+    The rows of an ADQL query of SIMBAD's tables, each server given
+    DEADLINE seconds, a server that did not answer left aside DOWN_FOR
 
     :param query: str, the query
 
@@ -159,15 +203,29 @@ def tap(query: str) -> List[Dict[str, Any]]:
     except ImportError as exc:
         raise OSError('astroquery is not installed (pip install astroquery):'
                       ' SIMBAD cannot be asked') from exc
-    failures = []
-    for server in list(SERVERS):
+
+    def ask(server):
+        # the server set and the query made in one call: an abandoned call
+        #   (DEADLINE) is not given another query's server
         client.server = server
+        return client.query_tap(query)
+
+    failures = []
+    now = time.time()
+    for server in list(SERVERS):
+        if now - _DOWN.get(server, -DOWN_FOR) < DOWN_FOR:
+            failures.append('%s: did not answer %.0f s ago' % (
+                server, now - _DOWN[server]))
+            continue
         try:
-            table = client.query_tap(query)
+            table = _within(DEADLINE, ask, server)
         except Exception as exc:                          # noqa: BLE001
+            if _no_answer(exc):
+                _DOWN[server] = time.time()
             failures.append('%s: %s: %s' % (server, type(exc).__name__,
                                             str(exc)[:200]))
             continue
+        _DOWN.pop(server, None)
         # the server that answered is asked first from now on
         SERVERS.remove(server)
         SERVERS.insert(0, server)

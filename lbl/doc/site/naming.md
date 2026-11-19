@@ -13,6 +13,20 @@ new stars** menu of the Folders tab says what that folder is called.
   or by where it is, so that a HARPS file named Gl699 or a nickname such as
   YO17 gets APERO's name too; APERO's own files carry it already
   (`DRSOBJN`). A star APERO does not know is named as SIMBAD names it.
+  APERO's database is read first: SIMBAD is asked nothing of a star it
+  names, and only the names it does not know (a nickname beside a known
+  name, to tell a second star at the same place); a name it knows is placed
+  by its entry (Gaia's place and proper motion, SIMBAD's name as APERO
+  copied it). A plan of the demonstration data asks SIMBAD 2 names instead
+  of 21.
+
+When SIMBAD does not answer, the plan asks it nothing more (nor where a
+star is) and names the stars without it. A query is given 40 s on each of
+SIMBAD's servers (the CDS, then its CfA mirror), and a server that did not
+answer is left aside 2 minutes, so the next plan does not wait for it
+again. On 2026-11-19 the CDS gave 404 and its mirror held each query
+minutes: a plan of the demonstration data took 4 min 03 s, and takes 43 s
+since.
 - **SIMBAD's main name**: SIMBAD's main identifier of the star, without its
   prefixes (`* eps Eri` gives `eps_Eri`, `NAME Barnard's star` gives
   `Barnard_s_star`). It is found by a name of the headers that SIMBAD places

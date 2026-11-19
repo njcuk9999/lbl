@@ -1279,19 +1279,21 @@ def stars(sightings, apart=frozenset()) -> list:
     return [sorted(m) for m in members.values()]
 
 
-def _simbad_names(sightings, groups, records, budget=SIMBAD_MOST):
+def _simbad_names(sightings, groups, records, budget=SIMBAD_MOST,
+                  named=None):
     """The names SIMBAD is asked: those of the stars whose sightings carry
     more than one name (two names at one place may be two stars), and those
     of a star new to the root (a name SIMBAD knows there is a better
-    folder than a programme's nickname), each spelling once; at most
-    `budget`."""
+    folder than a programme's nickname) that `named(record)` (APERO's
+    database) does not name, each spelling once; at most `budget`."""
     out = []
     for group in groups:
         norms = set()
         for i in group:
             norms |= sightings[i]["norms"]
-        new = not any(records[k].get("folder") for i in group
-                      for k in sightings[i]["files"])
+        files = [k for i in group for k in sightings[i]["files"]]
+        new = not any(records[k].get("folder") for k in files) and not (
+            named is not None and any(named(records[k]) for k in files))
         if len(norms - GENERIC) < 2 and not new:
             continue
         for i in group:
@@ -1319,8 +1321,12 @@ def _known(ident, sighting) -> bool:
 
 
 def apart_by_simbad(sightings, groups, idents) -> set:
-    """Pairs of sightings of one group that SIMBAD knows as two stars: each
-    has a name SIMBAD places there, and no such name is the other's star."""
+    """Pairs of sightings of one group that SIMBAD (or APERO's database,
+    _apero_idents) knows as two stars: each has a name placed there, and no
+    such name is the other's star (by its main identifier, or by its APERO
+    name, which a name SIMBAD answered gets too when APERO knows its star:
+    one star placed by APERO's copy of an older SIMBAD name and by SIMBAD
+    is not made two)."""
     out = set()
     for group in groups:
         mains = {}
@@ -1330,6 +1336,8 @@ def apart_by_simbad(sightings, groups, idents) -> set:
                 ident = idents.get(name)
                 if _known(ident, sightings[i]):
                     found.add(norm(ident["main"]))
+                    if ident.get("apero"):
+                        found.add("apero:" + ident["apero"])
             mains[i] = found
         for a in group:
             for b in group:
@@ -1472,6 +1480,49 @@ def _apero_entry(rec, apero):
     return None
 
 
+def _apero_of(rec, apero, seen):
+    """_apero_entry of a record, the files of a night (the same names, the
+    same place) asked once (`seen`)"""
+    place = rec.get("place") or {}
+    key = (tuple(rec["names"]), place.get("how"),
+           round(place.get("ra") or 0, 4), round(place.get("dec") or 0, 4))
+    if key not in seen:
+        seen[key] = _apero_entry(rec, apero)
+    return seen[key]
+
+
+def _apero_idents(names, idents, apero) -> None:
+    """The names APERO's database knows as a star with a place, kept in
+    `idents` as SIMBAD's answers are (its SIMBAD name the main
+    identifier, its place and proper motion Gaia's): SIMBAD is not asked
+    them. A name SIMBAD answered keeps SIMBAD's answer."""
+    from .fetch import apero_names
+    for name in names:
+        if idents.get(name) is not None:
+            continue
+        entry = apero(name)
+        if entry is None or not apero_names.is_star(entry) or \
+                entry.get("ra") is None or entry.get("dec") is None:
+            continue
+        idents[name] = dict(
+            name=name, apero=entry["apero"],
+            main=" ".join(str(entry.get("simbad") or entry["apero"]).split()),
+            ra=entry["ra"], dec=entry["dec"], pmra=entry.get("pmra"),
+            pmdec=entry.get("pmdec"))
+
+
+def _apero_names_of(idents, apero) -> None:
+    """SIMBAD's answers given the APERO name of their star, when APERO's
+    database knows it by SIMBAD's main identifier (apart_by_simbad)"""
+    from .fetch import apero_names
+    for name, ident in idents.items():
+        if not ident or ident.get("apero") or name.startswith("@"):
+            continue
+        entry = apero(ident["main"])
+        if entry is not None and apero_names.is_star(entry):
+            ident["apero"] = entry["apero"]
+
+
 def simbad_at(place, idents, failed=None):
     """SIMBAD's star at a place no name of the files says (a programme's
     nickname: YO17, M112): the brightest in G of those whose place agrees
@@ -1481,6 +1532,9 @@ def simbad_at(place, idents, failed=None):
     key = "@%.4f%+.4f" % (place["ra"], place["dec"])
     if key in idents:
         return idents[key]
+    if failed:
+        # SIMBAD did not answer in this plan: not waited for again
+        return None
     from lbl.core.simbad import tap
     radius = (120.0 + 10.5 * place["loose"]) / 3600.0
     try:
@@ -1509,7 +1563,7 @@ def simbad_at(place, idents, failed=None):
 
 
 def _folder_name(star, records, idents, naming="apero", apero=None,
-                 near=None):
+                 near=None, seen=None):
     """The name of a star's folders, and where it comes from: its name in
     the root (its DATA_DIRs first, then a science/ of the root's own:
     'root'); else as `naming` says (NAMINGS): 'apero' (APERO's DRSOBJN, or
@@ -1529,7 +1583,7 @@ def _folder_name(star, records, idents, naming="apero", apero=None,
                  simbad=("simbad", "headers"),
                  headers=("headers",))[naming if naming in NAMINGS
                                         else "apero"]
-    seen = {}
+    seen = {} if seen is None else seen
     for pick in steps:
         if pick == "apero" and apero is None:
             continue
@@ -1538,14 +1592,8 @@ def _folder_name(star, records, idents, naming="apero", apero=None,
             if pick == "drsobjn":
                 chosen = [rec["drsobjn"]] if rec.get("drsobjn") else []
             elif pick == "apero":
-                # the files of a night say the same: asked once
-                place = rec.get("place") or {}
-                key = (tuple(rec["names"]), place.get("how"),
-                       round(place.get("ra") or 0, 4),
-                       round(place.get("dec") or 0, 4))
-                if key not in seen:
-                    seen[key] = _apero_entry(rec, apero)
-                chosen = [seen[key]["apero"]] if seen[key] else []
+                entry = _apero_of(rec, apero, seen)
+                chosen = [entry["apero"]] if entry else []
             elif pick == "simbad":
                 sight = _sighting_of(rec)
                 chosen = [simbad_folder(idents[n]["main"])
@@ -1616,8 +1664,27 @@ def plan(root: str, idents=None, progress=None, ask_simbad=True,
     sightings = _sightings(stars_of)
     groups = stars(sightings)
     warnings_ = []
+    naming = naming if naming in NAMINGS else "apero"
+    # APERO's database first when it names the new stars: a star it names
+    #   (by APERO's DRSOBJN, a name or its place) is not asked of SIMBAD,
+    #   and a name it knows is placed by it; SIMBAD is asked the rest only
+    #   (SIMBAD slow or down holds the plan up to a minute a name)
+    seen = {}
+    named = None
+    if naming == "apero" and any(not r.get("folder") for r in stars_of):
+        if apero is None:
+            say(0, 0, "apero")
+            apero = _apero_lookup(fetch=ask_simbad)
+            if apero is None:
+                warnings_.append(dict(key="apero_unreachable", args=[]))
+        if apero is not None:
+            def named(rec):
+                return bool(rec.get("drsobjn")) or \
+                    _apero_of(rec, apero, seen) is not None
     simbad = "not needed"
-    names, cut = _simbad_names(sightings, groups, stars_of)
+    names, cut = _simbad_names(sightings, groups, stars_of, named=named)
+    if named is not None:
+        _apero_idents(names, idents, apero)
     asked = [n for n in names if n not in idents]
     if ask_simbad and asked:
         say(0, len(asked), "simbad")
@@ -1628,6 +1695,8 @@ def plan(root: str, idents=None, progress=None, ask_simbad=True,
         simbad = "asked" if ask_simbad else "not asked"
     if simbad == "unreachable":
         warnings_.append(dict(key="simbad_unreachable", args=[]))
+    if named is not None:
+        _apero_names_of(idents, apero)
     apart = apart_by_simbad(sightings, groups, idents)
     if apart:
         groups = stars(sightings, frozenset(apart))
@@ -1640,15 +1709,10 @@ def plan(root: str, idents=None, progress=None, ask_simbad=True,
     star_records = [[i for i, n in star_of.items() if n == number]
                     for number in range(len(groups))]
     warnings_ += _either(sightings, groups, apart, idents, stars_of)
-    naming = naming if naming in NAMINGS else "apero"
-    if naming == "apero" and apero is None and any(
-            not stars_of[i].get("folder") for i in range(len(stars_of))):
-        say(0, 0, "apero")
-        apero = _apero_lookup(fetch=ask_simbad)
-        if apero is None:
-            warnings_.append(dict(key="apero_unreachable", args=[]))
+    # SIMBAD found down: not asked again where the stars are
     return _destinations(root, records, stars_of, star_records, idents,
-                         warnings_, simbad, naming, apero, ask_simbad)
+                         warnings_, simbad, naming, apero,
+                         ask_simbad and simbad != "unreachable", seen)
 
 
 def _apero_lookup(fetch=True):
@@ -1706,19 +1770,22 @@ def _ask_simbad(names, idents, say) -> str:
     lock = threading.Lock()
 
     def one(name):
+        # once SIMBAD failed, the names left are not asked; every name is
+        #   counted, answered or not, so that the count goes to its end
         with lock:
-            if state["failed"]:
-                return
-        try:
-            found = resolve(name)
-        except ValueError:
-            found = None
-        except Exception:                                 # noqa: BLE001
-            with lock:
-                state["failed"] += 1
-            return
+            ask = not state["failed"]
+        answered = False
+        if ask:
+            try:
+                found, answered = resolve(name), True
+            except ValueError:
+                found, answered = None, True
+            except Exception:                             # noqa: BLE001
+                with lock:
+                    state["failed"] += 1
         with lock:
-            idents[name] = found
+            if answered:
+                idents[name] = found
             state["done"] += 1
             say(state["done"], len(names), "simbad")
 
@@ -1728,7 +1795,8 @@ def _ask_simbad(names, idents, say) -> str:
 
 
 def _destinations(root, records, stars_of, star_records, idents, warnings_,
-                  simbad, naming="apero", apero=None, ask=True) -> dict:
+                  simbad, naming="apero", apero=None, ask=True,
+                  seen=None) -> dict:
     """Each file its place: science/<folder> of its DATA_DIR, calib/, or
     UNUSED; the folders shown star by star."""
     moves, left, unused = [], [], []
@@ -1741,7 +1809,7 @@ def _destinations(root, records, stars_of, star_records, idents, warnings_,
 
     for number, members in enumerate(star_records):
         base, how = _folder_name(members, stars_of, idents, naming, apero,
-                                 near if ask else None)
+                                 near if ask else None, seen)
         homes = {}
         for i in members:
             folder = stars_of[i].get("folder")
