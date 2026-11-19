@@ -1648,10 +1648,29 @@ def planet_posteriors(before, after, planets):
     return out
 
 
+def posterior_span(samples, truth=None, low=None, high=None, pad=0.05):
+    """The range an axis of posteriors shows: from the 1st to the 99th
+    percentile of all of them and the injected value (`truth`), `pad` of
+    that span added on either side, kept within [low, high]"""
+    lo = min(float(np.percentile(s, 1)) for s in samples)
+    hi = max(float(np.percentile(s, 99)) for s in samples)
+    if truth is not None and np.isfinite(truth):
+        lo, hi = min(lo, float(truth)), max(hi, float(truth))
+    margin = pad * (hi - lo) if hi > lo else max(pad * abs(hi), 1e-3)
+    lo, hi = lo - margin, hi + margin
+    if low is not None:
+        lo = max(lo, low)
+    if high is not None:
+        hi = min(hi, high)
+    return lo, hi
+
+
 def figure_mcmc(posts, planets, before, after, path, most=4):
     """The posteriors of the planets' fits, one row a planet: K of both
     MCMCs (circular dashed, Keplerian solid), e and omega of the
-    Keplerian one, delivered and corrected in their colours"""
+    Keplerian one, delivered and corrected in their colours; K's and e's
+    axes over the posteriors (posterior_span), so that a large K is not
+    a spike at the end of an axis from 0"""
     known = [p for p in (planets or []) if isinstance(p, dict)]
     if not posts or not known:
         return None
@@ -1660,24 +1679,29 @@ def figure_mcmc(posts, planets, before, after, path, most=4):
                                                      + 0.7), squeeze=False)
     for i, planet in enumerate(shown):
         ax_k, ax_e, ax_w = axes[i]
-        # K's axis: up to three times the width of all but the widest of
-        #   the four posteriors (a Keplerian fit of a few outlying points
-        #   reaches hundreds of m/s and would flatten the others); what
-        #   lies beyond is said
+        injected = planet.get("injected") or {}
+        # K's axis: the four posteriors' 1st to 99th percentiles and the
+        #   injected K, 5% beyond, but a posterior whose 99th percentile is
+        #   over three times the next widest's left out of the span (a
+        #   Keplerian fit of a few outlying points reaches hundreds of m/s
+        #   and would flatten the others); what lies beyond is said
         curves = [(run, colour, scenario, style,
                    posts[run["label"]][scenario]["samples"]["K_%d" % i])
                   for run, colour in ((before, BEFORE), (after, AFTER))
                   for scenario, style in (("circular", "--"),
                                           ("keplerian", "-"))]
-        tops = sorted(float(np.percentile(k, 97.5)) for *_c, k in curves)
-        k_max = 1.1 * min(tops[-1], 3.0 * tops[-2])
+        tops = sorted(float(np.percentile(k, 99)) for *_c, k in curves)
+        wide = 3.0 * tops[-2] if len(tops) > 1 and tops[-2] > 0 else np.inf
+        k_lo, k_hi = posterior_span(
+            [k for *_c, k in curves if np.percentile(k, 99) <= wide],
+            injected.get("k"), low=0.0)
         beyond = []
         for run, colour, scenario, style, k in curves:
-            ax_k.hist(k, bins=60, range=(0.0, k_max), histtype="step",
+            ax_k.hist(k, bins=60, range=(k_lo, k_hi), histtype="step",
                       color=colour, ls=style, lw=1.1, density=True,
                       label="%s, %s" % (run["label"], scenario.replace(
                           "keplerian", "Keplerian")))
-            if np.median(k) > k_max:
+            if not k_lo <= np.median(k) <= k_hi:
                 beyond.append("%s, %s: K = %.0f m/s" % (
                     run["label"], scenario.replace("keplerian", "Keplerian"),
                     np.median(k)))
@@ -1689,13 +1713,20 @@ def figure_mcmc(posts, planets, before, after, path, most=4):
             ax_k.text(0.98, 0.95, "off the axis:\n" + "\n".join(beyond),
                       transform=ax_k.transAxes, ha="right", va="top",
                       fontsize=5.8, color=INK)
+        ax_k.set_xlim(k_lo, k_hi)
+        # e's axis: the same, within 0 and E_MAX
+        e_lo, e_hi = posterior_span(
+            [posts[run["label"]]["keplerian"]["samples"]["e_%d" % i]
+             for run in (before, after)], injected.get("e"), low=0.0,
+            high=keplerfit.E_MAX)
         for run, colour in ((before, BEFORE), (after, AFTER)):
             post = posts[run["label"]]
             kep = post["keplerian"]["samples"]
-            ax_e.hist(kep["e_%d" % i], bins=60, range=(0.0, keplerfit.E_MAX),
+            ax_e.hist(kep["e_%d" % i], bins=60, range=(e_lo, e_hi),
                       histtype="step", color=colour, lw=1.1, density=True)
             ax_w.hist(kep["omega_%d" % i], bins=60, histtype="step",
                       color=colour, lw=1.1, density=True)
+        ax_e.set_xlim(e_lo, e_hi)
         if planet.get("injected"):
             ax_e.axvline(planet["injected"]["e"], color=INK, ls=":", lw=1.0)
             if planet["injected"]["e"] > 0:
@@ -3177,8 +3208,10 @@ def velocity_section(star, before, after, numbers, folder, stale):
          " an MCMC of its own (the table after the figures gives every"
          " parameter): $K$ of the circular fit (dashed) and of the"
          " Keplerian one (solid), $e$ and $\\omega$ of the Keplerian one,"
-         " delivered and corrected in their colours. A correction that"
-         " left the planets alone keeps their posteriors."),
+         " delivered and corrected in their colours; the axes of $K$ and"
+         " $e$ from the 1st to the 99th percentile of the posteriors (and"
+         " the injected value), 5\\% beyond on either side. A correction"
+         " that left the planets alone keeps their posteriors."),
     ] + [
         (figure_posterior_corner(posts, numbers.get("planets_known"), before,
                                  after, scenario, os.path.join(

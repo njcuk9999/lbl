@@ -286,3 +286,22 @@ def test_the_corners_of_both_fits(tmp_path, monkeypatch):
     assert len(chosen) <= texreport.CORNER_MAX
     assert not any(k.startswith("lam") for k in chosen)
     assert chosen[-3:] == ["offset", "slope", "jitter"]
+
+
+def test_the_posteriors_axes_span_the_posteriors():
+    # 2026-11-19: K's axis from 0 left a large K a spike at its end
+    rng = np.random.default_rng(3)
+    big = [rng.normal(1000.0, 10.0, 4000), rng.normal(1005.0, 12.0, 4000)]
+    lo, hi = texreport.posterior_span(big, low=0.0)
+    inner = (min(np.percentile(s, 1) for s in big),
+             max(np.percentile(s, 99) for s in big))
+    pad = 0.05 * (inner[1] - inner[0])
+    assert np.isclose(lo, inner[0] - pad) and np.isclose(hi, inner[1] + pad)
+    assert 950.0 < lo < 980.0 and 1025.0 < hi < 1060.0
+    # the injected value inside, whatever the posteriors say
+    lo, hi = texreport.posterior_span(big, truth=900.0, low=0.0)
+    assert lo < 900.0 < hi
+    # kept within the bounds of the parameter (e in 0, E_MAX)
+    ecc = [rng.uniform(0.0, 0.95, 4000)]
+    lo, hi = texreport.posterior_span(ecc, low=0.0, high=0.95)
+    assert lo == 0.0 and hi == 0.95
