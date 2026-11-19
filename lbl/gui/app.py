@@ -492,7 +492,7 @@ class Handler(BaseHTTPRequestHandler):
                     if body.get("data_dir") else ""
                 return self._json(ctx.archives.start_search(
                     body.get("target", ""), body.get("instruments"),
-                    data_dir))
+                    data_dir, body.get("naming")))
             if route == "/api/archive/fetch":
                 data_dir = ctx.allow(body.get("data_dir", ""))
                 return self._json(ctx.archives.start_fetch(

@@ -49,6 +49,30 @@ only. HD 23079 (on 2026-11-19): 41, 20 and 75 spectra in C98, C07 and C14;
 the delivered velocities agree with DACE's CCF to 2.5-3.7 m/s rms, their
 errors 5 to 13% smaller.
 
+## From a script, or from koloa
+
+The same search and fetch run without the window:
+
+```
+python -m lbl.gui.archives list  "HD 23079" --root ROOT --instruments HARPS CORALIE
+python -m lbl.gui.archives fetch "HD 23079" --root ROOT --naming apero --rows "HD 23079|HARPS:"
+```
+
+`list` says what the archives have (a row per LBL reader and setting: its
+spectra, those already in the root, the size to fetch, its folder);
+`fetch` fetches the rows named by their ids (all of them when none). A
+star the root already has keeps its folder (found by where it is); a new
+one is named as `--naming` says, as the dispatch names new stars
+([Naming the stars](naming.md)): `apero` (APERO's name, by one of the
+star's names or by where it is, else SIMBAD's), `simbad`, or `headers`
+(the name asked: no header is read before the files are there), its
+setting after it (`HD_23079_C98`). `--ident` gives the star as its caller
+resolved it (main, aliases, ra, dec, pmra, pmdec): SIMBAD is not asked
+again. The log goes to stderr; the last line of stdout is `LBL-ARCHIVES `
+and the state of the search and of the fetch as JSON. koloa
+(github.com/eartigau/koloa) proposes the spectra of the star it analyses
+this way, into the root it is given.
+
 ## Spectra downloaded by hand
 
 Spectra from the archives' own pages, from a colleague or from a disk go

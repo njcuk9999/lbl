@@ -919,3 +919,30 @@ def test_coralie_in_the_archive_search(monkeypatch):
     assert out[0]['spectra'][0]['name'] == \
         'r.CORALIE.2001-02-22T01-02-03.000_S2D_A.fits'
     assert out[1]['get'] is spectra._get_dace
+
+
+def test_a_new_star_named_in_the_archive_search(monkeypatch, tmp_path):
+    """a star new to the root named as the dispatch's naming says: APERO's
+    name (by a name, else by where it is), else SIMBAD's, else the name
+    asked; its setting after it; its own folder kept when the root has it"""
+    from lbl.gui import archives
+    from lbl.gui.fetch import apero_names
+    known = {'GJ 699': dict(apero='GL699')}
+    monkeypatch.setattr(apero_names, 'lookup',
+                        lambda name, fetch=True: known.get(name))
+    monkeypatch.setattr(apero_names, 'near',
+                        lambda ra, dec, radius=30.0, fetch=True: [])
+    ident = dict(main='NAME Barnard\'s star', aliases=['GJ 699'],
+                 ra=269.45, dec=4.69)
+    assert archives.star_name('Barnard', ident, 'apero') == 'GL699'
+    assert archives.star_name('Barnard', ident, 'simbad') == 'Barnard_s_star'
+    assert archives.star_name('Barnard star', ident, 'headers') == \
+        'Barnard_star'
+    assert archives.star_name('HD 23079', dict(main='HD 23079'),
+                              'apero') == 'HD_23079'
+    group = dict(obj='HD23079_C98', lbl='CORALIE', source='DACE', key='C98',
+                 spectra=[dict(name='a.fits')])
+    assert archives.folder_for(str(tmp_path), group, dict(main='HD 23079'),
+                               'simbad', 'HD 23079') == 'HD_23079_C98'
+    # without a naming: as the search's group names it
+    assert archives.folder_for(str(tmp_path), group) == 'HD23079_C98'

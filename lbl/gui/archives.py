@@ -55,6 +55,12 @@ def _root():
 ARCHIVE_FILE = ".lbl_archive.json"
 #: the files fetched at once
 WORKERS = 4
+#: a star of APERO's database is the one asked when this near [arcsec]
+APERO_NEAR = 5.0
+#: the line of the command line's answer (main): this, then its JSON
+ANSWER = "LBL-ARCHIVES "
+#: the search and the fetch of the command line, looked at this often [s]
+POLL = 0.5
 #: each instrument's observatory and its latitude [deg] (astropy's site
 #:    registry, EarthLocation.of_site): a star that never rises
 #:    MIN_ALTITUDE above its horizon is not asked for there
@@ -173,14 +179,55 @@ def cell(target, inst) -> str:
     return "%s|%s" % (target, inst)
 
 
-def folder_for(data_dir: str, group: dict, ident=None) -> str:
+def star_name(target: str, ident=None, naming: str = "apero") -> str:
+    """The name of the folders of a star new to the root, as the dispatch's
+    `naming` has it (dispatch.NAMINGS): 'apero', its name in APERO's
+    database (by one of its names, else by where it is), else SIMBAD's;
+    'simbad', SIMBAD's main identifier (dispatch.simbad_folder);
+    'headers', the name asked (no header is read before the files are
+    fetched: it stands for the observer's)."""
+    from .dispatch import NAMINGS, clean, simbad_folder
+    naming = naming if naming in NAMINGS else "apero"
+    ident = ident or {}
+    if naming == "apero":
+        try:
+            from .fetch import apero_names
+            for name in [target, ident.get("main")] + list(
+                    ident.get("aliases") or []):
+                entry = apero_names.lookup(name) if name else None
+                if entry and entry.get("apero"):
+                    return clean(entry["apero"])
+            if ident.get("ra") is not None:
+                found = apero_names.near(float(ident["ra"]),
+                                         float(ident["dec"]), APERO_NEAR)
+                if found and found[0].get("apero"):
+                    return clean(found[0]["apero"])
+        except Exception:                                 # noqa: BLE001
+            # APERO's database out of reach: SIMBAD's name
+            pass
+    if naming in ("apero", "simbad") and ident.get("main"):
+        name = simbad_folder(ident["main"])
+        if name:
+            return name
+    return clean(target) or "star"
+
+
+def folder_for(data_dir: str, group: dict, ident=None, naming=None,
+               target: str = "") -> str:
     """Where a group's spectra go: the folder the star has in DATA_DIR
     (dispatch.star_folder, `ident` its place as SIMBAD has it), else
     science/<object> if the folder is new or holds these spectra already
     (or came from the same LBL instrument and source); else
     science/<object>_<instrument>_<source>, so that one folder never mixes
-    two readers."""
+    two readers. A star new to the root is named as `naming` says
+    (star_name), its setting after it (<star>_EGGS); without `naming`, as
+    the search's group names it (the name asked)."""
     base = group["obj"]
+    if naming:
+        from .fetch.spectra import _setting
+        name = star_name(target, ident, naming)
+        base = name if str(group["lbl"]).startswith("NIRPS") else \
+            _setting(name, group.get("key", ""))
     if ident and ident.get("ra") is not None:
         from .dispatch import star_folder
         # NIRPS's HE and HA are DATA_DIRs of their own, not settings
@@ -217,6 +264,8 @@ class Archives:
         #: each search's number: a search stopped, or replaced by another,
         #:    has its late answers dropped
         self._search_id = 0
+        self.naming = None
+        self.idents = {}
         self.log = []
         self.log_file = None
         _SINK = self
@@ -248,10 +297,16 @@ class Archives:
                              if data_dir else None)
 
     # -- searching -----------------------------------------------------------
-    def start_search(self, target: str, instruments, data_dir: str) -> dict:
+    def start_search(self, target: str, instruments, data_dir: str,
+                     naming=None, idents=None) -> dict:
         """Search the archives for one star or several (names separated by
         commas, semicolons or new lines): every star in every instrument
-        at once (PER_ARCHIVE at a time in one archive)."""
+        at once (PER_ARCHIVE at a time in one archive). `naming`: how a
+        star new to the root is named (star_name; None: the name asked);
+        `idents`: the stars as their caller resolved them, by the name asked
+        (name, main, aliases, ra, dec, pmra, pmdec: SIMBAD not asked again)."""
+        self.naming = naming
+        self.idents = dict(idents or {})
         targets = split_targets(target)
         instruments = [i for i in (instruments or INSTRUMENTS)
                        if i in INSTRUMENTS]
@@ -351,7 +406,7 @@ class Archives:
         def star(target):
             """SIMBAD's name and Teff of a star, then its instruments"""
             try:
-                ident = spectra.identify(target)
+                ident = self.idents.get(target) or spectra.identify(target)
             except Exception as exc:                      # noqa: BLE001
                 with self.lock:
                     self.search["stars"][target] = dict(
@@ -432,8 +487,8 @@ class Archives:
                 # the DATA_DIR of its reader under the root
                 home = dispatch.folder_of(group["lbl"], group["source"])
                 home_dir = os.path.join(data_dir, home) if data_dir else ""
-                mine = folder_for(home_dir, group, ident) if data_dir else \
-                    group["obj"]
+                mine = folder_for(home_dir, group, ident, self.naming,
+                                  target) if data_dir else group["obj"]
                 with self.lock:
                     folder = mine
                     # two readers never share a folder: one already proposed
@@ -669,3 +724,81 @@ class Archives:
                                               now=time.time(),
                                               log=self.log[-LOG_SENT:],
                                               unavailable=available())))
+
+
+# -----------------------------------------------------------------------------
+# The command line: the archive search without the window
+# -----------------------------------------------------------------------------
+def _wait(archives, kind: str) -> dict:
+    """a search or a fetch of the command line, waited for, its log lines
+    said as they come (on stderr: stdout holds the answer)"""
+    said = 0
+    while True:
+        with archives.lock:
+            state = getattr(archives, kind).get("state")
+            lines = archives.log[said:]
+            said = len(archives.log)
+        for line in lines:
+            print("%s | %-5s | %s" % (line["t"], line["level"], line["text"]),
+                  file=sys.stderr, flush=True)
+        if state != "running":
+            return archives.status()
+        time.sleep(POLL)
+
+
+def main(argv=None) -> int:
+    """
+    python -m lbl.gui.archives list|fetch STAR --root ROOT: what the
+    archives have of a star that LBL reads (list), and those spectra
+    fetched into the root (fetch), as the window's archive search does it:
+    ROOT/<INSTRUMENT>_<SOURCE>/science/<star>/, the star's own folder when
+    the root has it (found by where it is), else named as --naming says.
+    The last line of stdout is ANSWER and the search's (and fetch's) state
+    as JSON; the log goes to stderr. Used by koloa (github.com/eartigau/
+    koloa) to propose the spectra of the star it analyses.
+    """
+    import argparse
+    from .dispatch import NAMINGS
+    parser = argparse.ArgumentParser(prog="python -m lbl.gui.archives",
+                                     description=main.__doc__)
+    parser.add_argument("action", choices=("list", "fetch"))
+    parser.add_argument("target", help="the star (any name SIMBAD knows)")
+    parser.add_argument("--root", required=True,
+                        help="the root of LBL's data")
+    parser.add_argument("--instruments", nargs="+", default=None,
+                        choices=INSTRUMENTS, metavar="INST",
+                        help="the archives asked (all: %s)"
+                             % ", ".join(INSTRUMENTS))
+    parser.add_argument("--naming", default="apero", choices=NAMINGS,
+                        help="how a star new to the root is named")
+    parser.add_argument("--ident", default=None, metavar="JSON",
+                        help="a file of the star as it was resolved (name, "
+                             "main, aliases, ra, dec, pmra, pmdec): SIMBAD "
+                             "not asked")
+    parser.add_argument("--rows", nargs="+", default=None, metavar="ID",
+                        help="with fetch: the rows fetched, by their ids as "
+                             "list gives them (all when none)")
+    args = parser.parse_args(argv)
+    root = os.path.abspath(os.path.expanduser(args.root))
+    idents = None
+    if args.ident:
+        with open(args.ident, encoding="utf-8") as handle:
+            idents = {args.target: dict(json.load(handle), name=args.target)}
+    archives = Archives()
+    archives.start_search(args.target, args.instruments, root, args.naming,
+                          idents)
+    state = _wait(archives, "search")
+    if args.action == "fetch" and state["search"].get("state") == "done":
+        ids = args.rows or [row["id"] for row in state["search"]["groups"]]
+        archives.start_fetch(root, ids)
+        state = _wait(archives, "fetch")
+    print(ANSWER + json.dumps(dict(search=state["search"],
+                                   fetch=state["fetch"], root=root,
+                                   naming=args.naming)), flush=True)
+    failed = state["search"].get("state") == "failed" or \
+        state["fetch"].get("state") == "failed"
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
