@@ -91,7 +91,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from lbl.core.base import harps_eggs, portable_name
+from lbl.core.base import coralie_era, harps_eggs, portable_name
 
 from . import targets
 
@@ -861,6 +861,12 @@ def _setting(family, headers) -> str:
     if family == "SOPHIE" and str(_card(headers, "HIERARCH OHP INS FIBER")
                                   or "").strip().upper() == "HE":
         return "HE"
+    if family == "CORALIE":
+        # its eras (C98, C07, C14, C24) by the date of the exposure: the
+        #   instrument changed at each, CORALIE98 has 68 orders
+        mjd = targets._first(headers, targets.MJD_KEYS + (
+            "HIERARCH ESO QC BJD", "HIERARCH ESO DRS BJD"))
+        return "C" + coralie_era(mjd) if mjd is not None else ""
     if family == "ESPRESSO":
         mode = str(_card(headers, "HIERARCH ESO INS MODE") or "").strip()
         mode = mode.upper().replace("SINGLE", "").replace("MULTI", "")

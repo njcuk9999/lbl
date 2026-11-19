@@ -9,6 +9,8 @@ LBL-readable spectra are:
     HARPSN    the TNG, espdr's S2D_A (HARPSN ESO)
     SOPHIE    the OHP, e2ds and their blaze (SOPHIE)
     ESPRESSO  ESO, the S2D_A (ESPRESSO)
+    CORALIE   DACE, espdr's S2D_A of every era, a run per era (CORALIE
+              DACE)
 
 A search asks every instrument at once (an archive that does not answer
 holds the others up no more than its own time); what each one has is a
@@ -37,12 +39,13 @@ from concurrent.futures import ThreadPoolExecutor
 from . import dispatch
 
 #: the instruments asked, in the order the window shows them
-INSTRUMENTS = ("SPIROU", "NIRPS", "HARPS", "HARPSN", "SOPHIE", "ESPRESSO")
+INSTRUMENTS = ("SPIROU", "NIRPS", "HARPS", "HARPSN", "SOPHIE", "ESPRESSO",
+               "CORALIE")
 #: each instrument's archive and the product LBL reads, said shortly
 ARCHIVE_NAMES = dict(SPIROU="CADC · APERO t.fits", NIRPS="ESO · S2D + tellu",
                      HARPS="ESO · DRS e2ds",
                      HARPSN="TNG (IA2) · S2D_A", SOPHIE="OHP · e2ds",
-                     ESPRESSO="ESO · S2D_A")
+                     ESPRESSO="ESO · S2D_A", CORALIE="DACE · S2D_A")
 #: what the search keeps while it works (the headers of a star's HARPS-N
 #:    exposures), in the fetch's cache (fetch.paths)
 def _root():
@@ -57,7 +60,8 @@ WORKERS = 4
 #:    MIN_ALTITUDE above its horizon is not asked for there
 SITES = dict(SPIROU=("CFHT", 19.8267), NIRPS=("La Silla", -29.2567),
              HARPS=("La Silla", -29.2567), HARPSN=("the TNG", 28.7583),
-             SOPHIE=("the OHP", 43.9308), ESPRESSO=("Paranal", -24.6274))
+             SOPHIE=("the OHP", 43.9308), ESPRESSO=("Paranal", -24.6274),
+             CORALIE=("La Silla", -29.2567))
 #: the least altitude [deg] a star reaches at its transit for an archive to
 #:    be asked: 20 deg, an airmass of 2.9, wide on purpose (only what is out
 #:    of reach is skipped)

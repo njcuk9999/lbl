@@ -84,6 +84,30 @@ def harps_eggs(mode) -> bool:
     return str(mode or '').strip().upper().split('+')[0] == 'EGGS'
 
 
+#: CORALIE's eras as DACE names them (CORALIE98, CORALIE07, CORALIE14,
+#:    CORALIE24) and the date each starts [MJD], in the gaps between their
+#:    last and first exposures on DACE (1998-11-04 to 2007-04-08, 2007-06-02
+#:    to 2014-11-04, 2014-11-13 to 2024-10-15 at 06:00 UT, then from 21:18
+#:    UT). The instrument changed at each (CORALIE98 has 68 orders, the
+#:    later eras 69): one template must not mix them
+CORALIE_ERAS = (('98', -1.0e9), ('07', 54230.0), ('14', 56970.0),
+                ('24', 60599.5))
+
+
+def coralie_era(mjd) -> str:
+    """
+    CORALIE's era of an exposure by its date
+
+    :param mjd: float, the date of the exposure [MJD; a JD is taken too]
+
+    :return: str, '98', '07', '14' or '24'
+    """
+    mjd = float(mjd)
+    if mjd > 2400000.5:
+        mjd -= 2400000.5
+    return [era for era, start in CORALIE_ERAS if mjd >= start][-1]
+
+
 # must define the tqdm module as we need to turn it off in certain circumstances
 def tqdm_module(use_tqdm: bool = True, verbose: int = 2):
     """

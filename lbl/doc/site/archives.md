@@ -36,6 +36,19 @@ under a name any disk takes, Windows included ([Your data](data_root.md)).
 HARPS is optical: LBL's telluric cleaning is on by default (off for NIRPS
 and SPIRou).
 
+## CORALIE, from DACE
+
+CORALIE's spectra come from DACE (Geneva), which serves since 2026 every
+era reduced again by espdr (DRS-3.3.12): the `S2D_A`, blaze corrected on a
+barycentric vacuum grid, 5.8 MB each, read as `CORALIE DACE` into
+`CORALIE_DACE/science/<star>_C98/` (and `_C07`, `_C14`, `_C24`): an era is
+an object of its own, since the instrument changed in 2007, 2014 and 2024
+(CORALIE98 has 68 orders, the later eras 69). DACE finds the star by its
+catalogue name (HD, GJ, HIP...), and is asked anonymously: public spectra
+only. HD 23079 (on 2026-11-19): 41, 20 and 75 spectra in C98, C07 and C14;
+the delivered velocities agree with DACE's CCF to 2.5-3.7 m/s rms, their
+errors 5 to 13% smaller.
+
 ## Spectra downloaded by hand
 
 Spectra from the archives' own pages, from a colleague or from a disk go

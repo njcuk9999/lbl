@@ -49,6 +49,12 @@ cleaned by LBL. HAM and EGGS apart.
 ESPRESSO: ESO's S2D_A (blaze corrected, 65 MB each), a run per mode and
 binning (HR 2x1, UHR...), the telluric lines cleaned by LBL.
 
+CORALIE: DACE's S2D_A (fetch.dace; public, every era reduced again by
+espdr in 2026: blaze corrected, barycentric, 5.8 MB each), LBL's CORALIE
+DACE, a run per era (C98, C07, C14, C24: CORALIE98 has 68 orders, the
+later eras 69), the telluric lines cleaned by LBL. DACE finds the star by
+its catalogue name, not by where the telescope pointed.
+
 The exposures of every archive are matched to the star by where the
 telescope pointed, then those whose target name is that of another star of
 a catalogue the star is in (the companion of a binary) are left out
@@ -73,6 +79,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from lbl.core.base import harps_eggs, portable_name
 
+from . import dace
 from . import observatories as obs
 from . import tng
 from .log import log
@@ -100,6 +107,7 @@ INSTRUMENTS: Dict[str, Dict[str, Any]] = {
     'NIRPS': dict(label='NIRPS', size=24.0),
     'HARPS': dict(label='HARPS', size=1.5),
     'ESPRESSO': dict(label='ESPRESSO', size=65.0),
+    'CORALIE': dict(label='CORALIE', size=5.8),
 }
 
 
@@ -629,6 +637,18 @@ def _get_espresso(one: Dict[str, Any], science: str, calib: str) -> str:
     return ''
 
 
+def _get_dace(one: Dict[str, Any], science: str, calib: str) -> str:
+    """a spectrum of CORALIE from DACE: its S2D_A (espdr, blaze corrected,
+    barycentric), as it is"""
+    try:
+        dace.download(one['spectrum'], 'S2D_A',
+                      os.path.join(science, one['name']))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError,
+            RuntimeError) as err:
+        return f'{type(err).__name__}: {err}'
+    return ''
+
+
 # -----------------------------------------------------------------------------
 # The runs of LBL of an instrument for a star
 # -----------------------------------------------------------------------------
@@ -728,5 +748,20 @@ def groups(target: str, inst: str, root: str,
                         f'ESPRESSO.{one["id"]}_S2D_A.fits'))
                         for one, it in zip(found, kinds) if it == kind],
                     get=_get_espresso))
+        return out
+    if inst == 'CORALIE':
+        _, found = dace.spectra(dace.names(ident or identify(target)))
+        out = []
+        # an era a run (CORALIE98 has 68 orders, the later eras 69), in
+        #   folders of their own as the window's dispatch names them
+        for era in dict.fromkeys(one['era'] for one in found):
+            key = 'C' + era.replace('CORALIE', '')
+            out.append(dict(
+                key=key, obj=_setting(obj, key), lbl='CORALIE',
+                source='DACE', input='*S2D_A.fits', params={},
+                spectra=[dict(id=one['id'], spectrum=one['spectrum'],
+                              name=_safe(one['name']))
+                         for one in found if one['era'] == era],
+                get=_get_dace))
         return out
     raise ValueError(f'no instrument {inst} for LBL: {", ".join(INSTRUMENTS)}')

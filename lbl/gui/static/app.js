@@ -373,7 +373,7 @@ function showSub(name) {
 }
 
 // ── the public archives (archives.py, through lbl.gui.fetch) ───────────
-const ARCHIVE_INSTRUMENTS = [['SPIROU', 'SPIRou'], ['NIRPS', 'NIRPS'], ['HARPS', 'HARPS'], ['HARPSN', 'HARPS-N'], ['SOPHIE', 'SOPHIE'], ['ESPRESSO', 'ESPRESSO']];
+const ARCHIVE_INSTRUMENTS = [['SPIROU', 'SPIRou'], ['NIRPS', 'NIRPS'], ['HARPS', 'HARPS'], ['HARPSN', 'HARPS-N'], ['SOPHIE', 'SOPHIE'], ['ESPRESSO', 'ESPRESSO'], ['CORALIE', 'CORALIE']];
 const BIG_FETCH_MB = 5000;
 let ARCHIVE = null;
 let archiveChosen = new Set();

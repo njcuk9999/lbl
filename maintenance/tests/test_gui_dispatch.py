@@ -860,3 +860,62 @@ def test_harps_eggs_with_nirps_goes_with_eggs():
         assert harps_eggs(mode) is eggs
         head = {} if mode is None else {"HIERARCH ESO INS MODE": mode}
         assert dispatch._setting("HARPS", [head]) == ("EGGS" if eggs else "")
+
+
+def test_coralie_its_two_reductions_and_its_eras(tmp_path):
+    """CORALIE as DACE serves it: espdr's S2D_A (an ESO pipeline's product)
+    read by CORALIE DACE, its own DRS's e2ds by CORALIE; each into the
+    folder of its era by the date of the exposure"""
+    from lbl.core.base import coralie_era
+    assert dispatch.folder_of("CORALIE", "None") == "CORALIE"
+    assert dispatch.folder_of("CORALIE", "DACE") == "CORALIE_DACE"
+    assert [coralie_era(mjd) for mjd in (51121.9, 54199.4, 54253.9,
+                                         56966.3, 56974.7, 60599.25,
+                                         60599.89, 2457971.8)] == \
+        ["98", "98", "07", "07", "14", "14", "24", "14"]
+    s2d = tmp_path / "r.CORALIE.2017-08-06T07:15:01.000_S2D_A.fits"
+    head = fits.Header()
+    head["INSTRUME"] = "CORALIE"
+    head["MJD-OBS"] = 57971.30
+    head["HIERARCH ESO PRO CATG"] = "S2D_A"
+    head["HIERARCH ESO OBS TARG NAME"] = "HD23079"
+    fits.HDUList([fits.PrimaryHDU(header=head), fits.ImageHDU(
+        np.ones((2, 8), "f4"), name="SCIDATA")]).writeto(s2d)
+    e2ds = tmp_path / "CORALIE.2001-02-23T00:25:30.000_e2ds_A.fits"
+    head = fits.Header()
+    head["INSTRUME"] = "CORALIE"
+    head["HIERARCH ESO DRS BJD"] = 2451963.52
+    head["HIERARCH ESO DRS BLAZE FILE"] = "CORALIE.2001-02-22_blaze_A.fits"
+    head["HIERARCH ESO OBS TARG NAME"] = "HD23079"
+    fits.PrimaryHDU(np.ones((2, 8), "f4"), head).writeto(e2ds)
+    one, two = dispatch.read(str(s2d)), dispatch.read(str(e2ds))
+    assert (one["source"], one["kind"], one["setting"], one["blaze"]) == \
+        ("DACE", "science", "C14", None)
+    assert (two["source"], two["kind"], two["setting"], two["blaze"]) == \
+        ("None", "science", "C98", "CORALIE.2001-02-22_blaze_A.fits")
+
+
+def test_coralie_in_the_archive_search(monkeypatch):
+    """the archive search asks DACE for CORALIE: a run per era"""
+    from lbl.gui.fetch import dace, spectra
+    found = [dict(id=f'{night}/r.CORALIE.{night}T01:02:03.000_S2D_A.fits',
+                  spectrum=str(num), era=era,
+                  name=f'r.CORALIE.{night}T01:02:03.000_S2D_A.fits')
+             for num, (night, era) in enumerate([
+                 ('2001-02-22', 'CORALIE98'), ('2017-08-05', 'CORALIE14'),
+                 ('2017-08-06', 'CORALIE14')])]
+    asked = []
+    monkeypatch.setattr(dace, 'spectra',
+                        lambda names: asked.append(names) or (names[0],
+                                                              found))
+    out = spectra.groups('HD 23079', 'CORALIE', '/tmp', dict(
+        main='HD 23079', aliases=['HD 23079', 'HIP 17096', 'TYC 1'],
+        ra=54.9, dec=-52.9))
+    assert asked == [['HD23079', 'HIP17096']]
+    assert [(one['key'], one['obj'], one['lbl'], one['source'],
+             len(one['spectra'])) for one in out] == [
+        ('C98', 'HD23079_C98', 'CORALIE', 'DACE', 1),
+        ('C14', 'HD23079_C14', 'CORALIE', 'DACE', 2)]
+    assert out[0]['spectra'][0]['name'] == \
+        'r.CORALIE.2001-02-22T01-02-03.000_S2D_A.fits'
+    assert out[1]['get'] is spectra._get_dace
