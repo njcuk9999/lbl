@@ -60,7 +60,7 @@ InstrumentsType = Union[default.Instrument,
                         harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO, harpsn.HarpsN_ESSP,
                         maroonx.MaroonX,
                         sophie.Sophie,
-                        coralie.Coralie,
+                        coralie.Coralie, coralie.Coralie_DACE,
                         expres.Expres, expres.Expres_ESSP,
                         neid.Neid_ESSP,
                         espadons.Espadons,
@@ -75,7 +75,7 @@ InstrumentsList = (default.Instrument,
                    harpsn.HarpsN_ORIG, harpsn.HarpsN_ESO, harpsn.HarpsN_ESSP,
                    maroonx.MaroonXRed, maroonx.MaroonXBlue,
                    sophie.Sophie,
-                   coralie.Coralie,
+                   coralie.Coralie, coralie.Coralie_DACE,
                    expres.Expres, expres.Expres_ESSP,
                    neid.Neid_ESSP,
                    espadons.Espadons,
@@ -115,6 +115,7 @@ InstDict['SOPHIE'] = dict()
 InstDict['SOPHIE']['None'] = sophie.Sophie
 InstDict['CORALIE'] = dict()
 InstDict['CORALIE']['None'] = coralie.Coralie
+InstDict['CORALIE']['DACE'] = coralie.Coralie_DACE
 InstDict['EXPRES'] = dict()
 InstDict['EXPRES']['ORIG'] = expres.Expres
 InstDict['EXPRES']['ESSP'] = expres.Expres_ESSP
@@ -324,13 +325,14 @@ def load_instrument(args: ParamDict,
     if instrument in InstDict:
         # get the instrument dict
         source_dict = InstDict[instrument]
-        # None should only be in there if there are no data sources
-        if 'None' in source_dict.keys():
-            inst_class = source_dict['None']
-        # use the data source to get instance
-        elif data_source in source_dict:
+        # use the data source to get instance (CORALIE has None, its own
+        #   DRS, and DACE)
+        if data_source in source_dict:
             # get the instance from the source dictionary
             inst_class = source_dict[data_source]
+        # None otherwise: an instrument of one source takes any
+        elif 'None' in source_dict.keys():
+            inst_class = source_dict['None']
         else:
             emsg = 'Data source "{0}" invalid'
             eargs = [data_source]

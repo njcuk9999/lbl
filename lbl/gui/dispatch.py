@@ -210,6 +210,10 @@ EMPTY = "an empty file (0 bytes): a download that did not finish?"
 WHOLE = ("EXPRES", "NEID", "SOPHIE")
 #: the files of a target folder (targets.PATTERNS)
 SPECTRUM_PATTERNS = ("*.fits", "*.fits.gz", "*.hd5")
+#: the instruments LBL read from one source before it had others, the
+#:    folder of that source keeping the instrument's bare name: CORALIE/,
+#:    its own DRS's e2ds, CORALIE_DACE/ beside it since 2026
+BARE = {"CORALIE": "None"}
 #: ESPRESSO's setting that needs no folder of its own (the most used; the
 #:    archive search names its folders alike: fetch.spectra.ESPRESSO_MAIN)
 ESPRESSO_MAIN = "HR11"
@@ -226,9 +230,10 @@ def _inst_dict() -> dict:
 def folder_of(instrument: str, source) -> str:
     """The DATA_DIR of an instrument and a data source under a root:
     {INSTRUMENT}_{SOURCE}, or {INSTRUMENT} for an instrument LBL reads from
-    one source only (ESPRESSO, SOPHIE, NEID)."""
+    one source only (ESPRESSO, SOPHIE, NEID), and for the first source of
+    one that had only it (BARE)."""
     sources = _inst_dict().get(instrument) or {}
-    if len(sources) <= 1:
+    if len(sources) <= 1 or BARE.get(instrument) == str(source):
         return instrument
     return "%s_%s" % (instrument, source)
 
@@ -818,7 +823,7 @@ def _kind(family, source, name, headers, extnames, primary):
         if re.search(r"t\.fits(\.gz)?$", lower) or "tcorr" in lower:
             return "science", ""
         return "unused", "APERO's other products (LBL reads the t.fits)"
-    if source == "ESO" or family == "ESPRESSO":
+    if source in ("ESO", "DACE") or family == "ESPRESSO":
         read = ESO_SCIENCE.get(family, ESO_SCIENCE["other"])
         # the archive search's own: ESO's S2D divided by its telluric model
         if catg.upper() in read or "HIERARCH LBL TELL FLOOR" in primary:
@@ -1032,6 +1037,10 @@ def read(path: str) -> dict:
     elif family == "NEID":
         # NEID's own L2 files: LBL reads NEID through the ESSP's only
         source = None
+    elif family == "CORALIE":
+        # espdr's S2D, as DACE serves every era reduced again (an ESO
+        #   pipeline's product), else its own DRS's e2ds
+        source = "DACE" if "HIERARCH ESO PRO CATG" in primary else "None"
     elif family in ("SPIROU", "NIRPS", "HARPS", "HARPSN"):
         catg = str(_card(headers, "HIERARCH ESO PRO CATG") or "").upper()
         if source is None and catg in ESO_CALIB:
@@ -1080,7 +1089,7 @@ def read(path: str) -> dict:
             break
     out["place"] = position(headers, out["year"])
     if kind == "science" and family in ("HARPS", "HARPSN", "SOPHIE",
-                                        "CORALIE"):
+                                        "CORALIE") and source != "DACE":
         key = {"HARPS": "HIERARCH ESO DRS BLAZE FILE",
                "CORALIE": "HIERARCH ESO DRS BLAZE FILE",
                "HARPSN": "HIERARCH TNG DRS BLAZE FILE",

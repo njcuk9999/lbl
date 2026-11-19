@@ -20,8 +20,12 @@ and the models every instrument shares:
 
 A `DATA_DIR` is named after the LBL instrument and data source that read
 its spectra, or the instrument alone when LBL reads it from one source
-only. It is an ordinary LBL data folder: a wrap runs there as it always
-has, the window or not.
+only. CORALIE has two: its own DRS's `e2ds_A` in `CORALIE/` (source
+`None`), and in `CORALIE_DACE/` the `S2D_A` that DACE serves of every era
+reduced again by espdr (DRS-3.3.12, 2026: blaze corrected, barycentric,
+vacuum). CORALIE98 has 68 orders and the later eras 69: an era is an
+object of its own. It is an ordinary LBL data folder: a wrap runs there as
+it always has, the window or not.
 
 {{folders}}
 
@@ -35,7 +39,8 @@ tab counts those that can be dispatched. **Dispatch** reads their headers
 
 - **The reader**: the instrument (`INSTRUME`; NIRPS's HE or HA mode) and the
   data source, from the layout of the file (APERO's `t.fits`, ESO's
-  `S2D_A`, the CADC's, the HARPS DRS's `e2ds_A`...).
+  `S2D_A`, the CADC's, the HARPS DRS's `e2ds_A`, CORALIE's `S2D_A` from
+  DACE...).
 - **What it is**: a spectrum LBL reads (into `science/<star>/`), a
   calibration (a blaze, into `calib/`, under the name the spectra's headers
   give it, below), or another product of its pipeline (a CCF, an S1D...),

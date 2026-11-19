@@ -767,6 +767,214 @@ class Coralie(Instrument):
 
 
 # =============================================================================
+# Define CORALIE DACE class
+# =============================================================================
+class Coralie_DACE(Coralie):
+    """
+    CORALIE as DACE serves it since 2026: every era (CORALIE98, CORALIE07,
+    CORALIE14, CORALIE24) reduced again by the ESPRESSO pipeline (espdr,
+    DACE's DRS-3.3.12), its S2D_A files blaze corrected, their wavelengths
+    barycentric and in vacuum (WAVEDATA_VAC_BARY), the keys of the pipeline
+    under HIERARCH ESO QC. The eras do not have the same orders (68 for
+    CORALIE98, 69 after), so each is an object of its own
+    """
+    def __init__(self, params: base_classes.ParamDict,
+                 args: base_classes.ParamDict):
+        # call to super function
+        super().__init__(params, args)
+        self.name = 'CORALIE_DACE'
+        # extra parameters (specific to instrument)
+        self.default_template_name = 'Template_{0}_CORALIE_DACE.fits'
+        self.default_sample_wave_name = 'sample_wave_grid_coralie_dace.fits'
+        # define wave limits in nm
+        self.wavemin = 386.6
+        self.wavemax = 690.0
+        # set parameters for instrument
+        self.params = params
+        # override params
+        self.param_override()
+        # update from args
+        self.update_from_args(args)
+
+    def param_override(self):
+        """
+        Parameter override for CORALIE parameters from DACE
+        (update default params)
+
+        :return: None - updates self.params
+        """
+        # set function name
+        func_name = __NAME__ + '.Coralie_DACE.override()'
+        # first run the inherited method
+        super().param_override()
+        # define the default science input files
+        self.param_set('INPUT_FILE', '*S2D_A.fits', source=func_name)
+        # PCA2D reads the S2D through this class, its grid brought back to
+        #    the observer's frame (barycentric here)
+        self.param_set('PCA2D_INPUT_FORMAT', 's2d', source=func_name)
+        self.param_set('PCA2D_INPUT_PATTERN', '*_S2D_A.fits', source=func_name)
+        self.param_set('PCA2D_TO_OBSERVER', True, source=func_name)
+        self.param_set('PCA2D_MASK_SHARE', 0.5, source=func_name)
+        # two observer-frame components, as HARPS: in the visible the
+        #    atmosphere is mostly O2, which follows the airmass, and water,
+        #    which follows the water column
+        self.param_set('PCA2D_N_EARTH', 2, source=func_name)
+        # the windows of the PCA2D figures (centre:width in nm), HARPS's:
+        #    the O2 B and gamma bands, water, sodium D, magnesium b
+        self.param_set('PCA2D_WINDOWS', source=func_name,
+                       value=['687.75:2.5', '630.75:2', '594.25:2.25',
+                              '651.0:2.5', '586.5:1.5', '519.0:2'])
+        # The input science data are blaze corrected
+        self.param_set('BLAZE_CORRECTED', True, source=func_name)
+        # define the compil minimum and maximum wavelength allowed for lines
+        self.param_set('COMPIL_WAVE_MIN', self.wavemin, source=func_name)
+        self.param_set('COMPIL_WAVE_MAX', self.wavemax, source=func_name)
+        # define the name of the sample wave grid file (saved to the calib dir)
+        self.param_set('SAMPLE_WAVE_GRID_FILE', self.default_sample_wave_name,
+                       source=func_name)
+        # ---------------------------------------------------------------------
+        # Header keywords
+        # ---------------------------------------------------------------------
+        # define the key that gives the mid exposure time (a BJD)
+        self.param_set('KW_MID_EXP_TIME', 'HIERARCH ESO QC BJD',
+                       source=func_name)
+        # define the start time of the observation
+        self.param_set('KW_MJDATE', 'MJD-OBS', source=func_name)
+        # define snr keyword
+        self.param_set('KW_SNR', 'HIERARCH ESO QC ORDER50 SNR',
+                       source=func_name)
+        # define berv keyword (km/s)
+        self.param_set('KW_BERV', 'HIERARCH ESO QC BERV', source=func_name)
+        # define the airmass of the observation (that of the DIMM is a
+        #    placeholder, 9999.999)
+        self.param_set('KW_AIRMASS', 'HIERARCH ESO OBS TARG AIRMASS',
+                       source=func_name)
+        # define the human date of the observation
+        self.param_set('KW_DATE', 'DATE-OBS', source=func_name)
+        # define the filename of the wave solution (the same calibration
+        #    slot in every era)
+        self.param_set('KW_WAVEFILE', 'HIERARCH ESO PRO REC1 CAL27 NAME',
+                       source=func_name)
+        # define the SNR in chosen order
+        self.param_set('KW_EXT_SNR', 'HIERARCH ESO QC ORDER50 SNR',
+                       source=func_name)
+        # define the barycentric julian date
+        self.param_set('KW_BJD', 'HIERARCH ESO QC BJD', source=func_name)
+
+    def load_blaze_from_science(self, science_file: str,
+                                sci_image: np.ndarray,
+                                sci_hdr: io.LBLHeader,
+                                calib_directory: str, normalize: bool = True
+                                ) -> Tuple[np.ndarray, bool]:
+        """
+        Load the blaze file using a science file header: the S2D_A of DACE
+        are blaze corrected, so the blaze is ones
+
+        :param science_file: str, the science file name
+        :param sci_image: np.array - the science image (for the shape of the
+                          blaze)
+        :param sci_hdr: fits.Header - the science file header
+        :param calib_directory: str, the directory containing calibration files
+        :param normalize: bool, if True normalized the blaze per order
+
+        :return: the blaze and a flag whether blaze is set to ones (science
+                 image already blaze corrected)
+        """
+        _ = science_file, sci_hdr, calib_directory, normalize
+        return np.ones_like(sci_image), True
+
+    def no_blaze_corr(self, sci_image: np.ndarray,
+                      sci_wave: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        If we do not have a blaze we need to create an artificial one so that
+        the s1d has a proper weighting
+
+        :param sci_image: the science image (will be unblazed corrected)
+        :param sci_wave: the wavelength solution for the science image
+
+        :return: Tuple, 1. the unblazed science_image, 2. the artifical blaze
+        """
+        # get the wave centers for each order
+        wave_cen = sci_wave[:, sci_wave.shape[1] // 2]
+        # find the 'diffraction' order for a given 'on-detector' order
+        dpeak = wave_cen / (wave_cen - np.roll(wave_cen, 1))
+        dfit, _ = mp.robust_polyfit(1 / wave_cen, dpeak, 1, 3)
+        # use the fit to get the blaze assuming a sinc**2 profile: the
+        #   minima of a given order are at the consecutive orders
+        blaze = np.zeros(sci_wave.shape)
+        # loop around each order
+        for order_num in range(sci_wave.shape[0]):
+            # get the wave grid for this order
+            owave = sci_wave[order_num]
+            # the center of this order (a small offset avoids a division by
+            #   zero in the sinc at phase = 0)
+            owave_cen = owave[len(owave) // 2] + 1e-6
+            # calculate the period of this order
+            period = owave_cen / np.polyval(dfit, 1 / owave)
+            # the phase of the sinc**2 (sin**2 has half the period of sin)
+            phase = np.pi * (owave - owave_cen) / period
+            # assume the sinc profile
+            blaze[order_num] = (np.sin(phase) / phase) ** 2
+        # the blaze is not expressed as a flux density but the science
+        # spectrum is. We match the two
+        gradwave = np.gradient(sci_wave, axis=1)
+        for order_num in range(blaze.shape[0]):
+            gradwave[order_num] /= np.nanmedian(gradwave[order_num])
+        # un-correct the science image
+        sci_image = (sci_image / gradwave) * blaze
+        # return un-corrected science image and the calculated blaze
+        return sci_image, blaze
+
+    def get_wave_solution(self, science_filename: Optional[str] = None,
+                          data: Optional[np.ndarray] = None,
+                          header: Optional[io.LBLHeader] = None
+                          ) -> np.ndarray:
+        """
+        Get a wave solution from a file: WAVEDATA_VAC_BARY, its fourth
+        extension
+
+        :param science_filename: str, the absolute path to the file
+        :param data: np.ndarray, not used
+        :param header: fits.Header, not used
+
+        :return: np.ndarray, the wave map. Shape = (num orders x num pixels)
+        """
+        _ = data, header
+        # load wave map
+        wavemap = io.load_fits(science_filename, extnum=4)
+        # the wave solution is in Angstrom - convert to nm for consistency
+        return wavemap / 10.0
+
+    def get_berv_transmission(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        The BERV the telluric transmission must be shifted by, in m/s: the
+        wave solution is already barycentric (get_berv returns zero), but
+        the atmosphere moved by the header's BERV
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the velocity in m/s
+        """
+        hdr_key = self.params['KW_BERV']
+        try:
+            return float(sci_hdr.get_hkey(hdr_key, dtype=float)) * 1000
+        except Exception:
+            return 0.0
+
+    def get_berv(self, sci_hdr: io.LBLHeader) -> float:
+        """
+        Get the Barycenteric correction for the RV in m/s: none, the wave
+        solution of espdr is already barycentric
+
+        :param sci_hdr: io.LBLHeader, the science header
+
+        :return: float, the berv (0)
+        """
+        _ = sci_hdr
+        return 0.0
+
+
+# =============================================================================
 # Start of code
 # =============================================================================
 if __name__ == "__main__":
