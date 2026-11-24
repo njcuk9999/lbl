@@ -470,8 +470,9 @@ def _velocity_template(runparams: dict, keyword_args: dict, instrument: str,
 
 def _teff_of(runparams: dict, objname: str):
     """The Teff the wrap gives an object (OBJECT_TEFF, in the order of
-    OBJECT_SCIENCE; the object PCA2D corrected for <object>_pca2d), None
-    when it gives none"""
+    OBJECT_SCIENCE), or the object it was made from: <object>_pca2d (PCA2D's
+    correction), <object>_inj (an injection test), <object>_tc (telluric
+    cleaning), in any combination. None when it gives none"""
     names = runparams.get('OBJECT_SCIENCE')
     teffs = runparams.get('OBJECT_TEFF')
     if teffs is None or names is None:
@@ -479,10 +480,16 @@ def _teff_of(runparams: dict, objname: str):
     if not isinstance(teffs, (list, tuple)):
         return teffs
     names = list(names) if isinstance(names, (list, tuple)) else [names]
-    for name in (objname, str(objname).replace('_pca2d', '')):
+    name = str(objname)
+    while True:
         if name in names and names.index(name) < len(teffs):
             return teffs[names.index(name)]
-    return None
+        for suffix in ('_pca2d', '_inj', '_tc'):
+            if name.endswith(suffix):
+                name = name[:-len(suffix)]
+                break
+        else:
+            return None
 
 
 def _put_aside(data_dir: str, name: str, science_subdir: str, previous):

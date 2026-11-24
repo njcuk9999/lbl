@@ -158,3 +158,15 @@ def test_known_orbits_win_over_a_ccf_not_over_the_template(tmp_path):
                                    '', np.zeros(2), orbits, 'S',
                                    str(tmp_path), '', lambda x, **k: x)
     assert list(start) == [5.0, -50.0]
+
+
+def test_the_teff_of_an_object_made_from_another():
+    """the template of an injection test, of PCA2D's corrected spectra or of
+    telluric-cleaned ones gets its object's Teff (its first CCF needs the
+    PHOENIX model)"""
+    from lbl.recipes.lbl_wrap import _teff_of
+    runparams = dict(OBJECT_SCIENCE=['TOI904', 'GJ1'],
+                     OBJECT_TEFF=[3800, 3300])
+    assert [_teff_of(runparams, name) for name in (
+        'TOI904', 'TOI904_inj', 'TOI904_inj_pca2d', 'GJ1_tc_pca2d',
+        'OTHER')] == [3800, 3800, 3800, 3300, None]
