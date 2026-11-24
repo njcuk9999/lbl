@@ -152,3 +152,17 @@ def test_the_wrap_makes_the_velocity_template_first(tmp_path, monkeypatch):
         flat, overwrite=True)
     lbl_wrap._velocity_template(dict(SMALL_RV_SHIFT=False), **args)
     assert len(calls) == 2
+
+
+def test_a_shift_of_kilometres_per_second_is_iterated_to_convergence():
+    """Bouchy's step is the first order of the shift's expansion, right only
+    for a small shift: from 3 km/s off with no scan, two steps (the method
+    before) leave 50 m/s, the steps taken to convergence leave the noise's
+    precision"""
+    true = np.array([1.0e-5, -1.0e-5, 6.0e-6])
+    data, fits, grid = _data(true, noise=0.001)
+    errors = np.full(true.size, np.nan)
+    dv = ts.measure_velocities(data, fits, np.zeros(true.size), grid,
+                               scan=False, scan_step=2.5e-7, errors=errors)
+    expected = speed_of_light_ms * np.tanh(true)
+    assert np.all(np.abs(dv - expected) < 3 * errors + 0.5)

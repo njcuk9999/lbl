@@ -80,7 +80,15 @@ its own shift, `d_i = -(y_i - T_i) / T'_i`, of uncertainty `sigma_i / |T'_i|`
 (their weighted mean is the projection on the derivative, Bouchy's optimal
 weights), and the pixels are combined by LBL's mixture model
 (`odd_ratio_mean`, a Gaussian and a flat floor of outliers; Artigau et al.
-2022) rather than by the plain weighted mean. On synthetic spectra with 1 %
+2022) rather than by the plain weighted mean. Bouchy's step is the first
+order of the shift's expansion, right only for a small shift: it is
+iterated, the template and its derivative taken again at each new shift,
+until a step is 1 % of the spectrum's uncertainty or less (20 steps at
+most; a spectrum still moving is named in a warning). From 3 km/s off,
+with lines 4.5 km/s wide and no noise, one step leaves 1.4 km/s, two
+169 m/s, three 0.3 m/s, five nothing; on the synthetic spectra of the
+tests, from 3 km/s off with no scan, two steps (the method before
+2026-11-24) left 74 and 112 m/s, the iteration less than 0.1 m/s. On synthetic spectra with 1 %
 of bad pixels on the lines' flanks, after the scan, the velocities stay at
 0.8 m/s rms (the photon noise's) where the least squares of before are
 pulled to 22 m/s; without bad pixels the two agree (0.8 m/s).

@@ -34,8 +34,9 @@ ones and the even ones.
 With SMALL_RV_SHIFT False and no known orbits, the velocities of the spectra
 are first measured on the orders around COMPIL_SLOPE_REF_WAVE (a scan of the
 shift, then Bouchy et al. 2001 pixel by pixel on the template's Savitzky-
-Golay derivative, the pixels combined by LBL's mixture model, odd_ratio_mean)
-until they agree to MAX_CONVERGENCE_TEMPLATE_RV. They are kept in the
+Golay derivative, the pixels combined by LBL's mixture model, odd_ratio_mean,
+the steps iterated until they converge) until they agree to
+MAX_CONVERGENCE_TEMPLATE_RV. They are kept in the
 template's SCI_TABLE (VSYS), where PCA2D reads them for its star frame.
 
 The window is about one resolution element, not the 3 steps of the grid of
@@ -313,6 +314,14 @@ def fit_order(data: OrderData, io_: int, shifts: np.ndarray,
     return out
 
 
+#: Bouchy's steps on one spectrum (measure_velocities): taken until a step is
+#:   this fraction of the spectrum's uncertainty or less, or below
+#:   BOUCHY_FLOOR [m/s], BOUCHY_MAX_STEPS at most
+BOUCHY_TOLERANCE = 0.01
+BOUCHY_FLOOR = 1e-3
+BOUCHY_MAX_STEPS = 20
+
+
 def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
                        shifts: np.ndarray, lngrid: np.ndarray,
                        scan: bool, scan_step: float,
@@ -321,7 +330,7 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
     The velocity of each spectrum against the templates of some orders: the
     shift of the template that matches the spectrum (a scan of +-50 steps
     first when scan is True, then Bouchy et al. 2001 pixel by pixel,
-    combined by a mixture model)
+    combined by a mixture model, iterated until it converges)
 
     :param data: OrderData of the orders
     :param fits: dict, order index in data -> fit_order output
@@ -337,6 +346,7 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
     nfiles = len(shifts)
     delta = np.zeros(nfiles)
     steps = np.arange(-50, 51) * scan_step
+    unconverged = []
     for ifile in range(nfiles):
         xs, ys, ws, tm, td = [], [], [], [], []
         for io_, fit in fits.items():
@@ -380,8 +390,14 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
         #   Artigau et al. 2022) rather than by the plain weighted mean: a
         #   cosmic ray, a telluric residual or a bad pixel in one spectrum
         #   does not pull its velocity, which goes to PCA2D's star frame.
-        #   Twice, the template taken again at the new shift
-        for _ in range(2):
+        #   Bouchy's step is the first order of the shift's expansion, right
+        #   only for a small shift: it is iterated, the template and its
+        #   derivative taken again at each new shift, until the step is
+        #   BOUCHY_TOLERANCE of the spectrum's uncertainty or less
+        #   (BOUCHY_MAX_STEPS at most). From 3 km/s off, with lines 4.5 km/s
+        #   wide, two steps leave 169 m/s, three 0.3 m/s, five nothing
+        converged = False
+        for _ in range(BOUCHY_MAX_STEPS):
             pix_dv, pix_err = [], []
             for x, y, w, (grid, d0, d1) in zip(xs, ys, ws, tm):
                 model = np.interp(x - shift, grid, d0, left=np.nan,
@@ -407,7 +423,19 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
             shift += step
             if errors is not None:
                 errors[ifile] = C_MS * step_err
+            limit = BOUCHY_TOLERANCE * step_err \
+                if np.isfinite(step_err) else 0.0
+            if abs(step) <= limit or abs(step) * C_MS < BOUCHY_FLOOR:
+                converged = True
+                break
+        if not converged:
+            unconverged.append(ifile)
         delta[ifile] = shift
+    if unconverged:
+        msg = ('Velocities of the spectra: {0} of {1} still moving after {2} '
+               'Bouchy steps (spectra {3})')
+        log.warning(msg.format(len(unconverged), nfiles, BOUCHY_MAX_STEPS,
+                               ', '.join(str(i + 1) for i in unconverged)))
     # a feature displaced by +shift in ln(wavelength) is a velocity
     #   c tanh(shift) to add to the star's
     return C_MS * np.tanh(delta)
