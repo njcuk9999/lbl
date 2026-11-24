@@ -681,6 +681,7 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                          blaze_corrected=blaze_corr,
                          blaze_file=blaze_file,
                          skip_done=runparams['SKIP_LBL_COMPUTE'],
+                         object_teff=object_teff,
                          **keyword_args)
     # ---------------------------------------------------------------------
     # run the compile code

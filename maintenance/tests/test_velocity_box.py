@@ -37,15 +37,24 @@ def test_a_better_measurement_replaces_a_worse_never_the_reverse(tmp_path):
         assert json.load(handle)['spectra']['b.fits']['err'] == 3.0
 
 
-def test_the_corrected_spectra_share_their_object_s_box(tmp_path):
-    assert vb.path('/d', 'GJ1_pca2d') == vb.path('/d', 'GJ1')
-    assert vb.path('/d', 'GJ1_inj') != vb.path('/d', 'GJ1')
-    vb.update(str(tmp_path), 'GJ1', {'a.fits': dict(v=1.0)}, 'ccf')
-    got = vb.velocities(vb.read(str(tmp_path), 'GJ1_pca2d'),
-                        ['/p/a.fits', '/p/c.fits'])
-    assert list(got['found']) == [True, False]
-    assert got['v'][0] == 1.0 and np.isnan(got['v'][1])
-    assert list(got['by']) == ['ccf', '']
+def test_the_corrected_spectra_start_from_their_object_s_box(tmp_path):
+    """<object>_pca2d keeps its own box (its velocities are cleaner), and
+    starts from its object's for the spectra it lacks; an injection test
+    has its own"""
+    assert vb.path('/d', 'GJ1_pca2d') != vb.path('/d', 'GJ1')
+    assert vb.parent_object('GJ1_pca2d') == 'GJ1'
+    assert vb.parent_object('GJ1_inj') is None
+    vb.update(str(tmp_path), 'GJ1', {'a.fits': dict(v=1.0),
+                                     'b.fits': dict(v=2.0)}, 'template',
+              systemic=dict(v=1.5, by='ccf', n=2))
+    vb.update(str(tmp_path), 'GJ1_pca2d', {'a.fits': dict(v=1.2)},
+              'template')
+    got = vb.velocities(vb.read_start(str(tmp_path), 'GJ1_pca2d'),
+                        ['/p/a.fits', '/p/b.fits', '/p/c.fits'])
+    assert list(got['found']) == [True, True, False]
+    assert list(got['v'][:2]) == [1.2, 2.0]
+    assert vb.read_start(str(tmp_path), 'GJ1_pca2d')['systemic']['v'] == 1.5
+    assert list(vb.read(str(tmp_path), 'GJ1_pca2d')['spectra']) == ['a.fits']
 
 
 def test_a_nan_velocity_is_not_kept(tmp_path):
@@ -108,7 +117,8 @@ def test_the_template_starts_from_the_box_the_ccf_only_once(tmp_path,
 
     def fake_spectrum(inst, filename, load_science, blaze, calib_dir):
         read.append(filename)
-        return wave, _shifted(observed[os.path.basename(filename)], wave)
+        return wave, _shifted(observed[os.path.basename(filename)], wave), \
+            None
 
     monkeypatch.setattr(ts, 'spectrum_1d', fake_spectrum)
 

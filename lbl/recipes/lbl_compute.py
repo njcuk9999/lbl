@@ -57,6 +57,9 @@ ARGS_COMPUTE = [  # core
     # science
     'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'INPUT_FILE',
     'SCIENCE_TEMPLATE_FILE', 'COMPANION_TEMPLATE_FILE',
+    # the star's Teff: the PHOENIX model of the first CCF of its spectra
+    #   (the velocity box, lbl.science.velocity_box)
+    'OBJECT_TEFF',
     'BLAZE_FILE', 'BLAZE_CORRECTED', 'HP_WIDTH', 'USE_NOISE_MODEL',
     # plotting
     'PLOT', 'PLOT_COMPUTE_CCF', 'PLOT_COMPUTE_LINES',
@@ -200,6 +203,22 @@ def setup_compute(inst: InstrumentsType,
     ref_table = general.make_ref_dict(inst, reftable_file, reftable_exists,
                                       science_files, mask_file, calib_dir)
 
+    # -------------------------------------------------------------------------
+    # Step 4b: the velocity box (lbl.science.velocity_box): the spectra it
+    #   lacks measured by a CCF against the PHOENIX model, the first time,
+    #   so that every spectrum starts from its own velocity (not in the
+    #   array jobs of a cluster, ITERATION/TOTAL: each would do it again)
+    # -------------------------------------------------------------------------
+    multi_mode = inst.params['ITERATION'] >= 0 and inst.params['TOTAL'] >= 0
+    if inst.params['DATA_TYPE'] == 'SCIENCE' and not multi_mode:
+        from lbl.core import base
+        from lbl.science import template_scatter
+        tqdm = base.tqdm_module(inst.params['USE_TQDM'],
+                                log.console_verbosity)
+        template_scatter.fill_box(inst, science_files,
+                                  inst.load_science_file, blaze, calib_dir,
+                                  inst.params['OBJECT_SCIENCE'],
+                                  inst.params['DATA_DIR'], models_dir, tqdm)
     # -------------------------------------------------------------------------
     # Step 5: Get the systemic velocity properties for template
     # -------------------------------------------------------------------------
@@ -500,6 +519,16 @@ def compute_file(inst: InstrumentsType, ctx: Dict[str, Any], run: ComputeRun,
     # ---------------------------------------------------------------------
     inst.write_lblrv_table(ref_table, lblrv_file, sci_hdr, outputs)
     outputs['LBLRV_FILE'] = lblrv_file
+    # the velocity LBL measured, into the object's velocity box (on the
+    #   box's scale: general.compute_rv), the best start of the next steps
+    if np.isfinite(outputs.get('BOX_VELOCITY', np.nan)):
+        from lbl.science import velocity_box
+        velocity_box.update(
+            inst.params['DATA_DIR'], inst.params['OBJECT_SCIENCE'],
+            {science_file: dict(v=outputs['BOX_VELOCITY'],
+                                err=outputs.get('BOX_VELOCITY_ERR'),
+                                mjd=outputs['MJDATE_ALL'][it],
+                                berv=inst.params.get('BERV'))}, 'lbl')
     # ---------------------------------------------------------------------
     # 6.9 Time taken stats (For next iteration)
     # ---------------------------------------------------------------------

@@ -7,28 +7,33 @@ needs a starting point and brought up to date as the measurements improve.
 
 A spectrum's entry, under its file name:
 
-    v      the star's velocity in that spectrum [m/s], the BERV taken out
-           (relativistic composition): what the template registers the
-           spectrum at (template_scatter.star_shift)
-    err    its uncertainty [m/s] (NaN for a CCF)
+    v      the star's velocity in that spectrum [m/s], the BERV taken out:
+           what the template registers the spectrum at
+           (template_scatter.star_shift)
+    err    its uncertainty [m/s] (none for a CCF)
     by     what measured it: 'ccf' (against the PHOENIX model at the star's
-           Teff, a few hundred m/s), 'template' (the template's Bouchy
-           passes), 'lbl' (LBL's own velocity)
+           Teff, a few tens of m/s), 'template' (the template's Bouchy
+           passes), 'lbl' (LBL's own velocity, lbl_compute)
     mjd    the spectrum's time, berv its BERV [m/s], when the date of the
            measurement
 
-and the box's 'systemic': the median of the CCF velocities, a clean
+and the box's 'systemic': the median of the first CCF velocities, a clean
 systemic velocity of the star against the model.
 
 An entry is replaced by a measurement of a higher rank (ccf < template <
-lbl) or by a newer one of the same rank, never by one of a lower rank. The
-corrected spectra of PCA2D (<object>_pca2d) are the same exposures and share
-their object's box; an injection test (<object>_inj) has its own, its
-velocities carrying the injected signals.
+lbl) or by a newer one of the same rank, never by one of a lower rank.
+
+Each object has its own box. PCA2D's corrected spectra (<object>_pca2d) are
+the same exposures, but their velocities are cleaner (no telluric imprint
+where the star's lines cross the tellurics), and a template of the
+delivered spectra made again must not overwrite them: they keep their own
+box, and start from their object's for the spectra theirs lacks
+(read_start). An injection test (<object>_inj) has its own, its velocities
+carrying the injected signals.
 
 The file is written whole (a temporary file renamed over it), under a lock
-where the system offers one, so that two runs writing at once both keep
-their entries.
+where the system offers one, so that two runs writing at once (lbl_compute's
+parallel workers) both keep their entries.
 
 @author: artigau
 """
@@ -47,22 +52,22 @@ FOLDER = 'velocities'
 #: the rank of each kind of measurement: a higher one replaces a lower one
 RANK = dict(ccf=0, template=1, lbl=2)
 #: the suffix of PCA2D's corrected spectra (lbl.recipes.lbl_pca2d.SUFFIX):
-#:   their object shares the box of the object without it
+#:   they start from the box of the object without it
 PCA2D_SUFFIX = '_pca2d'
 
 
-def box_object(objname: str) -> str:
-    """The object whose box a spectrum's object reads: itself, or the object
-    PCA2D corrected (<object>_pca2d is the same exposures)"""
+def parent_object(objname: str) -> Optional[str]:
+    """The object whose box an object starts from when its own lacks a
+    spectrum: the object PCA2D corrected for <object>_pca2d, None otherwise"""
     name = str(objname)
     if name.endswith(PCA2D_SUFFIX):
-        name = name[:-len(PCA2D_SUFFIX)]
-    return name
+        return name[:-len(PCA2D_SUFFIX)]
+    return None
 
 
 def path(data_dir: str, objname: str) -> str:
     """The box of an object: DATA_DIR/velocities/<object>.json"""
-    return os.path.join(str(data_dir), FOLDER, box_object(objname) + '.json')
+    return os.path.join(str(data_dir), FOLDER, str(objname) + '.json')
 
 
 def read(data_dir: str, objname: str) -> Dict[str, Any]:
@@ -74,9 +79,25 @@ def read(data_dir: str, objname: str) -> Dict[str, Any]:
             box = json.load(handle)
     except (OSError, ValueError):
         box = dict()
-    box.setdefault('object', box_object(objname))
+    box.setdefault('object', str(objname))
     box.setdefault('systemic', None)
     box.setdefault('spectra', dict())
+    return box
+
+
+def read_start(data_dir: str, objname: str) -> Dict[str, Any]:
+    """The box an object starts from: its own, with its parent's entries
+    (parent_object) for the spectra it lacks, and its parent's systemic
+    velocity when it has none. Read only"""
+    box = read(data_dir, objname)
+    parent = parent_object(objname)
+    if parent is None:
+        return box
+    other = read(data_dir, parent)
+    for key, entry in other['spectra'].items():
+        box['spectra'].setdefault(key, entry)
+    if box.get('systemic') is None:
+        box['systemic'] = other.get('systemic')
     return box
 
 
@@ -113,10 +134,10 @@ def update(data_dir: str, objname: str, entries: Dict[str, Dict[str, Any]],
            by: str, systemic: Optional[Dict[str, Any]] = None
            ) -> Dict[str, Any]:
     """
-    Merge measurements into an object's box and write it
+    Merge measurements into an object's own box and write it
 
     :param data_dir: str, DATA_DIR
-    :param objname: str, the object (its box: box_object)
+    :param objname: str, the object
     :param entries: dict, file name (any path: its base name is the key) ->
                     dict(v, err, mjd, berv)
     :param by: str, what measured them (RANK)
@@ -145,11 +166,19 @@ def update(data_dir: str, objname: str, entries: Dict[str, Dict[str, Any]],
                                 berv=_number(entry.get('berv')), when=when)
         if systemic is not None:
             box['systemic'] = dict(systemic, when=when)
-        tmp = filename + '.tmp'
+        tmp = filename + '.tmp.{0}'.format(os.getpid())
         with open(tmp, 'w', encoding='utf-8') as handle:
             json.dump(box, handle, indent=1, sort_keys=True)
         os.replace(tmp, filename)
     return box
+
+
+def best(box: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
+    """A spectrum's entry in a box (by its base name), None when missing"""
+    entry = box.get('spectra', dict()).get(os.path.basename(str(name)))
+    if entry is None or entry.get('v') is None:
+        return None
+    return entry
 
 
 def velocities(box: Dict[str, Any], files: List[str]) -> Dict[str, Any]:
@@ -162,10 +191,9 @@ def velocities(box: Dict[str, Any], files: List[str]) -> Dict[str, Any]:
     n = len(files)
     out = dict(v=np.full(n, np.nan), err=np.full(n, np.nan),
                by=np.array([''] * n, dtype=object), found=np.zeros(n, bool))
-    spectra = box.get('spectra', dict())
     for it, name in enumerate(files):
-        entry = spectra.get(os.path.basename(str(name)))
-        if entry is None or entry.get('v') is None:
+        entry = best(box, name)
+        if entry is None:
             continue
         out['v'][it] = float(entry['v'])
         err = entry.get('err')

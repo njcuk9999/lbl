@@ -156,8 +156,29 @@ entries; `lbl_reset` deletes the boxes.
   systemic velocity (the template keeps its frame: `VSYS` stays relative),
   known orbits kept for the spectra the box has from a CCF only, and writes
   its velocities back (`by: template`).
-- Without `OBJECT_TEFF` or a model, the passes start from the BERV alone (or
-  the orbits), as before, and a warning says so.
+- **LBL's compute** fills the box the same way the first time (a CCF of the
+  spectra it lacks; not in a cluster's array jobs, `ITERATION`/`TOTAL`,
+  each of which would do it again), starts each spectrum at its box
+  velocity plus the model's velocity (`MODELVEL`, known from the second
+  file on), whatever template it is measured against (another star's, or
+  one made before the spectrum was added), and writes back the velocity
+  LBL reports, `BERV - SYSTVELO - MODELVEL` (`by: lbl`, with the bulk
+  error). The two are inverses: a spectrum LBL measured before starts where
+  LBL ended. Without a box entry, it starts from the template's table, as
+  before. On TOI-904 (NIRPS, 14 spectra, 2026-11-24): LBL's box velocities
+  within 8.6 m/s (median; 17.9 m/s rms) of the template's on the box's
+  scale, correlation 0.987; measured again from them, each spectrum
+  converged in 2 steps instead of 3 or 4; signals of K = 5 and 15 km/s
+  injected (an 8 and a 24 km/s span) came back with slopes of 1.0021 and
+  1.0006.
+- **PCA2D's star frame**, when it follows the star's velocities
+  (`SMALL_RV_SHIFT = False`, `lbl_pca2d.object_velocities`), takes them
+  from the object's box (LBL's, else the template's; not the first CCF's),
+  spectra added since the template included, else from the template's
+  table.
+- Without `OBJECT_TEFF` or a model, nothing is measured by CCF and the
+  passes start from the BERV alone (or the orbits), as before, with a
+  warning; LBL's compute still writes its velocities to the box.
 
 ## Explicit derivatives
 

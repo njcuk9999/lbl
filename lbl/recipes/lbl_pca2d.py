@@ -571,8 +571,10 @@ def object_velocities(name: str, comparison, data_dir: str, instrument: str,
     object's OWN template, whatever template its velocities are measured
     against (OBJECT_COMPARISON, `comparison`, kept for the call): only it
     knows the object's spectra (lbl_wrap makes it before PCA2D when
-    SMALL_RV_SHIFT is False). {} when there is no template yet, or it holds
-    no velocities."""
+    SMALL_RV_SHIFT is False). The velocities are taken from the object's
+    velocity box when it holds those of the template or of LBL (each
+    spectrum's best), else from the template's table. {} when there is no
+    template yet, or it holds no velocities."""
     _ = comparison
     from lbl.recipes.lbl_wrap import _template_of
     path = _template_of(data_dir, name, instrument)
@@ -594,6 +596,26 @@ def object_velocities(name: str, comparison, data_dir: str, instrument: str,
     if 'VSYS' not in table.colnames or 'FILENAME' not in table.colnames \
             or ('VKEP' in table.colnames and not iterated):
         return dict()
+    # THE VELOCITY BOX (lbl.science.velocity_box): the object's own, its
+    #   best measurement of each spectrum (LBL's, else the template's; not
+    #   the first CCF, tens of m/s), spectra added since the template
+    #   included; the template's table when the box holds fewer than 3
+    from lbl.science import velocity_box
+    box = velocity_box.read(data_dir, name)
+    boxed = {key: float(entry['v'])
+             for key, entry in box['spectra'].items()
+             if entry.get('v') is not None
+             and entry.get('by') in ('template', 'lbl')}
+    if len(boxed) >= 3 and np.std(list(boxed.values())) > 0:
+        values = np.array(list(boxed.values()))
+        median = float(np.median(values))
+        out = {key: (v - median) / 1000.0 for key, v in boxed.items()}
+        kinds = sorted({box['spectra'][key]['by'] for key in boxed})
+        log('PCA2D: the star frame follows the velocities of %s in its '
+            'velocity box (%d spectra, %.1f m/s rms, measured by %s), not '
+            'the BERV alone' % (name, len(out), float(np.std(values)),
+                                ' and '.join(kinds)), 'info')
+        return out
     vsys = np.asarray(table['VSYS'], dtype=float)
     good = np.isfinite(vsys)
     if good.sum() < 3 or not np.nanstd(vsys[good]) > 0:

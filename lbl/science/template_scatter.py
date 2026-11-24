@@ -324,7 +324,7 @@ def spectrum_1d(inst, filename: str, load_science: Callable, blaze,
     by its blaze (as read_orders does) and by its own median, where the s1d
     weights are not nil; all the orders together
 
-    :return: (wavelength [nm], normalised flux), 1D
+    :return: (wavelength [nm], normalised flux), 1D, and the header
     """
     image, hdr = load_science(filename)
     wave = inst.get_wave_solution(filename, image, hdr)
@@ -354,8 +354,79 @@ def spectrum_1d(inst, filename: str, load_science: Callable, blaze,
         waves.append(wave[order][good])
         fluxes.append(flux[good] / level)
     if not waves:
-        return np.array([]), np.array([])
-    return np.concatenate(waves), np.concatenate(fluxes)
+        return np.array([]), np.array([]), hdr
+    return np.concatenate(waves), np.concatenate(fluxes), hdr
+
+
+def fill_box(inst, science_files: List[str], load_science: Callable, blaze,
+             calib_dir: str, objname: str, data_dir: str, model_dir: str,
+             tqdm, berv: np.ndarray = None) -> Dict[str, Any]:
+    """
+    The spectra of an object that its box (lbl.science.velocity_box,
+    read_start) lacks, measured by a CCF against the PHOENIX model at the
+    star's Teff (general.sysvel_ccf, as the mask's systemic velocity is) and
+    put in it, with the box's systemic velocity (their median) when it has
+    none. A peak below 5 sigma is not kept. Without a model (no OBJECT_TEFF,
+    no download), nothing is measured, and a warning says so.
+
+    :param berv: np.ndarray or None, each spectrum's BERV [m/s]; read from
+                 its header (inst.get_berv) when None
+
+    :return: dict, the box the object starts from (read_start)
+    """
+    from lbl.science import general, velocity_box
+    box = velocity_box.read_start(data_dir, objname)
+    found = velocity_box.velocities(box, science_files)
+    missing = [it for it in range(len(science_files))
+               if not found['found'][it]]
+    if not missing:
+        return box
+    try:
+        m_wavemap, m_spectrum = general.get_stellar_models(inst, model_dir)
+    except Exception as exc:                              # noqa: BLE001
+        log.warning('Velocities of the spectra: no PHOENIX model for the '
+                    'CCF ({0}): {1} spectra without a velocity in {2}'.format(
+                        exc, len(missing),
+                        velocity_box.path(data_dir, objname)))
+        return box
+    reference, entries, ccf_v = None, dict(), []
+    for it in tqdm(missing, desc='CCF of the spectra against the model',
+                   unit='file'):
+        name = os.path.basename(str(science_files[it]))
+        try:
+            wave, flux, hdr = spectrum_1d(inst, science_files[it],
+                                          load_science, blaze, calib_dir)
+            if reference is None:
+                lo = max(float(np.min(wave)), float(np.min(m_wavemap)))
+                hi = min(float(np.max(wave)), float(np.max(m_wavemap)))
+                reference = general.sysvel_reference(lo, hi, m_wavemap,
+                                                     m_spectrum)
+            vel, _, _, signif = general.sysvel_ccf(wave, flux, reference)
+            this_berv = (float(berv[it]) if berv is not None
+                         else float(inst.get_berv(hdr)))
+        except Exception as exc:                          # noqa: BLE001
+            log.warning('CCF of {0} against the model failed: {1}'.format(
+                name, exc))
+            continue
+        if not signif > 5:
+            log.warning('CCF of {0} against the model: a peak at {1:.1f} '
+                        'sigma only, not kept'.format(name, signif))
+            continue
+        vstar = velocity_box.star_velocity(1000.0 * vel, this_berv)
+        ccf_v.append(vstar)
+        entries[science_files[it]] = dict(v=vstar, berv=this_berv)
+    systemic = None
+    if box.get('systemic') is None and ccf_v:
+        systemic = dict(v=float(np.median(ccf_v)), by='ccf', n=len(ccf_v),
+                        teff=inst.params.get('OBJECT_TEFF'))
+    if entries or systemic is not None:
+        velocity_box.update(data_dir, objname, entries, 'ccf',
+                            systemic=systemic)
+    log.general('Velocities of the spectra: {0} of {1} measured by a CCF '
+                'against the PHOENIX model, in {2}'.format(
+                    len(entries), len(missing),
+                    velocity_box.path(data_dir, objname)))
+    return velocity_box.read_start(data_dir, objname)
 
 
 def start_velocities(inst, science_files: List[str], load_science: Callable,
@@ -363,79 +434,29 @@ def start_velocities(inst, science_files: List[str], load_science: Callable,
                      rv0: np.ndarray, objname: str, data_dir: str,
                      model_dir: str, tqdm):
     """
-    Where the passes on the velocities start: each spectrum's velocity from
-    the object's box (lbl.science.velocity_box), the spectra not in it
-    measured first by a CCF against the PHOENIX model at the star's Teff
-    (general.sysvel_ccf, as the mask's systemic velocity is) and put in it.
-    The template keeps its frame (VSYS relative): the start is the box's
-    velocity less its systemic velocity (the median of the CCF velocities).
-    Known orbits (rv0) are kept for the spectra the box has from a CCF only,
+    Where the template's passes on the velocities start: each spectrum's
+    velocity from the object's box (fill_box: a CCF against the PHOENIX
+    model the first time). The template keeps its frame (VSYS relative):
+    the start is the box's velocity less its systemic velocity. Known
+    orbits (rv0) are kept for the spectra the box has from a CCF only,
     theirs being finer; a spectrum without either starts at rv0.
 
     :return: (the start [m/s], the systemic velocity [m/s] or NaN)
     """
-    from lbl.science import general, velocity_box
+    from lbl.science import velocity_box
     start = np.array(rv0, dtype=float)
     if not data_dir or not objname:
         return start, np.nan
-    box = velocity_box.read(data_dir, objname)
+    box = fill_box(inst, science_files, load_science, blaze, calib_dir,
+                   objname, data_dir, model_dir, tqdm, berv=berv)
     found = velocity_box.velocities(box, science_files)
-    missing = [it for it in range(len(science_files))
-               if not found['found'][it]]
-    if missing:
-        try:
-            m_wavemap, m_spectrum = general.get_stellar_models(inst,
-                                                               model_dir)
-        except Exception as exc:                          # noqa: BLE001
-            log.warning('Velocities of the spectra: no PHOENIX model for the '
-                        'CCF ({0}): the passes start from {1}'.format(
-                            exc, 'the known orbits' if np.any(start)
-                            else 'the BERV alone'))
-            m_wavemap = None
-        if m_wavemap is not None:
-            reference, entries, ccf_v = None, dict(), []
-            for it in tqdm(missing, desc='CCF of the spectra against the '
-                                         'model', unit='file'):
-                try:
-                    wave, flux = spectrum_1d(inst, science_files[it],
-                                             load_science, blaze, calib_dir)
-                    if reference is None:
-                        lo = max(float(np.min(wave)), float(np.min(m_wavemap)))
-                        hi = min(float(np.max(wave)), float(np.max(m_wavemap)))
-                        reference = general.sysvel_reference(
-                            lo, hi, m_wavemap, m_spectrum)
-                    vel, _, _, signif = general.sysvel_ccf(wave, flux,
-                                                           reference)
-                except Exception as exc:                  # noqa: BLE001
-                    log.warning('CCF of {0} against the model failed: {1}'
-                                .format(os.path.basename(
-                                    str(science_files[it])), exc))
-                    continue
-                if not signif > 5:
-                    log.warning('CCF of {0} against the model: a peak at '
-                                '{1:.1f} sigma only, not kept'.format(
-                                    os.path.basename(str(science_files[it])),
-                                    signif))
-                    continue
-                vstar = velocity_box.star_velocity(1000.0 * vel, berv[it])
-                ccf_v.append(vstar)
-                entries[science_files[it]] = dict(v=vstar, berv=berv[it])
-            systemic = None
-            if box.get('systemic') is None and ccf_v:
-                systemic = dict(v=float(np.median(ccf_v)), by='ccf',
-                                n=len(ccf_v),
-                                teff=inst.params.get('OBJECT_TEFF'))
-            if entries or systemic is not None:
-                box = velocity_box.update(data_dir, objname, entries, 'ccf',
-                                          systemic=systemic)
-            log.general('Velocities of the spectra: {0} of {1} measured by a '
-                        'CCF against the PHOENIX model, in {2}'.format(
-                            len(entries), len(missing),
-                            velocity_box.path(data_dir, objname)))
-        found = velocity_box.velocities(box, science_files)
-    sysvel = (box.get('systemic') or dict()).get('v')
-    if sysvel is None or not found['found'].any():
+    if not found['found'].any():
         return start, np.nan
+    # the box's systemic velocity (the first CCFs'), else the median of the
+    #   velocities it holds (LBL's, when no CCF was made)
+    sysvel = (box.get('systemic') or dict()).get('v')
+    if sysvel is None:
+        sysvel = float(np.median(found['v'][found['found']]))
     sysvel = float(sysvel)
     relative = found['v'] - sysvel
     use = found['found'] & ~((found['by'] == 'ccf') & (start != 0))

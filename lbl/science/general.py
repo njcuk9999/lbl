@@ -621,6 +621,8 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
 
     # get the systemic velocity for mask
     props['MASK_SYS_VEL'] = inst.get_mask_systemic_vel(mask_file)
+    # the velocity box (box_for): each spectrum's own starting velocity
+    props['BOX'] = None
     # deal with non science files
     if inst.params['DATA_TYPE'] != 'SCIENCE':
         # add values to props
@@ -659,6 +661,8 @@ def get_systemic_vel_props(inst: InstrumentsType, template_file: str,
     margs = [sci_template_file]
     log.general(msg.format(*margs))
     sci_template_table = inst.load_template(sci_template_file)
+    # the velocity box: each spectrum's own starting velocity
+    props['BOX'] = box_for(inst)
     # ---------------------------------------------------------------------
     # mask of best regions (expected to be clean)
     keep = np.zeros(len(mask_table)).astype(bool)
@@ -1335,10 +1339,24 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # Systemic velocity estimate
     # -------------------------------------------------------------------------
     if inst.params['DATA_TYPE'] == 'SCIENCE':
-        # get the velocity estimate from the template (if possible)
-        velo_estimate = get_velo_estimate(systemic_props, mjdate)
-        # deal with first estimate of RV / CCF equivalent width
-        vtot = velo_estimate + systemic_props['VSYS']
+        # the velocity estimate from the velocity box (each spectrum's own,
+        #   whatever template it is measured against), else from the
+        #   template (if possible)
+        boxed = box_estimate(systemic_props, science_file)
+        if boxed is not None:
+            # the box holds LBL's velocity (berv - sys_rv less the model's
+            #   velocity, as written below): its inverse, the model's
+            #   velocity once known (the second file on; within about 100
+            #   m/s on the first)
+            vtot = boxed[0] + (model_velocity if np.isfinite(model_velocity)
+                               else 0.0)
+            msg = ('\tStarting velocity from the velocity box ({0}): '
+                   '{1:.1f} m/s')
+            log.general(msg.format(boxed[1], boxed[0]))
+        else:
+            velo_estimate = get_velo_estimate(systemic_props, mjdate)
+            # deal with first estimate of RV / CCF equivalent width
+            vtot = velo_estimate + systemic_props['VSYS']
         sys_rv, ccf_fwhm = berv - vtot, systemic_props['FWHM']
         # the CCF e-width (header CCF_EW): the sigma of the Gaussian that
         #   has the FWHM of the template's CCF, in m/s
@@ -1935,6 +1953,14 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     outputs['RESET_RV'] = reset_rv
     outputs['NUM_ITERATIONS'] = num_to_converge
     outputs['SYSTEMIC_VELOCITY'] = sys_rv
+    # the velocity measured, for the velocity box: the velocity LBL reports
+    #   (berv - sys_rv less the model's velocity; on TOI-904, NIRPS, within
+    #   9 m/s of the template's on the box's scale, 2026-11-24)
+    outputs['BOX_VELOCITY'] = np.nan
+    outputs['BOX_VELOCITY_ERR'] = np.nan
+    if inst.params['DATA_TYPE'] == 'SCIENCE' and np.isfinite(model_velocity):
+        outputs['BOX_VELOCITY'] = float(berv - sys_rv - model_velocity)
+        outputs['BOX_VELOCITY_ERR'] = float(bulk_error)
     outputs['RMSRATIO'] = stddev_nsig
     outputs['CCF_EW'] = ccf_ewidth
     # in km/s, as the header key HP_WIDTH says
@@ -1948,6 +1974,44 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
     # -------------------------------------------------------------------------
     # return reference table and outputs
     return ref_table, outputs
+
+
+def box_for(inst: InstrumentsType) -> Optional[Dict[str, Any]]:
+    """
+    The object's velocity box (lbl.science.velocity_box.read_start), for
+    compute_rv's start: dict(box), None when it holds nothing
+    """
+    from lbl.science import velocity_box
+    try:
+        box = velocity_box.read_start(inst.params['DATA_DIR'],
+                                      inst.params['OBJECT_SCIENCE'])
+    except Exception as exc:                                  # noqa: BLE001
+        log.warning('The velocity box could not be read: {0}'.format(exc))
+        return None
+    if not box['spectra']:
+        return None
+    log.general('Velocity box: {0} spectra, {1}'.format(
+        len(box['spectra']), velocity_box.path(inst.params['DATA_DIR'],
+                                               inst.params['OBJECT_SCIENCE'])))
+    return dict(box=box)
+
+
+def box_estimate(systemic_props: Dict[str, Any], science_file: str):
+    """
+    A spectrum's velocity in the velocity box (box_for): (velocity [m/s],
+    what measured it), None when the box does not hold the spectrum. It is
+    on the scale of LBL's own velocities: compute_rv starts at it plus the
+    model's velocity, and writes back berv - sys_rv less the model's
+    velocity, the velocity LBL reports
+    """
+    from lbl.science import velocity_box
+    found = systemic_props.get('BOX')
+    if not found or not science_file:
+        return None
+    entry = velocity_box.best(found['box'], science_file)
+    if entry is None:
+        return None
+    return float(entry['v']), str(entry.get('by', ''))
 
 
 def get_velo_estimate(systemic_props: Dict[str, Any],
