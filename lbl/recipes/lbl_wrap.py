@@ -233,6 +233,7 @@ def main(runparams: dict):
                               object_comparison=tc_template,
                               blaze_corrected=blaze_corr,
                               blaze_file=blaze_file,
+                              object_teff=object_teff,
                               overwrite=True,
                               **keyword_args)
             # re-run tellu clean with uncorrected science data now using our
@@ -259,6 +260,7 @@ def main(runparams: dict):
                               object_comparison=tc_template,
                               blaze_corrected=blaze_corr,
                               blaze_file=blaze_file,
+                              object_teff=object_teff,
                               overwrite=True,
                               **keyword_args)
             # update object and comparison names
@@ -462,7 +464,25 @@ def _velocity_template(runparams: dict, keyword_args: dict, instrument: str,
                       data_source=data_source, data_type='SCIENCE',
                       object_science=objname, object_comparison=objname,
                       blaze_corrected=blaze_corr, blaze_file=blaze_file,
+                      object_teff=_teff_of(runparams, objname),
                       overwrite=flat, **keyword_args)
+
+
+def _teff_of(runparams: dict, objname: str):
+    """The Teff the wrap gives an object (OBJECT_TEFF, in the order of
+    OBJECT_SCIENCE; the object PCA2D corrected for <object>_pca2d), None
+    when it gives none"""
+    names = runparams.get('OBJECT_SCIENCE')
+    teffs = runparams.get('OBJECT_TEFF')
+    if teffs is None or names is None:
+        return None
+    if not isinstance(teffs, (list, tuple)):
+        return teffs
+    names = list(names) if isinstance(names, (list, tuple)) else [names]
+    for name in (objname, str(objname).replace('_pca2d', '')):
+        if name in names and names.index(name) < len(teffs):
+            return teffs[names.index(name)]
+    return None
 
 
 def _put_aside(data_dir: str, name: str, science_subdir: str, previous):
@@ -590,6 +610,7 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                               object_comparison=_obj_template,
                               blaze_corrected=blaze_corr,
                               blaze_file=blaze_file,
+                              object_teff=object_teff,
                               overwrite=not runparams['SKIP_LBL_TEMPLATE'],
                               **keyword_args)
     # ---------------------------------------------------------------------
@@ -636,6 +657,7 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
                               object_comparison=_obj_template,
                               blaze_corrected=blaze_corr,
                               blaze_file=blaze_file, overwrite=False,
+                              object_teff=object_teff,
                               **keyword_args)
         if mask:
             log.warning('the mask of {0} is not there, and lbl_compute needs'

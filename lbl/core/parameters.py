@@ -769,6 +769,23 @@ params.set('TEMPLATE_MEDBINMAX', 19, source=__NAME__)
 # to accept the median of the template as a good template. If above
 # we iterate once more. Expressed in m/s
 params.set('MAX_CONVERGENCE_TEMPLATE_RV', 100, source=__NAME__)
+# the passes of the BSD template on the velocities (SMALL_RV_SHIFT False):
+#   they stop when TEMPLATE_RV_CONV_FRAC of the spectra changed by less than
+#   TEMPLATE_RV_CONV_NSIG times their uncertainty in the last pass (95 % within
+#   2 sigma), TEMPLATE_RV_MAX_PASSES at most. They start from the spectra's
+#   velocities in DATA_DIR/velocities/<object>.json (lbl.science.velocity_box),
+#   a CCF against the PHOENIX model the first time
+params.set(key='TEMPLATE_RV_CONV_NSIG', value=2.0, source=__NAME__,
+           desc='the template\'s passes on the velocities stop when the '
+                'spectra changed by less than this many sigma',
+           dtype=float)
+params.set(key='TEMPLATE_RV_CONV_FRAC', value=0.95, source=__NAME__,
+           desc='the fraction of the spectra that must have changed by less '
+                'than TEMPLATE_RV_CONV_NSIG sigma for the passes to stop',
+           dtype=float)
+params.set(key='TEMPLATE_RV_MAX_PASSES', value=10, source=__NAME__,
+           desc='the most passes of the template on the velocities',
+           dtype=int)
 # ignore weights below this value for the template construction
 params.set('TEMPLATE_WEIGHT_MIN', 0.1, source=__NAME__)
 # the known companions of the star: if True the template looks the object up
@@ -786,8 +803,10 @@ params.set(key='PLANETS', value=False, source=__NAME__,
 #   a star whose velocity varies by less than MAX_CONVERGENCE_TEMPLATE_RV
 #   (100 m/s): planets of a few to a few tens of m/s, activity. False
 #   measures each spectrum's velocity against the template of the pass
-#   before and makes the template again (up to 5 passes), until the shifts
-#   agree to MAX_CONVERGENCE_TEMPLATE_RV: for a binary, a brown dwarf, a hot
+#   before and makes the template again (BSD: up to TEMPLATE_RV_MAX_PASSES,
+#   until 95 % of the spectra change by less than 2 sigma; BERVBIN: up to 5,
+#   until the shifts agree to MAX_CONVERGENCE_TEMPLATE_RV), starting from
+#   the velocities of DATA_DIR/velocities: for a binary, a brown dwarf, a hot
 #   Jupiter (HD 189733's K is 205 m/s), whose lines would otherwise be
 #   smeared in the template by the star's motion. With PLANETS and the
 #   star's orbits in the catalogs, the template follows the orbits instead,

@@ -53,6 +53,9 @@ ARGS_TEMPLATE = [  # core
     'DATA_DIR', 'TEMPLATE_SUBDIR', 'SCIENCE_SUBDIR',
     # science
     'OBJECT_SCIENCE', 'OBJECT_COMPARISON', 'BLAZE_FILE', 'BLAZE_CORRECTED',
+    # the star's Teff: the PHOENIX model of the first CCF of its spectra
+    #   (SMALL_RV_SHIFT False, lbl.science.velocity_box)
+    'OBJECT_TEFF',
     # other
     'VERBOSE', 'PROGRAM',
 ]
@@ -776,7 +779,8 @@ def run_template(inst, objname: str, objkind: str):
                  'constant: the template is made on BERV alone, in one pass '
                  '(SMALL_RV_SHIFT = False iterates on the velocities)')
     # the passes: one when the velocities are taken as known (the orbits,
-    #   SMALL_RV_SHIFT True) or constant, up to 5 otherwise. KNOWN ORBITS
+    #   SMALL_RV_SHIFT True) or constant, more otherwise (BSD:
+    #   TEMPLATE_RV_MAX_PASSES, from the velocity box; BERVBIN: 5). KNOWN ORBITS
     #   AND SMALL_RV_SHIFT False: the template starts from the orbits and
     #   iterates on top of them, since the planets were in the spectra to
     #   start with: the velocities measured (VSYS) are then the star's whole
@@ -797,7 +801,8 @@ def run_template(inst, objname: str, objkind: str):
         built = template_scatter.build(
             inst, science_files, partial(_load_template_science, inst), blaze,
             calib_dir, wavegrid, berv, rv0, iterate_rv=(n_passes > 1),
-            tqdm=tqdm)
+            tqdm=tqdm, objname=objname, data_dir=dparams['DATA_DIR'],
+            model_dir=dparams['MODEL_DIR'])
         p50, p50_odd, p50_even = (built['flux'], built['flux_odd'],
                                   built['flux_even'])
         eflux, eflux_odd, eflux_even = (built['eflux'], built['eflux_odd'],

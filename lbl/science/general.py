@@ -4014,37 +4014,80 @@ def template_systemic_velocity(t_wave: np.ndarray, t_flux: np.ndarray,
     :return: (velocity [km/s], the velocities and the CCF normalised to
              1 at its peak, the peak's significance in robust sigmas)
     """
-    from scipy.ndimage import gaussian_filter1d, median_filter
     t_wave = np.asarray(t_wave, dtype=float)
     t_flux = np.asarray(t_flux, dtype=float)
     good = np.isfinite(t_wave) & np.isfinite(t_flux) & (t_flux > 0)
     lo = max(np.min(t_wave[good]), np.min(m_wavemap))
     hi = min(np.max(t_wave[good]), np.max(m_wavemap))
+    reference = sysvel_reference(lo, hi, m_wavemap, m_spectrum, bands=bands)
+    return sysvel_ccf(t_wave, t_flux, reference, dv_max=dv_max)
+
+
+def sysvel_reference(lo: float, hi: float, m_wavemap: np.ndarray,
+                     m_spectrum: np.ndarray, bands=None) -> Dict[str, Any]:
+    """
+    The model of template_systemic_velocity, made ready once for the CCF of
+    any number of spectra on lo to hi [nm]: the grid uniform in
+    ln(wavelength) of SYSVEL_STEP_KMS, the model's ln(flux) there smoothed to
+    SYSVEL_MODEL_FWHM_KMS and high-passed (less a running median over
+    SYSVEL_HIGHPASS_KMS), and the samples within the photometric bands
+
+    :return: dict(grid, step, model, inband)
+    """
+    from scipy.ndimage import gaussian_filter1d, median_filter
     step = np.arctanh(SYSVEL_STEP_KMS / mp.speed_of_light)
     grid = np.exp(np.arange(np.log(lo), np.log(hi), step))
-    # the template, and where it has a sample on both sides of the grid's
-    #   (a gap is not bridged)
-    order = np.argsort(t_wave[good])
-    tw, tl = t_wave[good][order], np.log(t_flux[good][order])
-    tmpl = np.interp(grid, tw, tl)
-    idx = np.clip(np.searchsorted(tw, grid), 1, tw.size - 1)
-    gap = (tw[idx] - tw[idx - 1]) / grid > 3 * step
     model = np.interp(grid, m_wavemap, np.log(np.clip(m_spectrum, 1e-30,
                                                       None)))
     model = gaussian_filter1d(model, SYSVEL_MODEL_FWHM_KMS / 2.3548
                               / SYSVEL_STEP_KMS)
     window = int(SYSVEL_HIGHPASS_KMS / SYSVEL_STEP_KMS) | 1
-    tmpl = tmpl - median_filter(tmpl, window, mode='nearest')
     model = model - median_filter(model, window, mode='nearest')
     inband = np.zeros(grid.size, dtype=bool)
     for band in (astro.bands if bands is None else bands):
         inband |= (grid >= band.minimum) & (grid <= band.maximum)
     if not inband.any():
         raise ValueError('the template has no sample in a photometric band')
-    bad = gap | (np.abs(tmpl) > SYSVEL_CLIP) | ~inband
-    tmpl[bad] = 0.0
-    tmpl[~bad] -= np.mean(tmpl[~bad])
     model -= np.mean(model)
+    return dict(grid=grid, step=step, model=model, inband=inband,
+                window=window)
+
+
+def sysvel_ccf(t_wave: np.ndarray, t_flux: np.ndarray,
+               reference: Dict[str, Any], dv_max: float = 200.0):
+    """
+    The velocity of a spectrum (or a template) against the model of
+    sysvel_reference, as template_systemic_velocity measures it: the
+    spectrum's ln(flux) on the reference's grid, high-passed, its missing
+    samples, those beyond SYSVEL_CLIP, outside its own range or outside the
+    photometric bands counting for nothing; every shift at once by FFT, the
+    peak refined by a parabola through its three highest points. Positive:
+    the spectrum's lines are redshifted against the model's.
+
+    :return: (velocity [km/s], the velocities and the CCF normalised to 1 at
+             its peak, the peak's significance in robust sigmas)
+    """
+    from scipy.ndimage import median_filter
+    grid, step = reference['grid'], reference['step']
+    t_wave = np.asarray(t_wave, dtype=float)
+    t_flux = np.asarray(t_flux, dtype=float)
+    good = np.isfinite(t_wave) & np.isfinite(t_flux) & (t_flux > 0)
+    # the spectrum, and where it has a sample on both sides of the grid's
+    #   (a gap is not bridged); the grid beyond its ends counts for nothing
+    order = np.argsort(t_wave[good])
+    tw, tl = t_wave[good][order], np.log(t_flux[good][order])
+    tmpl = np.interp(grid, tw, tl)
+    idx = np.clip(np.searchsorted(tw, grid), 1, tw.size - 1)
+    gap = (tw[idx] - tw[idx - 1]) / grid > 3 * step
+    gap |= (grid < tw[0]) | (grid > tw[-1])
+    tmpl = tmpl - median_filter(tmpl, reference['window'], mode='nearest')
+    bad = gap | (np.abs(tmpl) > SYSVEL_CLIP) | ~reference['inband']
+    tmpl[bad] = 0.0
+    if not np.any(~bad):
+        raise ValueError('the spectrum has no usable sample in a '
+                         'photometric band')
+    tmpl[~bad] -= np.mean(tmpl[~bad])
+    model = reference['model']
     size = 1 << int(np.ceil(np.log2(2 * grid.size)))
     corr = np.fft.irfft(np.fft.rfft(tmpl, size)
                         * np.conj(np.fft.rfft(model, size)), size)

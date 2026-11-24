@@ -35,9 +35,12 @@ With SMALL_RV_SHIFT False and no known orbits, the velocities of the spectra
 are first measured on the orders around COMPIL_SLOPE_REF_WAVE (a scan of the
 shift, then Bouchy et al. 2001 pixel by pixel on the template's Savitzky-
 Golay derivative, the pixels combined by LBL's mixture model, odd_ratio_mean,
-the steps iterated until they converge) until they agree to
-MAX_CONVERGENCE_TEMPLATE_RV. They are kept in the
-template's SCI_TABLE (VSYS), where PCA2D reads them for its star frame.
+the steps iterated until they converge), pass after pass, until 95 % of the
+spectra changed by less than 2 sigma (TEMPLATE_RV_CONV_FRAC,
+TEMPLATE_RV_CONV_NSIG). They start from the object's velocity box
+(lbl.science.velocity_box, a CCF against the PHOENIX model the first time)
+and are written back to it. They are kept in the template's SCI_TABLE
+(VSYS), where PCA2D reads them for its star frame.
 
 The window is about one resolution element, not the 3 steps of the grid of
 templatepy: in a narrow window each spectrum's own noise is copied sharply
@@ -314,6 +317,138 @@ def fit_order(data: OrderData, io_: int, shifts: np.ndarray,
     return out
 
 
+def spectrum_1d(inst, filename: str, load_science: Callable, blaze,
+                calib_dir: str):
+    """
+    One spectrum as the CCF against the model takes it: every order divided
+    by its blaze (as read_orders does) and by its own median, where the s1d
+    weights are not nil; all the orders together
+
+    :return: (wavelength [nm], normalised flux), 1D
+    """
+    image, hdr = load_science(filename)
+    wave = inst.get_wave_solution(filename, image, hdr)
+    if blaze is None:
+        blazeimage, blaze_flag = inst.load_blaze_from_science(
+            filename, image, hdr, calib_dir, normalize=False)
+    elif np.sum(blaze.ravel()) == len(blaze.ravel()):
+        blazeimage, blaze_flag = np.array(blaze), True
+    else:
+        blazeimage, blaze_flag = np.array(blaze), False
+    if blaze_flag:
+        image, blazeimage = inst.no_blaze_corr(image, wave)
+    image = np.array(image, dtype=float)
+    image[image == 0] = np.nan
+    slope = apero._s1d_slopevector(inst.params, image, blazeimage)
+    waves, fluxes = [], []
+    for order in range(image.shape[0]):
+        with np.errstate(invalid='ignore', divide='ignore'):
+            flux = image[order] / blazeimage[order]
+            good = (slope[order] > 0) & np.isfinite(flux) & \
+                np.isfinite(wave[order]) & (wave[order] > 0) & (flux > 0)
+        if np.sum(good) < 10:
+            continue
+        level = np.nanmedian(flux[good])
+        if not np.isfinite(level) or level <= 0:
+            continue
+        waves.append(wave[order][good])
+        fluxes.append(flux[good] / level)
+    if not waves:
+        return np.array([]), np.array([])
+    return np.concatenate(waves), np.concatenate(fluxes)
+
+
+def start_velocities(inst, science_files: List[str], load_science: Callable,
+                     blaze, calib_dir: str, berv: np.ndarray,
+                     rv0: np.ndarray, objname: str, data_dir: str,
+                     model_dir: str, tqdm):
+    """
+    Where the passes on the velocities start: each spectrum's velocity from
+    the object's box (lbl.science.velocity_box), the spectra not in it
+    measured first by a CCF against the PHOENIX model at the star's Teff
+    (general.sysvel_ccf, as the mask's systemic velocity is) and put in it.
+    The template keeps its frame (VSYS relative): the start is the box's
+    velocity less its systemic velocity (the median of the CCF velocities).
+    Known orbits (rv0) are kept for the spectra the box has from a CCF only,
+    theirs being finer; a spectrum without either starts at rv0.
+
+    :return: (the start [m/s], the systemic velocity [m/s] or NaN)
+    """
+    from lbl.science import general, velocity_box
+    start = np.array(rv0, dtype=float)
+    if not data_dir or not objname:
+        return start, np.nan
+    box = velocity_box.read(data_dir, objname)
+    found = velocity_box.velocities(box, science_files)
+    missing = [it for it in range(len(science_files))
+               if not found['found'][it]]
+    if missing:
+        try:
+            m_wavemap, m_spectrum = general.get_stellar_models(inst,
+                                                               model_dir)
+        except Exception as exc:                          # noqa: BLE001
+            log.warning('Velocities of the spectra: no PHOENIX model for the '
+                        'CCF ({0}): the passes start from {1}'.format(
+                            exc, 'the known orbits' if np.any(start)
+                            else 'the BERV alone'))
+            m_wavemap = None
+        if m_wavemap is not None:
+            reference, entries, ccf_v = None, dict(), []
+            for it in tqdm(missing, desc='CCF of the spectra against the '
+                                         'model', unit='file'):
+                try:
+                    wave, flux = spectrum_1d(inst, science_files[it],
+                                             load_science, blaze, calib_dir)
+                    if reference is None:
+                        lo = max(float(np.min(wave)), float(np.min(m_wavemap)))
+                        hi = min(float(np.max(wave)), float(np.max(m_wavemap)))
+                        reference = general.sysvel_reference(
+                            lo, hi, m_wavemap, m_spectrum)
+                    vel, _, _, signif = general.sysvel_ccf(wave, flux,
+                                                           reference)
+                except Exception as exc:                  # noqa: BLE001
+                    log.warning('CCF of {0} against the model failed: {1}'
+                                .format(os.path.basename(
+                                    str(science_files[it])), exc))
+                    continue
+                if not signif > 5:
+                    log.warning('CCF of {0} against the model: a peak at '
+                                '{1:.1f} sigma only, not kept'.format(
+                                    os.path.basename(str(science_files[it])),
+                                    signif))
+                    continue
+                vstar = velocity_box.star_velocity(1000.0 * vel, berv[it])
+                ccf_v.append(vstar)
+                entries[science_files[it]] = dict(v=vstar, berv=berv[it])
+            systemic = None
+            if box.get('systemic') is None and ccf_v:
+                systemic = dict(v=float(np.median(ccf_v)), by='ccf',
+                                n=len(ccf_v),
+                                teff=inst.params.get('OBJECT_TEFF'))
+            if entries or systemic is not None:
+                box = velocity_box.update(data_dir, objname, entries, 'ccf',
+                                          systemic=systemic)
+            log.general('Velocities of the spectra: {0} of {1} measured by a '
+                        'CCF against the PHOENIX model, in {2}'.format(
+                            len(entries), len(missing),
+                            velocity_box.path(data_dir, objname)))
+        found = velocity_box.velocities(box, science_files)
+    sysvel = (box.get('systemic') or dict()).get('v')
+    if sysvel is None or not found['found'].any():
+        return start, np.nan
+    sysvel = float(sysvel)
+    relative = found['v'] - sysvel
+    use = found['found'] & ~((found['by'] == 'ccf') & (start != 0))
+    start[use] = relative[use]
+    counts = ', '.join('{0} {1}'.format(int(np.sum(found['by'] == kind)), kind)
+                       for kind in ('lbl', 'template', 'ccf')
+                       if np.any(found['by'] == kind))
+    log.general('Velocities of the spectra: the passes start from the box '
+                '({0}; {1} without), systemic velocity {2:.3f} km/s'.format(
+                    counts, int(np.sum(~found['found'])), sysvel / 1000.0))
+    return start, sysvel
+
+
 #: Bouchy's steps on one spectrum (measure_velocities): taken until a step is
 #:   this fraction of the spectrum's uncertainty or less, or below
 #:   BOUCHY_FLOOR [m/s], BOUCHY_MAX_STEPS at most
@@ -500,7 +635,9 @@ def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
                      rv_err: np.ndarray, lngrid: np.ndarray,
                      times: np.ndarray, time_label: str,
                      changes: List[float], history: List[np.ndarray] = None,
-                     steps_per_pass: List[np.ndarray] = None) -> None:
+                     steps_per_pass: List[np.ndarray] = None,
+                     within: List[float] = None, nsig: float = None,
+                     need: float = None) -> None:
     """The velocities measured, pass by pass, and the spectra registered at
     them, on the middle order of those measured (lbl.science.plot, for
     PCA2D's and the window's eyes): never fatal"""
@@ -544,7 +681,8 @@ def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
             grid_x, grid_y, inst.params['OBJECT_SCIENCE'], cloud_c=cloud_c,
             colour_label=(time_label or 'MJD') if np.isfinite(times).any()
             else 'spectrum', injected=injected, history=history,
-            steps_per_pass=steps_per_pass)
+            steps_per_pass=steps_per_pass, within=within, nsig=nsig,
+            need=need)
     except Exception as exc:                                  # noqa: BLE001
         log.warning('the plot of the template\'s velocities was not made: '
                     '{0}'.format(exc))
@@ -552,7 +690,8 @@ def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
 
 def build(inst, science_files: List[str], load_science: Callable, blaze,
           calib_dir: str, wavegrid: np.ndarray, berv: np.ndarray,
-          rv0: np.ndarray, iterate_rv: bool, tqdm) -> Dict[str, Any]:
+          rv0: np.ndarray, iterate_rv: bool, tqdm, objname: str = None,
+          data_dir: str = None, model_dir: str = None) -> Dict[str, Any]:
     """
     The template of a star from its spectra, by local polynomials through
     the clouds of their pixels (see the module's docstring)
@@ -567,6 +706,9 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
     :param rv0: np.ndarray, the star's velocity in each spectrum [m/s]
     :param iterate_rv: bool, measure the velocities of the spectra first
     :param tqdm: the progress bar
+    :param objname: str or None, the object (its velocity box)
+    :param data_dir: str or None, DATA_DIR (the velocity boxes)
+    :param model_dir: str or None, the models (PHOENIX, for the first CCF)
 
     :return: dict(flux, eflux, flux_odd, eflux_odd, flux_even, eflux_even,
              savgol_fluxes: the template and its derivatives per step of the
@@ -630,13 +772,23 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
         data = read_orders(inst, science_files, load_science, blaze,
                            calib_dir, reg, hp_pix, tqdm, sci_table, berv,
                            desc='Reading spectra (velocities)')
-        changes = []
+        changes, within = [], []
         rv_err = np.full(nfiles, np.nan)
+        # the start: the velocities of the object's box (a CCF against the
+        #   PHOENIX model the first time), so that a star that moves by km/s
+        #   is not smeared in the first template
+        rv0, sysvel = start_velocities(inst, science_files, load_science,
+                                       blaze, calib_dir, berv, rv0, objname,
+                                       data_dir, model_dir, tqdm)
+        nsig = float(params['TEMPLATE_RV_CONV_NSIG'])
+        need = float(params['TEMPLATE_RV_CONV_FRAC'])
+        npass = int(params['TEMPLATE_RV_MAX_PASSES'])
         # each pass's velocities (the start first) and the Bouchy steps
         #   each spectrum took, for the plot
         history = [np.array(rv0, dtype=float)]
         steps_per_pass = []
-        for ite in range(5):
+        converged = False
+        for ite in range(npass):
             shifts = star_shift(berv, rv0)
             fits = {io_: fit_order(data, io_, shifts, lngrid, fit_params,
                                    hp_pix[order], 2)
@@ -651,16 +803,38 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
             n1, p1 = np.nanpercentile(dv, [16, 84])
             sig = (p1 - n1) / 2.0
             changes.append(float(sig))
-            msg = 'Velocities of the spectra, pass {0}: change RMS {1:.1f} m/s'
-            log.general(msg.format(ite + 1, sig))
-            if sig < params['MAX_CONVERGENCE_TEMPLATE_RV']:
+            # converged when TEMPLATE_RV_CONV_FRAC of the spectra changed by
+            #   less than TEMPLATE_RV_CONV_NSIG times their uncertainty
+            ok = np.isfinite(dv) & np.isfinite(rv_err) & (rv_err > 0)
+            frac = float(np.mean(np.abs(dv[ok]) < nsig * rv_err[ok])) \
+                if ok.any() else 0.0
+            within.append(frac)
+            msg = ('Velocities of the spectra, pass {0}: change RMS {1:.1f} '
+                   'm/s, {2:.1f} % of them within {3:g} sigma')
+            log.general(msg.format(ite + 1, sig, 100 * frac, nsig))
+            if frac >= need:
+                converged = True
                 break
+        if not converged:
+            log.warning('Velocities of the spectra: {0:.1f} % within {1:g} '
+                        'sigma after {2} passes, not the {3:.0f} % asked '
+                        '(TEMPLATE_RV_CONV_FRAC)'.format(
+                            100 * within[-1] if within else 0.0, nsig, npass,
+                            100 * need))
         times, time_label = _times(sci_table, nfiles)
         _log_velocities(sci_table, rv0, rv_err, times, time_label)
         sci_table['VSYS_ERR'] = np.array(rv_err)
+        # the velocities measured, into the object's box: the template's
+        #   frame plus the box's systemic velocity
+        if data_dir and objname and np.isfinite(sysvel):
+            from lbl.science import velocity_box
+            entries = {science_files[it]: dict(
+                v=sysvel + rv0[it], err=rv_err[it], mjd=times[it],
+                berv=berv[it]) for it in range(nfiles)}
+            velocity_box.update(data_dir, objname, entries, 'template')
         _plot_velocities(inst, data, fits, reg, berv, rv0, rv_err, lngrid,
                          times, time_label, changes, history,
-                         steps_per_pass)
+                         steps_per_pass, within, nsig, need)
         del data
     shifts = star_shift(berv, rv0)
     # -------------------------------------------------------------------------

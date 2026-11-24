@@ -199,7 +199,9 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
                            objname: str, cloud_c: np.ndarray = None,
                            colour_label: str = 'MJD', injected=None,
                            history: List[np.ndarray] = None,
-                           steps_per_pass: List[np.ndarray] = None):
+                           steps_per_pass: List[np.ndarray] = None,
+                           within: List[float] = None, nsig: float = None,
+                           need: float = None):
     """
     The velocities the template measured on its spectra (SMALL_RV_SHIFT
     False), with their uncertainties, against the spectrum's number and
@@ -227,6 +229,10 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
                     convergence below
     :param steps_per_pass: list of np.ndarray or None, the Bouchy steps each
                            spectrum took in each pass
+    :param within: list of float or None, the fraction of the spectra that
+                   changed by less than nsig sigma in each pass
+    :param nsig: float or None, TEMPLATE_RV_CONV_NSIG
+    :param need: float or None, TEMPLATE_RV_CONV_FRAC, where the passes stop
     """
     key = _wanted(inst, None, lambda: 'template_velocities_' + str(objname))
     if key is None:
@@ -288,30 +294,44 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
                        transform=frames[1].transAxes)
     for frame in frames[:2]:
         frame.grid(color='lightgrey', linestyle='--')
-    # THE CONVERGENCE: the rms change of each pass against the threshold
-    #   that stops the passes, and the Bouchy steps each pass took (median
-    #   and most over the spectra)
+    # THE CONVERGENCE: the fraction of the spectra that changed by less than
+    #   nsig sigma in each pass, against the fraction that stops the passes,
+    #   the rms change of each pass on the right, and the Bouchy steps each
+    #   pass took (median and most over the spectra)
     frame = frames[2]
     if changes:
         npass = np.arange(1, len(changes) + 1)
-        shown = np.maximum(np.asarray(changes, dtype=float), 1e-3)
-        frame.semilogy(npass, shown, 'o-', color='C0', label='rms change')
-        limit = inst.params.get('MAX_CONVERGENCE_TEMPLATE_RV', None)
-        if limit is not None:
-            frame.axhline(float(limit), color='C3', ls='--', lw=1,
-                          label='MAX_CONVERGENCE_TEMPLATE_RV '
-                                '({0:g} m/s)'.format(float(limit)))
+        twin = frame.twinx()
+        twin.semilogy(npass, np.maximum(np.asarray(changes, dtype=float),
+                                        1e-3), 's--', color='C1', ms=4,
+                      label='rms change [m/s]')
+        twin.set_ylabel('rms change [m/s]', color='C1')
+        if within is not None and len(within) == len(changes):
+            frame.plot(npass, 100 * np.asarray(within, dtype=float), 'o-',
+                       color='C0', label='spectra within {0:g} sigma'.format(
+                           nsig if nsig is not None else 2))
+            if need is not None:
+                frame.axhline(100 * float(need), color='C3', ls='--', lw=1,
+                              label='where the passes stop '
+                                    '({0:.0f} %)'.format(100 * float(need)))
+            anchor = 100 * np.asarray(within, dtype=float)
+        else:
+            anchor = np.full(len(changes), 50.0)
         for k, taken in enumerate(steps_per_pass or []):
             taken = np.asarray(taken)[np.asarray(taken) > 0]
             if k < len(changes) and taken.size:
                 frame.annotate('Bouchy steps {0:g} (most {1:d})'.format(
                     float(np.median(taken)), int(taken.max())),
-                    (npass[k], shown[k]), textcoords='offset points',
-                    xytext=(6, 4), fontsize=7)
+                    (npass[k], anchor[k]), textcoords='offset points',
+                    xytext=(6, -12), fontsize=7)
+        frame.set_ylim(0, 105)
         frame.set_xticks(npass)
         frame.set_xlim(0.5, len(changes) + 1.5)
-        frame.legend(loc=0, fontsize=7)
-    frame.set(xlabel='pass', ylabel='change [m/s rms]',
+        handles = frame.get_legend_handles_labels()
+        extra = twin.get_legend_handles_labels()
+        frame.legend(handles[0] + extra[0], handles[1] + extra[1], loc=0,
+                     fontsize=7)
+    frame.set(xlabel='pass', ylabel='spectra within [%]',
               title='Convergence of the velocities, pass by pass')
     frame.grid(color='lightgrey', linestyle='--')
     if len(cloud_x):

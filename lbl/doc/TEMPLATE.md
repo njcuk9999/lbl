@@ -73,8 +73,14 @@ sums. No sort, no second pass.
 
 With `SMALL_RV_SHIFT = False` (and no known orbits), the velocity of each
 spectrum is measured first against the templates of the orders within 5 % of
-`COMPIL_SLOPE_REF_WAVE`, until the changes are below
-`MAX_CONVERGENCE_TEMPLATE_RV`: a scan of the shift, then Bouchy et al. (2001)
+`COMPIL_SLOPE_REF_WAVE`, pass after pass (the template of these orders made
+again at each), until `TEMPLATE_RV_CONV_FRAC` (95 %) of the spectra changed
+by less than `TEMPLATE_RV_CONV_NSIG` (2) times their uncertainty in the last
+pass, `TEMPLATE_RV_MAX_PASSES` (10) at most; a warning says when they did
+not. The passes start from the velocities of the object's velocity box
+(below), so that a star that moves by km/s is not smeared in the first
+template, whose velocities would then not converge. In each pass: a scan of
+the shift, then Bouchy et al. (2001)
 pixel by pixel on the template's Savitzky-Golay derivative. Each pixel gives
 its own shift, `d_i = -(y_i - T_i) / T'_i`, of uncertainty `sigma_i / |T'_i|`
 (their weighted mean is the projection on the derivative, Bouchy's optimal
@@ -110,15 +116,48 @@ spectrum (its number, file and MJD), and kept in the template's table of
 spectra (`VSYS`, `VSYS_ERR`). The plot of the template's velocities shows
 the iterations: the velocities at the start and after each pass, light to
 dark, under those kept (against the spectrum's number and its MJD), and the
-convergence, the rms change of each pass against
-`MAX_CONVERGENCE_TEMPLATE_RV` with the Bouchy steps each pass took (median
-and most over the spectra).
+convergence, the share of the spectra that changed by less than
+`TEMPLATE_RV_CONV_NSIG` sigma in each pass against `TEMPLATE_RV_CONV_FRAC`,
+the rms change of each pass and the Bouchy steps each took (median and most
+over the spectra).
 PCA2D's star frame follows them (`registration.velocities`, by file name),
 so that its star component is built where the star is and the PCA does not
 take in part of a real signal; `lbl_wrap` makes the object's own template
 this way before PCA2D, whatever template it is measured against
 (`OBJECT_COMPARISON`), and makes it again when it was made with the velocity
 taken as constant (`SMALLRV` in its header).
+
+## The velocity box
+
+Each spectrum's velocity is kept in a small box, one JSON file per object,
+`DATA_DIR/velocities/<object>.json` (`lbl/science/velocity_box.py`), made
+the first time a step needs a starting point and brought up to date as the
+measurements improve. A spectrum's entry, under its file name: `v`, the
+star's velocity in it, BERV taken out (relativistic composition: what the
+template registers the spectrum at), `err`, `by` (what measured it), `mjd`,
+`berv` and the date. An entry is replaced by a measurement of a higher rank
+(`ccf` < `template` < `lbl`) or a newer one of the same rank, never by one
+of a lower rank. The corrected spectra (`<object>_pca2d`) share their
+object's box; an injection test (`<object>_inj`) has its own. The file is
+written whole under a lock, so that two runs writing at once keep their
+entries; `lbl_reset` deletes the boxes.
+
+- **The first time** a spectrum is not in the box, its velocity is measured
+  by a CCF against the PHOENIX model at the star's Teff (`OBJECT_TEFF`, the
+  model the mask uses), as the mask's systemic velocity is
+  (`general.sysvel_ccf`: ln flux on a grid of 0.5 km/s, high-passed, the
+  photometric bands only, every shift at once by FFT): a peak below 5 sigma
+  is not kept. The median of these velocities is the box's `systemic`, a
+  clean systemic velocity of the star against the model. On TOI-904 (NIRPS,
+  14 CADC spectra, 2026-11-24): 1 s a spectrum, systemic +2.848 km/s against
+  LBL's median of +2.886 km/s for the same spectra, and the CCF velocities
+  50 m/s rms from the template's.
+- **The template** (`SMALL_RV_SHIFT = False`) starts from the box, less its
+  systemic velocity (the template keeps its frame: `VSYS` stays relative),
+  known orbits kept for the spectra the box has from a CCF only, and writes
+  its velocities back (`by: template`).
+- Without `OBJECT_TEFF` or a model, the passes start from the BERV alone (or
+  the orbits), as before, and a warning says so.
 
 ## Explicit derivatives
 

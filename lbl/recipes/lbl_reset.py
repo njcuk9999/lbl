@@ -4,7 +4,8 @@
 lbl_reset
 
 Remove the products of LBL from DATA_DIR (the spectra it derived, tables,
-velocities, masks, templates, plots, the sample wave grid)
+velocities, masks, templates, the velocity boxes, plots, the sample wave
+grid)
 
 Created on 2021-08-24
 
@@ -77,6 +78,9 @@ def reset_plan(data_dir: str, params) -> list:
         ('lblrv', join('LBLRV_SUBDIR'), dict()),
         ('masks', join('MASK_SUBDIR'), dict()),
         ('templates', join('TEMPLATE_SUBDIR'), dict()),
+        # the velocity boxes (lbl.science.velocity_box): each spectrum's
+        #   velocity, made again by a CCF the next time a template needs it
+        ('velocities', os.path.join(data_dir, 'velocities'), dict()),
         ('plots', os.path.join(data_dir, 'plots'), dict()),
         # of calib/, the sample wave grid alone (the blazes stay)
         ('wavegrid', join('CALIB_SUBDIR'),
