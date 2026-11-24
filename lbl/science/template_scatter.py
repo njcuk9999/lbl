@@ -325,7 +325,8 @@ BOUCHY_MAX_STEPS = 20
 def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
                        shifts: np.ndarray, lngrid: np.ndarray,
                        scan: bool, scan_step: float,
-                       errors: np.ndarray = None) -> np.ndarray:
+                       errors: np.ndarray = None,
+                       steps_taken: np.ndarray = None) -> np.ndarray:
     """
     The velocity of each spectrum against the templates of some orders: the
     shift of the template that matches the spectrum (a scan of +-50 steps
@@ -340,6 +341,8 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
     :param scan_step: float, the step of the scan [ln wavelength]
     :param errors: np.ndarray or None, filled with each spectrum's
                    uncertainty [m/s] (the mixture model's, last step)
+    :param steps_taken: np.ndarray or None, filled with the number of
+                        Bouchy steps each spectrum took
 
     :return: np.ndarray, the velocity to add to each spectrum's [m/s]
     """
@@ -397,7 +400,7 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
         #   (BOUCHY_MAX_STEPS at most). From 3 km/s off, with lines 4.5 km/s
         #   wide, two steps leave 169 m/s, three 0.3 m/s, five nothing
         converged = False
-        for _ in range(BOUCHY_MAX_STEPS):
+        for nstep in range(1, BOUCHY_MAX_STEPS + 1):
             pix_dv, pix_err = [], []
             for x, y, w, (grid, d0, d1) in zip(xs, ys, ws, tm):
                 model = np.interp(x - shift, grid, d0, left=np.nan,
@@ -423,6 +426,8 @@ def measure_velocities(data: OrderData, fits: Dict[int, Dict[str, Any]],
             shift += step
             if errors is not None:
                 errors[ifile] = C_MS * step_err
+            if steps_taken is not None:
+                steps_taken[ifile] = nstep
             limit = BOUCHY_TOLERANCE * step_err \
                 if np.isfinite(step_err) else 0.0
             if abs(step) <= limit or abs(step) * C_MS < BOUCHY_FLOOR:
@@ -494,10 +499,11 @@ def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
                      reg: List[int], berv: np.ndarray, rv0: np.ndarray,
                      rv_err: np.ndarray, lngrid: np.ndarray,
                      times: np.ndarray, time_label: str,
-                     changes: List[float]) -> None:
-    """The velocities measured and the spectra registered at them, on the
-    middle order of those measured (lbl.science.plot, for PCA2D's and the
-    window's eyes): never fatal"""
+                     changes: List[float], history: List[np.ndarray] = None,
+                     steps_per_pass: List[np.ndarray] = None) -> None:
+    """The velocities measured, pass by pass, and the spectra registered at
+    them, on the middle order of those measured (lbl.science.plot, for
+    PCA2D's and the window's eyes): never fatal"""
     try:
         from lbl.science import plot
         io_ = len(reg) // 2
@@ -537,7 +543,8 @@ def _plot_velocities(inst, data: OrderData, fits: Dict[int, Any],
             inst, rv0, rv_err, times, time_label, changes, cloud_x, cloud_y,
             grid_x, grid_y, inst.params['OBJECT_SCIENCE'], cloud_c=cloud_c,
             colour_label=(time_label or 'MJD') if np.isfinite(times).any()
-            else 'spectrum', injected=injected)
+            else 'spectrum', injected=injected, history=history,
+            steps_per_pass=steps_per_pass)
     except Exception as exc:                                  # noqa: BLE001
         log.warning('the plot of the template\'s velocities was not made: '
                     '{0}'.format(exc))
@@ -625,15 +632,22 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
                            desc='Reading spectra (velocities)')
         changes = []
         rv_err = np.full(nfiles, np.nan)
+        # each pass's velocities (the start first) and the Bouchy steps
+        #   each spectrum took, for the plot
+        history = [np.array(rv0, dtype=float)]
+        steps_per_pass = []
         for ite in range(5):
             shifts = star_shift(berv, rv0)
             fits = {io_: fit_order(data, io_, shifts, lngrid, fit_params,
                                    hp_pix[order], 2)
                     for io_, order in enumerate(reg)}
+            taken = np.zeros(nfiles, dtype=int)
             dv = measure_velocities(data, fits, shifts, lngrid,
                                     scan=(ite == 0), scan_step=dln,
-                                    errors=rv_err)
+                                    errors=rv_err, steps_taken=taken)
             rv0 = mp.add_velocities(rv0, dv)
+            history.append(np.array(rv0, dtype=float))
+            steps_per_pass.append(taken)
             n1, p1 = np.nanpercentile(dv, [16, 84])
             sig = (p1 - n1) / 2.0
             changes.append(float(sig))
@@ -645,7 +659,8 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
         _log_velocities(sci_table, rv0, rv_err, times, time_label)
         sci_table['VSYS_ERR'] = np.array(rv_err)
         _plot_velocities(inst, data, fits, reg, berv, rv0, rv_err, lngrid,
-                         times, time_label, changes)
+                         times, time_label, changes, history,
+                         steps_per_pass)
         del data
     shifts = star_shift(berv, rv0)
     # -------------------------------------------------------------------------

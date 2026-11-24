@@ -107,7 +107,12 @@ iteration), and follow LBL's velocities of the same spectra to 3.9 m/s rms
 Each spectrum's velocity, less their median, and its uncertainty (the
 mixture model's) are written in the log once measured, one line per
 spectrum (its number, file and MJD), and kept in the template's table of
-spectra (`VSYS`, `VSYS_ERR`).
+spectra (`VSYS`, `VSYS_ERR`). The plot of the template's velocities shows
+the iterations: the velocities at the start and after each pass, light to
+dark, under those kept (against the spectrum's number and its MJD), and the
+convergence, the rms change of each pass against
+`MAX_CONVERGENCE_TEMPLATE_RV` with the Bouchy steps each pass took (median
+and most over the spectra).
 PCA2D's star frame follows them (`registration.velocities`, by file name),
 so that its star component is built where the star is and the PCA does not
 take in part of a real signal; `lbl_wrap` makes the object's own template

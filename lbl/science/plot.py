@@ -197,7 +197,9 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
                            cloud_x: np.ndarray, cloud_y: np.ndarray,
                            grid_x: np.ndarray, grid_y: np.ndarray,
                            objname: str, cloud_c: np.ndarray = None,
-                           colour_label: str = 'MJD', injected=None):
+                           colour_label: str = 'MJD', injected=None,
+                           history: List[np.ndarray] = None,
+                           steps_per_pass: List[np.ndarray] = None):
     """
     The velocities the template measured on its spectra (SMALL_RV_SHIFT
     False), with their uncertainties, against the spectrum's number and
@@ -219,12 +221,19 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
     :param colour_label: str, what the epoch is
     :param injected: (MJD, velocity, label) of an injection test's signals
                      at the velocities' zero point, drawn over them, or None
+    :param history: list of np.ndarray or None, the velocities at the start
+                    and after each pass [m/s] (the last is `velocities`):
+                    the passes before the last are drawn under it, and the
+                    convergence below
+    :param steps_per_pass: list of np.ndarray or None, the Bouchy steps each
+                           spectrum took in each pass
     """
     key = _wanted(inst, None, lambda: 'template_velocities_' + str(objname))
     if key is None:
         return
     plt = import_matplotlib()
-    fig, frames = plt.subplots(ncols=1, nrows=3, figsize=(9, 10))
+    fig, frames = plt.subplots(ncols=1, nrows=4, figsize=(9, 13),
+                               gridspec_kw=dict(height_ratios=[3, 3, 2, 3]))
     vel = np.asarray(velocities, dtype=float)
     vel = vel - np.nanmedian(vel)
     err = np.asarray(errors, dtype=float)
@@ -234,8 +243,28 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
              'm/s'.format(int(np.sum(np.isfinite(vel))), objname,
                           float(np.nanstd(vel)), float(np.nanmedian(err))))
     number = np.arange(1, vel.size + 1)
+    # THE ITERATIONS: the velocities at the start and after each pass before
+    #   the last (each less its own median), light to dark, under the last
+    passes = [np.asarray(h, dtype=float) for h in (history or [])]
+    earlier = passes[:-1] if len(passes) == len(changes) + 1 else []
+    shades = plt.get_cmap('Blues')(np.linspace(0.3, 0.85, max(1,
+                                                              len(earlier))))
+    for k, past in enumerate(earlier):
+        if past.size != vel.size:
+            continue
+        past = past - np.nanmedian(past)
+        label = 'start' if k == 0 else 'pass {0} (change {1:.1f} m/s rms)' \
+            .format(k, changes[k - 1])
+        frames[0].plot(number, past, 'o', ms=3, mfc='none', mew=0.7,
+                       color=shades[k], label=label)
+        if np.isfinite(times).any():
+            frames[1].plot(times, past, 'o', ms=3, mfc='none', mew=0.7,
+                           color=shades[k], label=label)
+    last = 'pass {0}, kept'.format(len(changes)) if changes else 'measured'
     frames[0].errorbar(number, vel, yerr=err, fmt='.', ms=4, color='C3',
-                       ecolor='C3', elinewidth=0.6, alpha=0.8)
+                       ecolor='C3', elinewidth=0.6, alpha=0.8, label=last)
+    if earlier:
+        frames[0].legend(loc=0, fontsize=7)
     frames[0].set(xlabel='spectrum (Nth, in the order read)',
                   ylabel='velocity less its median [m/s]')
     frames[0].set_title(title, fontsize=9)
@@ -245,10 +274,11 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
     if np.isfinite(times).any():
         frames[1].errorbar(times, vel, yerr=err, fmt='.', ms=4, color='C3',
                            ecolor='C3', elinewidth=0.6, alpha=0.8,
-                           label='measured')
+                           label=last)
         if injected is not None:
             frames[1].plot(injected[0], injected[1], color='k', lw=1.0,
                            label=injected[2])
+        if injected is not None or earlier:
             frames[1].legend(loc=0, fontsize=7)
         frames[1].set(xlabel=time_label or 'MJD',
                       ylabel='velocity less its median [m/s]')
@@ -258,6 +288,32 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
                        transform=frames[1].transAxes)
     for frame in frames[:2]:
         frame.grid(color='lightgrey', linestyle='--')
+    # THE CONVERGENCE: the rms change of each pass against the threshold
+    #   that stops the passes, and the Bouchy steps each pass took (median
+    #   and most over the spectra)
+    frame = frames[2]
+    if changes:
+        npass = np.arange(1, len(changes) + 1)
+        shown = np.maximum(np.asarray(changes, dtype=float), 1e-3)
+        frame.semilogy(npass, shown, 'o-', color='C0', label='rms change')
+        limit = inst.params.get('MAX_CONVERGENCE_TEMPLATE_RV', None)
+        if limit is not None:
+            frame.axhline(float(limit), color='C3', ls='--', lw=1,
+                          label='MAX_CONVERGENCE_TEMPLATE_RV '
+                                '({0:g} m/s)'.format(float(limit)))
+        for k, taken in enumerate(steps_per_pass or []):
+            taken = np.asarray(taken)[np.asarray(taken) > 0]
+            if k < len(changes) and taken.size:
+                frame.annotate('Bouchy steps {0:g} (most {1:d})'.format(
+                    float(np.median(taken)), int(taken.max())),
+                    (npass[k], shown[k]), textcoords='offset points',
+                    xytext=(6, 4), fontsize=7)
+        frame.set_xticks(npass)
+        frame.set_xlim(0.5, len(changes) + 1.5)
+        frame.legend(loc=0, fontsize=7)
+    frame.set(xlabel='pass', ylabel='change [m/s rms]',
+              title='Convergence of the velocities, pass by pass')
+    frame.grid(color='lightgrey', linestyle='--')
     if len(cloud_x):
         centre = float(np.nanmedian(cloud_x))
         # 1 nm about the order's middle, in ln(wavelength)
@@ -267,20 +323,20 @@ def template_velocity_plot(inst: InstrumentsType, velocities: np.ndarray,
         if cloud_c is not None and len(cloud_c) == len(cloud_x):
             # the pixels coloured by their spectrum's epoch: a spectrum
             #   misplaced shows as a colour off the cloud
-            dots = frames[2].scatter(np.exp(cloud_x[inc]), cloud_y[inc],
+            dots = frames[3].scatter(np.exp(cloud_x[inc]), cloud_y[inc],
                                      c=np.asarray(cloud_c)[inc], s=0.6,
                                      cmap='viridis', alpha=0.6, lw=0,
                                      rasterized=True,
                                      label='the spectra, registered')
-            fig.colorbar(dots, ax=frames[2], label=colour_label, pad=0.01)
+            fig.colorbar(dots, ax=frames[3], label=colour_label, pad=0.01)
         else:
-            frames[2].plot(np.exp(cloud_x[inc]), cloud_y[inc], ',',
+            frames[3].plot(np.exp(cloud_x[inc]), cloud_y[inc], ',',
                            color='C0', alpha=0.5, rasterized=True,
                            label='the spectra, registered')
-        frames[2].plot(np.exp(grid_x[ing]), grid_y[ing], color='k', lw=1.2,
+        frames[3].plot(np.exp(grid_x[ing]), grid_y[ing], color='k', lw=1.2,
                        label='template')
-        frames[2].legend(loc=0)
-        frames[2].set(xlabel='Wavelength, star frame [nm]',
+        frames[3].legend(loc=0)
+        frames[3].set(xlabel='Wavelength, star frame [nm]',
                       ylabel='normalized flux',
                       title='Every spectrum at its velocity, one order')
     plt.tight_layout()
