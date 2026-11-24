@@ -122,24 +122,6 @@ def test_a_fit_of_the_name_of_a_kept_basis_updates_it_there(tmp_path):
                         'PCA2D_Observer_2026b_nirps_he.fits')
 
 
-def test_the_window_lists_the_kept_bases_and_keeps_one(tmp_path):
-    lblinfo = pytest.importorskip("lbl.gui.lblinfo")
-    data_dir = str(tmp_path)
-    _basis_file(os.path.join(data_dir, 'pca2d', 'components'), 'a')
-    _basis_file(os.path.join(data_dir, 'models', 'pca2d_SPIROU_CADC'), 'b')
-    rows = {row['name']: row for row in lblinfo.bases(data_dir, 'SPIROU',
-                                                      'CADC')}
-    assert rows['b']['kept'] and not rows['a']['kept']
-    assert rows['b']['folder'] == os.path.join('models', 'pca2d_SPIROU_CADC')
-    assert 'error' in lblinfo.keep_basis(data_dir, '../x.fits', 'SPIROU')
-    out = lblinfo.keep_basis(data_dir, 'PCA2D_Observer_a_spirou.fits',
-                             'SPIROU')
-    assert out['path'].startswith(os.path.join(data_dir, 'models',
-                                               'pca2d_SPIROU_CADC'))
-    assert all(row['kept'] for row in lblinfo.bases(data_dir, 'SPIROU',
-                                                    'CADC'))
-
-
 def test_a_models_folder_from_before_is_sorted_at_once(tmp_path):
     models = tmp_path / 'models'
     models.mkdir()
@@ -201,8 +183,7 @@ def test_the_science_template_is_not_looked_for_beside_a_vetted_one(
 
 def test_a_basis_in_any_subfolder_of_models_is_found(tmp_path):
     # a basis put in another subfolder of models/ (here
-    #   template_NIRPS_HE_CADC): LBL and the window look in every subfolder
-    lblinfo = pytest.importorskip("lbl.gui.lblinfo")
+    #   template_NIRPS_HE_CADC): LBL looks in every subfolder
     data_dir = str(tmp_path)
     folder = os.path.join(data_dir, 'models', 'template_NIRPS_HE_CADC')
     head = fits.Header()
@@ -214,10 +195,6 @@ def test_a_basis_in_any_subfolder_of_models_is_found(tmp_path):
     fits.PrimaryHDU(header=head).writeto(path)
     assert basis.basis_path('NIRPS_SNR45-90', data_dir, 'NIRPS_HE',
                             'CADC') == path
-    rows = lblinfo.bases(data_dir, 'NIRPS_HE', 'CADC')
-    assert [(r['name'], r['kept'], r['compatible']) for r in rows] == [
-        ('NIRPS_SNR45-90', True, True)]
-    assert rows[0]['folder'] == os.path.join('models', 'template_NIRPS_HE_CADC')
     # the instrument's own kept folder comes first for the same file
     _basis_file(os.path.join(data_dir, 'models', 'pca2d_NIRPS_HE_CADC'),
                 'other')

@@ -1,36 +1,30 @@
 # Working in this repository
 
+## LBL is the arithmetic, nothing else
+
+This branch holds the measurement, the PCA2D precleaning and the reports,
+all run by wraps (`lbl.recipes.lbl_wrap`; `lbl/doc/example_wrap_pca2d.py`) and by the
+commands `lbl_pca2d`, `lbl_setup`, `lbl_reset`. It holds no window, no
+search or fetch of public archives and no dispatch of downloaded files:
+those belong to a separate package, which imports LBL and which LBL never
+imports. Do not add such code here, nor options, parameters or tests that
+exist only for it.
+
 ## The documentation is always kept up to date
 
-The window `lbl_gui` has a **Documentation** tab: a website made of the
-Markdown pages of `lbl/doc/site/` and of LBL's documents in `lbl/doc/`
-(`PCA2D.md`, `TEMPLATE.md`, `KnownLimitations.md`, `AddingAnInstrument.md`),
-in the sections and order of `lbl/doc/site/SITE.yaml` (served by
-`lbl/gui/docs.py`).
-
-**Every change of the window or of what LBL does updates that documentation
-in the same commit**: a new or renamed tab, field, button, option, folder,
-file, step or recipe; a default changed; a behaviour changed (how files are
-dispatched, how stars are named, what a run writes, what the cleanup
-deletes...); a new instrument or data source. Edit the page that describes
-it (or add one, and list it in `SITE.yaml`); a change that no page
-describes yet gets a page. Do not consider a change done while the
+LBL's documents are the Markdown files of `lbl/doc/` (`PCA2D.md`,
+`TEMPLATE.md`, `KnownLimitations.md`, `AddingAnInstrument.md`) and the
+README. **Every change of what LBL does updates them in the same commit**:
+a new or renamed option, file, folder, step or recipe; a default changed; a
+behaviour changed (what a run writes, what a reset deletes...); a new
+instrument or data source. Do not consider a change done while the
 documentation still describes the old behaviour.
 
-What the code already says is pulled in rather than copied, so that it
-cannot drift: `{{help <key> | <title>}}` (the window's (i) text, from
-`lbl/gui/i18n.py`), `{{options}}` (PCA2D's options), `{{folders}}` (the
-instrument folders), `{{cleanup}}`, `{{version}}`. A new (i) help text must
-be placed in a page with `{{help ...}}`.
+Pages are in English, terse: every fact and number kept, no filler; no em
+dashes.
 
-`maintenance/tests/test_gui_docs.py` fails when a page of `SITE.yaml` is
-missing, when a help text of the window is in no page, when a tab of the
-window has no line in the welcome page, or when a link between pages leads
-nowhere. Run it with the GUI tests:
+## Tests
 
 ```
-python -m pytest maintenance/tests -k gui
+python -m pytest maintenance/tests
 ```
-
-Pages are in English (LBL's documentation is), terse: every fact and
-number kept, no filler; no em dashes.

@@ -224,47 +224,6 @@ def test_an_eccentric_signal_is_recovered_with_its_phase():
     assert abs(row['e'][0] - 0.3) < 0.1
 
 
-def test_the_window_writes_and_reads_the_signals():
-    from lbl.gui import wrapgen, wrapload
-    state = dict(on=True, signals=[dict(k='5', period=12.3, phase='',
-                                        e=0, omega=90),
-                                   dict(k=3, period=40, phase=0.25, e=0.2,
-                                        omega=30)])
-    fake = wrapgen.injection_params(state)
-    assert fake == dict(k=[5.0, 3.0], period=[12.3, 40.0], phase=[0.0, 0.25],
-                        e=[0.0, 0.2], omega=[90.0, 30.0])
-    assert wrapgen.injection_params(dict(on=False, signals=state['signals'])) \
-        is None
-    assert 'K and P' in wrapgen.injection_params(dict(on=True, signals=[]))
-    assert 'period' in wrapgen.injection_params(
-        dict(on=True, signals=[dict(k=5, period=-1)]))
-    # in the wrap, and back
-    text = wrapgen.render(dict(INSTRUMENT='SPIROU', DATA_SOURCE='APERO',
-                               OBJECT_SCIENCE=['STAR'], FAKE_KEPLERIAN=fake))
-    assert "rparams['FAKE_KEPLERIAN'] = {'k': [5.0, 3.0]" in text
-    assert 'an injection test' in text
-    back = wrapload.to_state(wrapload.read_text(text)['rparams'])['state']
-    assert back['injection']['on'] is True
-    assert [s['k'] for s in back['injection']['signals']] == [5.0, 3.0]
-    assert 'FAKE_KEPLERIAN' not in back['extra']
-    # a t0 is read as the phase it means
-    rows, said = wrapload.injection_state(dict(k=5, period=10,
-                                               t0=injection.EPOCH - 2.5))
-    assert np.isclose(rows[0]['phase'], 0.25) and 't0' in said
-
-
-def test_the_run_s_steps_name_the_injected_objects():
-    from lbl.gui import wrapgen
-    plan = wrapgen.steps(dict(OBJECT_SCIENCE=['STAR'],
-                              OBJECT_COMPARISON=['STAR'],
-                              RUN_LBL_COMPUTE=True, RUN_LBL_COMPILE=True,
-                              PCA2D=dict(n_star=1),
-                              FAKE_KEPLERIAN=dict(k=5, period=10)))
-    objects = [step['obj'] for step in plan]
-    assert 'STAR_inj' in objects and 'STAR_inj_pca2d' in objects
-    assert 'STAR' not in objects and 'STAR_pca2d' not in objects
-
-
 def test_the_report_says_what_was_recovered():
     from lbl.pca2d import keplerfit, texreport
     rng = np.random.default_rng(7)
@@ -353,18 +312,6 @@ def test_the_signals_among_the_known_planets(tmp_path):
     assert np.isclose(planets.star_velocity(bjd, alone['orbits'])[0],
                       injection.velocity(bjd, injection.signals(
                           dict(k=4.0, period=6.0)))[0])
-
-
-def test_the_window_holds_known():
-    from lbl.gui import wrapgen, wrapload
-    state = dict(on=True, known=True, signals=[dict(k=5, period=12)])
-    fake = wrapgen.injection_params(state)
-    assert fake['known'] is True
-    text = wrapgen.render(dict(OBJECT_SCIENCE=['STAR'],
-                               FAKE_KEPLERIAN=fake))
-    back = wrapload.to_state(wrapload.read_text(text)['rparams'])['state']
-    assert back['injection']['known'] is True
-    assert 'known' not in back['injection']['signals'][0]
 
 
 def test_an_injected_period_is_fitted_once():

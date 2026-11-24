@@ -2,17 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 The plots a run shows as it goes (lbl.science.liveplot): saved for the
-window that watches the run instead of shown in windows that wait to be
-closed, the first file's only for a plot drawn per file, listed in order;
-and the window's side (lbl.gui.runner: the folder given to the run, the
-plots in its summary).
+front end that watches the run instead of shown in windows that wait to be
+closed, the first file's only for a plot drawn per file, listed in order.
 
 Created on 2026-11-18
 
 @author: artigau
 """
-import json
-import os
 
 import matplotlib
 matplotlib.use('Agg')
@@ -103,26 +99,6 @@ def test_lbl_s_plots_go_to_the_window_first_file_only(tmp_path, monkeypatch):
     assert [row['title'] for row in listed][-3:] == [
         'template', 'template velocities, the spectra registered',
         'template velocities, the spectra registered']
-
-
-def test_the_window_gives_the_folder_and_reads_the_plots(tmp_path):
-    from lbl.gui import runner
-    run = tmp_path / 'gui' / 'runs' / 'r1'
-    run.mkdir(parents=True)
-    assert runner.plots_of(str(run)) == []
-    folder = runner.plots_folder(str(run))
-    os.makedirs(folder)
-    (run / 'plots' / '01_template_STAR.pdf').write_bytes(b'%PDF-1.4')
-    with open(os.path.join(folder, 'index.json'), 'w') as handle:
-        json.dump([dict(file='01_template_STAR.pdf', title='template',
-                        step='template', object='STAR'),
-                   dict(file='02_gone.pdf', title='gone')], handle)
-    found = runner.plots_of(str(run))
-    assert len(found) == 1 and found[0]['title'] == 'template'
-    assert found[0]['path'].endswith('01_template_STAR.pdf')
-    job = runner.Job('r1', 'r1', str(run), str(run / 'wrap.py'), 'python',
-                     str(tmp_path), dict())
-    assert job.summary()['plots'] == found
 
 
 def test_the_template_s_velocities_have_times_and_errors():

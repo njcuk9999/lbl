@@ -199,27 +199,3 @@ def test_a_new_correction_moves_the_old_residuals_aside(tmp_path):
     assert not residuals.exists() and not corrected.exists()
     aside = list((work / "superseded").glob("*/science/GJ1_residuals/a.fits"))
     assert len(aside) == 1 and said
-
-
-def test_the_window_offers_it_and_files_it_as_a_product(tmp_path):
-    from lbl.core.simbad import SUFFIXES
-    pytest.importorskip("lbl.gui")
-    from lbl.gui import cleanup, i18n, lblinfo
-    from lbl.gui.targets import DERIVED
-    row = next(r for r in lblinfo.pca2d_options("NIRPS_HE")
-               if r["key"] == "save_residuals")
-    assert (row["default"], row["kind"], row["group"]) == (False, "bool",
-                                                           "runs")
-    assert "save_residuals" in i18n.OPTIONS
-    assert i18n.EN["what_residuals"] and i18n.FR["what_residuals"]
-    # a folder of residuals is no target, and names its star
-    for name in ("GJ1_residuals", "GJ1_residuals_SNR50-60"):
-        assert DERIVED.search(name) and SUFFIXES.sub("", name) == "GJ1"
-    (tmp_path / "science" / "GJ1").mkdir(parents=True)
-    (tmp_path / "science" / "GJ1" / "a.fits").write_bytes(b"x")
-    (tmp_path / "science" / "GJ1_residuals").mkdir()
-    (tmp_path / "science" / "GJ1_residuals" / "a.fits").write_bytes(b"x")
-    kinds = {os.path.basename(item["path"]): item for item in
-             cleanup.survey(str(tmp_path))}
-    assert kinds["GJ1_residuals"]["code"] == "residuals"
-    assert kinds["GJ1"]["code"] == "spectra"

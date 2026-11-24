@@ -23,9 +23,10 @@ APERO's files:
   symbolic links to APERO's t.fits (the exposures the selection counted:
   read without error, with a BERV and an SNR), no copy;
 - <root>/wraps/<INSTRUMENT>_<basis>.py: the wraps, as the LBL window writes
-  them (lbl.gui.wrapgen.render): PCA2D joint, n_star=1, the instrument's
-  n_earth, LBL's own steps off (the bases are the product; the corrected
-  spectra of the training stars are written by the fit as always);
+  them (lbl_gui.wrapgen.render, the window's package lbl-pca2d-gui):
+  PCA2D joint, n_star=1, the instrument's n_earth, LBL's own steps off
+  (the bases are the product; the corrected spectra of the training stars
+  are written by the fit as always);
 - <root>/run_<INSTRUMENT>_<basis>.sh: one wrap, its basis kept once made;
   the six run side by side (a SPIRou fit is about 14 min an iteration, the
   bases one after the other took days; each SPIRou fit holds 25 to 50 GB,
@@ -125,7 +126,9 @@ def teff_of(value):
 
 
 def wrap(inst, name, stars, data_dir):
-    from lbl.gui import wrapgen
+    # the window's wrap generator: lbl_gui (lbl-pca2d-gui), in the same
+    #   environment as LBL
+    from lbl_gui import wrapgen
     objects = [obj for obj, _ in stars]
     rparams = dict(
         INSTRUMENT=inst, DATA_SOURCE=DATA_SOURCE, DATA_DIR=data_dir,

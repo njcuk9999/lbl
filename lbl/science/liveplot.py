@@ -3,11 +3,12 @@
 """
 The plots a run shows as it goes, without stopping it.
 
-A run the LBL window starts (lbl.gui.runner) is given the folder of its
-plots in LBL_LIVE_PLOTS (ENV): every plot of LBL's steps is then saved there
-as a PDF, listed in index.json (INDEX: file, title, step, object, time), and
-closed, instead of being shown in a window that would wait to be closed;
-the window shows them between the steps and the log as they come. A plot
+A run that a front end watches (a window that starts runs, a package apart
+from LBL) is given the folder of its plots in LBL_LIVE_PLOTS (ENV): every
+plot of LBL's steps is then saved there as a PDF, listed in index.json
+(INDEX: file, title, step, object, time), and closed, instead of being
+shown in a window that would wait to be closed; the front end shows them
+between the steps and the log as they come. A plot
 that LBL draws for every file (a CCF per spectrum, its lines) is saved for
 the FIRST file of each step and object only (claim). Without the variable
 nothing changes: the plots are shown as before, when PLOT asks for them.

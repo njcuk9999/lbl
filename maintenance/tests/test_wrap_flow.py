@@ -208,15 +208,3 @@ def test_a_second_run_corrects_once_on_the_corrected_velocities(
     corrections, _ = _two_pass_wrap(tmp_path, calls, monkeypatch,
                                     small_rv=False, ready=True)
     assert corrections == [{'STAR': 'STAR_pca2d'}]
-
-
-def test_the_plan_has_the_second_pass():
-    from lbl.gui import wrapgen
-    base = dict(OBJECT_SCIENCE=['STAR'], OBJECT_COMPARISON=['STAR'],
-                RUN_LBL_COMPUTE=True, PCA2D=dict(n_star=1))
-    once = [s.get('label') or s['kind'] for s in wrapgen.steps(base)]
-    twice = [s.get('label') or s['kind']
-             for s in wrapgen.steps(dict(base, SMALL_RV_SHIFT=False))]
-    assert 'step_pca2d_correct_2' not in once
-    assert twice.index('pca2d_correct') < twice.index(
-        'step_template_velocities') < twice.index('step_pca2d_correct_2')

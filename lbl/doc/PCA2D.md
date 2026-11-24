@@ -193,9 +193,8 @@ Mauna Kea is not cut at noon UT. The time of an exposure is read in its file
 name when it is there (APERO's and ESO's names of exposures carry it), else
 in its headers: DATE-OBS of the flux's extension or of the primary header
 (where ESO's S2D has it), else MJD-OBS. The date in the name of an ESO
-archive product (`ADP.<date>`, and the window's archive search names
-ESO's NIRPS spectra after it) is when the archive processed it, and is
-never taken. The cube records that longitude, and its
+archive product (`ADP.<date>`, which may name the file) is when the
+archive processed it, and is never taken. The cube records that longitude, and its
 cache key holds it, so a cube coadded at another boundary is built again.
 The cube is in the observer's frame, so a coadd smears the star by the BERV
 range of what it holds, and a long sequence is not one sky either: over a
@@ -327,8 +326,7 @@ injected one and K corrected over K delivered. The signals are part of the
 correction's request: other signals, another correction. With `known=True`
 and `PLANETS`, they are among the star's known planets: the template and
 PCA2D's star frame follow them, as they would a planet whose orbit is
-known. Details:
-[settings, injection test](site/tab_settings.md#injection-test).
+known. Details: `lbl/science/injection.py`.
 
 ## Components: saved, and read back
 
@@ -351,10 +349,8 @@ A basis that is to stay is KEPT in
 `DATA_DIR/models/pca2d_<INSTRUMENT>_<DATA_SOURCE>/` (`models/pca2d_SPIROU_CADC`),
 beside LBL's other models, which nothing deletes (`lbl_reset` empties
 `templates/`, a cleanup of the PCA2D products empties `pca2d/`):
-`lbl.pca2d.basis.keep(name, DATA_DIR, instrument)` moves it there (the window
-has a *keep* button beside the basis, and in its Runs tab a *Freeze basis*
-box that copies a run's basis there under a name of your own), or put the
-file there yourself:
+`lbl.pca2d.basis.keep(name, DATA_DIR, instrument)` moves it there, or put
+the file there yourself:
 a basis in any other subfolder of `models/` is found as well. `input_name`
 looks in `models/` first (the run's own `pca2d_` folder before the
 others), then in `pca2d/components/`; a fit whose `output_name` is that of
@@ -400,9 +396,9 @@ the format of `lbl/pca2d/nominal.yaml`, and that nominal file itself when
 there is none; the instrument and its data source are LBL's names, as in a
 wrap (or `lbl.instrument` and `lbl.data_source` in the configuration).
 
-## The LBL window
+## Wraps and front ends
 
-`lbl_gui` (`lbl.gui`) is only a front end to this: it
-writes an ordinary wrap file, with a `PCA2D` dict when the precleaning is on
-(`DATA_DIR/gui/runs/<run>/wrap.py`), and runs it with this LBL. The file can
-be edited and run again by hand. None of the computation is in it.
+Everything above runs from an ordinary wrap file, with a `PCA2D` dict when
+the precleaning is on. A front end (a window that builds runs) is not part
+of LBL: it writes such a wrap and runs it with this LBL, and the file can be
+edited and run again by hand. None of the computation is in it.
