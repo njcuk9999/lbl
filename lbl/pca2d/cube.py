@@ -175,10 +175,9 @@ def _save_cache(path: str, grid, data, sigma, trans, meta):
     if _PENDING_MEMBERS is not None:
         # which exposure went into which row: what `correct` matches an
         # exposure to its row by, once a night is cut into bundles
-        Table(rows=_PENDING_MEMBERS,
-              names=("filename", "row", "group", "bjd", "berv")
-              ).write(os.path.join(tmp, MEMBERS_FILE), format="ascii.csv",
-                      overwrite=True)
+        Table(rows=_PENDING_MEMBERS, names=MEMBER_COLUMNS).write(
+            os.path.join(tmp, MEMBERS_FILE), format="ascii.csv",
+            overwrite=True)
     shutil.rmtree(path, ignore_errors=True)
     os.rename(tmp, path)
     log("cached cube -> %s" % path)
@@ -348,7 +347,9 @@ class _Coadder:
                                  os.path.basename(str(merged["filename"])),
                                  str(self._label),
                                  float(meta.get("bjd", np.nan)),
-                                 member_berv(meta)))
+                                 member_berv(meta),
+                                 float(meta.get("snr_orders", np.nan)),
+                                 float(meta.get("snr_band", np.nan))))
         for parity in range(self.n_parity):
             slot = self.n_groups * self.n_parity + parity
             # A NON-ZERO WEIGHT IS NOT A USABLE WEIGHT. sigma is
@@ -418,9 +419,12 @@ def _merge_meta(rows):
             merged[key] = float(np.nanmean(values)) if np.any(np.isfinite(values)) \
                 else np.nan
     merged["exptime"] = float(np.nansum([row.get("exptime", np.nan) for row in rows]))
-    snr = np.array([row.get("snr_band", np.nan) for row in rows], dtype=float)
-    snr = snr[np.isfinite(snr)]
-    merged["snr_band"] = float(np.sqrt(np.sum(snr ** 2))) if snr.size else np.nan
+    for key in ("snr_band", "snr_orders"):
+        if key not in rows[0]:
+            continue
+        snr = np.array([row.get(key, np.nan) for row in rows], dtype=float)
+        snr = snr[np.isfinite(snr)]
+        merged[key] = float(np.sqrt(np.sum(snr ** 2))) if snr.size else np.nan
     merged["filename"] = rows[0]["filename"]
     return merged
 
@@ -652,6 +656,9 @@ def _prepare_exposure(path, config, grid, blocks):
         return out
     meta = one_object(meta, inp)
     meta["snr_band"] = sptf.band_snr(payload, dom["wave_min"], dom["wave_max"])
+    # every order's median: the SNR the LBL window shows, which a basis
+    #   keeps for each of its input exposures (basis INPUTS)
+    meta["snr_orders"] = sptf.exposure_snr(payload)
     usable = np.isfinite(payload["flux"]) & (payload["flux"] > 0)
     meta["median_flux"] = (float(np.median(payload["flux"][usable]))
                            if usable.any() else np.nan)
@@ -990,10 +997,16 @@ def template_path(config):
 #: a .partial folder then deletes the final folder before renaming, so a
 #: file placed there beforehand would be swept away.
 _PENDING_TEMPLATE = None
-#: the coadder's members, [(exposure, row name, group)], saved with the cube
+#: the coadder's members, one tuple of MEMBER_COLUMNS per exposure, saved
+#: with the cube
 _PENDING_MEMBERS = None
 #: where they are saved, in the cube's folder
 MEMBERS_FILE = "members.csv"
+#: a member: the exposure, the row it went into, its group (night), its BJD
+#: and BERV, its SNR (snr: the median of every order's, as the LBL window
+#: shows it; snr_band: over the domain's orders)
+MEMBER_COLUMNS = ("filename", "row", "group", "bjd", "berv", "snr",
+                  "snr_band")
 
 
 def member_berv(meta) -> float:

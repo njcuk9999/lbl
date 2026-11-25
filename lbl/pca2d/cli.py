@@ -1159,6 +1159,18 @@ def run_fit(plan):
         " when chi2 has clearly turned over", "info")
     fit_main(["--config", plan["written_config"], "--cube", plan["cube"],
               "--outdir", plan["outdir"]])
+    # the fit's input exposures and their SNR, which its basis keeps
+    #   (basis INPUTS): what a later run's SNR is matched against
+    from .basis import write_inputs
+    folders = ([m["directory"] for m in plan["members"]]
+               if plan.get("members") else [spectra_dir(cfg)])
+    try:
+        write_inputs(plan["cube"], plan["outdir"], folders,
+                     (cfg.get("input") or {}).get("extensions"))
+    except Exception as exc:                                  # noqa: BLE001
+        log("the fit's input exposures could not be listed (%s: %s): its"
+            " basis will not say their SNR" % (type(exc).__name__, exc),
+            "warn")
 
 
 def run_figures(plan):

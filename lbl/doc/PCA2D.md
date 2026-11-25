@@ -349,8 +349,19 @@ LBL names its templates, the instrument last, under the fit's `output_name`
 
 | file | what |
 |---|---|
-| `PCA2D_Observer_<output_name>_<instrument>.fits` | the observer basis: grid, components, mask, their power, the training stars, every row's amplitudes |
+| `PCA2D_Observer_<output_name>_<instrument>.fits` | the observer basis: grid, components, mask, their power, the training stars, every row's amplitudes, every input exposure and its SNR (`INPUTS`) |
 | `PCA2D_Star_<object>_<output_name>_<instrument>.fits` | each star of the fit: its spectrum per order parity, its star-frame components and their amplitudes |
+
+A basis keeps each input exposure (`INPUTS`: the file, the row it went into,
+its star, its BJD, whether its row was fitted) with its SNR: `snr`, the
+median of every order's extraction SNR (APERO's `EXTSNxxx`, the SNR the LBL
+window shows), and `snr_band`, over the domain's orders. `SNRMED`, `SNRP16`,
+`SNRP84` and `SNRN` in its primary header sum up the fitted ones' `snr`: what
+a run's SNR is matched against when a basis is chosen for it (the window's
+`smart` choice). The fit lists them in its folder (`inputs.csv`) from the
+cube's members (`members.csv`, which keeps each exposure's SNR), the header
+of a file whose cube was made before it did. A basis saved before
+2026-11-25 has none.
 
 Another star takes those observer components frozen with `input_name`: the
 output name (this instrument's file), the file name, or a path. Only its own

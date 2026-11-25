@@ -44,6 +44,14 @@ THE OBSERVER FILE:
     AMPLITUDES   one row per training row: star, file, BJD, BERV, the
                  ancillary quantities the fit kept (airmass, humidity...) and
                  the amplitude on each component
+    INPUTS       one row per input exposure (a row of bundled nights holds
+                 several): file, the row it went into, star, BJD, its SNR
+                 (snr: the median of every order's extraction SNR, the SNR
+                 the LBL window shows; snr_band: over the domain's orders),
+                 and whether its row was fitted (used). SNRMED, SNRP16,
+                 SNRP84 and SNRN in the primary header sum up the used ones'
+                 snr: what a run's SNR is matched against (the window's
+                 'smart' basis). Absent from a basis saved before 2026-11-25
 
 BASISID is a hash of the grid and the components: it enters the request
 stamp of a correction made with the basis, so that another basis makes the
@@ -66,6 +74,9 @@ from .grids import C_KMS, magic_grid
 
 #: where the components are, under DATA_DIR
 FOLDER = os.path.join('pca2d', 'components')
+#: the input exposures of a fit, in its folder (write_inputs, from
+#:   cli.run_fit): what save keeps as the basis' INPUTS
+INPUTS_FILE = 'inputs.csv'
 #: where the kept observer bases are, under DATA_DIR: one folder per
 #:   instrument and DATA_SOURCE, pca2d_<INSTRUMENT>_<DATA_SOURCE>
 #:   (lbl.core.io.model_subdir)
@@ -183,6 +194,66 @@ def keep(name: str, data_dir: str, instrument: str = '') -> str:
     return out
 
 
+def write_inputs(cube: str, outdir: str, directories=None,
+                 extensions=None):
+    """
+    The input exposures of a fit, one row each, into <outdir>/INPUTS_FILE:
+    filename, the cube row it went into (row), bjd, snr (the median of
+    every order's extraction SNR, tfits.exposure_snr) and snr_band. From
+    the cube's members (a cube of bundled nights) or else its rows (one per
+    exposure). An SNR the cube did not keep (one made before it did) is
+    read from the file's header, found in one of `directories`.
+
+    :param cube: str, the cube's folder
+    :param outdir: str, the fit's folder
+    :param directories: list of str, where the input files are
+    :param extensions: the instrument's extension names (input.extensions)
+
+    :return: str, the file written, or None when the cube has no rows
+    """
+    from .cube import MEMBERS_FILE
+    from . import tfits
+    meta = Table.read(os.path.join(cube, 'meta.fits'))
+    members = os.path.join(cube, MEMBERS_FILE)
+    nan = np.full(len(meta), np.nan)
+    if os.path.exists(members):
+        table = Table.read(members, format='ascii.csv')
+        names = [os.path.basename(str(f)) for f in table['filename']]
+        rows = [os.path.basename(str(r)) for r in table['row']]
+        bjd = np.asarray(table['bjd'], dtype=float)
+        snr, band = (np.asarray(table[key], dtype=float)
+                     if key in table.colnames else np.full(len(table), np.nan)
+                     for key in ('snr', 'snr_band'))
+    else:
+        # one row per exposure, its parity rows sharing the file
+        files = [os.path.basename(str(f)) for f in meta['filename']]
+        first, seen = [], set()
+        for k, name in enumerate(files):
+            if name not in seen:
+                seen.add(name)
+                first.append(k)
+        names = rows = [files[k] for k in first]
+        bjd = np.asarray(meta['bjd'], dtype=float)[first] \
+            if 'bjd' in meta.colnames else nan[first]
+        snr, band = (np.asarray(meta[key], dtype=float)[first]
+                     if key in meta.colnames else nan[first]
+                     for key in ('snr_orders', 'snr_band'))
+    if not names:
+        return None
+    snr = np.array(snr, dtype=float)
+    for k in np.flatnonzero(~np.isfinite(snr)):
+        for folder in directories or []:
+            path = os.path.join(folder, names[k])
+            if os.path.exists(path):
+                snr[k] = tfits.header_snr(path, extensions)
+                break
+    out = os.path.join(outdir, INPUTS_FILE)
+    Table(dict(filename=names, row=rows, bjd=bjd, snr=snr,
+               snr_band=np.asarray(band, dtype=float))).write(
+        out, format='ascii.csv', overwrite=True)
+    return out
+
+
 def basis_id(grid: np.ndarray, components: np.ndarray) -> str:
     """12 hex digits that change with the grid or any component"""
     digest = hashlib.sha1()
@@ -295,6 +366,36 @@ def save(run_dir: str, name: str, data_dir: str, objects: list,
     b = np.asarray(fit['b'], dtype=float)
     for index in range(n_earth):
         amplitudes['b%d' % (index + 1)] = b[rows, index]
+    # THE INPUT EXPOSURES (INPUTS_FILE, write_inputs): each one's SNR, what
+    #   a run's SNR is matched against; their star, and whether their row was
+    #   fitted, from the fit's rows
+    inputs = None
+    listed = os.path.join(run_dir, INPUTS_FILE)
+    if os.path.exists(listed):
+        inputs = Table.read(listed, format='ascii.csv')
+        star_of, used_of = dict(), dict()
+        for name, obj, ok in zip(np.asarray(fit['filename']), star, keep):
+            name = os.path.basename(str(name))
+            star_of.setdefault(name, str(obj))
+            used_of[name] = used_of.get(name, False) or bool(ok)
+        row_names = [os.path.basename(str(r)) for r in inputs['row']]
+        inputs = Table(dict(
+            object=[star_of.get(r, '') for r in row_names],
+            filename=[os.path.basename(str(f)) for f in inputs['filename']],
+            row=row_names,
+            bjd=np.asarray(inputs['bjd'], dtype=float),
+            snr=np.asarray(inputs['snr'], dtype=float),
+            snr_band=np.asarray(inputs['snr_band'], dtype=float),
+            used=np.array([used_of.get(r, False) for r in row_names],
+                          dtype=bool)))
+        snr = np.asarray(inputs['snr'])[np.asarray(inputs['used'])]
+        snr = snr[np.isfinite(snr)]
+        if snr.size:
+            p16, p50, p84 = np.percentile(snr, [16, 50, 84])
+            primary['SNRMED'] = (float(p50), 'median SNR of the input exposures')
+            primary['SNRP16'] = (float(p16), '16th percentile of their SNR')
+            primary['SNRP84'] = (float(p84), '84th percentile of their SNR')
+            primary['SNRN'] = (int(snr.size), 'input exposures with an SNR')
 
     out = component_file('observer', name, instrument, data_dir)
     # a kept basis of this name is updated where it is kept
@@ -310,13 +411,16 @@ def save(run_dir: str, name: str, data_dir: str, objects: list,
             fits.BinTableHDU(variance, name='VARIANCE'),
             fits.BinTableHDU(training, name='TRAINING'),
             fits.BinTableHDU(amplitudes, name='AMPLITUDES')]
+    if inputs is not None:
+        hdus.append(fits.BinTableHDU(inputs, name='INPUTS'))
     fits.HDUList(hdus).writeto(out, overwrite=True)
     return out
 
 
 class Basis:
     """A saved basis, read back: .grid, .components, .mask, .header, .ident,
-    .name, .training (Table), .amplitudes (Table)"""
+    .name, .training (Table), .amplitudes (Table), .inputs (Table, None for
+    a basis saved before it was kept)"""
 
     def __init__(self, path: str):
         self.path = path
@@ -327,6 +431,10 @@ class Basis:
             self.mask = np.asarray(hdul['MASK'].data, dtype=bool)
             self.training = Table(hdul['TRAINING'].data)
             self.amplitudes = Table(hdul['AMPLITUDES'].data)
+            # the input exposures and their SNR (none in a basis saved
+            #   before 2026-11-25)
+            self.inputs = (Table(hdul['INPUTS'].data)
+                           if 'INPUTS' in hdul else None)
         self.name = self.header.get('BASISNAM', os.path.basename(path))
         self.ident = self.header.get('BASISID', '')
         self.n_earth = self.components.shape[0]

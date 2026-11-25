@@ -163,3 +163,106 @@ def test_each_star_of_a_joint_fit_gets_its_own_file(tmp_path):
                               np.arange(2 * grid.size, 3 * grid.size))
         assert hdul[0].header['OBJECT'] == 'B'
         assert len(hdul['AMPLITUDES'].data) == 1
+
+
+def test_an_exposure_s_snr_is_the_median_of_its_orders(tmp_path):
+    """tfits.exposure_snr: every order's extraction SNR (APERO's EXTSNxxx),
+    the SNR the LBL window shows; header_snr the same from the headers"""
+    from lbl.pca2d import tfits
+    assert tfits.exposure_snr(dict(snr=[10.0, np.nan, 30.0, 20.0, 0.0])) \
+        == 20.0
+    assert np.isnan(tfits.exposure_snr(dict(snr=[np.nan])))
+    head = fits.Header()
+    for order, value in enumerate([12.0, 40.0, 33.0]):
+        head['EXTSN%03d' % order] = value
+    path = str(tmp_path / 'x_t.fits')
+    hdus = [fits.PrimaryHDU()] + [fits.ImageHDU(np.ones((3, 4)), name=n,
+                                                header=head if n == 'FluxA'
+                                                else None)
+                                  for n in ('FluxA', 'WaveA', 'BlazeA',
+                                            'Recon')]
+    fits.HDUList(hdus).writeto(path)
+    assert tfits.header_snr(path) == 33.0
+    assert np.isnan(tfits.header_snr(str(tmp_path / 'none.fits')))
+
+
+def _cube(folder, members=True, snr=True):
+    """A cube folder: three rows (one per exposure, or the bundles of four
+    exposures)"""
+    os.makedirs(folder)
+    Table(dict(filename=['f0.fits', 'f1.fits', 'f2.fits'],
+               bjd=[2461000.5, 2461001.5, 2461002.5],
+               snr_orders=[50.0, 60.0, 70.0], snr_band=[55.0, 65.0, 75.0])
+          ).write(os.path.join(folder, 'meta.fits'))
+    if members:
+        table = Table(dict(filename=['f0.fits', 'g0.fits', 'f1.fits',
+                                     'f2.fits'],
+                           row=['f0.fits', 'f0.fits', 'f1.fits', 'f2.fits'],
+                           group=['n0', 'n0', 'n1', 'n2'],
+                           bjd=[2461000.5, 2461000.6, 2461001.5, 2461002.5],
+                           berv=[1.0, 1.0, 2.0, 3.0]))
+        if snr:
+            table['snr'] = [40.0, 42.0, 60.0, 70.0]
+            table['snr_band'] = [41.0, 43.0, 61.0, 71.0]
+        table.write(os.path.join(folder, 'members.csv'), format='ascii.csv')
+
+
+def test_a_fit_lists_its_input_exposures_and_their_snr(tmp_path):
+    """basis.write_inputs: one row per exposure, from the members of a cube
+    of bundles or the rows of a cube of exposures; an SNR the cube did not
+    keep is read from the file's header"""
+    cube = str(tmp_path / 'cube')
+    _cube(cube)
+    out = basis.write_inputs(cube, str(tmp_path))
+    table = Table.read(out, format='ascii.csv')
+    assert list(table['filename']) == ['f0.fits', 'g0.fits', 'f1.fits',
+                                       'f2.fits']
+    assert list(table['row']) == ['f0.fits', 'f0.fits', 'f1.fits', 'f2.fits']
+    assert list(table['snr']) == [40.0, 42.0, 60.0, 70.0]
+    plain = str(tmp_path / 'plain')
+    _cube(plain, members=False)
+    table = Table.read(basis.write_inputs(plain, str(tmp_path)),
+                       format='ascii.csv')
+    assert list(table['snr']) == [50.0, 60.0, 70.0]
+    assert list(table['row']) == list(table['filename'])
+    old = str(tmp_path / 'old')
+    _cube(old, snr=False)
+    science = tmp_path / 'science'
+    science.mkdir()
+    head = fits.Header()
+    head['EXTSN000'] = 25.0
+    fits.HDUList([fits.PrimaryHDU()] + [
+        fits.ImageHDU(np.ones((1, 2)), name=n, header=head)
+        for n in ('FluxA', 'WaveA', 'BlazeA', 'Recon')]).writeto(
+        str(science / 'g0.fits'))
+    table = Table.read(basis.write_inputs(old, str(tmp_path),
+                                          [str(science)]),
+                       format='ascii.csv')
+    assert table['snr'][1] == 25.0
+    assert np.isnan(table['snr'][0])
+
+
+def test_a_basis_keeps_the_snr_of_its_input_exposures(tmp_path):
+    """INPUTS: each input exposure, its star and whether its row was fitted;
+    SNRMED and its percentiles in the header, over the fitted ones"""
+    run = tmp_path / 'run'
+    run.mkdir()
+    _fake_run(str(run))
+    Table(dict(filename=['f0.fits', 'h0.fits', 'f1.fits', 'f2.fits', 'x.fits'],
+               row=['f0.fits', 'f0.fits', 'f1.fits', 'f2.fits', 'x.fits'],
+               bjd=[1.0, 1.1, 2.0, 3.0, 4.0],
+               snr=[30.0, 50.0, 40.0, 80.0, 500.0],
+               snr_band=[31.0, 51.0, 41.0, 81.0, 501.0])).write(
+        str(run / basis.INPUTS_FILE), format='ascii.csv')
+    path = basis.save(str(run), 'snr_basis', str(tmp_path), ['A', 'B'],
+                      instrument='NIRPS_HE')
+    loaded = basis.load(path)
+    assert list(loaded.inputs['object']) == ['A', 'A', 'A', 'B', '']
+    assert list(loaded.inputs['used']) == [True, True, True, True, False]
+    assert loaded.header['SNRMED'] == 45.0 and loaded.header['SNRN'] == 4
+    # a fit that did not list them: no INPUTS, no SNRMED
+    os.remove(str(run / basis.INPUTS_FILE))
+    path = basis.save(str(run), 'plain_basis', str(tmp_path), ['A', 'B'],
+                      instrument='NIRPS_HE')
+    assert basis.load(path).inputs is None
+    assert 'SNRMED' not in basis.load(path).header

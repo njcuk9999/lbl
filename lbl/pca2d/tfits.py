@@ -210,6 +210,42 @@ def read_tfits(path: str, extensions=None, header_keys=None):
                 snr=snr, meta=meta)
 
 
+def exposure_snr(payload: dict) -> float:
+    """The exposure's SNR: the median of its per-order extraction SNR
+    (APERO's EXTSNxxx), every order, the SNR the LBL window shows for a
+    file. Kept with each input exposure of a cube (its members) and of an
+    observer basis (basis INPUTS), which a run's SNR is matched against."""
+    snr = np.asarray(payload.get("snr", []), dtype=float)
+    snr = snr[np.isfinite(snr) & (snr > 0)]
+    return float(np.median(snr)) if snr.size else np.nan
+
+
+def header_snr(path: str, extensions=None) -> float:
+    """exposure_snr from a file's headers alone (its flux extension's
+    EXTSNxxx), for an exposure of a cube made before its members kept it;
+    NaN when the file cannot be read or says nothing."""
+    try:
+        with robust_open(path) as hdulist:
+            headers = [hdu.header for hdu in hdulist]
+            # the flux extension's first when the instrument's names are
+            #   known; else the first header that has them, as the LBL
+            #   window reads them
+            try:
+                flux = str(_extensions(extensions)["flux"]).upper()
+                headers.sort(key=lambda h: str(h.get("EXTNAME", "")).upper()
+                             != flux)
+            except ValueError:
+                pass
+            for header in headers:
+                snr = [header_float(header, key) for key in header
+                       if str(key).startswith("EXTSN")]
+                if snr:
+                    return exposure_snr(dict(snr=snr))
+    except Exception:                                     # noqa: BLE001
+        pass
+    return np.nan
+
+
 def band_snr(payload: dict, wave_min: float, wave_max: float) -> float:
     """Median per-order extraction SNR over the orders inside the domain."""
     wave, snr = payload["wave"], payload["snr"]
