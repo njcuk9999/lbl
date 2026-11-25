@@ -170,18 +170,12 @@ convergence, the share of the spectra that changed by less than
 `TEMPLATE_RV_CONV_NSIG` sigma in each pass against `TEMPLATE_RV_CONV_FRAC`,
 the rms change of each pass and the Bouchy steps each took (median and most
 over the spectra).
-PCA2D's second pass, when the star moves by more than
-`MAX_CONVERGENCE_TEMPLATE_RV`, follows the velocities of the corrected
-spectra (`registration.velocities`, by file name), so that its star
-component is built where the star is and the PCA does not take in part of
-a real signal;
-`lbl_wrap` makes the corrected spectra's own template this way between the
-two passes, whatever template they are measured against
-(`OBJECT_COMPARISON`), and makes it again when it was made with the velocity
-taken as constant (`SMALLRV` in its header). The delivered spectra of a
-PCA2D run are measured as with `SMALL_RV_SHIFT = True`, and a template made
-so (`SMALLRV`) gives PCA2D no velocity, the box's included: its star frame
-is then the BERV ([PCA2D.md](PCA2D.md)).
+PCA2D's star frame does not follow the template's velocities: from its
+second pass on, it follows LBL's velocities of the previous pass's corrected
+spectra, less their dependence on the BERV ([PCA2D.md](PCA2D.md)). The
+delivered spectra of a PCA2D run are measured as with
+`SMALL_RV_SHIFT = True`; for its corrected spectra, `SMALL_RV_SHIFT` says
+whether their own template iterates on their velocities.
 
 ## The velocity box
 
@@ -227,12 +221,11 @@ entries; `lbl_reset` deletes the boxes.
   converged in 2 steps instead of 3 or 4; signals of K = 5 and 15 km/s
   injected (an 8 and a 24 km/s span) came back with slopes of 1.0021 and
   1.0006.
-- **PCA2D's star frame**, when it follows the star's velocities (its
-  second pass, `SMALL_RV_SHIFT = False`, `lbl_pca2d.object_velocities`),
-  takes them from the corrected object's box (LBL's, else the template's;
-  not the first CCF's), spectra added since the template included, else
-  from the template's table; none when the template was made with the
-  velocity taken as constant.
+- **PCA2D's star frame**, from its second pass on, takes LBL's velocities
+  of the previous pass's corrected spectra from the corrected object's box
+  (`lbl` entries, the spectra of its folder), less their linear dependence
+  on the BERV (each entry keeps its spectrum's BERV), whatever
+  `SMALL_RV_SHIFT` says ([PCA2D.md](PCA2D.md)).
 - Without `OBJECT_TEFF` or a model, nothing is measured by CCF and the
   passes start from the BERV alone (or the orbits), as before, with a
   warning; LBL's compute still writes its velocities to the box.

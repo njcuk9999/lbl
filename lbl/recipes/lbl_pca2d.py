@@ -106,7 +106,8 @@ RESIDUALS = '_residuals'
 #: the switches of this recipe, and what they are when not given
 DEFAULTS = dict(n_star=1, n_earth=None, figures=True, overwrite=False,
                 name=None, joint=False, compare=True, output_name=None,
-                input_name=None, save_residuals=False)
+                input_name=None, save_residuals=False, min_passes=2,
+                max_passes=4)
 #: the switches that stand for a key of the pca2d configuration, which gives
 #: their value when they are not set (None above)
 SWITCH_PATHS = dict(n_earth='twoframe.n_earth')
@@ -146,6 +147,13 @@ MANAGED = ('input.directory', 'input.object', 'output.directory',
            'output.fits_directory')
 #: {corrected object: its pca2d run folder}, for the report after LBL
 RUNS = dict()
+#: {corrected object: its done.json}, where lbl_wrap's passes are recorded
+#:   (mark_passes)
+STATES = dict()
+#: {corrected object: the passes of the correction kept}, when it is the
+#:   settled last pass of passes that started with the request asked for
+#:   (lbl_wrap then makes no other)
+SETTLED = dict()
 
 
 # =============================================================================
@@ -457,12 +465,18 @@ def size_of(path: str) -> int:
 
 
 def supersede(data_dir: str, corr_dir: str, name: str, work: str, log,
-              science_subdir: str = 'science', extra=()) -> None:
+              science_subdir: str = 'science', extra=(),
+              discard: bool = False) -> None:
     """Move the previous corrected object, and what LBL made from it, aside.
 
     Moved and not deleted: a correction is minutes to hours, its velocities
     hours, and which of two of them was right is sometimes only known after.
     The folder is said, with its size, so that it can be removed by hand.
+
+    discard: deleted instead, said with its size: an earlier pass of the
+    same run (lbl_wrap's passes), which the next one is made from and which
+    the run makes again every time; kept, every pass would leave a copy of
+    the corrected spectra (1.7 GB for 130 NIRPS spectra)
     """
     going = ([corr_dir] if os.path.isdir(corr_dir) else [])
     # the residuals of that correction (save_residuals), which another
@@ -470,6 +484,17 @@ def supersede(data_dir: str, corr_dir: str, name: str, work: str, log,
     going += [path for path in extra if os.path.isdir(path)]
     going += lbl_products(data_dir, name, science_subdir)
     if not going:
+        return
+    if discard:
+        total = sum(size_of(path) for path in going)
+        for path in going:
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+        log('the previous pass\'s %s and what LBL made from it (%d items,'
+            ' %.1f GB) deleted: an earlier pass of this run, the next one'
+            ' made from it' % (name, len(going), total / 1e9), 'info')
         return
     stamp = datetime.datetime.now().strftime('%y%m%d_%H%M%S')
     aside = os.path.join(work, 'superseded', stamp)
@@ -695,18 +720,18 @@ def main(instrument: str, data_dir: str, object_science: str,
          object_comparison: str = None, data_source: str = None,
          pca2d=None, input_file: str = None, science_subdir: str = 'science',
          report: bool = True, skip=None, planets: bool = False,
-         velocities_from: dict = None, **kwargs) -> tuple:
+         velocities_from: dict = None, first: str = None,
+         discard_previous: bool = False, **kwargs) -> tuple:
     """Correct one object, and return the names LBL goes on with:
     (object_science, object_comparison). skip is the wrap's
-    SKIP_LBL_PCA2D, planets its PLANETS, velocities_from {object: the
-    object whose template's velocities its star frame follows} (the
-    corrected spectra's, for lbl_wrap's second pass; None: the BERV alone,
-    lbl_wrap's first pass)."""
+    SKIP_LBL_PCA2D, planets its PLANETS, velocities_from {object: what its
+    star frame follows} (correct), first and discard_previous lbl_wrap's
+    passes' (correct)."""
     _ = kwargs
     names = correct(instrument, data_dir, [object_science],
                     {object_science: object_comparison}, data_source, pca2d,
                     input_file, science_subdir, report, skip, planets,
-                    velocities_from)
+                    velocities_from, first, discard_previous)
     return names[object_science]
 
 
@@ -714,6 +739,7 @@ def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
           data_source: str = None, pca2d=None, input_file: str = None,
           science_subdir: str = 'science', report: bool = True, skip=None,
           planets: bool = False, velocities_from: dict = None,
+          first: str = None, discard_previous: bool = False,
           **kwargs) -> dict:
     """Correct several objects against one observer basis (pca2d.joint), each
     with its own star spectrum. {object: (object_science, object_comparison)}.
@@ -722,14 +748,24 @@ def joint(instrument: str, data_dir: str, objects: list, comparisons: dict,
     _ = kwargs
     return correct(instrument, data_dir, list(objects), dict(comparisons),
                    data_source, pca2d, input_file, science_subdir, report,
-                   skip, planets, velocities_from)
+                   skip, planets, velocities_from, first, discard_previous)
 
 
 def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
             input_file, science_subdir, report=True, skip=None,
-            planets=False, velocities_from=None) -> dict:
+            planets=False, velocities_from=None, first=None,
+            discard_previous=False) -> dict:
     """The correction of one object, or of several together. Returns
     {object: (corrected object, its comparison)}.
+
+    velocities_from {object: what its star frame follows}: None, the BERV
+    alone (with the known orbits); a dict, those velocities {file name:
+    km/s} (lbl_wrap's passes: LBL's of the previous pass's corrected
+    spectra); a name, the velocities that object's template measured.
+    first: the stamp of the request of the first of lbl_wrap's passes this
+    one belongs to (None: this is the first). discard_previous: the
+    correction on disk is an earlier pass of this run, deleted rather than
+    moved aside (supersede).
 
     skip is the wrap's SKIP_LBL_PCA2D: None makes the correction again only
     if the request changed, True keeps the one on disk even then, False makes
@@ -840,11 +876,21 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     #   first pass: the delivered spectra's velocities carry the tellurics'
     #   imprint)
     velocities_from = velocities_from or dict()
-    velocities = {name: object_velocities(velocities_from.get(name, name),
-                                          comparisons.get(name),
-                                          data_dir, instrument, log)
-                  if velocities_from.get(name, name) else dict()
-                  for name in objects}
+
+    def star_frame(name):
+        source = velocities_from.get(name, name)
+        if isinstance(source, dict):
+            values = 1000.0 * np.array(list(source.values()), dtype=float)
+            log('PCA2D: the star frame of %s follows the velocities given'
+                ' (%d spectra, %.1f m/s rms), not the BERV alone'
+                % (name, len(source), float(np.std(values))
+                   if values.size else 0.0), 'info')
+            return dict(source)
+        if not source:
+            return dict()
+        return object_velocities(source, comparisons.get(name), data_dir,
+                                 instrument, log)
+    velocities = {name: star_frame(name) for name in objects}
     request = dict(block, objects=list(objects))
     # the orbits are part of the request only when there are some, so that a
     #   correction made before PLANETS existed keeps its stamp
@@ -889,6 +935,13 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                                           present.items()} == state.get(
         'n_files'))
     same = state.get('stamp') == stamp
+    # the stamp of the first of lbl_wrap's passes this one belongs to
+    first = first or stamp
+    # THE SETTLED LAST PASS OF PASSES THAT STARTED WITH THIS VERY REQUEST
+    #   (lbl_wrap's, an earlier run's): kept as the request itself would be;
+    #   SETTLED tells lbl_wrap to make no other pass
+    chained = (first == stamp and not same and state.get('first') == stamp
+               and bool(state.get('settled')))
     corrected = ', '.join(names[n][0] for n in objects)
     # THE RESIDUALS (save_residuals) change nothing in the spectra, and are
     #   not in the stamp: asked, they must be on disk as done.json counted
@@ -900,7 +953,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         len(glob.glob(os.path.join(residual_dirs[n], '*.fits')))
         == counted.get(n, -1) for n in objects)
     keep = on_disk and not switches['overwrite'] and skip is not False and (
-        same or skip is True)
+        same or chained or skip is True)
     if keep and switches['save_residuals'] and not residuals_there:
         if skip is True:
             log('PCA2D: SKIP_LBL_PCA2D=True keeps the correction in %s, made'
@@ -912,10 +965,19 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                 % corrected, 'info')
             keep = False
     if keep:
+        for name in objects:
+            STATES[names[name][0]] = state_file
         if same:
             log('PCA2D: this correction (%s) is already in %s, kept as it'
                 ' is. SKIP_LBL_PCA2D=False makes it again'
                 % (stamp, corrected), 'info')
+        elif chained:
+            log('PCA2D: the correction in %s is the last of %s passes that'
+                ' started with this request (%s), settled: kept as it is.'
+                ' SKIP_LBL_PCA2D=False makes them again'
+                % (corrected, state.get('passes', '?'), stamp), 'info')
+            for name in objects:
+                SETTLED[names[name][0]] = state.get('passes')
         else:
             log('PCA2D: SKIP_LBL_PCA2D=True, so the correction in %s (%s,'
                 ' made %s) is kept, although the settings, the input files'
@@ -937,7 +999,7 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
     for name in objects:
         supersede(data_dir, os.path.join(science_root, names[name][0]),
                   names[name][0], work, log, science_subdir,
-                  extra=[residual_dirs[name]])
+                  extra=[residual_dirs[name]], discard=discard_previous)
 
     stages = ['cube', 'fit'] + (['figures'] if switches['figures'] else [])
     stages.append('correct')
@@ -1035,8 +1097,12 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
         residuals = {n: len(glob.glob(os.path.join(residual_dirs[n],
                                                    '*.fits')))
                      for n in objects}
+    for name in objects:
+        STATES[names[name][0]] = state_file
     with open(state_file, 'w', encoding='utf-8') as handle:
+        # first, passes, settled: lbl_wrap's passes (mark_passes)
         json.dump(dict(stamp=stamp, objects=[names[n][0] for n in objects],
+                       first=first, passes=None, settled=False,
                        run_dir=run_dir,
                        n_files={n: len(w) for n, w in written.items()},
                        residuals=residuals,
@@ -1055,6 +1121,22 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
             log('PCA2D: %d residuals (ln f - savgol(ln f) - model) in %s'
                 % (residuals[name], residual_dirs[name]), 'value')
     return names
+
+def mark_passes(corrected: list, passes: int, settled: bool) -> None:
+    """lbl_wrap's passes, recorded in the done.json of the corrected objects'
+    last correction: how many there were, and whether LBL's velocities
+    settled (a later run whose first pass is the same request then keeps
+    that correction, correct)"""
+    for name in corrected:
+        path = STATES.get(name)
+        if not path or not os.path.exists(path):
+            continue
+        with open(path, encoding='utf-8') as handle:
+            state = json.load(handle)
+        state.update(passes=int(passes), settled=bool(settled))
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(state, handle, indent=1)
+
 
 def report(data_dir: str, delivered: str, corrected: str,
            lbl_report: str = None) -> str:

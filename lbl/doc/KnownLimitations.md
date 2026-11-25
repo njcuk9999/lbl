@@ -26,6 +26,14 @@ named.
 | PCA2D, nominal | 3.01 | 0.56 |
 | PCA2D, no residual clip | 3.15 | 0.41 |
 
+- **PCA2D's passes on a narrow BERV span.** On TOI-904 (14 NIRPS spectra
+  over 1.8 km/s of BERV), the passes that follow LBL's velocities, their
+  BERV part left out, end at 26.8 m/s rms (19.3 as half the 16-84 %
+  range), against 21.1 (18.3) after the first pass on the BERV alone, and
+  do not settle in 4 passes (93 % of the spectra within 1 sigma at the
+  last). Followed with their BERV part, they ran away (44.7 m/s). Where the
+  BERV hardly moves, the two frames are hard to tell apart; `max_passes=1`
+  keeps the first pass.
 - **The nominal residual clip is costly here.** `nsig_cut: 3.0` in
   `lbl/pca2d/nominal.yaml` blanks about 4% of the flux, including at
   490-560 nm where there are no tellurics. The errors grow by about 35%.

@@ -824,10 +824,9 @@ params.set(key='PLANETS', value=False, source=__NAME__,
 #   whatever this says. Science data only. With PCA2D, the delivered spectra
 #   are always measured as with True (their velocities carry the tellurics'
 #   imprint, which a star frame built on them would copy into the
-#   correction): False applies to PCA2D's corrected spectra, whose own
-#   template iterates, and, when their velocities spread by more than
-#   MAX_CONVERGENCE_TEMPLATE_RV, to a second PCA2D pass whose star frame
-#   follows them (lbl_wrap._pca2d_passes)
+#   correction), and PCA2D corrects in passes whose star frame follows LBL's
+#   velocities whatever this says (lbl_wrap._pca2d_passes): it decides
+#   whether the corrected spectra's own template iterates
 params.set(key='SMALL_RV_SHIFT', value=True, source=__NAME__,
            desc='the star\'s velocity is taken as constant: the template '
                 'is made in one pass on BERV alone, without iterating on '

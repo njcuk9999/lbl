@@ -121,39 +121,6 @@ def test_pca2d_takes_the_own_template_s_velocities(tmp_path, monkeypatch):
     assert found == {'a.fits': -0.01, 'b.fits': 0.01, 'c.fits': 0.0}
 
 
-def test_the_wrap_makes_the_velocity_template_first(tmp_path, monkeypatch):
-    """SMALL_RV_SHIFT False: the object's own template is made (or made
-    again when it was made flat) before PCA2D and before anything is
-    measured against it; SMALL_RV_SHIFT True: nothing"""
-    from lbl.recipes import lbl_wrap
-    calls = []
-    monkeypatch.setattr(lbl_wrap.lbl_template, 'main',
-                        lambda **kw: calls.append(kw))
-    monkeypatch.setattr(lbl_wrap, '_template_of', lambda *a: None)
-    args = dict(keyword_args=dict(SMALL_RV_SHIFT=False),
-                instrument='NIRPS_HE', data_dir=str(tmp_path),
-                data_source='CADC', objname='STAR', blaze_corr=None,
-                blaze_file=None)
-    lbl_wrap._velocity_template(dict(SMALL_RV_SHIFT=True), **args)
-    assert calls == []
-    lbl_wrap._velocity_template(dict(SMALL_RV_SHIFT=False), **args)
-    assert calls[0]['object_science'] == calls[0]['object_comparison'] \
-        == 'STAR'
-    assert calls[0]['overwrite'] is False
-    # a template made flat: made again
-    from astropy.io import fits
-    flat = tmp_path / 'LBL_Template_STAR.fits'
-    fits.PrimaryHDU(header=fits.Header([('SMALLRV', True)])).writeto(flat)
-    monkeypatch.setattr(lbl_wrap, '_template_of', lambda *a: str(flat))
-    lbl_wrap._velocity_template(dict(SMALL_RV_SHIFT=False), **args)
-    assert calls[1]['overwrite'] is True
-    # one made iterating: kept
-    fits.PrimaryHDU(header=fits.Header([('SMALLRV', False)])).writeto(
-        flat, overwrite=True)
-    lbl_wrap._velocity_template(dict(SMALL_RV_SHIFT=False), **args)
-    assert len(calls) == 2
-
-
 def test_a_shift_of_kilometres_per_second_is_iterated_to_convergence():
     """Bouchy's step is the first order of the shift's expansion, right only
     for a small shift: from 3 km/s off with no scan, two steps (the method

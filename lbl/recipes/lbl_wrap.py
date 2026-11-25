@@ -345,19 +345,25 @@ def main(runparams: dict):
                         runparams, object_sciences, data_types,
                         object_comparisons, pca2d_args, keyword_args,
                         instrument, data_dir, data_source, blaze_corrs,
-                        blaze_files)
+                        blaze_files, object_teffs)
                 object_science, object_comparison = \
                     pca2d_joint[object_science]
             else:
+                def measure(_delivered, corrected, comparison):
+                    _lbl_steps(object_science=corrected,
+                               object_comparison=comparison, report=False,
+                               **steps)
                 object_science, object_comparison = _pca2d_passes(
                     runparams, keyword_args, instrument, data_dir,
                     data_source, pca2d_args,
                     {object_science: object_comparison},
                     {object_science: (blaze_corr, blaze_file)},
-                    joint=False)[object_science]
+                    joint=False, measure=measure)[object_science]
+            # LBL measured the last pass's corrected spectra (_pca2d_passes):
+            #   its report alone
             lbl_report = _lbl_steps(object_science=object_science,
                                     object_comparison=object_comparison,
-                                    **steps)
+                                    **_report_only(steps))
             # ONE REPORT: pca2d's (the star, delivered against corrected, the
             # river plots, the components...) followed by LBL's own pages
             if runparams.get('REPORT', True) and runparams['RUN_LBL_COMPILE']:
@@ -421,41 +427,13 @@ def _as_delivered(keyword_args: dict) -> dict:
     return dict(keyword_args, SMALL_RV_SHIFT=True)
 
 
-def _velocity_template(runparams: dict, keyword_args: dict, instrument: str,
-                       data_dir: str, data_source: str, objname: str,
-                       blaze_corr, blaze_file) -> None:
-    """SMALL_RV_SHIFT False: the own template of PCA2D's corrected spectra,
-    made by iterating on their velocities, before PCA2D's second pass, which
-    takes them for its star frame (lbl_pca2d.object_velocities: its star
-    component is then built where the star is, and the PCA does not take in
-    part of a real signal). Made when it is missing, or made again when it
-    was made with the velocity taken as constant (SMALLRV in its header):
-    whatever template the velocities are measured against
-    (OBJECT_COMPARISON), only the object's own knows its spectra. Nothing
-    when SMALL_RV_SHIFT is True."""
-    if runparams.get('SMALL_RV_SHIFT', True) not in (False, 'False', 0):
-        return
-    path = _template_of(data_dir, objname, instrument)
-    flat = False
-    if path is not None:
-        try:
-            from astropy.io import fits
-            flat = bool(fits.getheader(path).get('SMALLRV', False))
-        except Exception:                                     # noqa: BLE001
-            flat = True
-        if not flat:
-            return
-    log.info('SMALL_RV_SHIFT = False: the template of {0} {1}, iterating on '
-             'the velocities of its spectra, before PCA2D\'s second pass, '
-             'whose star frame follows them'.format(objname, 'is made again (it was made with '
-                                   'the velocity taken as constant)' if flat
-                                   else 'is made'))
-    lbl_template.main(instrument=instrument, data_dir=data_dir,
-                      data_source=data_source, data_type='SCIENCE',
-                      object_science=objname, object_comparison=objname,
-                      blaze_corrected=blaze_corr, blaze_file=blaze_file,
-                      object_teff=_teff_of(runparams, objname),
-                      overwrite=flat, **keyword_args)
+def _report_only(steps: dict) -> dict:
+    """The steps of an object LBL has measured already (the last of
+    PCA2D's passes): its report alone, nothing made again"""
+    runparams = dict(steps['runparams'], RUN_LBL_TEMPLATE=False,
+                     RUN_LBL_MASK=False, RUN_LBL_COMPUTE=False,
+                     SKIP_LBL_COMPILE=True)
+    return dict(steps, runparams=runparams)
 
 
 def _teff_of(runparams: dict, objname: str):
@@ -768,7 +746,7 @@ def _template_of(data_dir: str, objname: str, instrument: str):
 def _pca2d_joint(runparams: dict, object_sciences, data_types,
                  object_comparisons, pca2d_args: dict, keyword_args: dict,
                  instrument: str, data_dir: str, data_source: str,
-                 blaze_corrs, blaze_files) -> dict:
+                 blaze_corrs, blaze_files, object_teffs=None) -> dict:
     """The joint pca2d correction of every science object of this wrap.
 
     Not after the telluric cleaning: that is done one object at a time inside
@@ -781,7 +759,7 @@ def _pca2d_joint(runparams: dict, object_sciences, data_types,
                 'cleaning first, then the joint correction on the _tc objects')
         raise base_classes.LblException(emsg)
     olen = len(object_sciences)
-    objects, comparisons, blazes = [], dict(), dict()
+    objects, comparisons, blazes, teffs = [], dict(), dict(), dict()
     for num in range(olen):
         wkargs = dict(iteration=num, length=olen)
         if lbl_misc.wraplistcheck(data_types, 'DATA_TYPES',
@@ -793,143 +771,250 @@ def _pca2d_joint(runparams: dict, object_sciences, data_types,
         blazes[object_sciences[num]] = (
             lbl_misc.wraplistcheck(blaze_corrs, 'BLAZE_CORRECTED', **wkargs),
             lbl_misc.wraplistcheck(blaze_files, 'BLAZE_FILE', **wkargs))
+        teffs[object_sciences[num]] = lbl_misc.wraplistcheck(
+            object_teffs, 'OBJECT_TEFF', **wkargs)
     if len(objects) < 2:
         emsg = ('LBL_WRAP ERROR: PCA2D joint=True needs two science objects '
                 'or more, there is {0}')
         raise base_classes.LblException(emsg.format(', '.join(objects)))
+    def measure(delivered, corrected, comparison):
+        _lbl_steps(runparams=runparams, keyword_args=keyword_args,
+                   instrument=instrument, data_dir=data_dir,
+                   data_source=data_source, data_type='SCIENCE',
+                   object_science=corrected, object_comparison=comparison,
+                   object_teff=teffs[delivered],
+                   blaze_corr=blazes[delivered][0],
+                   blaze_file=blazes[delivered][1], report=False)
     return _pca2d_passes(runparams, keyword_args, instrument, data_dir,
                          data_source, pca2d_args, comparisons, blazes,
-                         joint=True)
+                         joint=True, measure=measure)
 
 
-def _fine_velocities(runparams: dict) -> bool:
-    """Whether the velocities are adjusted finely: SMALL_RV_SHIFT False,
-    the template iterating on them"""
-    return runparams.get('SMALL_RV_SHIFT', True) in (False, 'False', 0)
+#: PCA2D's passes have settled when this share of an object's spectra
+#:   changed, from one pass to the next, by less than PASS_NSIG times their
+#:   uncertainty, the change of all of them aside (the template's frame)
+PASS_FRAC = 0.95
+PASS_NSIG = 1.0
 
 
-def _iterated(data_dir: str, objname: str, instrument: str) -> bool:
-    """Whether the object's own template measured its spectra's velocities
-    (RVITER in its header)"""
-    path = _template_of(data_dir, objname, instrument)
-    if path is None:
-        return False
-    try:
-        from astropy.io import fits
-        return bool(fits.getheader(path).get('RVITER', False))
-    except Exception:                                         # noqa: BLE001
-        return False
+def _lbl_velocities(data_dir: str, objname: str,
+                    science_subdir: str = 'science') -> dict:
+    """LBL's velocity of each spectrum of an object, from its velocity box
+    (what lbl_compute wrote, 'lbl'): {file name: (v, err) [m/s]}, the
+    spectra in its folder only (an entry of an earlier run's is not this
+    pass's)"""
+    from lbl.science import velocity_box
+    folder = os.path.join(data_dir, science_subdir, objname)
+    present = set(os.listdir(folder)) if os.path.isdir(folder) else set()
+    box = velocity_box.read(data_dir, objname)
+    out = dict()
+    for key, entry in box['spectra'].items():
+        if entry.get('by') != 'lbl' or entry.get('v') is None \
+                or key not in present:
+            continue
+        err, berv = entry.get('err'), entry.get('berv')
+        out[key] = (float(entry['v']),
+                    float(err) if err is not None else np.nan,
+                    float(berv) if berv is not None else np.nan)
+    return out
+
+
+def _star_frame(found: dict, name: str = '') -> dict:
+    """PCA2D's star frame from LBL's velocities: {file name: km/s, less
+    their median}, LESS THEIR LINEAR DEPENDENCE ON THE BERV: a star frame
+    that moves with the BERV is the very confusion of the star's frame with
+    the observer's, which PCA2D cannot tell apart, and makes worse at each
+    pass (TOI-904, 14 NIRPS spectra over 1.8 km/s of BERV, its velocities
+    after PCA2D correlated with the BERV at 0.77: followed as they were,
+    LBL went from 21.1 to 44.7 m/s rms in 4 passes). A star's orbit is not
+    a function of the BERV, and stays"""
+    if len(found) < 3:
+        return dict()
+    keys = list(found)
+    v = np.array([found[k][0] for k in keys])
+    err = np.array([found[k][1] for k in keys])
+    berv = np.array([found[k][2] if len(found[k]) > 2 else np.nan
+                     for k in keys])
+    good = np.isfinite(v) & np.isfinite(berv)
+    if good.sum() >= 3 and np.ptp(berv[good]) > 0:
+        weight = np.where(np.isfinite(err) & (err > 0), 1.0 / err, 1.0)
+        slope, _ = np.polyfit(berv[good], v[good], 1, w=weight[good])
+        before = float(np.std(v[good]))
+        v = np.where(np.isfinite(berv), v - slope * (berv - np.median(
+            berv[good])), v)
+        log.info('PCA2D: LBL\'s velocities of {0} less their dependence on '
+                 'the BERV ({1:+.2e} m/s per m/s), {2:.1f} to {3:.1f} m/s '
+                 'rms, for the star frame'.format(
+                     name, slope, before, float(np.std(v[good]))))
+    median = float(np.nanmedian(v))
+    # plain floats: the star frame goes into PCA2D's request (YAML)
+    return {key: float(val - median) / 1000.0 for key, val in zip(keys, v)
+            if np.isfinite(val)}
+
+
+def _settled(name: str, before: dict, after: dict, npass: int) -> bool:
+    """Whether LBL's velocities of a corrected object settled from one pass
+    to the next (PASS_FRAC within PASS_NSIG sigma, the change of all of them
+    aside), said in the log"""
+    keys = [k for k in after if k in before]
+    dv = np.array([after[k][0] - before[k][0] for k in keys])
+    err = np.array([after[k][1] for k in keys])
+    ok = np.isfinite(dv) & np.isfinite(err) & (err > 0)
+    if ok.sum() < 3:
+        log.warning('PCA2D, pass {0}: fewer than 3 spectra of {1} measured '
+                    'by LBL in both passes: taken as settled'.format(
+                        npass, name))
+        return True
+    common = float(np.median(dv[ok]))
+    low, high = np.percentile(dv[ok] - common, [16, 84])
+    frac = float(np.mean(np.abs(dv[ok] - common) < PASS_NSIG * err[ok]))
+    log.info('PCA2D, pass {0}: LBL\'s velocities of {1} changed by {2:.1f} '
+             'm/s (half the 16-84 % range; all of them {3:+.1f} m/s), '
+             '{4:.1f} % of them within {5:g} sigma ({6:.0f} % for settled)'
+             ''.format(npass, name, (high - low) / 2.0, common, 100 * frac,
+                       PASS_NSIG, 100 * PASS_FRAC))
+    return frac >= PASS_FRAC
 
 
 def _pca2d_passes(runparams: dict, keyword_args: dict, instrument: str,
                   data_dir: str, data_source: str, pca2d_args: dict,
-                  comparisons: dict, blazes: dict, joint: bool) -> dict:
-    """The PCA2D correction of these objects: {object: (corrected object,
-    its comparison)}.
+                  comparisons: dict, blazes: dict, joint: bool,
+                  measure) -> dict:
+    """The PCA2D correction of these objects, in passes, each measured by
+    LBL: {object: (corrected object, its comparison)}.
 
-    THE FIRST PASS IS ON THE BERV ALONE (with the known orbits, PLANETS),
-    whatever SMALL_RV_SHIFT says: the velocities of the delivered spectra
-    carry the tellurics' imprint where the star's lines cross them (the BERV
-    crossing), and a star frame built on them copies it into the correction
-    (TOI-904, 14 NIRPS spectra, 2026-11-24: LBL at 51 to 65 m/s rms after a
-    correction on them, against 21 m/s on the BERV alone; the template's
-    velocities 60 m/s rms on the delivered spectra, 15 on the corrected
-    ones). SMALL_RV_SHIFT True: that pass only.
+    THE FIRST PASS IS ON THE BERV ALONE (with the known orbits, PLANETS):
+    the velocities of the delivered spectra carry the tellurics' imprint
+    where the star's lines cross them (the BERV crossing), and a star frame
+    built on them copies it into the correction (TOI-904, 14 NIRPS
+    spectra, 2026-11-24: LBL at 51 to 65 m/s rms after a correction on
+    them, against 21 m/s on the BERV alone).
 
-    SMALL_RV_SHIFT False, A SECOND PASS FOR A STAR THAT MOVES: the
-    corrected spectra's own template, iterating on their velocities
-    (cleaner), and, when they spread by more than
-    MAX_CONVERGENCE_TEMPLATE_RV (100 m/s, half their 16-84 % range), a
-    second correction whose star frame follows them (lbl_pca2d
-    velocities_from), which LBL then measures: a binary, a brown dwarf, a
-    hot Jupiter. Under it, the first pass is kept: the velocities are then
-    mostly their errors, and PCA2D copies the star frame into the
-    correction (TOI-904, a BERV span of 1.8 km/s: the corrected spectra's
-    velocities, 16 m/s rms and correlated with the BERV, followed, took LBL
-    from 21.1 to 31.9 m/s rms, the same pattern 1.5 times larger,
-    correlation 0.99). Each object of a joint fit on its own. When the
-    corrected spectra's template already has its velocities (a previous
-    run's), no first pass: the one they ask for."""
+    EVERY NEXT PASS FOLLOWS LBL'S VELOCITIES of the previous pass's
+    corrected spectra (each spectrum's, in the corrected object's velocity
+    box), less their linear dependence on the BERV (_star_frame): PCA2D's
+    star component is then built where the star is, and the PCA does not
+    take in part of a real signal. On the BERV alone it does: TOI-206, 130
+    NIRPS spectra, a Keplerian of K = 100 m/s injected (2026-11-25): 95.2
+    +- 2.7 m/s recovered after the first pass, 101.4 +- 2.5 after two;
+    TOI-904 (the BERV's part followed too) ran away, 21.1 to 44.7 m/s rms
+    in 4 passes, and stayed at 26.8 (19.3 robust, 18.3 after the first)
+    without it. At least
+    min_passes (PCA2D option, 2), at most max_passes (4), until LBL's
+    velocities settle (_settled: PASS_FRAC of every object's spectra within
+    PASS_NSIG sigma of the previous pass's), whatever SMALL_RV_SHIFT says
+    (it decides how the corrected spectra's template is made). Each pass's
+    corrected spectra replace the previous pass's, which are deleted (and
+    the cubes of passes after the first, made on velocities no other run
+    has): intermediates of this run.
+
+    measure(delivered, corrected, comparison) runs LBL's steps on a pass's
+    corrected spectra, without a report. A correction kept as it is
+    (SKIP_LBL_PCA2D True, or the settled last pass of passes an earlier run
+    started with the same request, lbl_pca2d.SETTLED) is measured once, no
+    other pass made."""
+    import shutil
     from lbl.recipes import lbl_pca2d
     objects = list(comparisons)
+    switches, _ = lbl_pca2d.settings(pca2d_args.get('pca2d'),
+                                     pca2d_args.get('report', True))
+    least = max(1, int(switches.get('min_passes') or 1))
+    most = max(least, int(switches.get('max_passes') or least))
+    cache = os.path.join(data_dir, 'pca2d', 'cache')
 
-    def correct(velocities_from):
+    def correct(velocities_from, **kwargs):
         if joint:
             return lbl_pca2d.joint(objects=objects, comparisons=comparisons,
                                    velocities_from=velocities_from,
-                                   **pca2d_args)
+                                   **pca2d_args, **kwargs)
         name = objects[0]
         return {name: lbl_pca2d.main(object_science=name,
                                      object_comparison=comparisons[name],
                                      velocities_from=velocities_from,
-                                     **pca2d_args)}
+                                     **pca2d_args, **kwargs)}
 
-    # the BERV alone: no object's velocities for the star frame
-    berv_only = {name: None for name in objects}
-    if not _fine_velocities(runparams):
-        return correct(berv_only)
-    corrected = {name: lbl_pca2d.corrected_name(
-        name, pca2d_args.get('pca2d'), pca2d_args.get('report', True))
-        for name in objects}
-    if all(_iterated(data_dir, corrected[name], instrument)
-           for name in objects):
-        log.info('SMALL_RV_SHIFT = False: the corrected spectra of {0} have '
-                 'a template with their velocities (a previous run\'s): one '
-                 'PCA2D pass'.format(', '.join(objects)))
-        return correct(_follow(runparams, data_dir, instrument, corrected))
-    log.info('SMALL_RV_SHIFT = False: PCA2D in two passes, the first on the '
-             'BERV alone (the delivered spectra\'s velocities carry the '
-             'tellurics\' imprint), the second on the velocities of the '
-             'corrected spectra\'s template')
-    names = correct(berv_only)
-    for name in objects:
-        _velocity_template(runparams, keyword_args, instrument, data_dir,
-                           data_source, names[name][0], *blazes[name])
-    follow = _follow(runparams, data_dir, instrument,
-                     {name: names[name][0] for name in objects})
-    if not any(follow.values()):
-        # this line's start is what the window looks for (lbl_gui's runner
-        #   drops the second pass's steps it planned)
-        log.info('PCA2D: no second pass, the first is kept (no star moves by '
-                 'more than MAX_CONVERGENCE_TEMPLATE_RV)')
-        return names
-    log.info('PCA2D, second pass: the star frame follows the velocities of '
-             'the corrected spectra\'s template ({0})'.format(', '.join(
-                 name for name in objects if follow[name])))
-    return correct(follow)
+    def cubes():
+        return set(os.listdir(cache)) if os.path.isdir(cache) else set()
+    log.info('PCA2D in {0} to {1} passes (min_passes, max_passes): the first '
+             'on the BERV alone, each next one following LBL\'s velocities of '
+             'the previous one\'s corrected spectra, until they settle'
+             ''.format(least, most))
+    velocities = {name: None for name in objects}
+    previous, first, names = dict(), None, dict()
+    for npass in range(1, most + 1):
+        before = cubes()
+        log.info('PCA2D, pass {0}: the star frame {1}'.format(
+            npass, 'on the BERV alone' if npass == 1 else 'follows LBL\'s '
+            'velocities of pass {0}\'s corrected spectra'.format(npass - 1)))
+        names = correct(velocities, first=first,
+                        discard_previous=npass > 1)
+        if first is None:
+            # the request of the first pass, which the next ones belong to
+            first = _first_stamp(names)
+        for name in objects:
+            measure(name, *names[name])
+        # the cubes of this pass (velocities no other run has): deleted
+        if npass > 1:
+            for entry in sorted(cubes() - before):
+                path = os.path.join(cache, entry)
+                if entry.startswith('cube_') and os.path.isdir(path):
+                    size = lbl_pca2d.size_of(path)
+                    shutil.rmtree(path)
+                    log.info('PCA2D: the cube of pass {0} deleted ({1:.1f} '
+                             'GB), made on its velocities alone'.format(
+                                 npass, size / 1e9))
+        kept = [lbl_pca2d.SETTLED.pop(names[n][0], None) for n in objects]
+        if npass == 1 and (pca2d_args.get('skip') is True
+                           or all(k is not None for k in kept)):
+            log.info('PCA2D: the correction on disk is kept as it is: no '
+                     'other pass')
+            return names
+        current = {name: _lbl_velocities(
+            data_dir, names[name][0],
+            pca2d_args.get('science_subdir', 'science')) for name in objects}
+        if any(len(found) < 3 for found in current.values()):
+            log.warning('PCA2D: no LBL velocities of the corrected spectra '
+                        'to follow (RUN_LBL_COMPUTE off?): pass {0} is '
+                        'kept'.format(npass))
+            lbl_pca2d.mark_passes([names[n][0] for n in objects], npass,
+                                  False)
+            return names
+        settled = npass > 1 and all(
+            [_settled(name, previous[name], current[name], npass)
+             for name in objects])
+        if npass >= least and settled:
+            # this line's start is what the window looks for (lbl_gui's
+            #   runner drops the passes it planned beyond it)
+            log.info('PCA2D: LBL\'s velocities settled after {0} passes'
+                     ''.format(npass))
+            lbl_pca2d.mark_passes([names[n][0] for n in objects], npass,
+                                  True)
+            return names
+        if npass == most:
+            break
+        previous = current
+        velocities = {name: _star_frame(current[name], name)
+                      for name in objects}
+    if most == 1:
+        log.info('PCA2D: one pass (max_passes = 1)')
+    else:
+        log.warning('PCA2D: LBL\'s velocities not settled after {0} passes '
+                    '(max_passes): the last is kept'.format(most))
+    lbl_pca2d.mark_passes([names[n][0] for n in objects], most, False)
+    return names
 
 
-def _follow(runparams: dict, data_dir: str, instrument: str,
-            corrected: dict) -> dict:
-    """{object: its corrected spectra, whose velocities PCA2D's star frame
-    follows, when they spread by more than MAX_CONVERGENCE_TEMPLATE_RV
-    (half their 16-84 % range); None, the BERV alone, otherwise}
-    (_pca2d_passes)"""
-    from lbl.core.parameters import params as defaults
+def _first_stamp(names: dict):
+    """The stamp of the request a correction was made (or kept) with, from
+    its done.json (lbl_pca2d.STATES)"""
     from lbl.recipes import lbl_pca2d
-    limit = runparams.get('MAX_CONVERGENCE_TEMPLATE_RV')
-    if limit is None:
-        limit = defaults['MAX_CONVERGENCE_TEMPLATE_RV']
-    out = dict()
-    for name, other in corrected.items():
-        found = lbl_pca2d.object_velocities(other, None, data_dir,
-                                            instrument, lambda *a: None)
-        values = 1000.0 * np.array(list(found.values()), dtype=float)
-        values = values[np.isfinite(values)]
-        spread = float(np.diff(np.percentile(values, [16, 84]))[0] / 2) \
-            if values.size >= 3 else 0.0
-        moves = spread > float(limit)
-        out[name] = other if moves else None
-        log.info('{0}: the velocities of its corrected spectra spread by '
-                 '{1:.1f} m/s ({2} spectra), {3} MAX_CONVERGENCE_TEMPLATE_RV '
-                 '({4:g} m/s): {5}'.format(
-                     name, spread, values.size,
-                     'over' if moves else 'under', float(limit),
-                     'PCA2D\'s star frame follows them' if moves else
-                     'the star frame stays on the BERV (velocities this '
-                     'small are mostly their errors, which PCA2D would copy '
-                     'into the correction)'))
-    return out
+    import json
+    for corrected, _ in names.values():
+        path = lbl_pca2d.STATES.get(corrected)
+        if path and os.path.exists(path):
+            with open(path, encoding='utf-8') as handle:
+                return json.load(handle).get('stamp')
+    return None
 
 
 def custom(runparams: dict, func, required_kwargs: List[str]):
