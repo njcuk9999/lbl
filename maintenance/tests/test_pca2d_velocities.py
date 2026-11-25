@@ -40,7 +40,7 @@ def test_the_star_frame_takes_each_file_its_velocity():
     assert bervs[1] == 10.0 and abs(bervs[0] - meta['berv']) < 1e-12
 
 
-def _template(data_dir, name, vsys, kepler=None):
+def _template(data_dir, name, vsys, kepler=None, header=None):
     folder = data_dir / 'templates'
     folder.mkdir(exist_ok=True)
     sci = Table(dict(FILENAME=['/d/science/%s/%d.fits' % (name, i)
@@ -48,7 +48,7 @@ def _template(data_dir, name, vsys, kepler=None):
                      VSYS=np.asarray(vsys, dtype=float)))
     if kepler is not None:
         sci['VKEP'] = kepler
-    hdus = [fits.PrimaryHDU(),
+    hdus = [fits.PrimaryHDU(header=fits.Header(list((header or {}).items()))),
             fits.BinTableHDU(Table(dict(wavelength=[1.0, 2.0],
                                         flux=[1.0, 1.0])), name='TEMPLATE'),
             fits.BinTableHDU(sci, name='SCI_TABLE')]
@@ -72,6 +72,22 @@ def test_the_free_fit_of_the_template_and_only_it(tmp_path):
     # a template made on known orbits did not fit its velocities
     _template(tmp_path, 'STAR', [100.0, 130.0, 70.0, 100.0],
               kepler=[1.0, 2.0, 3.0, 4.0])
+    assert lbl_pca2d.object_velocities('STAR', None, str(tmp_path),
+                                       'SPIROU', quiet) == {}
+
+
+def test_a_flat_template_gives_the_berv_alone_whatever_the_box(tmp_path):
+    """SMALL_RV_SHIFT True (SMALLRV): the template measured no velocity,
+    and LBL's own velocities in the box do not make a star frame either"""
+    from lbl.science import velocity_box
+
+    def quiet(*args, **kwargs):
+        pass
+    _template(tmp_path, 'STAR', [100.0, 100.0, 100.0, 100.0],
+              header=dict(SMALLRV=True))
+    velocity_box.update(str(tmp_path), 'STAR', {
+        '%d.fits' % i: dict(v=v) for i, v in enumerate([5.0, -40.0, 60.0])},
+        'lbl')
     assert lbl_pca2d.object_velocities('STAR', None, str(tmp_path),
                                        'SPIROU', quiet) == {}
 

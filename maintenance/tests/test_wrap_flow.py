@@ -155,7 +155,14 @@ def test_a_pca2d_run_writes_one_report(tmp_path, calls, monkeypatch):
     assert merged[0]['lbl_report'] == 'TOI1452_pca2d_VETTED_GJ1289.pdf'
 
 
-def _two_pass_wrap(tmp_path, calls, monkeypatch, small_rv, ready=False):
+#: the corrected spectra's velocities [km/s, less their median]: a star
+#:   that moves by km/s (a binary), one whose velocities are their errors
+MOVING = {'a.fits': -1.0, 'b.fits': 0.0, 'c.fits': 1.0}
+STILL = {'a.fits': -0.015, 'b.fits': 0.0, 'c.fits': 0.015}
+
+
+def _two_pass_wrap(tmp_path, calls, monkeypatch, small_rv, ready=False,
+                   velocities=None):
     """a PCA2D run with SMALL_RV_SHIFT as given: the corrections asked of
     PCA2D, with the velocities each was given"""
     from lbl.recipes import lbl_pca2d
@@ -168,7 +175,7 @@ def _two_pass_wrap(tmp_path, calls, monkeypatch, small_rv, ready=False):
     monkeypatch.setattr(lbl_pca2d, 'main', main)
     monkeypatch.setattr(lbl_pca2d, 'report', lambda **kw: None)
     monkeypatch.setattr(lbl_pca2d, 'object_velocities',
-                        lambda *a, **k: {'a.fits': 0.0})
+                        lambda *a, **k: dict(velocities or MOVING))
     # the velocity templates: made when missing (the recorder of the fixture)
     monkeypatch.setattr(lbl_wrap, '_template_of', lambda *a: None)
     monkeypatch.setattr(lbl_wrap, '_iterated', lambda *a: ready)
@@ -177,28 +184,44 @@ def _two_pass_wrap(tmp_path, calls, monkeypatch, small_rv, ready=False):
                           OBJECT_TEFF=[3200], RUN_LBL_COMPILE=True,
                           REPORT=False, SMALL_RV_SHIFT=small_rv,
                           PCA2D=dict(n_star=1)))
-    templates = [kw['object_science'] for name, kw in calls
-                 if name == 'lbl_template']
+    templates = [(kw['object_science'], kw.get('SMALL_RV_SHIFT'))
+                 for name, kw in calls if name == 'lbl_template']
     return corrections, templates
 
 
 def test_fine_velocities_correct_twice(tmp_path, calls, monkeypatch):
-    """SMALL_RV_SHIFT False: PCA2D on the delivered spectra's velocities,
-    the corrected spectra's template (their velocities), PCA2D again on
-    those"""
+    """SMALL_RV_SHIFT False: the delivered spectra measured as with True
+    (their template on BERV alone) and PCA2D's first pass on the BERV alone
+    (their velocities carry the tellurics' imprint); the corrected spectra's
+    template, iterating on their velocities, then PCA2D again on those"""
     corrections, templates = _two_pass_wrap(tmp_path, calls, monkeypatch,
                                             small_rv=False)
-    assert corrections == [{}, {'STAR': 'STAR_pca2d'}]
-    # the delivered spectra's template first (and again for their
-    #   measurement), then the corrected spectra's, between the two passes
-    assert templates[0] == 'STAR' and 'STAR_pca2d' in templates
-    assert templates.index('STAR_pca2d') > templates.index('STAR')
+    assert corrections == [{'STAR': None}, {'STAR': 'STAR_pca2d'}]
+    names = [name for name, _ in templates]
+    assert names[0] == 'STAR' and 'STAR_pca2d' in names
+    assert names.index('STAR_pca2d') > names.index('STAR')
+    assert {flat for name, flat in templates if name == 'STAR'} == {True}
+    assert {flat for name, flat in templates
+            if name == 'STAR_pca2d'} == {False}
+
+
+def test_a_star_that_hardly_moves_keeps_the_first_pass(tmp_path, calls,
+                                                       monkeypatch):
+    """SMALL_RV_SHIFT False, the corrected spectra's velocities spread by
+    less than MAX_CONVERGENCE_TEMPLATE_RV: mostly their errors, which PCA2D
+    would copy into the correction; the first pass (BERV alone) is kept"""
+    corrections, templates = _two_pass_wrap(tmp_path, calls, monkeypatch,
+                                            small_rv=False, velocities=STILL)
+    assert corrections == [{'STAR': None}]
+    assert ('STAR_pca2d', False) in templates
 
 
 def test_coarse_velocities_correct_once(tmp_path, calls, monkeypatch):
+    """SMALL_RV_SHIFT True: one pass, on the BERV alone, whatever the
+    velocity box holds (LBL's own velocities of the delivered spectra)"""
     corrections, _ = _two_pass_wrap(tmp_path, calls, monkeypatch,
                                     small_rv=True)
-    assert corrections == [{}]
+    assert corrections == [{'STAR': None}]
 
 
 def test_a_second_run_corrects_once_on_the_corrected_velocities(
@@ -208,3 +231,7 @@ def test_a_second_run_corrects_once_on_the_corrected_velocities(
     corrections, _ = _two_pass_wrap(tmp_path, calls, monkeypatch,
                                     small_rv=False, ready=True)
     assert corrections == [{'STAR': 'STAR_pca2d'}]
+    corrections, _ = _two_pass_wrap(tmp_path, calls, monkeypatch,
+                                    small_rv=False, ready=True,
+                                    velocities=STILL)
+    assert corrections[-1] == {'STAR': None}

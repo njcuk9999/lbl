@@ -166,3 +166,31 @@ def test_a_shift_of_kilometres_per_second_is_iterated_to_convergence():
                                scan=False, scan_step=2.5e-7, errors=errors)
     expected = speed_of_light_ms * np.tanh(true)
     assert np.all(np.abs(dv - expected) < 3 * errors + 0.5)
+
+
+def test_the_velocities_are_measured_within_the_photometric_bands():
+    """TEMPLATE_RV_ORDERS = bands (the default): the orders with a quarter
+    of their pixels within a nominal photometric band (between the deep
+    telluric bands), their pixels outside left out; ref, those within 5 %
+    of COMPIL_SLOPE_REF_WAVE; all, every order, at most as many as fit"""
+    import pytest
+    from lbl.core.base_classes import LblException
+    # NIRPS-like orders, 970 to 1920 nm: y, J and H, the gaps between
+    starts = np.linspace(970.0, 1900.0, 60)
+    wave = np.array([np.linspace(lo, lo * 1.012, 400) for lo in starts])
+    inside = ts.in_bands(wave)
+    assert inside[np.abs(wave - 1600.0) < 1].all()
+    assert not inside[np.abs(wave - 1400.0) < 20].any()
+    assert not inside[np.abs(wave - 1880.0) < 20].any()
+    reg, which = ts.velocity_orders(dict(), wave, 1000)
+    assert which == 'bands'
+    share = inside.mean(axis=1)
+    assert reg == [o for o in range(len(starts)) if share[o] >= 0.25]
+    assert 0 < len(reg) < len(starts)
+    params = dict(TEMPLATE_RV_ORDERS='ref', COMPIL_SLOPE_REF_WAVE=1600.0)
+    reg, _ = ts.velocity_orders(params, wave, 1000)
+    assert all(abs(np.median(wave[o]) / 1600.0 - 1) < 0.05 for o in reg)
+    reg, _ = ts.velocity_orders(dict(TEMPLATE_RV_ORDERS='all'), wave, 7)
+    assert len(reg) == 7 and reg[0] == 0 and reg[-1] == len(starts) - 1
+    with pytest.raises(LblException):
+        ts.velocity_orders(dict(TEMPLATE_RV_ORDERS='some'), wave, 10)

@@ -6,23 +6,36 @@ few anchored in the observer frame (residual tellurics, airglow, detector
 features). The observer-frame part is divided out of the spectra, which
 LBL then measures like any other object.
 
-The star's frame is its BERV, composed with its velocity in each exposure
-when LBL has one: with `SMALL_RV_SHIFT = False`, the velocities the object's
-own template measured while it was made (its `VSYS`, by file name; Bouchy et
-al. 2001 pixel by pixel with a mixture model, [TEMPLATE.md](TEMPLATE.md)),
-the template made first by the wrap whatever `OBJECT_COMPARISON` is; with
-`PLANETS`, the known orbits. The star component is then built where the star
-is, and the PCA does not take in part of a real signal.
+The star's frame is its BERV, composed with the known orbits (`PLANETS`),
+or with the star's velocity in each exposure when it moves (below). The
+star component is then built where the star is, and the PCA does not take
+in part of a real signal.
 
-`SMALL_RV_SHIFT = False` makes the correction in TWO PASSES
-(`lbl_wrap._pca2d_passes`): the delivered spectra's velocities carry the
-tellurics' imprint where the star's lines cross them (the BERV crossing),
-and so would a star frame built on them. PCA2D corrects once on them; the
-corrected spectra's own template, iterating, measures cleaner velocities
-(the change between the two is logged); PCA2D corrects again on those
-(`lbl_pca2d.main(velocities_from=...)`), and LBL measures that correction.
-A template and a PCA2D more in the run. When the corrected spectra's
-template already has its velocities (a previous run's), one pass on them.
+The delivered spectra are measured as with `SMALL_RV_SHIFT = True`,
+whatever it says, and PCA2D's first pass is on the BERV alone
+(`lbl_wrap._pca2d_passes`): their velocities carry the tellurics' imprint
+where the star's lines cross them (the BERV crossing), which a template
+iterating on them takes in, and PCA2D copies a star frame into its
+correction. On TOI-904 (NIRPS, 14 spectra, 2026-11-24), the template's
+velocities scatter by 60 m/s on the delivered spectra and 15 on the
+corrected ones (formal errors 4 to 7 m/s); LBL after PCA2D gave 51 to
+65 m/s rms with a first pass on the delivered spectra's velocities, 21.1
+on the BERV alone.
+
+`SMALL_RV_SHIFT = False` then applies to the corrected spectra: their own
+template iterates on their velocities ([TEMPLATE.md](TEMPLATE.md)), and
+when they spread by more than `MAX_CONVERGENCE_TEMPLATE_RV` (100 m/s, half
+their 16-84 % range), PCA2D corrects again with its star frame following
+them (`lbl_pca2d.main(velocities_from=...)`, from the corrected object's
+velocity box), and LBL measures that correction: a binary, a brown dwarf,
+a hot Jupiter (a template and a PCA2D more in the run). Under it, the first
+pass is kept, and the log says so: velocities that small are mostly their
+errors, which PCA2D would copy. On TOI-904 (a BERV span of 1.8 km/s), the
+corrected spectra's velocities (16 m/s rms, correlated with the BERV)
+followed took LBL from 21.1 to 31.9 m/s rms, the same pattern 1.5 times
+larger (correlation 0.99); with the first pass kept, 22.0. Each object of a joint fit is judged on its
+own. When the corrected spectra's template already has its velocities (a
+previous run's), one pass, on them or on the BERV alike.
 
 ## Turning it on
 

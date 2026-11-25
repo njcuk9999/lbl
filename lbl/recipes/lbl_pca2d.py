@@ -593,7 +593,15 @@ def object_velocities(name: str, comparison, data_dir: str, instrument: str,
         iterated = bool(_fits.getheader(path).get('RVITER', False))
     except Exception:                                         # noqa: BLE001
         iterated = False
-    if 'VSYS' not in table.colnames or 'FILENAME' not in table.colnames \
+    # a template made with the velocity taken as constant (SMALLRV,
+    #   SMALL_RV_SHIFT True) measured none: the star frame is the BERV, the
+    #   velocity box's (LBL's own) included
+    try:
+        flat = bool(_fits.getheader(path).get('SMALLRV', False))
+    except Exception:                                         # noqa: BLE001
+        flat = False
+    if flat or 'VSYS' not in table.colnames \
+            or 'FILENAME' not in table.colnames \
             or ('VKEP' in table.colnames and not iterated):
         return dict()
     # THE VELOCITY BOX (lbl.science.velocity_box): the object's own, its
@@ -692,7 +700,8 @@ def main(instrument: str, data_dir: str, object_science: str,
     (object_science, object_comparison). skip is the wrap's
     SKIP_LBL_PCA2D, planets its PLANETS, velocities_from {object: the
     object whose template's velocities its star frame follows} (the
-    corrected spectra's, for lbl_wrap's second pass)."""
+    corrected spectra's, for lbl_wrap's second pass; None: the BERV alone,
+    lbl_wrap's first pass)."""
     _ = kwargs
     names = correct(instrument, data_dir, [object_science],
                     {object_science: object_comparison}, data_source, pca2d,
@@ -824,16 +833,17 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
              for name in objects}
     orbits = {name: object_orbits(name, files[name], data_dir, log)
               for name in objects} if planets else dict()
-    # the velocities LBL's template fitted freely, when it did (its own
-    #   template, made without known orbits): the star frame follows them
     # the star frame's velocities: those the object's own template measured
     #   (SMALL_RV_SHIFT False), or, given in velocities_from, those of
     #   another object's template, the corrected spectra's for lbl_wrap's
-    #   second pass (same file names)
+    #   second pass (same file names); None there, the BERV alone (lbl_wrap's
+    #   first pass: the delivered spectra's velocities carry the tellurics'
+    #   imprint)
     velocities_from = velocities_from or dict()
     velocities = {name: object_velocities(velocities_from.get(name, name),
                                           comparisons.get(name),
                                           data_dir, instrument, log)
+                  if velocities_from.get(name, name) else dict()
                   for name in objects}
     request = dict(block, objects=list(objects))
     # the orbits are part of the request only when there are some, so that a

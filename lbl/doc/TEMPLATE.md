@@ -72,12 +72,16 @@ with those of `g**2 w` for the covariance; the residuals come from the same
 sums. No sort, no second pass.
 
 With `SMALL_RV_SHIFT = False` (and no known orbits), the velocity of each
-spectrum is measured first against the templates of the orders within 5 % of
-`COMPIL_SLOPE_REF_WAVE`, pass after pass (the template of these orders made
-again at each), until `TEMPLATE_RV_CONV_FRAC` (95 %) of the spectra changed
-by less than `TEMPLATE_RV_CONV_NSIG` (2) times their uncertainty in the last
-pass, `TEMPLATE_RV_MAX_PASSES` (10) at most; a warning says when they did
-not. The passes start from the velocities of the object's velocity box
+spectrum is measured first against the templates of some orders, pass after
+pass (the template of these orders made again at each), until
+`TEMPLATE_RV_CONV_FRAC` (95 %) of the spectra changed by less than
+`TEMPLATE_RV_CONV_NSIG` (2) times their uncertainty in the last pass,
+`TEMPLATE_RV_MAX_PASSES` (10) at most; a warning says when they did not.
+The change of all of them at once (their median, logged) is left out: it
+is a shift of the template's frame, which nothing pins, not a change of
+the velocities (left in, it kept TOI-904's corrected spectra from
+converging: a pass of 1.1 m/s rms change with 7 % of them within 2 sigma,
+after one with 64 %). The passes start from the velocities of the object's velocity box
 (below), so that a star that moves by km/s is not smeared in the first
 template, whose velocities would then not converge. In each pass: a scan of
 the shift, then Bouchy et al. (2001)
@@ -98,6 +102,28 @@ tests, from 3 km/s off with no scan, two steps (the method before
 of bad pixels on the lines' flanks, after the scan, the velocities stay at
 0.8 m/s rms (the photon noise's) where the least squares of before are
 pulled to 22 m/s; without bad pixels the two agree (0.8 m/s).
+
+The orders (`TEMPLATE_RV_ORDERS`): `bands`, the default, the pixels within
+the nominal photometric bands (`lbl.core.astro.bands`: y 938.6-1113.4,
+J 1148.2-1349.4, H 1451.0-1809.1, K 1985.9-2401.5 nm...), defined between the
+deep telluric bands, of the orders with a quarter of their pixels there,
+each spectrum's pixels outside them left out at its own observed
+wavelengths; `ref`, the whole orders within 5 % of `COMPIL_SLOPE_REF_WAVE`
+(the choice before 2026-11-24); `all`, every order. As many orders as fit in
+`TEMPLATE_BSD_MEMORY`, evenly spread. On the delivered spectra the tellurics
+are what limits these velocities, not the photons: on TOI-904 (NIRPS, 14
+spectra, 2026-11-24), the rms of the velocities (their median formal error)
+was:
+
+| `TEMPLATE_RV_ORDERS` | orders | delivered spectra | PCA2D's corrected spectra |
+|---|---|---|---|
+| `ref` | 9 | 59.5 m/s (7.0) | 15.0 m/s (5.8) |
+| `all` | 75 | 83.4 m/s (4.7) | 18.4 m/s (3.9) |
+| `bands` | 60, 72 % of their pixels | 81.8 m/s (4.7) | 19.1 m/s (3.9) |
+
+(on 14 spectra, an rms is known to about 13 %). Hence, with PCA2D, the
+delivered spectra are measured as with `SMALL_RV_SHIFT = True`
+([PCA2D.md](PCA2D.md)).
 
 With `PLANETS` and the star's orbits known, `SMALL_RV_SHIFT = True` makes
 the template in one pass on the orbits; `False` starts from the orbits and
@@ -120,12 +146,18 @@ convergence, the share of the spectra that changed by less than
 `TEMPLATE_RV_CONV_NSIG` sigma in each pass against `TEMPLATE_RV_CONV_FRAC`,
 the rms change of each pass and the Bouchy steps each took (median and most
 over the spectra).
-PCA2D's star frame follows them (`registration.velocities`, by file name),
-so that its star component is built where the star is and the PCA does not
-take in part of a real signal; `lbl_wrap` makes the object's own template
-this way before PCA2D, whatever template it is measured against
+PCA2D's second pass, when the star moves by more than
+`MAX_CONVERGENCE_TEMPLATE_RV`, follows the velocities of the corrected
+spectra (`registration.velocities`, by file name), so that its star
+component is built where the star is and the PCA does not take in part of
+a real signal;
+`lbl_wrap` makes the corrected spectra's own template this way between the
+two passes, whatever template they are measured against
 (`OBJECT_COMPARISON`), and makes it again when it was made with the velocity
-taken as constant (`SMALLRV` in its header).
+taken as constant (`SMALLRV` in its header). The delivered spectra of a
+PCA2D run are measured as with `SMALL_RV_SHIFT = True`, and a template made
+so (`SMALLRV`) gives PCA2D no velocity, the box's included: its star frame
+is then the BERV ([PCA2D.md](PCA2D.md)).
 
 ## The velocity box
 
@@ -171,11 +203,12 @@ entries; `lbl_reset` deletes the boxes.
   converged in 2 steps instead of 3 or 4; signals of K = 5 and 15 km/s
   injected (an 8 and a 24 km/s span) came back with slopes of 1.0021 and
   1.0006.
-- **PCA2D's star frame**, when it follows the star's velocities
-  (`SMALL_RV_SHIFT = False`, `lbl_pca2d.object_velocities`), takes them
-  from the object's box (LBL's, else the template's; not the first CCF's),
-  spectra added since the template included, else from the template's
-  table.
+- **PCA2D's star frame**, when it follows the star's velocities (its
+  second pass, `SMALL_RV_SHIFT = False`, `lbl_pca2d.object_velocities`),
+  takes them from the corrected object's box (LBL's, else the template's;
+  not the first CCF's), spectra added since the template included, else
+  from the template's table; none when the template was made with the
+  velocity taken as constant.
 - Without `OBJECT_TEFF` or a model, nothing is measured by CCF and the
   passes start from the BERV alone (or the orbits), as before, with a
   warning; LBL's compute still writes its velocities to the box.

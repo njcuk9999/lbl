@@ -32,8 +32,9 @@ The orders are then combined on the grid with the weights the s1d uses
 ones and the even ones.
 
 With SMALL_RV_SHIFT False and no known orbits, the velocities of the spectra
-are first measured on the orders around COMPIL_SLOPE_REF_WAVE (a scan of the
-shift, then Bouchy et al. 2001 pixel by pixel on the template's Savitzky-
+are first measured on the pixels within the nominal photometric bands
+(astro.bands: y, J, H, K...), defined between the deep telluric bands
+(TEMPLATE_RV_ORDERS; a scan of the shift, then Bouchy et al. 2001 pixel by pixel on the template's Savitzky-
 Golay derivative, the pixels combined by LBL's mixture model, odd_ratio_mean,
 the steps iterated until they converge), pass after pass, until 95 % of the
 spectra changed by less than 2 sigma (TEMPLATE_RV_CONV_FRAC,
@@ -63,6 +64,7 @@ from lbl.core import base_classes
 from lbl.core import io
 from lbl.core import math as mp
 from lbl.core.gaussian_savgol import scatter_savgol
+from lbl.core import astro
 from lbl.science import apero
 
 # =============================================================================
@@ -72,11 +74,83 @@ log = io.log
 C_MS = mp.speed_of_light_ms
 #: the points of a cloud: the derivatives returned (0 to 3)
 NDERIV = 3
+#: TEMPLATE_RV_ORDERS = bands: an order whose pixels are less than this
+#:   share within a band is left out of the velocities
+BAND_MIN_SHARE = 0.25
 
 
 # =============================================================================
 # Define functions
 # =============================================================================
+def in_bands(wave: np.ndarray, bands=None) -> np.ndarray:
+    """True where a wavelength [nm] is within one of the nominal photometric
+    bands (astro.bands), which are defined between the deep telluric bands
+    of the atmosphere"""
+    wave = np.asarray(wave, dtype=float)
+    inside = np.zeros(wave.shape, dtype=bool)
+    with np.errstate(invalid='ignore'):
+        for band in (astro.bands if bands is None else bands):
+            inside |= (wave >= band.minimum) & (wave <= band.maximum)
+    return inside
+
+
+def velocity_orders(params, wave: np.ndarray, most: int) -> tuple:
+    """
+    The orders the velocities of the spectra are measured on
+    (TEMPLATE_RV_ORDERS), and the pixels of each kept
+
+    bands (the default): the pixels within the nominal photometric bands
+        (in_bands), where the deep tellurics are not, of the orders with at
+        least BAND_MIN_SHARE of their pixels there
+    ref: the whole orders within 5 % of COMPIL_SLOPE_REF_WAVE
+    all: the whole orders
+
+    Evenly spread, at most `most` of them (what fits in
+    TEMPLATE_BSD_MEMORY).
+
+    :param params: the instrument's parameters
+    :param wave: np.ndarray (orders, pixels), a wavelength solution [nm]
+    :param most: int, the most orders
+
+    :return: (list of order numbers, str: which of bands, ref, all; with
+             bands, read_orders' pixels outside them are then left out,
+             spectrum by spectrum, build)
+    """
+    which = str(params.get('TEMPLATE_RV_ORDERS', 'bands') or 'bands').lower()
+    if which not in ('bands', 'ref', 'all'):
+        emsg = ('TEMPLATE_RV_ORDERS must be bands, ref or all, not '
+                '{0!r}'.format(params.get('TEMPLATE_RV_ORDERS')))
+        raise base_classes.LblException(emsg)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        medwave = np.nanmedian(wave, axis=1)
+    finite = np.isfinite(medwave)
+    if which == 'ref':
+        ref_wave = params['COMPIL_SLOPE_REF_WAVE']
+        reg = [o for o in range(len(medwave)) if finite[o] and
+               abs(medwave[o] / ref_wave - 1) < 0.05]
+        if not reg:
+            reg = list(np.argsort(np.abs(medwave - ref_wave))[:3])
+    elif which == 'all':
+        reg = [o for o in range(len(medwave)) if finite[o]]
+    else:
+        pixels = in_bands(wave)
+        valid = np.isfinite(wave) & (wave > 0)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            share = pixels.sum(axis=1) / valid.sum(axis=1)
+        reg = [o for o in range(len(medwave))
+               if finite[o] and share[o] >= BAND_MIN_SHARE]
+        if not reg:
+            emsg = ('TEMPLATE_RV_ORDERS = bands: no order has {0:.0%} of its '
+                    'pixels within a photometric band; use ref or all')
+            raise base_classes.LblException(emsg.format(BAND_MIN_SHARE))
+    if len(reg) > most:
+        pick = np.unique(np.linspace(0, len(reg) - 1,
+                                     most).round().astype(int))
+        reg = [reg[k] for k in pick]
+    return reg, which
+
+
 def bsd_param(params, name: str):
     """
     TEMPLATE_BSD_<name>, or TEMPLATE_SCATTER_<name>, its name from when the
@@ -782,17 +856,37 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
                         chunk))
     sci_table = dict()
     # -------------------------------------------------------------------------
-    # the velocities of the spectra, on the orders around COMPIL_SLOPE_REF_WAVE
+    # the velocities of the spectra: on the pixels within the nominal
+    #   photometric bands, between the deep telluric bands (TEMPLATE_RV_ORDERS,
+    #   velocity_orders). The tellurics are what limits them on the
+    #   delivered spectra: on 14 NIRPS spectra of TOI-904 (2026-11-24) the
+    #   9 orders around COMPIL_SLOPE_REF_WAVE gave 59.5 m/s rms, all 75
+    #   orders 83.4, the bands 81.8; on PCA2D's corrected spectra 15.0,
+    #   18.4 and 19.1
     if iterate_rv:
-        ref_wave = params['COMPIL_SLOPE_REF_WAVE']
-        medwave = np.nanmedian(wave0, axis=1)
-        reg = [o for o in range(nord) if np.isfinite(medwave[o]) and
-               abs(medwave[o] / ref_wave - 1) < 0.05]
-        if not reg:
-            reg = list(np.argsort(np.abs(medwave - ref_wave))[:3])
+        reg, which = velocity_orders(params, wave0, chunk)
         data = read_orders(inst, science_files, load_science, blaze,
                            calib_dir, reg, hp_pix, tqdm, sci_table, berv,
                            desc='Reading spectra (velocities)')
+        if which == 'bands':
+            # each spectrum's own pixels outside the bands left out (its
+            #   observed wavelengths: the tellurics are in the observer's
+            #   frame)
+            for io_ in range(len(reg)):
+                with np.errstate(invalid='ignore'):
+                    observed = np.exp(data.xobs[io_].astype(float) +
+                                      data.ref[io_])
+                data.flux[io_][~in_bands(observed)] = np.nan
+            kept = np.isfinite(data.flux).sum() / max(1, np.isfinite(
+                data.xobs).sum())
+            log.general('Velocities of the spectra: on the pixels within the '
+                        'photometric bands (TEMPLATE_RV_ORDERS = bands), {0} '
+                        'of the {1} orders, {2:.0f} % of their pixels'.format(
+                            len(reg), nord, 100 * kept))
+        else:
+            log.general('Velocities of the spectra: on {0} of the {1} orders '
+                        '(TEMPLATE_RV_ORDERS = {2})'.format(len(reg), nord,
+                                                            which))
         changes, within = [], []
         rv_err = np.full(nfiles, np.nan)
         # the start: the velocities of the object's box (a CCF against the
@@ -821,18 +915,26 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
             rv0 = mp.add_velocities(rv0, dv)
             history.append(np.array(rv0, dtype=float))
             steps_per_pass.append(taken)
+            # the change of all the velocities at once is a shift of the
+            #   template's frame, which nothing pins (the velocities are
+            #   relative): it is not a change of the velocities. Left in,
+            #   it kept TOI-904's corrected spectra from converging
+            #   (2026-11-24: a pass of 1.1 m/s rms change with 7 % of the
+            #   spectra within 2 sigma, after one with 64 %)
+            common = float(np.nanmedian(dv))
             n1, p1 = np.nanpercentile(dv, [16, 84])
             sig = (p1 - n1) / 2.0
             changes.append(float(sig))
             # converged when TEMPLATE_RV_CONV_FRAC of the spectra changed by
             #   less than TEMPLATE_RV_CONV_NSIG times their uncertainty
             ok = np.isfinite(dv) & np.isfinite(rv_err) & (rv_err > 0)
-            frac = float(np.mean(np.abs(dv[ok]) < nsig * rv_err[ok])) \
-                if ok.any() else 0.0
+            frac = float(np.mean(np.abs(dv[ok] - common) <
+                                 nsig * rv_err[ok])) if ok.any() else 0.0
             within.append(frac)
             msg = ('Velocities of the spectra, pass {0}: change RMS {1:.1f} '
-                   'm/s, {2:.1f} % of them within {3:g} sigma')
-            log.general(msg.format(ite + 1, sig, 100 * frac, nsig))
+                   'm/s (all of them {4:+.1f} m/s, the template\'s frame), '
+                   '{2:.1f} % of them within {3:g} sigma')
+            log.general(msg.format(ite + 1, sig, 100 * frac, nsig, common))
             if frac >= need:
                 converged = True
                 break

@@ -783,6 +783,15 @@ params.set(key='TEMPLATE_RV_CONV_FRAC', value=0.95, source=__NAME__,
            desc='the fraction of the spectra that must have changed by less '
                 'than TEMPLATE_RV_CONV_NSIG sigma for the passes to stop',
            dtype=float)
+params.set(key='TEMPLATE_RV_ORDERS', value='bands', source=__NAME__,
+           desc='what the template measures the velocities of its spectra '
+                'on: bands, the pixels within the nominal photometric bands '
+                '(lbl.core.astro.bands, between the deep telluric bands), of '
+                'the orders with a quarter of their pixels there; ref, the '
+                'orders within 5 % of COMPIL_SLOPE_REF_WAVE; all, every '
+                'order (evenly spread, as many as fit in '
+                'TEMPLATE_BSD_MEMORY)',
+           dtype=str)
 params.set(key='TEMPLATE_RV_MAX_PASSES', value=10, source=__NAME__,
            desc='the most passes of the template on the velocities',
            dtype=int)
@@ -810,7 +819,13 @@ params.set(key='PLANETS', value=False, source=__NAME__,
 #   Jupiter (HD 189733's K is 205 m/s), whose lines would otherwise be
 #   smeared in the template by the star's motion. With PLANETS and the
 #   star's orbits in the catalogs, the template follows the orbits instead,
-#   whatever this says. Science data only.
+#   whatever this says. Science data only. With PCA2D, the delivered spectra
+#   are always measured as with True (their velocities carry the tellurics'
+#   imprint, which a star frame built on them would copy into the
+#   correction): False applies to PCA2D's corrected spectra, whose own
+#   template iterates, and, when their velocities spread by more than
+#   MAX_CONVERGENCE_TEMPLATE_RV, to a second PCA2D pass whose star frame
+#   follows them (lbl_wrap._pca2d_passes)
 params.set(key='SMALL_RV_SHIFT', value=True, source=__NAME__,
            desc='the star\'s velocity is taken as constant: the template '
                 'is made in one pass on BERV alone, without iterating on '
