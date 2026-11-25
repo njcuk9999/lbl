@@ -783,12 +783,14 @@ params.set(key='TEMPLATE_RV_CONV_FRAC', value=0.95, source=__NAME__,
            desc='the fraction of the spectra that must have changed by less '
                 'than TEMPLATE_RV_CONV_NSIG sigma for the passes to stop',
            dtype=float)
-params.set(key='TEMPLATE_RV_ORDERS', value='bands', source=__NAME__,
+params.set(key='TEMPLATE_RV_ORDERS', value='ref', source=__NAME__,
            desc='what the template measures the velocities of its spectra '
-                'on: bands, the pixels within the nominal photometric bands '
+                'on: ref (the default), the whole orders whose median '
+                'wavelength is within 5 % of COMPIL_SLOPE_REF_WAVE (NIRPS: '
+                'orders 54 to 62, 1515 to 1677 nm, the middle of H); bands, '
+                'the pixels within the nominal photometric bands '
                 '(lbl.core.astro.bands, between the deep telluric bands), of '
-                'the orders with a quarter of their pixels there; ref, the '
-                'orders within 5 % of COMPIL_SLOPE_REF_WAVE; all, every '
+                'the orders with a quarter of their pixels there; all, every '
                 'order (evenly spread, as many as fit in '
                 'TEMPLATE_BSD_MEMORY)',
            dtype=str)

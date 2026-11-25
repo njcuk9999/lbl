@@ -103,27 +103,51 @@ of bad pixels on the lines' flanks, after the scan, the velocities stay at
 0.8 m/s rms (the photon noise's) where the least squares of before are
 pulled to 22 m/s; without bad pixels the two agree (0.8 m/s).
 
-The orders (`TEMPLATE_RV_ORDERS`): `bands`, the default, the pixels within
-the nominal photometric bands (`lbl.core.astro.bands`: y 938.6-1113.4,
-J 1148.2-1349.4, H 1451.0-1809.1, K 1985.9-2401.5 nm...), defined between the
-deep telluric bands, of the orders with a quarter of their pixels there,
-each spectrum's pixels outside them left out at its own observed
-wavelengths; `ref`, the whole orders within 5 % of `COMPIL_SLOPE_REF_WAVE`
-(the choice before 2026-11-24); `all`, every order. As many orders as fit in
-`TEMPLATE_BSD_MEMORY`, evenly spread. On the delivered spectra the tellurics
-are what limits these velocities, not the photons: on TOI-904 (NIRPS, 14
-spectra, 2026-11-24), the rms of the velocities (their median formal error)
-was:
+The orders (`TEMPLATE_RV_ORDERS`):
 
-| `TEMPLATE_RV_ORDERS` | orders | delivered spectra | PCA2D's corrected spectra |
-|---|---|---|---|
-| `ref` | 9 | 59.5 m/s (7.0) | 15.0 m/s (5.8) |
-| `all` | 75 | 83.4 m/s (4.7) | 18.4 m/s (3.9) |
-| `bands` | 60, 72 % of their pixels | 81.8 m/s (4.7) | 19.1 m/s (3.9) |
+- `ref`, the default: the whole orders whose median wavelength is within
+  5 % of `COMPIL_SLOPE_REF_WAVE` (the 3 nearest when none is), every pixel
+  of them. That wavelength is the instrument's (NIRPS and SPIRou 1600 nm;
+  HARPS, HARPS-N, NEID, SOPHIE, CORALIE, EXPRES 550; ESPRESSO, ESPaDOnS
+  650; CARMENES 750; MAROON-X 500 and 800), the reference of the chromatic
+  slope in the compilation and the window the BERVBIN template registers
+  its spectra on (1520 to 1680 nm for NIRPS), chosen as the cleanest part
+  of the domain, with the most velocity content. On NIRPS HE: orders 54 to
+  62, 1515.0 to 1677.0 nm, all within H, 36 792 pixels.
+- `bands`: the pixels within the nominal photometric bands
+  (`lbl.core.astro.bands`: y 938.6-1113.4, J 1148.2-1349.4, H 1451.0-1809.1,
+  K 1985.9-2401.5 nm...), defined between the deep telluric bands, of the
+  orders with a quarter of their pixels there, each spectrum's pixels
+  outside them left out at its own observed wavelengths. On NIRPS HE: 60
+  orders (0 to 19 y, 23 to 41 J, 49 to 69 H; `ref`'s orders among them),
+  235 874 pixels.
+- `all`: every order.
 
-(on 14 spectra, an rms is known to about 13 %). Hence, with PCA2D, the
-delivered spectra are measured as with `SMALL_RV_SHIFT = True`
-([PCA2D.md](PCA2D.md)).
+As many orders as fit in `TEMPLATE_BSD_MEMORY`, evenly spread. The template
+itself is made from every order whatever this says: only the velocities
+that register the spectra are measured on these.
+
+The tellurics are what limits these velocities, not the photons: on TOI-904
+(NIRPS, 14 spectra, 2026-11-25), their dispersion (rms; half the 16-84 %
+range; median formal error) was:
+
+| `TEMPLATE_RV_ORDERS` | delivered spectra | PCA2D's corrected spectra |
+|---|---|---|
+| `ref` | 59.5; 48.4; 7.0 m/s | 15.1; 11.0; 5.8 m/s |
+| `all` | 83.3; 75.2; 4.7 m/s | 19.1; 17.7; 3.9 m/s |
+| `bands` | 81.5; 72.5; 4.7 m/s | 19.2; 17.8; 3.9 m/s |
+
+With 16 % of the pixels of `bands`, `ref` holds 45 % of its velocity
+information (the ratio of their formal errors squared), yet scatters less:
+the orders `bands` adds (y, J, the edges of H) bring more of the tellurics'
+imprint than of the star's velocity. `bands` was the default from
+2026-11-24 to 2026-11-25, `ref` the choice before. On 14 spectra an rms is
+known to 20 %, half the 16-84 % range to 26 % (and it reads 12 % low on
+Gaussian noise). LBL's own velocities of the same corrected spectra follow
+the template's (correlation 0.97 on every order, slope 1.11 +- 0.08; 0.91
+and 1.22 +- 0.16 on the lines of `ref`'s window): the scatter is the
+spectra's, not the method's. Hence, with PCA2D, the delivered spectra are
+measured as with `SMALL_RV_SHIFT = True` ([PCA2D.md](PCA2D.md)).
 
 With `PLANETS` and the star's orbits known, `SMALL_RV_SHIFT = True` makes
 the template in one pass on the orbits; `False` starts from the orbits and

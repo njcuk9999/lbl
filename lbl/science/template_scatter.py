@@ -32,9 +32,10 @@ The orders are then combined on the grid with the weights the s1d uses
 ones and the even ones.
 
 With SMALL_RV_SHIFT False and no known orbits, the velocities of the spectra
-are first measured on the pixels within the nominal photometric bands
-(astro.bands: y, J, H, K...), defined between the deep telluric bands
-(TEMPLATE_RV_ORDERS; a scan of the shift, then Bouchy et al. 2001 pixel by pixel on the template's Savitzky-
+are first measured on the whole orders within 5 % of COMPIL_SLOPE_REF_WAVE,
+the cleanest part of the domain (TEMPLATE_RV_ORDERS, or the pixels within
+the nominal photometric bands, or every order; a scan of the shift, then
+Bouchy et al. 2001 pixel by pixel on the template's Savitzky-
 Golay derivative, the pixels combined by LBL's mixture model, odd_ratio_mean,
 the steps iterated until they converge), pass after pass, until 95 % of the
 spectra changed by less than 2 sigma (TEMPLATE_RV_CONV_FRAC,
@@ -74,6 +75,10 @@ log = io.log
 C_MS = mp.speed_of_light_ms
 #: the points of a cloud: the derivatives returned (0 to 3)
 NDERIV = 3
+#: TEMPLATE_RV_ORDERS = ref: the orders whose median wavelength is within
+#:   this fraction of COMPIL_SLOPE_REF_WAVE (the window of the BERVBIN
+#:   template, lbl_template)
+REF_WINDOW = 0.05
 #: TEMPLATE_RV_ORDERS = bands: an order whose pixels are less than this
 #:   share within a band is left out of the velocities
 BAND_MIN_SHARE = 0.25
@@ -99,10 +104,12 @@ def velocity_orders(params, wave: np.ndarray, most: int) -> tuple:
     The orders the velocities of the spectra are measured on
     (TEMPLATE_RV_ORDERS), and the pixels of each kept
 
-    bands (the default): the pixels within the nominal photometric bands
-        (in_bands), where the deep tellurics are not, of the orders with at
-        least BAND_MIN_SHARE of their pixels there
-    ref: the whole orders within 5 % of COMPIL_SLOPE_REF_WAVE
+    ref (the default): the whole orders whose median wavelength is within
+        5 % of COMPIL_SLOPE_REF_WAVE (the 3 nearest when none is), the
+        window the BERVBIN template registered its spectra on
+    bands: the pixels within the nominal photometric bands (in_bands),
+        where the deep tellurics are not, of the orders with at least
+        BAND_MIN_SHARE of their pixels there
     all: the whole orders
 
     Evenly spread, at most `most` of them (what fits in
@@ -116,9 +123,9 @@ def velocity_orders(params, wave: np.ndarray, most: int) -> tuple:
              bands, read_orders' pixels outside them are then left out,
              spectrum by spectrum, build)
     """
-    which = str(params.get('TEMPLATE_RV_ORDERS', 'bands') or 'bands').lower()
+    which = str(params.get('TEMPLATE_RV_ORDERS', 'ref') or 'ref').lower()
     if which not in ('bands', 'ref', 'all'):
-        emsg = ('TEMPLATE_RV_ORDERS must be bands, ref or all, not '
+        emsg = ('TEMPLATE_RV_ORDERS must be ref, bands or all, not '
                 '{0!r}'.format(params.get('TEMPLATE_RV_ORDERS')))
         raise base_classes.LblException(emsg)
     with warnings.catch_warnings():
@@ -126,9 +133,14 @@ def velocity_orders(params, wave: np.ndarray, most: int) -> tuple:
         medwave = np.nanmedian(wave, axis=1)
     finite = np.isfinite(medwave)
     if which == 'ref':
-        ref_wave = params['COMPIL_SLOPE_REF_WAVE']
+        ref_wave = params.get('COMPIL_SLOPE_REF_WAVE')
+        if ref_wave is None or not np.isfinite(float(ref_wave)):
+            emsg = ('TEMPLATE_RV_ORDERS = ref needs COMPIL_SLOPE_REF_WAVE '
+                    '(the instrument\'s); set it, or use bands or all')
+            raise base_classes.LblException(emsg)
+        ref_wave = float(ref_wave)
         reg = [o for o in range(len(medwave)) if finite[o] and
-               abs(medwave[o] / ref_wave - 1) < 0.05]
+               abs(medwave[o] / ref_wave - 1) < REF_WINDOW]
         if not reg:
             reg = list(np.argsort(np.abs(medwave - ref_wave))[:3])
     elif which == 'all':
@@ -856,13 +868,14 @@ def build(inst, science_files: List[str], load_science: Callable, blaze,
                         chunk))
     sci_table = dict()
     # -------------------------------------------------------------------------
-    # the velocities of the spectra: on the pixels within the nominal
-    #   photometric bands, between the deep telluric bands (TEMPLATE_RV_ORDERS,
-    #   velocity_orders). The tellurics are what limits them on the
-    #   delivered spectra: on 14 NIRPS spectra of TOI-904 (2026-11-24) the
-    #   9 orders around COMPIL_SLOPE_REF_WAVE gave 59.5 m/s rms, all 75
-    #   orders 83.4, the bands 81.8; on PCA2D's corrected spectra 15.0,
-    #   18.4 and 19.1
+    # the velocities of the spectra: on the orders around
+    #   COMPIL_SLOPE_REF_WAVE (TEMPLATE_RV_ORDERS, velocity_orders). The
+    #   tellurics are what limits them, not the photons: on 14 NIRPS spectra
+    #   of TOI-904 (2026-11-25), the 9 orders of ref gave 59.5 m/s rms (48.4
+    #   as half the 16-84 % range), all 75 orders 83.3 (75.2), the bands
+    #   81.5 (72.5); on PCA2D's corrected spectra 15.1 (11.0), 19.1 (17.7)
+    #   and 19.2 (17.8), their median formal errors 1.5 times those of
+    #   bands
     if iterate_rv:
         reg, which = velocity_orders(params, wave0, chunk)
         data = read_orders(inst, science_files, load_science, blaze,
