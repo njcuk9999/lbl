@@ -260,9 +260,48 @@ def test_a_basis_keeps_the_snr_of_its_input_exposures(tmp_path):
     assert list(loaded.inputs['object']) == ['A', 'A', 'A', 'B', '']
     assert list(loaded.inputs['used']) == [True, True, True, True, False]
     assert loaded.header['SNRMED'] == 45.0 and loaded.header['SNRN'] == 4
+    # each training star's, in TRAINING
+    assert list(loaded.training['snr']) == [40.0, 80.0]
+    assert list(loaded.training['nexp']) == [3, 1]
+    # each star's own file: its exposures and their SNR
+    stars = basis.save_stars(str(run), str(tmp_path), ['A', 'B'],
+                             instrument='NIRPS_HE')
+    with fits.open(stars[0]) as hdul:
+        assert list(hdul['INPUTS'].data['filename']) == [
+            'f0.fits', 'h0.fits', 'f1.fits']
+        assert hdul[0].header['SNRMED'] == 40.0
+    assert fits.getheader(stars[1])['SNRMED'] == 80.0
     # a fit that did not list them: no INPUTS, no SNRMED
     os.remove(str(run / basis.INPUTS_FILE))
     path = basis.save(str(run), 'plain_basis', str(tmp_path), ['A', 'B'],
                       instrument='NIRPS_HE')
     assert basis.load(path).inputs is None
     assert 'SNRMED' not in basis.load(path).header
+
+
+def test_a_basis_saved_before_gets_its_inputs_snr(tmp_path):
+    """basis.add_inputs: a basis without INPUTS (saved before 2026-11-25)
+    gets them from the cube its fit was made on, its components and
+    BASISID as they were; a star's file its own exposures only"""
+    run = tmp_path / 'run'
+    run.mkdir()
+    _fake_run(str(run))
+    path = basis.save(str(run), 'old_basis', str(tmp_path), ['A', 'B'],
+                      instrument='NIRPS_HE')
+    stars = basis.save_stars(str(run), str(tmp_path), ['A', 'B'],
+                             instrument='NIRPS_HE')
+    before = basis.load(path)
+    assert before.inputs is None
+    cube = str(tmp_path / 'cube')
+    _cube(cube)
+    assert basis.add_inputs(path, cube) == 4
+    after = basis.load(path)
+    assert after.ident == before.ident
+    assert np.array_equal(after.components, before.components)
+    assert list(after.inputs['object']) == ['A', 'A', 'A', 'B']
+    assert after.header['SNRMED'] == 51.0
+    assert list(after.training['snr']) == [42.0, 70.0]
+    assert basis.add_inputs(stars[1], cube) == 1
+    with fits.open(stars[1]) as hdul:
+        assert list(hdul['INPUTS'].data['filename']) == ['f2.fits']
+        assert hdul[0].header['SNRMED'] == 70.0

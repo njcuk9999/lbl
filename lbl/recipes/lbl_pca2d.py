@@ -1011,6 +1011,16 @@ def correct(instrument, data_dir, objects, comparisons, data_source, pca2d,
                             data_source=str(data_source or ''))
         log('PCA2D: observer components saved, %s; another star reads them'
             ' with PCA2D input_name=%r' % (saved, observer_label), 'value')
+        # what a run's SNR is matched against (the basis' INPUTS)
+        from astropy.io import fits
+        head = fits.getheader(saved)
+        if head.get('SNRMED') is None:
+            log('PCA2D: the SNR of its input exposures is not known (the'
+                ' fit did not list them, %s): no SNR to match a run'
+                ' against' % pbasis.INPUTS_FILE, 'warn')
+        else:
+            log('PCA2D: its input exposures, median SNR %.1f (%d of them)'
+                % (head['SNRMED'], head.get('SNRN', 0)), 'value')
     for saved in pbasis.save_stars(run_dir, data_dir, list(objects),
                                    instrument=instrument,
                                    name=output or label or None):

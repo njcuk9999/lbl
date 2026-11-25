@@ -350,18 +350,23 @@ LBL names its templates, the instrument last, under the fit's `output_name`
 | file | what |
 |---|---|
 | `PCA2D_Observer_<output_name>_<instrument>.fits` | the observer basis: grid, components, mask, their power, the training stars, every row's amplitudes, every input exposure and its SNR (`INPUTS`) |
-| `PCA2D_Star_<object>_<output_name>_<instrument>.fits` | each star of the fit: its spectrum per order parity, its star-frame components and their amplitudes |
+| `PCA2D_Star_<object>_<output_name>_<instrument>.fits` | each star of the fit: its spectrum per order parity, its star-frame components and their amplitudes, its input exposures and their SNR (`INPUTS`) |
 
-A basis keeps each input exposure (`INPUTS`: the file, the row it went into,
-its star, its BJD, whether its row was fitted) with its SNR: `snr`, the
-median of every order's extraction SNR (APERO's `EXTSNxxx`, the SNR the LBL
-window shows), and `snr_band`, over the domain's orders. `SNRMED`, `SNRP16`,
-`SNRP84` and `SNRN` in its primary header sum up the fitted ones' `snr`: what
-a run's SNR is matched against when a basis is chosen for it (the window's
-`smart` choice). The fit lists them in its folder (`inputs.csv`) from the
-cube's members (`members.csv`, which keeps each exposure's SNR), the header
-of a file whose cube was made before it did. A basis saved before
-2026-11-25 has none.
+Every file saved keeps its input exposures (`INPUTS`: the file, the row it
+went into, its star, its BJD, whether its row was fitted) with their SNR:
+`snr`, the median of every order's extraction SNR (APERO's `EXTSNxxx`, the
+SNR the LBL window shows), and `snr_band`, over the domain's orders.
+`SNRMED`, `SNRP16`, `SNRP84` and `SNRN` in its primary header sum up the
+fitted ones' `snr`; the observer basis' `TRAINING` gives each star's (`snr`,
+`snr_p16`, `snr_p84`, `nexp`). That is what a run's SNR is matched against
+when a basis is chosen for it (the window's `smart` choice), and the log says
+the basis' median SNR as it is saved. The fit lists them in its folder
+(`inputs.csv`) from the cube's members (`members.csv`, which keeps each
+exposure's SNR), the header of a file whose cube was made before it did. A
+file saved before 2026-11-25 has none: `lbl.pca2d.basis.add_inputs(path,
+cube, directories)` gives it them from the cube its fit was made on (and the
+input files, for an SNR that cube did not keep), its components and
+`BASISID` as they were.
 
 Another star takes those observer components frozen with `input_name`: the
 output name (this instrument's file), the file name, or a path. Only its own

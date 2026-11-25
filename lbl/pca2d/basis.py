@@ -40,7 +40,9 @@ THE OBSERVER FILE:
                  own space (high-passed log flux), by decreasing power
     MASK         (NPIX) 1 where the training constrained the basis
     VARIANCE     one row per component: its weighted power and its share
-    TRAINING     one row per training star: rows, MJD and BERV ranges
+    TRAINING     one row per training star: rows, MJD and BERV ranges, its
+                 SNR (snr, snr_p16, snr_p84: its fitted input exposures';
+                 nexp: how many it has; NaN and 0 when not known)
     AMPLITUDES   one row per training row: star, file, BJD, BERV, the
                  ancillary quantities the fit kept (airmass, humidity...) and
                  the amplitude on each component
@@ -262,6 +264,132 @@ def basis_id(grid: np.ndarray, components: np.ndarray) -> str:
     return digest.hexdigest()[:12]
 
 
+def add_inputs(path: str, cube: str, directories=None,
+               extensions=None) -> int:
+    """
+    Give a basis saved before it kept them (observer or star file) its
+    input exposures and their SNR: INPUTS, SNRMED... in its header and, for
+    an observer basis, each star's SNR in TRAINING. Its rows are matched to
+    the exposures of the cube it was fitted on (write_inputs: the cube's
+    members or rows, an SNR it did not keep read from the files' headers,
+    found in `directories`). The file is written again in place, its
+    components and BASISID as they were.
+
+    :param path: str, the basis' file
+    :param cube: str, the folder of the cube its fit was made on
+    :param directories: list of str, where the input files are
+    :param extensions: the instrument's extension names
+
+    :return: int, the input exposures of its rows found
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        listed = write_inputs(cube, tmp, directories, extensions)
+        if listed is None:
+            return 0
+        table = Table.read(listed, format='ascii.csv')
+    with fits.open(path) as hdul:
+        hdus = [hdu.copy() for hdu in hdul if hdu.name != 'INPUTS']
+    amplitudes = Table(next(h for h in hdus if h.name == 'AMPLITUDES').data)
+    rows = [os.path.basename(str(f)) for f in amplitudes['filename']]
+    if 'object' in amplitudes.colnames:
+        star_of = dict(zip(rows, [str(o) for o in amplitudes['object']]))
+    else:
+        star_of = dict.fromkeys(rows, str(hdus[0].header.get('OBJECT', '')))
+    # a star's file keeps its own exposures only (a joint cube has all)
+    mine = np.array([os.path.basename(str(r)) in star_of
+                     for r in table['row']], dtype=bool)
+    if 'object' not in amplitudes.colnames:
+        table = table[mine]
+    inputs = _inputs_table(table, star_of, dict.fromkeys(rows, True))
+    _snr_cards(hdus[0].header, inputs)
+    for k, hdu in enumerate(hdus):
+        if hdu.name == 'TRAINING':
+            training = Table(hdu.data)
+            _star_snr(training, inputs)
+            hdus[k] = fits.BinTableHDU(training, name='TRAINING')
+    hdus.append(fits.BinTableHDU(inputs, name='INPUTS'))
+    tmp = path + '.inputs.tmp'
+    fits.HDUList(hdus).writeto(tmp, overwrite=True)
+    os.replace(tmp, path)
+    return int(np.sum(np.asarray(inputs['used'])))
+
+
+def _inputs_table(listed: Table, star_of: dict, used_of: dict) -> Table:
+    """INPUTS from a list of input exposures (write_inputs) and their rows'
+    star and use: object, filename, row, bjd, snr, snr_band, used"""
+    rows = [os.path.basename(str(r)) for r in listed['row']]
+    return Table(dict(
+        object=[star_of.get(r, '') for r in rows],
+        filename=[os.path.basename(str(f)) for f in listed['filename']],
+        row=rows,
+        bjd=np.asarray(listed['bjd'], dtype=float),
+        snr=np.asarray(listed['snr'], dtype=float),
+        snr_band=np.asarray(listed['snr_band'], dtype=float),
+        used=np.array([used_of.get(r, False) for r in rows], dtype=bool)))
+
+
+def _fit_inputs(run_dir: str, fit, star: np.ndarray, keep: np.ndarray):
+    """A fit's input exposures (INPUTS_FILE in its folder), each with the
+    star of its row and whether that row was fitted; None when the fit did
+    not list them (one made before 2026-11-25)"""
+    listed = os.path.join(run_dir, INPUTS_FILE)
+    if not os.path.exists(listed):
+        return None
+    star_of, used_of = dict(), dict()
+    for name, obj, ok in zip(np.asarray(fit['filename']), star, keep):
+        name = os.path.basename(str(name))
+        star_of.setdefault(name, str(obj))
+        used_of[name] = used_of.get(name, False) or bool(ok)
+    return _inputs_table(Table.read(listed, format='ascii.csv'), star_of,
+                         used_of)
+
+
+def _used_snr(inputs) -> np.ndarray:
+    """The finite SNR of the input exposures whose row was fitted"""
+    if inputs is None or not len(inputs):
+        return np.array([])
+    snr = np.asarray(inputs['snr'], dtype=float)[
+        np.asarray(inputs['used'], dtype=bool)]
+    return snr[np.isfinite(snr)]
+
+
+def _snr_cards(header, inputs) -> None:
+    """SNRMED, SNRP16, SNRP84, SNRN: the SNR of the fitted input exposures,
+    into a basis' header (none when it is not known)"""
+    for key in ('SNRMED', 'SNRP16', 'SNRP84', 'SNRN'):
+        header.remove(key, ignore_missing=True)
+    snr = _used_snr(inputs)
+    if not snr.size:
+        return
+    p16, p50, p84 = np.percentile(snr, [16, 50, 84])
+    header['SNRMED'] = (float(p50), 'median SNR of the input exposures')
+    header['SNRP16'] = (float(p16), '16th percentile of their SNR')
+    header['SNRP84'] = (float(p84), '84th percentile of their SNR')
+    header['SNRN'] = (int(snr.size), 'input exposures with an SNR')
+
+
+def _star_snr(training: Table, inputs) -> None:
+    """Each training star's SNR, into TRAINING: snr (the median of its
+    fitted input exposures'), snr_p16, snr_p84, nexp (its input exposures);
+    NaN and 0 when not known"""
+    med, low, high, count = [], [], [], []
+    for obj in training['object']:
+        part = (None if inputs is None else
+                inputs[np.asarray(inputs['object']) == str(obj)])
+        snr = _used_snr(part)
+        p16, p50, p84 = (np.percentile(snr, [16, 50, 84]) if snr.size
+                         else (np.nan, np.nan, np.nan))
+        med.append(float(p50))
+        low.append(float(p16))
+        high.append(float(p84))
+        count.append(0 if part is None else len(part))
+    training['snr'] = med
+    training['snr_p16'] = low
+    training['snr_p84'] = high
+    training['nexp'] = count
+
+
 def save(run_dir: str, name: str, data_dir: str, objects: list,
          instrument: str = '', config: dict = None,
          data_source: str = '') -> str:
@@ -367,35 +495,10 @@ def save(run_dir: str, name: str, data_dir: str, objects: list,
     for index in range(n_earth):
         amplitudes['b%d' % (index + 1)] = b[rows, index]
     # THE INPUT EXPOSURES (INPUTS_FILE, write_inputs): each one's SNR, what
-    #   a run's SNR is matched against; their star, and whether their row was
-    #   fitted, from the fit's rows
-    inputs = None
-    listed = os.path.join(run_dir, INPUTS_FILE)
-    if os.path.exists(listed):
-        inputs = Table.read(listed, format='ascii.csv')
-        star_of, used_of = dict(), dict()
-        for name, obj, ok in zip(np.asarray(fit['filename']), star, keep):
-            name = os.path.basename(str(name))
-            star_of.setdefault(name, str(obj))
-            used_of[name] = used_of.get(name, False) or bool(ok)
-        row_names = [os.path.basename(str(r)) for r in inputs['row']]
-        inputs = Table(dict(
-            object=[star_of.get(r, '') for r in row_names],
-            filename=[os.path.basename(str(f)) for f in inputs['filename']],
-            row=row_names,
-            bjd=np.asarray(inputs['bjd'], dtype=float),
-            snr=np.asarray(inputs['snr'], dtype=float),
-            snr_band=np.asarray(inputs['snr_band'], dtype=float),
-            used=np.array([used_of.get(r, False) for r in row_names],
-                          dtype=bool)))
-        snr = np.asarray(inputs['snr'])[np.asarray(inputs['used'])]
-        snr = snr[np.isfinite(snr)]
-        if snr.size:
-            p16, p50, p84 = np.percentile(snr, [16, 50, 84])
-            primary['SNRMED'] = (float(p50), 'median SNR of the input exposures')
-            primary['SNRP16'] = (float(p16), '16th percentile of their SNR')
-            primary['SNRP84'] = (float(p84), '84th percentile of their SNR')
-            primary['SNRN'] = (int(snr.size), 'input exposures with an SNR')
+    #   a run's SNR is matched against, each star's in TRAINING
+    inputs = _fit_inputs(run_dir, fit, star, keep)
+    _snr_cards(primary, inputs)
+    _star_snr(training, inputs)
 
     out = component_file('observer', name, instrument, data_dir)
     # a kept basis of this name is updated where it is kept
@@ -682,6 +785,8 @@ def save_stars(run_dir: str, data_dir: str, objects: list,
         COMPONENTS   (NSTAR, NPIX): the star-frame components (shared by the
                      stars of a joint fit)
         AMPLITUDES   one row per exposure: file, BJD, BERV, the amplitudes
+        INPUTS       the star's input exposures and their SNR, as the
+                     observer file's (SNRMED... in the header)
 
     :param run_dir: str, the fit's folder
     :param data_dir: str, LBL's DATA_DIR
@@ -703,6 +808,10 @@ def save_stars(run_dir: str, data_dir: str, objects: list,
     filename = np.asarray(fit['filename'])
     first = np.ones(len(parity), dtype=bool)
     first[1:] = filename[1:] != filename[:-1]
+    star = np.array([objects[m] if m < len(objects) else '?'
+                     for m in member])
+    # the input exposures and their SNR (INPUTS), each star its own
+    inputs = _fit_inputs(run_dir, fit, star, keep)
     written = []
     for index, obj in enumerate(objects):
         rows = first & keep & (member == index)
@@ -729,6 +838,9 @@ def save_stars(run_dir: str, data_dir: str, objects: list,
             if isinstance(value, float) and not np.isfinite(value):
                 continue
             primary[key] = (value, comment)
+        own = (None if inputs is None
+               else inputs[np.asarray(inputs['object']) == str(obj)])
+        _snr_cards(primary, own)
         if 'earth_basis' in fit.files and str(fit['earth_basis']):
             primary['EARTHBAS'] = (str(fit['earth_basis']),
                                    'observer basis, frozen')
@@ -743,12 +855,14 @@ def save_stars(run_dir: str, data_dir: str, objects: list,
         label = obj if not name else '{0}_{1}'.format(obj, name)
         out = component_file('star', label, instrument, data_dir)
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        fits.HDUList([fits.PrimaryHDU(header=primary),
-                      fits.ImageHDU(grid, name='WAVE'),
-                      fits.ImageHDU(templates[2 * index:2 * index + 2],
-                                    name='TEMPLATES'),
-                      fits.ImageHDU(star_pcs, name='COMPONENTS'),
-                      fits.BinTableHDU(amplitudes, name='AMPLITUDES')]
-                     ).writeto(out, overwrite=True)
+        hdus = [fits.PrimaryHDU(header=primary),
+                fits.ImageHDU(grid, name='WAVE'),
+                fits.ImageHDU(templates[2 * index:2 * index + 2],
+                              name='TEMPLATES'),
+                fits.ImageHDU(star_pcs, name='COMPONENTS'),
+                fits.BinTableHDU(amplitudes, name='AMPLITUDES')]
+        if own is not None:
+            hdus.append(fits.BinTableHDU(own, name='INPUTS'))
+        fits.HDUList(hdus).writeto(out, overwrite=True)
         written.append(out)
     return written
