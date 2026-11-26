@@ -159,6 +159,34 @@ def _side_level(wave: np.ndarray, ratio: np.ndarray, noise: np.ndarray,
     return np.mean(wave[band]), np.median(ratio[band]), error
 
 
+def window_half(line: Dict) -> float:
+    """
+    Half the extent of the window a line's dEW is integrated over [nm]: half
+    its width for a boxcar, 1.5 times its FWHM for a gaussian (its weight
+    there 2e-3 of its peak)
+
+    :param line: dict, the line (load_lines)
+
+    :return: float, the window's half extent [nm]
+    """
+    width = float(line['WIDTH'])
+    return 1.5 * width if line['FUNCTION'] == 'gaussian' else 0.5 * width
+
+
+def side_bands(line: Dict) -> tuple:
+    """
+    The side bands where the local level q of a line is taken: from h + w/2
+    to h + 5 w/2 from its centre on each side (h the window's half extent,
+    w its width) [nm, offsets from the centre]
+
+    :param line: dict, the line (load_lines)
+
+    :return: tuple, (inner, outer) offsets from the centre [nm]
+    """
+    half, width = window_half(line), float(line['WIDTH'])
+    return half + 0.5 * width, half + 2.5 * width
+
+
 def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
                   template: np.ndarray, blaze: np.ndarray,
                   rms: np.ndarray) -> Optional[Dict]:
@@ -179,7 +207,7 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
     """
     lam0, width = line['WAVE'], line['WIDTH']
     gaussian = line['FUNCTION'] == 'gaussian'
-    half = 1.5 * width if gaussian else 0.5 * width
+    half = window_half(line)
     # the finite part of the order, increasing
     finite = np.where(np.isfinite(wave))[0]
     if len(finite) < 10:
@@ -213,7 +241,8 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
         ratio = spectrum / model
         ratio_noise = rms / model
     dist = np.abs(wave - lam0)
-    band = (dist >= half + 0.5 * width) & (dist <= half + 2.5 * width)
+    inner, outer = side_bands(line)
+    band = (dist >= inner) & (dist <= outer)
     left = _side_level(wave, ratio, ratio_noise, band & (wave < lam0))
     right = _side_level(wave, ratio, ratio_noise, band & (wave > lam0))
     if left is None and right is None:

@@ -88,6 +88,15 @@ def test_a_gaussian_window_weights_the_line():
     assert out['dEW'] == pytest.approx(expected, rel=0.01)
 
 
+def test_the_window_and_its_side_bands():
+    box = dict(WIDTH=0.04, FUNCTION='boxcar')
+    gauss = dict(WIDTH=0.04, FUNCTION='gaussian')
+    assert activity_lines.window_half(box) == pytest.approx(0.02)
+    assert activity_lines.window_half(gauss) == pytest.approx(0.06)
+    assert activity_lines.side_bands(box) == pytest.approx((0.04, 0.12))
+    assert activity_lines.side_bands(gauss) == pytest.approx((0.08, 0.16))
+
+
 def test_the_rdb_gets_one_column_per_measure_and_line(tmp_path):
     from astropy.io import fits
     from astropy.table import Table
