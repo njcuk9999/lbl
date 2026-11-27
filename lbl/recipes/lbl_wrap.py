@@ -575,25 +575,31 @@ def _lbl_steps(runparams, keyword_args, instrument, data_dir, data_source,
     # ---------------------------------------------------------------------
     # make the template (if not present)
     if runparams['RUN_LBL_TEMPLATE']:
-        # Must produce the template for the science data and the template
-        #   we use a set to do this (only runs once if they are the same)
-        for _obj_template in {object_science, object_comparison}:
-            lbl_template.main(instrument=instrument, data_dir=data_dir,
-                              data_source=data_source,
-                              data_type=data_type,
-                              object_science=object_science,
-                              object_comparison=_obj_template,
-                              blaze_corrected=blaze_corr,
-                              blaze_file=blaze_file,
-                              object_teff=object_teff,
-                              overwrite=not runparams['SKIP_LBL_TEMPLATE'],
-                              **keyword_args)
+        # ONE CALL: lbl_template makes the science object's template and,
+        #   when the comparison is another, the comparison's too (a vetted
+        #   one is the depot's, not made). Called again with the science as
+        #   its comparison, as it was, it made the science's template a
+        #   second time, the same file (5 minutes for 379 NIRPS spectra, at
+        #   every LBL stage of a PCA2D run)
+        lbl_template.main(instrument=instrument, data_dir=data_dir,
+                          data_source=data_source,
+                          data_type=data_type,
+                          object_science=object_science,
+                          object_comparison=object_comparison,
+                          blaze_corrected=blaze_corr,
+                          blaze_file=blaze_file,
+                          object_teff=object_teff,
+                          overwrite=not runparams['SKIP_LBL_TEMPLATE'],
+                          **keyword_args)
     # ---------------------------------------------------------------------
     # make the mask (if not present)
     if runparams['RUN_LBL_MASK']:
-        # Must produce the mask for the science data and the template
-        #   we use a set to do this (only runs once if they are the same)
-        for _obj_comparison in {object_science, object_comparison}:
+        # the comparison's mask (the one the velocities are measured with),
+        #   then the science's own when the comparison is another star (its
+        #   systemic velocity): lbl_mask makes one per call, in this order
+        #   (the window plans them so)
+        for _obj_comparison in dict.fromkeys([object_comparison,
+                                              object_science]):
             lbl_mask.main(instrument=instrument, data_dir=data_dir,
                           data_source=data_source,
                           data_type=data_type,

@@ -103,6 +103,29 @@ def test_cleaning_with_a_vetted_template(tmp_path, calls):
     assert 'VETTED_GL699_tc' not in templates
 
 
+def test_one_template_call_and_two_masks_against_another_star(tmp_path,
+                                                             calls):
+    """lbl_template makes the science's template and the comparison's in one
+    call: a second call with the science as its comparison made the same
+    file again. lbl_mask makes one mask per call: the comparison's, then
+    the science's own"""
+    lbl_wrap.main(_params(tmp_path, OBJECT_SCIENCE='GJ1',
+                          OBJECT_COMPARISON='VETTED_GL699',
+                          DATA_TYPES='SCIENCE', OBJECT_TEFF=3500,
+                          RUN_LBL_MASK=True))
+    # the steps themselves (overwrite as SKIP_LBL_* say); those made with
+    #   overwrite=False are the net for what compute finds missing, here
+    #   where the recipes write nothing
+    templates = [kw for name, kw in calls
+                 if name == 'lbl_template' and kw['overwrite']]
+    assert len(templates) == 1
+    assert (templates[0]['object_science'],
+            templates[0]['object_comparison']) == ('GJ1', 'VETTED_GL699')
+    masks = [kw['object_comparison'] for name, kw in calls
+             if name == 'lbl_mask' and kw['overwrite']]
+    assert masks == ['VETTED_GL699', 'GJ1']
+
+
 def test_cleaning_with_another_star_cleaned(tmp_path, calls):
     (tmp_path / 'science' / 'GJ2_tc').mkdir(parents=True)
     lbl_wrap.main(_params(tmp_path, OBJECT_SCIENCE='GJ1',
