@@ -1202,25 +1202,33 @@ ACTIVITY_PER_PAGE = 8
 ACTIVITY_NSIG = 4.0
 
 
+def _ew_kind(table):
+    """'EW' when the rdb has the activity lines' equivalent widths (since
+    2026-11-27), 'dEW' for an older one (their change against the template
+    only)"""
+    return 'EW' if any(str(c).startswith('EW_') for c in table) else 'dEW'
+
+
 def activity_lines(table, labels=None):
     """The activity lines of the rdb measured in at least one spectrum
     (lbl_compile, lbl.science.activity_lines), in the rdb's order, as (key,
     name, label).
 
     The columns of a line are <column>_<key>, the key being its name with
-    the space as an underscore: dEW_He_1.08333 and sdEW_He_1.08333 for
-    He 1.08333.
+    the space as an underscore: EW_He_1.08333 and sEW_He_1.08333 for
+    He 1.08333 (dEW_ and sdEW_ in an rdb of before 2026-11-27).
     """
     labels = labels or dict()
+    kind = _ew_kind(table)
     out = []
     for column in table:
-        if not column.startswith('dEW_'):
+        if not str(column).startswith(kind + '_'):
             continue
-        if 'sdEW_' + column[4:] not in table:
+        key = column[len(kind) + 1:]
+        if 's' + column not in table:
             continue
         if not np.isfinite(np.asarray(table[column], dtype=float)).any():
             continue
-        key = column[4:]
         name = key.replace('_', ' ', 1)
         out.append((key, name, labels.get(name, name)))
     return out
@@ -1229,8 +1237,9 @@ def activity_lines(table, labels=None):
 def activity_stats(table, key):
     """The measures of one activity line: (good, weighted mean, reduced
     chi2 about it), the last two NaN with fewer than two measures."""
-    ew = np.asarray(table['dEW_' + key], dtype=float)
-    sig = np.asarray(table['sdEW_' + key], dtype=float)
+    kind = _ew_kind(table)
+    ew = np.asarray(table[kind + '_' + key], dtype=float)
+    sig = np.asarray(table['s' + kind + '_' + key], dtype=float)
     good = np.isfinite(ew) & np.isfinite(sig) & (sig > 0)
     if np.sum(good) < 2:
         return good, float('nan'), float('nan')
@@ -1256,12 +1265,16 @@ def activity_spread(ew, sig):
 
 
 def page_activity(plt, table, lines, title):
-    """The differential equivalent width of each activity line, in time.
+    """The equivalent width of each activity line, in time.
 
     WHAT IS PLOTTED. For each line of lbl/resources/activity_lines.yaml that
-    the spectra cover, what the line absorbs more than in the template (in
-    mA, lbl.science.activity_lines): 0 is the template, a line filling in
-    with chromospheric emission goes negative. The spectra further than
+    the spectra cover, its pseudo-equivalent width in the window and against
+    the pseudo-continuum of the catalog (in mA, lbl.science.activity_lines,
+    Schofer et al. 2019): the template's is the dotted line, with its
+    systematic error from the continuum in the title; a line filling in
+    with chromospheric emission goes down, emission is negative. In an rdb
+    of before 2026-11-27, its change against the template (dEW, 0 the
+    template). The spectra further than
     ACTIVITY_NSIG sigmas from the median are red, a sigma being the error
     bar and the line's own variability together (activity_spread): a flare
     lights He I and the Paschen lines together, an artefact usually one line
@@ -1275,15 +1288,25 @@ def page_activity(plt, table, lines, title):
     if not lines:
         return None
     time = np.asarray(table[S.TIME], dtype=float)
+    kind = _ew_kind(table)
     ncol = 2 if len(lines) > 1 else 1
     nrow = int(np.ceil(len(lines) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(11, 1.2 + 2.4 * nrow),
                              sharex=True, squeeze=False)
     for index, (key, name, label) in enumerate(lines):
         ax = axes[index // ncol, index % ncol]
-        ew = np.asarray(table['dEW_' + key], dtype=float)
-        sig = np.asarray(table['sdEW_' + key], dtype=float)
+        ew = np.asarray(table[kind + '_' + key], dtype=float)
+        sig = np.asarray(table['s' + kind + '_' + key], dtype=float)
         good, mean, chi2 = activity_stats(table, key)
+        # the template's equivalent width and its systematic error
+        level, level_sys = 0.0, None
+        if kind == 'EW' and 'EWT_' + key in table:
+            ewt = np.asarray(table['EWT_' + key], dtype=float)
+            if np.isfinite(ewt).any():
+                level = float(np.nanmedian(ewt))
+                if 'EWTSYS_' + key in table:
+                    level_sys = float(np.nanmedian(np.asarray(
+                        table['EWTSYS_' + key], dtype=float)))
         spread = activity_spread(ew[good], sig[good]) if good.any() else 0.0
         centre = np.median(ew[good]) if good.any() else mean
         with np.errstate(invalid='ignore', divide='ignore'):
@@ -1295,16 +1318,21 @@ def page_activity(plt, table, lines, title):
         if far.any():
             ax.errorbar(time[far], ew[far], yerr=sig[far], fmt='o', ms=3.5,
                         lw=0.7, capsize=0, color='C3')
-        ax.axhline(0.0, color='k', lw=0.8, ls=':')
-        ax.set_title('%s (%s): %d spectra\nrms %.2g, median error %.2g,'
+        ax.axhline(level, color='k', lw=0.8, ls=':')
+        template = ('\n' if kind != 'EW' else
+                    '\ntemplate %.3g%s m$\\AA$\n' % (
+                        level, '' if level_sys is None
+                        else ' $\\pm$ %.2g (continuum)' % level_sys))
+        ax.set_title('%s (%s): %d spectra%srms %.2g, median error %.2g,'
                      ' variability %.2g m$\\AA$, $\\chi^2_r$ %.2g, %d beyond'
                      ' %g$\\sigma$'
-                     % (label, name, np.sum(good),
+                     % (label, name, np.sum(good), template,
                         np.std(ew[good]) if good.any() else np.nan,
                         np.median(sig[good]) if good.any() else np.nan,
                         spread, chi2, np.sum(far), ACTIVITY_NSIG),
                      fontsize=8)
-        ax.set_ylabel('$\\Delta$EW (m$\\AA$)', fontsize=8)
+        ax.set_ylabel('EW (m$\\AA$)' if kind == 'EW'
+                      else '$\\Delta$EW (m$\\AA$)', fontsize=8)
         ax.tick_params(labelsize=8)
         ax.grid(alpha=0.3)
     for index in range(len(lines), nrow * ncol):
@@ -1317,11 +1345,17 @@ def page_activity(plt, table, lines, title):
             axes[last // ncol, col].set_xlabel(
                 'Reduced Julian date (RJD = BJD - 2400000, days)', fontsize=8)
             axes[last // ncol, col].xaxis.set_tick_params(labelbottom=True)
-    fig.suptitle('Activity lines: differential equivalent width against the'
-                 ' template, %s\n0 is the template, negative is a line'
-                 ' filling in (emission); red: beyond %g sigmas of the median,'
-                 ' error bar and the line\'s own variability together'
-                 % (title, ACTIVITY_NSIG), fontsize=10)
+    if kind == 'EW':
+        head = ('Activity lines: pseudo-equivalent width (Schofer et al. 2019'
+                ' windows and pseudo-continuum), %s\ndotted: the template;'
+                ' lower is a line filling in, negative is emission' % title)
+    else:
+        head = ('Activity lines: differential equivalent width against the'
+                ' template, %s\n0 is the template, negative is a line'
+                ' filling in (emission)' % title)
+    fig.suptitle(head + '; red: beyond %g sigmas of the median, error bar'
+                 ' and the line\'s own variability together'
+                 % ACTIVITY_NSIG, fontsize=10)
     fig.tight_layout()
     return fig
 

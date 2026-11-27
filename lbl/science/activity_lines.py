@@ -1,64 +1,89 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Differential equivalent widths of the activity lines.
-
-The lines are those of lbl/resources/activity_lines.yaml: the literature's
-activity indicators from u to K, at their vacuum wavelengths. Every science
-spectrum gets them, with no option to set:
+Equivalent widths of the activity lines, in the formalism of Schofer et al.
+(2019, A&A 623, A44, section 3.2): each line has an integration window and
+two pseudo-continuum ranges, one on each side, fixed in the catalog
+(lbl/resources/activity_lines.yaml, vacuum wavelengths, the star's rest
+frame). Every science spectrum gets them, with no option to set:
 
     measure()     lbl_compute, once the velocity has converged: for each
                   line, in the order where it falls closest to the centre,
-                  the change of its equivalent width against the template.
-                  Written to the ACTIVITY extension of the lblrv file, one row
-                  per line of the catalog: the catalog's columns and
-                  MEASURED
+                  its equivalent width against the template. Written to the
+                  ACTIVITY extension of the lblrv file, one row per line of
+                  the catalog: the catalog's columns and MEASURED
     add_to_rdb()  lbl_compile: the same, as columns of the rdb (one row per
                   spectrum), <column>_<line> for the lines measured at least
-                  once, the line's space as an underscore: dEW_He_1.08333,
-                  sdEW_He_1.08333, FRACVALID_He_1.08333, CHI2_He_1.08333.
-                  sdEW is dEW's error, so the rdb per night (lbl2) bins dEW
-                  weighted by it
+                  once, the line's space as an underscore: EW_He_1.08333,
+                  sEW_He_1.08333, dEW_He_1.08333, EWT_He_1.08333...
+                  sEW is EW's error (and dEW's), so the rdb per night (lbl2)
+                  bins EW and dEW weighted by it
 
 THE MEASUREMENT
 ---------------
-In the frame of the template, at the velocity the RVs converged to, with S
-the spectrum (before LBL's sigma clipping, which would cut a flare out), B
-the blaze and T the template:
+In the star's frame (the template's, at the velocity the RVs converged
+to), with T the template, S the spectrum (before LBL's sigma clipping, which
+would cut a flare out) and B the blaze:
 
-    q        the local level of S / (T B): its median in two side bands,
-             from h + w/2 to h + 5 w/2 on each side of the line (w the
-             width of the window, h its half extent), linear across the
-             line. LBL's own low-pass of that ratio (5 line widths, 60 to
-             230 km/s on NIRPS) would follow a line as broad as H alpha;
-             side bands scaled to each window do not
-    C        the continuum of the template near the line: the 95th
-             percentile of T within 2.5 nm
-    r        (q T B - S) / (q B C): what the spectrum lacks against the
-             template, in units of the continuum
+    PC(lam)  the template's pseudo-continuum: the 90th percentile of T in
+             each pseudo-continuum range, joined by a straight line between
+             the ranges' centres (Schofer et al. 2019, eq. 2: robust to the
+             noise and to the lines within the ranges). On the template
+             itself (its own pixels, merged over the orders: an order of the
+             spectrum need not hold the ranges)
+    q(lam)   the spectrum's level against the template: the median of
+             S / (T B) in each range, a straight line between the two. A
+             range the order does not hold (its valid pixels end before it)
+             is replaced, for q only, by as wide a stretch of the order's
+             valid pixels nearest to it on that side of the window (half the
+             window's width from it at least). S / (q B) is the spectrum
+             brought to the template's level, as Schofer et al. normalise
+             both spectra to their pseudo-continuum ranges
 
-    dEW = sum over the pixels of a_i r_i
+    EWT  = sum over the window of a_i (1 - T_i / PC_i), on the template's
+           own pixels: the same for every spectrum
+    dEW  = sum over the window of a_i (T_i - S_i / (q_i B_i)) / PC_i, on
+           the order's pixels
+    EW   = EWT + dEW
+         ~ sum over the window of a_i (1 - S_i / (q_i B_i PC_i))
 
-with a_i the length of pixel i inside the window: its overlap with the
-window for a boxcar (h = w / 2), its width times a gaussian of FWHM w and
-peak 1 for a gaussian (h = 1.5 w). In mA, positive when the line absorbs
-more than in the template: a line filling in with emission gives a negative
-dEW. Its error, sdEW, carries the noise of LBL's model (rms) and that of q.
-FRACVALID is the fraction of the window with valid pixels; the pixels LBL's
-sigma clipping rejected are kept (a flare would be cut out otherwise), CHI2
-(the residuals of the window against rms, per pixel) shows them.
+with a_i the length of pixel i inside the window (a boxcar: the overlap of
+the pixel with it). In mA, positive for absorption: emission is negative.
+EWT is the template's pseudo-equivalent width, dEW what the spectrum absorbs
+more than the template (Schofer et al.'s pEW', the template in place of an
+inactive star's spectrum), EW the spectrum's own. A window pixel that is
+not valid in the spectrum counts as the template's (dEW 0 there).
+
+    sEW (= sdEW)  the error of EW and of dEW: the noise of LBL's model (rms)
+                  over the window, and that of q's level
+    EWTSYS        the systematic error of EWT from the continuum: how far it
+                  moves with another continuum, the 95th percentile of T
+                  within SYS_HALF_WIDTH of the line's centre (LBL's before
+                  2026-11-27). Not divided by the number of spectra: the
+                  same for all of them. EW carries it too, dEW does not
+    FRACVALID     the fraction of the window with valid pixels: below
+                  MIN_FRAC_VALID, no measure; the pixels LBL's sigma
+                  clipping rejected are kept (a flare would be cut out),
+                  CHI2 (the residuals of the window against rms, per pixel)
+                  shows them
 
 The order is the one where the line, without the BERV, falls closest to the
-centre: the same order for every spectrum, as long as the window and some
-of its side bands are inside it and 90% of the window is valid; the next
-closest otherwise.
+centre: the same order for every spectrum, as long as the window is inside
+it and MIN_FRAC_VALID of the window is valid; the next closest otherwise.
+The published ranges can be farther apart than an order is long (Pa gamma's,
+6.5 nm, against the 11 nm a NIRPS order holds of valid pixels): the template
+holds them all.
 
-Created on 2026-10-22
+The windows hold the whole line, wide enough for the broadest emission
+(Schofer et al. 2019); the catalog says where each window and range comes
+from (lbl/doc/ACTIVITY.md).
+
+Created on 2026-10-22, Schofer's formalism on 2026-11-27
 
 @author: artigau
 """
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import yaml
@@ -79,51 +104,106 @@ CATALOG = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), 'resources', 'activity_lines.yaml')
 #: the lblrv extension of the measurements
 EXTNAME = 'ACTIVITY'
-#: the columns of the catalog kept in the lblrv extension
-CATALOG_COLUMNS = ['NAME', 'LABEL', 'SPECIES', 'KIND', 'BAND', 'FUNCTION',
-                   'WAVE', 'WIDTH']
+#: the columns of the catalog kept in the lblrv extension (the window and
+#:   the two pseudo-continuum ranges' edges, nm, vacuum, the star's frame)
+CATALOG_COLUMNS = ['NAME', 'LABEL', 'SPECIES', 'KIND', 'BAND', 'WAVE',
+                   'WIN_LO', 'WIN_HI', 'CONT1_LO', 'CONT1_HI', 'CONT2_LO',
+                   'CONT2_HI']
 #: the columns measured on each line, and their units
-MEASURED = dict(dEW='mAngstrom', sdEW='mAngstrom', FRACVALID='', CHI2='')
+MEASURED = dict(EW='mAngstrom', sEW='mAngstrom', dEW='mAngstrom',
+                sdEW='mAngstrom', EWT='mAngstrom', EWTSYS='mAngstrom',
+                FRACVALID='', CHI2='')
 #: nm to mA
 NM_TO_MA = 1e4
-#: half width [nm] of the region where the continuum of the template is taken
-CONT_HALF_WIDTH = 2.5
-#: percentile of the template taken as its continuum
-CONT_PERCENTILE = 95
+#: the percentile of the template in a pseudo-continuum range taken as its
+#:   level (Schofer et al. 2019)
+PC_PERCENTILE = 90
+#: EWTSYS: the other continuum, this percentile of the template within this
+#:   half width [nm] of the line's centre
+SYS_PERCENTILE = 95
+SYS_HALF_WIDTH = 2.5
 #: least fraction of the window with valid pixels
 MIN_FRAC_VALID = 0.9
-#: least number of valid pixels in a side band
+#: least number of valid pixels in a pseudo-continuum range
 MIN_SIDE_PIX = 3
 # the catalog, read once
 _LINES: Optional[List[Dict]] = None
+_VERSION: Optional[int] = None
 
 
 # =============================================================================
 # Define functions
 # =============================================================================
+def _interval(value, what: str) -> Tuple[float, float]:
+    """[lo, hi] of the catalog, checked"""
+    lo, hi = (float(v) for v in value)
+    if not lo < hi:
+        raise ValueError('{0}: [{1}, {2}] is not an interval '
+                         '({3})'.format(what, lo, hi, CATALOG))
+    return lo, hi
+
+
 def load_lines() -> List[Dict]:
     """
     The lines of the catalog, in its order
 
-    :return: list of dicts, one per line (NAME, LABEL, SPECIES, KIND, BAND,
-             FUNCTION, WAVE [nm, vacuum], WIDTH [nm])
+    :return: list of dicts, one per line: NAME, LABEL, SPECIES, KIND, BAND,
+             WAVE [nm, vacuum], WINDOW (lo, hi), CONT ((lo, hi), (lo, hi)),
+             WIDTH (the window's) [nm], REF, URL
     """
-    global _LINES
+    global _LINES, _VERSION
     if _LINES is None:
         with open(CATALOG, 'r') as yfile:
-            catalog = yaml.safe_load(yfile)['lines']
+            content = yaml.safe_load(yfile)
         lines = []
-        for name, line in catalog.items():
-            if line['function'] not in ('boxcar', 'gaussian'):
-                emsg = '{0}: function must be boxcar or gaussian, not {1} ({2})'
-                raise ValueError(emsg.format(name, line['function'], CATALOG))
+        for name, line in content['lines'].items():
+            window = _interval(line['window'], name + ' window')
+            ranges = [_interval(r, name + ' continuum')
+                      for r in line['continuum']]
+            if len(ranges) != 2 or not (ranges[0][1] <= window[0] and
+                                        ranges[1][0] >= window[1]):
+                emsg = ('{0}: two pseudo-continuum ranges are needed, one '
+                        'blueward of the window and one redward ({1})')
+                raise ValueError(emsg.format(name, CATALOG))
             lines.append(dict(NAME=name, LABEL=line['label'],
                               SPECIES=line['species'], KIND=line['kind'],
-                              BAND=line['band'], FUNCTION=line['function'],
-                              WAVE=float(line['wave']),
-                              WIDTH=float(line['width'])))
+                              BAND=line['band'], WAVE=float(line['wave']),
+                              WINDOW=window, CONT=tuple(ranges),
+                              WIDTH=window[1] - window[0],
+                              REF=line.get('ref', ''),
+                              URL=line.get('url', '')))
         _LINES = lines
+        _VERSION = int(content['version'])
     return _LINES
+
+
+def catalog_version() -> int:
+    """The version of the catalog (its definitions: a measure made with
+    another one is made again)"""
+    load_lines()
+    return _VERSION
+
+
+def window(line: Dict) -> Tuple[float, float]:
+    """The window a line's equivalent width is integrated over, (lo, hi)
+    [nm, vacuum, the star's frame]"""
+    return line['WINDOW']
+
+
+def continuum(line: Dict) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    """A line's two pseudo-continuum ranges, blueward and redward of its
+    window, ((lo, hi), (lo, hi)) [nm, vacuum, the star's frame]"""
+    return line['CONT']
+
+
+def _catalog_row(line: Dict) -> Dict:
+    """The catalog's columns of a line, flat (the lblrv extension's)"""
+    (c1lo, c1hi), (c2lo, c2hi) = line['CONT']
+    return dict(NAME=line['NAME'], LABEL=line['LABEL'],
+                SPECIES=line['SPECIES'], KIND=line['KIND'], BAND=line['BAND'],
+                WAVE=line['WAVE'], WIN_LO=line['WINDOW'][0],
+                WIN_HI=line['WINDOW'][1], CONT1_LO=c1lo, CONT1_HI=c1hi,
+                CONT2_LO=c2lo, CONT2_HI=c2hi)
 
 
 def _pixel_edges(wave: np.ndarray) -> np.ndarray:
@@ -159,55 +239,121 @@ def _side_level(wave: np.ndarray, ratio: np.ndarray, noise: np.ndarray,
     return np.mean(wave[band]), np.median(ratio[band]), error
 
 
-def window_half(line: Dict) -> float:
+def template_terms(line: Dict, t_wave: np.ndarray,
+                   t_flux: np.ndarray) -> Optional[Dict]:
     """
-    Half the extent of the window a line's dEW is integrated over [nm]: half
-    its width for a boxcar, 1.5 times its FWHM for a gaussian (its weight
-    there 2e-3 of its peak)
+    What a line's equivalent widths take from the template, on the template
+    itself (its own pixels, merged over the orders, in the star's frame):
+    its pseudo-continuum (the 90th percentile of the template in each
+    range, at the range's centre), its equivalent width EWT in the window,
+    and EWTSYS. The same for every spectrum, whatever its orders.
 
     :param line: dict, the line (load_lines)
+    :param t_wave: np.ndarray, the template's wavelengths [nm], increasing
+    :param t_flux: np.ndarray, the template, without the blaze
 
-    :return: float, the window's half extent [nm]
+    :return: None if a range or the window lacks template pixels, else dict
+             (x_left, pc_left, x_right, pc_right, EWT, EWTSYS) [nm, mA]
     """
-    width = float(line['WIDTH'])
-    return 1.5 * width if line['FUNCTION'] == 'gaussian' else 0.5 * width
+    lo, hi = window(line)
+    (c1lo, c1hi), (c2lo, c2hi) = continuum(line)
+    good = np.isfinite(t_wave) & np.isfinite(t_flux)
+    t_wave, t_flux = t_wave[good], t_flux[good]
+    left = t_flux[(t_wave >= c1lo) & (t_wave <= c1hi)]
+    right = t_flux[(t_wave >= c2lo) & (t_wave <= c2hi)]
+    if len(left) < MIN_SIDE_PIX or len(right) < MIN_SIDE_PIX:
+        return None
+    out = dict(x_left=0.5 * (c1lo + c1hi), x_right=0.5 * (c2lo + c2hi),
+               pc_left=float(np.percentile(left, PC_PERCENTILE)),
+               pc_right=float(np.percentile(right, PC_PERCENTILE)))
+    # the window on the template's pixels
+    i0 = max(int(np.searchsorted(t_wave, lo)) - 2, 0)
+    i1 = min(int(np.searchsorted(t_wave, hi)) + 2, len(t_wave))
+    if i1 - i0 < 3:
+        return None
+    wave, flux = t_wave[i0:i1], t_flux[i0:i1]
+    edges = _pixel_edges(wave)
+    if edges[0] > lo or edges[-1] < hi:
+        return None
+    length = np.clip(np.minimum(edges[1:], hi) - np.maximum(edges[:-1], lo),
+                     0, None)
+    pcont = pseudo_continuum(out, wave)
+    ewt = np.sum(length * (1 - flux / pcont))
+    near = np.abs(t_wave - line['WAVE']) < SYS_HALF_WIDTH
+    cont_sys = np.percentile(t_flux[near], SYS_PERCENTILE)
+    ewt_sys = np.sum(length * (1 - flux / cont_sys))
+    out['EWT'] = float(ewt * NM_TO_MA)
+    out['EWTSYS'] = float(abs(ewt_sys - ewt) * NM_TO_MA)
+    return out
 
 
-def side_bands(line: Dict) -> tuple:
+def pseudo_continuum(terms: Dict, wave: np.ndarray) -> np.ndarray:
+    """The template's pseudo-continuum at these wavelengths: a straight line
+    between its levels at the two ranges' centres (template_terms)"""
+    return terms['pc_left'] + (terms['pc_right'] - terms['pc_left']) * (
+            wave - terms['x_left']) / (terms['x_right'] - terms['x_left'])
+
+
+def _side_band(wave: np.ndarray, usable: np.ndarray, rng: Tuple,
+               side: int, lo: float, hi: float) -> np.ndarray:
     """
-    The side bands where the local level q of a line is taken: from h + w/2
-    to h + 5 w/2 from its centre on each side (h the window's half extent,
-    w its width) [nm, offsets from the centre]
+    The pixels of the order where the spectrum's level q is taken on one
+    side of the window: the pseudo-continuum range, or where the order does
+    not hold MIN_SIDE_PIX valid pixels of it, as wide a stretch of the
+    order's valid pixels nearest the range on that side (at least half the
+    window's width from the window, so that the line's wings stay out)
+
+    :param wave: np.ndarray, the order's wavelengths, increasing
+    :param usable: np.ndarray, bool, the pixels of the order with a ratio
+    :param rng: (lo, hi), the range [nm]
+    :param side: int, -1 blueward, +1 redward of the window
+    :param lo, hi: float, the window [nm]
+
+    :return: np.ndarray, bool, the pixels (none when the order has none
+             there)
+    """
+    band = usable & (wave >= rng[0]) & (wave <= rng[1])
+    if np.sum(band) >= MIN_SIDE_PIX:
+        return band
+    width, gap = rng[1] - rng[0], 0.5 * (hi - lo)
+    if side < 0:
+        pool = usable & (wave <= lo - gap)
+        if not pool.any():
+            return pool
+        start = max(wave[pool].min(), rng[0])
+        return pool & (wave >= start) & (wave <= start + width)
+    pool = usable & (wave >= hi + gap)
+    if not pool.any():
+        return pool
+    end = min(wave[pool].max(), rng[1])
+    return pool & (wave <= end) & (wave >= end - width)
+
+
+def _measure_line(line: Dict, terms: Dict, wave: np.ndarray,
+                  spectrum: np.ndarray, template: np.ndarray,
+                  blaze: np.ndarray, rms: np.ndarray) -> Optional[Dict]:
+    """
+    The equivalent widths of one line in one order of a spectrum (see the
+    module's docstring)
 
     :param line: dict, the line (load_lines)
-
-    :return: tuple, (inner, outer) offsets from the centre [nm]
-    """
-    half, width = window_half(line), float(line['WIDTH'])
-    return half + 0.5 * width, half + 2.5 * width
-
-
-def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
-                  template: np.ndarray, blaze: np.ndarray,
-                  rms: np.ndarray) -> Optional[Dict]:
-    """
-    The differential equivalent width of one line in one order
-
-    :param line: dict, the line (load_lines)
+    :param terms: dict, what the line takes from the template
+                  (template_terms)
     :param wave: np.ndarray, the wavelengths of the order in the template's
                  frame [nm]
     :param spectrum: np.ndarray, the spectrum of the order (not clipped)
-    :param template: np.ndarray, the template, without the blaze
+    :param template: np.ndarray, the template on the order, without the
+                     blaze
     :param blaze: np.ndarray, the blaze of the order
     :param rms: np.ndarray, LBL's noise model of the order
 
-    :return: None if the window or its side bands are not in the order, else
-             the measured columns (dEW NaN if less than MIN_FRAC_VALID of the
-             window is valid)
+    :return: None if the window is not in the order, or no pseudo-continuum
+             range has valid pixels of the spectrum there, else the measured
+             columns (dEW NaN if less than MIN_FRAC_VALID of the window is
+             valid)
     """
-    lam0, width = line['WAVE'], line['WIDTH']
-    gaussian = line['FUNCTION'] == 'gaussian'
-    half = window_half(line)
+    lo, hi = window(line)
+    (c1lo, c1hi), (c2lo, c2hi) = continuum(line)
     # the finite part of the order, increasing
     finite = np.where(np.isfinite(wave))[0]
     if len(finite) < 10:
@@ -222,72 +368,71 @@ def _measure_line(line: Dict, wave: np.ndarray, spectrum: np.ndarray,
         template, blaze, rms = template[::-1], blaze[::-1], rms[::-1]
     edges = _pixel_edges(wave)
     # the window must be inside the order
-    if edges[0] > lam0 - half or edges[-1] < lam0 + half:
+    if edges[0] > lo or edges[-1] < hi:
         return None
-    # length of each pixel inside the window
-    if gaussian:
-        dist = wave - lam0
-        profile = np.exp(-4 * np.log(2) * (dist / width) ** 2)
-        length = np.where(np.abs(dist) <= half,
-                          profile * (edges[1:] - edges[:-1]), 0.0)
-    else:
-        length = (np.minimum(edges[1:], lam0 + half) -
-                  np.maximum(edges[:-1], lam0 - half))
-        length = np.clip(length, 0, None)
-    window = length > 0
-    # the local level of S / (T B), from the side bands
+    # length of each pixel inside the window (a boxcar)
+    length = np.clip(np.minimum(edges[1:], hi) - np.maximum(edges[:-1], lo),
+                     0, None)
+    in_window = length > 0
+    # the spectrum's level against the template, from the ranges where the
+    #   order has valid pixels (both, or the one)
     with np.errstate(divide='ignore', invalid='ignore'):
         model = template * blaze
         ratio = spectrum / model
         ratio_noise = rms / model
-    dist = np.abs(wave - lam0)
-    inner, outer = side_bands(line)
-    band = (dist >= inner) & (dist <= outer)
-    left = _side_level(wave, ratio, ratio_noise, band & (wave < lam0))
-    right = _side_level(wave, ratio, ratio_noise, band & (wave > lam0))
-    if left is None and right is None:
+    usable = np.isfinite(ratio) & np.isfinite(ratio_noise)
+    side_l = _side_level(wave, ratio, ratio_noise,
+                         _side_band(wave, usable, (c1lo, c1hi), -1, lo, hi))
+    side_r = _side_level(wave, ratio, ratio_noise,
+                         _side_band(wave, usable, (c2lo, c2hi), 1, lo, hi))
+    if side_l is None and side_r is None:
         return None
-    if left is None or right is None:
-        _, level, level_err = left if right is None else right
+    centre = 0.5 * (lo + hi)
+    if side_l is None or side_r is None:
+        _, level, level_err = side_l if side_r is None else side_r
         qlevel = np.full(len(wave), level)
     else:
-        frac = (lam0 - left[0]) / (right[0] - left[0])
-        qlevel = left[1] + (right[1] - left[1]) * (wave - left[0]) / (
-                right[0] - left[0])
-        level = left[1] + (right[1] - left[1]) * frac
-        level_err = np.sqrt(((1 - frac) * left[2]) ** 2 +
-                            (frac * right[2]) ** 2)
-    # the continuum of the template
-    near = (dist < CONT_HALF_WIDTH) & np.isfinite(template)
-    cont = np.percentile(template[near], CONT_PERCENTILE) if np.any(near) \
-        else np.nan
-    # the valid pixels of the window
-    valid = window & np.isfinite(spectrum) & np.isfinite(model)
-    valid &= np.isfinite(rms) & (model > 0) & (blaze > 0) & (qlevel > 0)
-    frac_valid = np.sum(length[valid]) / np.sum(length[window])
-    out = dict(dEW=np.nan, sdEW=np.nan, FRACVALID=float(frac_valid),
+        frac = (centre - side_l[0]) / (side_r[0] - side_l[0])
+        qlevel = side_l[1] + (side_r[1] - side_l[1]) * (wave - side_l[0]) / (
+                side_r[0] - side_l[0])
+        level = side_l[1] + (side_r[1] - side_l[1]) * frac
+        level_err = np.sqrt(((1 - frac) * side_l[2]) ** 2 +
+                            (frac * side_r[2]) ** 2)
+    pcont = pseudo_continuum(terms, wave)
+    out = dict(EW=np.nan, sEW=np.nan, dEW=np.nan, sdEW=np.nan,
+               EWT=terms['EWT'], EWTSYS=terms['EWTSYS'], FRACVALID=np.nan,
                CHI2=np.nan)
-    if frac_valid < MIN_FRAC_VALID or not np.isfinite(cont) or cont <= 0:
+    # the valid pixels of the window
+    valid = in_window & np.isfinite(spectrum) & np.isfinite(model)
+    valid &= np.isfinite(rms) & (model > 0) & (blaze > 0) & (qlevel > 0)
+    valid &= pcont > 0
+    frac_valid = np.sum(length[valid]) / np.sum(length[in_window])
+    out['FRACVALID'] = float(frac_valid)
+    if frac_valid < MIN_FRAC_VALID:
         return out
-    # what the spectrum lacks against the template, in continuum units
-    continuum = qlevel[valid] * blaze[valid] * cont
+    # what the spectrum lacks against the template, in pseudo-continuum
+    #   units
+    continuum_level = qlevel[valid] * blaze[valid] * pcont[valid]
     resid = qlevel[valid] * model[valid] - spectrum[valid]
-    ew = np.sum(length[valid] * resid / continuum)
-    var = np.sum((length[valid] * rms[valid] / continuum) ** 2)
+    dew = np.sum(length[valid] * resid / continuum_level)
+    var = np.sum((length[valid] * rms[valid] / continuum_level) ** 2)
     var += ((level_err / level) *
-            np.sum(length[valid] * template[valid] / cont)) ** 2
-    out['dEW'] = float(ew * NM_TO_MA)
+            np.sum(length[valid] * template[valid] / pcont[valid])) ** 2
+    out['dEW'] = float(dew * NM_TO_MA)
     out['sdEW'] = float(np.sqrt(var) * NM_TO_MA)
+    out['EW'] = out['EWT'] + out['dEW']
+    out['sEW'] = out['sdEW']
     out['CHI2'] = float(np.mean((resid / rms[valid]) ** 2))
     return out
 
 
 def measure(wavegrid: np.ndarray, spectrum: np.ndarray,
             template: np.ndarray, blaze: np.ndarray, rms: np.ndarray,
-            velocity: float, berv: float) -> Table:
+            velocity: float, berv: float,
+            template_1d: Tuple[np.ndarray, np.ndarray]) -> Table:
     """
-    The differential equivalent widths of all the lines of the catalog in one
-    spectrum, against the template (see the module's docstring)
+    The equivalent widths of all the lines of the catalog in one spectrum,
+    against the template (see the module's docstring)
 
     :param wavegrid: np.ndarray, the wavelengths of the spectrum in the
                      observer's frame [nm], (orders, pixels)
@@ -300,11 +445,18 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray,
                      to the template's frame [m/s], as mp.doppler_shift
                      takes it
     :param berv: float, the BERV [m/s] (the order is chosen without it)
+    :param template_1d: (wavelengths [nm], flux): the template itself, in
+                        the same frame as the template on the orders (the
+                        star's), without the blaze: the pseudo-continuum and
+                        EWT are measured on it
 
     :return: Table, one row per line of the catalog: the catalog's columns
              and the measured ones (NaN when no order holds the line)
     """
     lines = load_lines()
+    t_wave, t_flux = (np.asarray(a, dtype=float) for a in template_1d)
+    order = np.argsort(t_wave)
+    t_wave, t_flux = t_wave[order], t_flux[order]
     npix = wavegrid.shape[1]
     # the template's frame, and the same without the BERV
     wave_t = mp.doppler_shift(wavegrid, velocity)
@@ -317,8 +469,12 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray,
     wmax = np.max(np.where(finite, wave_ref, -np.inf), axis=1)
     rows = []
     for line in lines:
-        row = {col: line[col] for col in CATALOG_COLUMNS}
+        row = _catalog_row(line)
         row.update({col: np.nan for col in MEASURED})
+        terms = template_terms(line, t_wave, t_flux)
+        if terms is None:
+            rows.append(row)
+            continue
         # orders holding the line, the closest to their centre first
         candidates = []
         for order_num in np.where((wmin < line['WAVE']) &
@@ -332,9 +488,9 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray,
             candidates.append((abs(x_ref - centre), order_num))
         first = None
         for _, order_num in sorted(candidates):
-            out = _measure_line(line, wave_t[order_num], spectrum[order_num],
-                                template[order_num], blaze[order_num],
-                                rms[order_num])
+            out = _measure_line(line, terms, wave_t[order_num],
+                                spectrum[order_num], template[order_num],
+                                blaze[order_num], rms[order_num])
             if out is None:
                 continue
             if first is None:
@@ -347,8 +503,8 @@ def measure(wavegrid: np.ndarray, spectrum: np.ndarray,
             row.update(first)
         rows.append(row)
     table = Table(rows=rows, names=CATALOG_COLUMNS + list(MEASURED))
-    table['WAVE'].unit = 'nm'
-    table['WIDTH'].unit = 'nm'
+    for col in CATALOG_COLUMNS[5:]:
+        table[col].unit = 'nm'
     for col, unit in MEASURED.items():
         if len(unit) > 0:
             table[col].unit = unit
@@ -386,14 +542,16 @@ def extension_header(science_file: str) -> fits.Header:
     header = fits.Header()
     header['SCIFILE'] = (os.path.basename(science_file), 'science file')
     header['ACTCAT'] = (os.path.basename(CATALOG), 'catalog of lines')
-    header['ACTUNIT'] = ('mAngstrom', 'unit of dEW and sdEW')
+    header['ACTVERS'] = (catalog_version(), 'version of the catalog')
+    header['ACTUNIT'] = ('mAngstrom', 'unit of EW, dEW, EWT and errors')
     return header
 
 
 def has_activity(lblrv_file: str) -> bool:
     """
     Whether an lblrv file has the ACTIVITY extension with the columns of
-    MEASURED (files written before do not)
+    MEASURED, made with this version of the catalog (files written before,
+    or with other windows, do not: they are measured again)
 
     :param lblrv_file: str, the lblrv file
 
@@ -404,7 +562,9 @@ def has_activity(lblrv_file: str) -> bool:
             if EXTNAME not in hdulist:
                 return False
             names = hdulist[EXTNAME].columns.names
-            return all(col in names for col in MEASURED)
+            version = hdulist[EXTNAME].header.get('ACTVERS')
+            return (all(col in names for col in MEASURED)
+                    and version == catalog_version())
     except Exception as _:
         return False
 
@@ -412,15 +572,15 @@ def has_activity(lblrv_file: str) -> bool:
 def rdb_column(col: str, name: str) -> str:
     """
     The rdb column of a measured column of a line: <column>_<line>, the
-    line's space as an underscore (dEW, He 1.08333 -> dEW_He_1.08333)
+    line's space as an underscore (EW, He 1.08333 -> EW_He_1.08333)
     """
     return '{0}_{1}'.format(col, name.replace(' ', '_'))
 
 
 def rdb_has_activity(rdbfile: str) -> bool:
     """
-    Whether an rdb file has the activity columns (one compiled before them
-    does not, and is compiled again)
+    Whether an rdb file has the activity columns of this version (one
+    compiled before them, or before EW, does not, and is compiled again)
 
     :param rdbfile: str, the rdb file
 
@@ -431,7 +591,7 @@ def rdb_has_activity(rdbfile: str) -> bool:
             names = rfile.readline().rstrip('\n').split('\t')
     except Exception as _:
         return False
-    return any(name.startswith('dEW_') for name in names)
+    return any(name.startswith('EW_') for name in names)
 
 
 def add_to_rdb(rdb_table: Table, lblrv_files: List[str]) -> int:

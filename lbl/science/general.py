@@ -494,6 +494,10 @@ def spline_template(inst: InstrumentsType, template_file: str,
     k_order = 2
     # flux, 1st and 2nd derivatives
     sps['spline'] = mp.iuv_spline(ntwave, tflux[valid], k=k_order, ext=1)
+    # the template itself, in the star's frame: the activity lines' pseudo-
+    #   continuum and equivalent width are measured on it, whatever the
+    #   orders of the spectrum (lbl.science.activity_lines)
+    sps['template_1d'] = (np.array(ntwave), np.array(tflux[valid]))
     # deal with the odd/even templates
     if 'flux_odd' in template_table.colnames:
         # keeping track of odd/even derivatives
@@ -1882,7 +1886,8 @@ def compute_rv(inst: InstrumentsType, sci_iteration: int,
         with warnings.catch_warnings(record=True):
             template_now = model / b_ratio
         activity = activity_lines.measure(wavegrid, sci_data0, template_now,
-                                          blaze, rms, model_shift, berv)
+                                          blaze, rms, model_shift, berv,
+                                          splines.get('template_1d'))
         activity_lines.log_measured(activity)
         activity_header = activity_lines.extension_header(science_file)
     else:

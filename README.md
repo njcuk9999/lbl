@@ -26,6 +26,11 @@ The template is made from every pixel of every spectrum, without resampling
 (a local polynomial through them, with explicit derivatives): see
 [lbl/doc/TEMPLATE.md](lbl/doc/TEMPLATE.md).
 
+Every science spectrum also gets the pseudo-equivalent width of the activity
+lines (H alpha, He I, Ca II, the Paschen lines...), in the windows and
+against the pseudo-continuum of Schöfer et al. (2019): see
+[lbl/doc/ACTIVITY.md](lbl/doc/ACTIVITY.md).
+
 ---
 
 Please see our website for documentation: [lbl.exoplanets.ca](https://lbl.exoplanets.ca/)
