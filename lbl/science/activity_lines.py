@@ -51,8 +51,20 @@ with a_i the length of pixel i inside the window (a boxcar: the overlap of
 the pixel with it). In mA, positive for absorption: emission is negative.
 EWT is the template's pseudo-equivalent width, dEW what the spectrum absorbs
 more than the template (Schofer et al.'s pEW', the template in place of an
-inactive star's spectrum), EW the spectrum's own. A window pixel that is
-not valid in the spectrum counts as the template's (dEW 0 there).
+inactive star's spectrum), EW the spectrum's own.
+
+Pixels of the window that are not valid in a spectrum (a bad pixel, a
+telluric masked, the order's edge) are made up for by the template's line:
+with d_i = |1 - T_i / PC_i| its depth on the order's pixels, the dEW summed
+over the valid pixels is divided by FRACLINE = sum_valid a_i d_i /
+sum_window a_i d_i, the share of the line they hold (its error too). Exact
+when the change follows the template's profile; a missing wing then costs
+little, a missing core much (a uniform 1 / FRACVALID would over-correct a
+missing wing: +24 % for a quarter of He I 10833's window). Measured when
+FRACVALID >= MIN_FRAC_VALID and FRACLINE >= MIN_FRAC_LINE (0.75 both). A
+line whose template is flat in the window (mean d under MIN_LINE_DEPTH, or
+the template not defined over all of it) has no profile to weight by: no
+correction, FRACLINE NaN, and MIN_FRAC_VALID_FLAT (0.9) of the window valid.
 
     sEW (= sdEW)  the error of EW and of dEW: the noise of LBL's model (rms)
                   over the window, and that of q's level
@@ -61,15 +73,19 @@ not valid in the spectrum counts as the template's (dEW 0 there).
                   within SYS_HALF_WIDTH of the line's centre (LBL's before
                   2026-11-27). Not divided by the number of spectra: the
                   same for all of them. EW carries it too, dEW does not
-    FRACVALID     the fraction of the window with valid pixels: below
-                  MIN_FRAC_VALID, no measure; the pixels LBL's sigma
+    FRACVALID     the fraction of the window with valid pixels (below
+                  MIN_FRAC_VALID, no measure); the pixels LBL's sigma
                   clipping rejected are kept (a flare would be cut out),
                   CHI2 (the residuals of the window against rms, per pixel)
                   shows them
+    FRACLINE      the share of the template's line in the valid pixels,
+                  which dEW is divided by (below MIN_FRAC_LINE, no
+                  measure; NaN for a line flat in the template)
 
 The order is the one where the line, without the BERV, falls closest to the
 centre: the same order for every spectrum, as long as the window is inside
-it and MIN_FRAC_VALID of the window is valid; the next closest otherwise.
+it and enough of it is valid (FRACVALID and FRACLINE); the next closest
+otherwise.
 The published ranges can be farther apart than an order is long (Pa gamma's,
 6.5 nm, against the 11 nm a NIRPS order holds of valid pixels): the template
 holds them all.
@@ -112,7 +128,7 @@ CATALOG_COLUMNS = ['NAME', 'LABEL', 'SPECIES', 'KIND', 'BAND', 'WAVE',
 #: the columns measured on each line, and their units
 MEASURED = dict(EW='mAngstrom', sEW='mAngstrom', dEW='mAngstrom',
                 sdEW='mAngstrom', EWT='mAngstrom', EWTSYS='mAngstrom',
-                FRACVALID='', CHI2='')
+                FRACVALID='', FRACLINE='', CHI2='')
 #: nm to mA
 NM_TO_MA = 1e4
 #: the percentile of the template in a pseudo-continuum range taken as its
@@ -122,8 +138,15 @@ PC_PERCENTILE = 90
 #:   half width [nm] of the line's centre
 SYS_PERCENTILE = 95
 SYS_HALF_WIDTH = 2.5
-#: least fraction of the window with valid pixels
-MIN_FRAC_VALID = 0.9
+#: least fraction of the window with valid pixels, and least share of the
+#:   template's line they hold (FRACLINE, which dEW is divided by)
+MIN_FRAC_VALID = 0.75
+MIN_FRAC_LINE = 0.75
+#: a line flat in the template's window (its mean depth |1 - T/PC| under
+#:   this) has no profile to weight by: no correction, and this least
+#:   fraction of the window with valid pixels
+MIN_LINE_DEPTH = 0.01
+MIN_FRAC_VALID_FLAT = 0.9
 #: least number of valid pixels in a pseudo-continuum range
 MIN_SIDE_PIX = 3
 # the catalog, read once
@@ -349,8 +372,8 @@ def _measure_line(line: Dict, terms: Dict, wave: np.ndarray,
 
     :return: None if the window is not in the order, or no pseudo-continuum
              range has valid pixels of the spectrum there, else the measured
-             columns (dEW NaN if less than MIN_FRAC_VALID of the window is
-             valid)
+             columns (dEW NaN if too little of the window or of the line is
+             valid: MIN_FRAC_VALID, MIN_FRAC_LINE)
     """
     lo, hi = window(line)
     (c1lo, c1hi), (c2lo, c2hi) = continuum(line)
@@ -401,15 +424,31 @@ def _measure_line(line: Dict, terms: Dict, wave: np.ndarray,
     pcont = pseudo_continuum(terms, wave)
     out = dict(EW=np.nan, sEW=np.nan, dEW=np.nan, sdEW=np.nan,
                EWT=terms['EWT'], EWTSYS=terms['EWTSYS'], FRACVALID=np.nan,
-               CHI2=np.nan)
+               FRACLINE=np.nan, CHI2=np.nan)
     # the valid pixels of the window
     valid = in_window & np.isfinite(spectrum) & np.isfinite(model)
     valid &= np.isfinite(rms) & (model > 0) & (blaze > 0) & (qlevel > 0)
     valid &= pcont > 0
     frac_valid = np.sum(length[valid]) / np.sum(length[in_window])
     out['FRACVALID'] = float(frac_valid)
-    if frac_valid < MIN_FRAC_VALID:
-        return out
+    # the template's line on the order's pixels, |1 - T/PC|: what the
+    #   missing pixels would have held of a change that follows its profile
+    with np.errstate(divide='ignore', invalid='ignore'):
+        depth = np.abs(1 - template / pcont)
+    line_all = np.sum(length[in_window] * depth[in_window])
+    profiled = (np.all(np.isfinite(depth[in_window])) and line_all >=
+                MIN_LINE_DEPTH * np.sum(length[in_window]))
+    if profiled:
+        frac_line = np.sum(length[valid] * depth[valid]) / line_all
+        out['FRACLINE'] = float(frac_line)
+        if frac_valid < MIN_FRAC_VALID or frac_line < MIN_FRAC_LINE:
+            return out
+        scale = 1.0 / frac_line
+    else:
+        # flat in the template: nothing to weight by
+        if frac_valid < MIN_FRAC_VALID_FLAT:
+            return out
+        scale = 1.0
     # what the spectrum lacks against the template, in pseudo-continuum
     #   units
     continuum_level = qlevel[valid] * blaze[valid] * pcont[valid]
@@ -418,8 +457,9 @@ def _measure_line(line: Dict, terms: Dict, wave: np.ndarray,
     var = np.sum((length[valid] * rms[valid] / continuum_level) ** 2)
     var += ((level_err / level) *
             np.sum(length[valid] * template[valid] / pcont[valid])) ** 2
-    out['dEW'] = float(dew * NM_TO_MA)
-    out['sdEW'] = float(np.sqrt(var) * NM_TO_MA)
+    # the missing pixels made up for by the template's profile
+    out['dEW'] = float(scale * dew * NM_TO_MA)
+    out['sdEW'] = float(scale * np.sqrt(var) * NM_TO_MA)
     out['EW'] = out['EWT'] + out['dEW']
     out['sEW'] = out['sdEW']
     out['CHI2'] = float(np.mean((resid / rms[valid]) ** 2))
@@ -591,7 +631,8 @@ def rdb_has_activity(rdbfile: str) -> bool:
             names = rfile.readline().rstrip('\n').split('\t')
     except Exception as _:
         return False
-    return any(name.startswith('EW_') for name in names)
+    return (any(name.startswith('EW_') for name in names)
+            and any(name.startswith('FRACLINE_') for name in names))
 
 
 def add_to_rdb(rdb_table: Table, lblrv_files: List[str]) -> int:

@@ -172,6 +172,88 @@ def test_an_order_holding_one_range_measures_with_its_level():
     assert cut(1083.29, 1083.37) is None
 
 
+def _deepened(k, blank=None):
+    """One order holding He I 10830's window and ranges, the spectrum the
+    template's line deepened by k (a change that follows its profile:
+    1 - (1 + k)(1 - T)), the pixels of the window where blank(wave) is
+    true not valid; its dEW, measured, and the template's terms"""
+    npix = 8000
+    wave = np.linspace(1079.0, 1091.0, npix)
+    template = _template(wave)
+    blaze = np.full(npix, 1e4)
+    spectrum = 0.8 * blaze * (1 - (1 + k) * (1 - template))
+    if blank is not None:
+        spectrum[blank(wave)] = np.nan
+    terms = activity_lines.template_terms(_line(), *_template_1d())
+    return activity_lines._measure_line(_line(), terms, wave, spectrum,
+                                        template, blaze,
+                                        np.full(npix, 1.0)), terms
+
+
+def test_missing_pixels_are_made_up_for_by_the_template_s_line():
+    """A quarter of the window missing on one side (the line's wing): dEW
+    divided by FRACLINE, the share of the template's line in the valid
+    pixels, is that of the whole window (a uniform 1 / FRACVALID would
+    over-correct, the old count-as-template under-correct)"""
+    lo, hi = activity_lines.window(_line())
+    full, terms = _deepened(0.2)
+    assert full['FRACVALID'] == 1 and full['FRACLINE'] == pytest.approx(1)
+    # all of it: the template's line deepened by 20 %
+    assert full['dEW'] == pytest.approx(0.2 * terms['EWT'], rel=0.02)
+    wing, _ = _deepened(0.2, lambda w: w > hi - 0.24 * (hi - lo))
+    assert wing['FRACVALID'] == pytest.approx(0.76, abs=0.02)
+    assert 0.75 < wing['FRACLINE'] < 0.95
+    assert wing['dEW'] == pytest.approx(full['dEW'], rel=1e-6)
+    # its error divided by FRACLINE too (the wing's pixels held noise more
+    #   than line: it can be the smaller)
+    assert 0 < wing['sdEW'] < 2 * full['sdEW']
+    as_before = wing['dEW'] * wing['FRACLINE']
+    uniform = as_before / wing['FRACVALID']
+    assert abs(as_before / full['dEW'] - 1) > 0.05
+    assert abs(uniform / full['dEW'] - 1) > 0.05
+
+
+def test_too_little_of_the_window_or_of_the_line_is_not_measured():
+    lo, hi = activity_lines.window(_line())
+    centre = 0.5 * (lo + hi)
+    # a fifth of the window, at the line's core: 80 % of the window, much
+    #   less of the line
+    core, _ = _deepened(0.2, lambda w: abs(w - centre) < 0.1 * (hi - lo))
+    assert core['FRACVALID'] == pytest.approx(0.8, abs=0.02)
+    assert core['FRACLINE'] < activity_lines.MIN_FRAC_LINE
+    assert np.isnan(core['dEW']) and np.isnan(core['EW'])
+    # 30 % of the window, on its edge
+    edge, _ = _deepened(0.2, lambda w: w > hi - 0.3 * (hi - lo))
+    assert edge['FRACVALID'] < activity_lines.MIN_FRAC_VALID
+    assert np.isnan(edge['dEW'])
+
+
+def test_a_line_flat_in_the_template_keeps_the_old_rule():
+    """No line in the template's window: nothing to weight by, no
+    correction, FRACLINE NaN and 90 % of the window valid"""
+    lo, hi = activity_lines.window(_line())
+    npix = 8000
+    wave = np.linspace(1079.0, 1091.0, npix)
+    template = np.ones(npix)
+    blaze = np.full(npix, 1e4)
+    spectrum = 0.8 * blaze * (1 - 0.1 * _gauss(wave, LAM0, 0.01))
+    flat_1d = (np.linspace(1070.0, 1100.0, 120001), np.ones(120001))
+    terms = activity_lines.template_terms(_line(), *flat_1d)
+
+    def measured(cut):
+        spec = spectrum.copy()
+        spec[wave > hi - cut * (hi - lo)] = np.nan
+        return activity_lines._measure_line(_line(), terms, wave, spec,
+                                            template, blaze, np.ones(npix))
+    full, most, less = measured(0.0), measured(0.05), measured(0.15)
+    assert np.isnan(full['FRACLINE']) and np.isnan(most['FRACLINE'])
+    # 95 %: measured, the valid pixels only (the wing cut is not made up)
+    assert most['dEW'] < full['dEW']
+    assert most['dEW'] == pytest.approx(full['dEW'], rel=0.05)
+    # 85 %: not
+    assert np.isnan(less['dEW'])
+
+
 def test_the_catalog_s_schofer_lines_are_their_table_1():
     # Schofer et al. 2019, Table 1: lambda0 +- dlambda, ranges lambda_l/r
     #   +- dlambda_PC, in A, vacuum: dlambda is HALF the window

@@ -49,8 +49,46 @@ Then, with a_i the length of pixel i inside the window:
 | `EW` | EWT + dEW ≈ Σ a_i (1 − S_i / (q_i B_i PC_i)) | the spectrum's own pseudo-equivalent width |
 
 All in mÅ, positive for absorption: a line filling in goes down, emission is
-negative. A window pixel that is not valid in a spectrum counts as the
-template's (its dEW is 0 there).
+negative.
+
+## Missing pixels
+
+A pixel of the window can be missing in a spectrum (a bad pixel, a telluric
+line masked, the order's edge). The pixels that are there are made up for
+by the template's line: with d_i = |1 − T_i / PC_i| its depth on the order's
+pixels,
+
+    FRACLINE = Σ_valid a_i d_i / Σ_window a_i d_i
+
+is the share of the line the valid pixels hold, and dEW (and its error) is
+the sum over the valid pixels divided by FRACLINE. A spectrum is measured
+when at least 75 % of the window is valid (`FRACVALID`) and the valid pixels
+hold at least 75 % of the line (`FRACLINE`).
+
+This is exact when the change of the line follows the template's profile
+(the line deepens or fills in as a whole). Losing a wing then costs little,
+losing the core much, as it should: the core is where the change is. A
+uniform correction (dividing by `FRACVALID`) assumes the change is spread
+evenly over the window, which it is not. For a Gaussian line of 0.020 nm
+FWHM in He I 10833's 0.050 nm window:
+
+| pixels missing | counted as the template (before) | divided by FRACVALID | divided by FRACLINE |
+|---|---|---|---|
+| a quarter of the window, on one side (a wing) | 93 % | 124 % | 100 % |
+| a quarter of the window, at the centre (the core) | 46 % | 61 % | 100 % |
+| a tenth of the window, on one side | 99 % | 110 % | 100 % |
+
+(the share of the true dEW each gives). A change that does not follow the
+profile (an emission core narrower than the absorption) is not made up for
+exactly: what is left is much smaller than with either of the other two.
+
+A line flat in the template's window (its mean depth under 1 %, or the
+template not defined over all of the window) has no profile to weight by:
+no correction, `FRACLINE` is NaN, and 90 % of the window must be valid.
+
+Where the pixels missing change with the BERV (a telluric line crossing the
+window), so does `FRACLINE`: plot dEW against it to check that the
+correction leaves no trend.
 
 ## The errors
 
@@ -58,7 +96,8 @@ template's (its dEW is 0 there).
 |---|---|
 | `sEW` (= `sdEW`) | the error of EW and of dEW: the noise of LBL's model (its rms) over the window, and that of q's level |
 | `EWTSYS` | the systematic error of EWT from the choice of continuum: how far EWT moves with another one, the 95th percentile of T within 2.5 nm of the line's centre (LBL's continuum before 2026-11-27). The same for every spectrum: it does not average down, and the nightly table does not divide it. EW carries it, dEW does not |
-| `FRACVALID` | the fraction of the window with valid pixels; under 0.9, no measure |
+| `FRACVALID` | the fraction of the window with valid pixels; under 0.75, no measure |
+| `FRACLINE` | the share of the template's line in the valid pixels, which dEW is divided by (see Missing pixels); under 0.75, no measure; NaN for a line flat in the template |
 | `CHI2` | the residuals of the window against LBL's rms, per pixel: the pixels LBL's sigma clipping would have rejected are kept (a flare would be cut out), CHI2 shows them |
 
 The continuum is the largest uncertainty of an absolute equivalent width: in
@@ -71,7 +110,8 @@ its absolute level is.
 
 The order is the one where the line, without the BERV, falls closest to its
 centre: the same order for every spectrum, as long as the window is inside
-it and 90 % of the window is valid; the next closest otherwise.
+it and enough of it is valid (`FRACVALID`, `FRACLINE`); the next closest
+otherwise.
 
 ## The catalog
 
@@ -100,7 +140,7 @@ brought to vacuum (Morton 2000) and says so.
 `lbl_compile` adds, for each line measured at least once, `<column>_<line>`
 with the line's space as an underscore: `EW_He_1.08333`, `sEW_He_1.08333`,
 `dEW_He_1.08333`, `sdEW_He_1.08333`, `EWT_He_1.08333`, `EWTSYS_He_1.08333`,
-`FRACVALID_He_1.08333`, `CHI2_He_1.08333`. The rdb per night (`lbl2_`)
+`FRACVALID_He_1.08333`, `FRACLINE_He_1.08333`, `CHI2_He_1.08333`. The rdb per night (`lbl2_`)
 bins EW and dEW weighted by their errors.
 
 The report draws EW in time, the template's EWT dotted, with its systematic
@@ -115,6 +155,12 @@ instrument to another; its absolute level only as an indication. The
 catalog's windows are fixed, the same for every instrument.
 
 ## Changes
+
+- 2026-11-28: missing pixels made up for by the template's line
+  (`FRACLINE`); a spectrum is measured with 75 % of the window and of the
+  line valid (90 % of the window before, the missing pixels counted as the
+  template's). The lblrv files and rdb tables written before are measured
+  and compiled again.
 
 - 2026-11-27: Schöfer et al.'s formalism. Until then the windows were the
   core of each line (the windows taken from Schöfer et al. were half
